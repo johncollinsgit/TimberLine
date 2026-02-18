@@ -1,96 +1,198 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
-    <head>
-        @include('partials.head')
-    </head>
-    <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
-            <flux:sidebar.header>
-                <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
-                <flux:sidebar.collapse class="lg:hidden" />
-            </flux:sidebar.header>
-
-            <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </flux:sidebar.item>
-                </flux:sidebar.group>
-            </flux:sidebar.nav>
-
-            <flux:spacer />
-
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
-
-            <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
-        </flux:sidebar>
+<head>
+  @include('partials.head')
+  @livewireStyles
+@livewireScripts
+@livewireScriptConfig
 
 
-        <!-- Mobile User Menu -->
-        <flux:header class="lg:hidden">
-            <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
+  <style>
+    html { scroll-behavior: smooth; }
 
-            <flux:spacer />
+    /* Motion/feel */
+    .mf-transition { transition: all 200ms cubic-bezier(.2,.8,.2,1); }
+    .mf-fade-in { animation: mfFadeIn 220ms ease-out both; }
+    @keyframes mfFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
 
-            <flux:dropdown position="top" align="end">
-                <flux:profile
-                    :initials="auth()->user()->initials()"
-                    icon-trailing="chevron-down"
-                />
+    /* Sidebar glow */
+    .mf-sidebar-glow::before{
+      content:"";
+      position:absolute;
+      inset:-40px -60px -40px -60px;
+      background:
+        radial-gradient(700px 400px at 0% 0%, rgba(99,102,241,.22), transparent 55%),
+        radial-gradient(600px 350px at 0% 100%, rgba(56,189,248,.16), transparent 55%);
+      filter: blur(14px);
+      pointer-events:none;
+      opacity:.9;
+    }
 
-                <flux:menu>
-                    <flux:menu.radio.group>
-                        <div class="p-0 text-sm font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
-                                <flux:avatar
-                                    :name="auth()->user()->name"
-                                    :initials="auth()->user()->initials()"
-                                />
+    .mf-nav-item { will-change: transform; }
+    .mf-nav-item:hover { transform: translateX(2px); }
 
-                                <div class="grid flex-1 text-start text-sm leading-tight">
-                                    <flux:heading class="truncate">{{ auth()->user()->name }}</flux:heading>
-                                    <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
-                                </div>
-                            </div>
-                        </div>
-                    </flux:menu.radio.group>
+    .mf-active-pill { position: relative; }
+    .mf-active-pill::after{
+      content:"";
+      position:absolute;
+      left:-10px;
+      top:50%;
+      width:6px;
+      height:22px;
+      transform: translateY(-50%);
+      border-radius:999px;
+      background: linear-gradient(to bottom, rgba(56,189,248,.95), rgba(99,102,241,.45));
+      box-shadow: 0 0 0 1px rgba(56,189,248,.25), 0 10px 25px rgba(56,189,248,.18);
+    }
 
-                    <flux:menu.separator />
+    /* Surface: explicit light + explicit dark (prevents “whiting out”) */
+    .mf-surface{
+      background:
+        radial-gradient(900px 520px at 10% 0%, rgba(56,189,248,.10), transparent 58%),
+        radial-gradient(900px 520px at 90% 10%, rgba(99,102,241,.08), transparent 60%),
+        linear-gradient(to bottom, rgba(255,255,255,.80), rgba(255,255,255,.65));
+    }
+    .dark .mf-surface{
+      background:
+        radial-gradient(900px 520px at 10% 0%, rgba(56,189,248,.12), transparent 58%),
+        radial-gradient(900px 520px at 90% 10%, rgba(99,102,241,.10), transparent 60%),
+        linear-gradient(to bottom, rgba(24,24,27,.78), rgba(24,24,27,.55));
+    }
 
-                    <flux:menu.radio.group>
-                        <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
-                            {{ __('Settings') }}
-                        </flux:menu.item>
-                    </flux:menu.radio.group>
+    /* Soft edges; avoids harsh wireframe */
+    .mf-soft-edge{
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.07),
+        0 30px 80px -55px rgba(0,0,0,.90);
+    }
 
-                    <flux:menu.separator />
+    /* Keep borders tasteful inside the main surface only */
+    .mf-surface :where(.border, [class*="border-"]) { border-color: rgba(255,255,255,.08) !important; }
+    .mf-surface :where(input, textarea, select) {
+      background-color: rgba(255,255,255,.04) !important;
+      border-color: rgba(255,255,255,.10) !important;
+    }
 
-                    <form method="POST" action="{{ route('logout') }}" class="w-full">
-                        @csrf
-                        <flux:menu.item
-                            as="button"
-                            type="submit"
-                            icon="arrow-right-start-on-rectangle"
-                            class="w-full cursor-pointer"
-                            data-test="logout-button"
-                        >
-                            {{ __('Log Out') }}
-                        </flux:menu.item>
-                    </form>
-                </flux:menu>
-            </flux:dropdown>
-        </flux:header>
+    /* Optional: if you ever tag a debug banner, it gets nuked */
+    .mf-hide-debug-banner :where(.debug-banner, #debug-banner, [data-debug-banner]) { display:none !important; }
+  </style>
+</head>
 
+<body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+@php
+  use Illuminate\Support\Facades\Route;
+
+  $hrefDashboard = Route::has('dashboard')        ? route('dashboard')        : '/dashboard';
+  $hrefShipping  = Route::has('shipping.orders')  ? route('shipping.orders')  : '/shipping/orders';
+  $hrefPouring   = Route::has('pouring.index')    ? route('pouring.index')    : '/pouring';
+  $hrefAdmin     = Route::has('admin.index')      ? route('admin.index')      : '/admin';
+  $hrefAnalytics = Route::has('analytics.index')  ? route('analytics.index')  : '/analytics';
+
+  $shippingActive  = request()->routeIs('shipping.*')  || request()->is('shipping*');
+  $pouringActive   = request()->routeIs('pouring.*')   || request()->is('pouring*');
+  $adminActive     = request()->routeIs('admin.*')     || request()->is('admin*');
+  $analyticsActive = request()->routeIs('analytics.*') || request()->is('analytics*');
+@endphp
+
+<div class="min-h-screen flex">
+
+  {{-- Sidebar --}}
+  <flux:sidebar
+    sticky
+    collapsible="mobile"
+    class="relative overflow-hidden mf-transition border-e border-white/10 bg-zinc-950"
+  >
+    <div class="mf-sidebar-glow absolute inset-0"></div>
+
+    <div class="relative mf-fade-in">
+      <flux:sidebar.header class="mf-transition">
+        <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition" />
+        <flux:sidebar.collapse class="lg:hidden mf-transition" />
+      </flux:sidebar.header>
+
+      <flux:sidebar.nav>
+        <flux:sidebar.group heading="Production OS" class="grid">
+          <div class="space-y-1">
+            <div class="{{ $shippingActive ? 'mf-active-pill' : '' }}">
+              <flux:sidebar.item icon="truck" href="{{ $hrefShipping }}" :current="$shippingActive" wire:navigate class="mf-transition mf-nav-item">
+                Shipping Room
+              </flux:sidebar.item>
+            </div>
+
+            <div class="{{ $pouringActive ? 'mf-active-pill' : '' }}">
+              <flux:sidebar.item icon="fire" href="{{ $hrefPouring }}" :current="$pouringActive" wire:navigate class="mf-transition mf-nav-item">
+                Pouring Room
+              </flux:sidebar.item>
+            </div>
+
+            <div class="{{ $adminActive ? 'mf-active-pill' : '' }}">
+              <flux:sidebar.item icon="cog" href="{{ $hrefAdmin }}" :current="$adminActive" wire:navigate class="mf-transition mf-nav-item">
+                Administration
+              </flux:sidebar.item>
+            </div>
+
+            <div class="{{ $analyticsActive ? 'mf-active-pill' : '' }}">
+              <flux:sidebar.item icon="chart-bar" href="{{ $hrefAnalytics }}" :current="$analyticsActive" wire:navigate class="mf-transition mf-nav-item">
+                Analytics
+              </flux:sidebar.item>
+            </div>
+          </div>
+        </flux:sidebar.group>
+
+        <flux:sidebar.group heading="Quick Actions" class="grid mt-2">
+          {{-- Wire these to real routes/actions when you have them; keeping your intent intact --}}
+          <flux:sidebar.item icon="plus" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
+            New manual order
+          </flux:sidebar.item>
+          <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
+            Due soon
+          </flux:sidebar.item>
+        </flux:sidebar.group>
+      </flux:sidebar.nav>
+
+      <flux:spacer />
+
+      <flux:sidebar.nav class="opacity-90">
+        <flux:sidebar.group heading="Help" class="grid">
+          <flux:sidebar.item icon="book-open" href="https://laravel.com/docs" target="_blank" class="mf-transition mf-nav-item">
+            Laravel Docs
+          </flux:sidebar.item>
+        </flux:sidebar.group>
+      </flux:sidebar.nav>
+
+      @auth
+        <div class="mt-3 mf-transition">
+          <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
+        </div>
+      @endauth
+    </div>
+  </flux:sidebar>
+
+  {{-- Right side --}}
+  <div class="flex-1 min-w-0 flex flex-col">
+
+    {{-- Mobile Header --}}
+    <flux:header class="lg:hidden mf-fade-in">
+      <flux:sidebar.toggle class="lg:hidden mf-transition" icon="bars-2" inset="left" />
+      <flux:spacer />
+      {{-- keep your auth dropdown --}}
+    </flux:header>
+
+    {{-- Main content --}}
+    <main class="flex-1 min-w-0 overflow-y-auto p-6 mf-fade-in">
+      <div class="rounded-3xl mf-surface mf-soft-edge p-6 md:p-7 text-zinc-900 dark:text-zinc-100">
         {{ $slot }}
+      </div>
+    </main>
 
-        @fluxScripts
-    </body>
+  </div>
+</div>
+
+@livewireScripts
+@livewireScriptConfig
+@fluxScripts
+</body>
 </html>

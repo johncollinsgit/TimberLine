@@ -1,23 +1,32 @@
 {
-    "$schema": "https://www.schemastore.org/package.json",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite"
-    },
-    "dependencies": {
-        "@tailwindcss/vite": "^4.1.11",
-        "autoprefixer": "^10.4.20",
-        "axios": "^1.7.4",
-        "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^2.0",
-        "tailwindcss": "^4.0.7",
-        "vite": "^7.0.4"
-    },
-    "optionalDependencies": {
-        "@rollup/rollup-linux-x64-gnu": "4.9.5",
-        "@tailwindcss/oxide-linux-x64-gnu": "^4.0.1",
-        "lightningcss-linux-x64-gnu": "^1.29.1"
-    }
+  "$schema": "https://www.schemastore.org/package.json",
+  "private": true,
+  "type": "module",
+
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "serve": "php artisan serve",
+    "dev:full": "concurrently -k -n \"LARAVEL,VITE\" -c \"green,blue\" \"php artisan serve\" \"npm run dev\""
+  },
+
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "autoprefixer": "^10.4.20",
+    "axios": "^1.7.4",
+    "chart.js": "^4.5.1",
+    "laravel-vite-plugin": "^2.0",
+    "tailwindcss": "^4.0.7",
+    "vite": "^7.0.4"
+  },
+
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.9.5",
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.1",
+    "lightningcss-linux-x64-gnu": "^1.29.1"
+  },
+
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }
