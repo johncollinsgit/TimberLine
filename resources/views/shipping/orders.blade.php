@@ -1,4 +1,5 @@
 <?php
+// Legacy shipping view (not used by routes). Kept for reference during the Livewire migration.
 
 namespace App\Livewire\Shipping;
 
@@ -22,7 +23,7 @@ class Orders extends Component
     public array $expanded = [];
 
     // Sorting (used in list/table)
-    public string $sort = 'due_date';
+    public string $sort = 'ship_by_at';
     public string $dir  = 'asc';
 
     // Timeline month (YYYY-MM)
@@ -33,7 +34,7 @@ class Orders extends Component
         'channel'    => ['except' => 'all'],
         'status'     => ['except' => 'all'],
         'search'     => ['except' => ''],
-        'sort'       => ['except' => 'due_date'],
+        'sort'       => ['except' => 'ship_by_at'],
         'dir'        => ['except' => 'asc'],
         'timelineYm' => ['except' => ''],
         'page'       => ['except' => 1],
@@ -50,7 +51,8 @@ class Orders extends Component
     ];
 
     private const SORTS = [
-        'due_date'     => 'due_date',
+        'ship_by_at'   => 'ship_by_at',
+        'due_at'       => 'due_at',
         'newest'       => 'id',
         'oldest'       => 'id',
         'order_number' => 'order_number',
@@ -170,7 +172,7 @@ class Orders extends Component
         $status = $this->status ?: 'all';
         $search = trim($this->search);
 
-        $sortKey = array_key_exists($this->sort, self::SORTS) ? $this->sort : 'due_date';
+        $sortKey = array_key_exists($this->sort, self::SORTS) ? $this->sort : 'ship_by_at';
         $dir     = strtolower($this->dir) === 'desc' ? 'desc' : 'asc';
 
         $q = Order::query()
@@ -207,9 +209,15 @@ class Orders extends Component
 
         // sorting
         $q->tap(function (Builder $qq) use ($sortKey, $dir) {
-            if ($sortKey === 'due_date') {
-                $qq->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')
-                   ->orderBy('due_date', $dir)
+            if ($sortKey === 'ship_by_at') {
+                $qq->orderByRaw('CASE WHEN ship_by_at IS NULL THEN 1 ELSE 0 END')
+                   ->orderBy('ship_by_at', $dir)
+                   ->orderByDesc('id');
+                return;
+            }
+            if ($sortKey === 'due_at') {
+                $qq->orderByRaw('CASE WHEN due_at IS NULL THEN 1 ELSE 0 END')
+                   ->orderBy('due_at', $dir)
                    ->orderByDesc('id');
                 return;
             }
@@ -217,7 +225,7 @@ class Orders extends Component
             if ($sortKey === 'newest') { $qq->orderByDesc('id'); return; }
             if ($sortKey === 'oldest') { $qq->orderBy('id', 'asc'); return; }
 
-            $col = self::SORTS[$sortKey] ?? 'due_date';
+            $col = self::SORTS[$sortKey] ?? 'ship_by_at';
             $qq->orderBy($col, $dir)->orderByDesc('id');
         });
 
@@ -229,14 +237,14 @@ class Orders extends Component
         $start = $month->copy()->startOfMonth()->startOfWeek(); // Sunday start
         $end   = $month->copy()->endOfMonth()->endOfWeek();     // Saturday end
 
-        // Use same filters as baseQuery, but constrain due_date to grid range
+        // Use same filters as baseQuery, but constrain ship_by_at to grid range
         $q = $this->baseQuery()
-            ->whereNotNull('due_date')
-            ->whereBetween('due_date', [$start->toDateString(), $end->toDateString()]);
+            ->whereNotNull('ship_by_at')
+            ->whereBetween('ship_by_at', [$start->startOfDay(), $end->endOfDay()]);
 
         // Timeline should be stable and date-ordered
         $q->getQuery()->orders = null;
-        $q->orderBy('due_date', 'asc')->orderBy('id', 'desc');
+        $q->orderBy('ship_by_at', 'asc')->orderBy('id', 'desc');
 
         return $q;
     }

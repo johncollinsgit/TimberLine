@@ -16,8 +16,8 @@ class Catalog extends Component
     public string $newSizeLabel = '';
 
     // Inline edit state
-    public array $editScent = []; // [id => ['name'=>..., 'is_active'=>bool, 'sort_order'=>int]]
-    public array $editSize  = []; // [id => ['code'=>..., 'label'=>..., 'is_active'=>bool, 'sort_order'=>int]]
+    public array $editScent = []; // [id => ['name'=>..., 'is_active'=>bool]]
+    public array $editSize  = []; // [id => ['code'=>..., 'label'=>..., 'is_active'=>bool]]
 
     public function mount(): void
     {
@@ -28,25 +28,23 @@ class Catalog extends Component
     private function rehydrateEdits(): void
     {
         $this->editScent = Scent::query()
-            ->orderBy('sort_order')->orderBy('name')
+            ->orderBy('name')
             ->get()
             ->mapWithKeys(fn($s) => [
                 $s->id => [
                     'name' => $s->name,
                     'is_active' => (bool) $s->is_active,
-                    'sort_order' => (int) $s->sort_order,
                 ]
             ])->toArray();
 
         $this->editSize = Size::query()
-            ->orderBy('sort_order')->orderBy('code')
+            ->orderBy('code')
             ->get()
             ->mapWithKeys(fn($s) => [
                 $s->id => [
                     'code' => $s->code,
                     'label' => $s->label,
                     'is_active' => (bool) $s->is_active,
-                    'sort_order' => (int) $s->sort_order,
                 ]
             ])->toArray();
     }
@@ -62,7 +60,6 @@ class Catalog extends Component
         Scent::query()->create([
             'name' => trim($validated['name']),
             'is_active' => true,
-            'sort_order' => 0,
         ]);
 
         $this->newScentName = '';
@@ -77,13 +74,11 @@ class Catalog extends Component
         $validated = validator($data, [
             'name' => ['required', 'string', 'max:255', 'unique:scents,name,' . $id],
             'is_active' => ['boolean'],
-            'sort_order' => ['integer', 'min:0', 'max:9999'],
         ])->validate();
 
         Scent::query()->whereKey($id)->update([
             'name' => trim($validated['name']),
             'is_active' => (bool) ($validated['is_active'] ?? false),
-            'sort_order' => (int) ($validated['sort_order'] ?? 0),
         ]);
 
         $this->rehydrateEdits();
@@ -104,7 +99,6 @@ class Catalog extends Component
             'code' => trim($validated['code']),
             'label' => blank($validated['label'] ?? null) ? null : trim($validated['label']),
             'is_active' => true,
-            'sort_order' => 0,
         ]);
 
         $this->newSizeCode = '';
@@ -121,14 +115,12 @@ class Catalog extends Component
             'code' => ['required', 'string', 'max:64', 'unique:sizes,code,' . $id],
             'label' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
-            'sort_order' => ['integer', 'min:0', 'max:9999'],
         ])->validate();
 
         Size::query()->whereKey($id)->update([
             'code' => trim($validated['code']),
             'label' => blank($validated['label'] ?? null) ? null : trim($validated['label']),
             'is_active' => (bool) ($validated['is_active'] ?? false),
-            'sort_order' => (int) ($validated['sort_order'] ?? 0),
         ]);
 
         $this->rehydrateEdits();

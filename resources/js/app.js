@@ -1,6 +1,8 @@
 import "./dashboard-widgets";
-import './dashboard-charts';
-import './bootstrap';
+import "./widget-dnd";
+import "./gantt-scroll";
+import "./sidebar-dnd";
+import "./bootstrap";
 
 
 console.log('✅ app.js loaded');

@@ -21,10 +21,18 @@
     'event' => 'Event',
   ];
 
+  $sources = [
+    'all' => 'All',
+    'shopify_retail' => 'Retail Shopify',
+    'shopify_wholesale' => 'Wholesale Shopify',
+    'manual' => 'Manual',
+  ];
+
   $views = [
-    'list' => ['label' => 'List', 'icon' => '≡'],
     'table' => ['label' => 'Table', 'icon' => '▦'],
-    'timeline' => ['label' => 'Timeline', 'icon' => '🗓'],
+    'list' => ['label' => 'List', 'icon' => '≡'],
+    'timeline' => ['label' => 'Calendar', 'icon' => '🗓'],
+    'gantt' => ['label' => 'Gantt', 'icon' => '▤'],
   ];
 
   // Blue-forward palette helpers
@@ -42,6 +50,24 @@
     return $status ? ucwords(str_replace('_', ' ', $status)) : '—';
   };
 
+  $typeBadge = function ($type) {
+    $type = strtolower((string) $type);
+    return match ($type) {
+      'wholesale' => 'border-amber-300/35 bg-amber-400/20 text-amber-50',
+      'event', 'market' => 'border-purple-300/35 bg-purple-400/20 text-purple-50',
+      default => 'border-sky-300/35 bg-sky-400/20 text-sky-50',
+    };
+  };
+
+  $typeAccent = function ($type) {
+    $type = strtolower((string) $type);
+    return match ($type) {
+      'wholesale' => 'border-amber-300/30 bg-amber-500/10',
+      'event', 'market' => 'border-purple-300/30 bg-purple-500/10',
+      default => 'border-sky-300/30 bg-sky-500/10',
+    };
+  };
+
   // TIMELINE GRID (Month view)
   $month = ($timelineMonth instanceof Carbon)
     ? $timelineMonth->copy()
@@ -55,8 +81,8 @@
 
   $byDay = $timelineOrders->groupBy(function ($o) {
     try {
-      if (blank($o->due_date)) return '__none__';
-      return Carbon::parse($o->due_date)->toDateString();
+      if (blank($o->ship_by_at)) return '__none__';
+      return Carbon::parse($o->ship_by_at)->toDateString();
     } catch (\Throwable $e) {
       return '__none__';
     }
@@ -83,121 +109,145 @@
     <section class="sticky top-4 z-30">
       <div
         style="background: {{ $panelBg }};"
-        class="rounded-3xl border border-sky-500/15 bg-zinc-950/60 backdrop-blur
+        class="rounded-3xl border border-emerald-500/15 bg-zinc-950/60 backdrop-blur
                shadow-[0_18px_60px_-40px_rgba(0,0,0,1)] overflow-hidden"
       >
         <div class="p-4">
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-
-            {{-- Left --}}
-            <div class="lg:col-span-4">
-              <div class="flex items-start justify-between gap-3">
+          <div class="space-y-4">
+            {{-- Row A: Identity + actions --}}
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div class="flex flex-wrap items-center gap-3">
                 <div>
                   <div class="text-sm font-semibold text-white/95">Orders</div>
                   <div class="text-xs text-white/50 mt-0.5">{{ $orders->total() }} total</div>
                 </div>
-
-                <div class="flex items-center gap-2">
-                  <button type="button" wire:click="expandAll"
-                    class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15 text-white/80 transition">
-                    Expand
-                  </button>
-                  <button type="button" wire:click="collapseAll"
-                    class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15 text-white/80 transition">
-                    Collapse
-                  </button>
-                </div>
+                <a href="{{ route('retail.plan') }}"
+                  class="inline-flex h-11 items-center rounded-full border border-emerald-300/35 bg-emerald-400/25 px-5 text-sm font-semibold text-emerald-50 hover:bg-emerald-400/35 transition">
+                  Retail/Pour List
+                </a>
               </div>
+              <div class="flex items-center gap-2">
+                <button type="button" wire:click="expandAll"
+                  class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
+                  Expand
+                </button>
+                <button type="button" wire:click="collapseAll"
+                  class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
+                  Collapse
+                </button>
+              </div>
+            </div>
 
-              {{-- View selector --}}
-              <div class="mt-3 flex flex-wrap items-center gap-2">
+            {{-- Row B: View + Search --}}
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div class="inline-flex items-center rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
                 @foreach($views as $key => $meta)
                   @php $active = (($view ?? 'list') === $key); @endphp
                   <button type="button" wire:click="$set('view','{{ $key }}')"
-                    class="px-3 py-1.5 rounded-xl text-xs border transition inline-flex items-center gap-2
-                      {{ $active ? 'border-sky-300/35 bg-sky-400/25 text-sky-50' : 'border-sky-400/15 bg-sky-500/5 text-white/75 hover:bg-sky-500/10 hover:border-sky-300/25' }}">
-                    <span class="text-white/70">{{ $meta['icon'] }}</span>
+                    class="h-9 px-4 rounded-2xl text-xs font-semibold transition inline-flex items-center gap-2
+                      {{ $active ? 'bg-emerald-400/25 text-emerald-50' : 'text-white/70 hover:bg-emerald-500/10' }}">
+                    <span class="{{ $key === 'timeline' ? 'text-white/40' : 'text-white/70' }}">{{ $meta['icon'] }}</span>
                     <span>{{ $meta['label'] }}</span>
                   </button>
                 @endforeach
               </div>
 
-              {{-- Month nav only in timeline --}}
-              @if(($view ?? 'list') === 'timeline')
-                <div class="mt-3 flex items-center gap-2">
-                  <button type="button" wire:click="timelinePrevMonth"
-                    class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15 text-white/80 transition"
-                    title="Previous month">←</button>
-
-                  <button type="button" wire:click="timelineToday"
-                    class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15 text-white/80 transition"
-                    title="Jump to current month">Today</button>
-
-                  <button type="button" wire:click="timelineNextMonth"
-                    class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15 text-white/80 transition"
-                    title="Next month">→</button>
-
-                  <div class="ml-2 text-xs text-white/55">
-                    <span class="text-white/85 font-semibold">{{ $month->format('F Y') }}</span>
-                  </div>
+              <div class="w-full lg:max-w-md">
+                <div class="relative">
+                  <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">⌕</div>
+                  <input type="text" wire:model.live.debounce.250ms="search"
+                    placeholder="Search order #, customer, scent..."
+                    class="h-10 w-full pl-9 pr-3 rounded-2xl bg-emerald-500/5 border border-emerald-400/15 text-white placeholder:text-white/40
+                           focus:outline-none focus:ring-2 focus:ring-emerald-400/20" />
                 </div>
-              @endif
+              </div>
             </div>
 
-            {{-- Middle --}}
-            <div class="lg:col-span-4">
-              <label class="block text-xs text-white/50 mb-2">Search</label>
-              <div class="relative">
-                <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">⌕</div>
-                <input type="text" wire:model.live.debounce.250ms="search"
-                  placeholder="Order #, customer, market, scent..."
-                  class="w-full pl-9 pr-3 py-2 rounded-2xl bg-sky-500/5 border border-sky-400/15 text-white placeholder:text-white/40
-                         focus:outline-none focus:ring-2 focus:ring-sky-400/20" />
+            {{-- Row C: Filters + active chips --}}
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+              <div class="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Status</label>
+                  <select wire:model.live="status"
+                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/5 px-3 text-white/90">
+                    @foreach($pills as $key => $label)
+                      <option value="{{ $key }}">{{ $label }}</option>
+                    @endforeach
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Channel</label>
+                  <select wire:model.live="channel"
+                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/5 px-3 text-white/90">
+                    @foreach($channels as $key => $label)
+                      <option value="{{ $key }}">{{ $label }}</option>
+                    @endforeach
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Source</label>
+                  <select wire:model.live="source"
+                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/5 px-3 text-white/90">
+                    @foreach($sources as $key => $label)
+                      <option value="{{ $key }}">{{ $label }}</option>
+                    @endforeach
+                  </select>
+                </div>
               </div>
 
-              {{-- Channel --}}
-              <div class="mt-3">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="text-xs text-white/50">Channel</div>
-                  <div class="text-xs text-sky-200/70">{{ ucfirst($channel ?? 'all') }}</div>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                  @foreach($channels as $key => $label)
-                    @php $active = (($channel ?? 'all') === $key); @endphp
-                    <button type="button" wire:click="$set('channel','{{ $key }}')"
-                      class="px-3 py-1.5 rounded-full text-xs border transition
-                        {{ $active ? 'border-sky-300/35 bg-sky-400/25 text-sky-50' : 'border-sky-400/15 bg-sky-500/5 text-white/80 hover:bg-sky-500/10 hover:border-sky-300/25' }}">
-                      {{ $label }}
+              <div class="lg:col-span-5">
+                <div class="flex flex-wrap items-center gap-2">
+                  @if(($status ?? 'all') !== 'all')
+                    <button type="button" wire:click="$set('status','all')"
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      Status: {{ $pills[$status] ?? ucfirst($status) }} ✕
                     </button>
-                  @endforeach
+                  @endif
+                  @if(($channel ?? 'all') !== 'all')
+                    <button type="button" wire:click="$set('channel','all')"
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      Channel: {{ ucfirst($channel) }} ✕
+                    </button>
+                  @endif
+                  @if(($source ?? 'all') !== 'all')
+                    <button type="button" wire:click="$set('source','all')"
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      Source: {{ $sources[$source] ?? ucfirst($source) }} ✕
+                    </button>
+                  @endif
+                  @if(($search ?? '') !== '')
+                    <button type="button" wire:click="$set('search','')"
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      Search: "{{ \Illuminate\Support\Str::limit($search, 20) }}" ✕
+                    </button>
+                  @endif
+
+                  @if(($status ?? 'all') !== 'all' || ($channel ?? 'all') !== 'all' || ($source ?? 'all') !== 'all' || ($search ?? '') !== '')
+                    <button type="button" wire:click="clearFilters"
+                      class="h-8 px-3 rounded-full text-xs border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition">
+                      Clear filters
+                    </button>
+                  @endif
                 </div>
+
+                @if(($view ?? 'list') === 'timeline')
+                  <div class="mt-3 flex items-center gap-2">
+                    <button type="button" wire:click="timelinePrevMonth"
+                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                      title="Previous month">←</button>
+                    <button type="button" wire:click="timelineToday"
+                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                      title="Jump to current month">Today</button>
+                    <button type="button" wire:click="timelineNextMonth"
+                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                      title="Next month">→</button>
+                    <div class="ml-2 text-xs text-white/55">
+                      <span class="text-white/85 font-semibold">{{ $month->format('F Y') }}</span>
+                    </div>
+                  </div>
+                @endif
               </div>
             </div>
-
-            {{-- Right --}}
-            <div class="lg:col-span-4">
-              <div class="flex items-center justify-between mb-2">
-                <div class="text-xs text-white/50">Status</div>
-                <div class="text-xs text-sky-200/70">{{ ucfirst($status ?? 'all') }}</div>
-              </div>
-
-              <div class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                @foreach($pills as $key => $label)
-                  @php $active = (($status ?? 'all') === $key); @endphp
-                  <button type="button" wire:click="$set('status', '{{ $key }}')"
-                    class="shrink-0 px-3 py-1.5 rounded-full text-xs border transition
-                      {{ $active ? 'border-sky-300/35 bg-sky-400/25 text-sky-50 shadow-[0_0_0_1px_rgba(56,189,248,.08)]' : 'border-sky-400/15 bg-sky-500/5 text-white/80 hover:bg-sky-500/10 hover:border-sky-300/25' }}">
-                    {{ $label }}
-                  </button>
-                @endforeach
-              </div>
-
-              <div class="mt-2 text-[11px] text-white/40">
-                Tip: Timeline puts orders on their ship-by date (day-of-month) like Notion.
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
@@ -230,9 +280,11 @@
               $lines = $order->lines ?? collect();
 
               $orderNumber = $order->order_number ?? '—';
-              $market      = $order->container_name ?? '—';
-              $customer    = $order->customer_name ?? '—';
-              $due         = $fmtDate($order->due_date ?? null);
+              $type        = $order->order_type ?? $order->channel ?? 'retail';
+              $label       = $order->display_name ?? $order->order_label ?? $order->container_name ?? $order->customer_name ?? '—';
+              $customer    = $order->customer_name ?? $order->display_name ?? '—';
+              $due         = $fmtDate($order->due_at ?? null);
+              $shipBy      = $fmtDate($order->ship_by_at ?? null);
 
               $linesCount  = $lines->count();
               $qtyTotal    = $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0));
@@ -241,65 +293,87 @@
 
             <div style="background: {{ $surface }}; box-shadow: {{ $shadow }};"
                  class="group relative rounded-3xl overflow-hidden transition">
-              <div class="absolute inset-0 rounded-3xl border border-sky-500/14 pointer-events-none"></div>
-              <div class="absolute -inset-8 bg-sky-500/5 blur-3xl pointer-events-none"></div>
+              <div class="absolute inset-0 rounded-3xl border border-emerald-500/14 pointer-events-none"></div>
+              <div class="absolute -inset-8 bg-emerald-500/5 blur-3xl pointer-events-none"></div>
               <div style="background: {{ $rail }};" class="absolute left-0 top-4 bottom-4 w-[6px] rounded-full opacity-95"></div>
 
               <button type="button" wire:click="toggle({{ $order->id }})"
-                      class="relative w-full px-6 py-5 text-left hover:bg-sky-500/5 transition">
+                      class="relative w-full px-6 py-5 text-left hover:bg-emerald-500/5 transition">
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0 pl-1">
                     <div class="min-w-0 flex items-center gap-2">
-                      <div class="font-semibold text-white/95 truncate">{{ $market }}</div>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border {{ $typeBadge($type) }}">
+                        {{ ucfirst($type) }}
+                      </span>
+                      <div class="font-semibold text-white/95 truncate">{{ $label }}</div>
                       <span class="text-white/25">·</span>
                       <div class="text-white/80 truncate">{{ $customer }}</div>
                     </div>
 
                     <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/55">
-                      <span class="text-sky-100/80">{{ $orderNumber }}</span>
+                      <span class="text-emerald-100/80">{{ $orderNumber }}</span>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-white/10 bg-white/5 text-white/60">
+                        Source: {{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}
+                      </span>
                       <span class="inline-flex items-center gap-1"><span class="text-white/25">•</span><span>{{ $linesCount }} lines</span></span>
                       <span class="inline-flex items-center gap-1"><span class="text-white/25">•</span><span>{{ $qtyTotal }} qty</span></span>
                       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70">
                         {{ $statusLabel }}
                       </span>
+                      @if(($order->open_mapping_exceptions_count ?? 0) > 0)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                          Blocked: needs mapping
+                        </span>
+                        <a href="{{ route('admin.mapping-exceptions') }}" class="text-[11px] text-emerald-100/80 hover:text-emerald-100 underline">
+                          Fix mappings
+                        </a>
+                      @endif
                     </div>
                   </div>
 
                   <div class="flex items-center gap-3 shrink-0">
                     <div class="text-sm text-white/60">
-                      Due: <span class="text-sky-50/90">{{ $due }}</span>
+                      Ship By: <span class="text-emerald-50/90">{{ $shipBy }}</span>
                     </div>
 
                     <div class="text-xs px-3 py-1.5 rounded-full border
-                      {{ $isOpen ? 'border-sky-300/30 bg-sky-400/20 text-sky-50' : 'border-sky-400/15 bg-sky-500/8 text-white/70' }}">
+                      {{ $isOpen ? 'border-emerald-300/30 bg-emerald-400/20 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/8 text-white/70' }}">
                       {{ $isOpen ? 'Open' : 'Closed' }}
                     </div>
 
-                    <div class="text-sky-100/40 group-hover:text-sky-100/75 transition">
-                      {{ $isOpen ? '▾' : '▸' }}
+                    <div class="text-emerald-100/40 group-hover:text-emerald-100/75 transition">
+                      <span class="inline-block transition-transform duration-300 {{ $isOpen ? 'rotate-90' : '' }}">▸</span>
                     </div>
                   </div>
                 </div>
               </button>
 
-              @if($isOpen)
-                <div class="relative px-6 pb-6 pt-4">
+              <div
+                class="relative overflow-hidden transition-all duration-300 ease-out"
+                style="max-height: {{ $isOpen ? '1600px' : '0px' }}; opacity: {{ $isOpen ? '1' : '0' }}; transform: {{ $isOpen ? 'translateY(0)' : 'translateY(-6px)' }};"
+                aria-hidden="{{ $isOpen ? 'false' : 'true' }}"
+              >
+                <div class="px-6 pb-6 pt-4 {{ $isOpen ? '' : 'pointer-events-none' }}">
                   @if($lines->isEmpty())
-                    <div class="rounded-2xl border border-sky-400/12 bg-sky-500/5 p-4 text-sm text-white/70">
+                    <div class="rounded-2xl border border-emerald-400/12 bg-emerald-500/5 p-3 text-sm text-white/70">
                       No line items.
                     </div>
                   @else
-                    <div class="rounded-2xl border border-sky-400/12 bg-sky-500/5 overflow-hidden">
-                      <div class="flex items-center justify-between px-4 py-3 text-xs text-white/55 border-b border-sky-400/10">
+                    <div class="rounded-2xl border border-emerald-400/12 bg-emerald-500/5 overflow-hidden">
+                      <div class="flex items-center justify-between px-4 py-2 text-xs text-white/55 border-b border-emerald-400/10">
                         <div>Line items</div>
                         <div class="text-white/45">{{ $lines->count() }} items · Total qty {{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</div>
                       </div>
 
-                      <div class="divide-y divide-sky-400/10">
+                      <div class="divide-y divide-emerald-400/10">
                         @foreach($lines as $line)
                         @php
                           $title   = $line->raw_title ?? $line->product_title ?? $line->title ?? $line->name ?? $line->scent_name ?? 'Item';
-                          $variant = $line->raw_variant ?? $line->variant_title ?? $line->variant_name ?? $line->size ?? $line->size_code ?? $line->sku ?? null;
+                          $sizeLabel = $line->size?->label
+                            ?? $line->size?->code
+                            ?? $line->size_code
+                            ?? null;
+                          $variant = $line->raw_variant ?? $line->variant_title ?? $line->variant_name ?? $line->size ?? $line->sku ?? null;
 
                           // show ordered_qty if present; fallback to legacy quantity
                           $qty = (int) (($line->ordered_qty ?? $line->quantity) ?? 0);
@@ -308,23 +382,26 @@
                           $img = $line->image_url ?? $line->image ?? $line->image_src ?? null;
                         @endphp
 
-                          <div class="px-4 py-4">
-                            <div class="flex items-start gap-4">
+                          <div class="px-4 py-2">
+                            <div class="flex items-start gap-3">
                               <div class="shrink-0">
                                 @if($img)
                                   <img src="{{ $img }}" alt=""
-                                       class="h-14 w-14 rounded-xl object-cover border border-white/10 bg-white/5"
+                                       class="h-10 w-10 rounded-lg object-cover border border-white/10 bg-white/5"
                                        loading="lazy" />
                                 @else
-                                  <div class="h-14 w-14 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-white/30 text-xs">—</div>
+                                  <div class="h-10 w-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-white/30 text-[10px]">—</div>
                                 @endif
                               </div>
 
                               <div class="min-w-0 flex-1">
-                                <div class="min-w-0 flex items-center gap-2 text-sm truncate">
+                                <div class="min-w-0 flex flex-wrap items-center gap-1.5 text-sm leading-tight">
                                   <span class="font-semibold text-white/90 truncate">{{ $title }}</span>
 
-                                  @if($variant)
+                                  @if($sizeLabel)
+                                    <span class="text-white/30">·</span>
+                                    <span class="text-white/55 truncate">{{ $sizeLabel }}</span>
+                                  @elseif($variant)
                                     <span class="text-white/30">·</span>
                                     <span class="text-white/55 truncate">{{ $variant }}</span>
                                   @endif
@@ -333,12 +410,12 @@
 
                                   <span class="inline-flex items-center gap-1 text-white/70 shrink-0">
                                     <span class="text-white/40">×</span>
-                                    <span class="px-2 py-0.5 rounded-full text-xs border border-white/10 bg-white/5 text-white/80">{{ $qty }}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/80">{{ $qty }}</span>
                                   </span>
 
                                   @if($pour)
                                     <span class="text-white/30">·</span>
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border border-sky-300/20 bg-sky-500/10 text-sky-100/80 shrink-0">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-emerald-300/20 bg-emerald-500/10 text-emerald-100/80 shrink-0">
                                       {{ $pour }}
                                     </span>
                                   @endif
@@ -349,17 +426,17 @@
                         @endforeach
                       </div>
 
-                      <div class="flex items-center justify-between px-4 py-3 text-xs text-white/55 border-t border-sky-400/10">
+                      <div class="flex items-center justify-between px-4 py-2 text-xs text-white/55 border-t border-emerald-400/10">
                         <div>{{ $lines->count() }} items</div>
                         <div>Total qty: <span class="text-white/80 font-semibold">{{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</span></div>
                       </div>
                     </div>
                   @endif
                 </div>
-              @endif
+              </div>
             </div>
           @empty
-            <div class="rounded-3xl border border-sky-500/15 bg-sky-500/5 p-10 text-center">
+            <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 p-10 text-center">
               <div class="text-white font-medium">No orders found</div>
               <div class="text-white/50 text-sm mt-1">Try adjusting filters or search.</div>
             </div>
@@ -371,28 +448,31 @@
 
       {{-- TABLE VIEW (fixed + clean) --}}
       @if(($view ?? 'list') === 'table')
-        <div class="rounded-3xl border border-sky-500/15 bg-sky-500/5 overflow-hidden">
-          <div class="px-4 py-3 border-b border-sky-400/10 flex items-center justify-between">
+        <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 overflow-hidden">
+          <div class="px-4 py-3 border-b border-emerald-400/10 flex items-center justify-between">
             <div class="text-sm font-semibold text-white/90">Table View</div>
             <div class="text-xs text-white/55">Shipping-room spreadsheet mode.</div>
           </div>
 
           <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
+            <table class="min-w-full text-sm mf-table">
               <thead class="text-xs text-white/55 bg-black/20">
                 <tr class="[&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-medium">
                   <th>Order</th>
-                  <th>Market</th>
+                  <th>Type</th>
+                  <th>Name</th>
                   <th>Customer</th>
-                  <th>Due</th>
+                  <th>Ship By</th>
+                  <th>Bring Down</th>
                   <th>Status</th>
+                  <th>Source</th>
                   <th class="text-right">Lines</th>
                   <th class="text-right">Qty</th>
                   <th class="text-right">Open</th>
                 </tr>
               </thead>
 
-              <tbody class="divide-y divide-sky-400/10">
+              <tbody class="divide-y divide-emerald-400/10">
                 @forelse($orders as $order)
                   @php
                     $lines = $order->lines ?? collect();
@@ -407,38 +487,71 @@
                   @endphp
 
                   {{-- main row --}}
-                  <tr class="hover:bg-sky-500/5 transition" wire:key="order-row-{{ $order->id }}">
-                    <td class="px-4 py-3 text-sky-100/80 whitespace-nowrap">
+                  <tr
+                    class="hover:bg-emerald-500/5 transition {{ $isEditingOrder ? '' : 'cursor-pointer' }}"
+                    wire:key="order-row-{{ $order->id }}"
+                    @if(!$isEditingOrder) wire:click="toggle({{ $order->id }})" @endif
+                  >
+                    <td class="px-4 py-3 text-emerald-100/80 whitespace-nowrap">
                       {{ $order->order_number ?? '—' }}
                     </td>
 
                     <td class="px-4 py-3 text-white/80 whitespace-nowrap">
-                      {{ $order->container_name ?? '—' }}
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border {{ $typeBadge($order->order_type ?? $order->channel ?? 'retail') }}">
+                        {{ ucfirst($order->order_type ?? $order->channel ?? 'retail') }}
+                      </span>
                     </td>
 
                     <td class="px-4 py-3 text-white/80">
-                      {{ $order->customer_name ?? '—' }}
+                      {{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}
                     </td>
 
-                    {{-- Due --}}
+                    <td class="px-4 py-3 text-white/80">
+                      {{ $order->customer_name ?? $order->display_name ?? '—' }}
+                    </td>
+
+                    {{-- Ship By --}}
                     <td class="px-4 py-3 text-white/70 whitespace-nowrap">
                       @if($canEditOrders && $isEditingOrder)
                         <input
                           type="date"
                           class="w-[150px] rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white/90
-                                 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
-                          wire:model.defer="orderEdit.{{ $order->id }}.due_date"
+                                 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                          wire:model.defer="orderEdit.{{ $order->id }}.ship_by_at"
                         />
-                        @error("orderEdit.$order->id.due_date")
+                        @error("orderEdit.$order->id.ship_by_at")
                           <div class="mt-1 text-[11px] text-red-400">{{ $message }}</div>
                         @enderror
                       @else
                         <button
                           type="button"
-                          class="hover:underline decoration-sky-300/40"
-                          @if($canEditOrders) wire:click="startEditing({{ $order->id }})" @endif
+                          class="hover:underline decoration-emerald-300/40"
+                          @if($canEditOrders) wire:click.stop="startEditing({{ $order->id }})" @endif
                         >
-                          {{ $fmtDate($order->due_date ?? null) }}
+                          {{ $fmtDate($order->ship_by_at ?? null) }}
+                        </button>
+                      @endif
+                    </td>
+
+                    {{-- Bring Down --}}
+                    <td class="px-4 py-3 text-white/70 whitespace-nowrap">
+                      @if($canEditOrders && $isEditingOrder)
+                        <input
+                          type="date"
+                          class="w-[150px] rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white/90
+                                 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                          wire:model.defer="orderEdit.{{ $order->id }}.due_at"
+                        />
+                        @error("orderEdit.$order->id.due_at")
+                          <div class="mt-1 text-[11px] text-red-400">{{ $message }}</div>
+                        @enderror
+                      @else
+                        <button
+                          type="button"
+                          class="hover:underline decoration-emerald-300/40"
+                          @if($canEditOrders) wire:click.stop="startEditing({{ $order->id }})" @endif
+                        >
+                          {{ $fmtDate($order->due_at ?? null) }}
                         </button>
                       @endif
                     </td>
@@ -448,7 +561,7 @@
                       @if($canEditOrders && $isEditingOrder)
                         <select
                           class="w-[170px] rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/90
-                                 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                                 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                           wire:model.defer="orderEdit.{{ $order->id }}.status"
                         >
                           <option value="new">New</option>
@@ -462,15 +575,43 @@
                         @error("orderEdit.$order->id.status")
                           <div class="mt-1 text-[11px] text-red-400">{{ $message }}</div>
                         @enderror
+                        <label class="mt-2 flex items-center gap-2 text-[11px] text-white/60">
+                          <input
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-white/20 bg-white/5 text-emerald-400 focus:ring-emerald-400/30"
+                            wire:model.defer="orderEdit.{{ $order->id }}.recalc_ship_by"
+                          />
+                          Recalculate ship-by from order type
+                        </label>
+                        @if(($order->open_mapping_exceptions_count ?? 0) > 0)
+                          <div class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                            Blocked: needs mapping
+                          </div>
+                          <a href="{{ route('admin.mapping-exceptions') }}" class="mt-1 inline-flex text-[10px] text-emerald-100/80 hover:text-emerald-100 underline">
+                            Fix mappings
+                          </a>
+                        @endif
                       @else
                         <button
                           type="button"
                           class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition"
-                          @if($canEditOrders) wire:click="startEditing({{ $order->id }})" @endif
+                          @if($canEditOrders) wire:click.stop="startEditing({{ $order->id }})" @endif
                         >
                           {{ $fmtStatus($order->status ?? null) }}
                         </button>
+                        @if(($order->open_mapping_exceptions_count ?? 0) > 0)
+                          <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                            Blocked: needs mapping
+                          </div>
+                          <a href="{{ route('admin.mapping-exceptions') }}" class="mt-1 inline-flex text-[10px] text-emerald-100/80 hover:text-emerald-100 underline">
+                            Fix mappings
+                          </a>
+                        @endif
                       @endif
+                    </td>
+
+                    <td class="px-4 py-3 text-white/70 whitespace-nowrap">
+                      {{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}
                     </td>
 
                     <td class="px-4 py-3 text-right text-white/70 whitespace-nowrap">
@@ -483,31 +624,10 @@
 
                     <td class="px-4 py-3 text-right whitespace-nowrap">
                       <div class="flex items-center justify-end gap-2">
-                        {{-- Save/Cancel for order-level edits --}}
-                        @if($canEditOrders && $isEditingOrder)
-                          <button
-                            type="button"
-                            wire:click="cancelEditing({{ $order->id }})"
-                            class="px-3 py-1.5 rounded-xl text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white/75 transition"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            wire:click="saveOrder({{ $order->id }})"
-                            wire:loading.attr="disabled"
-                            class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/25 bg-sky-500/15 hover:bg-sky-500/20 text-white/85 transition"
-                          >
-                            <span wire:loading.remove>Save</span>
-                            <span wire:loading>Saving…</span>
-                          </button>
-                        @endif
-
-                        {{-- Open/Close --}}
                         <button
                           type="button"
-                          wire:click="toggle({{ $order->id }})"
-                          class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/20 bg-sky-500/10 hover:bg-sky-500/15 text-white/80 transition"
+                          wire:click.stop="toggle({{ $order->id }})"
+                          class="px-3 py-1.5 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
                         >
                           {{ $isOpen ? 'Close' : 'Open' }}
                         </button>
@@ -518,10 +638,10 @@
                   {{-- open details row --}}
                   @if($isOpen)
                     <tr class="bg-black/20" wire:key="order-open-{{ $order->id }}">
-                      <td colspan="8" class="px-4 py-4">
-                        <div class="rounded-2xl border border-sky-400/12 bg-sky-500/5 overflow-hidden">
+                      <td colspan="11" class="px-4 py-4">
+                        <div class="rounded-2xl border border-emerald-400/12 bg-emerald-500/5 overflow-hidden">
 
-                          <div class="px-4 py-3 border-b border-sky-400/10 flex items-center justify-between">
+                          <div class="px-4 py-3 border-b border-emerald-400/10 flex items-center justify-between">
                             <div class="text-xs text-white/60">
                               Line items
                               <span class="text-white/30">·</span>
@@ -530,51 +650,52 @@
                               <span class="text-white/50">Total qty {{$lines->sum(fn ($l) => (int)($l->ordered_qty ?? $l->quantity ?? 0))}}</span>
                             </div>
 
-                            {{-- Save dirty qty changes for this order only --}}
-                            @if($canEditOrders && $dirtyForOrder > 0)
-                              <button
-                                type="button"
-                                wire:click="saveOrderLines({{ $order->id }})"
-                                wire:loading.attr="disabled"
-                                class="px-3 py-1.5 rounded-xl text-xs border border-sky-400/25 bg-sky-500/15 hover:bg-sky-500/20 text-white/85 transition"
-                              >
-                                <span wire:loading.remove>Save {{ $dirtyForOrder }} change{{ $dirtyForOrder === 1 ? '' : 's' }}</span>
-                                <span wire:loading>Saving…</span>
-                              </button>
+                            @php
+                              $orderIsDirty = $isEditingOrder || $dirtyForOrder > 0;
+                            @endphp
+
+                            @if($canEditOrders && $orderIsDirty)
+                              <div class="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  wire:click="cancelEditing({{ $order->id }})"
+                                  class="px-3 py-1.5 rounded-xl text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white/75 transition"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  wire:click="saveOrderWork({{ $order->id }})"
+                                  wire:loading.attr="disabled"
+                                  class="px-4 py-1.5 rounded-xl text-xs border border-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/20 text-white/90 transition"
+                                >
+                                  <span wire:loading.remove>Save Order</span>
+                                  <span wire:loading>Saving…</span>
+                                </button>
+                              </div>
                             @endif
                           </div>
 
                           {{-- NOTICE --}}
                           @if(!empty($orderNotice[$order->id] ?? null))
-                            <div class="px-4 py-2 border-b border-sky-400/10 bg-sky-500/10 text-xs text-sky-100/90">
+                            <div class="px-4 py-2 border-b border-emerald-400/10 bg-emerald-500/10 text-xs text-emerald-100/90">
                               {{ $orderNotice[$order->id] }}
                             </div>
                           @endif
 
                           {{-- ADD NEW LINE --}}
                           @if($canEditOrders)
-                            <div class="px-4 py-3 border-b border-sky-400/10 bg-black/10">
-                              <div class="grid grid-cols-12 gap-2 items-center">
+                            <div class="px-4 py-3 border-b border-emerald-400/10 bg-black/10">
+                              <div class="grid grid-cols-12 gap-3 items-center">
 
                           {{-- SCENT --}}
-                          <div class="col-span-4">
-                            <input
-                              type="text"
-                              list="scents-list-{{ $order->id }}"
-                              placeholder="Start typing a scent…"
-                              class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90 placeholder:text-white/35
-                                    focus:outline-none focus:ring-2 focus:ring-sky-400/20"
-                              wire:model.live.debounce.150ms="newLine.{{ $order->id }}.scent_search"
-                              wire:keydown.enter.prevent="selectNewLineScent({{ $order->id }})"
-                              wire:blur="selectNewLineScent({{ $order->id }})"
-                              wire:change="selectNewLineScent({{ $order->id }})"
+                          <div class="col-span-5">
+                            <livewire:components.scent-combobox
+                              :emit-key="'order-'.$order->id"
+                              :selected-id="(int)($newLine[$order->id]['scent_id'] ?? 0)"
+                              :allow-wholesale-custom="(($order->order_type ?? $order->channel ?? 'retail') === 'wholesale')"
+                              wire:key="scent-combo-{{ $order->id }}"
                             />
-
-                            <datalist id="scents-list-{{ $order->id }}">
-                              @foreach($scents as $scent)
-                                <option value="{{ $scent->name }}"></option>
-                              @endforeach
-                            </datalist>
 
                             {{-- Show either scent_search or scent_id errors (depending on which one you hit) --}}
                             @error("newLine.$order->id.scent_search")
@@ -593,7 +714,7 @@
                               list="sizes-list-{{ $order->id }}"
                               placeholder="Size…"
                               class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90 placeholder:text-white/35
-                                    focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                                    focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                               wire:model.live.debounce.150ms="newLine.{{ $order->id }}.size_search"
                               wire:keydown.enter.prevent="selectNewLineSize({{ $order->id }})"
                               wire:blur="selectNewLineSize({{ $order->id }})"
@@ -619,7 +740,7 @@
                                 <div class="col-span-2">
                                   <select
                                     class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90
-                                           focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                                           focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                                     wire:model.defer="newLine.{{ $order->id }}.wick"
                                   >
                                     <option value="">Wick…</option>
@@ -647,7 +768,7 @@
                                       inputmode="numeric"
                                       pattern="[0-9]*"
                                       class="h-10 w-20 text-center rounded-xl border border-white/10 bg-white/5 px-2 text-white/90
-                                             focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                                             focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                                       wire:model.defer="newLine.{{ $order->id }}.qty"
                                     />
 
@@ -665,14 +786,14 @@
                                 </div>
 
                                 {{-- ADD --}}
-                                <div class="col-span-2 flex justify-end">
+                                <div class="col-span-1 flex justify-end">
                                   <button
                                     type="button"
                                     wire:click="addLineItem({{ $order->id }})"
                                     wire:loading.attr="disabled"
-                                    class="h-10 px-5 rounded-xl text-sm font-semibold border border-sky-400/25 bg-sky-500/15 hover:bg-sky-500/20 text-white/90 transition"
+                                    class="h-10 w-full min-w-[90px] rounded-xl text-sm font-semibold border border-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/20 text-white/90 transition"
                                   >
-                                    + Add
+                                    Add
                                   </button>
                                 </div>
 
@@ -681,11 +802,12 @@
                           @endif
 
                           {{-- EXISTING LINES --}}
-                          <div class="divide-y divide-sky-400/10">
+                          <div class="divide-y divide-emerald-400/10">
                             @forelse($lines as $line)
                               @php
                                 $name = $line->scent?->name ?? $line->scent_name ?? ($line->name ?? 'Item');
-                                $size = $line->size ? ($line->size->label ?: $line->size->code) : ($line->size_code ?? null);
+                                $sizeLabel = $line->size ? ($line->size->label ?: $line->size->code) : ($line->size_code ?? $line->raw_variant ?? null);
+                                $wickLabel = $line->wick_type ?? null;
                                 $qty = (int) (($line->ordered_qty ?? $line->quantity) ?? 0);
 
                                 // ✅ correct place to compute this: inside the loop where $line exists
@@ -694,11 +816,13 @@
 
                               <div class="px-4 py-3 flex items-center justify-between gap-4" wire:key="line-{{ $line->id }}">
                                 <div class="min-w-0 flex-1">
-                                  <div class="min-w-0 truncate text-white/85">
-                                    <span class="font-semibold">{{ $name }}</span>
-                                    @if(!blank($size))
-                                      <span class="text-white/25">·</span>
-                                      <span class="text-white/55">{{ $size }}</span>
+                                  <div class="min-w-0 flex flex-wrap items-center gap-2 text-white/85">
+                                    <span class="font-semibold truncate max-w-[320px]">{{ $name }}</span>
+                                    @if(!blank($sizeLabel))
+                                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70">{{ $sizeLabel }}</span>
+                                    @endif
+                                    @if(!blank($wickLabel))
+                                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70">{{ ucfirst($wickLabel) }}</span>
                                     @endif
                                   </div>
                                 </div>
@@ -717,7 +841,7 @@
                                       min="0"
                                       inputmode="numeric"
                                       class="w-20 h-9 text-center rounded-xl border border-white/10 bg-white/5 px-2 text-white/90
-                                             focus:outline-none focus:ring-2 focus:ring-sky-400/20"
+                                             focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                                       wire:model.defer="lineEdit.{{ $line->id }}.qty"
                                     />
 
@@ -744,9 +868,9 @@
                                         type="button"
                                         wire:click="saveLine({{ $line->id }})"
                                         wire:loading.attr="disabled"
-                                        class="ml-2 px-3 py-2 rounded-xl text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition"
+                                        class="ml-2 px-3 py-2 rounded-xl text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition"
                                       >
-                                        Save
+                                        Save line
                                       </button>
                                     @endif
                                   @else
@@ -759,7 +883,7 @@
                             @endforelse
                           </div>
 
-                          <div class="px-4 py-3 border-t border-sky-400/10 flex items-center justify-between text-xs text-white/55">
+                          <div class="px-4 py-3 border-t border-emerald-400/10 flex items-center justify-between text-xs text-white/55">
                             <div>{{ $lines->count() }} items</div>
                             <div>Total qty: <span class="text-white/80 font-semibold">{{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</span></div>
                           </div>
@@ -771,14 +895,112 @@
 
                 @empty
                   <tr>
-                    <td colspan="8" class="px-4 py-10 text-center text-white/60">No orders found.</td>
+                    <td colspan="11" class="px-4 py-10 text-center text-white/60">No orders found.</td>
                   </tr>
                 @endforelse
               </tbody>
             </table>
           </div>
 
-          <div class="px-4 py-3 border-t border-sky-400/10">{{ $orders->links() }}</div>
+          <div class="px-4 py-3 border-t border-emerald-400/10">{{ $orders->links() }}</div>
+        </div>
+      @endif
+
+      {{-- GANTT VIEW --}}
+      @if(($view ?? 'list') === 'gantt')
+        @php
+          $gStart = $ganttStart ? Carbon::parse($ganttStart) : now()->startOfWeek();
+          $gDays = max(1, (int) ($ganttDays ?? 21));
+          $gEnd = $gStart->copy()->addDays($gDays - 1);
+
+          $grouped = ($ganttRows ?? collect())->groupBy(function ($row) {
+            $order = $row['order'];
+            return $order->order_type ?? $order->channel ?? 'retail';
+          });
+        @endphp
+
+        <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 overflow-hidden">
+          <div class="px-4 py-3 border-b border-emerald-400/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="text-sm font-semibold text-white/90">Gantt View</div>
+            <div class="flex items-center gap-2">
+              <button type="button" wire:click="ganttToday"
+                class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
+                This Week
+              </button>
+              <div class="text-xs text-white/60 ml-2">
+                {{ $gStart->format('M j') }} – {{ $gEnd->format('M j, Y') }}
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="overflow-x-auto cursor-grab select-none"
+            data-gantt-scroll
+            data-gantt-start="{{ $gStart->toDateString() }}"
+            data-gantt-days="{{ $gDays }}"
+            data-gantt-snap="today"
+          >
+            <div class="min-w-[900px]">
+              {{-- Date header --}}
+              <div class="grid sticky top-0 z-10" style="grid-template-columns: 240px repeat({{ $gDays }}, 44px);">
+                <div class="px-4 py-2 text-xs text-white/50 border-b border-emerald-400/10 bg-black/30">Order</div>
+                @for($i=0; $i<$gDays; $i++)
+                  @php $d = $gStart->copy()->addDays($i); @endphp
+                  <div
+                    class="px-2 py-2 text-[11px] text-white/60 border-b border-emerald-400/10 bg-black/30 text-center"
+                    data-gantt-day
+                    data-date="{{ $d->toDateString() }}"
+                  >
+                    <div class="text-[10px] uppercase tracking-[0.2em] text-white/40">{{ $d->format('D') }}</div>
+                    <div>{{ $d->format('M j') }}</div>
+                  </div>
+                @endfor
+              </div>
+
+              @foreach($grouped as $type => $ordersGroup)
+                <div class="grid border-b border-emerald-400/10" style="grid-template-columns: 240px repeat({{ $gDays }}, 44px);">
+                  <div class="px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-100/60 bg-emerald-500/10">
+                    {{ ucfirst($type) }}
+                  </div>
+                  <div class="bg-emerald-500/10" style="grid-column: 2 / span {{ $gDays }};"></div>
+                </div>
+
+                @foreach($ordersGroup as $row)
+                  @php
+                    $order = $row['order'];
+                    $start = Carbon::parse($row['start']);
+                    $end = Carbon::parse($row['end']);
+                    $barStart = $start->greaterThan($gStart) ? $start->copy() : $gStart->copy();
+                    $barEnd = $end->lessThan($gEnd) ? $end->copy() : $gEnd->copy();
+                    $visible = $barEnd->greaterThanOrEqualTo($gStart) && $barStart->lessThanOrEqualTo($gEnd);
+                    $offset = $gStart->diffInDays($barStart);
+                    $span = $barStart->diffInDays($barEnd) + 1;
+                    $label = $order->display_name ?? $order->order_label ?? $order->customer_name ?? $order->order_number ?? 'Order';
+                    $number = $order->order_number ?? '—';
+                  @endphp
+
+                  <div class="grid border-b border-emerald-400/10" style="grid-template-columns: 240px repeat({{ $gDays }}, 44px);">
+                    <div class="px-4 py-2 text-xs text-white/80 truncate">
+                      <div class="font-semibold text-white/90 truncate">#{{ $number }}</div>
+                      <div class="text-white/50 truncate">{{ $label }}</div>
+                      <div class="text-white/40 text-[11px]">Start: {{ $start->toDateString() }} → Ship: {{ $end->toDateString() }}</div>
+                    </div>
+                    @for($i=0; $i<$gDays; $i++)
+                      <div class="border-l border-emerald-400/10"></div>
+                    @endfor
+
+                    @if($visible)
+                      <div
+                        class="h-6 rounded-full bg-emerald-400/40 border border-emerald-300/30 shadow-[0_4px_20px_-12px_rgba(16,185,129,0.9)]"
+                        style="grid-column: {{ $offset + 2 }} / span {{ $span }}; margin-top: -26px; margin-bottom: 8px;"
+                        title="Start: {{ $start->toDateString() }} → Ship: {{ $end->toDateString() }}"
+                      ></div>
+                    @endif
+                  </div>
+                @endforeach
+              @endforeach
+            </div>
+          </div>
         </div>
       @endif
 
@@ -786,10 +1008,10 @@
       @if(($view ?? 'list') === 'timeline')
         <div class="space-y-4">
 
-          <div class="rounded-3xl border border-sky-500/15 bg-sky-500/5 p-4 text-sm text-white/65">
+          <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 p-4 text-sm text-white/65">
             <div class="text-white/85 font-semibold">Timeline (Month)</div>
             <div class="mt-1">
-              Orders show on their <span class="text-sky-100/80">ship-by due date</span> (day-of-month).
+              Orders show on their <span class="text-emerald-100/80">ship-by due date</span> (day-of-month).
               Use Channel + Status + Search to isolate workloads.
             </div>
           </div>
@@ -800,8 +1022,8 @@
             @endforeach
           </div>
 
-          <div class="rounded-3xl border border-sky-500/15 bg-zinc-950/40 backdrop-blur overflow-hidden">
-            <div class="grid grid-cols-7 gap-px bg-sky-400/10">
+          <div class="rounded-3xl border border-emerald-500/15 bg-zinc-950/40 backdrop-blur overflow-hidden">
+            <div class="grid grid-cols-7 gap-px bg-emerald-400/10">
               @foreach($gridDays as $cursor)
                 @php
                   $dayKey   = $cursor->toDateString();
@@ -817,27 +1039,28 @@
                     </div>
 
                     @if($isToday)
-                      <div class="text-[11px] px-2 py-0.5 rounded-full border border-sky-300/30 bg-sky-400/20 text-sky-50">
+                      <div class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-300/30 bg-emerald-400/20 text-emerald-50">
                         Today
                       </div>
                     @endif
                   </div>
 
                   <div class="mt-2 space-y-1.5">
-                    @foreach($dayOrders->take(4) as $order)
+                      @foreach($dayOrders->take(4) as $order)
                       @php
                         $isOpen = $expanded[$order->id] ?? false;
                         $lines = $order->lines ?? collect();
                         $qtyTotal = $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0));
                         $statusLabel = $fmtStatus($order->status ?? null);
+                        $type = $order->order_type ?? $order->channel ?? 'retail';
 
-                        $titleLeft = $order->container_name ?? '—';
-                        $titleRight = $order->customer_name ?? '—';
+                        $titleLeft = $order->display_name ?? $order->order_label ?? $order->container_name ?? $order->customer_name ?? ($order->order_number ?? '—');
+                        $titleRight = $order->customer_name ?? $order->display_name ?? $order->order_label ?? ($order->order_number ?? '—');
                         $sub = ($order->order_number ?? '—') . ' · ' . $qtyTotal . ' qty · ' . $statusLabel;
                       @endphp
 
                       <button type="button" wire:click="toggle({{ $order->id }})"
-                        class="w-full text-left rounded-xl border border-sky-500/12 bg-sky-500/5 hover:bg-sky-500/10 px-2 py-1.5 transition">
+                        class="w-full text-left rounded-xl border px-2 py-1.5 transition hover:brightness-110 {{ $typeAccent($type) }}">
                         <div class="flex items-center justify-between gap-2">
                           <div class="min-w-0">
                             <div class="text-xs text-white/90 truncate">
@@ -845,15 +1068,18 @@
                               <span class="text-white/25">·</span>
                               <span class="text-white/70">{{ $titleRight }}</span>
                             </div>
-                            <div class="mt-0.5 text-[11px] text-white/45 truncate">{{ $sub }}</div>
+                            <div class="mt-0.5 text-[11px] text-white/55 truncate">{{ $sub }}</div>
                           </div>
-                          <div class="text-sky-100/40">{{ $isOpen ? '▾' : '▸' }}</div>
+                          <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border {{ $typeBadge($type) }}">
+                            {{ ucfirst($type) }}
+                          </span>
+                          <div class="text-emerald-100/40">{{ $isOpen ? '▾' : '▸' }}</div>
                         </div>
                       </button>
 
                       @if($isOpen)
-                        <div class="ml-2 mr-1 mb-2 mt-1 rounded-xl border border-sky-400/10 bg-black/20 overflow-hidden">
-                          <div class="divide-y divide-sky-400/10">
+                        <div class="ml-2 mr-1 mb-2 mt-1 rounded-xl border border-emerald-400/10 bg-black/20 overflow-hidden">
+                          <div class="divide-y divide-emerald-400/10">
                             @foreach($lines->take(6) as $line)
                               @php
                                 $name = $line->scent?->name ?? $line->scent_name ?? ($line->name ?? 'Item');
@@ -899,3 +1125,15 @@
     </main>
   </div>
 </div>
+
+<script>
+  window.addEventListener('line-added', (event) => {
+    const orderId = event.detail?.orderId;
+    if (!orderId) return;
+    const input = document.getElementById(`new-line-scent-${orderId}`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+</script>

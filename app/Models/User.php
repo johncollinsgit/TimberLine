@@ -23,6 +23,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'is_active',
     ];
 
     /**
@@ -48,6 +50,8 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'dashboard_layout' => 'array',
+        'ui_preferences' => 'array',
+        'is_active' => 'boolean',
         ];
     }
 
@@ -61,5 +65,20 @@ class User extends Authenticatable
             ->take(2)
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
+    }
+
+    public function isAdmin(): bool
+    {
+        return ($this->role ?? 'admin') === 'admin';
+    }
+
+    public function isManager(): bool
+    {
+        return ($this->role ?? '') === 'manager';
+    }
+
+    public function isPouring(): bool
+    {
+        return ($this->role ?? '') === 'pouring';
     }
 }

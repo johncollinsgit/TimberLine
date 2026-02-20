@@ -64,3 +64,46 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* Modern Forestry global surface */
+.mf-app-shell {
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(16, 185, 129, 0.18), transparent 60%),
+              radial-gradient(900px 520px at 90% 0%, rgba(245, 158, 11, 0.12), transparent 55%),
+              linear-gradient(180deg, rgba(9,12,10,1), rgba(8,10,9,1));
+}
+
+.mf-app-card {
+  background: rgba(16, 21, 19, 0.82);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+  box-shadow: 0 30px 80px -50px rgba(0,0,0,0.9);
+}
+
+.mf-app-glow {
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.1), 0 20px 60px -40px rgba(0,0,0,0.9);
+}
+
+.mf-widget-ghost {
+  opacity: 0.35;
+}
+
+.mf-widget-chosen {
+  box-shadow: 0 25px 60px -35px rgba(16, 185, 129, 0.5);
+}
+
+.mf-widget-drag {
+  cursor: grabbing;
+}
+
+[data-drag-handle] {
+  cursor: grab;
+}
+
+.mf-wide .mf-container {
+  max-width: 1900px;
+}
+
+.mf-compact .mf-table th,
+.mf-compact .mf-table td {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+}

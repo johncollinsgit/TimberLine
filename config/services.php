@@ -6,12 +6,6 @@ return [
     |--------------------------------------------------------------------------
     | Third Party Services
     |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
     */
 
     'postmark' => [
@@ -23,7 +17,7 @@ return [
     ],
 
     'ses' => [
-        'key' => env('AWS_ACCESS_KEY_ID'),
+        'key'    => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
@@ -31,8 +25,50 @@ return [
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+            'channel'              => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Used by Production-OS ingestion layer.
+    | Store keys must match artisan command arguments:
+    |
+    | php artisan shopify:import-orders retail
+    | php artisan shopify:import-orders wholesale
+    |
+    */
+
+    'shopify' => [
+
+        'api_version' => env('SHOPIFY_API_VERSION', '2026-01'),
+
+        'scopes' => env(
+            'SHOPIFY_SCOPES',
+            'read_orders,read_products'
+        ),
+
+        'stores' => [
+
+            'retail' => [
+                'shop'          => env('SHOPIFY_RETAIL_SHOP'),
+                'access_token'  => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
+                'client_id'     => env('SHOPIFY_RETAIL_CLIENT_ID'),
+                'client_secret' => env('SHOPIFY_RETAIL_CLIENT_SECRET'),
+            ],
+
+            'wholesale' => [
+                'shop'          => env('SHOPIFY_WHOLESALE_SHOP'),
+                'access_token'  => env('SHOPIFY_WHOLESALE_ACCESS_TOKEN'),
+                'client_id'     => env('SHOPIFY_WHOLESALE_CLIENT_ID'),
+                'client_secret' => env('SHOPIFY_WHOLESALE_CLIENT_SECRET'),
+            ],
+
+        ],
+
     ],
 
 ];

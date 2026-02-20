@@ -8,12 +8,12 @@
     <div class="flex gap-2">
       <button type="button" wire:click="$set('tab','scents')"
         class="px-3 py-1.5 rounded-lg text-sm border
-        {{ $tab === 'scents' ? 'border-sky-400/40 bg-sky-500/15 text-sky-700 dark:text-sky-200' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300' }}">
+        {{ $tab === 'scents' ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300' }}">
         Scents
       </button>
       <button type="button" wire:click="$set('tab','sizes')"
         class="px-3 py-1.5 rounded-lg text-sm border
-        {{ $tab === 'sizes' ? 'border-sky-400/40 bg-sky-500/15 text-sky-700 dark:text-sky-200' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300' }}">
+        {{ $tab === 'sizes' ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300' }}">
         Sizes
       </button>
     </div>
@@ -31,7 +31,7 @@
           @error('newScentName') <div class="mt-1 text-xs text-red-500">{{ $message }}</div> @enderror
         </div>
         <button type="button" wire:click="createScent"
-          class="px-3 py-2 rounded-lg text-sm border border-sky-400/40 bg-sky-500/15 hover:bg-sky-500/20">
+          class="px-3 py-2 rounded-lg text-sm border border-emerald-400/40 bg-emerald-500/15 hover:bg-emerald-500/20">
           + Add
         </button>
       </div>
@@ -42,7 +42,6 @@
             <tr class="[&>th]:text-left [&>th]:py-2">
               <th class="pr-4">Name</th>
               <th class="pr-4">Active</th>
-              <th class="pr-4">Sort</th>
               <th class="text-right">Save</th>
             </tr>
           </thead>
@@ -58,10 +57,6 @@
                     <input type="checkbox" wire:model.defer="editScent.{{ $id }}.is_active" />
                     <span class="text-xs text-zinc-600 dark:text-zinc-300">Active</span>
                   </label>
-                </td>
-                <td class="py-2 pr-4">
-                  <input type="number" min="0" wire:model.defer="editScent.{{ $id }}.sort_order"
-                    class="w-24 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm" />
                 </td>
                 <td class="py-2 text-right">
                   <button type="button" wire:click="saveScent({{ $id }})"
@@ -98,7 +93,7 @@
 
         <div class="flex justify-end">
           <button type="button" wire:click="createSize"
-            class="px-3 py-2 rounded-lg text-sm border border-sky-400/40 bg-sky-500/15 hover:bg-sky-500/20">
+            class="px-3 py-2 rounded-lg text-sm border border-emerald-400/40 bg-emerald-500/15 hover:bg-emerald-500/20">
             + Add
           </button>
         </div>
@@ -111,7 +106,6 @@
               <th class="pr-4">Code</th>
               <th class="pr-4">Label</th>
               <th class="pr-4">Active</th>
-              <th class="pr-4">Sort</th>
               <th class="text-right">Save</th>
             </tr>
           </thead>
@@ -131,10 +125,6 @@
                     <input type="checkbox" wire:model.defer="editSize.{{ $id }}.is_active" />
                     <span class="text-xs text-zinc-600 dark:text-zinc-300">Active</span>
                   </label>
-                </td>
-                <td class="py-2 pr-4">
-                  <input type="number" min="0" wire:model.defer="editSize.{{ $id }}.sort_order"
-                    class="w-24 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-black/30 px-3 py-2 text-sm" />
                 </td>
                 <td class="py-2 text-right">
                   <button type="button" wire:click="saveSize({{ $id }})"

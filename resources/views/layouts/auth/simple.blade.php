@@ -3,17 +3,57 @@
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen bg-white antialiased dark:bg-linear-to-b dark:from-neutral-950 dark:to-neutral-900">
-        <div class="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-            <div class="flex w-full max-w-sm flex-col gap-2">
-                <a href="{{ route('home') }}" class="flex flex-col items-center gap-2 font-medium" wire:navigate>
-                    <span class="flex h-9 w-9 mb-1 items-center justify-center rounded-md">
-                        <x-app-logo-icon class="size-9 fill-current text-black dark:text-white" />
-                    </span>
-                    <span class="sr-only">{{ config('app.name', 'Laravel') }}</span>
-                </a>
-                <div class="flex flex-col gap-6">
-                    {{ $slot }}
+    <body class="min-h-screen bg-[#0b0f0c] text-zinc-100 antialiased">
+        <div class="relative min-h-svh overflow-hidden">
+            <div class="pointer-events-none absolute inset-0">
+                <div class="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-emerald-500/20 blur-[120px]"></div>
+                <div class="absolute right-0 top-1/3 h-[28rem] w-[28rem] rounded-full bg-amber-400/10 blur-[140px]"></div>
+                <div class="absolute left-1/3 bottom-0 h-80 w-80 rounded-full bg-lime-400/10 blur-[120px]"></div>
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,24,20,0.8),_rgba(8,10,9,1))]"></div>
+            </div>
+
+            <div class="relative z-10 grid min-h-svh grid-cols-1 lg:grid-cols-2">
+                <div class="hidden lg:flex flex-col justify-between p-12">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/20 ring-1 ring-emerald-200/20">
+                            <x-app-logo-icon class="size-8 fill-current text-emerald-200" />
+                        </span>
+                        <div>
+                            <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Modern Forestry</div>
+                            <div class="text-2xl font-['Fraunces'] font-semibold text-white">Backstage</div>
+                        </div>
+                    </div>
+
+                    <div class="max-w-md space-y-4">
+                        <div class="text-4xl font-['Fraunces'] font-semibold leading-tight text-white">
+                            Production, shipping, and wholesale operations in one calm place.
+                        </div>
+                        <p class="text-sm text-emerald-50/70">
+                            Built for real inventory flow. Track orders, line items, and fulfillment without the noise.
+                        </p>
+                    </div>
+
+                    <div class="text-xs uppercase tracking-[0.2em] text-emerald-50/50">
+                        Operations Console
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-center p-6 md:p-10">
+                    <div class="w-full max-w-md rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-8 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.9)] backdrop-blur">
+                        <div class="mb-6 flex items-center gap-3">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400/20 ring-1 ring-emerald-200/20 lg:hidden">
+                                <x-app-logo-icon class="size-6 fill-current text-emerald-200" />
+                            </span>
+                            <div>
+                                <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60 lg:hidden">Modern Forestry</div>
+                                <div class="text-lg font-['Fraunces'] font-semibold text-white lg:text-xl">Backstage</div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-6">
+                            {{ $slot }}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
