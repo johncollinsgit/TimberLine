@@ -44,7 +44,11 @@ use App\Models\WholesaleCustomScent;
 use App\Support\Wiki\WikiRepository;
 
 Route::get('/', function () {
-    return view('welcome');
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return redirect()->route('login');
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {

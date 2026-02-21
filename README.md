@@ -25,3 +25,14 @@ CLI helper:
 Notes:
 - Access tokens are stored in `shopify_stores` and encrypted at rest.
 - Webhooks are verified with HMAC and dispatched to a sync queue (Phase 1).
+
+## Deployment (Forge / Production)
+This app uses Vite. Production must build assets and remove any dev hot file.
+
+Required in deploy script:
+- `npm ci`
+- `npm run build`
+- `php artisan view:clear`
+
+If `public/hot` exists on the server, delete it so `@vite` uses the manifest:
+- `rm -f public/hot`
