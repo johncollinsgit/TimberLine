@@ -15,17 +15,18 @@ return new class extends Migration
         });
 
         // SQLite-friendly: partial unique index so manual orders (null shopify_order_id) are allowed
-        DB::statement("
-            CREATE UNIQUE INDEX IF NOT EXISTS orders_unique_shopify_store_order
-            ON orders (shopify_store, shopify_order_id)
-            WHERE shopify_store IS NOT NULL AND shopify_order_id IS NOT NULL
-        ");
+        // MySQL-safe: unique index (MySQL allows multiple NULLs in UNIQUE indexes)
+        Schema::table("orders", function (Blueprint $table) {
+            $table->unique(["shopify_store", "shopify_order_id"], "orders_unique_shopify_store_order");
+        });
     }
 
     public function down(): void
     {
         // Drop index
-        DB::statement("DROP INDEX IF EXISTS orders_unique_shopify_store_order");
+        Schema::table("orders", function (Blueprint $table) {
+            $table->dropUnique("orders_unique_shopify_store_order");
+        });
 
         // Drop column
         Schema::table('orders', function (Blueprint $table) {
