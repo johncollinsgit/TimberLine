@@ -8,6 +8,28 @@
 
         <x-auth-session-status class="text-center" :status="session('status')" />
 
+        @php
+            $googleLoginEnabled = (bool) config('services.google.enabled')
+                && filled(config('services.google.client_id'))
+                && filled(config('services.google.client_secret'))
+                && filled(config('services.google.redirect'));
+        @endphp
+
+        @if ($googleLoginEnabled)
+            <div class="space-y-3">
+                <a href="{{ route('auth.google.redirect') }}"
+                   class="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 hover:bg-white/10 transition">
+                    <span aria-hidden="true" class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-black text-[11px] font-semibold">G</span>
+                    <span>Continue with Google</span>
+                </a>
+                <div class="flex items-center gap-3 text-xs text-emerald-100/40">
+                    <span class="h-px flex-1 bg-white/10"></span>
+                    <span>or</span>
+                    <span class="h-px flex-1 bg-white/10"></span>
+                </div>
+            </div>
+        @endif
+
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
             @csrf
 

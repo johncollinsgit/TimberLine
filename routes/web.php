@@ -32,6 +32,7 @@ use App\Livewire\Markets\MarketPourListBuilder;
 use App\Livewire\Markets\MarketPourListShow;
 use App\Livewire\Pouring\Requests as PourRequests;
 use App\Http\Controllers\ShopifyAuthController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WikiController;
@@ -252,6 +253,11 @@ Route::prefix('shopify')->group(function () {
     Route::get('/auth/{store}', [ShopifyAuthController::class, 'auth'])->name('shopify.auth');
     Route::get('/reinstall/{store}', [ShopifyAuthController::class, 'reinstall'])->name('shopify.reinstall');
     Route::get('/callback/{store}', [ShopifyAuthController::class, 'callback'])->name('shopify.callback');
+});
+
+Route::middleware('guest')->prefix('auth/google')->name('auth.google.')->group(function () {
+    Route::get('/redirect', [GoogleAuthController::class, 'redirect'])->name('redirect');
+    Route::get('/callback', [GoogleAuthController::class, 'callback'])->name('callback');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
