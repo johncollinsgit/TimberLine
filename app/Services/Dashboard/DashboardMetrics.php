@@ -324,9 +324,11 @@ class DashboardMetrics
             $query->where('orders.order_type', $channel);
         }
 
+        $sizeCodeExpr = 'LOWER(COALESCE(sizes.code, order_lines.size_code, "unknown"))';
+
         $rows = $query
-            ->selectRaw('LOWER(COALESCE(sizes.code, order_lines.size_code, "unknown")) as size_code, SUM('.$qtyExpr.') as qty')
-            ->groupBy('size_code')
+            ->selectRaw($sizeCodeExpr.' as normalized_size_code, SUM('.$qtyExpr.') as qty')
+            ->groupByRaw($sizeCodeExpr)
             ->get();
 
         $buckets = [
@@ -336,7 +338,7 @@ class DashboardMetrics
         ];
 
         foreach ($rows as $row) {
-            $code = (string) ($row->size_code ?? 'unknown');
+            $code = (string) ($row->normalized_size_code ?? 'unknown');
             $qty = (int) ($row->qty ?? 0);
 
             if (str_contains($code, 'melt')) {
