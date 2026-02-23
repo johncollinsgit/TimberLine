@@ -568,6 +568,22 @@
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
+      @auth
+        <div class="px-3 pb-2">
+          <div class="mf-theme-selector inline-flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2">
+            <span class="text-[10px] uppercase tracking-[0.24em] opacity-80">Theme</span>
+            <select id="mf-theme-picker"
+                    class="min-w-0 flex-1 rounded-xl border border-white/10 px-2 py-1 text-sm focus:outline-none"
+                    data-theme-save-url="{{ route('ui.preferences.theme') }}"
+                    data-theme-csrf="{{ csrf_token() }}">
+              @foreach($themeOptions as $themeKey => $themeLabel)
+                <option value="{{ $themeKey }}" @selected($activeTheme === $themeKey)>{{ $themeLabel }}</option>
+              @endforeach
+            </select>
+          </div>
+        </div>
+      @endauth
+
       <flux:sidebar.nav class="mf-sidebar-nav">
         <flux:sidebar.group heading="Modern Forestry Backstage" class="grid">
           <div class="space-y-1" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
@@ -663,21 +679,6 @@
 
     {{-- Main content --}}
     <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
-      @auth
-        <div class="mb-4 flex justify-end">
-          <div class="mf-theme-selector inline-flex items-center gap-3 rounded-2xl border px-3 py-2">
-            <span class="text-[11px] uppercase tracking-[0.24em] opacity-80">Theme</span>
-            <select id="mf-theme-picker"
-                    class="rounded-xl border border-white/10 px-2 py-1 text-sm focus:outline-none"
-                    data-theme-save-url="{{ route('ui.preferences.theme') }}"
-                    data-theme-csrf="{{ csrf_token() }}">
-              @foreach($themeOptions as $themeKey => $themeLabel)
-                <option value="{{ $themeKey }}" @selected($activeTheme === $themeKey)>{{ $themeLabel }}</option>
-              @endforeach
-            </select>
-          </div>
-        </div>
-      @endauth
       @if($unresolvedExceptions > 0)
         <div class="mb-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-50/90">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
