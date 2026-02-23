@@ -263,6 +263,7 @@ Route::middleware('guest')->prefix('auth/google')->name('auth.google.')->group(f
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/ui/preferences', [UiPreferencesController::class, 'update'])->name('ui.preferences.update');
     Route::post('/ui/preferences/sidebar-order', [UiPreferencesController::class, 'updateSidebarOrder'])->name('ui.preferences.sidebar-order');
+    Route::post('/ui/preferences/theme', [UiPreferencesController::class, 'updateTheme'])->name('ui.preferences.theme');
 });
 
 require __DIR__.'/settings.php';

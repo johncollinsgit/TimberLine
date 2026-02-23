@@ -80,6 +80,112 @@
 
     /* Optional: if you ever tag a debug banner, it gets nuked */
     .mf-hide-debug-banner :where(.debug-banner, #debug-banner, [data-debug-banner]) { display:none !important; }
+
+    /* Theme tokens */
+    body[data-mf-theme="forestry-green"]{
+      --mf-body-bg: #08110d;
+      --mf-sidebar-bg: #090f0d;
+      --mf-sidebar-border: rgba(255,255,255,.08);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(16,24,21,.82), rgba(16,24,21,.62));
+      --mf-main-card-border: rgba(255,255,255,.10);
+      --mf-accent: 16,185,129;
+      --mf-accent-2: 245,158,11;
+      --mf-chip-bg: rgba(16,185,129,.12);
+      --mf-chip-border: rgba(16,185,129,.28);
+      --mf-chip-text: rgba(236,253,245,.92);
+    }
+    body[data-mf-theme="sugar-and-spice"]{
+      --mf-body-bg: #1a1018;
+      --mf-sidebar-bg: #160f17;
+      --mf-sidebar-border: rgba(255,210,236,.16);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(44,24,41,.82), rgba(29,18,30,.66));
+      --mf-main-card-border: rgba(255,214,236,.16);
+      --mf-accent: 244,114,182;
+      --mf-accent-2: 251,146,60;
+      --mf-chip-bg: rgba(244,114,182,.16);
+      --mf-chip-border: rgba(244,114,182,.30);
+      --mf-chip-text: rgba(255,238,247,.94);
+    }
+    body[data-mf-theme="get-shit-done"]{
+      --mf-body-bg: #120f0a;
+      --mf-sidebar-bg: #110f0c;
+      --mf-sidebar-border: rgba(255,208,128,.14);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(31,24,16,.84), rgba(21,17,12,.68));
+      --mf-main-card-border: rgba(255,196,92,.16);
+      --mf-accent: 249,115,22;
+      --mf-accent-2: 234,179,8;
+      --mf-chip-bg: rgba(249,115,22,.16);
+      --mf-chip-border: rgba(249,115,22,.30);
+      --mf-chip-text: rgba(255,244,230,.94);
+    }
+    body[data-mf-theme="steve-jobs"]{
+      --mf-body-bg: #0a0b0d;
+      --mf-sidebar-bg: #090a0c;
+      --mf-sidebar-border: rgba(255,255,255,.07);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(18,19,22,.82), rgba(14,15,17,.66));
+      --mf-main-card-border: rgba(255,255,255,.09);
+      --mf-accent: 148,163,184;
+      --mf-accent-2: 226,232,240;
+      --mf-chip-bg: rgba(148,163,184,.12);
+      --mf-chip-border: rgba(148,163,184,.22);
+      --mf-chip-text: rgba(241,245,249,.94);
+    }
+
+    body.mf-app-shell{
+      background:
+        radial-gradient(1200px 700px at 0% 0%, rgba(var(--mf-accent), .14), transparent 60%),
+        radial-gradient(1100px 650px at 100% 10%, rgba(var(--mf-accent-2), .10), transparent 62%),
+        var(--mf-body-bg, #08110d);
+    }
+
+    .mf-sidebar-theme-shell{
+      background: var(--mf-sidebar-bg, #090f0d) !important;
+      border-color: var(--mf-sidebar-border, rgba(255,255,255,.08)) !important;
+    }
+
+    .mf-sidebar-glow::before{
+      background:
+        radial-gradient(700px 400px at 0% 0%, rgba(var(--mf-accent), .24), transparent 55%),
+        radial-gradient(600px 350px at 0% 100%, rgba(var(--mf-accent-2), .16), transparent 55%);
+    }
+
+    .mf-app-card{
+      background: var(--mf-main-card-bg, linear-gradient(to bottom, rgba(16,24,21,.82), rgba(16,24,21,.62)));
+      border: 1px solid var(--mf-main-card-border, rgba(255,255,255,.10));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.04),
+        0 30px 80px -50px rgba(0,0,0,.9);
+    }
+
+    .mf-app-glow{
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mf-app-glow::before{
+      content: "";
+      position: absolute;
+      inset: -20% -10% auto -10%;
+      height: 55%;
+      background: radial-gradient(60% 100% at 20% 0%, rgba(var(--mf-accent), .08), transparent 70%);
+      pointer-events: none;
+    }
+
+    .mf-theme-selector{
+      border-color: var(--mf-chip-border, rgba(16,185,129,.28));
+      background: linear-gradient(to bottom, rgba(0,0,0,.32), rgba(0,0,0,.22)), var(--mf-chip-bg, rgba(16,185,129,.12));
+      color: var(--mf-chip-text, rgba(236,253,245,.92));
+      box-shadow: 0 10px 30px -20px rgba(0,0,0,.8);
+      backdrop-filter: blur(10px);
+    }
+    .mf-theme-selector select{
+      color: inherit;
+      background: transparent;
+    }
+    .mf-theme-selector select option{
+      color: #111827;
+      background: #fff;
+    }
   </style>
 </head>
 
@@ -87,8 +193,17 @@
   $prefs = is_array(auth()->user()?->ui_preferences ?? null) ? auth()->user()->ui_preferences : [];
   $wideLayout = !empty($prefs['wide_layout']);
   $compactTables = !empty($prefs['compact_tables']);
+  $themeOptions = [
+      'forestry-green' => 'Forestry Green',
+      'sugar-and-spice' => 'Sugar and Spice',
+      'get-shit-done' => 'Get Shit Done',
+      'steve-jobs' => 'Steve Jobs',
+  ];
+  $activeTheme = is_string($prefs['theme'] ?? null) && array_key_exists($prefs['theme'], $themeOptions)
+      ? $prefs['theme']
+      : 'forestry-green';
 @endphp
-<body class="min-h-screen text-zinc-100 antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }}">
+<body data-mf-theme="{{ $activeTheme }}" class="min-h-screen text-zinc-100 antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }}">
 @php
   use Illuminate\Support\Facades\Route;
   $user = auth()->user();
@@ -171,7 +286,7 @@
   <flux:sidebar
     sticky
     collapsible="mobile"
-    class="relative overflow-hidden mf-transition border-e border-white/10 bg-zinc-950"
+    class="relative overflow-hidden mf-transition border-e mf-sidebar-theme-shell"
   >
     <div class="mf-sidebar-glow absolute inset-0"></div>
 
@@ -276,6 +391,21 @@
 
     {{-- Main content --}}
     <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
+      @auth
+        <div class="mb-4 flex justify-end">
+          <div class="mf-theme-selector inline-flex items-center gap-3 rounded-2xl border px-3 py-2">
+            <span class="text-[11px] uppercase tracking-[0.24em] opacity-80">Theme</span>
+            <select id="mf-theme-picker"
+                    class="rounded-xl border border-white/10 px-2 py-1 text-sm focus:outline-none"
+                    data-theme-save-url="{{ route('ui.preferences.theme') }}"
+                    data-theme-csrf="{{ csrf_token() }}">
+              @foreach($themeOptions as $themeKey => $themeLabel)
+                <option value="{{ $themeKey }}" @selected($activeTheme === $themeKey)>{{ $themeLabel }}</option>
+              @endforeach
+            </select>
+          </div>
+        </div>
+      @endauth
       @if($unresolvedExceptions > 0)
         <div class="mb-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-50/90">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -335,6 +465,43 @@
       timeoutId = setTimeout(() => el.classList.add('hidden'), 6000);
     }
     window.addEventListener('toast', (e) => showToast(e.detail));
+  })();
+</script>
+<script>
+  (function () {
+    const picker = document.getElementById('mf-theme-picker');
+    if (!picker || picker.dataset.mfBound === '1') return;
+    picker.dataset.mfBound = '1';
+
+    picker.addEventListener('change', async () => {
+      const theme = picker.value || 'forestry-green';
+      document.body.setAttribute('data-mf-theme', theme);
+
+      try {
+        const res = await fetch(picker.dataset.themeSaveUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': picker.dataset.themeCsrf || '',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ theme }),
+          credentials: 'same-origin',
+        });
+
+        if (!res.ok) {
+          throw new Error('Failed to save theme');
+        }
+
+        window.dispatchEvent(new CustomEvent('toast', {
+          detail: { style: 'success', message: 'Theme updated.' }
+        }));
+      } catch (e) {
+        window.dispatchEvent(new CustomEvent('toast', {
+          detail: { style: 'warning', message: 'Theme preview changed, but save failed.' }
+        }));
+      }
+    });
   })();
 </script>
 <script>

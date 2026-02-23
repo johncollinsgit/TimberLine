@@ -6,6 +6,13 @@ use Illuminate\Http\Request;
 
 class UiPreferencesController extends Controller
 {
+    private const THEMES = [
+        'forestry-green',
+        'sugar-and-spice',
+        'get-shit-done',
+        'steve-jobs',
+    ];
+
     public function update(Request $request)
     {
         $user = $request->user();
@@ -41,5 +48,24 @@ class UiPreferencesController extends Controller
         $user->forceFill(['ui_preferences' => $prefs])->save();
 
         return response()->json(['ok' => true]);
+    }
+
+    public function updateTheme(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'theme' => ['required', 'string', 'in:'.implode(',', self::THEMES)],
+        ]);
+
+        $prefs = is_array($user->ui_preferences) ? $user->ui_preferences : [];
+        $prefs['theme'] = $validated['theme'];
+
+        $user->forceFill(['ui_preferences' => $prefs])->save();
+
+        return response()->json(['ok' => true, 'theme' => $validated['theme']]);
     }
 }
