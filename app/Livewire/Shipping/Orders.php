@@ -148,6 +148,17 @@ class Orders extends Component
         $this->resetPage();
     }
 
+    public function setViewMode(string $view): void
+    {
+        if (!in_array($view, ['table', 'list', 'timeline', 'gantt'], true)) {
+            return;
+        }
+
+        $this->view = $view;
+        $this->persistUserPreferences();
+        $this->resetPage();
+    }
+
     public function toggleSort(string $key): void
     {
         if (!array_key_exists($key, self::SORTS)) {

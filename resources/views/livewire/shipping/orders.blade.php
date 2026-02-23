@@ -232,12 +232,19 @@
               <div class="mf-shipping-view-tabs flex max-w-full overflow-x-auto rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
                 @foreach($views as $key => $meta)
                   @php $active = (($view ?? 'list') === $key); @endphp
-                  <button type="button" wire:click="$set('view','{{ $key }}')"
+                  @php
+                    $tabHref = request()->fullUrlWithQuery([
+                      'view' => $key,
+                      'page' => 1,
+                    ]);
+                  @endphp
+                  <a href="{{ $tabHref }}"
+                    wire:click.prevent="setViewMode('{{ $key }}')"
                     class="mf-shipping-view-tab h-9 px-4 rounded-2xl text-xs font-semibold transition inline-flex items-center gap-2
                       {{ $active ? 'bg-emerald-400/25 text-emerald-50' : 'text-white/70 hover:bg-emerald-500/10' }}">
                     <span class="{{ $key === 'timeline' ? 'text-white/40' : 'text-white/70' }}">{{ $meta['icon'] }}</span>
                     <span>{{ $meta['label'] }}</span>
-                  </button>
+                  </a>
                 @endforeach
               </div>
 
@@ -581,18 +588,23 @@
                     @php
                       $isActiveSort = $sortState['key'] === $col['key'];
                       $sortIcon = $isActiveSort ? ($sortState['dir'] === 'asc' ? '↑' : '↓') : '↕';
+                      $sortHref = request()->fullUrlWithQuery(
+                        $isActiveSort && $sortState['dir'] === 'desc'
+                          ? ['sort' => 'ship_by_at', 'dir' => 'asc', 'page' => 1]
+                          : ['sort' => $col['key'], 'dir' => ($isActiveSort ? 'desc' : 'asc'), 'page' => 1]
+                      );
                     @endphp
                     <th class="{{ $col['align'] === 'right' ? 'text-right' : '' }}" @if($col['title']) title="{{ $col['title'] }}" @endif>
-                      <button
-                        type="button"
-                        wire:click="toggleSort('{{ $col['key'] }}')"
+                      <a
+                        href="{{ $sortHref }}"
+                        wire:click.prevent.stop="toggleSort('{{ $col['key'] }}')"
                         class="mf-sort-btn {{ $col['align'] === 'right' ? 'ml-auto justify-end' : '' }}"
                         data-active="{{ $isActiveSort ? 'true' : 'false' }}"
                         title="Sort by {{ $col['label'] }}"
                       >
                         <span class="mf-sort-btn-label">{{ $col['label'] }}</span>
                         <span class="mf-sort-btn-icon" aria-hidden="true">{{ $sortIcon }}</span>
-                      </button>
+                      </a>
                     </th>
                   @endforeach
                   <th class="text-right">Open</th>
