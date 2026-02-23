@@ -758,6 +758,22 @@
       border-color: rgba(255,255,255,.025);
       background: linear-gradient(to bottom, rgba(255,255,255,.008), rgba(255,255,255,0));
     }
+    /* Steve Jobs theme: force dark text on light surfaces/cards/controls */
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where([class*="text-white"], [class*="text-zinc-50"], [class*="text-zinc-100"], [class*="text-zinc-200"], [class*="text-emerald-50"], [class*="text-amber-50"], [class*="text-sky-50"]){
+      color: var(--mf-text-1) !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where([class*="text-zinc-300"], [class*="text-zinc-400"], [class*="text-zinc-500"], [class*="text-slate-300"], [class*="text-slate-400"], [class*="text-slate-500"], [class*="text-white/50"], [class*="text-white/60"], [class*="text-white/70"]){
+      color: var(--mf-text-2) !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where(button, a, input, textarea, select){
+      color: var(--mf-text-1) !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where(input::placeholder, textarea::placeholder){
+      color: var(--mf-text-3) !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell details > div :where([class*="text-white"], [class*="text-zinc-"], [class*="text-emerald-"], [class*="text-amber-"]){
+      color: var(--mf-sidebar-text) !important;
+    }
     body[data-mf-theme="get-shit-done"] .mf-sidebar-group-balanced [data-flux-sidebar-group-heading],
     body[data-mf-theme="get-shit-done"] .mf-sidebar-group-balanced :where(h2, h3, h4){
       letter-spacing: .14em;
