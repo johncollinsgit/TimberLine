@@ -6,6 +6,8 @@
 
 
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Archivo:wght@500;700;800;900&family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Sora:wght@400;500;600;700;800&display=swap');
+
     html { scroll-behavior: smooth; }
 
     /* Motion/feel */
@@ -82,7 +84,33 @@
     .mf-hide-debug-banner :where(.debug-banner, #debug-banner, [data-debug-banner]) { display:none !important; }
 
     /* Theme tokens */
+    body[data-mf-theme]{
+      --mf-font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+      --mf-font-display: "Fraunces", ui-serif, Georgia, serif;
+      --mf-font-accent: "Sora", ui-sans-serif, system-ui, sans-serif;
+      --mf-text-1: rgba(244,244,245,.96);
+      --mf-text-2: rgba(228,228,231,.78);
+      --mf-text-3: rgba(212,212,216,.58);
+      --mf-panel-bg: rgba(255,255,255,.03);
+      --mf-panel-bg-2: rgba(255,255,255,.045);
+      --mf-panel-border: rgba(255,255,255,.10);
+      --mf-panel-strong-border: rgba(255,255,255,.16);
+      --mf-input-bg: rgba(255,255,255,.04);
+      --mf-input-border: rgba(255,255,255,.12);
+      --mf-table-stripe: rgba(255,255,255,.015);
+      --mf-nav-bg-hover: rgba(255,255,255,.035);
+      --mf-nav-bg-active: rgba(var(--mf-accent), .13);
+      --mf-nav-border-active: rgba(var(--mf-accent), .35);
+      --mf-sidebar-text: rgba(255,255,255,.92);
+      --mf-sidebar-muted: rgba(255,255,255,.62);
+      --mf-sidebar-heading: rgba(255,255,255,.72);
+      --mf-floral-opacity: 0;
+    }
+
     body[data-mf-theme="forestry-green"]{
+      --mf-font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+      --mf-font-display: "Newsreader", Georgia, serif;
+      --mf-font-accent: "Sora", ui-sans-serif, system-ui, sans-serif;
       --mf-body-bg: #08110d;
       --mf-sidebar-bg: #090f0d;
       --mf-sidebar-border: rgba(255,255,255,.08);
@@ -93,8 +121,24 @@
       --mf-chip-bg: rgba(16,185,129,.12);
       --mf-chip-border: rgba(16,185,129,.28);
       --mf-chip-text: rgba(236,253,245,.92);
+      --mf-panel-bg: rgba(8, 25, 19, .42);
+      --mf-panel-bg-2: rgba(9, 30, 22, .55);
+      --mf-panel-border: rgba(110, 231, 183, .12);
+      --mf-panel-strong-border: rgba(110, 231, 183, .22);
+      --mf-input-bg: rgba(8, 25, 19, .55);
+      --mf-input-border: rgba(110, 231, 183, .16);
+      --mf-table-stripe: rgba(110, 231, 183, .035);
+      --mf-nav-bg-hover: rgba(16,185,129,.06);
+      --mf-nav-bg-active: rgba(16,185,129,.10);
+      --mf-nav-border-active: rgba(16,185,129,.30);
+      --mf-sidebar-text: rgba(236,253,245,.94);
+      --mf-sidebar-muted: rgba(209,250,229,.62);
+      --mf-sidebar-heading: rgba(209,250,229,.72);
     }
     body[data-mf-theme="sugar-and-spice"]{
+      --mf-font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+      --mf-font-display: "Fraunces", Georgia, serif;
+      --mf-font-accent: "Sora", ui-sans-serif, system-ui, sans-serif;
       --mf-body-bg: #1a1018;
       --mf-sidebar-bg: #160f17;
       --mf-sidebar-border: rgba(255,210,236,.16);
@@ -105,8 +149,25 @@
       --mf-chip-bg: rgba(244,114,182,.16);
       --mf-chip-border: rgba(244,114,182,.30);
       --mf-chip-text: rgba(255,238,247,.94);
+      --mf-panel-bg: rgba(68, 31, 59, .28);
+      --mf-panel-bg-2: rgba(80, 34, 64, .38);
+      --mf-panel-border: rgba(255, 189, 228, .18);
+      --mf-panel-strong-border: rgba(255, 189, 228, .28);
+      --mf-input-bg: rgba(77, 28, 61, .35);
+      --mf-input-border: rgba(255, 189, 228, .22);
+      --mf-table-stripe: rgba(255, 189, 228, .04);
+      --mf-nav-bg-hover: rgba(244,114,182,.07);
+      --mf-nav-bg-active: rgba(244,114,182,.13);
+      --mf-nav-border-active: rgba(244,114,182,.34);
+      --mf-sidebar-text: rgba(255,242,248,.95);
+      --mf-sidebar-muted: rgba(255,221,236,.66);
+      --mf-sidebar-heading: rgba(255,221,236,.78);
+      --mf-floral-opacity: .95;
     }
     body[data-mf-theme="get-shit-done"]{
+      --mf-font-body: "Archivo", ui-sans-serif, system-ui, sans-serif;
+      --mf-font-display: "Barlow Condensed", "Archivo", Impact, sans-serif;
+      --mf-font-accent: "Archivo", ui-sans-serif, system-ui, sans-serif;
       --mf-body-bg: #120f0a;
       --mf-sidebar-bg: #110f0c;
       --mf-sidebar-border: rgba(255,208,128,.14);
@@ -117,8 +178,24 @@
       --mf-chip-bg: rgba(249,115,22,.16);
       --mf-chip-border: rgba(249,115,22,.30);
       --mf-chip-text: rgba(255,244,230,.94);
+      --mf-panel-bg: rgba(47, 26, 11, .28);
+      --mf-panel-bg-2: rgba(58, 30, 10, .42);
+      --mf-panel-border: rgba(251, 146, 60, .18);
+      --mf-panel-strong-border: rgba(251, 146, 60, .28);
+      --mf-input-bg: rgba(59, 28, 9, .36);
+      --mf-input-border: rgba(251, 146, 60, .20);
+      --mf-table-stripe: rgba(251, 146, 60, .04);
+      --mf-nav-bg-hover: rgba(249,115,22,.07);
+      --mf-nav-bg-active: rgba(249,115,22,.12);
+      --mf-nav-border-active: rgba(249,115,22,.34);
+      --mf-sidebar-text: rgba(255,247,237,.95);
+      --mf-sidebar-muted: rgba(254,215,170,.64);
+      --mf-sidebar-heading: rgba(254,215,170,.80);
     }
     body[data-mf-theme="steve-jobs"]{
+      --mf-font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mf-font-display: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mf-font-accent: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mf-body-bg: #0a0b0d;
       --mf-sidebar-bg: #090a0c;
       --mf-sidebar-border: rgba(255,255,255,.07);
@@ -129,18 +206,47 @@
       --mf-chip-bg: rgba(148,163,184,.12);
       --mf-chip-border: rgba(148,163,184,.22);
       --mf-chip-text: rgba(241,245,249,.94);
+      --mf-panel-bg: rgba(255,255,255,.018);
+      --mf-panel-bg-2: rgba(255,255,255,.028);
+      --mf-panel-border: rgba(255,255,255,.085);
+      --mf-panel-strong-border: rgba(255,255,255,.14);
+      --mf-input-bg: rgba(255,255,255,.018);
+      --mf-input-border: rgba(255,255,255,.10);
+      --mf-table-stripe: rgba(255,255,255,.012);
+      --mf-nav-bg-hover: rgba(255,255,255,.028);
+      --mf-nav-bg-active: rgba(148,163,184,.085);
+      --mf-nav-border-active: rgba(148,163,184,.22);
+      --mf-sidebar-text: rgba(248,250,252,.95);
+      --mf-sidebar-muted: rgba(226,232,240,.60);
+      --mf-sidebar-heading: rgba(226,232,240,.72);
     }
 
     body.mf-app-shell{
+      font-family: var(--mf-font-body);
       background:
         radial-gradient(1200px 700px at 0% 0%, rgba(var(--mf-accent), .14), transparent 60%),
         radial-gradient(1100px 650px at 100% 10%, rgba(var(--mf-accent-2), .10), transparent 62%),
         var(--mf-body-bg, #08110d);
+      color: var(--mf-text-1);
     }
 
     .mf-sidebar-theme-shell{
       background: var(--mf-sidebar-bg, #090f0d) !important;
       border-color: var(--mf-sidebar-border, rgba(255,255,255,.08)) !important;
+      color: var(--mf-sidebar-text);
+    }
+
+    .mf-sidebar-theme-shell::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity: var(--mf-floral-opacity, 0);
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23ffb7d7' stroke-width='1.5' stroke-linecap='round' opacity='.45'%3E%3Cpath d='M28 30c8-10 22-10 30 0-8 10-22 10-30 0Z'/%3E%3Cpath d='M43 15c10 8 10 22 0 30-10-8-10-22 0-30Z'/%3E%3Cpath d='M58 30c8-10 22-10 30 0-8 10-22 10-30 0Z'/%3E%3Cpath d='M43 45c10 8 10 22 0 30-10-8-10-22 0-30Z'/%3E%3Cpath d='M43 30c6-6 14-6 20 0-6 6-14 6-20 0Z' fill='%23ffd7ea' fill-opacity='.22'/%3E%3Cpath d='M88 92c6-8 18-8 24 0-6 8-18 8-24 0Z'/%3E%3Cpath d='M100 80c8 6 8 18 0 24-8-6-8-18 0-24Z'/%3E%3Cpath d='M16 104c4 0 6 2 8 6 2-4 4-6 8-6-4 0-6-2-8-6-2 4-4 6-8 6Z' fill='%23ffe7f3' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 170px 170px;
+      background-position: right top;
+      mix-blend-mode: screen;
     }
 
     .mf-sidebar-glow::before{
@@ -157,6 +263,13 @@
         0 30px 80px -50px rgba(0,0,0,.9);
     }
 
+    body[data-mf-theme="sugar-and-spice"] .mf-app-card{
+      background:
+        radial-gradient(700px 260px at 8% 0%, rgba(255, 174, 219, .09), transparent 55%),
+        radial-gradient(650px 240px at 92% 6%, rgba(251, 146, 60, .08), transparent 58%),
+        var(--mf-main-card-bg);
+    }
+
     .mf-app-glow{
       position: relative;
       overflow: hidden;
@@ -169,6 +282,24 @@
       height: 55%;
       background: radial-gradient(60% 100% at 20% 0%, rgba(var(--mf-accent), .08), transparent 70%);
       pointer-events: none;
+    }
+
+    .mf-app-glow::after{
+      content: "";
+      position: absolute;
+      inset: auto -6% -12% auto;
+      width: 240px;
+      height: 240px;
+      pointer-events: none;
+      opacity: calc(var(--mf-floral-opacity, 0) * .9);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,214,236,.25) 0 18%, transparent 19% 100%),
+        radial-gradient(circle at 28% 38%, rgba(255,184,221,.18) 0 9%, transparent 10% 100%),
+        radial-gradient(circle at 72% 38%, rgba(255,184,221,.18) 0 9%, transparent 10% 100%),
+        radial-gradient(circle at 35% 68%, rgba(255,184,221,.18) 0 8%, transparent 9% 100%),
+        radial-gradient(circle at 65% 68%, rgba(255,184,221,.18) 0 8%, transparent 9% 100%);
+      filter: blur(.15px);
+      transform: rotate(-12deg);
     }
 
     .mf-theme-selector{
@@ -185,6 +316,147 @@
     .mf-theme-selector select option{
       color: #111827;
       background: #fff;
+    }
+
+    /* Typography mood by theme */
+    #app-main :is(h1,h2,h3,h4,h5,h6){
+      font-family: var(--mf-font-display);
+      color: var(--mf-text-1);
+      letter-spacing: -0.02em;
+    }
+    #app-main :is(label, th, summary, .uppercase){
+      font-family: var(--mf-font-accent);
+    }
+    body[data-mf-theme="get-shit-done"] #app-main :is(h1,h2,h3,h4,h5,h6){
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      line-height: .95;
+    }
+    body[data-mf-theme="steve-jobs"] #app-main :is(h1,h2,h3,h4,h5,h6){
+      letter-spacing: -.035em;
+      font-weight: 600;
+    }
+    body[data-mf-theme="sugar-and-spice"] #app-main :is(h1,h2,h3){
+      letter-spacing: -.03em;
+      text-shadow: 0 8px 30px rgba(244,114,182,.10);
+    }
+
+    /* Sidebar internals */
+    .mf-sidebar-theme-shell :where(a, button, summary, [role="button"]){
+      color: var(--mf-sidebar-text);
+    }
+    .mf-sidebar-theme-shell :where([class*="sidebar-item"], a[href]){
+      border-radius: .95rem;
+    }
+    .mf-sidebar-theme-shell :where(a[href]):hover{
+      background: var(--mf-nav-bg-hover);
+    }
+    .mf-sidebar-theme-shell :where([aria-current="page"], .mf-active-pill > *){
+      background: linear-gradient(to right, var(--mf-nav-bg-active), rgba(255,255,255,0));
+      box-shadow: inset 0 0 0 1px var(--mf-nav-border-active);
+      border-radius: 14px;
+    }
+    .mf-sidebar-theme-shell :where([class*="text-zinc"], [class*="text-emerald"], [class*="text-amber"]){
+      color: inherit;
+    }
+    .mf-sidebar-theme-shell details{
+      background: var(--mf-panel-bg-2) !important;
+      background: color-mix(in srgb, var(--mf-panel-bg-2) 78%, transparent) !important;
+      border-color: var(--mf-panel-border) !important;
+    }
+    .mf-sidebar-theme-shell details > summary{
+      color: var(--mf-sidebar-heading) !important;
+    }
+    .mf-sidebar-theme-shell details > div{
+      background: rgba(0,0,0,.22) !important;
+      border: 1px solid var(--mf-panel-border);
+    }
+    .mf-sidebar-theme-shell .mf-sidebar-action-btn{
+      border-color: var(--mf-panel-strong-border) !important;
+      background: linear-gradient(to bottom, rgba(var(--mf-accent), .12), rgba(0,0,0,.10)) !important;
+      color: var(--mf-sidebar-text) !important;
+    }
+    .mf-sidebar-theme-shell .mf-sidebar-action-btn:hover{
+      background: linear-gradient(to bottom, rgba(var(--mf-accent), .18), rgba(0,0,0,.14)) !important;
+    }
+    body[data-mf-theme="get-shit-done"] .mf-sidebar-theme-shell .mf-sidebar-action-btn{
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    /* Widget/panel unification inside main app card */
+    .mf-app-card{
+      color: var(--mf-text-1);
+    }
+    .mf-app-card :where(p, span, small, li, td, dt, dd){
+      color: var(--mf-text-2);
+    }
+    .mf-app-card :where(.text-zinc-50, .text-zinc-100, .text-zinc-200, .text-white){
+      color: var(--mf-text-1) !important;
+    }
+    .mf-app-card :where(.text-zinc-300, .text-zinc-400, .text-zinc-500, .text-slate-300, .text-slate-400){
+      color: var(--mf-text-2) !important;
+    }
+    .mf-app-card :where(.text-zinc-600, .text-slate-500){
+      color: var(--mf-text-3) !important;
+    }
+    .mf-app-card :where(div,section,article,aside,details)[class*="rounded-"][class*="border"]{
+      border-color: var(--mf-panel-border) !important;
+      background: linear-gradient(to bottom, var(--mf-panel-bg-2), var(--mf-panel-bg)) !important;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+    }
+    .mf-app-card :where(input, textarea, select){
+      color: var(--mf-text-1) !important;
+      background: var(--mf-input-bg) !important;
+      border-color: var(--mf-input-border) !important;
+      box-shadow: none !important;
+    }
+    .mf-app-card :where(input, textarea, select)::placeholder{
+      color: var(--mf-text-3) !important;
+    }
+    .mf-app-card :where(table){
+      border-color: var(--mf-panel-border) !important;
+    }
+    .mf-app-card :where(table thead){
+      background: rgba(var(--mf-accent), .06) !important;
+    }
+    .mf-app-card :where(table tbody tr:nth-child(even)){
+      background: var(--mf-table-stripe);
+    }
+    .mf-app-card :where(th, td){
+      border-color: var(--mf-panel-border) !important;
+    }
+    .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl:not(.mf-sidebar-action-btn){
+      border-color: var(--mf-panel-strong-border);
+    }
+    .mf-app-card :where(a, button){
+      transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+    }
+    .mf-app-card :where(a:hover, button:hover){
+      border-color: var(--mf-nav-border-active);
+    }
+
+    /* Theme-specific personality accents */
+    body[data-mf-theme="get-shit-done"] .mf-app-card{
+      box-shadow:
+        inset 0 0 0 1px rgba(251,146,60,.05),
+        0 34px 90px -52px rgba(0,0,0,.92);
+    }
+    body[data-mf-theme="get-shit-done"] .mf-theme-selector{
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-weight: 700;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-app-card{
+      border-radius: 1.5rem;
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.02),
+        0 18px 40px -30px rgba(0,0,0,.85);
+    }
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-glow::before{
+      opacity: .45;
+      filter: blur(24px);
     }
   </style>
 </head>
@@ -296,7 +568,7 @@
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
-      <flux:sidebar.nav>
+      <flux:sidebar.nav class="mf-sidebar-nav">
         <flux:sidebar.group heading="Modern Forestry Backstage" class="grid">
           <div class="space-y-1" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
             @foreach($orderedSidebarItems as $item)
@@ -310,12 +582,12 @@
                 </flux:sidebar.item>
               </div>
             @endforeach
-            <details class="ml-3 rounded-xl border border-emerald-200/10 bg-emerald-500/5 px-2 py-1" {{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') || (request()->routeIs('wiki.article') && request()->route('slug') === 'market-room') ? 'open' : '' }}>
+            <details class="ml-3 rounded-xl border px-2 py-1 mf-sidebar-panel" {{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') || (request()->routeIs('wiki.article') && request()->route('slug') === 'market-room') ? 'open' : '' }}>
               <summary class="cursor-pointer list-none text-xs text-emerald-100/70 flex items-center justify-between px-2 py-1 group">
                 <span>Wiki Sections</span>
                 <span class="text-[10px] transition-transform group-open:rotate-90">▸</span>
               </summary>
-              <div class="mt-2 rounded-xl bg-black/30 p-2 space-y-1">
+              <div class="mt-2 rounded-xl p-2 space-y-1">
                 <div class="{{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') ? 'mf-active-pill' : '' }}">
                   <flux:sidebar.item icon="folder-open" href="{{ route('wiki.wholesale-processes') }}" class="mf-transition mf-nav-item">
                     Wholesale Processes
@@ -338,7 +610,7 @@
           </flux:sidebar.item>
 
           @if($isAdmin || $isManager)
-            <details class="mt-2 rounded-2xl border border-emerald-400/10 bg-emerald-500/5 p-3 group">
+            <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
               <summary class="cursor-pointer list-none text-[10px] uppercase tracking-[0.3em] text-emerald-100/50 flex items-center justify-between">
                 <span>Import Tools</span>
                 <span class="text-[10px] transition-transform group-open:rotate-90">▸</span>
@@ -346,19 +618,19 @@
               <div class="mt-3 space-y-2">
                 <form method="POST" action="{{ route('admin.tools.clear-orders') }}">
                   @csrf
-                  <button type="submit" class="w-full rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-100/90 hover:bg-red-500/20">
+                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
                     Clear Orders
                   </button>
                 </form>
                 <form method="POST" action="{{ route('admin.tools.import-retail') }}">
                   @csrf
-                  <button type="submit" class="w-full rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100/90 hover:bg-emerald-500/20">
+                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
                     Import Retail Orders
                   </button>
                 </form>
                 <form method="POST" action="{{ route('admin.tools.import-wholesale') }}">
                   @csrf
-                  <button type="submit" class="w-full rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90 hover:bg-amber-500/20">
+                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
                     Import Wholesale Orders
                   </button>
                 </form>
