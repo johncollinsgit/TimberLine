@@ -2,6 +2,11 @@
     <div class="flex flex-col gap-6">
         <x-auth-header :title="__('Forgot password')" :description="__('Enter your email to receive a password reset link')" />
 
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-zinc-300">
+            <div class="font-semibold text-white/90">Need approval first?</div>
+            <div class="mt-1">If your account is still pending approval, wait for the approval email with your password setup link.</div>
+        </div>
+
         <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
 

@@ -2,6 +2,11 @@
     <div class="flex flex-col gap-6">
         <x-auth-header :title="__('Reset password')" :description="__('Please enter your new password below')" />
 
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-zinc-300">
+            <div class="font-semibold text-white/90">Next step</div>
+            <div class="mt-1">After you set your password, you will be returned to the login page to sign in.</div>
+        </div>
+
         <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
 
@@ -48,5 +53,9 @@
                 </flux:button>
             </div>
         </form>
+
+        <div class="text-center text-sm text-zinc-400">
+            <flux:link :href="route('login')" wire:navigate>{{ __('Back to login') }}</flux:link>
+        </div>
     </div>
 </x-layouts::auth>

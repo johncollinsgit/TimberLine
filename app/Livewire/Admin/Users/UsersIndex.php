@@ -3,10 +3,12 @@
 namespace App\Livewire\Admin\Users;
 
 use App\Models\User;
+use App\Notifications\ApprovalPasswordSetupNotification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Throwable;
 
 class UsersIndex extends Component
 {
@@ -110,6 +112,8 @@ class UsersIndex extends Component
             return;
         }
 
+        $user = User::query()->findOrFail($this->editingId);
+
         $data = validator($this->edit, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $this->editingId],
@@ -141,11 +145,31 @@ class UsersIndex extends Component
             $payload['password'] = Hash::make($this->newPassword);
         }
 
+        $wasInactive = !$user->is_active;
+
         User::query()->whereKey($this->editingId)->update($payload);
+
+        $emailSent = false;
+        if ($wasInactive && $payload['is_active']) {
+            $fresh = User::query()->find($this->editingId);
+            if ($fresh) {
+                try {
+                    $fresh->notify(new ApprovalPasswordSetupNotification($fresh));
+                    $emailSent = true;
+                } catch (Throwable $e) {
+                    report($e);
+                }
+            }
+        }
 
         $this->showEdit = false;
         $this->editingId = null;
-        $this->dispatch('toast', ['message' => 'User updated.', 'style' => 'success']);
+        $this->dispatch('toast', [
+            'message' => ($wasInactive && $payload['is_active'])
+                ? ($emailSent ? 'User updated and approval email sent.' : 'User updated. Approval email could not be sent.')
+                : 'User updated.',
+            'style' => ($wasInactive && $payload['is_active'] && !$emailSent) ? 'warning' : 'success',
+        ]);
     }
 
     public function openDelete(int $id): void
@@ -173,6 +197,7 @@ class UsersIndex extends Component
     public function approve(int $id): void
     {
         $user = User::query()->findOrFail($id);
+        $wasInactive = !$user->is_active;
 
         $user->forceFill([
             'is_active' => true,
@@ -180,7 +205,22 @@ class UsersIndex extends Component
             'approved_by' => auth()->id(),
         ])->save();
 
-        $this->dispatch('toast', ['message' => 'User approved.', 'style' => 'success']);
+        $emailSent = false;
+        if ($wasInactive) {
+            try {
+                $user->notify(new ApprovalPasswordSetupNotification($user));
+                $emailSent = true;
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+
+        $this->dispatch('toast', [
+            'message' => $emailSent
+                ? 'User approved. Password setup email sent.'
+                : 'User approved. Password setup email could not be sent.',
+            'style' => $emailSent ? 'success' : 'warning',
+        ]);
     }
 
     public function render()

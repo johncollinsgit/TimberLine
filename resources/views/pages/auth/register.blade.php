@@ -1,6 +1,6 @@
 <x-layouts::auth>
     <div class="flex flex-col gap-6">
-        <x-auth-header :title="__('Create an account')" :description="__('Enter your details below to create your account')" />
+        <x-auth-header :title="__('Request access')" :description="__('Submit your details. After approval, we will email you a link to set your password.')" />
 
         <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
@@ -30,34 +30,21 @@
                 placeholder="email@example.com"
             />
 
-            <!-- Password -->
-            <flux:input
-                name="password"
-                :label="__('Password')"
-                type="password"
-                required
-                autocomplete="new-password"
-                :placeholder="__('Password')"
-                viewable
-            />
-
-            <!-- Confirm Password -->
-            <flux:input
-                name="password_confirmation"
-                :label="__('Confirm password')"
-                type="password"
-                required
-                autocomplete="new-password"
-                :placeholder="__('Confirm password')"
-                viewable
-            />
-
             <div class="flex items-center justify-end">
                 <flux:button type="submit" variant="primary" class="w-full" data-test="register-user-button">
-                    {{ __('Create account') }}
+                    {{ __('Submit access request') }}
                 </flux:button>
             </div>
         </form>
+
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-zinc-300">
+            <div class="font-semibold text-white/90">What happens next?</div>
+            <ol class="mt-2 list-decimal space-y-1 pl-4">
+                <li>An administrator reviews your request.</li>
+                <li>You receive an approval email with a password setup link.</li>
+                <li>Set your password, then return to sign in.</li>
+            </ol>
+        </div>
 
         <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-600 dark:text-zinc-400">
             <span>{{ __('Already have an account?') }}</span>

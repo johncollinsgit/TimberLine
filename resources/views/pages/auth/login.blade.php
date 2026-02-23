@@ -8,6 +8,25 @@
 
         <x-auth-session-status class="text-center" :status="session('status')" />
 
+        @if (session('status'))
+            <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-3 text-xs text-emerald-50/85">
+                <div class="font-semibold">Next steps</div>
+                <div class="mt-1">Check your email for approval or password setup instructions. Then come back here to sign in.</div>
+                <div class="mt-2 flex flex-wrap gap-3">
+                    @if (Route::has('password.request'))
+                        <a href="{{ route('password.request') }}" class="underline decoration-emerald-200/60 underline-offset-2" wire:navigate>
+                            Reset password
+                        </a>
+                    @endif
+                    @if (Route::has('register'))
+                        <a href="{{ route('register') }}" class="underline decoration-emerald-200/60 underline-offset-2" wire:navigate>
+                            Request access
+                        </a>
+                    @endif
+                </div>
+            </div>
+        @endif
+
         @php
             $googleLoginEnabled = (bool) config('services.google.enabled')
                 && filled(config('services.google.client_id'))
