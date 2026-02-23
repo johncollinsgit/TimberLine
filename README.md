@@ -36,3 +36,4 @@ Required in deploy script:
 
 If `public/hot` exists on the server, delete it so `@vite` uses the manifest:
 - `rm -f public/hot`
+Deploy proof: Mon Feb 23 14:03:40 EST 2026
