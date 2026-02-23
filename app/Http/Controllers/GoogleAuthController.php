@@ -56,7 +56,7 @@ class GoogleAuthController extends Controller
         }
 
         if (!$user) {
-            if (!config('services.google.auto_provision', false)) {
+            if (!config('services.google.auto_provision', true)) {
                 return redirect()->route('login')
                     ->withErrors(['email' => 'No Backstage account exists for that Google email. Ask an administrator to create one.']);
             }
@@ -67,10 +67,17 @@ class GoogleAuthController extends Controller
                 'password' => Str::password(32),
                 'role' => 'pouring',
                 'is_active' => false,
+                'requested_via' => 'google',
+                'approval_requested_at' => now(),
             ]);
         }
 
         if ($user->getAttribute('is_active') === false) {
+            if ($user->getAttribute('approved_at') === null) {
+                return redirect()->route('login')
+                    ->with('status', 'Google account request received. An administrator must approve your access before you can sign in.');
+            }
+
             return redirect()->route('login')
                 ->withErrors(['email' => 'This account is disabled. Contact an administrator.']);
         }
@@ -79,6 +86,7 @@ class GoogleAuthController extends Controller
             'google_id' => $googleId,
             'google_avatar' => is_string($avatar) ? $avatar : null,
             'name' => $user->name ?: ($name !== '' ? $name : $user->name),
+            'requested_via' => $user->requested_via ?: 'google',
         ])->save();
 
         Auth::login($user, remember: true);

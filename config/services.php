@@ -34,7 +34,7 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI'),
         'enabled' => env('GOOGLE_LOGIN_ENABLED', false),
-        'auto_provision' => env('GOOGLE_LOGIN_AUTO_PROVISION', false),
+        'auto_provision' => env('GOOGLE_LOGIN_AUTO_PROVISION', true),
         'allowed_domains' => array_values(array_filter(array_map(
             static fn (string $domain): string => strtolower(trim($domain)),
             explode(',', (string) env('GOOGLE_LOGIN_ALLOWED_DOMAINS', ''))

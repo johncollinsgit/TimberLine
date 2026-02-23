@@ -25,6 +25,10 @@ class User extends Authenticatable
         'password',
         'role',
         'is_active',
+        'requested_via',
+        'approval_requested_at',
+        'approved_at',
+        'approved_by',
         'google_id',
         'google_avatar',
     ];
@@ -54,6 +58,8 @@ class User extends Authenticatable
         'dashboard_layout' => 'array',
         'ui_preferences' => 'array',
         'is_active' => 'boolean',
+        'approval_requested_at' => 'datetime',
+        'approved_at' => 'datetime',
         ];
     }
 

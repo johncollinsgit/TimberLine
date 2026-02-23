@@ -77,6 +77,10 @@ class UsersIndex extends Component
             'password' => Hash::make($data['password']),
             'role' => $data['role'],
             'is_active' => (bool) ($data['is_active'] ?? true),
+            'requested_via' => 'admin',
+            'approval_requested_at' => (bool) ($data['is_active'] ?? true) ? null : now(),
+            'approved_at' => (bool) ($data['is_active'] ?? true) ? now() : null,
+            'approved_by' => (bool) ($data['is_active'] ?? true) ? auth()->id() : null,
         ]);
 
         $this->reset('create');
@@ -120,6 +124,14 @@ class UsersIndex extends Component
             'is_active' => (bool) ($data['is_active'] ?? true),
         ];
 
+        if ($payload['is_active']) {
+            $payload['approved_at'] = now();
+            $payload['approved_by'] = auth()->id();
+            if (empty($this->edit['requested_via'] ?? null)) {
+                $payload['requested_via'] = 'admin';
+            }
+        }
+
         if ($this->newPassword !== '') {
             if (strlen($this->newPassword) < 8) {
                 throw ValidationException::withMessages([
@@ -158,8 +170,28 @@ class UsersIndex extends Component
         $this->dispatch('toast', ['message' => 'User deleted.', 'style' => 'success']);
     }
 
+    public function approve(int $id): void
+    {
+        $user = User::query()->findOrFail($id);
+
+        $user->forceFill([
+            'is_active' => true,
+            'approved_at' => now(),
+            'approved_by' => auth()->id(),
+        ])->save();
+
+        $this->dispatch('toast', ['message' => 'User approved.', 'style' => 'success']);
+    }
+
     public function render()
     {
+        $pendingUsers = User::query()
+            ->where('is_active', false)
+            ->orderBy('approval_requested_at', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->limit(50)
+            ->get();
+
         $users = User::query()
             ->when($this->search !== '', function ($query) {
                 $query->where('name', 'like', '%' . $this->search . '%')
@@ -171,6 +203,7 @@ class UsersIndex extends Component
 
         return view('livewire.admin.users.index', [
             'users' => $users,
+            'pendingUsers' => $pendingUsers,
         ])->layout('layouts.app');
     }
 }

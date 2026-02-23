@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\FortifyLoginResponse;
+use App\Http\Responses\FortifyRegisterResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class FortifyServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\Laravel\Fortify\Contracts\LoginResponse::class, FortifyLoginResponse::class);
+        $this->app->singleton(\Laravel\Fortify\Contracts\RegisterResponse::class, FortifyRegisterResponse::class);
     }
 
     /**
@@ -52,8 +54,13 @@ class FortifyServiceProvider extends ServiceProvider
             }
 
             if ($user->getAttribute('is_active') === false) {
+                $pending = $user->getAttribute('approved_at') === null
+                    && in_array((string) ($user->getAttribute('requested_via') ?? ''), ['registration', 'google'], true);
+
                 throw ValidationException::withMessages([
-                    Fortify::username() => __('This account is disabled. Contact an administrator.'),
+                    Fortify::username() => $pending
+                        ? __('Your account request is pending approval.')
+                        : __('This account is disabled. Contact an administrator.'),
                 ]);
             }
 

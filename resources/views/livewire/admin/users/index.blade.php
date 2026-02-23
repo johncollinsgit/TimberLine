@@ -60,6 +60,49 @@
     </div>
   </div>
 
+  <div class="mt-4 rounded-2xl border border-amber-300/20 bg-amber-500/5 p-4">
+    <div class="flex items-center justify-between gap-2">
+      <div>
+        <div class="text-sm font-semibold text-white">Pending Approvals</div>
+        <div class="text-xs text-amber-100/70">Requests from Google sign-in or the Request Access form.</div>
+      </div>
+      <div class="rounded-full border border-amber-300/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-50">
+        {{ $pendingUsers->count() }} pending
+      </div>
+    </div>
+
+    <div class="mt-3 space-y-2">
+      @forelse($pendingUsers as $pending)
+        @php
+          $source = $pending->requested_via ?: ($pending->google_id ? 'google' : 'manual');
+        @endphp
+        <div class="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div class="text-sm text-white">{{ $pending->name }}</div>
+            <div class="text-xs text-white/70">{{ $pending->email }}</div>
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/60">
+              <span class="rounded-full border border-white/10 px-2 py-0.5 capitalize">{{ str_replace('_', ' ', $source) }}</span>
+              <span>Requested {{ optional($pending->approval_requested_at ?? $pending->created_at)->diffForHumans() }}</span>
+              <span>Role: {{ $pending->role ?? 'pouring' }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" wire:click="openEdit({{ $pending->id }})" class="rounded-full border border-white/10 px-3 py-1 text-[11px] text-white/80">
+              Review
+            </button>
+            <button type="button" wire:click="approve({{ $pending->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-[11px] text-emerald-100">
+              Approve
+            </button>
+          </div>
+        </div>
+      @empty
+        <div class="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/60">
+          No pending account approvals.
+        </div>
+      @endforelse
+    </div>
+  </div>
+
   <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
     <table class="min-w-full text-sm">
       <thead class="bg-white/5 text-white/70">

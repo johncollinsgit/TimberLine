@@ -3,16 +3,16 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Access denied</title>
+    <title>Server error</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100">
     <main class="mx-auto flex min-h-screen max-w-2xl items-center px-6">
         <section class="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl">
-            <p class="text-xs uppercase tracking-[0.3em] text-zinc-400">403</p>
-            <h1 class="mt-3 text-3xl font-semibold">You do not have access to that page.</h1>
+            <p class="text-xs uppercase tracking-[0.3em] text-zinc-400">500</p>
+            <h1 class="mt-3 text-3xl font-semibold">The server had a moment.</h1>
             <p class="mt-3 text-sm text-zinc-300">
-                If you think this is a mistake, contact an administrator. Otherwise use the link below to return to your workspace.
+                Something broke on our side. Try again in a minute. If it keeps happening, send the time and what you clicked.
             </p>
             @include('errors.partials.disappointment-quote')
             <div class="mt-6">
