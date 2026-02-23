@@ -10,12 +10,14 @@ use App\Models\Scent;
 use App\Models\Size;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
 class Plan extends Component
 {
     public RetailPlan $plan;
     public string $quote = '';
+    public string $queue = 'retail';
 
     public ?int $inventoryScentId = null;
     public ?int $inventorySizeId = null;
@@ -27,19 +29,25 @@ class Plan extends Component
         'scentSelected' => 'handleScentSelected',
     ];
 
+    protected $queryString = [
+        'queue' => ['except' => 'retail'],
+    ];
+
     public function mount(): void
     {
-        $name = 'Retail/Pour List ' . CarbonImmutable::now()->format('Y-m-d');
-        $this->plan = RetailPlan::query()
+        $this->queue = $this->normalizeQueue($this->queue);
+
+        $name = $this->queueDisplayName() . ' / Pour List ' . CarbonImmutable::now()->format('Y-m-d');
+        $query = RetailPlan::query()
             ->whereDate('created_at', CarbonImmutable::today())
-            ->whereNull('published_at')
-            ->latest('id')
-            ->first()
-            ?? RetailPlan::query()->create([
-                'name' => $name,
-                'status' => 'draft',
-                'created_by' => auth()->id(),
-            ]);
+            ->whereNull('published_at');
+
+        if ($this->supportsQueueTypeColumn()) {
+            $query->where('queue_type', $this->queue);
+        }
+
+        $this->plan = $query->latest('id')->first()
+            ?? $this->createDraftPlan($name);
         $this->quote = $this->enneagramQuote();
 
         if ($this->plan->items()->count() === 0) {
@@ -55,7 +63,7 @@ class Plan extends Component
     protected function prefillFromOrdersInternal(bool $silent): void
     {
         $orders = Order::query()
-            ->where('order_type', 'retail')
+            ->where('order_type', $this->orderTypeForQueue())
             ->whereNull('published_at')
             ->whereIn('status', ['new', 'reviewed'])
             ->with(['lines'])
@@ -94,8 +102,8 @@ class Plan extends Component
             $this->dispatch('toast', [
                 'type' => 'success',
                 'message' => $added > 0
-                    ? "Prefilled {$added} retail lines."
-                    : 'No new retail lines to add.',
+                    ? "Prefilled {$added} ".strtolower($this->queueDisplayName()).' lines.'
+                    : 'No new '.strtolower($this->queueDisplayName()).' lines to add.',
             ]);
         }
     }
@@ -232,7 +240,7 @@ class Plan extends Component
 
         $this->dispatch('toast', [
             'type' => 'warning',
-            'message' => 'Retail list cleared.',
+            'message' => $this->queueDisplayName().' list cleared.',
         ]);
     }
 
@@ -241,7 +249,7 @@ class Plan extends Component
         if ($this->plan->published_at) {
             $this->dispatch('toast', [
                 'type' => 'warning',
-                'message' => 'This retail list is already published.',
+                'message' => 'This '.$this->queueDisplayName().' list is already published.',
             ]);
             return;
         }
@@ -280,9 +288,9 @@ class Plan extends Component
                 $today = CarbonImmutable::today();
 
                 $inventoryOrder = Order::query()->create([
-                    'order_type' => 'retail',
-                    'order_label' => 'Retail Inventory',
-                    'order_number' => 'RET-INV-' . $today->format('Ymd'),
+                    'order_type' => $this->orderTypeForQueue(),
+                    'order_label' => $this->queueDisplayName() . ' Inventory',
+                    'order_number' => $this->inventoryOrderNumberPrefix() . $today->format('Ymd'),
                     'source' => 'internal',
                     'status' => 'submitted_to_pouring',
                     'ordered_at' => now(),
@@ -326,16 +334,14 @@ class Plan extends Component
             }
         }, 3);
 
-        $this->plan = RetailPlan::query()->create([
-            'name' => 'Retail/Pour List ' . CarbonImmutable::now()->format('Y-m-d H:i'),
-            'status' => 'draft',
-            'created_by' => auth()->id(),
-        ]);
+        $this->plan = $this->createDraftPlan(
+            $this->queueDisplayName() . ' / Pour List ' . CarbonImmutable::now()->format('Y-m-d H:i')
+        );
         $this->prefillFromOrdersInternal(true);
 
         $this->dispatch('toast', [
             'type' => 'success',
-            'message' => 'Retail/Pour list sent to Pouring Room. Candles-to-pour list cleared for the next batch.',
+            'message' => $this->queueDisplayName().'/Pour list sent to Pouring Room. Candles-to-pour list cleared for the next batch.',
         ]);
         $this->dispatch('retail-plan-published', [
             'pegasus_gif' => asset('images/pegasus.gif'),
@@ -369,7 +375,90 @@ class Plan extends Component
             'scents' => $scents,
             'sizes' => $sizes,
             'quote' => $this->quote,
+            'queueMeta' => $this->queueMeta(),
         ]);
+    }
+
+    protected function createDraftPlan(string $name): RetailPlan
+    {
+        $payload = [
+            'name' => $name,
+            'status' => 'draft',
+            'created_by' => auth()->id(),
+        ];
+
+        if ($this->supportsQueueTypeColumn()) {
+            $payload['queue_type'] = $this->queue;
+        }
+
+        return RetailPlan::query()->create($payload);
+    }
+
+    protected function supportsQueueTypeColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plans', 'queue_type');
+        }
+
+        return $supports;
+    }
+
+    protected function normalizeQueue(string $queue): string
+    {
+        $queue = strtolower(trim($queue));
+
+        return in_array($queue, ['retail', 'wholesale', 'markets'], true)
+            ? $queue
+            : 'retail';
+    }
+
+    protected function orderTypeForQueue(): string
+    {
+        return match ($this->queue) {
+            'wholesale' => 'wholesale',
+            'markets' => 'event',
+            default => 'retail',
+        };
+    }
+
+    protected function inventoryOrderNumberPrefix(): string
+    {
+        return match ($this->queue) {
+            'wholesale' => 'WHL-INV-',
+            'markets' => 'MKT-INV-',
+            default => 'RET-INV-',
+        };
+    }
+
+    protected function queueDisplayName(): string
+    {
+        return match ($this->queue) {
+            'wholesale' => 'Wholesale',
+            'markets' => 'Markets',
+            default => 'Retail',
+        };
+    }
+
+    protected function queueMeta(): array
+    {
+        $queue = $this->queueDisplayName();
+        $prefillLabel = match ($this->queue) {
+            'wholesale' => 'Prefill from Wholesale Orders',
+            'markets' => 'Prefill from Market Orders',
+            default => 'Prefill from Retail Orders',
+        };
+
+        return [
+            'key' => $this->queue,
+            'title' => $queue.'/Pour List',
+            'subtitle' => 'Draft list for today. Publish to push to the pouring room.',
+            'prefill_label' => $prefillLabel,
+            'add_button_label' => 'Add to '.$queue.'/Pour List',
+            'empty_label' => 'No items yet. Prefill from '.strtolower($queue).' orders or add inventory below.',
+            'markets_help' => $this->queue === 'markets',
+        ];
     }
 
     protected function enneagramQuote(): string

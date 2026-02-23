@@ -12,6 +12,7 @@ class RetailPlan extends Model
     protected $fillable = [
         'name',
         'status',
+        'queue_type',
         'created_by',
         'published_at',
     ];
