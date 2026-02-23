@@ -372,17 +372,20 @@ class DashboardMetrics
             $query->where('orders.order_type', $channel);
         }
 
+        $orderTypeExpr = 'COALESCE(orders.order_type, "unknown")';
+        $scentNameExpr = 'COALESCE(scents.name, order_lines.scent_name, order_lines.raw_title, "Unknown")';
+
         $rows = $query
-            ->selectRaw('COALESCE(orders.order_type, "unknown") as order_type, COALESCE(scents.name, order_lines.scent_name, order_lines.raw_title, "Unknown") as scent_name, SUM('.$qtyExpr.') as qty')
-            ->groupBy('order_type', 'scent_name')
+            ->selectRaw($orderTypeExpr.' as grouped_order_type, '.$scentNameExpr.' as grouped_scent_name, SUM('.$qtyExpr.') as qty')
+            ->groupByRaw($orderTypeExpr.', '.$scentNameExpr)
             ->orderByDesc('qty')
             ->get();
 
-        $byChannel = $rows->groupBy('order_type')->map(fn ($group) => $group
+        $byChannel = $rows->groupBy('grouped_order_type')->map(fn ($group) => $group
             ->sortByDesc('qty')
             ->take(5)
             ->map(fn ($row): array => [
-                'scent' => (string) $row->scent_name,
+                'scent' => (string) $row->grouped_scent_name,
                 'qty' => (int) $row->qty,
             ])->values()->all())->all();
 
@@ -415,16 +418,18 @@ class DashboardMetrics
             $query->where('orders.order_type', $channel);
         }
 
+        $orderTypeExpr = 'COALESCE(orders.order_type, "unknown")';
+
         $rows = $query
-            ->selectRaw('COALESCE(orders.order_type, "unknown") as order_type')
+            ->selectRaw($orderTypeExpr.' as grouped_order_type')
             ->selectRaw('SUM(CASE WHEN orders.created_at >= ? THEN ('.$qtyExpr.') * COALESCE('.$priceExpr.', 0) ELSE 0 END) as gross_7', [$start7])
             ->selectRaw('SUM(('.$qtyExpr.') * COALESCE('.$priceExpr.', 0)) as gross_30')
             ->selectRaw('SUM(CASE WHEN '.$priceExpr.' IS NULL THEN '.$qtyExpr.' ELSE 0 END) as qty_missing_price')
-            ->groupBy('order_type')
+            ->groupByRaw($orderTypeExpr)
             ->get();
 
         $byChannel = $rows->mapWithKeys(fn ($row): array => [
-            (string) $row->order_type => [
+            (string) $row->grouped_order_type => [
                 'gross_7' => round((float) $row->gross_7, 2),
                 'gross_30' => round((float) $row->gross_30, 2),
                 'qty_missing_price' => (int) $row->qty_missing_price,
