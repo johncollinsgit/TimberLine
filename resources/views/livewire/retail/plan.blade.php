@@ -14,7 +14,7 @@
     <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div class="min-w-0">
         <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">{{ $queueMeta['title'] ?? 'Retail/Pour List' }}</div>
-        <div class="mt-2 text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white break-words">{{ $plan->name }}</div>
+        <div class="mt-2 max-w-full sm:max-w-[32rem] text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white truncate" title="{{ $plan->name }}">{{ $plan->name }}</div>
         <div class="mt-2 text-sm text-emerald-50/70 break-words">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
         <div class="mt-2 text-xs text-emerald-100/70 italic">“{{ $quote }}”</div>
       </div>

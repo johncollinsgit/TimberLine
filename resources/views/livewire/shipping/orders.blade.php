@@ -102,6 +102,51 @@
   $wicks = $wicks ?? [];
 @endphp
 
+<style>
+  .mf-shipping-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .mf-shipping-table {
+    width: 100%;
+    min-width: 1280px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .mf-shipping-table thead th {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+  .mf-shipping-table tbody td {
+    vertical-align: middle;
+  }
+  .mf-shipping-table .mf-row-main > td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 52px;
+  }
+  .mf-shipping-table .mf-row-main > td.mf-cell-wrap {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    height: auto;
+  }
+  .mf-shipping-table .mf-cell-clip {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
+
 <div class="min-h-[calc(100vh-4rem)] min-w-0">
   <div class="space-y-4 sm:space-y-6 min-w-0">
 
@@ -454,20 +499,33 @@
             <div class="text-xs text-white/55">Shipping-room spreadsheet mode.</div>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm mf-table">
+          <div class="mf-shipping-table-wrap">
+            <table class="text-sm mf-table mf-shipping-table">
+              <colgroup>
+                <col style="width: 120px;">
+                <col style="width: 110px;">
+                <col style="width: 220px;">
+                <col style="width: 220px;">
+                <col style="width: 130px;">
+                <col style="width: 130px;">
+                <col style="width: 190px;">
+                <col style="width: 150px;">
+                <col style="width: 72px;">
+                <col style="width: 72px;">
+                <col style="width: 118px;">
+              </colgroup>
               <thead class="text-xs text-white/55 bg-black/20">
                 <tr class="[&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-medium">
-                  <th>Order</th>
+                  <th title="Order Number">Order</th>
                   <th>Type</th>
                   <th>Name</th>
                   <th>Customer</th>
-                  <th>Ship By</th>
-                  <th>Bring Down</th>
+                  <th title="Ship By Date">Ship By</th>
+                  <th title="Bring Down Date">Bring Down</th>
                   <th>Status</th>
                   <th>Source</th>
-                  <th class="text-right">Lines</th>
-                  <th class="text-right">Qty</th>
+                  <th class="text-right" title="Line Count">Lines</th>
+                  <th class="text-right" title="Quantity">Qty</th>
                   <th class="text-right">Open</th>
                 </tr>
               </thead>
@@ -488,7 +546,7 @@
 
                   {{-- main row --}}
                   <tr
-                    class="hover:bg-emerald-500/5 transition {{ $isEditingOrder ? '' : 'cursor-pointer' }}"
+                    class="mf-row-main hover:bg-emerald-500/5 transition {{ $isEditingOrder ? '' : 'cursor-pointer' }}"
                     wire:key="order-row-{{ $order->id }}"
                     @if(!$isEditingOrder) wire:click="toggle({{ $order->id }})" @endif
                   >
@@ -502,12 +560,12 @@
                       </span>
                     </td>
 
-                    <td class="px-4 py-3 text-white/80">
-                      {{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}
+                    <td class="px-4 py-3 text-white/80" title="{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}">
+                      <span class="mf-cell-clip">{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}</span>
                     </td>
 
-                    <td class="px-4 py-3 text-white/80">
-                      {{ $order->customer_name ?? $order->display_name ?? '—' }}
+                    <td class="px-4 py-3 text-white/80" title="{{ $order->customer_name ?? $order->display_name ?? '—' }}">
+                      <span class="mf-cell-clip">{{ $order->customer_name ?? $order->display_name ?? '—' }}</span>
                     </td>
 
                     {{-- Ship By --}}
@@ -557,7 +615,7 @@
                     </td>
 
                     {{-- Status --}}
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3 {{ $isEditingOrder ? 'mf-cell-wrap' : '' }}">
                       @if($canEditOrders && $isEditingOrder)
                         <select
                           class="w-[170px] rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/90
@@ -575,7 +633,7 @@
                         @error("orderEdit.$order->id.status")
                           <div class="mt-1 text-[11px] text-red-400">{{ $message }}</div>
                         @enderror
-                        <label class="mt-2 flex items-center gap-2 text-[11px] text-white/60">
+                        <label class="mt-2 flex items-center gap-2 text-[11px] text-white/60 whitespace-normal">
                           <input
                             type="checkbox"
                             class="h-4 w-4 rounded border-white/20 bg-white/5 text-emerald-400 focus:ring-emerald-400/30"
@@ -592,26 +650,25 @@
                           </a>
                         @endif
                       @else
-                        <button
-                          type="button"
-                          class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition"
-                          @if($canEditOrders) wire:click.stop="startEditing({{ $order->id }})" @endif
-                        >
-                          {{ $fmtStatus($order->status ?? null) }}
-                        </button>
-                        @if(($order->open_mapping_exceptions_count ?? 0) > 0)
-                          <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
-                            Blocked: needs mapping
-                          </div>
-                          <a href="{{ route('admin.mapping-exceptions') }}" class="mt-1 inline-flex text-[10px] text-emerald-100/80 hover:text-emerald-100 underline">
-                            Fix mappings
-                          </a>
-                        @endif
+                        <div class="flex items-center gap-2 whitespace-nowrap overflow-hidden">
+                          <button
+                            type="button"
+                            class="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition"
+                            @if($canEditOrders) wire:click.stop="startEditing({{ $order->id }})" @endif
+                          >
+                            {{ $fmtStatus($order->status ?? null) }}
+                          </button>
+                          @if(($order->open_mapping_exceptions_count ?? 0) > 0)
+                            <span class="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                              Needs mapping
+                            </span>
+                          @endif
+                        </div>
                       @endif
                     </td>
 
-                    <td class="px-4 py-3 text-white/70 whitespace-nowrap">
-                      {{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}
+                    <td class="px-4 py-3 text-white/70 whitespace-nowrap" title="{{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}">
+                      <span class="mf-cell-clip">{{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}</span>
                     </td>
 
                     <td class="px-4 py-3 text-right text-white/70 whitespace-nowrap">

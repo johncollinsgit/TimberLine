@@ -43,14 +43,14 @@
     .mf-active-pill::after{
       content:"";
       position:absolute;
-      left:-10px;
+      left:2px;
       top:50%;
-      width:6px;
-      height:22px;
+      width:4px;
+      height:24px;
       transform: translateY(-50%);
       border-radius:999px;
-      background: linear-gradient(to bottom, rgba(16,185,129,.95), rgba(245,158,11,.45));
-      box-shadow: 0 0 0 1px rgba(16,185,129,.25), 0 10px 25px rgba(16,185,129,.18);
+      background: linear-gradient(to bottom, rgba(var(--mf-accent), .95), rgba(var(--mf-accent-2), .45));
+      box-shadow: 0 0 0 1px rgba(var(--mf-accent), .22), 0 10px 25px rgba(var(--mf-accent), .14);
     }
 
     /* Surface: explicit light + explicit dark (prevents “whiting out”) */
@@ -148,25 +148,25 @@
       --mf-font-display: "Fraunces", Georgia, serif;
       --mf-font-accent: "Sora", ui-sans-serif, system-ui, sans-serif;
       --mf-body-bg: #fff8fb;
-      --mf-sidebar-bg: #fff4fa;
-      --mf-sidebar-border: rgba(236, 72, 153, .12);
+      --mf-sidebar-bg: #fff8fb;
+      --mf-sidebar-border: rgba(236, 72, 153, .10);
       --mf-main-card-bg: linear-gradient(to bottom, rgba(255,255,255,.94), rgba(255,249,253,.98));
       --mf-main-card-border: rgba(236, 72, 153, .10);
       --mf-accent: 244,114,182;
-      --mf-accent-2: 251,146,60;
+      --mf-accent-2: 148,163,122;
       --mf-chip-bg: rgba(244,114,182,.09);
       --mf-chip-border: rgba(244,114,182,.22);
       --mf-chip-text: rgba(136, 19, 55, .88);
       --mf-panel-bg: rgba(255, 255, 255, .82);
-      --mf-panel-bg-2: rgba(255, 245, 251, .88);
+      --mf-panel-bg-2: rgba(255, 247, 251, .92);
       --mf-panel-border: rgba(244, 114, 182, .12);
       --mf-panel-strong-border: rgba(244, 114, 182, .20);
       --mf-input-bg: rgba(255, 255, 255, .94);
       --mf-input-border: rgba(244, 114, 182, .16);
       --mf-table-stripe: rgba(244, 114, 182, .03);
-      --mf-nav-bg-hover: rgba(244,114,182,.07);
-      --mf-nav-bg-active: rgba(244,114,182,.13);
-      --mf-nav-border-active: rgba(244,114,182,.34);
+      --mf-nav-bg-hover: rgba(244,114,182,.045);
+      --mf-nav-bg-active: rgba(244,114,182,.08);
+      --mf-nav-border-active: rgba(244,114,182,.22);
       --mf-text-1: rgba(77, 29, 57, .95);
       --mf-text-2: rgba(106, 46, 79, .78);
       --mf-text-3: rgba(137, 77, 110, .58);
@@ -174,63 +174,66 @@
       --mf-sidebar-muted: rgba(120, 56, 91, .62);
       --mf-sidebar-heading: rgba(136, 52, 99, .72);
       --mf-body-text: 77,29,57;
-      --mf-chart-3: rgba(251,146,60,.78);
+      --mf-chart-3: rgba(148,163,122,.78);
       --mf-chart-4: rgba(190,24,93,.76);
       --mf-chart-5: rgba(45,212,191,.72);
-      --mf-floral-opacity: .95;
+      --mf-floral-opacity: .22;
     }
     body[data-mf-theme="get-shit-done"]{
       --mf-font-body: "Archivo", ui-sans-serif, system-ui, sans-serif;
       --mf-font-display: "Barlow Condensed", "Archivo", Impact, sans-serif;
       --mf-font-accent: "Archivo", ui-sans-serif, system-ui, sans-serif;
-      --mf-body-bg: #120f0a;
-      --mf-sidebar-bg: #110f0c;
-      --mf-sidebar-border: rgba(255,208,128,.14);
-      --mf-main-card-bg: linear-gradient(to bottom, rgba(31,24,16,.84), rgba(21,17,12,.68));
-      --mf-main-card-border: rgba(255,196,92,.16);
-      --mf-accent: 249,115,22;
-      --mf-accent-2: 234,179,8;
-      --mf-chip-bg: rgba(249,115,22,.16);
-      --mf-chip-border: rgba(249,115,22,.30);
-      --mf-chip-text: rgba(255,244,230,.94);
-      --mf-panel-bg: rgba(47, 26, 11, .28);
-      --mf-panel-bg-2: rgba(58, 30, 10, .42);
-      --mf-panel-border: rgba(251, 146, 60, .18);
-      --mf-panel-strong-border: rgba(251, 146, 60, .28);
-      --mf-input-bg: rgba(59, 28, 9, .36);
-      --mf-input-border: rgba(251, 146, 60, .20);
-      --mf-table-stripe: rgba(251, 146, 60, .04);
-      --mf-nav-bg-hover: rgba(249,115,22,.07);
-      --mf-nav-bg-active: rgba(249,115,22,.12);
-      --mf-nav-border-active: rgba(249,115,22,.34);
-      --mf-sidebar-text: rgba(255,247,237,.95);
-      --mf-sidebar-muted: rgba(254,215,170,.64);
-      --mf-sidebar-heading: rgba(254,215,170,.80);
+      --mf-body-bg: #0f1013;
+      --mf-sidebar-bg: #0d0e11;
+      --mf-sidebar-border: rgba(255,255,255,.06);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(23,24,28,.92), rgba(16,17,20,.88));
+      --mf-main-card-border: rgba(255,255,255,.07);
+      --mf-accent: 190,18,60;
+      --mf-accent-2: 127,29,29;
+      --mf-chip-bg: rgba(190,18,60,.14);
+      --mf-chip-border: rgba(239,68,68,.26);
+      --mf-chip-text: rgba(254,242,242,.95);
+      --mf-panel-bg: rgba(22, 23, 27, .58);
+      --mf-panel-bg-2: rgba(28, 29, 34, .72);
+      --mf-panel-border: rgba(239, 68, 68, .14);
+      --mf-panel-strong-border: rgba(239, 68, 68, .26);
+      --mf-input-bg: rgba(17, 18, 22, .82);
+      --mf-input-border: rgba(239, 68, 68, .16);
+      --mf-table-stripe: rgba(255,255,255,.012);
+      --mf-nav-bg-hover: rgba(239,68,68,.055);
+      --mf-nav-bg-active: rgba(190,18,60,.16);
+      --mf-nav-border-active: rgba(239,68,68,.28);
+      --mf-sidebar-text: rgba(250,250,250,.95);
+      --mf-sidebar-muted: rgba(212,212,216,.58);
+      --mf-sidebar-heading: rgba(228,228,231,.74);
+      --mf-chart-3: rgba(148,163,184,.65);
+      --mf-chart-4: rgba(251,191,36,.74);
+      --mf-chart-5: rgba(244,114,182,.66);
     }
     body[data-mf-theme="steve-jobs"]{
       --mf-font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mf-font-display: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mf-font-accent: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mf-body-bg: #f6f6f3;
+      --mf-body-bg: #f5f6f8;
       --mf-sidebar-bg: #fbfbf9;
       --mf-sidebar-border: rgba(15,23,42,.06);
-      --mf-main-card-bg: linear-gradient(to bottom, rgba(255,255,255,.98), rgba(249,250,251,.96));
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(255,255,255,.985), rgba(247,248,250,.97));
       --mf-main-card-border: rgba(15,23,42,.06);
       --mf-accent: 71,85,105;
       --mf-accent-2: 15,23,42;
-      --mf-chip-bg: rgba(148,163,184,.10);
-      --mf-chip-border: rgba(100,116,139,.18);
-      --mf-chip-text: rgba(30,41,59,.90);
+      --mf-chip-bg: rgba(96,165,250,.08);
+      --mf-chip-border: rgba(96,165,250,.16);
+      --mf-chip-text: rgba(30,41,59,.92);
       --mf-panel-bg: rgba(255,255,255,.86);
-      --mf-panel-bg-2: rgba(250,250,250,.92);
+      --mf-panel-bg-2: rgba(248,249,251,.94);
       --mf-panel-border: rgba(148,163,184,.12);
       --mf-panel-strong-border: rgba(100,116,139,.18);
       --mf-input-bg: rgba(255,255,255,.96);
       --mf-input-border: rgba(148,163,184,.16);
       --mf-table-stripe: rgba(15,23,42,.015);
       --mf-nav-bg-hover: rgba(15,23,42,.03);
-      --mf-nav-bg-active: rgba(71,85,105,.08);
-      --mf-nav-border-active: rgba(71,85,105,.18);
+      --mf-nav-bg-active: rgba(96,165,250,.08);
+      --mf-nav-border-active: rgba(96,165,250,.20);
       --mf-text-1: rgba(15,23,42,.95);
       --mf-text-2: rgba(51,65,85,.78);
       --mf-text-3: rgba(100,116,139,.60);
@@ -238,7 +241,7 @@
       --mf-sidebar-muted: rgba(51,65,85,.58);
       --mf-sidebar-heading: rgba(71,85,105,.68);
       --mf-body-text: 15,23,42;
-      --mf-chart-3: rgba(99,102,241,.72);
+      --mf-chart-3: rgba(96,165,250,.70);
       --mf-chart-4: rgba(34,197,94,.70);
       --mf-chart-5: rgba(234,88,12,.70);
     }
@@ -351,8 +354,8 @@
 
     body[data-mf-theme="sugar-and-spice"] .mf-app-card{
       background:
-        radial-gradient(700px 260px at 8% 0%, rgba(255, 174, 219, .09), transparent 55%),
-        radial-gradient(650px 240px at 92% 6%, rgba(251, 146, 60, .08), transparent 58%),
+        radial-gradient(700px 260px at 8% 0%, rgba(255, 192, 220, .05), transparent 55%),
+        radial-gradient(650px 240px at 92% 6%, rgba(148, 163, 122, .05), transparent 58%),
         var(--mf-main-card-bg);
     }
 
@@ -374,10 +377,10 @@
       content: "";
       position: absolute;
       inset: auto -6% -12% auto;
-      width: 240px;
-      height: 240px;
+      width: 180px;
+      height: 180px;
       pointer-events: none;
-      opacity: calc(var(--mf-floral-opacity, 0) * .9);
+      opacity: calc(var(--mf-floral-opacity, 0) * .55);
       background:
         radial-gradient(circle at 50% 50%, rgba(255,214,236,.25) 0 18%, transparent 19% 100%),
         radial-gradient(circle at 28% 38%, rgba(255,184,221,.18) 0 9%, transparent 10% 100%),
@@ -394,14 +397,26 @@
       color: var(--mf-chip-text, rgba(236,253,245,.92));
       box-shadow: 0 10px 30px -20px rgba(0,0,0,.8);
       backdrop-filter: blur(10px);
+      width: 100%;
+      min-height: 2.75rem;
     }
     .mf-theme-selector select{
       color: inherit;
       background: transparent;
+      font-family: var(--mf-font-accent);
+      font-size: .875rem;
+      line-height: 1.2;
+      min-width: 10.5rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
     }
     .mf-theme-selector select option{
       color: #111827;
       background: #fff;
+    }
+    .mf-theme-selector:focus-within{
+      box-shadow: 0 0 0 1px var(--mf-nav-border-active), 0 10px 30px -20px rgba(0,0,0,.8);
     }
 
     /* Typography mood by theme */
@@ -435,7 +450,7 @@
       border-radius: .95rem;
     }
     .mf-sidebar-theme-shell :where([class*="sidebar-item"]){
-      padding-left: .65rem;
+      padding-left: .9rem;
       padding-right: .65rem;
     }
     .mf-sidebar-theme-shell :where(a[href]):hover{
@@ -600,19 +615,23 @@
     /* Theme-specific personality accents */
     body[data-mf-theme="get-shit-done"] .mf-app-card{
       box-shadow:
-        inset 0 0 0 1px rgba(251,146,60,.05),
+        inset 0 0 0 1px rgba(239,68,68,.06),
         0 34px 90px -52px rgba(0,0,0,.92);
+      border-radius: .9rem;
     }
     body[data-mf-theme="get-shit-done"] .mf-theme-selector{
       text-transform: uppercase;
       letter-spacing: .04em;
       font-weight: 700;
     }
+    body[data-mf-theme="get-shit-done"] .mf-sidebar-theme-shell :where([class*="sidebar-item"], a[href]){
+      border-radius: .55rem;
+    }
     body[data-mf-theme="steve-jobs"] .mf-app-card{
       border-radius: 1.5rem;
       box-shadow:
         inset 0 0 0 1px rgba(255,255,255,.02),
-        0 18px 40px -30px rgba(0,0,0,.85);
+        0 24px 44px -30px rgba(15,23,42,.14);
     }
     body[data-mf-theme="steve-jobs"] .mf-sidebar-glow::before{
       opacity: .45;
@@ -629,7 +648,7 @@
     }
     body[data-mf-theme="sugar-and-spice"] .mf-sidebar-group-balanced > .space-y-1{
       background:
-        radial-gradient(180px 80px at 100% 0%, rgba(255,184,221,.07), transparent 70%),
+        radial-gradient(180px 80px at 100% 0%, rgba(255,184,221,.04), transparent 70%),
         linear-gradient(to bottom, rgba(255,255,255,.012), rgba(255,255,255,0));
       border-color: rgba(255,184,221,.08);
     }
