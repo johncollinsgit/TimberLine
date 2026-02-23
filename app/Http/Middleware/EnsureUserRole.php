@@ -24,7 +24,7 @@ class EnsureUserRole
             abort(403);
         }
 
-        if (property_exists($user, 'is_active') && !$user->is_active) {
+        if ($user->getAttribute('is_active') === false) {
             abort(403);
         }
 

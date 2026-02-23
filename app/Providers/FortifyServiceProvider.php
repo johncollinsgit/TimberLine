@@ -5,11 +5,14 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\FortifyLoginResponse;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -39,6 +42,23 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $email = Str::lower((string) $request->input('email'));
+            $user = User::query()->where('email', $email)->first();
+
+            if (!$user || !Hash::check((string) $request->input('password'), (string) $user->password)) {
+                return null;
+            }
+
+            if ($user->getAttribute('is_active') === false) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => __('This account is disabled. Contact an administrator.'),
+                ]);
+            }
+
+            return $user;
+        });
     }
 
     /**

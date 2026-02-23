@@ -67,3 +67,27 @@ test('users can logout', function () {
 
     $this->assertGuest();
 });
+
+test('inactive users can not authenticate', function () {
+    $user = User::factory()->create([
+        'is_active' => false,
+    ]);
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $response->assertSessionHasErrorsIn('email');
+    $this->assertGuest();
+});
+
+test('authenticated pouring users visiting login are redirected to pouring room', function () {
+    $user = User::factory()->create([
+        'role' => 'pouring',
+    ]);
+
+    $response = $this->actingAs($user)->get(route('login'));
+
+    $response->assertRedirect(route('pouring.index', absolute: false));
+});
