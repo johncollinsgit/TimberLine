@@ -38,6 +38,7 @@ use App\Http\Controllers\WikiController;
 use App\Http\Controllers\WikiAdminController;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyStores;
+use App\Support\Auth\HomeRedirect;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
@@ -45,7 +46,7 @@ use App\Support\Wiki\WikiRepository;
 
 Route::get('/', function () {
     if (auth()->check()) {
-        return redirect()->route('dashboard');
+        return redirect()->to(HomeRedirect::pathFor(auth()->user()));
     }
 
     return redirect()->route('login');
