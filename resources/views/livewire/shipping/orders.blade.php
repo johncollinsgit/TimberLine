@@ -145,6 +145,50 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .mf-shipping-view-tabs {
+    position: relative;
+    z-index: 2;
+    isolation: isolate;
+    pointer-events: auto;
+  }
+  .mf-shipping-view-tab {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+  }
+  .mf-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    min-width: 0;
+    max-width: 100%;
+    color: inherit;
+    white-space: nowrap;
+  }
+  .mf-sort-btn-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mf-sort-btn-icon {
+    width: .85rem;
+    text-align: center;
+    opacity: .7;
+    font-size: .75rem;
+    line-height: 1;
+  }
+  .mf-sort-btn[data-active="true"] .mf-sort-btn-icon {
+    opacity: 1;
+  }
+  .mf-sort-btn[data-active="true"] .mf-sort-btn-label {
+    color: rgba(255,255,255,.95);
+    text-decoration: underline;
+    text-decoration-color: rgba(52,211,153,.4);
+    text-underline-offset: 3px;
+  }
+  .mf-sort-btn:hover .mf-sort-btn-label {
+    color: rgba(255,255,255,.9);
+  }
 </style>
 
 <div class="min-h-[calc(100vh-4rem)] min-w-0">
@@ -185,11 +229,11 @@
 
             {{-- Row B: View + Search --}}
             <div class="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div class="flex max-w-full overflow-x-auto rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
+              <div class="mf-shipping-view-tabs flex max-w-full overflow-x-auto rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
                 @foreach($views as $key => $meta)
                   @php $active = (($view ?? 'list') === $key); @endphp
                   <button type="button" wire:click="$set('view','{{ $key }}')"
-                    class="h-9 px-4 rounded-2xl text-xs font-semibold transition inline-flex items-center gap-2
+                    class="mf-shipping-view-tab h-9 px-4 rounded-2xl text-xs font-semibold transition inline-flex items-center gap-2
                       {{ $active ? 'bg-emerald-400/25 text-emerald-50' : 'text-white/70 hover:bg-emerald-500/10' }}">
                     <span class="{{ $key === 'timeline' ? 'text-white/40' : 'text-white/70' }}">{{ $meta['icon'] }}</span>
                     <span>{{ $meta['label'] }}</span>
@@ -493,6 +537,12 @@
 
       {{-- TABLE VIEW (fixed + clean) --}}
       @if(($view ?? 'list') === 'table')
+        @php
+          $sortState = [
+            'key' => (string) ($sort ?? 'ship_by_at'),
+            'dir' => strtolower((string) ($dir ?? 'asc')) === 'desc' ? 'desc' : 'asc',
+          ];
+        @endphp
         <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 overflow-hidden">
           <div class="px-4 py-3 border-b border-emerald-400/10 flex items-center justify-between">
             <div class="text-sm font-semibold text-white/90">Table View</div>
@@ -516,16 +566,35 @@
               </colgroup>
               <thead class="text-xs text-white/55 bg-black/20">
                 <tr class="[&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-medium">
-                  <th title="Order Number">Order</th>
-                  <th>Type</th>
-                  <th>Name</th>
-                  <th>Customer</th>
-                  <th title="Ship By Date">Ship By</th>
-                  <th title="Bring Down Date">Bring Down</th>
-                  <th>Status</th>
-                  <th>Source</th>
-                  <th class="text-right" title="Line Count">Lines</th>
-                  <th class="text-right" title="Quantity">Qty</th>
+                  @foreach([
+                    ['key' => 'order_number', 'label' => 'Order', 'align' => 'left', 'title' => 'Order Number'],
+                    ['key' => 'order_type', 'label' => 'Type', 'align' => 'left', 'title' => null],
+                    ['key' => 'container', 'label' => 'Name', 'align' => 'left', 'title' => null],
+                    ['key' => 'customer', 'label' => 'Customer', 'align' => 'left', 'title' => null],
+                    ['key' => 'ship_by_at', 'label' => 'Ship By', 'align' => 'left', 'title' => 'Ship By Date'],
+                    ['key' => 'due_at', 'label' => 'Bring Down', 'align' => 'left', 'title' => 'Bring Down Date'],
+                    ['key' => 'status', 'label' => 'Status', 'align' => 'left', 'title' => null],
+                    ['key' => 'source', 'label' => 'Source', 'align' => 'left', 'title' => null],
+                    ['key' => 'lines_count', 'label' => 'Lines', 'align' => 'right', 'title' => 'Line Count'],
+                    ['key' => 'qty_total', 'label' => 'Qty', 'align' => 'right', 'title' => 'Quantity'],
+                  ] as $col)
+                    @php
+                      $isActiveSort = $sortState['key'] === $col['key'];
+                      $sortIcon = $isActiveSort ? ($sortState['dir'] === 'asc' ? '↑' : '↓') : '↕';
+                    @endphp
+                    <th class="{{ $col['align'] === 'right' ? 'text-right' : '' }}" @if($col['title']) title="{{ $col['title'] }}" @endif>
+                      <button
+                        type="button"
+                        wire:click="toggleSort('{{ $col['key'] }}')"
+                        class="mf-sort-btn {{ $col['align'] === 'right' ? 'ml-auto justify-end' : '' }}"
+                        data-active="{{ $isActiveSort ? 'true' : 'false' }}"
+                        title="Sort by {{ $col['label'] }}"
+                      >
+                        <span class="mf-sort-btn-label">{{ $col['label'] }}</span>
+                        <span class="mf-sort-btn-icon" aria-hidden="true">{{ $sortIcon }}</span>
+                      </button>
+                    </th>
+                  @endforeach
                   <th class="text-right">Open</th>
                 </tr>
               </thead>

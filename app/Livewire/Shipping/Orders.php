@@ -96,9 +96,13 @@ class Orders extends Component
         'newest'       => 'id',
         'oldest'       => 'id',
         'order_number' => 'order_number',
+        'order_type'   => 'order_type',
         'customer'     => 'customer_name',
+        'source'       => 'source',
         'container'    => 'container_name',
         'status'       => 'status',
+        'lines_count'  => '__virtual__',
+        'qty_total'    => '__virtual__',
     ];
 
     // Wick options
@@ -142,6 +146,28 @@ class Orders extends Component
         $this->search = '';
         $this->persistUserPreferences();
         $this->resetPage();
+    }
+
+    public function toggleSort(string $key): void
+    {
+        if (!array_key_exists($key, self::SORTS)) {
+            return;
+        }
+
+        if ($this->sort !== $key) {
+            $this->sort = $key;
+            $this->dir = 'asc';
+            return;
+        }
+
+        if ($this->dir === 'asc') {
+            $this->dir = 'desc';
+            return;
+        }
+
+        // Third click resets to the default operational sort.
+        $this->sort = 'ship_by_at';
+        $this->dir = 'asc';
     }
 
     private function clearEdits(): void
@@ -906,6 +932,7 @@ class Orders extends Component
         $dir     = strtolower($this->dir) === 'desc' ? 'desc' : 'asc';
 
         $q = Order::query()
+            ->select('orders.*')
             ->with([
                 'lines' => function ($rel) {
                     $rel->with(['scent:id,name', 'size:id,code,label'])
@@ -920,10 +947,18 @@ class Orders extends Component
                 },
             ])
             ->withCount([
+                'lines as lines_count_sort',
                 'mappingExceptions as open_mapping_exceptions_count' => function ($q) {
                     $q->whereNull('resolved_at');
                 },
             ]);
+
+        $q->selectSub(
+            DB::table('order_lines')
+                ->selectRaw('COALESCE(SUM(COALESCE(ordered_qty, quantity, 0)), 0)')
+                ->whereColumn('order_lines.order_id', 'orders.id'),
+            'qty_total_sort'
+        );
 
         if ($status !== 'all') {
             $q->where('status', $status);
@@ -971,6 +1006,14 @@ class Orders extends Component
 
             if ($sortKey === 'newest') { $qq->orderByDesc('id'); return; }
             if ($sortKey === 'oldest') { $qq->orderBy('id', 'asc'); return; }
+            if ($sortKey === 'lines_count') {
+                $qq->orderBy('lines_count_sort', $dir)->orderByDesc('id');
+                return;
+            }
+            if ($sortKey === 'qty_total') {
+                $qq->orderBy('qty_total_sort', $dir)->orderByDesc('id');
+                return;
+            }
 
             $col = self::SORTS[$sortKey] ?? 'ship_by_at';
             $qq->orderBy($col, $dir)->orderByDesc('id');
