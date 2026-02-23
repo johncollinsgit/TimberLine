@@ -43,10 +43,10 @@
     .mf-active-pill::after{
       content:"";
       position:absolute;
-      left:2px;
+      left: var(--mf-active-indicator-offset);
       top:50%;
-      width:4px;
-      height:24px;
+      width: var(--mf-active-indicator-width);
+      height: var(--mf-active-indicator-height);
       transform: translateY(-50%);
       border-radius:999px;
       background: linear-gradient(to bottom, rgba(var(--mf-accent), .95), rgba(var(--mf-accent-2), .45));
@@ -86,6 +86,11 @@
 
     /* Theme tokens */
     body[data-mf-theme]{
+      --mf-sidebar-item-pad-x: .62rem;
+      --mf-sidebar-item-pad-y: .45rem;
+      --mf-active-indicator-offset: 4px;
+      --mf-active-indicator-width: 4px;
+      --mf-active-indicator-height: 24px;
       --mf-font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
       --mf-font-display: "Fraunces", ui-serif, Georgia, serif;
       --mf-font-accent: "Sora", ui-sans-serif, system-ui, sans-serif;
@@ -98,6 +103,12 @@
       --mf-panel-strong-border: rgba(255,255,255,.16);
       --mf-input-bg: rgba(255,255,255,.04);
       --mf-input-border: rgba(255,255,255,.12);
+      --mf-focus-ring: rgba(var(--mf-accent), .22);
+      --mf-control-text: var(--mf-text-1);
+      --mf-control-bg: rgba(var(--mf-accent), .12);
+      --mf-control-bg-hover: rgba(var(--mf-accent), .18);
+      --mf-control-muted-bg: rgba(255,255,255,.04);
+      --mf-control-muted-hover: rgba(255,255,255,.07);
       --mf-table-stripe: rgba(255,255,255,.015);
       --mf-nav-bg-hover: rgba(255,255,255,.035);
       --mf-nav-bg-active: rgba(var(--mf-accent), .13);
@@ -113,6 +124,17 @@
       --mf-chart-4: rgba(168,85,247,.80);
       --mf-chart-5: rgba(236,72,153,.80);
       --mf-chart-6: rgba(34,197,94,.78);
+      --color-bg: var(--mf-body-bg);
+      --color-surface: var(--mf-panel-bg);
+      --color-text: var(--mf-text-1);
+      --color-accent: rgba(var(--mf-accent), 1);
+      --color-accent-strong: rgba(var(--mf-accent-2), 1);
+      --color-border: var(--mf-panel-border);
+      --color-sidebar-bg: var(--mf-sidebar-bg);
+      --color-sidebar-active: var(--mf-nav-bg-active);
+      --font-heading: var(--mf-font-display);
+      --font-body: var(--mf-font-body);
+      --radius: 1rem;
     }
 
     body[data-mf-theme="forestry-green"]{
@@ -163,6 +185,12 @@
       --mf-panel-strong-border: rgba(244, 114, 182, .20);
       --mf-input-bg: rgba(255, 255, 255, .94);
       --mf-input-border: rgba(244, 114, 182, .16);
+      --mf-focus-ring: rgba(136,19,55,.18);
+      --mf-control-text: rgba(88,34,65,.94);
+      --mf-control-bg: rgba(136,19,55,.10);
+      --mf-control-bg-hover: rgba(136,19,55,.16);
+      --mf-control-muted-bg: rgba(136,19,55,.05);
+      --mf-control-muted-hover: rgba(136,19,55,.08);
       --mf-table-stripe: rgba(244, 114, 182, .03);
       --mf-nav-bg-hover: rgba(244,114,182,.045);
       --mf-nav-bg-active: rgba(244,114,182,.08);
@@ -199,6 +227,12 @@
       --mf-panel-strong-border: rgba(239, 68, 68, .26);
       --mf-input-bg: rgba(17, 18, 22, .82);
       --mf-input-border: rgba(239, 68, 68, .16);
+      --mf-focus-ring: rgba(239,68,68,.18);
+      --mf-control-text: rgba(250,250,250,.95);
+      --mf-control-bg: rgba(190,18,60,.14);
+      --mf-control-bg-hover: rgba(190,18,60,.20);
+      --mf-control-muted-bg: rgba(255,255,255,.04);
+      --mf-control-muted-hover: rgba(255,255,255,.08);
       --mf-table-stripe: rgba(255,255,255,.012);
       --mf-nav-bg-hover: rgba(239,68,68,.055);
       --mf-nav-bg-active: rgba(190,18,60,.16);
@@ -230,6 +264,12 @@
       --mf-panel-strong-border: rgba(100,116,139,.18);
       --mf-input-bg: rgba(255,255,255,.96);
       --mf-input-border: rgba(148,163,184,.16);
+      --mf-focus-ring: rgba(30,41,59,.12);
+      --mf-control-text: rgba(15,23,42,.92);
+      --mf-control-bg: rgba(30,41,59,.06);
+      --mf-control-bg-hover: rgba(30,41,59,.10);
+      --mf-control-muted-bg: rgba(15,23,42,.025);
+      --mf-control-muted-hover: rgba(15,23,42,.05);
       --mf-table-stripe: rgba(15,23,42,.015);
       --mf-nav-bg-hover: rgba(15,23,42,.03);
       --mf-nav-bg-active: rgba(96,165,250,.08);
@@ -393,20 +433,61 @@
 
     .mf-theme-selector{
       border-color: var(--mf-chip-border, rgba(16,185,129,.28));
-      background: linear-gradient(to bottom, rgba(0,0,0,.32), rgba(0,0,0,.22)), var(--mf-chip-bg, rgba(16,185,129,.12));
+      background: linear-gradient(to bottom, rgba(0,0,0,.22), rgba(0,0,0,.12)), var(--mf-chip-bg, rgba(16,185,129,.12));
       color: var(--mf-chip-text, rgba(236,253,245,.92));
       box-shadow: 0 10px 30px -20px rgba(0,0,0,.8);
       backdrop-filter: blur(10px);
       width: 100%;
       min-height: 2.75rem;
+      overflow: hidden;
+    }
+    .mf-theme-selector-label{
+      flex: 0 0 auto;
+      font-family: var(--mf-font-accent);
+      color: inherit;
+      opacity: .9;
+    }
+    .mf-theme-select-wrap{
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      border: 1px solid var(--mf-panel-strong-border);
+      border-radius: .8rem;
+      background: var(--mf-control-muted-bg);
+      overflow: hidden;
+    }
+    .mf-theme-select-wrap:hover{
+      background: var(--mf-control-muted-hover);
+      border-color: var(--mf-nav-border-active);
+    }
+    .mf-theme-select-wrap::after{
+      content: "▾";
+      position: absolute;
+      right: .65rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--mf-chip-text);
+      opacity: .82;
+      font-size: .75rem;
+      line-height: 1;
+      pointer-events: none;
     }
     .mf-theme-selector select{
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
       color: inherit;
       background: transparent;
+      border: 0;
       font-family: var(--mf-font-accent);
       font-size: .875rem;
       line-height: 1.2;
-      min-width: 10.5rem;
+      padding: .5rem 1.9rem .5rem .65rem;
       text-overflow: ellipsis;
       white-space: nowrap;
       overflow: hidden;
@@ -415,8 +496,15 @@
       color: #111827;
       background: #fff;
     }
+    .mf-theme-selector select:focus{
+      outline: none;
+    }
     .mf-theme-selector:focus-within{
       box-shadow: 0 0 0 1px var(--mf-nav-border-active), 0 10px 30px -20px rgba(0,0,0,.8);
+    }
+    .mf-theme-selector:focus-within .mf-theme-select-wrap{
+      border-color: var(--mf-nav-border-active);
+      box-shadow: inset 0 0 0 1px var(--mf-focus-ring);
     }
 
     /* Typography mood by theme */
@@ -450,8 +538,10 @@
       border-radius: .95rem;
     }
     .mf-sidebar-theme-shell :where([class*="sidebar-item"]){
-      padding-left: .9rem;
-      padding-right: .65rem;
+      padding-left: var(--mf-sidebar-item-pad-x);
+      padding-right: var(--mf-sidebar-item-pad-x);
+      padding-top: var(--mf-sidebar-item-pad-y);
+      padding-bottom: var(--mf-sidebar-item-pad-y);
     }
     .mf-sidebar-theme-shell :where(a[href]):hover{
       background: var(--mf-nav-bg-hover);
@@ -558,6 +648,11 @@
       border-color: var(--mf-input-border) !important;
       box-shadow: none !important;
     }
+    .mf-app-card :where(input, textarea, select):focus{
+      outline: none !important;
+      border-color: var(--mf-nav-border-active) !important;
+      box-shadow: 0 0 0 3px var(--mf-focus-ring) !important;
+    }
     .mf-app-card :where(input, textarea, select)::placeholder{
       color: var(--mf-text-3) !important;
     }
@@ -581,6 +676,28 @@
     }
     .mf-app-card :where(a:hover, button:hover){
       border-color: var(--mf-nav-border-active);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl,
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl{
+      color: var(--mf-control-text);
+      background: var(--mf-control-bg);
+      border-color: var(--mf-panel-strong-border);
+      box-shadow: 0 8px 18px -14px rgba(15,23,42,.22);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl:hover,
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl:hover{
+      background: var(--mf-control-bg-hover);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-app-card :where(.rounded-full)[class*="border"],
+    body[data-mf-theme="steve-jobs"] .mf-app-card :where(.rounded-full)[class*="border"]{
+      border-color: var(--mf-panel-strong-border) !important;
+      box-shadow: 0 6px 16px -14px rgba(15,23,42,.18);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-sidebar-theme-shell .mf-sidebar-action-btn,
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell .mf-sidebar-action-btn{
+      background: linear-gradient(to bottom, var(--mf-control-bg), rgba(255,255,255,.04)) !important;
+      color: var(--mf-control-text) !important;
+      border-color: var(--mf-panel-strong-border) !important;
     }
     .mf-app-card :where(.sticky){
       max-width: 100%;
@@ -768,15 +885,17 @@
       @auth
         <div class="mf-sidebar-theme-slot">
           <div class="mf-theme-selector inline-flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2">
-            <span class="text-[10px] uppercase tracking-[0.24em] opacity-80">Theme</span>
-            <select id="mf-theme-picker"
-                    class="min-w-0 flex-1 rounded-xl border border-white/10 px-2 py-1 text-sm focus:outline-none"
-                    data-theme-save-url="{{ route('ui.preferences.theme') }}"
-                    data-theme-csrf="{{ csrf_token() }}">
-              @foreach($themeOptions as $themeKey => $themeLabel)
-                <option value="{{ $themeKey }}" @selected($activeTheme === $themeKey)>{{ $themeLabel }}</option>
-              @endforeach
-            </select>
+            <span class="mf-theme-selector-label text-[10px] uppercase tracking-[0.24em]">Theme</span>
+            <div class="mf-theme-select-wrap">
+              <select id="mf-theme-picker"
+                      class="min-w-0 flex-1 text-sm focus:outline-none"
+                      data-theme-save-url="{{ route('ui.preferences.theme') }}"
+                      data-theme-csrf="{{ csrf_token() }}">
+                @foreach($themeOptions as $themeKey => $themeLabel)
+                  <option value="{{ $themeKey }}" @selected($activeTheme === $themeKey)>{{ $themeLabel }}</option>
+                @endforeach
+              </select>
+            </div>
           </div>
         </div>
       @endauth
