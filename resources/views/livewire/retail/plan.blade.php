@@ -1,5 +1,5 @@
-<div class="space-y-6">
-  <section class="rounded-2xl border border-emerald-200/10 bg-[#0c1210]/80 p-3">
+<div class="space-y-4 sm:space-y-6 min-w-0">
+  <section class="rounded-2xl border border-emerald-200/10 bg-[#0c1210]/80 p-3 min-w-0">
     <div class="flex flex-wrap gap-2">
       @foreach (['retail' => 'Retail', 'wholesale' => 'Wholesale', 'markets' => 'Markets'] as $tabKey => $tabLabel)
         <a href="{{ route('retail.plan', ['queue' => $tabKey]) }}"
@@ -10,12 +10,12 @@
     </div>
   </section>
 
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div>
+  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] min-w-0">
+    <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div class="min-w-0">
         <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">{{ $queueMeta['title'] ?? 'Retail/Pour List' }}</div>
-        <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">{{ $plan->name }}</div>
-        <div class="mt-2 text-sm text-emerald-50/70">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
+        <div class="mt-2 text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white break-words">{{ $plan->name }}</div>
+        <div class="mt-2 text-sm text-emerald-50/70 break-words">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
         <div class="mt-2 text-xs text-emerald-100/70 italic">“{{ $quote }}”</div>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -43,10 +43,10 @@
     @endif
   </section>
 
-  <div class="grid grid-cols-1 xl:grid-cols-12 gap-6" data-rp-grid>
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 min-w-0" data-rp-grid>
     <div class="xl:col-span-12" data-rp-panel="add-scents" data-size="full" draggable="true">
-      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5 h-full" data-rp-surface>
-        <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0" data-rp-surface>
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Add Additional Scents to the list</div>
           <div class="flex items-center gap-1">
             <button type="button" data-rp-size="square" class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-white/80">Square</button>
@@ -54,7 +54,7 @@
             <button type="button" data-rp-size="full" class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-white/80">Full</button>
           </div>
         </div>
-        <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-12 md:items-end" data-rp-body>
+        <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-12 md:items-end min-w-0" data-rp-body>
           <div class="md:col-span-5">
             <label class="text-xs text-emerald-100/60">Scent</label>
             <livewire:components.scent-combobox
@@ -93,8 +93,8 @@
     </div>
 
     <div class="xl:col-span-12" data-rp-panel="candles" data-size="full" draggable="true">
-      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
-        <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Candles to be poured</div>
           <div class="flex items-center gap-1">
             <button type="button" data-rp-size="square" class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-white/80">Square</button>
@@ -113,8 +113,8 @@
                 ?? '—';
               $source = $item->source === 'inventory' ? 'Inventory' : 'Order';
             @endphp
-            <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between">
-              <div>
+            <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
+              <div class="min-w-0">
                 <div class="text-sm text-white/90">
                   {{ $scentName }} <span class="text-emerald-100/60">· {{ $sizeLabel }}</span>
                 </div>
@@ -127,8 +127,8 @@
                   @endif
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <div class="flex items-center rounded-full border border-emerald-200/15 bg-black/30 px-2 py-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="flex items-center rounded-full border border-emerald-200/15 bg-black/30 px-2 py-1 shrink-0">
                   <button type="button" wire:click="decrementItemQuantity({{ $item->id }})"
                     class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
                     −
@@ -141,7 +141,7 @@
                     +
                   </button>
                 </div>
-                <div class="flex items-center rounded-full border border-emerald-200/10 bg-black/20 px-2 py-1">
+                <div class="flex items-center rounded-full border border-emerald-200/10 bg-black/20 px-2 py-1 shrink-0">
                   <span class="text-[10px] text-emerald-100/60 mr-2">Additional for inventory</span>
                   <button type="button" wire:click="decrementItemInventoryQuantity({{ $item->id }})"
                     class="h-6 w-6 rounded-full border border-emerald-300/15 bg-emerald-500/5 text-emerald-50 hover:bg-emerald-500/15 transition">

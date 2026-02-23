@@ -37,6 +37,7 @@
     .mf-sidebar-sort-item:active { cursor: grabbing; }
     .mf-sidebar-ghost { opacity: .45; }
     .mf-sidebar-drag { opacity: .8; }
+    .mf-sidebar-sort-item + .mf-sidebar-sort-item { margin-top: .18rem; }
 
     .mf-active-pill { position: relative; }
     .mf-active-pill::after{
@@ -105,6 +106,13 @@
       --mf-sidebar-muted: rgba(255,255,255,.62);
       --mf-sidebar-heading: rgba(255,255,255,.72);
       --mf-floral-opacity: 0;
+      --mf-body-text: 244,244,245;
+      --mf-chart-1: rgba(var(--mf-accent), .88);
+      --mf-chart-2: rgba(var(--mf-accent-2), .86);
+      --mf-chart-3: rgba(59,130,246,.82);
+      --mf-chart-4: rgba(168,85,247,.80);
+      --mf-chart-5: rgba(236,72,153,.80);
+      --mf-chart-6: rgba(34,197,94,.78);
     }
 
     body[data-mf-theme="forestry-green"]{
@@ -139,29 +147,36 @@
       --mf-font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
       --mf-font-display: "Fraunces", Georgia, serif;
       --mf-font-accent: "Sora", ui-sans-serif, system-ui, sans-serif;
-      --mf-body-bg: #1a1018;
-      --mf-sidebar-bg: #160f17;
-      --mf-sidebar-border: rgba(255,210,236,.16);
-      --mf-main-card-bg: linear-gradient(to bottom, rgba(44,24,41,.82), rgba(29,18,30,.66));
-      --mf-main-card-border: rgba(255,214,236,.16);
+      --mf-body-bg: #fff8fb;
+      --mf-sidebar-bg: #fff4fa;
+      --mf-sidebar-border: rgba(236, 72, 153, .12);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(255,255,255,.94), rgba(255,249,253,.98));
+      --mf-main-card-border: rgba(236, 72, 153, .10);
       --mf-accent: 244,114,182;
       --mf-accent-2: 251,146,60;
-      --mf-chip-bg: rgba(244,114,182,.16);
-      --mf-chip-border: rgba(244,114,182,.30);
-      --mf-chip-text: rgba(255,238,247,.94);
-      --mf-panel-bg: rgba(68, 31, 59, .28);
-      --mf-panel-bg-2: rgba(80, 34, 64, .38);
-      --mf-panel-border: rgba(255, 189, 228, .18);
-      --mf-panel-strong-border: rgba(255, 189, 228, .28);
-      --mf-input-bg: rgba(77, 28, 61, .35);
-      --mf-input-border: rgba(255, 189, 228, .22);
-      --mf-table-stripe: rgba(255, 189, 228, .04);
+      --mf-chip-bg: rgba(244,114,182,.09);
+      --mf-chip-border: rgba(244,114,182,.22);
+      --mf-chip-text: rgba(136, 19, 55, .88);
+      --mf-panel-bg: rgba(255, 255, 255, .82);
+      --mf-panel-bg-2: rgba(255, 245, 251, .88);
+      --mf-panel-border: rgba(244, 114, 182, .12);
+      --mf-panel-strong-border: rgba(244, 114, 182, .20);
+      --mf-input-bg: rgba(255, 255, 255, .94);
+      --mf-input-border: rgba(244, 114, 182, .16);
+      --mf-table-stripe: rgba(244, 114, 182, .03);
       --mf-nav-bg-hover: rgba(244,114,182,.07);
       --mf-nav-bg-active: rgba(244,114,182,.13);
       --mf-nav-border-active: rgba(244,114,182,.34);
-      --mf-sidebar-text: rgba(255,242,248,.95);
-      --mf-sidebar-muted: rgba(255,221,236,.66);
-      --mf-sidebar-heading: rgba(255,221,236,.78);
+      --mf-text-1: rgba(77, 29, 57, .95);
+      --mf-text-2: rgba(106, 46, 79, .78);
+      --mf-text-3: rgba(137, 77, 110, .58);
+      --mf-sidebar-text: rgba(88, 34, 65, .93);
+      --mf-sidebar-muted: rgba(120, 56, 91, .62);
+      --mf-sidebar-heading: rgba(136, 52, 99, .72);
+      --mf-body-text: 77,29,57;
+      --mf-chart-3: rgba(251,146,60,.78);
+      --mf-chart-4: rgba(190,24,93,.76);
+      --mf-chart-5: rgba(45,212,191,.72);
       --mf-floral-opacity: .95;
     }
     body[data-mf-theme="get-shit-done"]{
@@ -196,29 +211,36 @@
       --mf-font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mf-font-display: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --mf-font-accent: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mf-body-bg: #0a0b0d;
-      --mf-sidebar-bg: #090a0c;
-      --mf-sidebar-border: rgba(255,255,255,.07);
-      --mf-main-card-bg: linear-gradient(to bottom, rgba(18,19,22,.82), rgba(14,15,17,.66));
-      --mf-main-card-border: rgba(255,255,255,.09);
-      --mf-accent: 148,163,184;
-      --mf-accent-2: 226,232,240;
-      --mf-chip-bg: rgba(148,163,184,.12);
-      --mf-chip-border: rgba(148,163,184,.22);
-      --mf-chip-text: rgba(241,245,249,.94);
-      --mf-panel-bg: rgba(255,255,255,.018);
-      --mf-panel-bg-2: rgba(255,255,255,.028);
-      --mf-panel-border: rgba(255,255,255,.085);
-      --mf-panel-strong-border: rgba(255,255,255,.14);
-      --mf-input-bg: rgba(255,255,255,.018);
-      --mf-input-border: rgba(255,255,255,.10);
-      --mf-table-stripe: rgba(255,255,255,.012);
-      --mf-nav-bg-hover: rgba(255,255,255,.028);
-      --mf-nav-bg-active: rgba(148,163,184,.085);
-      --mf-nav-border-active: rgba(148,163,184,.22);
-      --mf-sidebar-text: rgba(248,250,252,.95);
-      --mf-sidebar-muted: rgba(226,232,240,.60);
-      --mf-sidebar-heading: rgba(226,232,240,.72);
+      --mf-body-bg: #f6f6f3;
+      --mf-sidebar-bg: #fbfbf9;
+      --mf-sidebar-border: rgba(15,23,42,.06);
+      --mf-main-card-bg: linear-gradient(to bottom, rgba(255,255,255,.98), rgba(249,250,251,.96));
+      --mf-main-card-border: rgba(15,23,42,.06);
+      --mf-accent: 71,85,105;
+      --mf-accent-2: 15,23,42;
+      --mf-chip-bg: rgba(148,163,184,.10);
+      --mf-chip-border: rgba(100,116,139,.18);
+      --mf-chip-text: rgba(30,41,59,.90);
+      --mf-panel-bg: rgba(255,255,255,.86);
+      --mf-panel-bg-2: rgba(250,250,250,.92);
+      --mf-panel-border: rgba(148,163,184,.12);
+      --mf-panel-strong-border: rgba(100,116,139,.18);
+      --mf-input-bg: rgba(255,255,255,.96);
+      --mf-input-border: rgba(148,163,184,.16);
+      --mf-table-stripe: rgba(15,23,42,.015);
+      --mf-nav-bg-hover: rgba(15,23,42,.03);
+      --mf-nav-bg-active: rgba(71,85,105,.08);
+      --mf-nav-border-active: rgba(71,85,105,.18);
+      --mf-text-1: rgba(15,23,42,.95);
+      --mf-text-2: rgba(51,65,85,.78);
+      --mf-text-3: rgba(100,116,139,.60);
+      --mf-sidebar-text: rgba(15,23,42,.90);
+      --mf-sidebar-muted: rgba(51,65,85,.58);
+      --mf-sidebar-heading: rgba(71,85,105,.68);
+      --mf-body-text: 15,23,42;
+      --mf-chart-3: rgba(99,102,241,.72);
+      --mf-chart-4: rgba(34,197,94,.70);
+      --mf-chart-5: rgba(234,88,12,.70);
     }
 
     body.mf-app-shell{
@@ -229,11 +251,75 @@
         var(--mf-body-bg, #08110d);
       color: var(--mf-text-1);
     }
+    body[data-mf-theme="sugar-and-spice"],
+    body[data-mf-theme="steve-jobs"]{
+      color-scheme: light;
+    }
+    body[data-mf-theme="forestry-green"],
+    body[data-mf-theme="get-shit-done"]{
+      color-scheme: dark;
+    }
 
     .mf-sidebar-theme-shell{
       background: var(--mf-sidebar-bg, #090f0d) !important;
       border-color: var(--mf-sidebar-border, rgba(255,255,255,.08)) !important;
       color: var(--mf-sidebar-text);
+    }
+    .mf-sidebar-header{
+      padding-inline: .75rem;
+      padding-top: .5rem;
+      padding-bottom: .45rem;
+    }
+    .mf-sidebar-theme-slot{
+      padding-inline: .75rem;
+      padding-top: .5rem;
+      padding-bottom: .9rem;
+    }
+    .mf-sidebar-nav{
+      padding-inline: .35rem;
+      padding-top: .15rem;
+      padding-bottom: .35rem;
+    }
+    .mf-sidebar-nav > *:first-child{
+      margin-top: 0 !important;
+    }
+    .mf-sidebar-nav > * + *{
+      margin-top: .7rem;
+    }
+    .mf-sidebar-group-balanced{
+      padding-inline: .25rem;
+      padding-top: .15rem;
+    }
+    .mf-sidebar-group-balanced [data-flux-sidebar-group-heading],
+    .mf-sidebar-group-balanced :where(h2, h3, h4){
+      margin-bottom: .6rem;
+      padding-inline: .45rem;
+      color: var(--mf-sidebar-heading);
+      letter-spacing: .08em;
+    }
+    .mf-sidebar-group-balanced > .space-y-1{
+      border-radius: 1rem;
+      padding: .35rem;
+      background: linear-gradient(to bottom, rgba(255,255,255,.01), rgba(255,255,255,0));
+      border: 1px solid rgba(255,255,255,.03);
+    }
+    .mf-sidebar-panel{
+      margin-top: .35rem;
+    }
+    .mf-sidebar-panel summary{
+      min-height: 2rem;
+    }
+    .mf-sidebar-panel > div{
+      margin-top: .45rem !important;
+    }
+    .mf-sidebar-nav :where(a[href], button, summary){
+      min-height: 2.25rem;
+    }
+    .mf-sidebar-footer{
+      margin-top: .25rem;
+      padding: .7rem .75rem .85rem;
+      border-top: 1px solid rgba(255,255,255,.04);
+      background: linear-gradient(to top, rgba(255,255,255,.015), rgba(255,255,255,0));
     }
 
     .mf-sidebar-theme-shell::after{
@@ -348,6 +434,10 @@
     .mf-sidebar-theme-shell :where([class*="sidebar-item"], a[href]){
       border-radius: .95rem;
     }
+    .mf-sidebar-theme-shell :where([class*="sidebar-item"]){
+      padding-left: .65rem;
+      padding-right: .65rem;
+    }
     .mf-sidebar-theme-shell :where(a[href]):hover{
       background: var(--mf-nav-bg-hover);
     }
@@ -358,6 +448,12 @@
     }
     .mf-sidebar-theme-shell :where([class*="text-zinc"], [class*="text-emerald"], [class*="text-amber"]){
       color: inherit;
+    }
+    .mf-sidebar-theme-shell :where(svg){
+      color: rgba(var(--mf-accent), .92);
+    }
+    .mf-sidebar-theme-shell :where([aria-current="page"] svg, .mf-active-pill svg){
+      color: rgba(var(--mf-accent-2), .95);
     }
     .mf-sidebar-theme-shell details{
       background: var(--mf-panel-bg-2) !important;
@@ -370,6 +466,10 @@
     .mf-sidebar-theme-shell details > div{
       background: rgba(0,0,0,.22) !important;
       border: 1px solid var(--mf-panel-border);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-sidebar-theme-shell details > div,
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell details > div{
+      background: rgba(255,255,255,.65) !important;
     }
     .mf-sidebar-theme-shell .mf-sidebar-action-btn{
       border-color: var(--mf-panel-strong-border) !important;
@@ -388,6 +488,37 @@
     /* Widget/panel unification inside main app card */
     .mf-app-card{
       color: var(--mf-text-1);
+      min-width: 0;
+    }
+    .mf-app-card > *{
+      min-width: 0;
+    }
+    .mf-app-card :where(.flex,[class*="flex "],[class^="flex"]) > *{
+      min-width: 0;
+    }
+    .mf-app-card :where(.grid,[class*="grid "],[class^="grid"]) > *{
+      min-width: 0;
+    }
+    .mf-app-card :where(.truncate){
+      min-width: 0;
+      max-width: 100%;
+    }
+    .mf-app-card :where(.overflow-x-auto){
+      max-width: 100%;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      border-radius: .9rem;
+    }
+    .mf-app-card :where(table){
+      width: 100%;
+      table-layout: auto;
+    }
+    .mf-app-card :where(th, td){
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    .mf-app-card :where(.rounded-full, .rounded-xl, .rounded-2xl, .rounded-3xl){
+      box-sizing: border-box;
     }
     .mf-app-card :where(p, span, small, li, td, dt, dd){
       color: var(--mf-text-2);
@@ -436,6 +567,35 @@
     .mf-app-card :where(a:hover, button:hover){
       border-color: var(--mf-nav-border-active);
     }
+    .mf-app-card :where(.sticky){
+      max-width: 100%;
+    }
+    .mf-responsive-shell{
+      width: min(100%, 1800px);
+      margin-inline: auto;
+    }
+    .mf-table-wrap{
+      overflow-x: auto;
+      max-width: 100%;
+      border-radius: 1rem;
+      border: 1px solid var(--mf-panel-border);
+      background: linear-gradient(to bottom, var(--mf-panel-bg-2), var(--mf-panel-bg));
+    }
+    .mf-table-wrap > table{
+      min-width: 40rem;
+    }
+    @media (max-width: 640px){
+      .mf-app-card{
+        padding: 1rem !important;
+        border-radius: 1.25rem !important;
+      }
+      .mf-table-wrap > table{
+        min-width: 34rem;
+      }
+      #app-main{
+        padding: 1rem !important;
+      }
+    }
 
     /* Theme-specific personality accents */
     body[data-mf-theme="get-shit-done"] .mf-app-card{
@@ -457,6 +617,24 @@
     body[data-mf-theme="steve-jobs"] .mf-sidebar-glow::before{
       opacity: .45;
       filter: blur(24px);
+    }
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-group-balanced > .space-y-1{
+      border-color: rgba(255,255,255,.025);
+      background: linear-gradient(to bottom, rgba(255,255,255,.008), rgba(255,255,255,0));
+    }
+    body[data-mf-theme="get-shit-done"] .mf-sidebar-group-balanced [data-flux-sidebar-group-heading],
+    body[data-mf-theme="get-shit-done"] .mf-sidebar-group-balanced :where(h2, h3, h4){
+      letter-spacing: .14em;
+      font-weight: 800;
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-sidebar-group-balanced > .space-y-1{
+      background:
+        radial-gradient(180px 80px at 100% 0%, rgba(255,184,221,.07), transparent 70%),
+        linear-gradient(to bottom, rgba(255,255,255,.012), rgba(255,255,255,0));
+      border-color: rgba(255,184,221,.08);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-sidebar-footer{
+      border-top-color: rgba(255,184,221,.08);
     }
   </style>
 </head>
@@ -563,13 +741,13 @@
     <div class="mf-sidebar-glow absolute inset-0"></div>
 
     <div class="relative mf-fade-in">
-      <flux:sidebar.header class="mf-transition">
+      <flux:sidebar.header class="mf-transition mf-sidebar-header">
         <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition" />
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
       @auth
-        <div class="px-3 pb-2">
+        <div class="mf-sidebar-theme-slot">
           <div class="mf-theme-selector inline-flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2">
             <span class="text-[10px] uppercase tracking-[0.24em] opacity-80">Theme</span>
             <select id="mf-theme-picker"
@@ -585,7 +763,7 @@
       @endauth
 
       <flux:sidebar.nav class="mf-sidebar-nav">
-        <flux:sidebar.group heading="Modern Forestry Backstage" class="grid">
+        <flux:sidebar.group heading="Modern Forestry Backstage" class="grid mf-sidebar-group-balanced">
           <div class="space-y-1" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
             @foreach($orderedSidebarItems as $item)
               <div
@@ -620,7 +798,7 @@
         </flux:sidebar.group>
 
         @if(!$isPouring)
-        <flux:sidebar.group heading="Quick Actions" class="grid mt-2">
+        <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
           <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
             Due soon
           </flux:sidebar.item>
@@ -660,7 +838,7 @@
       <flux:spacer />
 
       @auth
-        <div class="mt-3 mf-transition">
+        <div class="mf-transition mf-sidebar-footer">
           <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </div>
       @endauth
@@ -749,6 +927,7 @@
     picker.addEventListener('change', async () => {
       const theme = picker.value || 'forestry-green';
       document.body.setAttribute('data-mf-theme', theme);
+      window.dispatchEvent(new CustomEvent('mf:theme-changed', { detail: { theme } }));
 
       try {
         const res = await fetch(picker.dataset.themeSaveUrl, {

@@ -15,13 +15,13 @@
   ];
 @endphp
 
-<div class="space-y-6">
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div>
+<div class="space-y-4 sm:space-y-6 min-w-0">
+  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] min-w-0">
+    <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div class="min-w-0">
         <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Pouring Room</div>
-        <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Production Queue</div>
-          <div class="mt-2 text-sm text-emerald-50/70">{{ $reminder }}</div>
+        <div class="mt-2 text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white">Production Queue</div>
+        <div class="mt-2 text-sm text-emerald-50/70 break-words">{{ $reminder }}</div>
       </div>
 
       <div class="flex flex-wrap gap-2">
@@ -36,10 +36,10 @@
     </div>
   </section>
 
-  <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 min-w-0">
     <div class="xl:col-span-8 space-y-4">
       @if($viewMode === 'scent')
-        <div class="rounded-2xl border border-emerald-200/10 bg-[#101513]/80 p-4">
+        <div class="rounded-2xl border border-emerald-200/10 bg-[#101513]/80 p-4 min-w-0">
           <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Bulk by Scent</div>
           <div class="mt-3 space-y-3">
             @foreach($byScent as $scentId => $lines)
@@ -47,8 +47,8 @@
                 $scentName = $lines->first()?->scent?->display_name ?? $lines->first()?->scent?->name ?? 'Unknown';
                 $qty = $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) + ($l->extra_qty ?? 0)));
               @endphp
-              <div class="flex items-center justify-between rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4">
-                <div>
+              <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4">
+                <div class="min-w-0">
                   <div class="text-sm font-semibold text-white/90">{{ $scentName }}</div>
                   <div class="text-xs text-emerald-100/60">{{ $qty }} units</div>
                 </div>
@@ -73,12 +73,12 @@
             $status = $order->status ?? 'submitted_to_pouring';
             $statusLabel = $statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status));
           @endphp
-          <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <div class="flex items-center gap-2">
+          <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
+            <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div class="min-w-0">
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border text-emerald-50/90" style="{{ $typeStyle }}">{{ $typeLabel }}</span>
-                  <div class="text-white/90 font-semibold">{{ $label }}</div>
+                  <div class="min-w-0 truncate text-white/90 font-semibold">{{ $label }}</div>
                 </div>
                 <div class="mt-1 text-xs text-emerald-100/60">
                   Order #{{ $order->order_number ?? '—' }}
@@ -91,7 +91,7 @@
                   @endif
                 </div>
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3">
                 <div class="px-3 py-1 rounded-full text-xs border text-white/85" style="{{ $urgencyStyle }}">Bring Down: {{ optional($order->due_at)->toDateString() ?? '—' }}</div>
                 <button type="button" wire:click="toggleOrder({{ $order->id }})"
                   class="px-3 py-1.5 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 text-white/80">
@@ -123,8 +123,8 @@
                   $isMapped = !empty($line->scent_id) && !empty($line->size_id);
                   $blend = $line->scent?->oilBlend;
                 @endphp
-                <div class="flex items-center justify-between rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-2">
-                  <div class="text-sm text-white/85">
+                <div class="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:justify-between rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-2">
+                  <div class="min-w-0 text-sm text-white/85">
                     {{ $name }} <span class="text-emerald-100/60">· {{ $size }}</span>
                     @if($wick)
                       <span class="text-emerald-100/60">· {{ ucfirst($wick) }} wick</span>
@@ -144,7 +144,7 @@
                       </div>
                     @endif
                   </div>
-                  <div class="flex items-center gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
                     @if($isMapped)
                       <button type="button" wire:click="toggleLine({{ $line->id }})"
                         class="px-2 py-1 rounded-lg text-xs border border-emerald-400/20 bg-emerald-500/10 text-white/80">
@@ -161,13 +161,13 @@
             </div>
           </div>
         @empty
-          <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 text-sm text-emerald-50/70">No orders ready for pouring.</div>
+          <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5 sm:p-6 text-sm text-emerald-50/70">No orders ready for pouring.</div>
         @endforelse
       @endif
     </div>
 
     <div class="xl:col-span-4 space-y-4">
-      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
+      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
         <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Batch Preview</div>
         <div class="mt-4 space-y-3">
           <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-3 text-xs text-emerald-50/80">

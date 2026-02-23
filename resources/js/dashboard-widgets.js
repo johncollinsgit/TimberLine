@@ -37,19 +37,42 @@ function mountPie(canvas, counts) {
   // If no data, show a subtle empty state (no chart)
   if (!labels.length || values.reduce((a, b) => a + b, 0) === 0) return;
 
+  const styles = window.getComputedStyle(document.body);
+  const textColor = `rgba(${styles.getPropertyValue("--mf-body-text").trim() || "244,244,245"}, 0.78)`;
+  const palette = [
+    styles.getPropertyValue("--mf-chart-1").trim() || "rgba(16,185,129,.88)",
+    styles.getPropertyValue("--mf-chart-2").trim() || "rgba(245,158,11,.86)",
+    styles.getPropertyValue("--mf-chart-3").trim() || "rgba(59,130,246,.82)",
+    styles.getPropertyValue("--mf-chart-4").trim() || "rgba(168,85,247,.80)",
+    styles.getPropertyValue("--mf-chart-5").trim() || "rgba(236,72,153,.80)",
+    styles.getPropertyValue("--mf-chart-6").trim() || "rgba(34,197,94,.78)",
+  ];
+  const borderColor = `rgba(${styles.getPropertyValue("--mf-body-text").trim() || "244,244,245"}, 0.10)`;
+
   const chart = new Chart(canvas.getContext("2d"), {
     type: "pie",
     data: {
       labels,
-      datasets: [{ data: values }],
+      datasets: [{
+        data: values,
+        backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+        borderColor,
+        borderWidth: 1,
+      }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          position: "right",
-          labels: { color: "rgba(255,255,255,0.75)" },
+          position: window.innerWidth < 768 ? "bottom" : "right",
+          labels: {
+            color: textColor,
+            boxWidth: 12,
+            boxHeight: 12,
+            padding: 14,
+            usePointStyle: true,
+          },
         },
         tooltip: {
           callbacks: {
@@ -104,6 +127,11 @@ window.__mfAnalyticsWidgetsMount = () => {
 document.addEventListener("DOMContentLoaded", () => {
   window.__mfDashboardWidgetsMount();
   window.__mfAnalyticsWidgetsMount();
+});
+
+window.addEventListener("mf:theme-changed", () => {
+  window.__mfDashboardWidgetsMount?.();
+  window.__mfAnalyticsWidgetsMount?.();
 });
 
 // If Livewire is present, re-mount on updates

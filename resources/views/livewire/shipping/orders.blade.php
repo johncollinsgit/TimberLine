@@ -102,31 +102,31 @@
   $wicks = $wicks ?? [];
 @endphp
 
-<div class="min-h-[calc(100vh-4rem)]">
-  <div class="space-y-6">
+<div class="min-h-[calc(100vh-4rem)] min-w-0">
+  <div class="space-y-4 sm:space-y-6 min-w-0">
 
     {{-- TOP TOOLBAR --}}
-    <section class="sticky top-4 z-30">
+    <section class="sticky top-2 sm:top-4 z-30 min-w-0">
       <div
         style="background: {{ $panelBg }};"
         class="rounded-3xl border border-emerald-500/15 bg-zinc-950/60 backdrop-blur
-               shadow-[0_18px_60px_-40px_rgba(0,0,0,1)] overflow-hidden"
+               shadow-[0_18px_60px_-40px_rgba(0,0,0,1)] overflow-hidden min-w-0"
       >
-        <div class="p-4">
-          <div class="space-y-4">
+        <div class="p-3 sm:p-4">
+          <div class="space-y-4 min-w-0">
             {{-- Row A: Identity + actions --}}
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div class="flex flex-wrap items-center gap-3">
+            <div class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div class="flex min-w-0 flex-wrap items-center gap-3">
                 <div>
                   <div class="text-sm font-semibold text-white/95">Orders</div>
                   <div class="text-xs text-white/50 mt-0.5">{{ $orders->total() }} total</div>
                 </div>
                 <a href="{{ route('retail.plan') }}"
-                  class="inline-flex h-11 items-center rounded-full border border-emerald-300/35 bg-emerald-400/25 px-5 text-sm font-semibold text-emerald-50 hover:bg-emerald-400/35 transition">
+                  class="inline-flex h-10 sm:h-11 items-center rounded-full border border-emerald-300/35 bg-emerald-400/25 px-4 sm:px-5 text-sm font-semibold text-emerald-50 hover:bg-emerald-400/35 transition">
                   Retail/Pour List
                 </a>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <button type="button" wire:click="expandAll"
                   class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
                   Expand
@@ -139,8 +139,8 @@
             </div>
 
             {{-- Row B: View + Search --}}
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div class="inline-flex items-center rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
+            <div class="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div class="flex max-w-full overflow-x-auto rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
                 @foreach($views as $key => $meta)
                   @php $active = (($view ?? 'list') === $key); @endphp
                   <button type="button" wire:click="$set('view','{{ $key }}')"
@@ -152,7 +152,7 @@
                 @endforeach
               </div>
 
-              <div class="w-full lg:max-w-md">
+              <div class="w-full xl:max-w-md min-w-0">
                 <div class="relative">
                   <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">⌕</div>
                   <input type="text" wire:model.live.debounce.250ms="search"
@@ -164,7 +164,7 @@
             </div>
 
             {{-- Row C: Filters + active chips --}}
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start min-w-0">
               <div class="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Status</label>
@@ -195,8 +195,8 @@
                 </div>
               </div>
 
-              <div class="lg:col-span-5">
-                <div class="flex flex-wrap items-center gap-2">
+              <div class="lg:col-span-5 min-w-0">
+                <div class="flex flex-wrap items-center gap-2 min-w-0">
                   @if(($status ?? 'all') !== 'all')
                     <button type="button" wire:click="$set('status','all')"
                       class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
@@ -231,7 +231,7 @@
                 </div>
 
                 @if(($view ?? 'list') === 'timeline')
-                  <div class="mt-3 flex items-center gap-2">
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
                     <button type="button" wire:click="timelinePrevMonth"
                       class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
                       title="Previous month">←</button>
