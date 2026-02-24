@@ -128,6 +128,39 @@
       --mf-chart-4: rgba(168,85,247,.80);
       --mf-chart-5: rgba(236,72,153,.80);
       --mf-chart-6: rgba(34,197,94,.78);
+      --bg-main: var(--mf-body-bg);
+      --bg-card: color-mix(in srgb, var(--mf-panel-bg-2) 75%, #fff 0%);
+      --card-border: var(--mf-panel-border);
+      --card-shadow: 0 12px 24px rgba(0,0,0,.10);
+      --text-primary: var(--mf-text-1);
+      --text-secondary: var(--mf-text-2);
+      --text-muted: var(--mf-text-3);
+      --heading: var(--mf-text-1);
+      --link: rgba(var(--mf-accent), 1);
+      --link-hover: rgba(var(--mf-accent-2), 1);
+      --btn-primary-bg: rgba(var(--mf-accent), .9);
+      --btn-primary-hover: rgba(var(--mf-accent), 1);
+      --btn-primary-text: #fff;
+      --btn-secondary-bg: var(--mf-control-muted-bg);
+      --btn-secondary-hover: var(--mf-control-muted-hover);
+      --btn-secondary-text: var(--mf-control-text);
+      --btn-secondary-border: var(--mf-panel-strong-border);
+      --input-bg: var(--mf-input-bg);
+      --input-border: var(--mf-input-border);
+      --input-focus: rgba(var(--mf-accent), .9);
+      --input-text: var(--mf-text-1);
+      --placeholder: var(--mf-text-3);
+      --table-header-bg: rgba(var(--mf-accent), .06);
+      --table-header-text: var(--mf-text-1);
+      --table-row-hover: rgba(var(--mf-accent), .06);
+      --table-border: var(--mf-panel-border);
+      --pill-bg: var(--mf-control-muted-bg);
+      --pill-text: var(--mf-control-text);
+      --pill-border: var(--mf-panel-strong-border);
+      --pill-active-bg: var(--mf-control-bg);
+      --pill-active-text: var(--mf-control-text);
+      --indicator: rgba(var(--mf-accent), 1);
+      --divider: var(--mf-panel-border);
       --color-bg: var(--mf-body-bg);
       --color-surface: var(--mf-panel-bg);
       --color-text: var(--mf-text-1);
@@ -210,6 +243,39 @@
       --mf-chart-4: rgba(190,24,93,.76);
       --mf-chart-5: rgba(45,212,191,.72);
       --mf-floral-opacity: .22;
+      --bg-main: #F6E9EF;
+      --bg-card: #FFFFFF;
+      --card-border: #E3C8D3;
+      --card-shadow: 0 10px 25px rgba(148, 60, 100, 0.12);
+      --text-primary: #4A1F2E;
+      --text-secondary: #7A4B5C;
+      --text-muted: #9A7A87;
+      --heading: #381522;
+      --link: #B8326E;
+      --link-hover: #9F2A5E;
+      --btn-primary-bg: #B8326E;
+      --btn-primary-hover: #9F2A5E;
+      --btn-primary-text: #FFFFFF;
+      --btn-secondary-bg: #F2D1DC;
+      --btn-secondary-hover: #E8B7C8;
+      --btn-secondary-text: #4A1F2E;
+      --btn-secondary-border: #D6A7B8;
+      --input-bg: #FFFFFF;
+      --input-border: #C58FA6;
+      --input-focus: #B8326E;
+      --input-text: #4A1F2E;
+      --placeholder: #9A7A87;
+      --table-header-bg: #E9BCCB;
+      --table-header-text: #3A1825;
+      --table-row-hover: #F2DCE4;
+      --table-border: #E3C8D3;
+      --pill-bg: #F7E3EB;
+      --pill-text: #4A1F2E;
+      --pill-border: #D6A7B8;
+      --pill-active-bg: #B8326E;
+      --pill-active-text: #FFFFFF;
+      --indicator: #B8326E;
+      --divider: #E3C8D3;
     }
     body[data-mf-theme="get-shit-done"]{
       --mf-font-body: "Archivo", ui-sans-serif, system-ui, sans-serif;
@@ -288,6 +354,39 @@
       --mf-chart-3: rgba(96,165,250,.70);
       --mf-chart-4: rgba(34,197,94,.70);
       --mf-chart-5: rgba(234,88,12,.70);
+      --bg-main: #F5F5F5;
+      --bg-card: #FFFFFF;
+      --card-border: #D6D6D6;
+      --card-shadow: 0 10px 25px rgba(0, 0, 0, 0.10);
+      --text-primary: #111111;
+      --text-secondary: #333333;
+      --text-muted: #5A5A5A;
+      --heading: #0A0A0A;
+      --link: #111111;
+      --link-hover: #000000;
+      --btn-primary-bg: #111111;
+      --btn-primary-hover: #000000;
+      --btn-primary-text: #FFFFFF;
+      --btn-secondary-bg: #FFFFFF;
+      --btn-secondary-hover: #F0F0F0;
+      --btn-secondary-text: #111111;
+      --btn-secondary-border: #BDBDBD;
+      --input-bg: #FFFFFF;
+      --input-border: #BDBDBD;
+      --input-focus: #111111;
+      --input-text: #111111;
+      --placeholder: #6A6A6A;
+      --table-header-bg: #EAEAEA;
+      --table-header-text: #111111;
+      --table-row-hover: #F2F2F2;
+      --table-border: #D6D6D6;
+      --pill-bg: #FFFFFF;
+      --pill-text: #111111;
+      --pill-border: #BDBDBD;
+      --pill-active-bg: #111111;
+      --pill-active-text: #FFFFFF;
+      --indicator: #111111;
+      --divider: #D6D6D6;
     }
 
     body.mf-app-shell{
@@ -371,7 +470,7 @@
     .mf-sidebar-footer{
       margin-top: .25rem;
       padding: .7rem .75rem .85rem;
-      border-top: 1px solid rgba(255,255,255,.04);
+      border-top: 1px solid var(--divider);
       background: linear-gradient(to top, rgba(255,255,255,.015), rgba(255,255,255,0));
       position: relative;
       z-index: 1;
@@ -464,14 +563,14 @@
       flex: 1 1 auto;
       min-width: 0;
       max-width: 100%;
-      border: 1px solid var(--mf-panel-strong-border);
+      border: 1px solid var(--btn-secondary-border);
       border-radius: .8rem;
-      background: var(--mf-control-muted-bg);
+      background: var(--btn-secondary-bg);
       overflow: hidden;
     }
     .mf-theme-select-wrap:hover{
-      background: var(--mf-control-muted-hover);
-      border-color: var(--mf-nav-border-active);
+      background: var(--btn-secondary-hover);
+      border-color: var(--btn-secondary-border);
     }
     .mf-theme-select-wrap::after{
       content: "▾";
@@ -494,6 +593,7 @@
       min-width: 0;
       max-width: 100%;
       color: inherit;
+      color: var(--btn-secondary-text);
       background: transparent;
       border: 0;
       font-family: var(--mf-font-accent);
@@ -522,7 +622,7 @@
     /* Typography mood by theme */
     #app-main :is(h1,h2,h3,h4,h5,h6){
       font-family: var(--mf-font-display);
-      color: var(--mf-text-1);
+      color: var(--heading);
       letter-spacing: -0.02em;
     }
     #app-main :is(label, th, summary, .uppercase){
@@ -562,6 +662,7 @@
       background: linear-gradient(to right, var(--mf-nav-bg-active), rgba(255,255,255,0));
       box-shadow: inset 0 0 0 1px var(--mf-nav-border-active);
       border-radius: 14px;
+      color: var(--pill-active-text);
     }
     .mf-sidebar-theme-shell :where([class*="text-zinc"], [class*="text-emerald"], [class*="text-amber"]){
       color: inherit;
@@ -570,12 +671,12 @@
       color: rgba(var(--mf-accent), .92);
     }
     .mf-sidebar-theme-shell :where([aria-current="page"] svg, .mf-active-pill svg){
-      color: rgba(var(--mf-accent-2), .95);
+      color: var(--indicator);
     }
     .mf-sidebar-theme-shell details{
       background: var(--mf-panel-bg-2) !important;
       background: color-mix(in srgb, var(--mf-panel-bg-2) 78%, transparent) !important;
-      border-color: var(--mf-panel-border) !important;
+      border-color: var(--divider) !important;
     }
     .mf-sidebar-theme-shell details > summary{
       color: var(--mf-sidebar-heading) !important;
@@ -604,8 +705,9 @@
 
     /* Widget/panel unification inside main app card */
     .mf-app-card{
-      color: var(--mf-text-1);
+      color: var(--text-primary);
       min-width: 0;
+      box-shadow: var(--card-shadow), inset 0 0 0 1px rgba(255,255,255,.02);
     }
     .mf-app-card > *{
       min-width: 0;
@@ -638,50 +740,57 @@
       box-sizing: border-box;
     }
     .mf-app-card :where(p, span, small, li, td, dt, dd){
-      color: var(--mf-text-2);
+      color: var(--text-secondary);
     }
     .mf-app-card :where(.text-zinc-50, .text-zinc-100, .text-zinc-200, .text-white){
-      color: var(--mf-text-1) !important;
+      color: var(--text-primary) !important;
     }
     .mf-app-card :where(.text-zinc-300, .text-zinc-400, .text-zinc-500, .text-slate-300, .text-slate-400){
-      color: var(--mf-text-2) !important;
+      color: var(--text-secondary) !important;
     }
     .mf-app-card :where(.text-zinc-600, .text-slate-500){
-      color: var(--mf-text-3) !important;
+      color: var(--text-muted) !important;
     }
     .mf-app-card :where(div,section,article,aside,details)[class*="rounded-"][class*="border"]{
-      border-color: var(--mf-panel-border) !important;
-      background: linear-gradient(to bottom, var(--mf-panel-bg-2), var(--mf-panel-bg)) !important;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+      border-color: var(--card-border) !important;
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--bg-card) 94%, transparent), var(--bg-card)) !important;
+      box-shadow: var(--card-shadow), inset 0 0 0 1px rgba(255,255,255,.02);
     }
     .mf-app-card :where(input, textarea, select){
-      color: var(--mf-text-1) !important;
-      background: var(--mf-input-bg) !important;
-      border-color: var(--mf-input-border) !important;
+      color: var(--input-text) !important;
+      background: var(--input-bg) !important;
+      border-color: var(--input-border) !important;
       box-shadow: none !important;
     }
     .mf-app-card :where(input, textarea, select):focus{
       outline: none !important;
-      border-color: var(--mf-nav-border-active) !important;
+      border-color: var(--input-focus) !important;
       box-shadow: 0 0 0 3px var(--mf-focus-ring) !important;
     }
     .mf-app-card :where(input, textarea, select)::placeholder{
-      color: var(--mf-text-3) !important;
+      color: var(--placeholder) !important;
     }
     .mf-app-card :where(table){
-      border-color: var(--mf-panel-border) !important;
+      border-color: var(--table-border) !important;
     }
     .mf-app-card :where(table thead){
-      background: rgba(var(--mf-accent), .06) !important;
+      background: var(--table-header-bg) !important;
+      color: var(--table-header-text) !important;
+    }
+    .mf-app-card :where(table thead th){
+      color: var(--table-header-text) !important;
     }
     .mf-app-card :where(table tbody tr:nth-child(even)){
       background: var(--mf-table-stripe);
     }
+    .mf-app-card :where(table tbody tr:hover){
+      background: var(--table-row-hover) !important;
+    }
     .mf-app-card :where(th, td){
-      border-color: var(--mf-panel-border) !important;
+      border-color: var(--table-border) !important;
     }
     .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl:not(.mf-sidebar-action-btn){
-      border-color: var(--mf-panel-strong-border);
+      border-color: var(--btn-secondary-border);
     }
     .mf-app-card :where(a, button){
       transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
@@ -698,27 +807,41 @@
     .mf-app-card :where(a:hover, button:hover){
       border-color: var(--mf-nav-border-active);
     }
+    .mf-app-card :where(a[href]){
+      color: var(--link);
+    }
+    .mf-app-card :where(a[href]:hover){
+      color: var(--link-hover);
+      text-decoration-color: var(--link-hover);
+    }
     body[data-mf-theme="sugar-and-spice"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl,
     body[data-mf-theme="steve-jobs"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl{
-      color: var(--mf-control-text);
-      background: var(--mf-control-bg);
-      border-color: var(--mf-panel-strong-border);
+      color: var(--btn-secondary-text);
+      background: var(--btn-secondary-bg);
+      border-color: var(--btn-secondary-border);
       box-shadow: 0 8px 18px -14px rgba(15,23,42,.22);
     }
     body[data-mf-theme="sugar-and-spice"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl:hover,
     body[data-mf-theme="steve-jobs"] .mf-app-card :where(button, [type="button"], [type="submit"]).rounded-xl:hover{
-      background: var(--mf-control-bg-hover);
+      background: var(--btn-secondary-hover);
     }
     body[data-mf-theme="sugar-and-spice"] .mf-app-card :where(.rounded-full)[class*="border"],
     body[data-mf-theme="steve-jobs"] .mf-app-card :where(.rounded-full)[class*="border"]{
-      border-color: var(--mf-panel-strong-border) !important;
+      border-color: var(--pill-border) !important;
       box-shadow: 0 6px 16px -14px rgba(15,23,42,.18);
+      color: var(--pill-text) !important;
+      background: var(--pill-bg) !important;
     }
     body[data-mf-theme="sugar-and-spice"] .mf-sidebar-theme-shell .mf-sidebar-action-btn,
     body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell .mf-sidebar-action-btn{
-      background: linear-gradient(to bottom, var(--mf-control-bg), rgba(255,255,255,.04)) !important;
-      color: var(--mf-control-text) !important;
-      border-color: var(--mf-panel-strong-border) !important;
+      background: linear-gradient(to bottom, var(--btn-primary-bg), color-mix(in srgb, var(--btn-primary-bg) 82%, #000 18%)) !important;
+      color: var(--btn-primary-text) !important;
+      border-color: var(--btn-primary-bg) !important;
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-sidebar-theme-shell .mf-sidebar-action-btn:hover,
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell .mf-sidebar-action-btn:hover{
+      background: linear-gradient(to bottom, var(--btn-primary-hover), color-mix(in srgb, var(--btn-primary-hover) 84%, #000 16%)) !important;
+      border-color: var(--btn-primary-hover) !important;
     }
     .mf-app-card :where(.sticky){
       max-width: 100%;
