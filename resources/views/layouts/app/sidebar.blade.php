@@ -902,6 +902,9 @@
       border-color: rgba(255,255,255,.025);
       background: linear-gradient(to bottom, rgba(255,255,255,.008), rgba(255,255,255,0));
     }
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell :where([aria-current="page"], .mf-active-pill > *){
+      color: var(--mf-sidebar-text) !important;
+    }
     /* Steve Jobs theme: force dark text on light surfaces/cards/controls */
     body[data-mf-theme="steve-jobs"] .mf-app-card :where([class*="text-white"], [class*="text-zinc-50"], [class*="text-zinc-100"], [class*="text-zinc-200"], [class*="text-emerald-50"], [class*="text-amber-50"], [class*="text-sky-50"]){
       color: var(--mf-text-1) !important;
