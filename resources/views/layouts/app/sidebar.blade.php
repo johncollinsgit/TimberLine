@@ -19,6 +19,10 @@
     }
 
     /* Sidebar glow */
+    .mf-sidebar-glow{
+      pointer-events: none;
+      z-index: 0;
+    }
     .mf-sidebar-glow::before{
       content:"";
       position:absolute;
@@ -312,16 +316,22 @@
       padding-inline: .75rem;
       padding-top: .5rem;
       padding-bottom: .45rem;
+      position: relative;
+      z-index: 1;
     }
     .mf-sidebar-theme-slot{
       padding-inline: .75rem;
       padding-top: .5rem;
       padding-bottom: .9rem;
+      position: relative;
+      z-index: 1;
     }
     .mf-sidebar-nav{
       padding-inline: .35rem;
       padding-top: .15rem;
       padding-bottom: .35rem;
+      position: relative;
+      z-index: 1;
     }
     .mf-sidebar-nav > *:first-child{
       margin-top: 0 !important;
@@ -363,6 +373,8 @@
       padding: .7rem .75rem .85rem;
       border-top: 1px solid rgba(255,255,255,.04);
       background: linear-gradient(to top, rgba(255,255,255,.015), rgba(255,255,255,0));
+      position: relative;
+      z-index: 1;
     }
 
     .mf-sidebar-theme-shell::after{
@@ -673,6 +685,15 @@
     }
     .mf-app-card :where(a, button){
       transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+    }
+    /* Interaction guardrails: decorative layers must not block controls. */
+    #app-main :where(a, button, input, select, textarea, summary, [role="button"], [role="tab"]){
+      pointer-events: auto;
+      position: relative;
+      z-index: 1;
+    }
+    #app-main :where(.pointer-events-none){
+      z-index: 0;
     }
     .mf-app-card :where(a:hover, button:hover){
       border-color: var(--mf-nav-border-active);
