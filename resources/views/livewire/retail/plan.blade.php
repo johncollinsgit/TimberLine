@@ -144,12 +144,11 @@
                 </div>
                 <div class="text-xs text-emerald-100/60">
                   @php
-                    $sourceLabel = match ($item->source) {
+                    $sourceLabel = [
                         'inventory' => 'Inventory',
                         'market_box_draft' => 'Market Draft',
                         'market_box_manual' => 'Market Box',
-                        default => (($queueMeta['key'] ?? '') === 'markets' ? 'Market Draft' : 'Order'),
-                    };
+                    ][$item->source ?? ''] ?? (($queueMeta['key'] ?? '') === 'markets' ? 'Market Draft' : 'Order');
                   @endphp
                   {{ $marketSourceLabels[$item->id] ?? $sourceLabel }}
                   @if(($item->status ?? 'draft') === 'needs_mapping' && (($queueMeta['key'] ?? '') !== 'markets' || empty($item->scent_id)))
