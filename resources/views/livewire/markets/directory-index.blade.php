@@ -89,10 +89,12 @@
                 @endif
               </div>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <a href="{{ route('markets.browser.market', $market) }}" class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">View market history</a>
+            <div class="flex flex-col gap-2 lg:w-56 lg:shrink-0">
+              <a href="{{ route('markets.browser.market', $market) }}" class="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">View market history</a>
               @if($next && ($next->year ?? null))
-                <a href="{{ route('markets.browser.year', ['year' => $next->year]) }}" class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">View year list</a>
+                <a href="{{ route('markets.browser.year', ['year' => $next->year]) }}" class="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">View year list</a>
+              @else
+                <div class="hidden lg:block h-[34px]"></div>
               @endif
             </div>
           </div>
