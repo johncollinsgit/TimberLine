@@ -1099,7 +1099,7 @@
   $inventoryActive = request()->routeIs('inventory.index');
   $eventsActive = request()->routeIs('events.*');
   $marketListsActive = request()->routeIs('markets.lists.*');
-  $marketsActive = request()->routeIs('pouring.requests');
+  $marketsActive = request()->routeIs('markets.browser.*');
 
   $sidebarItems = [];
   if (!$isPouring) {
@@ -1111,7 +1111,7 @@
       $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
   }
   $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'fire', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
-  $sidebarItems[] = ['key' => 'markets', 'icon' => 'clipboard-document', 'href' => route('pouring.requests'), 'label' => 'Markets', 'current' => $marketsActive];
+  $sidebarItems[] = ['key' => 'markets', 'icon' => 'clipboard-document', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
   if ($isAdmin || $isManager) {
       $sidebarItems[] = ['key' => 'administration', 'icon' => 'cog', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
   }
