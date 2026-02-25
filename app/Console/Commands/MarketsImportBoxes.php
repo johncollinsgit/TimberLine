@@ -117,7 +117,13 @@ class MarketsImportBoxes extends Command
 
     private function upsertMarket(array $parsed): Market
     {
-        $name = (string) ($parsed['market_name'] ?? 'Unknown Market');
+        $name = trim((string) ($parsed['market_name'] ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($parsed['raw_sheet_name'] ?? 'Unknown Market'));
+        }
+        if ($name === '') {
+            $name = 'Unknown Market';
+        }
         $slug = (string) ($parsed['canonical_slug'] ?? Str::slug($name));
         if ($slug === '') {
             $slug = 'market-'.Str::random(8);
@@ -291,15 +297,31 @@ class MarketsImportBoxes extends Command
 
     private function extractQty(array $assoc): int
     {
-        foreach (['qty', 'quantity', 'count', 'box_count', 'units'] as $key) {
+        foreach (['boxes_sent', 'qty', 'quantity', 'count', 'box_count', 'units', 'boxes_requested'] as $key) {
             if (!array_key_exists($key, $assoc)) {
                 continue;
             }
-            $value = preg_replace('/[^\d\-]/', '', (string) $assoc[$key]);
+            $value = preg_replace('/[^0-9\.\-]/', '', (string) $assoc[$key]);
             if ($value === '' || !is_numeric($value)) {
                 continue;
             }
-            return max(0, (int) $value);
+            return max(0, (int) round((float) $value));
+        }
+
+        // Fallback: look for a likely "sent" quantity column while avoiding returns.
+        foreach ($assoc as $key => $rawValue) {
+            $normalizedKey = Str::lower((string) $key);
+            if (Str::contains($normalizedKey, 'return')) {
+                continue;
+            }
+            if (!Str::contains($normalizedKey, ['sent', 'qty', 'quantity', 'count', 'units'])) {
+                continue;
+            }
+            $value = preg_replace('/[^0-9\.\-]/', '', (string) $rawValue);
+            if ($value === '' || !is_numeric($value)) {
+                continue;
+            }
+            return max(0, (int) round((float) $value));
         }
 
         return 0;

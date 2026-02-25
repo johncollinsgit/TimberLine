@@ -92,6 +92,7 @@ class SheetNameParser
             'ignored' => false,
             'raw_sheet_name' => $raw,
             'normalized_sheet_name' => $normalized,
+            'year' => $workbookYear,
             'market_name' => $marketName['market_name'] ?? $normalized,
             'market_name_confidence' => $marketName['market_name_confidence'] ?? 'low',
             'canonical_slug' => Str::slug((string) ($marketName['market_name'] ?? $normalized)),
