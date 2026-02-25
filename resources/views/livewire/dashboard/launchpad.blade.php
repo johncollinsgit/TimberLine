@@ -67,7 +67,6 @@
           @foreach($popularActions as $action)
             <a
               href="{{ $action['url'] }}"
-              wire:navigate
               class="group relative aspect-square overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-[0_18px_42px_-30px_rgba(0,0,0,0.45)] transition hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-[0_24px_54px_-28px_rgba(0,0,0,0.55)] focus:outline-none focus:ring-4 focus:ring-white/10"
             >
               <div class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/5 to-transparent"></div>
