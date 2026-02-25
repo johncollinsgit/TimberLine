@@ -92,16 +92,19 @@
                 @if($next)
                   <span class="text-white/35">·</span>
                   Next / recent: {{ $next->starts_at?->format('M j, Y') ?? 'Date TBD' }}
-                  @if(($next->display_name ?: $next->name) && ($next->display_name ?: $next->name) !== $row['title'])
-                    <span class="text-white/35">·</span>
-                    {{ $next->display_name ?: $next->name }}
-                  @endif
                   @if($next->city || $next->state)
                     <span class="text-white/35">·</span>
                     {{ trim(collect([$next->city, $next->state])->filter()->implode(', ')) }}
                   @endif
                 @endif
               </div>
+              @if($next && ($next->name || $next->display_name))
+                <div class="mt-1 text-sm text-white/75">
+                  {{ $next->name ?: $next->display_name }}
+                  <span class="text-white/35">·</span>
+                  {{ $next->starts_at?->format('M j, Y') ?? 'Date TBD' }}
+                </div>
+              @endif
             </div>
             <div class="flex flex-col gap-2 lg:w-56 lg:shrink-0">
               <a href="{{ route('markets.browser.market', $market) }}" class="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">View market history</a>
