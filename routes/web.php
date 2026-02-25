@@ -11,6 +11,7 @@ use App\Livewire\PouringRoom\OrderDetail as PouringOrderDetail;
 use App\Livewire\PouringRoom\AllCandles as PouringAllCandles;
 use App\Livewire\PouringRoom\Calendar as PouringCalendar;
 use App\Livewire\PouringRoom\Timeline as PouringTimeline;
+use App\Livewire\Dashboard\Launchpad as DashboardLaunchpad;
 use App\Livewire\Retail\Plan as RetailPlan;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\ImportRuns as AdminImportRuns;
@@ -57,7 +58,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
     Route::middleware(['role:admin,manager'])->group(function () {
-        Route::view('/dashboard', 'dashboard')->name('dashboard');
+        Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
 
     /*
