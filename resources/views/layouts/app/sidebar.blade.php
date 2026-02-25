@@ -935,6 +935,87 @@
     body[data-mf-theme="sugar-and-spice"] .mf-sidebar-footer{
       border-top-color: rgba(255,184,221,.08);
     }
+
+    /* App-level announcement banner (outside .mf-app-card) */
+    .mf-announcement{
+      border-color: rgba(252, 211, 77, .28) !important;
+      background: rgba(245, 158, 11, .12) !important;
+      color: rgba(255, 251, 235, .92) !important;
+      box-shadow: 0 14px 28px -22px rgba(245, 158, 11, .45);
+    }
+    .mf-announcement-subtle{
+      color: rgba(255, 251, 235, .72) !important;
+    }
+    .mf-announcement-btn{
+      border-color: rgba(252, 211, 77, .34) !important;
+      background: rgba(245, 158, 11, .18) !important;
+      color: rgba(255, 251, 235, .94) !important;
+    }
+    .mf-announcement-btn:hover{
+      background: rgba(245, 158, 11, .24) !important;
+      border-color: rgba(252, 211, 77, .42) !important;
+    }
+    .mf-announcement-btn.mf-announcement-btn-muted{
+      background: rgba(245, 158, 11, .11) !important;
+      color: rgba(255, 251, 235, .82) !important;
+    }
+    .mf-announcement-btn.mf-announcement-btn-muted:hover{
+      background: rgba(245, 158, 11, .15) !important;
+    }
+
+    body[data-mf-theme="sugar-and-spice"] .mf-announcement{
+      border-color: #d6a7b8 !important;
+      background: linear-gradient(to bottom, rgba(184,50,110,.16), rgba(122,28,72,.14)) !important;
+      color: #4a1f2e !important;
+      box-shadow: 0 16px 28px -22px rgba(148, 60, 100, .24);
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-announcement-subtle{
+      color: #7a4b5c !important;
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-announcement-btn{
+      border-color: #b06a88 !important;
+      background: #b8326e !important;
+      color: #fff !important;
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-announcement-btn:hover{
+      border-color: #9f2a5e !important;
+      background: #9f2a5e !important;
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-announcement-btn.mf-announcement-btn-muted{
+      border-color: #d6a7b8 !important;
+      background: #f2d1dc !important;
+      color: #4a1f2e !important;
+    }
+    body[data-mf-theme="sugar-and-spice"] .mf-announcement-btn.mf-announcement-btn-muted:hover{
+      background: #e8b7c8 !important;
+    }
+
+    body[data-mf-theme="steve-jobs"] .mf-announcement{
+      border-color: #bdbdbd !important;
+      background: linear-gradient(to bottom, #e5e5e5, #dcdcdc) !important;
+      color: #111111 !important;
+      box-shadow: 0 16px 28px -22px rgba(0, 0, 0, .18);
+    }
+    body[data-mf-theme="steve-jobs"] .mf-announcement-subtle{
+      color: #333333 !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-announcement-btn{
+      border-color: #111111 !important;
+      background: #111111 !important;
+      color: #ffffff !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-announcement-btn:hover{
+      border-color: #000000 !important;
+      background: #000000 !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-announcement-btn.mf-announcement-btn-muted{
+      border-color: #bdbdbd !important;
+      background: #f4f4f4 !important;
+      color: #111111 !important;
+    }
+    body[data-mf-theme="steve-jobs"] .mf-announcement-btn.mf-announcement-btn-muted:hover{
+      background: #ececec !important;
+    }
   </style>
 </head>
 
@@ -1159,22 +1240,22 @@
     {{-- Main content --}}
     <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
       @if($unresolvedExceptions > 0)
-        <div class="mb-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-50/90">
+        <div class="mf-announcement mb-4 rounded-2xl border px-4 py-3 text-sm">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <span class="font-semibold">Import Attention:</span>
               {{ $unresolvedExceptions }} unmapped line item{{ $unresolvedExceptions === 1 ? '' : 's' }} need review.
               @if($latestRun)
-                <span class="text-amber-100/60 ml-2">Last run: #{{ $latestRun->id }} ({{ $latestRun->store_key ?? 'store' }})</span>
+                <span class="mf-announcement-subtle ml-2">Last run: #{{ $latestRun->id }} ({{ $latestRun->store_key ?? 'store' }})</span>
               @endif
             </div>
             <div class="flex items-center gap-2">
               <a href="{{ route('admin.mapping-exceptions') }}"
-                 class="inline-flex items-center rounded-full border border-amber-300/40 bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-50">
+                 class="mf-announcement-btn inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold">
                 Fix Exceptions
               </a>
               <a href="{{ route('admin.import-runs') }}"
-                 class="inline-flex items-center rounded-full border border-amber-300/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-50/80">
+                 class="mf-announcement-btn mf-announcement-btn-muted inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold">
                 Import Runs
               </a>
             </div>
