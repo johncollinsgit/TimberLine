@@ -1,5 +1,4 @@
-<x-layouts::app :title="__('Dashboard')">
-  <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 mf-container mf-responsive-shell min-w-0">
+<div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 mf-container mf-responsive-shell min-w-0">
     <div class="space-y-6 sm:space-y-8 min-w-0">
       <section class="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-8 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.65)]">
         <div class="mx-auto w-full max-w-2xl">
@@ -85,4 +84,3 @@
       </section>
     </div>
   </div>
-</x-layouts::app>

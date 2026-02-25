@@ -418,10 +418,45 @@
       position: relative;
       z-index: 1;
     }
+    .mf-sidebar-header :where([data-flux-sidebar-brand], a[href]).mf-home-pill{
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      min-height: 2.35rem;
+      width: calc(100% - 2.4rem);
+      padding: .45rem .65rem;
+      border-radius: 9999px;
+      border: 1px solid var(--mf-panel-border);
+      background: linear-gradient(to bottom, rgba(255,255,255,.045), rgba(255,255,255,.02));
+      box-shadow: 0 10px 24px -20px rgba(0,0,0,.7);
+      transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+    .mf-sidebar-header :where([data-flux-sidebar-brand], a[href]).mf-home-pill:hover{
+      background: linear-gradient(to bottom, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      border-color: var(--mf-panel-strong-border);
+    }
+    .mf-sidebar-header :where([data-flux-sidebar-brand], a[href]).mf-home-pill:focus-visible{
+      outline: none;
+      box-shadow: 0 0 0 3px var(--mf-focus-ring), 0 10px 24px -20px rgba(0,0,0,.7);
+    }
+    .mf-sidebar-header .mf-home-pill [data-flux-sidebar-brand-name],
+    .mf-sidebar-header .mf-home-pill [data-flux-brand-name]{
+      font-size: .875rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--mf-sidebar-text);
+    }
+    .mf-sidebar-header .mf-home-pill img{
+      width: 1.75rem;
+      height: 1.75rem;
+      object-fit: contain;
+      border-radius: .55rem;
+      flex: 0 0 auto;
+    }
     .mf-sidebar-theme-slot{
       padding-inline: .75rem;
-      padding-top: .5rem;
-      padding-bottom: .9rem;
+      padding-top: .35rem;
+      padding-bottom: .75rem;
       position: relative;
       z-index: 1;
     }
@@ -543,44 +578,47 @@
     }
 
     .mf-theme-selector{
-      border-color: var(--mf-chip-border, rgba(16,185,129,.28));
-      background: linear-gradient(to bottom, rgba(0,0,0,.22), rgba(0,0,0,.12)), var(--mf-chip-bg, rgba(16,185,129,.12));
-      color: var(--mf-chip-text, rgba(236,253,245,.92));
-      box-shadow: 0 10px 30px -20px rgba(0,0,0,.8);
-      backdrop-filter: blur(10px);
+      border-color: var(--mf-panel-border);
+      background: linear-gradient(to bottom, rgba(255,255,255,.035), rgba(255,255,255,.015));
+      color: var(--mf-sidebar-text);
+      box-shadow: none;
+      backdrop-filter: blur(6px);
       width: 100%;
-      min-height: 2.75rem;
+      min-height: 0;
       overflow: hidden;
+      border-radius: .625rem;
     }
     .mf-theme-selector-label{
       flex: 0 0 auto;
       font-family: var(--mf-font-accent);
-      color: inherit;
-      opacity: .9;
+      color: var(--mf-sidebar-muted);
+      opacity: .85;
+      font-size: 10px;
+      letter-spacing: .18em;
     }
     .mf-theme-select-wrap{
       position: relative;
       flex: 1 1 auto;
       min-width: 0;
       max-width: 100%;
-      border: 1px solid var(--btn-secondary-border);
-      border-radius: .8rem;
-      background: var(--btn-secondary-bg);
+      border: 1px solid var(--mf-panel-border);
+      border-radius: .45rem;
+      background: rgba(255,255,255,.02);
       overflow: hidden;
     }
     .mf-theme-select-wrap:hover{
-      background: var(--btn-secondary-hover);
-      border-color: var(--btn-secondary-border);
+      background: rgba(255,255,255,.04);
+      border-color: var(--mf-panel-strong-border);
     }
     .mf-theme-select-wrap::after{
       content: "▾";
       position: absolute;
-      right: .65rem;
+      right: .45rem;
       top: 50%;
       transform: translateY(-50%);
-      color: var(--mf-chip-text);
-      opacity: .82;
-      font-size: .75rem;
+      color: var(--mf-sidebar-muted);
+      opacity: .9;
+      font-size: .65rem;
       line-height: 1;
       pointer-events: none;
     }
@@ -592,14 +630,13 @@
       width: 100%;
       min-width: 0;
       max-width: 100%;
-      color: inherit;
-      color: var(--btn-secondary-text);
+      color: var(--mf-sidebar-text);
       background: transparent;
       border: 0;
-      font-family: var(--mf-font-accent);
-      font-size: .875rem;
+      font-family: var(--mf-font-body);
+      font-size: .75rem;
       line-height: 1.2;
-      padding: .5rem 1.9rem .5rem .65rem;
+      padding: .25rem 1.35rem .25rem .45rem;
       text-overflow: ellipsis;
       white-space: nowrap;
       overflow: hidden;
@@ -612,7 +649,7 @@
       outline: none;
     }
     .mf-theme-selector:focus-within{
-      box-shadow: 0 0 0 1px var(--mf-nav-border-active), 0 10px 30px -20px rgba(0,0,0,.8);
+      box-shadow: 0 0 0 1px var(--mf-nav-border-active);
     }
     .mf-theme-selector:focus-within .mf-theme-select-wrap{
       border-color: var(--mf-nav-border-active);
@@ -1122,17 +1159,17 @@
 
     <div class="relative mf-fade-in">
       <flux:sidebar.header class="mf-transition mf-sidebar-header">
-        <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition" />
+        <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition mf-home-pill" />
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
       @auth
         <div class="mf-sidebar-theme-slot">
-          <div class="mf-theme-selector inline-flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2">
-            <span class="mf-theme-selector-label text-[10px] uppercase tracking-[0.24em]">Theme</span>
+          <div class="mf-theme-selector inline-flex w-full items-center justify-between gap-2 border px-2 py-1">
+            <span class="mf-theme-selector-label uppercase">Theme</span>
             <div class="mf-theme-select-wrap">
               <select id="mf-theme-picker"
-                      class="min-w-0 flex-1 text-sm focus:outline-none"
+                      class="min-w-0 flex-1 text-xs focus:outline-none"
                       data-theme-save-url="{{ route('ui.preferences.theme') }}"
                       data-theme-csrf="{{ csrf_token() }}">
                 @foreach($themeOptions as $themeKey => $themeLabel)

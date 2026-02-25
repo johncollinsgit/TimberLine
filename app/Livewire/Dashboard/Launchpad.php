@@ -21,7 +21,7 @@ class Launchpad extends Component
         return view('livewire.dashboard.launchpad', [
             'glance' => $this->todayAtGlance(),
             'popularActions' => $this->popularActions(),
-        ]);
+        ])->layout('layouts.app', ['title' => 'Dashboard']);
     }
 
     private function todayAtGlance(): array
