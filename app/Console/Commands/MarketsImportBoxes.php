@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Event;
 use App\Models\Market;
 use App\Models\MarketBoxShipment;
+use App\Support\Markets\SheetNameParser;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -43,11 +44,12 @@ class MarketsImportBoxes extends Command
 
             foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
                 $sheetName = trim((string) $sheet->getTitle());
-                if ($this->shouldIgnoreSheet($sheetName)) {
+                $parser = app(SheetNameParser::class);
+                $hints = $this->sheetContentHints($sheet);
+                $parsed = $parser->parse($sheetName, $year, $hints);
+                if (($parsed['ignored'] ?? false) === true) {
                     continue;
                 }
-
-                $parsed = $this->parseSheetName($sheetName, $year);
                 DB::transaction(function () use ($sheet, $sheetName, $parsed, &$importedEvents, &$importedLines) {
                     $market = $this->upsertMarket($parsed);
                     $event = $this->upsertEvent($market, $parsed, $sheetName);
@@ -90,63 +92,10 @@ class MarketsImportBoxes extends Command
         return [2023, 2024, 2025, 2026];
     }
 
-    private function shouldIgnoreSheet(string $sheetName): bool
-    {
-        $normalized = Str::of($sheetName)->lower()->squish()->value();
-        return in_array($normalized, $this->ignoredSheets, true);
-    }
-
-    private function parseSheetName(string $sheetName, int $fallbackYear): array
-    {
-        $clean = trim(preg_replace('/\s+/', ' ', str_replace(['_', '|'], ' ', $sheetName)) ?? $sheetName);
-        preg_match('/\b(20\d{2})\b/', $clean, $yearMatch);
-        $year = isset($yearMatch[1]) ? (int) $yearMatch[1] : $fallbackYear;
-
-        $startsAt = null;
-        $endsAt = null;
-        if (preg_match('/(\d{1,2})[\/-](\d{1,2})(?:\s*[-–]\s*(\d{1,2})[\/-](\d{1,2})|\s*-\s*(\d{1,2}))?/', $clean, $m)) {
-            try {
-                $startMonth = (int) $m[1];
-                $startDay = (int) $m[2];
-                $endMonth = isset($m[4]) && $m[4] !== '' ? (int) $m[3] : $startMonth;
-                $endDay = isset($m[4]) && $m[4] !== '' ? (int) $m[4] : (isset($m[5]) && $m[5] !== '' ? (int) $m[5] : $startDay);
-                $startsAt = now()->setDate($year, $startMonth, $startDay)->toDateString();
-                $endsAt = now()->setDate($year, $endMonth, $endDay)->toDateString();
-            } catch (\Throwable $e) {
-                $startsAt = null;
-                $endsAt = null;
-            }
-        }
-
-        $state = null;
-        if (preg_match('/\b([A-Z]{2})\b/', $clean, $stateMatch)) {
-            $state = strtoupper($stateMatch[1]);
-        }
-
-        $nameWithoutDates = trim(preg_replace('/\b20\d{2}\b/', '', $clean) ?? $clean);
-        $nameWithoutDates = trim(preg_replace('/\d{1,2}[\/-]\d{1,2}(\s*[-–]\s*(\d{1,2}[\/-]\d{1,2}|\d{1,2}))?/', '', $nameWithoutDates) ?? $nameWithoutDates);
-        $canonicalName = trim(preg_replace('/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV|WY)\b/', '', $nameWithoutDates) ?? $nameWithoutDates);
-        $canonicalName = Str::of($canonicalName)->replace(['(', ')'], ' ')->squish()->value();
-        if ($canonicalName === '') {
-            $canonicalName = Str::of($sheetName)->squish()->value();
-        }
-
-        return [
-            'canonical_name' => $canonicalName,
-            'display_name' => $sheetName,
-            'year' => $year,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'state' => $state,
-            'city' => null,
-            'venue' => null,
-        ];
-    }
-
     private function upsertMarket(array $parsed): Market
     {
-        $name = (string) ($parsed['canonical_name'] ?? 'Unknown Market');
-        $slug = Str::slug($name);
+        $name = (string) ($parsed['market_name'] ?? 'Unknown Market');
+        $slug = (string) ($parsed['canonical_slug'] ?? Str::slug($name));
         if ($slug === '') {
             $slug = 'market-'.Str::random(8);
         }
@@ -171,23 +120,84 @@ class MarketsImportBoxes extends Command
             'market_id' => $market->id,
             'year' => $parsed['year'] ?? null,
             'name' => $market->name,
-            'display_name' => $parsed['display_name'] ?? $sheetName,
+            'display_name' => $parsed['raw_sheet_name'] ?? $sheetName,
             'starts_at' => $parsed['starts_at'] ?? null,
             'ends_at' => $parsed['ends_at'] ?? null,
             'city' => $parsed['city'] ?? null,
             'state' => $parsed['state'] ?? null,
             'venue' => $parsed['venue'] ?? null,
+            'notes' => $this->mergeParseNotes(null, $parsed),
             'source' => 'spreadsheet',
             'source_ref' => $sheetName,
+            'parse_confidence' => $parsed['confidence'] ?? null,
+            'parse_notes_json' => $this->buildParseNotesJson($parsed),
+            'needs_review' => (bool) ($parsed['needs_review'] ?? false),
             'status' => 'planned',
         ];
 
         if ($event) {
+            $payload['notes'] = $this->mergeParseNotes($event->notes, $parsed);
+            $payload['parse_confidence'] = $parsed['confidence'] ?? null;
+            $payload['parse_notes_json'] = $this->buildParseNotesJson($parsed);
+            $payload['needs_review'] = (bool) ($parsed['needs_review'] ?? false);
             $event->fill($payload)->save();
             return $event;
         }
 
         return Event::query()->create($payload);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function buildParseNotesJson(array $parsed): ?array
+    {
+        if (empty($parsed)) {
+            return null;
+        }
+
+        return [
+            'confidence' => $parsed['confidence'] ?? null,
+            'date_confidence' => $parsed['date_confidence'] ?? null,
+            'date_parse_notes' => $parsed['date_parse_notes'] ?? null,
+            'location_confidence' => $parsed['location_confidence'] ?? null,
+            'location_parse_notes' => $parsed['location_parse_notes'] ?? null,
+            'market_name_confidence' => $parsed['market_name_confidence'] ?? null,
+            'notes' => array_values(array_filter((array) ($parsed['notes'] ?? []))),
+            'normalized_sheet_name' => $parsed['normalized_sheet_name'] ?? null,
+            'raw_sheet_name' => $parsed['raw_sheet_name'] ?? null,
+        ];
+    }
+
+    private function mergeParseNotes(?string $existing, array $parsed): ?string
+    {
+        $parseLines = [];
+        $confidence = (string) ($parsed['confidence'] ?? '');
+        if ($confidence !== '') {
+            $parseLines[] = "Parse confidence: {$confidence}";
+        }
+        if (!empty($parsed['notes']) && is_array($parsed['notes'])) {
+            foreach ($parsed['notes'] as $note) {
+                $parseLines[] = 'Parse note: '.(string) $note;
+            }
+        }
+        if (($parsed['needs_review'] ?? false) === true) {
+            $parseLines[] = 'Needs review: yes';
+        }
+        if (empty($parseLines)) {
+            return $existing;
+        }
+
+        $prefix = "[market-import-parser]\n".implode("\n", array_unique($parseLines));
+        $existing = trim((string) $existing);
+        if ($existing === '') {
+            return $prefix;
+        }
+
+        $cleanedExisting = preg_replace('/\[market-import-parser\][\s\S]*$/m', '', $existing) ?? $existing;
+        $cleanedExisting = trim($cleanedExisting);
+
+        return trim($cleanedExisting."\n\n".$prefix);
     }
 
     private function extractRows(object $sheet): array
@@ -236,6 +246,26 @@ class MarketsImportBoxes extends Command
         return $out;
     }
 
+    /**
+     * @return array<int,string>
+     */
+    private function sheetContentHints(object $sheet): array
+    {
+        $rows = method_exists($sheet, 'toArray') ? $sheet->toArray(null, true, true, false) : [];
+        $hints = [];
+        foreach (array_slice($rows, 0, 10) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $line = trim(implode(' ', array_map(fn ($v) => trim((string) $v), $row)));
+            if ($line !== '') {
+                $hints[] = preg_replace('/\s+/', ' ', $line) ?? $line;
+            }
+        }
+
+        return $hints;
+    }
+
     private function extractQty(array $assoc): int
     {
         foreach (['qty', 'quantity', 'count', 'box_count', 'units'] as $key) {
@@ -252,4 +282,3 @@ class MarketsImportBoxes extends Command
         return 0;
     }
 }
-

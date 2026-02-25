@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Event extends Model
 {
     protected $fillable = [
-        'market_id','year','name','display_name','venue','city','state','starts_at','ends_at','due_date','ship_date','status','notes','source','source_ref',
+        'market_id','year','name','display_name','venue','city','state','starts_at','ends_at','due_date','ship_date','status','notes','source','source_ref','parse_confidence','parse_notes_json','needs_review',
     ];
 
     protected $casts = [
@@ -19,6 +19,8 @@ class Event extends Model
         'ends_at' => 'date',
         'due_date' => 'date',
         'ship_date' => 'date',
+        'parse_notes_json' => 'array',
+        'needs_review' => 'boolean',
     ];
 
     public function market(): BelongsTo

@@ -19,6 +19,15 @@
             <span class="text-white/35">·</span>{{ $event->venue }}
           @endif
         </p>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/75">Source: {{ $event->source ?: 'manual' }}</span>
+          @if(!blank($event->parse_confidence))
+            <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/75">Parse: {{ ucfirst((string) $event->parse_confidence) }}</span>
+          @endif
+          @if($event->needs_review)
+            <span class="rounded-full border border-amber-300/30 bg-amber-400/15 px-3 py-1 text-[11px] font-semibold text-amber-50">Needs Review</span>
+          @endif
+        </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         @if($event->market)
@@ -88,6 +97,30 @@
     @if(!blank($event->notes))
       <div class="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80 whitespace-pre-wrap">{{ $event->notes }}</div>
     @endif
+    @if(!empty($event->parse_notes_json))
+      <div class="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div class="text-xs uppercase tracking-[0.2em] text-white/50">Parser Details</div>
+        <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 text-xs text-white/70">
+          <div>Date confidence: {{ $event->parse_notes_json['date_confidence'] ?? '—' }}</div>
+          <div>Location confidence: {{ $event->parse_notes_json['location_confidence'] ?? '—' }}</div>
+          @if(!blank($event->parse_notes_json['date_parse_notes'] ?? null))
+            <div class="md:col-span-2">Date parse notes: {{ $event->parse_notes_json['date_parse_notes'] }}</div>
+          @endif
+          @if(!blank($event->parse_notes_json['location_parse_notes'] ?? null))
+            <div class="md:col-span-2">Location parse notes: {{ $event->parse_notes_json['location_parse_notes'] }}</div>
+          @endif
+          @if(!empty($event->parse_notes_json['notes']) && is_array($event->parse_notes_json['notes']))
+            <div class="md:col-span-2">
+              <div class="mb-1">Notes:</div>
+              <ul class="list-disc pl-5 space-y-1">
+                @foreach($event->parse_notes_json['notes'] as $note)
+                  <li>{{ $note }}</li>
+                @endforeach
+              </ul>
+            </div>
+          @endif
+        </div>
+      </div>
+    @endif
   </section>
 </div>
-
