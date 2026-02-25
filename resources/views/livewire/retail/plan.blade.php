@@ -112,22 +112,14 @@
         </div>
         <div class="mt-4 space-y-2" data-rp-body>
           @forelse($items as $item)
-            @php
-              $scentName = $scents->firstWhere('id', $item->scent_id)?->display_name
-                ?? $scents->firstWhere('id', $item->scent_id)?->name
-                ?? 'Unknown';
-              $sizeLabel = $sizes->firstWhere('id', $item->size_id)?->display
-                ?? $sizes->firstWhere('id', $item->size_id)?->code
-                ?? '—';
-              $source = $item->source === 'inventory' ? 'Inventory' : 'Order';
-            @endphp
             <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
               <div class="min-w-0">
                 <div class="text-sm text-white/90">
-                  {{ $scentName }} <span class="text-emerald-100/60">· {{ $sizeLabel }}</span>
+                  {{ $scents->firstWhere('id', $item->scent_id)?->display_name ?? $scents->firstWhere('id', $item->scent_id)?->name ?? 'Unknown' }}
+                  <span class="text-emerald-100/60">· {{ $sizes->firstWhere('id', $item->size_id)?->display ?? $sizes->firstWhere('id', $item->size_id)?->code ?? '—' }}</span>
                 </div>
                 <div class="text-xs text-emerald-100/60">
-                  {{ $source }}
+                  {{ $item->source === 'inventory' ? 'Inventory' : 'Order' }}
                   @if(($item->status ?? 'draft') === 'needs_mapping')
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
                       Needs mapping
