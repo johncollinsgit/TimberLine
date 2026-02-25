@@ -1103,13 +1103,12 @@
 
   $sidebarItems = [];
   if (!$isPouring) {
-      $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document-check', 'href' => $hrefRetailPlan, 'label' => 'Retail/Pour List', 'current' => $retailPlanActive];
+      $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document-check', 'href' => $hrefRetailPlan, 'label' => 'All Pour Lists', 'current' => $retailPlanActive];
       $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
       $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
   }
   if ($isAdmin || $isManager) {
       $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
-      $sidebarItems[] = ['key' => 'market-pour-lists', 'icon' => 'list-bullet', 'href' => route('markets.lists.index'), 'label' => 'Market Pour Lists', 'current' => $marketListsActive];
   }
   $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'fire', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
   $sidebarItems[] = ['key' => 'markets', 'icon' => 'clipboard-document', 'href' => route('pouring.requests'), 'label' => 'Markets', 'current' => $marketsActive];

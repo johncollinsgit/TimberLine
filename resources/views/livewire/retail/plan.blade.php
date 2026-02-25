@@ -1,19 +1,8 @@
 <div class="space-y-4 sm:space-y-6 min-w-0">
-  <section class="rounded-2xl border border-emerald-200/10 bg-[#0c1210]/80 p-3 min-w-0">
-    <div class="flex flex-wrap gap-2">
-      @foreach (['retail' => 'Retail', 'wholesale' => 'Wholesale', 'markets' => 'Markets'] as $tabKey => $tabLabel)
-        <a href="{{ route('retail.plan', ['queue' => $tabKey]) }}"
-          class="rounded-full px-4 py-2 text-xs border transition {{ ($queueMeta['key'] ?? 'retail') === $tabKey ? 'border-emerald-300/40 bg-emerald-500/20 text-white' : 'border-emerald-200/10 bg-emerald-500/5 text-emerald-50/80 hover:bg-emerald-500/10' }}">
-          {{ $tabLabel }}
-        </a>
-      @endforeach
-    </div>
-  </section>
-
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] min-w-0">
     <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div class="min-w-0">
-        <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">{{ $queueMeta['title'] ?? 'Retail/Pour List' }}</div>
+        <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">All Pour Lists</div>
         <div class="mt-2 max-w-full sm:max-w-[32rem] text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white truncate" title="{{ $plan->name }}">{{ $plan->name }}</div>
         <div class="mt-2 text-sm text-emerald-50/70 break-words">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
         <div class="mt-2 text-xs text-emerald-100/70 italic">“{{ $quote }}”</div>
@@ -32,6 +21,25 @@
           Publish to Pouring
         </button>
       </div>
+    </div>
+    <div class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3" role="navigation" aria-label="Pour list queues">
+      @foreach (['retail' => ['label' => 'Retail', 'desc' => 'Shopify retail queue'], 'wholesale' => ['label' => 'Wholesale', 'desc' => 'Wholesale order queue'], 'markets' => ['label' => 'Markets', 'desc' => 'Market/event planning queue']] as $tabKey => $tabMeta)
+        @php($isActiveQueue = ($queueMeta['key'] ?? 'retail') === $tabKey)
+        <a
+          href="{{ route('retail.plan', ['queue' => $tabKey]) }}"
+          class="group block rounded-2xl border p-4 sm:p-5 transition min-w-0 {{ $isActiveQueue ? 'border-emerald-300/35 bg-emerald-500/18 shadow-[0_18px_40px_-30px_rgba(16,185,129,.35)]' : 'border-emerald-200/10 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-300/20' }}"
+        >
+          <div class="flex h-full min-h-[5.5rem] flex-col justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-base sm:text-lg font-semibold text-white leading-tight">{{ $tabMeta['label'] }}</div>
+              <div class="mt-1 text-xs sm:text-sm text-emerald-50/65">{{ $tabMeta['desc'] }}</div>
+            </div>
+            <div class="inline-flex items-center gap-1 text-xs font-semibold {{ $isActiveQueue ? 'text-emerald-50' : 'text-emerald-100/80 group-hover:text-emerald-50' }}">
+              {{ $isActiveQueue ? 'Current Queue' : 'Open Queue' }} <span aria-hidden="true">→</span>
+            </div>
+          </div>
+        </a>
+      @endforeach
     </div>
     @if(!empty($queueMeta['markets_help']))
       <div class="mt-4 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-50/85">
