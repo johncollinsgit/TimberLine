@@ -130,7 +130,12 @@
           </div>
         </div>
         <div class="mt-4 space-y-2" data-rp-body>
-          @forelse($items as $item)
+          @if($items->isEmpty())
+            <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
+              {{ $queueMeta['empty_label'] ?? 'No items yet. Prefill from retail orders or add inventory below.' }}
+            </div>
+          @else
+            @foreach($items as $item)
             <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
               <div class="min-w-0">
                 <div class="text-sm text-white/90">
@@ -143,14 +148,19 @@
                   @endif
                 </div>
                 <div class="text-xs text-emerald-100/60">
-                  @php
-                    $sourceLabel = [
-                        'inventory' => 'Inventory',
-                        'market_box_draft' => 'Market Draft',
-                        'market_box_manual' => 'Market Box',
-                    ][$item->source ?? ''] ?? (($queueMeta['key'] ?? '') === 'markets' ? 'Market Draft' : 'Order');
-                  @endphp
-                  {{ $marketSourceLabels[$item->id] ?? $sourceLabel }}
+                  @if(isset($marketSourceLabels[$item->id]))
+                    {{ $marketSourceLabels[$item->id] }}
+                  @elseif(($item->source ?? '') === 'inventory')
+                    Inventory
+                  @elseif(($item->source ?? '') === 'market_box_draft')
+                    Market Draft
+                  @elseif(($item->source ?? '') === 'market_box_manual')
+                    Market Box
+                  @elseif(($queueMeta['key'] ?? '') === 'markets')
+                    Market Draft
+                  @else
+                    Order
+                  @endif
                   @if(($item->status ?? 'draft') === 'needs_mapping' && (($queueMeta['key'] ?? '') !== 'markets' || empty($item->scent_id)))
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
                       Needs mapping
@@ -198,11 +208,8 @@
                 </button>
               </div>
             </div>
-          @empty
-            <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
-              {{ $queueMeta['empty_label'] ?? 'No items yet. Prefill from retail orders or add inventory below.' }}
-            </div>
-          @endforelse
+            @endforeach
+          @endif
         </div>
         <div class="mt-4">
           <button type="button" wire:click="publishPlan"
