@@ -15,12 +15,6 @@ class MarketsImportBoxes extends Command
     protected $signature = 'markets:import-boxes {year? : Specific year workbook to import (e.g. 2026)}';
     protected $description = 'Import market box count/scent notes spreadsheets into markets + event occurrences (idempotent).';
 
-    private array $ignoredSheets = [
-        'market box count & scent notes',
-        'tr room sprays sold',
-        'sheet3', 'sheet4', 'sheet5', 'sheet6',
-    ];
-
     public function handle(): int
     {
         if (!class_exists(\PhpOffice\PhpSpreadsheet\IOFactory::class)) {
@@ -40,16 +34,31 @@ class MarketsImportBoxes extends Command
             }
 
             $this->info("Importing {$path}");
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($path);
+            if (method_exists($reader, 'setReadDataOnly')) {
+                $reader->setReadDataOnly(true);
+            }
+            if (method_exists($reader, 'setReadEmptyCells')) {
+                $reader->setReadEmptyCells(false);
+            }
+            if (method_exists($reader, 'setIgnoreRowsWithNoCells')) {
+                $reader->setIgnoreRowsWithNoCells(true);
+            }
 
-            foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
-                $sheetName = trim((string) $sheet->getTitle());
-                $parser = app(SheetNameParser::class);
-                $hints = $this->sheetContentHints($sheet);
-                $parsed = $parser->parse($sheetName, $year, $hints);
+            $parser = app(SheetNameParser::class);
+            foreach ($reader->listWorksheetNames($path) as $rawSheetName) {
+                $sheetName = trim((string) $rawSheetName);
+                $parsed = $parser->parse($sheetName, $year);
                 if (($parsed['ignored'] ?? false) === true) {
                     continue;
                 }
+
+                $reader->setLoadSheetsOnly([$sheetName]);
+                $spreadsheet = $reader->load($path);
+                $sheet = $spreadsheet->getSheet(0);
+                $hints = $this->sheetContentHints($sheet);
+                $parsed = $parser->parse($sheetName, $year, $hints);
+
                 DB::transaction(function () use ($sheet, $sheetName, $parsed, &$importedEvents, &$importedLines) {
                     $market = $this->upsertMarket($parsed);
                     $event = $this->upsertEvent($market, $parsed, $sheetName);
@@ -75,6 +84,12 @@ class MarketsImportBoxes extends Command
                         }
                     }
                 });
+
+                $spreadsheet->disconnectWorksheets();
+                unset($sheet, $spreadsheet);
+                if (function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
             }
         }
 
