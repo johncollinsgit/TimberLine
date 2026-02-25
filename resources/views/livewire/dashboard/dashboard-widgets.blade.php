@@ -134,6 +134,9 @@
                     </div>
                   </div>
                   <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <a href="{{ route('shipping.orders', ['search' => ltrim((string) ($o['number'] ?? ''), '#')]) }}" wire:navigate class="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-semibold text-white/85 hover:bg-white/10">
+                      Open
+                    </a>
                     <button type="button" wire:click="toggleDueWindow({{ (int) ($o['id'] ?? 0) }})" class="inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-semibold {{ $typeBadge($o['channel'] ?? '') }}">Details</button>
                     <div class="text-xs text-white/70">{{ $o['due'] ?? '—' }}</div>
                   </div>
@@ -179,19 +182,25 @@
           </div>
 
         @elseif($id === 'shipping_queue')
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Open Shipping Room</div>
+            <a href="{{ route('shipping.orders') }}" wire:navigate class="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold text-emerald-100/85 hover:bg-emerald-500/20">
+              Open Orders
+            </a>
+          </div>
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <div class="rounded-2xl border border-emerald-300/15 bg-emerald-500/10 p-4">
+            <a href="{{ route('shipping.orders') }}" wire:navigate class="block rounded-2xl border border-emerald-300/15 bg-emerald-500/10 p-4 hover:bg-emerald-500/15 transition">
               <div class="text-xs uppercase tracking-[0.25em] text-emerald-100/50">Ready</div>
               <div class="mt-2 text-2xl font-semibold text-white">{{ $data['shippingQueue']['ready'] ?? 0 }}</div>
-            </div>
-            <div class="rounded-2xl border border-amber-300/15 bg-amber-400/10 p-4">
+            </a>
+            <a href="{{ route('shipping.orders') }}" wire:navigate class="block rounded-2xl border border-amber-300/15 bg-amber-400/10 p-4 hover:bg-amber-400/15 transition">
               <div class="text-xs uppercase tracking-[0.25em] text-amber-100/60">Blocked</div>
               <div class="mt-2 text-2xl font-semibold text-white">{{ $data['shippingQueue']['blocked'] ?? 0 }}</div>
-            </div>
-            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+            </a>
+            <a href="{{ route('shipping.orders') }}" wire:navigate class="block rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">
               <div class="text-xs uppercase tracking-[0.25em] text-white/50">Avg Age</div>
               <div class="mt-2 text-2xl font-semibold text-white">{{ $data['shippingQueue']['avgAgeDays'] ?? 0 }}d</div>
-            </div>
+            </a>
           </div>
 
         @elseif($id === 'import_health')
@@ -296,7 +305,11 @@
               <tbody class="divide-y divide-white/10">
                 @forelse(($data['recentOrders'] ?? []) as $o)
                   <tr class="hover:bg-white/5">
-                    <td class="px-3 py-2 text-white/90">#{{ ltrim((string) ($o['number'] ?? '—'), '#') }}</td>
+                    <td class="px-3 py-2 text-white/90">
+                      <a href="{{ route('shipping.orders', ['search' => ltrim((string) ($o['number'] ?? ''), '#')]) }}" wire:navigate class="underline decoration-transparent hover:decoration-current">
+                        #{{ ltrim((string) ($o['number'] ?? '—'), '#') }}
+                      </a>
+                    </td>
                     <td class="px-3 py-2 text-white/80">{{ $o['customer'] ?? 'Unknown' }}</td>
                     <td class="px-3 py-2">
                       <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] {{ $typeBadge($o['channel'] ?? '') }}">{{ $o['channel'] ?? '—' }}</span>

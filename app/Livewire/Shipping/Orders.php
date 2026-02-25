@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -1033,18 +1034,34 @@ class Orders extends Component
         return $q;
     }
 
-    private function timelineQueryForMonth(Carbon $month): Builder
+    private function timelineOrdersForMonth(Carbon $month): Collection
     {
-        $start = $month->copy()->startOfMonth()->startOfWeek();
-        $end   = $month->copy()->endOfMonth()->endOfWeek();
+        $start = CarbonImmutable::instance($month->copy()->startOfMonth()->startOfWeek()->startOfDay());
+        $end   = CarbonImmutable::instance($month->copy()->endOfMonth()->endOfWeek()->endOfDay());
+        $calculator = app(BusinessDayCalculator::class);
 
-        $q = $this->baseQuery()
-            ->whereNotNull('ship_by_at')
-            ->whereBetween('ship_by_at', [$start->startOfDay(), $end->endOfDay()]);
+        return $this->baseQuery()
+            ->get()
+            ->map(function (Order $order) use ($calculator, $start, $end) {
+                $effectiveShipBy = $this->computeShipByDate($order, $calculator);
+                if (!$effectiveShipBy) {
+                    return null;
+                }
 
-        $q->reorder('ship_by_at', 'asc')->orderByDesc('id');
+                if ($effectiveShipBy->lt($start) || $effectiveShipBy->gt($end)) {
+                    return null;
+                }
 
-        return $q;
+                $order->setAttribute('effective_ship_by_at', $effectiveShipBy->toDateString());
+
+                return $order;
+            })
+            ->filter()
+            ->sortBy(function (Order $order) {
+                $date = (string) ($order->getAttribute('effective_ship_by_at') ?? '');
+                return $date.'|'.str_pad((string) $order->id, 10, '0', STR_PAD_LEFT);
+            })
+            ->values();
     }
 
     public function render()
@@ -1060,7 +1077,7 @@ class Orders extends Component
 
         if (($this->view ?? 'list') === 'timeline') {
             $timelineMonth  = Carbon::createFromFormat('Y-m', $this->timelineYm)->startOfMonth();
-            $timelineOrders = $this->timelineQueryForMonth($timelineMonth)->get();
+            $timelineOrders = $this->timelineOrdersForMonth($timelineMonth);
         }
         if (($this->view ?? 'list') === 'gantt') {
             $ganttStart = Carbon::parse($this->ganttStart)->startOfDay();

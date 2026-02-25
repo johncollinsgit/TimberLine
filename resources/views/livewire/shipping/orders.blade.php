@@ -81,8 +81,9 @@
 
   $byDay = $timelineOrders->groupBy(function ($o) {
     try {
-      if (blank($o->ship_by_at)) return '__none__';
-      return Carbon::parse($o->ship_by_at)->toDateString();
+      $effective = $o->effective_ship_by_at ?? $o->ship_by_at ?? null;
+      if (blank($effective)) return '__none__';
+      return Carbon::parse($effective)->toDateString();
     } catch (\Throwable $e) {
       return '__none__';
     }
