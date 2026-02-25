@@ -3,10 +3,20 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ config('app.name', 'Modern Forestry Backstage') }}</title>
-    <link rel="icon" href="/favicon.ico" sizes="any">
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Modern Forestry Backstage</title>
+    <meta name="application-name" content="Modern Forestry Backstage">
+    <meta property="og:site_name" content="Modern Forestry Backstage">
+    <meta property="og:title" content="Modern Forestry Backstage">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ url('/') }}">
+    <meta property="og:image" content="{{ asset('apple-touch-icon.png') }}?v=mf2">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Modern Forestry Backstage">
+    <meta name="twitter:image" content="{{ asset('apple-touch-icon.png') }}?v=mf2">
+    <link rel="icon" href="{{ asset('favicon.ico') }}?v=mf2" sizes="any">
+    <link rel="icon" href="{{ asset('favicon.svg') }}?v=mf2" type="image/svg+xml">
+    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=mf2">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=mf2">
     <style>
         :root {
             color-scheme: dark;
