@@ -8,6 +8,7 @@ use App\Models\MarketPourList;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Services\MarketRecommender;
+use Carbon\CarbonImmutable;
 use Livewire\Component;
 
 class Show extends Component
@@ -40,7 +41,7 @@ class Show extends Component
         $this->starts_at = optional($event->starts_at)->toDateString();
         $this->ends_at = optional($event->ends_at)->toDateString();
         $this->due_date = optional($event->due_date)->toDateString();
-        $this->ship_date = optional($event->ship_date)->toDateString();
+        $this->ship_date = optional($event->ship_date)->toDateString() ?: $this->defaultMarketShipDate();
         $this->status = $event->status ?? 'planned';
         $this->notes = $event->notes;
     }
@@ -130,5 +131,13 @@ class Show extends Component
             'sizes' => $sizes,
             'recommendations' => $reco,
         ])->layout('layouts.app');
+    }
+
+    private function defaultMarketShipDate(): string
+    {
+        return CarbonImmutable::now()
+            ->addWeeks(2)
+            ->next(CarbonImmutable::THURSDAY)
+            ->toDateString();
     }
 }

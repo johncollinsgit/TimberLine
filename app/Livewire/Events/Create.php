@@ -3,6 +3,7 @@
 namespace App\Livewire\Events;
 
 use App\Models\Event;
+use Carbon\CarbonImmutable;
 use Livewire\Component;
 
 class Create extends Component
@@ -17,6 +18,13 @@ class Create extends Component
     public ?string $ship_date = null;
     public string $status = 'planned';
     public ?string $notes = null;
+
+    public function mount(): void
+    {
+        if (blank($this->ship_date)) {
+            $this->ship_date = $this->defaultMarketShipDate();
+        }
+    }
 
     public function save(): void
     {
@@ -49,5 +57,13 @@ class Create extends Component
     {
         return view('livewire.events.create')
             ->layout('layouts.app');
+    }
+
+    private function defaultMarketShipDate(): string
+    {
+        return CarbonImmutable::now()
+            ->addWeeks(2)
+            ->next(CarbonImmutable::THURSDAY)
+            ->toDateString();
     }
 }
