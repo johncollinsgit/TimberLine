@@ -119,7 +119,11 @@
                   <span class="text-emerald-100/60">· {{ $sizes->firstWhere('id', $item->size_id)?->display ?? $sizes->firstWhere('id', $item->size_id)?->code ?? '—' }}</span>
                 </div>
                 <div class="text-xs text-emerald-100/60">
-                  {{ $item->source === 'inventory' ? 'Inventory' : 'Order' }}
+                  {{ match ($item->source) {
+                      'inventory' => 'Inventory',
+                      'market_pour_list' => 'Market Draft',
+                      default => 'Order',
+                  } }}
                   @if(($item->status ?? 'draft') === 'needs_mapping')
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
                       Needs mapping

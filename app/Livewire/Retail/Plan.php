@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Retail;
 
+use App\Models\MarketPourList;
+use App\Models\MarketPourListLine;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\RetailPlan;
@@ -11,6 +13,7 @@ use App\Models\Size;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class Plan extends Component
@@ -62,6 +65,11 @@ class Plan extends Component
 
     protected function prefillFromOrdersInternal(bool $silent): void
     {
+        if ($this->queue === 'markets') {
+            $this->prefillFromMarketDraftsInternal($silent);
+            return;
+        }
+
         $orders = Order::query()
             ->where('order_type', $this->orderTypeForQueue())
             ->whereNull('published_at')
@@ -104,6 +112,57 @@ class Plan extends Component
                 'message' => $added > 0
                     ? "Prefilled {$added} ".strtolower($this->queueDisplayName()).' lines.'
                     : 'No new '.strtolower($this->queueDisplayName()).' lines to add.',
+            ]);
+        }
+    }
+
+    protected function prefillFromMarketDraftsInternal(bool $silent): void
+    {
+        $drafts = MarketPourList::query()
+            ->where('status', 'draft')
+            ->with(['event:id,name,starts_at', 'lines'])
+            ->orderByDesc('id')
+            ->get();
+
+        $added = 0;
+
+        foreach ($drafts as $draft) {
+            foreach ($draft->lines as $line) {
+                $qty = (int) ($line->edited_qty ?? $line->recommended_qty ?? 0);
+                if ($qty <= 0) {
+                    continue;
+                }
+
+                [$scentId, $sizeId, $sku] = $this->resolveMarketDraftLineMapping($line, $draft);
+
+                $item = RetailPlanItem::query()->updateOrCreate(
+                    [
+                        'retail_plan_id' => $this->plan->id,
+                        'source' => 'market_pour_list',
+                        'sku' => $sku,
+                    ],
+                    [
+                        'order_id' => null,
+                        'order_line_id' => null,
+                        'scent_id' => $scentId,
+                        'size_id' => $sizeId,
+                        'quantity' => $qty,
+                        'status' => ($scentId && $sizeId) ? 'draft' : 'needs_mapping',
+                    ]
+                );
+
+                if ($item->wasRecentlyCreated) {
+                    $added++;
+                }
+            }
+        }
+
+        if (!$silent) {
+            $this->dispatch('toast', [
+                'type' => 'success',
+                'message' => $added > 0
+                    ? "Prefilled {$added} markets draft lines."
+                    : 'No new markets draft lines to add.',
             ]);
         }
     }
@@ -446,8 +505,14 @@ class Plan extends Component
         $queue = $this->queueDisplayName();
         $prefillLabel = match ($this->queue) {
             'wholesale' => 'Prefill from Wholesale Orders',
-            'markets' => 'Prefill from Market Orders',
+            'markets' => 'Prefill from Market Drafts',
             default => 'Prefill from Retail Orders',
+        };
+
+        $emptyLabel = match ($this->queue) {
+            'markets' => 'No items yet. Prefill from market drafts or add inventory below.',
+            'wholesale' => 'No items yet. Prefill from wholesale orders or add inventory below.',
+            default => 'No items yet. Prefill from retail orders or add inventory below.',
         };
 
         return [
@@ -456,9 +521,84 @@ class Plan extends Component
             'subtitle' => 'Draft list for today. Publish to push to the pouring room.',
             'prefill_label' => $prefillLabel,
             'add_button_label' => 'Add to '.$queue.'/Pour List',
-            'empty_label' => 'No items yet. Prefill from '.strtolower($queue).' orders or add inventory below.',
+            'empty_label' => $emptyLabel,
             'markets_help' => $this->queue === 'markets',
         ];
+    }
+
+    protected function resolveMarketDraftLineMapping(MarketPourListLine $line, MarketPourList $draft): array
+    {
+        $reason = is_array($line->reason_json) ? $line->reason_json : [];
+
+        $scentId = $line->scent_id ?: $this->resolveScentIdFromText((string) ($reason['scent'] ?? ''));
+        $sizeId = $line->size_id ?: $this->resolveSizeIdFromText((string) ($reason['size'] ?? ''));
+
+        $sku = 'mktpl:'.$draft->id.':'.$line->id;
+
+        // Preserve a human-readable identifier when mapping is incomplete.
+        if (!$scentId || !$sizeId) {
+            $parts = array_values(array_filter([
+                trim((string) ($reason['product_key'] ?? '')),
+                trim((string) ($reason['scent'] ?? '')),
+                trim((string) ($reason['size'] ?? '')),
+            ]));
+
+            if ($parts !== []) {
+                $sku = implode(' | ', $parts);
+            }
+        }
+
+        return [$scentId ?: null, $sizeId ?: null, Str::limit($sku, 255, '')];
+    }
+
+    protected function resolveScentIdFromText(string $scent): ?int
+    {
+        $scent = trim($scent);
+        if ($scent === '') {
+            return null;
+        }
+
+        $normalized = Scent::normalizeName($scent);
+
+        $match = Scent::query()
+            ->where('name', $scent)
+            ->orWhere('display_name', $scent)
+            ->get(['id', 'name', 'display_name'])
+            ->first();
+
+        if ($match) {
+            return (int) $match->id;
+        }
+
+        return Scent::query()
+            ->get(['id', 'name', 'display_name'])
+            ->first(function (Scent $candidate) use ($normalized) {
+                $names = array_filter([
+                    $candidate->name,
+                    $candidate->display_name,
+                ]);
+
+                foreach ($names as $name) {
+                    if (Scent::normalizeName((string) $name) === $normalized) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })?->id;
+    }
+
+    protected function resolveSizeIdFromText(string $size): ?int
+    {
+        $size = trim($size);
+        if ($size === '') {
+            return null;
+        }
+
+        return Size::query()
+            ->where('code', $size)
+            ->orWhere('label', $size)
+            ->first()?->id;
     }
 
     protected function enneagramQuote(): string
