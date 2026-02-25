@@ -143,12 +143,15 @@
                   @endif
                 </div>
                 <div class="text-xs text-emerald-100/60">
-                  {{ match ($item->source) {
-                      'inventory' => 'Inventory',
-                      'market_box_draft' => 'Market Draft',
-                      'market_box_manual' => 'Market Box',
-                      default => 'Order',
-                  } }}
+                  @php
+                    $sourceLabel = match ($item->source) {
+                        'inventory' => 'Inventory',
+                        'market_box_draft' => 'Market Draft',
+                        'market_box_manual' => 'Market Box',
+                        default => (($queueMeta['key'] ?? '') === 'markets' ? 'Market Draft' : 'Order'),
+                    };
+                  @endphp
+                  {{ $marketSourceLabels[$item->id] ?? $sourceLabel }}
                   @if(($item->status ?? 'draft') === 'needs_mapping' && (($queueMeta['key'] ?? '') !== 'markets' || empty($item->scent_id)))
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
                       Needs mapping

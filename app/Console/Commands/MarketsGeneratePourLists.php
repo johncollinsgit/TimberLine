@@ -139,7 +139,7 @@ class MarketsGeneratePourLists extends Command
             ->when($event->starts_at, fn ($q) => $q->whereDate('starts_at', '<', $event->starts_at))
             ->orderByDesc('starts_at')
             ->limit(8)
-            ->get(['id']);
+            ->get(['id', 'starts_at']);
 
         $historyRows = MarketBoxShipment::query()
             ->whereIn('event_id', $historyEvents->pluck('id'))
@@ -160,22 +160,48 @@ class MarketsGeneratePourLists extends Command
                 Str::lower(trim((string) ($row->size ?: ''))),
             ]);
         });
+        $historyEventRank = array_flip($historyEvents->pluck('id')->map(fn ($id) => (int) $id)->all());
+        $targetPreviousYear = $event->starts_at?->year ? ((int) $event->starts_at->year - 1) : null;
+        $historyEventYear = $historyEvents
+            ->mapWithKeys(fn (Event $e) => [(int) $e->id => $e->starts_at?->year ? (int) $e->starts_at->year : null])
+            ->all();
 
         $draft->lines()->delete();
         foreach ($grouped as $group) {
             $sample = $group->first();
             $avgQty = (int) round($group->avg('qty'));
-            if ($avgQty <= 0) {
+
+            $previousYearRow = $targetPreviousYear === null
+                ? null
+                : $group
+                    ->filter(fn (MarketBoxShipment $row) => ($historyEventYear[(int) $row->event_id] ?? null) === $targetPreviousYear)
+                    ->sortBy(fn (MarketBoxShipment $row) => $historyEventRank[(int) $row->event_id] ?? PHP_INT_MAX)
+                    ->first();
+
+            $latestHistoryRow = $group
+                ->sortBy(fn (MarketBoxShipment $row) => $historyEventRank[(int) $row->event_id] ?? PHP_INT_MAX)
+                ->first();
+
+            $defaultQty = (int) ($previousYearRow?->qty ?? $latestHistoryRow?->qty ?? 0);
+            $qtyBasis = $previousYearRow ? 'previous_year' : ($latestHistoryRow ? 'latest_history' : 'history_avg');
+            $recommendedQty = $defaultQty > 0 ? $defaultQty : $avgQty;
+
+            if ($recommendedQty <= 0) {
                 continue;
             }
 
             MarketPourListLine::query()->create([
                 'market_pour_list_id' => $draft->id,
-                'recommended_qty' => $avgQty,
+                'recommended_qty' => $recommendedQty,
                 'edited_qty' => null,
                 'reason_json' => [
-                    'source' => 'market_box_history_avg',
+                    'source' => 'market_box_history_default',
                     'history_event_count' => $group->pluck('event_id')->unique()->count(),
+                    'default_qty_basis' => $qtyBasis,
+                    'default_qty' => $recommendedQty,
+                    'previous_year_qty' => $previousYearRow ? (int) $previousYearRow->qty : null,
+                    'latest_history_qty' => $latestHistoryRow ? (int) $latestHistoryRow->qty : null,
+                    'history_avg_qty' => $avgQty,
                     'product_key' => $sample->product_key,
                     'scent' => $sample->scent,
                     'size' => $sample->size,
@@ -279,4 +305,3 @@ class MarketsGeneratePourLists extends Command
         return $existing."\n".$append;
     }
 }
-

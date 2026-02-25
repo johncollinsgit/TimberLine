@@ -134,6 +134,45 @@ class Plan extends Component
                 }
 
                 [$scentId, $sizeId, $sku] = $this->resolveMarketDraftLineMapping($line, $draft);
+                $rawReason = is_array($line->reason_json) ? $line->reason_json : [];
+                $splitScentIds = $scentId
+                    ? []
+                    : $this->resolveSplitScentIdsFromText((string) ($rawReason['scent'] ?? ''));
+
+                if (count($splitScentIds) === 2) {
+                    // A "ABC / XYZ" market box note means one full box split across two scents.
+                    // Store each split scent as half-box units (1 = half box).
+                    RetailPlanItem::query()
+                        ->where('retail_plan_id', $this->plan->id)
+                        ->where('source', 'market_box_draft')
+                        ->where('sku', $sku)
+                        ->delete();
+
+                    foreach (array_values($splitScentIds) as $index => $splitScentId) {
+                        $item = RetailPlanItem::query()->updateOrCreate(
+                            [
+                                'retail_plan_id' => $this->plan->id,
+                                'source' => 'market_box_draft',
+                                'sku' => $sku.'#split:'.($index + 1),
+                            ],
+                            [
+                                'order_id' => null,
+                                'order_line_id' => null,
+                                'scent_id' => $splitScentId,
+                                'size_id' => $sizeId,
+                                'quantity' => max(1, $qty),
+                                'status' => 'draft',
+                            ]
+                        );
+
+                        if ($item->wasRecentlyCreated) {
+                            $added++;
+                        }
+                    }
+
+                    continue;
+                }
+
                 if (!$scentId && str_starts_with($sku, 'mktpl:')) {
                     // No usable scent metadata on this draft line; keep it in the draft editor,
                     // but skip the markets planner row until it can be mapped by a human.
@@ -518,6 +557,7 @@ class Plan extends Component
             ->orderBy('source')
             ->get();
         $sizeQuery = trim($this->inventorySizeSearch);
+        $marketSourceLabels = [];
 
         $scents = Scent::query()
             ->orderBy('name')
@@ -526,7 +566,7 @@ class Plan extends Component
         if ($this->queue === 'markets') {
             $draftIds = $items
                 ->map(function ($item) {
-                    if (preg_match('/^mktpl:(\d+):\d+$/', (string) ($item->sku ?? ''), $m)) {
+                    if (preg_match('/^mktpl:(\d+):\d+(?:#split:\d+)?$/', (string) ($item->sku ?? ''), $m)) {
                         return (int) $m[1];
                     }
 
@@ -537,14 +577,23 @@ class Plan extends Component
                 ->values();
 
             $draftsById = MarketPourList::query()
-                ->with(['event:id,name,starts_at'])
+                ->with(['event:id,market_id,name,starts_at', 'event.market:id,name'])
                 ->whereIn('id', $draftIds)
                 ->get()
                 ->keyBy('id');
 
+            foreach ($items as $item) {
+                if (!preg_match('/^mktpl:(\d+):\d+(?:#split:\d+)?$/', (string) ($item->sku ?? ''), $m)) {
+                    continue;
+                }
+                $draft = $draftsById->get((int) $m[1]);
+                $event = $draft?->event;
+                $marketSourceLabels[$item->id] = $event?->market?->name ?: $event?->name;
+            }
+
             $items = $items->sortBy(function ($item) use ($draftsById, $scents) {
                 $draftId = null;
-                if (preg_match('/^mktpl:(\d+):\d+$/', (string) ($item->sku ?? ''), $m)) {
+                if (preg_match('/^mktpl:(\d+):\d+(?:#split:\d+)?$/', (string) ($item->sku ?? ''), $m)) {
                     $draftId = (int) $m[1];
                 }
 
@@ -579,6 +628,7 @@ class Plan extends Component
             'sizes' => $sizes,
             'quote' => $this->quote,
             'queueMeta' => $this->queueMeta(),
+            'marketSourceLabels' => $marketSourceLabels,
         ]);
     }
 
@@ -697,6 +747,40 @@ class Plan extends Component
 
     protected function resolveScentIdFromText(string $scent): ?int
     {
+        return $this->resolveSingleScentIdFromText($scent);
+    }
+
+    /**
+     * @return array<int,int>
+     */
+    protected function resolveSplitScentIdsFromText(string $scent): array
+    {
+        $scent = trim($scent);
+        if ($scent === '' || !str_contains($scent, '/')) {
+            return [];
+        }
+
+        $parts = array_values(array_filter(array_map('trim', explode('/', $scent))));
+        if (count($parts) !== 2) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($parts as $part) {
+            $id = $this->resolveSingleScentIdFromText($part);
+            if (!$id) {
+                return [];
+            }
+            $ids[] = (int) $id;
+        }
+
+        $ids = array_values(array_unique($ids));
+
+        return count($ids) === 2 ? $ids : [];
+    }
+
+    protected function resolveSingleScentIdFromText(string $scent): ?int
+    {
         $scent = trim($scent);
         if ($scent === '') {
             return null;
@@ -707,7 +791,8 @@ class Plan extends Component
         $match = Scent::query()
             ->where('name', $scent)
             ->orWhere('display_name', $scent)
-            ->get(['id', 'name', 'display_name'])
+            ->orWhere('abbreviation', $scent)
+            ->get(['id', 'name', 'display_name', 'abbreviation'])
             ->first();
 
         if ($match) {
@@ -715,11 +800,12 @@ class Plan extends Component
         }
 
         return Scent::query()
-            ->get(['id', 'name', 'display_name'])
+            ->get(['id', 'name', 'display_name', 'abbreviation'])
             ->first(function (Scent $candidate) use ($normalized) {
                 $names = array_filter([
                     $candidate->name,
                     $candidate->display_name,
+                    $candidate->abbreviation,
                 ]);
 
                 foreach ($names as $name) {
