@@ -83,11 +83,6 @@
                     {{ $action['description'] }}
                   </div>
                 </div>
-                <div class="mt-auto pt-3">
-                  <span class="inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-white/85 transition group-hover:bg-white/10 group-hover:text-white">
-                    Go <span aria-hidden="true">→</span>
-                  </span>
-                </div>
               </div>
             </a>
           @endforeach

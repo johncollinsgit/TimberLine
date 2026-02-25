@@ -99,7 +99,7 @@ class Launchpad extends Component
                 'emoji' => '🗓',
                 'title' => 'Create Market Event',
                 'description' => 'Create an event and prefill ship/due dates for planning.',
-                'url' => route('events.create'),
+                'url' => route('markets.browser.index'),
             ],
             [
                 'emoji' => '⚙',
@@ -147,7 +147,7 @@ class Launchpad extends Component
         }
 
         if ($this->matchesAny($normalized, ['event', 'market event'])) {
-            return route('events.create');
+            return route('markets.browser.index');
         }
 
         return route('analytics.index');

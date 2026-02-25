@@ -54,8 +54,22 @@
         <a href="{{ route('markets.browser.year', ['year' => $latestYear]) }}" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/85 hover:bg-white/10">
           <div class="font-semibold text-white">Browse by Year</div>
           <div class="mt-1 text-xs text-white/60">Open a year view and drill into each market occurrence.</div>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">Open {{ $latestYear }}</span>
+            @if((auth()->user()?->role ?? null) === 'admin')
+              <span class="inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100/90">+ Add New Event</span>
+            @endif
+          </div>
         </a>
       </div>
+
+      @if((auth()->user()?->role ?? null) === 'admin')
+        <div class="-mt-1 flex justify-end">
+          <a href="{{ route('events.create') }}" class="inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100/90 hover:bg-emerald-500/15">
+            Add New Event
+          </a>
+        </div>
+      @endif
     </div>
   </section>
 
