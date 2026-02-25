@@ -41,6 +41,11 @@ return [
         ))),
     ],
 
+    'google_calendar' => [
+        'api_key' => env('GOOGLE_CALENDAR_API_KEY'),
+        'asana_skylight_calendar_id' => env('ASANA_SKYLIGHT_CALENDAR_ID', 'e4790b1a07ff610489e40c5fb28d50f4f8b74dc2d4b24db2a9b13bef0df39541@group.calendar.google.com'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Shopify Configuration

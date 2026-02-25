@@ -29,6 +29,8 @@ class MarketPourListShow extends Component
 
     public function generate(): void
     {
+        abort_unless((string) auth()->user()?->role === 'admin', 403);
+
         if (empty($this->selectedEvents)) {
             $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select at least one event.']);
             return;
@@ -87,11 +89,14 @@ class MarketPourListShow extends Component
 
     public function updateLine(int $lineId, int $qty): void
     {
+        abort_unless((string) auth()->user()?->role === 'admin', 403);
         MarketPourListLine::query()->where('id', $lineId)->update(['edited_qty' => max(0, $qty)]);
     }
 
     public function publish(): void
     {
+        abort_unless((string) auth()->user()?->role === 'admin', 403);
+
         if ($this->list->lines()->count() === 0) {
             $this->dispatch('toast', ['type' => 'warning', 'message' => 'Generate recommendations first.']);
             return;
@@ -125,6 +130,8 @@ class MarketPourListShow extends Component
             }
 
             $this->list->status = 'published';
+            $this->list->published_at = now();
+            $this->list->published_by_user_id = auth()->id();
             $this->list->save();
         });
 

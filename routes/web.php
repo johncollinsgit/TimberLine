@@ -31,6 +31,10 @@ use App\Livewire\Events\Import as EventsImport;
 use App\Livewire\Markets\MarketPourLists;
 use App\Livewire\Markets\MarketPourListBuilder;
 use App\Livewire\Markets\MarketPourListShow;
+use App\Livewire\Markets\DirectoryIndex as MarketsDirectoryIndex;
+use App\Livewire\Markets\MarketHistoryShow as MarketsMarketHistoryShow;
+use App\Livewire\Markets\YearOverview as MarketsYearOverview;
+use App\Livewire\Markets\EventBrowserShow as MarketsEventBrowserShow;
 use App\Livewire\Pouring\Requests as PourRequests;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\GoogleAuthController;
@@ -138,6 +142,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Artisan::call('shopify:import-orders', ['store' => 'wholesale', '--days' => 200]);
             return back()->with('status', 'Wholesale import started.');
         })->name('admin.tools.import-wholesale');
+
+        Route::post('/admin/tools/import-market-boxes', function () {
+            Artisan::call('markets:import-boxes');
+            return back()->with('status', trim(Artisan::output()) ?: 'Market box import started.');
+        })->name('admin.tools.import-market-boxes');
     });
 
     // Analytics
@@ -152,6 +161,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware(['role:admin,manager'])->group(function () {
+        Route::get('/markets', MarketsDirectoryIndex::class)->name('markets.browser.index');
+        Route::get('/markets/market/{market:slug}', MarketsMarketHistoryShow::class)->name('markets.browser.market');
+        Route::get('/markets/year/{year}', MarketsYearOverview::class)->name('markets.browser.year');
+        Route::get('/markets/event/{event}', MarketsEventBrowserShow::class)->name('markets.browser.event');
         Route::get('/events', EventsIndex::class)->name('events.index');
         Route::get('/events/new', EventsCreate::class)->name('events.create');
         Route::get('/events/import', EventsImport::class)->name('events.import');

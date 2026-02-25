@@ -1246,6 +1246,12 @@
                     Import Wholesale Orders
                   </button>
                 </form>
+                <form method="POST" action="{{ route('admin.tools.import-market-boxes') }}">
+                  @csrf
+                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
+                    Reimport Market Boxes
+                  </button>
+                </form>
               </div>
             </details>
           @endif
