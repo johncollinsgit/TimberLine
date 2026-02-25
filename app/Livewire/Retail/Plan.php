@@ -523,6 +523,46 @@ class Plan extends Component
             ->orderBy('name')
             ->get();
 
+        if ($this->queue === 'markets') {
+            $draftIds = $items
+                ->map(function ($item) {
+                    if (preg_match('/^mktpl:(\d+):\d+$/', (string) ($item->sku ?? ''), $m)) {
+                        return (int) $m[1];
+                    }
+
+                    return null;
+                })
+                ->filter()
+                ->unique()
+                ->values();
+
+            $draftsById = MarketPourList::query()
+                ->with(['event:id,name,starts_at'])
+                ->whereIn('id', $draftIds)
+                ->get()
+                ->keyBy('id');
+
+            $items = $items->sortBy(function ($item) use ($draftsById, $scents) {
+                $draftId = null;
+                if (preg_match('/^mktpl:(\d+):\d+$/', (string) ($item->sku ?? ''), $m)) {
+                    $draftId = (int) $m[1];
+                }
+
+                $draft = $draftId ? $draftsById->get($draftId) : null;
+                $event = $draft?->event;
+                $eventDate = $event?->starts_at ? (string) $event->starts_at : '9999-12-31';
+                $eventName = Str::lower(trim((string) ($event?->name ?? 'zzzz manual market box')));
+                $scentName = Str::lower(trim((string) (
+                    $scents->firstWhere('id', $item->scent_id)?->display_name
+                    ?? $scents->firstWhere('id', $item->scent_id)?->name
+                    ?? $item->sku
+                    ?? 'zzz'
+                )));
+
+                return [$eventDate, $eventName, $scentName, (int) $item->id];
+            })->values();
+        }
+
         $sizes = Size::query()
             ->when($sizeQuery !== '', function ($q) use ($sizeQuery) {
                 $q->where('code', 'like', '%'.$sizeQuery.'%')
