@@ -134,7 +134,9 @@
             <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
               {{ $queueMeta['empty_label'] ?? 'No items yet. Prefill from retail orders or add inventory below.' }}
             </div>
-          @elseif(($queueMeta['key'] ?? '') === 'markets')
+          @endif
+
+          @if(!$items->isEmpty() && (($queueMeta['key'] ?? '') === 'markets'))
             <div class="overflow-x-auto rounded-2xl border border-emerald-200/10 bg-black/20">
               <table class="min-w-[980px] w-full text-left text-sm text-white/90">
                 <thead class="bg-emerald-500/5">
@@ -281,7 +283,9 @@
             <div class="mt-2 text-xs text-emerald-100/55">
               Sort columns to review market drafts, adjust half-box units in place, then publish to send the finalized plan to the pouring room.
             </div>
-          @else
+          @endif
+
+          @if(!$items->isEmpty() && (($queueMeta['key'] ?? '') !== 'markets'))
             <div class="space-y-2">
               @foreach($items as $item)
               <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
