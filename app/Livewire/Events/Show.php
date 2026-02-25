@@ -8,6 +8,7 @@ use App\Models\MarketPourList;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Services\MarketRecommender;
+use App\Services\Shipping\BusinessDayCalculator;
 use Carbon\CarbonImmutable;
 use Livewire\Component;
 
@@ -42,6 +43,9 @@ class Show extends Component
         $this->ends_at = optional($event->ends_at)->toDateString();
         $this->due_date = optional($event->due_date)->toDateString();
         $this->ship_date = optional($event->ship_date)->toDateString() ?: $this->defaultMarketShipDate();
+        if (blank($this->due_date) && filled($this->ship_date)) {
+            $this->due_date = $this->defaultMarketDueDateFromShipDate($this->ship_date);
+        }
         $this->status = $event->status ?? 'planned';
         $this->notes = $event->notes;
     }
@@ -139,5 +143,11 @@ class Show extends Component
             ->addWeeks(2)
             ->next(CarbonImmutable::THURSDAY)
             ->toDateString();
+    }
+
+    private function defaultMarketDueDateFromShipDate(string $shipDate): string
+    {
+        $ship = CarbonImmutable::parse($shipDate)->startOfDay();
+        return app(BusinessDayCalculator::class)->subBusinessDays($ship, 2)->toDateString();
     }
 }

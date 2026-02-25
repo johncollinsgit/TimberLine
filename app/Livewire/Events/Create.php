@@ -3,6 +3,7 @@
 namespace App\Livewire\Events;
 
 use App\Models\Event;
+use App\Services\Shipping\BusinessDayCalculator;
 use Carbon\CarbonImmutable;
 use Livewire\Component;
 
@@ -23,6 +24,9 @@ class Create extends Component
     {
         if (blank($this->ship_date)) {
             $this->ship_date = $this->defaultMarketShipDate();
+        }
+        if (blank($this->due_date) && filled($this->ship_date)) {
+            $this->due_date = $this->defaultMarketDueDateFromShipDate($this->ship_date);
         }
     }
 
@@ -65,5 +69,11 @@ class Create extends Component
             ->addWeeks(2)
             ->next(CarbonImmutable::THURSDAY)
             ->toDateString();
+    }
+
+    private function defaultMarketDueDateFromShipDate(string $shipDate): string
+    {
+        $ship = CarbonImmutable::parse($shipDate)->startOfDay();
+        return app(BusinessDayCalculator::class)->subBusinessDays($ship, 2)->toDateString();
     }
 }
