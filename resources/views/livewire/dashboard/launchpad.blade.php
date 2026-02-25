@@ -68,14 +68,26 @@
             <a
               href="{{ $action['url'] }}"
               wire:navigate
-              class="group relative aspect-square rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_18px_42px_-30px_rgba(0,0,0,0.45)] transition hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-[0_24px_54px_-28px_rgba(0,0,0,0.55)] focus:outline-none focus:ring-4 focus:ring-white/10"
+              class="group relative aspect-square overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-[0_18px_42px_-30px_rgba(0,0,0,0.45)] transition hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-[0_24px_54px_-28px_rgba(0,0,0,0.55)] focus:outline-none focus:ring-4 focus:ring-white/10"
             >
-              <div class="flex h-full flex-col">
-                <div class="text-2xl leading-none">{{ $action['emoji'] }}</div>
-                <div class="mt-4 text-base font-semibold text-white leading-tight">{{ $action['title'] }}</div>
-                <div class="mt-2 text-sm text-white/65 leading-snug">{{ $action['description'] }}</div>
-                <div class="mt-auto pt-4 text-sm font-semibold text-white/85 group-hover:text-white">
-                  Go <span aria-hidden="true">→</span>
+              <div class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/5 to-transparent"></div>
+              <div class="relative flex h-full min-w-0 flex-col overflow-hidden">
+                <div class="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                  <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-300/70"></span>
+                  Action
+                </div>
+                <div class="mt-3 min-w-0">
+                  <div class="text-sm sm:text-base font-semibold text-white leading-tight break-words">
+                    {{ $action['title'] }}
+                  </div>
+                  <div class="mt-2 text-xs sm:text-sm text-white/65 leading-snug overflow-hidden" style="display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;">
+                    {{ $action['description'] }}
+                  </div>
+                </div>
+                <div class="mt-auto pt-3">
+                  <span class="inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-white/85 transition group-hover:bg-white/10 group-hover:text-white">
+                    Go <span aria-hidden="true">→</span>
+                  </span>
                 </div>
               </div>
             </a>
