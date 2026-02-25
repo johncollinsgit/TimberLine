@@ -30,6 +30,11 @@
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        @if((auth()->user()?->role ?? null) === 'admin')
+          <button type="button" wire:click="{{ $editing ? 'cancelEdit' : 'startEdit' }}" class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
+            {{ $editing ? 'Cancel edit' : 'Edit event' }}
+          </button>
+        @endif
         @if($event->market)
           <a href="{{ route('markets.browser.market', $event->market) }}" class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">View market history</a>
         @endif
@@ -42,6 +47,107 @@
       </div>
     </div>
   </section>
+
+  @if(session('status'))
+    <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
+      {{ session('status') }}
+    </div>
+  @endif
+
+  @if($editing && (auth()->user()?->role ?? null) === 'admin')
+    <section class="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold text-white">Edit Market Event</h2>
+        <button type="button" wire:click="cancelEdit" class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/75 hover:bg-white/10">Cancel</button>
+      </div>
+
+      <form wire:submit="saveEvent" class="mt-4 space-y-4">
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Market Name</span>
+            <input type="text" wire:model.defer="market_name" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('market_name') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Event Name</span>
+            <input type="text" wire:model.defer="event_name" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('event_name') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block md:col-span-2">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Imported / Display Title</span>
+            <input type="text" wire:model.defer="display_name" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('display_name') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Year</span>
+            <input type="number" wire:model.defer="year" min="2020" max="2100" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('year') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Start Date</span>
+            <input type="date" wire:model.defer="starts_at" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('starts_at') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">End Date</span>
+            <input type="date" wire:model.defer="ends_at" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('ends_at') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Status</span>
+            <select wire:model.defer="status" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+              <option value="planned">planned</option>
+              <option value="confirmed">confirmed</option>
+              <option value="completed">completed</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+            @error('status') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">City</span>
+            <input type="text" wire:model.defer="city" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('city') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">State</span>
+            <input type="text" wire:model.defer="state" maxlength="2" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('state') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+          <label class="block">
+            <span class="text-xs uppercase tracking-[0.18em] text-white/55">Venue</span>
+            <input type="text" wire:model.defer="venue" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15">
+            @error('venue') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+          </label>
+        </div>
+
+        <label class="block">
+          <span class="text-xs uppercase tracking-[0.18em] text-white/55">Notes</span>
+          <textarea wire:model.defer="notes" rows="4" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/15"></textarea>
+          @error('notes') <span class="mt-1 block text-xs text-rose-200">{{ $message }}</span> @enderror
+        </label>
+
+        <label class="inline-flex items-center gap-2 text-sm text-white/75">
+          <input type="checkbox" wire:model.defer="needs_review" class="rounded border-white/20 bg-white/5">
+          Needs review
+        </label>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="submit" class="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100/90 hover:bg-emerald-500/15">
+            Save event
+          </button>
+          <button type="button" wire:click="cancelEdit" class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/75 hover:bg-white/10">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  @endif
 
   <section class="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
     <div class="flex items-center justify-between gap-2">

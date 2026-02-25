@@ -8,7 +8,7 @@
       </div>
 
       <div class="grid grid-cols-1 gap-3 md:grid-cols-12">
-        <div class="md:col-span-7">
+        <div class="md:col-span-6">
           <label class="sr-only" for="markets-search">Search markets</label>
           <input id="markets-search" type="text" wire:model.live.debounce.300ms="search"
             placeholder="Search markets, cities, venues, event names..."
@@ -32,6 +32,15 @@
             @foreach($states as $state)
               <option value="{{ $state }}">{{ $state }}</option>
             @endforeach
+          </select>
+        </div>
+        <div class="md:col-span-1">
+          <label class="sr-only" for="markets-sort">Sort</label>
+          <select id="markets-sort" wire:model.live="sort"
+            class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white focus:outline-none focus:ring-4 focus:ring-white/10">
+            <option value="market">Name</option>
+            <option value="next_date">Date</option>
+            <option value="occurrences">Count</option>
           </select>
         </div>
       </div>
@@ -58,12 +67,21 @@
         <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="min-w-0">
-              <div class="text-base font-semibold text-white">{{ $market->name }}</div>
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="text-base font-semibold text-white">{{ $row['title'] }}</div>
+                @if(!empty($row['raw_market_key']))
+                  <span class="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100/90">Imported key: {{ $row['raw_market_key'] }}</span>
+                @endif
+              </div>
               <div class="mt-1 text-sm text-white/65">
                 {{ $row['occurrences_count'] }} occurrence{{ $row['occurrences_count'] === 1 ? '' : 's' }}
                 @if($next)
                   <span class="text-white/35">·</span>
                   Next / recent: {{ $next->starts_at?->format('M j, Y') ?? 'Date TBD' }}
+                  @if(($next->display_name ?: $next->name) && ($next->display_name ?: $next->name) !== $row['title'])
+                    <span class="text-white/35">·</span>
+                    {{ $next->display_name ?: $next->name }}
+                  @endif
                   @if($next->city || $next->state)
                     <span class="text-white/35">·</span>
                     {{ trim(collect([$next->city, $next->state])->filter()->implode(', ')) }}
@@ -91,4 +109,3 @@
     </div>
   </section>
 </div>
-
