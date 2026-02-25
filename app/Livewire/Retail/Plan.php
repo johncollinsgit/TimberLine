@@ -21,6 +21,8 @@ class Plan extends Component
     public RetailPlan $plan;
     public string $quote = '';
     public string $queue = 'retail';
+    public string $marketsSort = 'event_date';
+    public string $marketsSortDirection = 'asc';
 
     public ?int $inventoryScentId = null;
     public ?int $inventorySizeId = null;
@@ -39,6 +41,8 @@ class Plan extends Component
     public function mount(): void
     {
         $this->queue = $this->normalizeQueue($this->queue);
+        $this->marketsSort = $this->normalizeMarketsSort($this->marketsSort);
+        $this->marketsSortDirection = $this->normalizeMarketsSortDirection($this->marketsSortDirection);
 
         $name = $this->queueDisplayName() . ' / Pour List ' . CarbonImmutable::now()->format('Y-m-d');
         $query = RetailPlan::query()
@@ -397,6 +401,23 @@ class Plan extends Component
         $item->save();
     }
 
+    public function sortMarketsBy(string $column): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        $column = $this->normalizeMarketsSort($column);
+
+        if ($this->marketsSort === $column) {
+            $this->marketsSortDirection = $this->marketsSortDirection === 'asc' ? 'desc' : 'asc';
+            return;
+        }
+
+        $this->marketsSort = $column;
+        $this->marketsSortDirection = $column === 'quantity' ? 'desc' : 'asc';
+    }
+
     public function clearScents(): void
     {
         RetailPlanItem::query()
@@ -558,6 +579,7 @@ class Plan extends Component
             ->get();
         $sizeQuery = trim($this->inventorySizeSearch);
         $marketSourceLabels = [];
+        $marketRows = [];
 
         $scents = Scent::query()
             ->orderBy('name')
@@ -584,31 +606,78 @@ class Plan extends Component
 
             foreach ($items as $item) {
                 if (!preg_match('/^mktpl:(\d+):\d+(?:#split:\d+)?$/', (string) ($item->sku ?? ''), $m)) {
-                    continue;
+                    $m = null;
                 }
-                $draft = $draftsById->get((int) $m[1]);
+                $draft = isset($m[1]) ? $draftsById->get((int) $m[1]) : null;
                 $event = $draft?->event;
-                $marketSourceLabels[$item->id] = $event?->market?->name ?: $event?->name;
+                $marketName = trim((string) ($event?->market?->name ?: $event?->name ?: ''));
+                if ($marketName !== '') {
+                    $marketSourceLabels[$item->id] = $marketName;
+                }
+
+                $scent = $scents->firstWhere('id', $item->scent_id);
+                $scentName = (string) ($scent?->display_name ?? $scent?->name ?? ($item->sku ?: 'Unknown scent'));
+                $eventDate = $event?->starts_at;
+                $eventDateSort = $eventDate?->format('Y-m-d') ?? '9999-12-31';
+
+                $sourceKey = match ((string) ($item->source ?? '')) {
+                    'market_box_manual' => 'manual',
+                    'inventory' => 'inventory',
+                    default => 'draft',
+                };
+
+                $sourceLabel = match ($sourceKey) {
+                    'manual' => 'Manual Market Box',
+                    'inventory' => 'Inventory',
+                    default => 'Market Draft',
+                };
+
+                $marketRows[$item->id] = [
+                    'market_name' => $marketName !== '' ? $marketName : ($sourceKey === 'manual' ? 'Manual market box' : 'Unassigned market'),
+                    'event_name' => $event?->name,
+                    'event_date_label' => $eventDate?->format('M j, Y') ?? 'No date',
+                    'event_date_sort' => $eventDateSort,
+                    'scent_name' => $scentName,
+                    'source_key' => $sourceKey,
+                    'source_label' => $sourceLabel,
+                    'box_label' => $this->marketBoxLabel($item),
+                    'quantity_units' => (int) ($item->quantity ?? 0),
+                ];
             }
 
-            $items = $items->sortBy(function ($item) use ($draftsById, $scents) {
-                $draftId = null;
-                if (preg_match('/^mktpl:(\d+):\d+(?:#split:\d+)?$/', (string) ($item->sku ?? ''), $m)) {
-                    $draftId = (int) $m[1];
+            $sortColumn = $this->normalizeMarketsSort($this->marketsSort);
+            $sortDirection = $this->normalizeMarketsSortDirection($this->marketsSortDirection);
+            $this->marketsSort = $sortColumn;
+            $this->marketsSortDirection = $sortDirection;
+
+            $items = $items->sort(function ($a, $b) use ($marketRows, $sortColumn, $sortDirection) {
+                $left = $marketRows[$a->id] ?? [];
+                $right = $marketRows[$b->id] ?? [];
+
+                $leftValue = match ($sortColumn) {
+                    'market' => Str::lower((string) ($left['market_name'] ?? '')),
+                    'event' => Str::lower((string) ($left['event_name'] ?? '')),
+                    'scent' => Str::lower((string) ($left['scent_name'] ?? '')),
+                    'source' => Str::lower((string) ($left['source_label'] ?? '')),
+                    'quantity' => (int) ($left['quantity_units'] ?? 0),
+                    default => (string) ($left['event_date_sort'] ?? '9999-12-31'),
+                };
+
+                $rightValue = match ($sortColumn) {
+                    'market' => Str::lower((string) ($right['market_name'] ?? '')),
+                    'event' => Str::lower((string) ($right['event_name'] ?? '')),
+                    'scent' => Str::lower((string) ($right['scent_name'] ?? '')),
+                    'source' => Str::lower((string) ($right['source_label'] ?? '')),
+                    'quantity' => (int) ($right['quantity_units'] ?? 0),
+                    default => (string) ($right['event_date_sort'] ?? '9999-12-31'),
+                };
+
+                $comparison = $leftValue <=> $rightValue;
+                if ($comparison === 0) {
+                    $comparison = (int) $a->id <=> (int) $b->id;
                 }
 
-                $draft = $draftId ? $draftsById->get($draftId) : null;
-                $event = $draft?->event;
-                $eventDate = $event?->starts_at ? (string) $event->starts_at : '9999-12-31';
-                $eventName = Str::lower(trim((string) ($event?->name ?? 'zzzz manual market box')));
-                $scentName = Str::lower(trim((string) (
-                    $scents->firstWhere('id', $item->scent_id)?->display_name
-                    ?? $scents->firstWhere('id', $item->scent_id)?->name
-                    ?? $item->sku
-                    ?? 'zzz'
-                )));
-
-                return [$eventDate, $eventName, $scentName, (int) $item->id];
+                return $sortDirection === 'desc' ? ($comparison * -1) : $comparison;
             })->values();
         }
 
@@ -629,6 +698,9 @@ class Plan extends Component
             'quote' => $this->quote,
             'queueMeta' => $this->queueMeta(),
             'marketSourceLabels' => $marketSourceLabels,
+            'marketRows' => $marketRows,
+            'marketsSort' => $this->marketsSort,
+            'marketsSortDirection' => $this->marketsSortDirection,
         ]);
     }
 
@@ -665,6 +737,22 @@ class Plan extends Component
         return in_array($queue, ['retail', 'wholesale', 'markets'], true)
             ? $queue
             : 'retail';
+    }
+
+    protected function normalizeMarketsSort(string $sort): string
+    {
+        $sort = strtolower(trim($sort));
+
+        return in_array($sort, ['event_date', 'market', 'event', 'scent', 'source', 'quantity'], true)
+            ? $sort
+            : 'event_date';
+    }
+
+    protected function normalizeMarketsSortDirection(string $direction): string
+    {
+        $direction = strtolower(trim($direction));
+
+        return $direction === 'desc' ? 'desc' : 'asc';
     }
 
     protected function orderTypeForQueue(): string
