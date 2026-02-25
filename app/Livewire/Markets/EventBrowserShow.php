@@ -3,6 +3,8 @@
 namespace App\Livewire\Markets;
 
 use App\Models\Event;
+use App\Models\MarketBoxShipment;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class EventBrowserShow extends Component
@@ -106,9 +108,11 @@ class EventBrowserShow extends Component
             'marketPourList.lines.size',
         ]);
 
+        $boxLines = $event->boxShipments->reject(fn (MarketBoxShipment $line) => $this->isSummaryBoxLine($line))->values();
+
         return view('livewire.markets.event-browser-show', [
             'event' => $event,
-            'boxLines' => $event->boxShipments,
+            'boxLines' => $boxLines,
             'draftList' => $event->marketPourList,
         ])->layout('layouts.app');
     }
@@ -128,5 +132,23 @@ class EventBrowserShow extends Component
         $this->status = (string) ($event->status ?: 'planned');
         $this->notes = (string) ($event->notes ?? '');
         $this->needs_review = (bool) $event->needs_review;
+    }
+
+    private function isSummaryBoxLine(MarketBoxShipment $line): bool
+    {
+        $candidates = [
+            (string) ($line->scent ?? ''),
+            (string) ($line->product_key ?? ''),
+            (string) ($line->item_type ?? ''),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = Str::lower(trim($candidate));
+            if (in_array($value, ['total', 'grand total', 'subtotal', 'totals'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -269,6 +269,10 @@ class MarketsImportBoxes extends Command
                 'source_row_hash' => hash('sha256', json_encode($assoc)),
             ];
 
+            if ($this->isSummaryRow($mapped, $assoc)) {
+                continue;
+            }
+
             $out[] = $mapped;
         }
 
@@ -325,5 +329,30 @@ class MarketsImportBoxes extends Command
         }
 
         return 0;
+    }
+
+    private function isSummaryRow(array $mapped, array $assoc): bool
+    {
+        $candidates = [
+            (string) ($mapped['scent'] ?? ''),
+            (string) ($mapped['product_key'] ?? ''),
+            (string) ($mapped['item_type'] ?? ''),
+            (string) ($assoc['scent'] ?? ''),
+            (string) ($assoc['product'] ?? ''),
+            (string) ($assoc['item'] ?? ''),
+            (string) ($assoc['total'] ?? ''),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = Str::lower(trim($candidate));
+            if ($value === '') {
+                continue;
+            }
+            if (in_array($value, ['total', 'grand total', 'totals', 'subtotal'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
