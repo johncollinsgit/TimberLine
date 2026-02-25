@@ -47,14 +47,22 @@ class MarketsImportBoxes extends Command
 
             $parser = app(SheetNameParser::class);
             foreach ($reader->listWorksheetNames($path) as $rawSheetName) {
-                $sheetName = trim((string) $rawSheetName);
+                $sheetNameExact = (string) $rawSheetName;
+                $sheetName = trim($sheetNameExact);
                 $parsed = $parser->parse($sheetName, $year);
                 if (($parsed['ignored'] ?? false) === true) {
                     continue;
                 }
 
-                $reader->setLoadSheetsOnly([$sheetName]);
+                // PhpSpreadsheet sheet loading requires an exact worksheet title match.
+                $reader->setLoadSheetsOnly([$sheetNameExact]);
                 $spreadsheet = $reader->load($path);
+                if ($spreadsheet->getSheetCount() === 0) {
+                    $this->warn("Skipped sheet (could not load exact worksheet): {$sheetName}");
+                    $spreadsheet->disconnectWorksheets();
+                    unset($spreadsheet);
+                    continue;
+                }
                 $sheet = $spreadsheet->getSheet(0);
                 $hints = $this->sheetContentHints($sheet);
                 $parsed = $parser->parse($sheetName, $year, $hints);
