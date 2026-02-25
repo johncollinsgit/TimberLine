@@ -134,11 +134,16 @@ class Plan extends Component
                 }
 
                 [$scentId, $sizeId, $sku] = $this->resolveMarketDraftLineMapping($line, $draft);
+                if (!$scentId && str_starts_with($sku, 'mktpl:')) {
+                    // No usable scent metadata on this draft line; keep it in the draft editor,
+                    // but skip the markets planner row until it can be mapped by a human.
+                    continue;
+                }
 
                 $item = RetailPlanItem::query()->updateOrCreate(
                     [
                         'retail_plan_id' => $this->plan->id,
-                        'source' => 'market_pour_list',
+                        'source' => 'market_box_draft',
                         'sku' => $sku,
                     ],
                     [
@@ -146,8 +151,9 @@ class Plan extends Component
                         'order_line_id' => null,
                         'scent_id' => $scentId,
                         'size_id' => $sizeId,
-                        'quantity' => $qty,
-                        'status' => ($scentId && $sizeId) ? 'draft' : 'needs_mapping',
+                        // Store market-box quantities in half-box units (1=half, 2=full).
+                        'quantity' => max(1, $qty * 2),
+                        'status' => $scentId ? 'draft' : 'needs_mapping',
                     ]
                 );
 
@@ -161,7 +167,7 @@ class Plan extends Component
             $this->dispatch('toast', [
                 'type' => 'success',
                 'message' => $added > 0
-                    ? "Prefilled {$added} markets draft lines."
+                    ? "Prefilled {$added} market box scents from drafts."
                     : 'No new markets draft lines to add.',
             ]);
         }
@@ -169,6 +175,14 @@ class Plan extends Component
 
     public function addInventoryItem(): void
     {
+        if ($this->queue === 'markets') {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Use Half Box or Full Box for market scents.',
+            ]);
+            return;
+        }
+
         $this->validate([
             'inventoryScentId' => 'required|exists:scents,id',
             'inventorySizeId' => 'required|exists:sizes,id',
@@ -193,6 +207,45 @@ class Plan extends Component
         $this->dispatch('toast', [
             'type' => 'success',
             'message' => 'Inventory item added to plan.',
+        ]);
+    }
+
+    public function addMarketHalfBox(): void
+    {
+        $this->addMarketBoxUnits(1);
+    }
+
+    public function addMarketFullBox(): void
+    {
+        $this->addMarketBoxUnits(2);
+    }
+
+    protected function addMarketBoxUnits(int $halfBoxUnits): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        $this->validate([
+            'inventoryScentId' => 'required|exists:scents,id',
+        ]);
+
+        RetailPlanItem::create([
+            'retail_plan_id' => $this->plan->id,
+            'scent_id' => $this->inventoryScentId,
+            'size_id' => null,
+            'quantity' => max(1, $halfBoxUnits),
+            'source' => 'market_box_manual',
+            'status' => 'draft',
+            'sku' => 'market-box',
+        ]);
+
+        $this->inventoryScentId = null;
+        $this->inventoryScentSearch = '';
+
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => 'Market box scent added to plan.',
         ]);
     }
 
@@ -273,6 +326,20 @@ class Plan extends Component
         $item->save();
     }
 
+    public function marketBoxLabel(RetailPlanItem $item): string
+    {
+        $units = max(1, (int) ($item->quantity ?? 0));
+        $boxes = $units / 2;
+
+        if (fmod($boxes, 1.0) === 0.0) {
+            $value = (string) (int) $boxes;
+        } else {
+            $value = number_format($boxes, 1);
+        }
+
+        return $value.' '.(((float) $boxes) === 1.0 ? 'box' : 'boxes');
+    }
+
     public function incrementItemInventoryQuantity(int $itemId): void
     {
         $item = RetailPlanItem::query()
@@ -337,6 +404,43 @@ class Plan extends Component
 
                     $item->status = 'published';
                     $item->save();
+                }
+            }
+
+            if ($this->queue === 'markets') {
+                $marketBoxItems = $items->whereIn('source', ['market_box_draft', 'market_box_manual']);
+                $publishableBoxes = $marketBoxItems->filter(fn ($item) => (int) ($item->scent_id ?? 0) > 0 && (int) ($item->quantity ?? 0) > 0);
+
+                if ($publishableBoxes->isNotEmpty()) {
+                    $today = CarbonImmutable::today();
+                    $marketOrder = Order::query()->create([
+                        'order_type' => 'event',
+                        'order_label' => 'Markets Box Plan',
+                        'order_number' => 'MKT-BOX-' . $today->format('Ymd'),
+                        'source' => 'internal',
+                        'status' => 'submitted_to_pouring',
+                        'ordered_at' => now(),
+                        'ship_by_at' => $today,
+                        'due_at' => $today,
+                        'published_at' => now(),
+                    ]);
+
+                    [$size16CottonId, $size8CottonId, $sizeWaxMeltId] = $this->marketBoxSizeIds();
+
+                    foreach ($publishableBoxes as $item) {
+                        $halfBoxUnits = max(1, (int) $item->quantity);
+                        $scentId = (int) $item->scent_id;
+
+                        // One full box = 4x16oz cotton, 8x8oz cotton, 8x wax melts
+                        // One half box = 2x16oz cotton, 4x8oz cotton, 4x wax melts
+                        $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $halfBoxUnits * 2);
+                        $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size8CottonId, $halfBoxUnits * 4);
+                        $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $sizeWaxMeltId, $halfBoxUnits * 4);
+
+                        $item->order_id = $marketOrder->id;
+                        $item->status = 'published';
+                        $item->save();
+                    }
                 }
             }
 
@@ -599,6 +703,57 @@ class Plan extends Component
             ->where('code', $size)
             ->orWhere('label', $size)
             ->first()?->id;
+    }
+
+    protected function marketBoxSizeIds(): array
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $sizes = Size::query()->get(['id', 'code', 'label']);
+        $findByContains = function (array $needles) use ($sizes): ?int {
+            foreach ($sizes as $size) {
+                $haystack = Str::lower(trim(($size->code ?? '').' '.($size->label ?? '')));
+                foreach ($needles as $needle) {
+                    if (str_contains($haystack, Str::lower($needle))) {
+                        return (int) $size->id;
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        $cached = [
+            $findByContains(['16oz-cotton', '16 oz cotton', '16oz cotton wick']),
+            $findByContains(['8oz-cotton', '8 oz cotton', '8oz cotton wick']),
+            $findByContains(['wax-melts', 'wax melts', 'wax melt']),
+        ];
+
+        return $cached;
+    }
+
+    protected function createMarketBoxOrderLine(int $orderId, int $scentId, ?int $sizeId, int $qty): void
+    {
+        if (!$sizeId || $qty <= 0) {
+            return;
+        }
+
+        $size = Size::query()->find($sizeId);
+
+        OrderLine::query()->create([
+            'order_id' => $orderId,
+            'scent_id' => $scentId,
+            'size_id' => $sizeId,
+            'size_code' => $size?->code,
+            'ordered_qty' => $qty,
+            'extra_qty' => 0,
+            'quantity' => $qty,
+            'wick_type' => str_contains((string) ($size?->code ?? ''), 'cotton') ? 'cotton' : null,
+        ]);
     }
 
     protected function enneagramQuote(): string
