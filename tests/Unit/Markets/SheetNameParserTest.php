@@ -72,3 +72,24 @@ it('ignores meta sheets like Sheet4', function () {
         ->and($result['confidence'])->toBe('none');
 });
 
+it('uses location as fallback market name when sheet is mostly location plus date', function () {
+    $parser = new SheetNameParser();
+
+    $result = $parser->parse('Drayton Mills, SC 12.2.23', 2023);
+
+    expect($result['market_name'])->toBe('Drayton Mills')
+        ->and($result['city'])->toBe('Drayton Mills')
+        ->and($result['state'])->toBe('SC')
+        ->and($result['starts_at'])->toBe('2023-12-02')
+        ->and($result['ends_at'])->toBe('2023-12-02');
+});
+
+it('infers workbook year for month-dot-day fragments without year', function () {
+    $parser = new SheetNameParser();
+
+    $result = $parser->parse('Pickens Azalea Festival SC 04.2', 2023);
+
+    expect($result['starts_at'])->toBe('2023-04-02')
+        ->and($result['ends_at'])->toBe('2023-04-02')
+        ->and($result['date_confidence'])->toBe('medium');
+});

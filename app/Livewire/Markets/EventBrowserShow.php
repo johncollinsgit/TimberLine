@@ -113,6 +113,7 @@ class EventBrowserShow extends Component
         return view('livewire.markets.event-browser-show', [
             'event' => $event,
             'boxLines' => $boxLines,
+            'boxQtyTotal' => (int) $boxLines->sum(fn (MarketBoxShipment $line) => (int) ($line->qty ?? 0)),
             'draftList' => $event->marketPourList,
         ])->layout('layouts.app');
     }

@@ -74,6 +74,15 @@ class SheetNameParser
             array_push($notes, ...$marketName['notes']);
         }
 
+        if ($this->looksLikeDateKey((string) ($marketName['market_name'] ?? ''))) {
+            $fallbackName = $this->fallbackMarketNameFromLocation($location);
+            if ($fallbackName !== null) {
+                $marketName['market_name'] = $fallbackName;
+                $marketName['market_name_confidence'] = $this->looksLikeDateKey((string) ($marketName['market_name'] ?? '')) ? 'low' : 'medium';
+                $notes[] = 'market name inferred from parsed location';
+            }
+        }
+
         $confidence = $this->overallConfidence(
             (string) ($marketName['market_name'] ?? ''),
             $date['starts_at'] ?? null,
@@ -198,6 +207,34 @@ class SheetNameParser
 
         if ($best) {
             return $this->buildDateResultFromMatch($best, $workbookYear);
+        }
+
+        if (preg_match('/\b(0?[1-9]|1[0-2])[\.\/](\d{1,2})[\.\/](\d{2,4})\b/', $s, $m)) {
+            $year = $this->normalizeYear((string) $m[3], $workbookYear);
+            $start = $this->safeDate((int) $m[1], (int) $m[2], $year);
+            return [
+                'starts_at' => $start?->toDateString(),
+                'ends_at' => $start?->toDateString(),
+                'date_confidence' => $start ? 'high' : 'low',
+                'date_parse_notes' => 'single date found; end date set to start date',
+                'matched_fragment' => $m[0],
+                'notes' => [],
+            ];
+        }
+
+        if (preg_match('/\b(0[1-9]|1[0-2])[\.\/](\d{1,2})$/', $s, $m)) {
+            $day = (int) $m[2];
+            if ($day >= 1 && $day <= 31) {
+                $start = $this->safeDate((int) $m[1], $day, $workbookYear);
+                return [
+                    'starts_at' => $start?->toDateString(),
+                    'ends_at' => $start?->toDateString(),
+                    'date_confidence' => $start ? 'medium' : 'low',
+                    'date_parse_notes' => 'single date inferred from month/day using workbook year',
+                    'matched_fragment' => $m[0],
+                    'notes' => ['year inferred from workbook year'],
+                ];
+            }
         }
 
         if (preg_match('/\b(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])?\.$/', $s, $m)) {
@@ -521,5 +558,38 @@ class SheetNameParser
         }
 
         return $lastToken;
+    }
+
+    private function looksLikeDateKey(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return true;
+        }
+
+        return (bool) preg_match('/^\d{1,2}(?:\.\d{1,2}){0,2}$/', $value);
+    }
+
+    /**
+     * @param array<string,mixed> $location
+     */
+    private function fallbackMarketNameFromLocation(array $location): ?string
+    {
+        $city = trim((string) ($location['city'] ?? ''));
+        $state = strtoupper(trim((string) ($location['state'] ?? '')));
+
+        if ($city !== '' && $state !== '') {
+            return $city;
+        }
+
+        if ($city !== '') {
+            return $city;
+        }
+
+        if ($state !== '') {
+            return $state;
+        }
+
+        return null;
     }
 }

@@ -150,9 +150,17 @@
   @endif
 
   <section class="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
-    <div class="flex items-center justify-between gap-2">
-      <h2 class="text-lg font-semibold text-white">Imported Box Lines / Scent Notes</h2>
-      <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">{{ $boxLines->count() }} rows</span>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-white">Imported Box Lines / Scent Notes</h2>
+        <div class="mt-1 text-sm text-white/65">{{ $boxLines->count() }} rows imported</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-2 text-right">
+          <div class="text-[10px] uppercase tracking-[0.18em] text-emerald-100/60">Total Market Boxes</div>
+          <div class="mt-1 text-xl sm:text-2xl font-bold text-emerald-50">{{ number_format((int) $boxQtyTotal) }}</div>
+        </div>
+      </div>
     </div>
     <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
       <table class="min-w-full text-sm">
