@@ -577,7 +577,7 @@ class Plan extends Component
                 ->values();
 
             $draftsById = MarketPourList::query()
-                ->with(['event:id,market_id,name,starts_at', 'event.market:id,name'])
+                ->with(['event:id,market_id,name,display_name,starts_at', 'event.market:id,name'])
                 ->whereIn('id', $draftIds)
                 ->get()
                 ->keyBy('id');
@@ -588,7 +588,7 @@ class Plan extends Component
                 }
                 $draft = $draftsById->get((int) $m[1]);
                 $event = $draft?->event;
-                $marketSourceLabels[$item->id] = $event?->market?->name ?: $event?->name;
+                $marketSourceLabels[$item->id] = $event?->display_name ?: $event?->name ?: $event?->market?->name;
             }
 
             $items = $items->sortBy(function ($item) use ($draftsById, $scents) {
@@ -729,8 +729,9 @@ class Plan extends Component
 
         $sku = 'mktpl:'.$draft->id.':'.$line->id;
 
-        // Preserve a human-readable identifier when mapping is incomplete.
-        if (!$scentId || !$sizeId) {
+        // Preserve the draft SKU so we can still resolve the source event label in the markets planner.
+        // A missing size is normal for market box draft rows, but a missing scent is not renderable yet.
+        if (!$scentId) {
             $parts = array_values(array_filter([
                 trim((string) ($reason['product_key'] ?? '')),
                 trim((string) ($reason['scent'] ?? '')),
