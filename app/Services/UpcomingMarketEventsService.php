@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\Event;
 use App\Models\Market;
+use App\Support\MarketEvents\RequestMetrics;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -19,6 +21,7 @@ class UpcomingMarketEventsService
      */
     public function syncUpcoming(int $weeks = 6): array
     {
+        $startedAt = microtime(true);
         $weeks = max(1, $weeks);
         $calendarId = (string) config('services.google_calendar.asana_skylight_calendar_id');
         $apiKey = (string) config('services.google_calendar.api_key');
@@ -45,11 +48,20 @@ class UpcomingMarketEventsService
             ];
         }
 
-        return [
+        $result = [
             'fetched' => count($items),
             'upserted' => count($upserted),
             'events' => $upserted,
         ];
+
+        Log::info('UpcomingMarketEventsService sync complete', [
+            'weeks' => $weeks,
+            'fetched' => $result['fetched'],
+            'upserted' => $result['upserted'],
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
+
+        return $result;
     }
 
     /**
@@ -63,17 +75,42 @@ class UpcomingMarketEventsService
 
         $url = 'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events';
 
-        $response = Http::timeout(20)->get($url, [
+        $params = [
             'key' => $apiKey,
             'singleEvents' => 'true',
             'orderBy' => 'startTime',
             'timeMin' => $timeMin,
             'timeMax' => $timeMax,
             'maxResults' => 250,
+        ];
+
+        RequestMetrics::recordExternalHttpCall('google_calendar_events', [
+            'calendar_id' => $calendarId,
+            'weeks' => $weeks,
         ]);
 
+        $response = Http::timeout(20)->get($url, $params);
+
         if (! $response->successful()) {
-            throw new RuntimeException('Failed to fetch Google Calendar events: HTTP '.$response->status());
+            $body = Str::limit(trim((string) $response->body()), 4000, '');
+            Log::error('Google Calendar events fetch failed', [
+                'url_path' => parse_url($url, PHP_URL_PATH),
+                'calendar_id' => $calendarId,
+                'query' => [
+                    'singleEvents' => 'true',
+                    'orderBy' => 'startTime',
+                    'timeMin' => $timeMin,
+                    'timeMax' => $timeMax,
+                    'maxResults' => 250,
+                ],
+                'status' => $response->status(),
+                'response_body' => $body,
+            ]);
+
+            throw new RuntimeException(
+                'Failed to fetch Google Calendar events: HTTP '.$response->status()
+                .($body !== '' ? ' body='.$body : '')
+            );
         }
 
         return (array) $response->json();

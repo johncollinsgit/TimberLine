@@ -56,8 +56,9 @@
       @php($selectedUpcomingEvent = $marketEventsPanel['selected_event'] ?? null)
       @php($candidateGroups = $marketEventsPanel['candidate_prior_events'] ?? [])
       @php($candidatePreview = $marketEventsPanel['candidate_preview'] ?? [])
-      <div class="xl:col-span-12" data-rp-panel="events-prefill" data-size="full" draggable="true">
+      <div class="xl:col-span-12" data-rp-panel="events-prefill" data-size="full" draggable="true" wire:poll.15s="refreshMarketEventsSyncStatus">
         <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0" data-rp-surface>
+          @php($syncState = $marketEventsPanel['sync_state'] ?? [])
           <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Upcoming Events (Next 4 weeks)</div>
@@ -67,6 +68,21 @@
                   {{ \Illuminate\Support\Carbon::parse($marketEventsPanel['last_sync_at'])->timezone(config('app.timezone'))->format('M j, Y g:i A') }}
                 @else
                   Last sync: never
+                @endif
+              </div>
+              <div class="mt-1 text-xs text-emerald-100/60">
+                Status:
+                @php($syncStatus = (string)($syncState['status'] ?? 'idle'))
+                @if($syncStatus === 'running')
+                  <span class="text-amber-100">running</span>
+                @elseif($syncStatus === 'queued')
+                  <span class="text-amber-100">queued</span>
+                @elseif($syncStatus === 'success')
+                  <span class="text-emerald-50">success</span>
+                @elseif($syncStatus === 'failed')
+                  <span class="text-rose-100">failed</span>
+                @else
+                  <span>{{ $syncStatus }}</span>
                 @endif
               </div>
             </div>
@@ -86,12 +102,33 @@
               <button
                 type="button"
                 wire:click="syncMarketEventsPanel"
+                @disabled((($syncState['status'] ?? null) === 'running') || !(bool) config('features.market_events_sync_enabled', true))
                 class="rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-white/90 hover:bg-emerald-500/15"
               >
-                Sync Events
+                @if(($syncState['status'] ?? null) === 'running')
+                  Sync Running…
+                @elseif(($syncState['status'] ?? null) === 'queued')
+                  Sync Queued…
+                @else
+                  Sync Events
+                @endif
               </button>
             </div>
           </div>
+
+          @if(($syncState['last_sync_status'] ?? null) === 'failed')
+            <div class="mt-3 rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-100/90">
+              Calendar sync failed on the last sync attempt.
+              @if(!empty($syncState['last_http_status']))
+                HTTP {{ (int) $syncState['last_http_status'] }}.
+              @endif
+            </div>
+            @if(($marketEventsPanel['show_sync_error_detail'] ?? false) && !empty($syncState['last_error']))
+              <div class="mt-2 rounded-2xl border border-rose-300/15 bg-black/20 px-3 py-2 text-[11px] text-rose-50/85 break-words">
+                {{ \Illuminate\Support\Str::limit((string) $syncState['last_error'], 500) }}
+              </div>
+            @endif
+          @endif
 
           @if(!empty($marketEventsPanel['error']))
             <div class="mt-3 rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-100/90">
@@ -99,7 +136,7 @@
             </div>
           @endif
 
-          @if(!empty($marketEventsPanel['sync_summary']))
+          @if(!empty($marketEventsPanel['sync_summary']) && (($syncState['last_sync_status'] ?? null) === 'success'))
             <div class="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-50/90">
               Synced {{ $marketEventsPanel['sync_summary']['fetched'] ?? 0 }} event(s), upserted {{ $marketEventsPanel['sync_summary']['upserted'] ?? 0 }} for the 4-week lookahead.
             </div>
@@ -170,7 +207,7 @@
 
                   @if(empty($candidateGroups))
                     <div class="mt-2 rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-                      No candidates found. Try widening the match window or syncing events.
+                      No prior-year events found in the selected date window. Try widening the match window or syncing events.
                     </div>
                   @else
                     <div class="mt-2 space-y-3 max-h-72 overflow-auto pr-1">
@@ -184,7 +221,18 @@
                               <div class="rounded-lg border border-emerald-200/10 bg-black/15 px-3 py-2">
                                 <div class="flex flex-wrap items-start justify-between gap-2">
                                   <div class="min-w-0">
-                                    <div class="text-xs text-emerald-100/60">
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-emerald-100/60">
+                                      <span>{{ (int)($candidate['match_score_percent'] ?? 0) }}% match</span>
+                                      <span>•</span>
+                                      <span>{{ (int)($candidate['year'] ?? ($group['year'] ?? 0)) }}</span>
+                                      @if(!empty($candidate['is_suggested']))
+                                        <span class="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-50">Suggested</span>
+                                      @endif
+                                      @if(!empty($candidate['is_override']))
+                                        <span class="rounded-full border border-amber-300/30 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-50">Mapped</span>
+                                      @endif
+                                    </div>
+                                    <div class="mt-1 text-xs text-emerald-100/60">
                                       {{ !empty($candidate['starts_at']) ? \Illuminate\Support\Carbon::parse($candidate['starts_at'])->format('M j, Y') : 'Date TBD' }}
                                       @if(!empty($candidate['ends_at']) && $candidate['ends_at'] !== ($candidate['starts_at'] ?? null))
                                         – {{ \Illuminate\Support\Carbon::parse($candidate['ends_at'])->format('M j, Y') }}
@@ -198,8 +246,17 @@
                                     wire:click="selectCandidateEvent({{ (int)($candidate['event_id'] ?? 0) }})"
                                     class="shrink-0 rounded-full border px-3 py-1 text-[11px] transition {{ $isSelectedCandidate ? 'border-emerald-300/35 bg-emerald-500/15 text-white' : 'border-emerald-300/20 bg-emerald-500/8 text-emerald-50/90 hover:bg-emerald-500/12' }}"
                                   >
-                                    Preview
+                                    Select
                                   </button>
+                                  @if(!empty($marketEventsPanel['selected_upcoming_event_id']))
+                                    <button
+                                      type="button"
+                                      wire:click="mapUpcomingToCandidate({{ (int)$marketEventsPanel['selected_upcoming_event_id'] }}, {{ (int)($candidate['event_id'] ?? 0) }})"
+                                      class="shrink-0 rounded-full border border-amber-300/20 bg-amber-500/8 px-3 py-1 text-[11px] text-amber-50/90 hover:bg-amber-500/12"
+                                    >
+                                      Map
+                                    </button>
+                                  @endif
                                 </div>
                               </div>
                             @endforeach

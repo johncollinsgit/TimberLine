@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Retail;
 
+use App\Jobs\SyncMarketEventsJob;
 use App\Models\Event;
+use App\Models\EventMatchOverride;
 use App\Models\MarketPlan;
 use App\Models\MarketPourList;
 use App\Models\MarketPourListLine;
@@ -13,10 +15,13 @@ use App\Models\RetailPlanItem;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Services\EventMatchingService;
-use App\Services\UpcomingMarketEventsService;
+use App\Services\MarketEventSyncCoordinator;
+use App\Support\MarketEvents\RequestMetrics;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -35,6 +40,8 @@ class Plan extends Component
 
     /** @var array<string,mixed> */
     public array $marketEventsSyncSummary = [];
+    /** @var array<string,mixed> */
+    public array $marketEventsSyncState = [];
     public ?int $selectedUpcomingEventId = null;
     public ?int $selectedCandidateEventId = null;
     public int $matchWindowDays = 30;
@@ -43,12 +50,20 @@ class Plan extends Component
 
     /** @var array<int,array<string,mixed>> */
     public array $candidatePriorEvents = [];
+    /** @var array<int,array<string,mixed>> */
+    public array $candidateScoredEvents = [];
 
     /** @var array<string,mixed> */
     public array $candidatePreview = [];
 
     /** @var array<int,array<string,mixed>> */
     public array $upcomingMarketEventRows = [];
+
+    protected ?float $marketsRequestProfileStartedAt = null;
+    protected int $marketsRequestProfileQueryCount = 0;
+    protected float $marketsRequestProfileQueryTimeMs = 0.0;
+    protected bool $marketsRequestProfileListenerAttached = false;
+    protected ?string $marketsRequestProfileTrigger = null;
 
     public ?int $inventoryScentId = null;
     public ?int $inventorySizeId = null;
@@ -66,6 +81,7 @@ class Plan extends Component
 
     public function mount(): void
     {
+        $this->startMarketsRequestProfile('mount');
         $this->queue = $this->normalizeQueue($this->queue);
         $this->marketsPanelTab = 'draft';
 
@@ -91,11 +107,23 @@ class Plan extends Component
         }
 
         if ($this->queue === 'markets' && $this->marketEventsPanelEnabled()) {
-            $this->refreshMarketEventsPanelData();
-            if ($this->selectedUpcomingEventId) {
-                $this->loadCandidatePriorEvents();
-            }
+            $this->profileMarketsAction('mount', function (): void {
+                $this->refreshMarketEventsPanelData();
+                if ($this->selectedUpcomingEventId) {
+                    $this->loadCandidatePriorEvents();
+                }
+            });
         }
+    }
+
+    public function hydrate(): void
+    {
+        $this->startMarketsRequestProfile('hydrate');
+    }
+
+    public function dehydrate(): void
+    {
+        $this->finishMarketsRequestProfile();
     }
 
     public function prefillFromOrders(): void
@@ -264,105 +292,211 @@ class Plan extends Component
 
     public function updatedMatchWindowDays(mixed $value): void
     {
-        $window = (int) $value;
-        $this->matchWindowDays = in_array($window, [14, 30, 45, 60], true) ? $window : 30;
+        $this->profileMarketsAction('updatedMatchWindowDays', function () use ($value): void {
+            $window = (int) $value;
+            $this->matchWindowDays = in_array($window, [14, 30, 45, 60], true) ? $window : 30;
 
-        if ($this->queue === 'markets' && $this->selectedUpcomingEventId) {
-            $this->loadCandidatePriorEvents();
-        }
+            if ($this->queue === 'markets' && $this->selectedUpcomingEventId) {
+                $this->loadCandidatePriorEvents();
+            }
+        });
     }
 
     public function syncMarketEventsPanel(): void
+    {
+        $this->profileMarketsAction('syncMarketEventsPanel', function (): void {
+            if ($this->queue !== 'markets' || ! $this->marketEventsPanelEnabled()) {
+                return;
+            }
+
+            if (! (bool) config('features.market_events_sync_enabled', true)) {
+                $this->marketEventsErrorBanner = 'Event sync is disabled by feature flag.';
+                $this->refreshMarketEventsPanelData();
+
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Market event sync is disabled (MARKET_EVENTS_SYNC_ENABLED=false).',
+                ]);
+
+                return;
+            }
+
+            if (! $this->supportsMarketEventSyncStateTable()) {
+                $this->marketEventsErrorBanner = 'Event sync status table missing. Run migrations.';
+                $this->refreshMarketEventsPanelData();
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Run migrations before using Market event sync.',
+                ]);
+
+                return;
+            }
+
+            $this->marketEventsErrorBanner = null;
+            $coordinator = app(MarketEventSyncCoordinator::class);
+            $gate = $coordinator->canQueue(4, false);
+
+            if (! ($gate['allowed'] ?? false)) {
+                $reason = (string) ($gate['reason'] ?? 'unknown');
+                $this->refreshMarketEventsPanelData();
+
+                $message = match ($reason) {
+                    'running' => 'Market event sync is already running.',
+                    'cooldown' => 'Market event sync was run recently. Please wait a few minutes or use artisan --force.',
+                    default => 'Market event sync is temporarily unavailable.',
+                };
+
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => $message,
+                ]);
+
+                return;
+            }
+
+            try {
+                $coordinator->markQueued(4, auth()->id());
+                if ((string) config('queue.default') === 'sync') {
+                    SyncMarketEventsJob::dispatchAfterResponse(4, false, auth()->id());
+                } else {
+                    SyncMarketEventsJob::dispatch(4, false, auth()->id());
+                }
+                $this->refreshMarketEventsPanelData();
+
+                $this->dispatch('toast', [
+                    'type' => 'success',
+                    'message' => 'Market event sync queued. The page will keep using stored events until sync completes.',
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Failed to queue market event sync job', [
+                    'queue' => $this->queue,
+                    'plan_id' => $this->plan->id ?? null,
+                    'exception' => get_class($e),
+                    'message' => $e->getMessage(),
+                ]);
+
+                $this->marketEventsErrorBanner = 'Failed to queue calendar sync job.';
+                $this->refreshMarketEventsPanelData();
+                $this->dispatch('toast', [
+                    'type' => 'error',
+                    'message' => 'Failed to queue market event sync: '.$e->getMessage(),
+                ]);
+            }
+        });
+    }
+
+    public function refreshMarketEventsSyncStatus(): void
     {
         if ($this->queue !== 'markets' || ! $this->marketEventsPanelEnabled()) {
             return;
         }
 
-        $this->marketEventsErrorBanner = null;
-
-        try {
-            $result = app(UpcomingMarketEventsService::class)->syncUpcoming(4);
-            $this->marketEventsSyncSummary = $result;
+        $this->profileMarketsAction('refreshMarketEventsSyncStatus', function (): void {
             $this->refreshMarketEventsPanelData();
-            if ($this->queue === 'markets' && $this->selectedUpcomingEventId) {
-                $this->loadCandidatePriorEvents();
-            }
-
-            $this->dispatch('toast', [
-                'type' => 'success',
-                'message' => "Synced {$result['upserted']} market event(s) for the next 4 weeks.",
-            ]);
-        } catch (\Throwable $e) {
-            $windowStart = now()->startOfDay()->toIso8601String();
-            $windowEnd = now()->addWeeks(4)->endOfDay()->toIso8601String();
-            Log::error('Markets panel calendar sync failed', [
-                'queue' => $this->queue,
-                'plan_id' => $this->plan->id ?? null,
-                'calendar_id' => (string) config('services.google_calendar.asana_skylight_calendar_id'),
-                'weeks' => 4,
-                'time_min' => $windowStart,
-                'time_max' => $windowEnd,
-                'exception' => get_class($e),
-                'message' => $e->getMessage(),
-            ]);
-
-            $this->marketEventsErrorBanner = 'Calendar sync failed. Check Google Calendar settings/API key and try again.';
-
-            $this->dispatch('toast', [
-                'type' => 'error',
-                'message' => 'Calendar sync failed: '.$e->getMessage(),
-            ]);
-        }
+        });
     }
 
     public function selectUpcomingEvent(int $eventId): void
     {
-        if ($this->queue !== 'markets') {
-            return;
-        }
+        $this->profileMarketsAction('selectUpcomingEvent', function () use ($eventId): void {
+            if ($this->queue !== 'markets') {
+                return;
+            }
 
-        $event = Event::query()->find($eventId);
-        if (! $event) {
-            $this->dispatch('toast', [
-                'type' => 'warning',
-                'message' => 'Selected event was not found.',
-            ]);
-            return;
-        }
+            $event = Event::query()->find($eventId);
+            if (! $event) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Selected event was not found.',
+                ]);
+                return;
+            }
 
-        $this->selectedUpcomingEventId = (int) $event->id;
-        $this->marketSelectedEventId = $this->selectedUpcomingEventId; // legacy alias for existing code paths
-        $this->selectedCandidateEventId = null;
-        $this->marketSelectedHistoryPlanId = null; // legacy alias
-        $this->candidatePreview = [];
-        $this->marketEventsErrorBanner = null;
+            $this->selectedUpcomingEventId = (int) $event->id;
+            $this->marketSelectedEventId = $this->selectedUpcomingEventId; // legacy alias for existing code paths
+            $this->selectedCandidateEventId = null;
+            $this->marketSelectedHistoryPlanId = null; // legacy alias
+            $this->candidatePreview = [];
+            $this->marketEventsErrorBanner = null;
 
-        if ($this->supportsRetailPlanEventColumn()) {
-            $this->plan->event_id = $event->id;
-            $this->plan->save();
-        }
+            if ($this->supportsRetailPlanEventColumn()) {
+                $this->plan->event_id = $event->id;
+                $this->plan->save();
+            }
 
-        $this->loadCandidatePriorEvents();
+            $this->loadCandidatePriorEvents();
+        });
     }
 
     public function selectCandidateEvent(int $eventId): void
     {
-        if ($this->queue !== 'markets') {
-            return;
-        }
+        $this->profileMarketsAction('selectCandidateEvent', function () use ($eventId): void {
+            if ($this->queue !== 'markets') {
+                return;
+            }
 
-        $candidate = Event::query()->with('market')->find($eventId);
-        if (! $candidate) {
+            $candidate = Event::query()->with('market')->find($eventId);
+            if (! $candidate) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Candidate event no longer exists.',
+                ]);
+                return;
+            }
+
+            $this->selectedCandidateEventId = (int) $candidate->id;
+            $this->marketSelectedHistoryPlanId = $this->selectedCandidateEventId; // legacy alias
+            $this->candidatePreview = $this->buildCandidatePreview($candidate);
+        });
+    }
+
+    public function mapUpcomingToCandidate(int $upcomingId, int $candidateId): void
+    {
+        $this->profileMarketsAction('mapUpcomingToCandidate', function () use ($upcomingId, $candidateId): void {
+            if ($this->queue !== 'markets') {
+                return;
+            }
+
+            $upcoming = Event::query()->find($upcomingId);
+            $candidate = Event::query()->find($candidateId);
+
+            if (! $upcoming || ! $candidate) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Could not save mapping because one of the events was not found.',
+                ]);
+
+                return;
+            }
+
+            if (! $this->supportsEventMatchOverridesTable()) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Mapping override table missing. Run migrations first.',
+                ]);
+
+                return;
+            }
+
+            EventMatchOverride::query()->updateOrCreate(
+                ['upcoming_event_id' => $upcoming->id],
+                [
+                    'candidate_event_id' => $candidate->id,
+                    'created_by_user_id' => auth()->id(),
+                ]
+            );
+
+            app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
+            $this->selectedUpcomingEventId = (int) $upcoming->id;
+            $this->selectedCandidateEventId = (int) $candidate->id;
+            $this->candidatePreview = $this->buildCandidatePreview($candidate);
+            $this->loadCandidatePriorEvents();
+
             $this->dispatch('toast', [
-                'type' => 'warning',
-                'message' => 'Candidate event no longer exists.',
+                'type' => 'success',
+                'message' => 'Saved event mapping override for this upcoming event.',
             ]);
-            return;
-        }
-
-        $this->selectedCandidateEventId = (int) $candidate->id;
-        $this->marketSelectedHistoryPlanId = $this->selectedCandidateEventId; // legacy alias
-        $this->candidatePreview = $this->buildCandidatePreview($candidate);
+        });
     }
 
     public function applyCandidatePrefill(): void
@@ -435,6 +569,7 @@ class Plan extends Component
     protected function loadCandidatePriorEvents(): void
     {
         $this->candidatePriorEvents = [];
+        $this->candidateScoredEvents = [];
         $this->selectedCandidateEventId = null;
         $this->marketSelectedHistoryPlanId = null;
         $this->candidatePreview = [];
@@ -445,7 +580,7 @@ class Plan extends Component
         }
 
         try {
-            $candidates = app(EventMatchingService::class)->candidatesForUpcoming($upcoming, $this->matchWindowDays, 5);
+            $summary = $this->cachedCandidateMatchSummary($upcoming, $this->matchWindowDays);
         } catch (\Throwable $e) {
             Log::error('Retail markets candidate lookup failed', [
                 'queue' => $this->queue,
@@ -461,40 +596,54 @@ class Plan extends Component
             return;
         }
 
+        $windowCandidates = collect((array) ($summary['window_candidates'] ?? []));
+        $this->candidateScoredEvents = array_values((array) ($summary['scored_candidates'] ?? []));
+
+        $override = $this->supportsEventMatchOverridesTable()
+            ? EventMatchOverride::query()->where('upcoming_event_id', $upcoming->id)->first()
+            : null;
+        $overrideCandidateId = (int) ($override?->candidate_event_id ?? 0) ?: null;
+        $suggestedCandidateId = $overrideCandidateId
+            ?: ((int) ($summary['suggested_candidate_event_id'] ?? 0) ?: null);
+
         $grouped = [];
 
-        foreach ($candidates as $row) {
-            /** @var Event|null $candidate */
-            $candidate = $row['event'] ?? null;
-            if (! $candidate) {
-                continue;
-            }
-
-            $year = (int) ($candidate->starts_at?->year ?? ($row['match_year'] ?? 0));
+        foreach ($windowCandidates as $row) {
+            $candidateId = (int) ($row['candidate_event_id'] ?? 0);
+            $year = (int) (($row['year'] ?? 0) ?: ($row['match_year'] ?? 0));
             $grouped[$year] ??= [
                 'year' => $year,
                 'items' => [],
             ];
 
             $grouped[$year]['items'][] = [
-                'event_id' => (int) $candidate->id,
-                'title' => (string) ($candidate->display_name ?: $candidate->name ?: 'Untitled Event'),
-                'starts_at' => $candidate->starts_at?->toDateString(),
-                'ends_at' => $candidate->ends_at?->toDateString(),
+                'event_id' => $candidateId,
+                'year' => $year,
+                'title' => (string) ($row['title'] ?? 'Untitled Event'),
+                'starts_at' => (string) ($row['starts_at'] ?? '') ?: null,
+                'ends_at' => (string) ($row['ends_at'] ?? '') ?: null,
+                'match_score' => (float) ($row['match_score'] ?? 0),
+                'match_score_percent' => (int) round(((float) ($row['match_score'] ?? 0)) * 100),
+                'title_score' => (float) ($row['title_score'] ?? 0),
+                'date_score' => (float) ($row['date_score'] ?? 0),
                 'days_diff' => (int) ($row['days_diff'] ?? 0),
                 'days_diff_signed' => (int) ($row['days_diff_signed'] ?? 0),
-                'source' => (string) ($candidate->source ?? ''),
-                'market_name' => (string) ($candidate->market?->name ?? ''),
+                'source' => (string) ($row['source'] ?? ''),
+                'market_name' => (string) ($row['market_name'] ?? ''),
+                'is_suggested' => $suggestedCandidateId !== null && $candidateId === $suggestedCandidateId,
+                'is_override' => $overrideCandidateId !== null && $candidateId === $overrideCandidateId,
             ];
         }
 
         krsort($grouped);
         foreach ($grouped as &$group) {
             usort($group['items'], fn (array $a, array $b) => [
+                -1 * (int) round(((float) ($a['match_score'] ?? 0.0)) * 10000),
                 $a['days_diff'] ?? 9999,
                 $a['starts_at'] ?? '9999-12-31',
                 $a['title'] ?? 'zzzz',
             ] <=> [
+                -1 * (int) round(((float) ($b['match_score'] ?? 0.0)) * 10000),
                 $b['days_diff'] ?? 9999,
                 $b['starts_at'] ?? '9999-12-31',
                 $b['title'] ?? 'zzzz',
@@ -503,6 +652,15 @@ class Plan extends Component
         unset($group);
 
         $this->candidatePriorEvents = array_values($grouped);
+
+        if ($overrideCandidateId) {
+            $overrideCandidate = Event::query()->with('market')->find($overrideCandidateId);
+            if ($overrideCandidate) {
+                $this->selectedCandidateEventId = (int) $overrideCandidate->id;
+                $this->marketSelectedHistoryPlanId = $this->selectedCandidateEventId;
+                $this->candidatePreview = $this->buildCandidatePreview($overrideCandidate);
+            }
+        }
     }
 
     protected function selectedUpcomingEventForPanel(): ?Event
@@ -544,11 +702,78 @@ class Plan extends Component
             ->values()
             ->all();
 
-        $this->marketEventsLastSyncAt = Event::query()
-            ->where('source', 'asana_calendar')
-            ->max('updated_at');
+        if ($this->supportsMarketEventSyncStateTable()) {
+            $syncState = app(MarketEventSyncCoordinator::class)->queueStatus();
+            $this->marketEventsSyncState = $syncState;
+            $this->marketEventsSyncSummary = (array) ($syncState['last_result'] ?? []);
+            $this->marketEventsLastSyncAt = (string) ($syncState['last_sync_at'] ?? '')
+                ?: Event::query()->where('source', 'asana_calendar')->max('updated_at');
+        } else {
+            $this->marketEventsSyncState = [
+                'status' => 'unavailable',
+                'last_sync_status' => null,
+                'last_error' => 'market_event_sync_states table missing (run migrations).',
+                'last_result' => [],
+            ];
+            $this->marketEventsSyncSummary = [];
+            $this->marketEventsLastSyncAt = Event::query()->where('source', 'asana_calendar')->max('updated_at');
+        }
 
         $this->marketEventsPanelLoaded = true;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function cachedCandidateMatchSummary(Event $upcoming, int $windowDays): array
+    {
+        $windowDays = max(1, min(120, $windowDays));
+        $version = app(MarketEventSyncCoordinator::class)->matchingCacheVersion();
+        $cacheKey = "markets:event-match:v2:{$version}:{$upcoming->id}:{$windowDays}";
+
+        return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($upcoming, $windowDays): array {
+            $startedAt = microtime(true);
+            $rows = app(EventMatchingService::class)->candidatesForUpcoming($upcoming, $windowDays, 5);
+
+            $serialized = $rows->map(function (array $row): array {
+                /** @var Event|null $candidate */
+                $candidate = $row['event'] ?? null;
+
+                return [
+                    'candidate_event_id' => (int) ($row['candidate_event_id'] ?? $candidate?->id ?? 0),
+                    'match_year' => (int) ($row['match_year'] ?? 0),
+                    'year' => (int) ($candidate?->starts_at?->year ?? $row['match_year'] ?? 0),
+                    'title' => (string) ($candidate?->display_name ?: $candidate?->name ?: 'Untitled Event'),
+                    'starts_at' => $candidate?->starts_at?->toDateString(),
+                    'ends_at' => $candidate?->ends_at?->toDateString(),
+                    'match_score' => (float) ($row['match_score'] ?? 0),
+                    'title_score' => (float) ($row['title_score'] ?? 0),
+                    'date_score' => (float) ($row['date_score'] ?? 0),
+                    'location_score' => (float) ($row['location_score'] ?? 0),
+                    'source_ref_score' => (float) ($row['source_ref_score'] ?? 0),
+                    'days_diff' => (int) ($row['days_diff'] ?? 0),
+                    'days_diff_signed' => (int) ($row['days_diff_signed'] ?? 0),
+                    'source' => (string) ($candidate?->source ?? ''),
+                    'market_name' => (string) ($candidate?->market?->name ?? ''),
+                ];
+            })->values()->all();
+
+            Log::info('Retail markets candidate summary cache miss', [
+                'queue' => $this->queue,
+                'plan_id' => $this->plan->id ?? null,
+                'upcoming_event_id' => $upcoming->id,
+                'window_days' => $windowDays,
+                'candidate_count' => count($serialized),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+
+            return [
+                'window_candidates' => $serialized,
+                'scored_candidates' => array_slice($serialized, 0, 10),
+                'suggested_candidate_event_id' => (int) ($serialized[0]['candidate_event_id'] ?? 0) ?: null,
+                'cached_at' => now()->toIso8601String(),
+            ];
+        });
     }
 
     /**
@@ -1220,6 +1445,7 @@ class Plan extends Component
         $this->selectedUpcomingEventId = null;
         $this->selectedCandidateEventId = null;
         $this->candidatePriorEvents = [];
+        $this->candidateScoredEvents = [];
         $this->candidatePreview = [];
         $this->marketSelectedEventId = null;
         $this->marketSelectedHistoryPlanId = null;
@@ -1245,13 +1471,16 @@ class Plan extends Component
             'error' => $this->marketEventsErrorBanner,
             'last_sync_at' => $this->marketEventsLastSyncAt,
             'sync_summary' => $this->marketEventsSyncSummary,
+            'sync_state' => $this->marketEventsSyncState,
             'upcoming_events' => collect(),
             'selected_event' => null,
             'match_window_days' => $this->matchWindowDays,
             'candidate_prior_events' => $this->candidatePriorEvents,
+            'candidate_scored_events' => $this->candidateScoredEvents,
             'candidate_preview' => $this->candidatePreview,
             'selected_upcoming_event_id' => $this->selectedUpcomingEventId,
             'selected_candidate_event_id' => $this->selectedCandidateEventId,
+            'show_sync_error_detail' => (bool) (auth()->user()?->isAdmin()),
         ];
 
         if (! $base['enabled']) {
@@ -1579,6 +1808,108 @@ class Plan extends Component
         ]);
     }
 
+    protected function startMarketsRequestProfile(string $trigger): void
+    {
+        $queue = $this->normalizeQueue((string) ($this->queue ?: request()->query('queue', 'retail')));
+        if ($queue !== 'markets') {
+            return;
+        }
+
+        $this->marketsRequestProfileStartedAt = microtime(true);
+        $this->marketsRequestProfileQueryCount = 0;
+        $this->marketsRequestProfileQueryTimeMs = 0.0;
+        $this->marketsRequestProfileTrigger = $trigger;
+        RequestMetrics::reset();
+
+        if (! ($this->shouldProfileMarketsQueries())) {
+            return;
+        }
+
+        if ($this->marketsRequestProfileListenerAttached) {
+            return;
+        }
+
+        $this->marketsRequestProfileListenerAttached = true;
+
+        DB::listen(function (QueryExecuted $query): void {
+            if ($this->marketsRequestProfileStartedAt === null) {
+                return;
+            }
+
+            $this->marketsRequestProfileQueryCount++;
+            $this->marketsRequestProfileQueryTimeMs += (float) $query->time;
+        });
+    }
+
+    protected function finishMarketsRequestProfile(): void
+    {
+        if ($this->marketsRequestProfileStartedAt === null) {
+            return;
+        }
+
+        Log::info('Markets queue request profile', [
+            'trigger' => $this->marketsRequestProfileTrigger,
+            'queue' => $this->queue,
+            'plan_id' => $this->plan->id ?? null,
+            'livewire_component' => static::class,
+            'url' => request()?->fullUrl(),
+            'duration_ms' => (int) round((microtime(true) - $this->marketsRequestProfileStartedAt) * 1000),
+            'db_query_count' => $this->marketsRequestProfileQueryCount,
+            'db_query_time_ms' => (int) round($this->marketsRequestProfileQueryTimeMs),
+            'external_http_calls' => RequestMetrics::externalHttpCalls(),
+        ]);
+
+        $this->marketsRequestProfileStartedAt = null;
+        $this->marketsRequestProfileQueryCount = 0;
+        $this->marketsRequestProfileQueryTimeMs = 0.0;
+        $this->marketsRequestProfileTrigger = null;
+    }
+
+    protected function shouldProfileMarketsQueries(): bool
+    {
+        return app()->isLocal() || (bool) config('app.debug');
+    }
+
+    /**
+     * @template TReturn
+     * @param  callable():TReturn  $callback
+     * @return TReturn
+     */
+    protected function profileMarketsAction(string $action, callable $callback): mixed
+    {
+        if ($this->queue !== 'markets') {
+            return $callback();
+        }
+
+        $startedAt = microtime(true);
+        $queryCount = 0;
+        $queryTimeMs = 0.0;
+        RequestMetrics::reset();
+
+        if ($this->shouldProfileMarketsQueries()) {
+            DB::listen(function (QueryExecuted $query) use (&$queryCount, &$queryTimeMs): void {
+                $queryCount++;
+                $queryTimeMs += (float) $query->time;
+            });
+        }
+
+        try {
+            return $callback();
+        } finally {
+            Log::info('Markets queue action profile', [
+                'action' => $action,
+                'queue' => $this->queue,
+                'plan_id' => $this->plan->id ?? null,
+                'selected_upcoming_event_id' => $this->selectedUpcomingEventId,
+                'selected_candidate_event_id' => $this->selectedCandidateEventId,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'db_query_count' => $queryCount,
+                'db_query_time_ms' => (int) round($queryTimeMs),
+                'external_http_calls' => RequestMetrics::externalHttpCalls(),
+            ]);
+        }
+    }
+
     protected function createDraftPlan(string $name): RetailPlan
     {
         $payload = [
@@ -1626,6 +1957,28 @@ class Plan extends Component
 
         if ($supports === null) {
             $supports = Schema::hasColumn('orders', 'event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsMarketEventSyncStateTable(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasTable('market_event_sync_states');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsEventMatchOverridesTable(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasTable('event_match_overrides');
         }
 
         return $supports;
