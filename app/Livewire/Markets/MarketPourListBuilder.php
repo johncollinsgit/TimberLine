@@ -363,7 +363,7 @@ class MarketPourListBuilder extends Component
      */
     protected function upcomingEvents(): Collection
     {
-        $cutoff = now()->subDays(7)->toDateString();
+        $cutoff = now()->subDays(21)->toDateString();
 
         return Event::query()
             ->with('market')
@@ -375,7 +375,15 @@ class MarketPourListBuilder extends Component
             ->orderBy('starts_at')
             ->orderBy('display_name')
             ->limit(60)
-            ->get();
+            ->get()
+            ->unique(function (Event $event): string {
+                $matcher = app(EventMatchingService::class);
+                $normalized = $matcher->normalizeTitle((string) ($event->display_name ?: $event->name));
+                $date = $event->starts_at?->toDateString() ?? 'date_tbd';
+
+                return $date.'|'.$normalized;
+            })
+            ->values();
     }
 
     protected function attemptHistoryPreload(Event $event): void
@@ -708,6 +716,7 @@ class MarketPourListBuilder extends Component
         $exact = Scent::query()
             ->where('name', $name)
             ->orWhere('display_name', $name)
+            ->orWhere('abbreviation', $name)
             ->first(['id']);
 
         if ($exact) {
@@ -715,18 +724,48 @@ class MarketPourListBuilder extends Component
         }
 
         $normalized = Scent::normalizeName($name);
+        $scents = Scent::query()->get(['id', 'name', 'display_name', 'abbreviation']);
 
-        return Scent::query()
-            ->get(['id', 'name', 'display_name'])
-            ->first(function (Scent $scent) use ($normalized) {
-                foreach ([(string) $scent->name, (string) ($scent->display_name ?? '')] as $candidate) {
-                    if ($candidate !== '' && Scent::normalizeName($candidate) === $normalized) {
+        $match = $scents->first(function (Scent $scent) use ($normalized) {
+            foreach ([(string) $scent->name, (string) ($scent->display_name ?? ''), (string) ($scent->abbreviation ?? '')] as $candidate) {
+                if ($candidate !== '' && Scent::normalizeName($candidate) === $normalized) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+
+        if ($match) {
+            return (int) $match->id;
+        }
+
+        // Historical plans sometimes use shorthand combos like "ACC/VS". If the full alias
+        // does not exist, fall back to the first recognizable token abbreviation/name.
+        $tokens = preg_split('/(?:\/|,|&|\+|\band\b)/i', $name) ?: [];
+        foreach ($tokens as $token) {
+            $token = trim((string) $token);
+            if ($token === '') {
+                continue;
+            }
+
+            $normalizedToken = Scent::normalizeName($token);
+            $tokenMatch = $scents->first(function (Scent $scent) use ($normalizedToken) {
+                foreach ([(string) $scent->name, (string) ($scent->display_name ?? ''), (string) ($scent->abbreviation ?? '')] as $candidate) {
+                    if ($candidate !== '' && Scent::normalizeName($candidate) === $normalizedToken) {
                         return true;
                     }
                 }
 
                 return false;
-            })?->id;
+            });
+
+            if ($tokenMatch) {
+                return (int) $tokenMatch->id;
+            }
+        }
+
+        return null;
     }
 
     protected function mutateDraftEntry(string $key, callable $mutator): void

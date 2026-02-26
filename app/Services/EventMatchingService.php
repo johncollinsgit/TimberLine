@@ -14,7 +14,7 @@ class EventMatchingService
         $title = Str::lower($title);
 
         $title = preg_replace('/\b20\d{2}\b/u', ' ', $title) ?? $title;
-        $title = preg_replace('/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/u', ' ', $title) ?? $title;
+        $title = preg_replace('/\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/u', ' ', $title) ?? $title;
         $title = preg_replace('/\b(?:january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)\.?\b/u', ' ', $title) ?? $title;
         $title = preg_replace('/\b(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/u', ' ', $title) ?? $title;
         $title = preg_replace('/[^a-z0-9\s]/u', ' ', $title) ?? $title;

@@ -1072,7 +1072,6 @@
 @endphp
 <body data-mf-theme="{{ $activeTheme }}" class="min-h-screen text-zinc-100 antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }}">
 @php
-  use Illuminate\Support\Facades\Route;
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
   $isManager = $user?->isManager() ?? false;
@@ -1138,12 +1137,26 @@
       ->filter()
       ->values();
 
-  $unresolvedExceptions = \App\Models\MappingException::query()
-      ->whereNull('resolved_at')
-      ->count();
-  $latestRun = \App\Models\ShopifyImportRun::query()
-      ->orderByDesc('id')
-      ->first();
+  $unresolvedExceptions = 0;
+  $latestRun = null;
+
+  try {
+      if (\Illuminate\Support\Facades\Schema::hasTable('mapping_exceptions')) {
+          $unresolvedExceptions = \App\Models\MappingException::query()
+              ->whereNull('resolved_at')
+              ->count();
+      }
+
+      if (\Illuminate\Support\Facades\Schema::hasTable('shopify_import_runs')) {
+          $latestRun = \App\Models\ShopifyImportRun::query()
+              ->orderByDesc('id')
+              ->first();
+      }
+  } catch (\Throwable $e) {
+      // Sidebar telemetry should never break page rendering.
+      $unresolvedExceptions = 0;
+      $latestRun = null;
+  }
 @endphp
 
 <div class="min-h-screen flex">

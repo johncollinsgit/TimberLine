@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Services\Shipping\BusinessDayCalculator;
 use Carbon\CarbonImmutable;
@@ -30,6 +31,11 @@ class Order extends Model
     public function mappingExceptions(): HasMany
     {
         return $this->hasMany(MappingException::class);
+    }
+
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(Event::class);
     }
 
     protected static function booted(): void

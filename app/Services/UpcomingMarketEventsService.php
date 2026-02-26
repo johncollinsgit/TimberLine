@@ -57,7 +57,8 @@ class UpcomingMarketEventsService
      */
     public function fetchCalendarEvents(string $calendarId, string $apiKey, int $weeks): array
     {
-        $timeMin = now()->startOfDay()->toIso8601String();
+        // Include a short lookback so current-month/recent events remain visible in the planner.
+        $timeMin = now()->subDays(21)->startOfDay()->toIso8601String();
         $timeMax = now()->addWeeks($weeks)->endOfDay()->toIso8601String();
 
         $url = 'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events';
@@ -114,7 +115,33 @@ class UpcomingMarketEventsService
             return $existing;
         }
 
+        $duplicate = Event::query()
+            ->where('source', 'asana_calendar')
+            ->when($startsAt, fn ($q) => $q->whereDate('starts_at', $startsAt->toDateString()))
+            ->when($endsAt, fn ($q) => $q->whereDate('ends_at', $endsAt->toDateString()))
+            ->get()
+            ->first(function (Event $candidate) use ($title) {
+                return $this->normalizedCalendarTitleKey((string) ($candidate->display_name ?: $candidate->name))
+                    === $this->normalizedCalendarTitleKey($title);
+            });
+
+        if ($duplicate) {
+            $duplicate->fill(collect($payload)->except(['source_ref'])->all())->save();
+            return $duplicate;
+        }
+
         return Event::query()->create($payload);
+    }
+
+    protected function normalizedCalendarTitleKey(string $title): string
+    {
+        $normalized = Str::lower($title);
+        $normalized = preg_replace('/\b20\d{2}\b/u', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/u', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^a-z0-9\s]/u', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
+
+        return trim($normalized);
     }
 
     protected function matchOrCreateMarket(string $title, ?string $city, ?string $state): Market

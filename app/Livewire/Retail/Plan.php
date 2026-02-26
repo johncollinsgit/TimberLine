@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Retail;
 
+use App\Models\Event;
+use App\Models\MarketPlan;
 use App\Models\MarketPourList;
 use App\Models\MarketPourListLine;
 use App\Models\Order;
@@ -10,8 +12,12 @@ use App\Models\RetailPlan;
 use App\Models\RetailPlanItem;
 use App\Models\Scent;
 use App\Models\Size;
+use App\Services\EventMatchingService;
+use App\Services\UpcomingMarketEventsService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Component;
@@ -21,6 +27,13 @@ class Plan extends Component
     public RetailPlan $plan;
     public string $quote = '';
     public string $queue = 'retail';
+    public string $marketsPanelTab = 'draft';
+    public ?int $marketSelectedEventId = null;
+    public ?int $marketSelectedHistoryPlanId = null;
+    public ?string $marketEventsErrorBanner = null;
+
+    /** @var array<string,mixed> */
+    public array $marketEventsSyncSummary = [];
 
     public ?int $inventoryScentId = null;
     public ?int $inventorySizeId = null;
@@ -39,6 +52,7 @@ class Plan extends Component
     public function mount(): void
     {
         $this->queue = $this->normalizeQueue($this->queue);
+        $this->marketsPanelTab = 'draft';
 
         $name = $this->queueDisplayName() . ' / Pour List ' . CarbonImmutable::now()->format('Y-m-d');
         $query = RetailPlan::query()
@@ -52,6 +66,9 @@ class Plan extends Component
         $this->plan = $query->latest('id')->first()
             ?? $this->createDraftPlan($name);
         $this->quote = $this->enneagramQuote();
+        $this->marketSelectedEventId = $this->supportsRetailPlanEventColumn()
+            ? (int) ($this->plan->event_id ?: 0) ?: null
+            : null;
 
         if ($this->plan->items()->count() === 0) {
             $this->prefillFromOrdersInternal(true);
@@ -210,6 +227,300 @@ class Plan extends Component
                     : 'No new markets draft lines to add.',
             ]);
         }
+    }
+
+    public function setMarketsPanelTab(string $tab): void
+    {
+        if ($this->queue !== 'markets' || ! $this->marketEventsPanelEnabled()) {
+            $this->marketsPanelTab = 'draft';
+            return;
+        }
+
+        $this->marketsPanelTab = in_array($tab, ['draft', 'events'], true) ? $tab : 'draft';
+    }
+
+    public function syncMarketEventsPanel(): void
+    {
+        if ($this->queue !== 'markets' || ! $this->marketEventsPanelEnabled()) {
+            return;
+        }
+
+        $this->marketEventsErrorBanner = null;
+
+        try {
+            $result = app(UpcomingMarketEventsService::class)->syncUpcoming(4);
+            $this->marketEventsSyncSummary = $result;
+
+            $this->dispatch('toast', [
+                'type' => 'success',
+                'message' => "Synced {$result['upserted']} market event(s) for the next 4 weeks.",
+            ]);
+        } catch (\Throwable $e) {
+            $windowStart = now()->startOfDay()->toIso8601String();
+            $windowEnd = now()->addWeeks(4)->endOfDay()->toIso8601String();
+            Log::error('Markets panel calendar sync failed', [
+                'queue' => $this->queue,
+                'plan_id' => $this->plan->id ?? null,
+                'calendar_id' => (string) config('services.google_calendar.asana_skylight_calendar_id'),
+                'weeks' => 4,
+                'time_min' => $windowStart,
+                'time_max' => $windowEnd,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+
+            $this->marketEventsErrorBanner = 'Calendar sync failed. Check Google Calendar settings/API key and try again.';
+
+            $this->dispatch('toast', [
+                'type' => 'error',
+                'message' => 'Calendar sync failed: '.$e->getMessage(),
+            ]);
+        }
+    }
+
+    public function selectMarketEvent(int $eventId): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        $event = Event::query()->find($eventId);
+        if (! $event) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Selected event was not found.',
+            ]);
+            return;
+        }
+
+        $this->marketSelectedEventId = (int) $event->id;
+        $this->marketSelectedHistoryPlanId = null;
+        $this->marketEventsErrorBanner = null;
+
+        if ($this->supportsRetailPlanEventColumn()) {
+            $this->plan->event_id = $event->id;
+            $this->plan->save();
+        }
+    }
+
+    public function selectMarketHistoryCandidate(int $marketPlanId): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        $this->marketSelectedHistoryPlanId = $marketPlanId > 0 ? $marketPlanId : null;
+    }
+
+    public function loadMatchedMarketEventBoxes(): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        $selectedEvent = $this->selectedMarketEventForPanel();
+        if (! $selectedEvent) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Select an event first.',
+            ]);
+            return;
+        }
+
+        $prefill = $this->marketEventPrefillData($selectedEvent);
+        $match = $prefill['best_match'] ?? null;
+
+        if (! is_array($match)) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'No confident historical match found.',
+            ]);
+            return;
+        }
+
+        $this->loadMarketHistoryBoxesFromMarketPlanGroup((int) ($match['id'] ?? 0), $selectedEvent);
+    }
+
+    public function loadSelectedMarketHistoryBoxes(): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        $selectedEvent = $this->selectedMarketEventForPanel();
+        if (! $selectedEvent) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Select an event first.',
+            ]);
+            return;
+        }
+
+        if (! $this->marketSelectedHistoryPlanId) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Choose a historical event to load.',
+            ]);
+            return;
+        }
+
+        $this->loadMarketHistoryBoxesFromMarketPlanGroup($this->marketSelectedHistoryPlanId, $selectedEvent);
+    }
+
+    protected function loadMarketHistoryBoxesFromMarketPlanGroup(int $marketPlanId, Event $selectedEvent): void
+    {
+        $marketPlan = MarketPlan::query()->find($marketPlanId);
+        if (! $marketPlan) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Historical event rows were not found.',
+            ]);
+            return;
+        }
+
+        $rows = MarketPlan::query()
+            ->where('status', 'published')
+            ->where('normalized_title', (string) $marketPlan->normalized_title)
+            ->whereDate('event_date', $marketPlan->event_date)
+            ->orderBy('id')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'No historical box rows found for that event.',
+            ]);
+            return;
+        }
+
+        $added = 0;
+        $merged = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($rows, $selectedEvent, &$added, &$merged, &$skipped) {
+            if ($this->supportsRetailPlanEventColumn()) {
+                $this->plan->event_id = $selectedEvent->id;
+                $this->plan->save();
+            }
+
+            foreach ($rows as $row) {
+                $boxType = strtolower(trim((string) $row->box_type));
+                $boxCount = max(0, (int) $row->box_count);
+
+                if ($boxCount <= 0 || ! in_array($boxType, ['full', 'half'], true)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $splitScentIds = $this->resolveSplitScentIdsFromText((string) $row->scent);
+                if (count($splitScentIds) === 2) {
+                    if ($boxType !== 'full') {
+                        $skipped++;
+                        continue;
+                    }
+
+                    foreach ($splitScentIds as $index => $splitScentId) {
+                        $result = $this->mergeMarketEventPrefillItem(
+                            $selectedEvent,
+                            (int) $row->id,
+                            (int) $splitScentId,
+                            $boxCount,
+                            (string) $row->scent,
+                            'full',
+                            $index + 1
+                        );
+
+                        $added += $result['added'];
+                        $merged += $result['merged'];
+                    }
+
+                    continue;
+                }
+
+                $scentId = $this->resolveScentIdFromText((string) $row->scent);
+                $halfBoxUnits = $boxType === 'full' ? ($boxCount * 2) : $boxCount;
+
+                $result = $this->mergeMarketEventPrefillItem(
+                    $selectedEvent,
+                    (int) $row->id,
+                    $scentId,
+                    $halfBoxUnits,
+                    (string) $row->scent,
+                    $boxType
+                );
+
+                $added += $result['added'];
+                $merged += $result['merged'];
+            }
+        }, 3);
+
+        $historyLabel = (string) ($marketPlan->event_title ?: 'historical event');
+        $message = "Loaded historical boxes from {$historyLabel}. Added {$added}, merged {$merged}";
+        if ($skipped > 0) {
+            $message .= ", skipped {$skipped}";
+        }
+        $message .= '.';
+
+        $this->marketsPanelTab = 'draft';
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => $message,
+        ]);
+    }
+
+    /**
+     * @return array{added:int,merged:int}
+     */
+    protected function mergeMarketEventPrefillItem(Event $selectedEvent, int $sourceMarketPlanLineId, ?int $scentId, int $halfBoxUnits, string $rawScent, string $boxType, ?int $splitIndex = null): array
+    {
+        $halfBoxUnits = max(1, $halfBoxUnits);
+
+        if ($scentId) {
+            $existing = RetailPlanItem::query()
+                ->where('retail_plan_id', $this->plan->id)
+                ->whereNull('size_id')
+                ->whereIn('source', ['market_box_manual', 'market_box_draft', 'market_box_event_prefill'])
+                ->where('scent_id', $scentId)
+                ->where('status', '!=', 'published')
+                ->first();
+
+            if ($existing) {
+                $existing->quantity = max(1, (int) $existing->quantity + $halfBoxUnits);
+                if (($existing->status ?? 'draft') === 'needs_mapping') {
+                    $existing->status = 'draft';
+                }
+                $existing->save();
+
+                return ['added' => 0, 'merged' => 1];
+            }
+        }
+
+        $skuParts = [
+            'mktevt',
+            (string) $selectedEvent->id,
+            (string) $sourceMarketPlanLineId,
+            $boxType,
+        ];
+
+        if ($splitIndex !== null) {
+            $skuParts[] = 'split'.$splitIndex;
+        }
+
+        $skuParts[] = Str::slug($rawScent) ?: 'scent';
+
+        RetailPlanItem::query()->create([
+            'retail_plan_id' => $this->plan->id,
+            'order_id' => null,
+            'order_line_id' => null,
+            'scent_id' => $scentId,
+            'size_id' => null,
+            'quantity' => $halfBoxUnits,
+            'source' => 'market_box_event_prefill',
+            'status' => $scentId ? 'draft' : 'needs_mapping',
+            'sku' => Str::limit(implode(':', $skuParts), 255, ''),
+        ]);
+
+        return ['added' => 1, 'merged' => 0];
     }
 
     public function addInventoryItem(): void
@@ -447,14 +758,21 @@ class Plan extends Component
             }
 
             if ($this->queue === 'markets') {
-                $marketBoxItems = $items->whereIn('source', ['market_box_draft', 'market_box_manual']);
+                $marketBoxItems = $items->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill']);
                 $publishableBoxes = $marketBoxItems->filter(fn ($item) => (int) ($item->scent_id ?? 0) > 0 && (int) ($item->quantity ?? 0) > 0);
 
                 if ($publishableBoxes->isNotEmpty()) {
                     $today = CarbonImmutable::today();
-                    $marketOrder = Order::query()->create([
+                    $planEvent = ($this->supportsRetailPlanEventColumn() && $this->plan->event_id)
+                        ? Event::query()->find($this->plan->event_id)
+                        : null;
+                    $marketOrderLabel = $planEvent
+                        ? 'Markets Box Plan · '.($planEvent->display_name ?: $planEvent->name)
+                        : 'Markets Box Plan';
+
+                    $marketOrderPayload = [
                         'order_type' => 'event',
-                        'order_label' => 'Markets Box Plan',
+                        'order_label' => $marketOrderLabel,
                         'order_number' => 'MKT-BOX-' . $today->format('Ymd'),
                         'source' => 'internal',
                         'status' => 'submitted_to_pouring',
@@ -462,7 +780,13 @@ class Plan extends Component
                         'ship_by_at' => $today,
                         'due_at' => $today,
                         'published_at' => now(),
-                    ]);
+                    ];
+
+                    if ($this->supportsOrderEventColumn()) {
+                        $marketOrderPayload['event_id'] = $planEvent?->id;
+                    }
+
+                    $marketOrder = Order::query()->create($marketOrderPayload);
 
                     [$size16CottonId, $size8CottonId, $sizeWaxMeltId] = $this->marketBoxSizeIds();
 
@@ -539,6 +863,9 @@ class Plan extends Component
         $this->plan = $this->createDraftPlan(
             $this->queueDisplayName() . ' / Pour List ' . CarbonImmutable::now()->format('Y-m-d H:i')
         );
+        $this->marketSelectedEventId = null;
+        $this->marketSelectedHistoryPlanId = null;
+        $this->marketEventsErrorBanner = null;
         $this->prefillFromOrdersInternal(true);
 
         $this->dispatch('toast', [
@@ -550,6 +877,241 @@ class Plan extends Component
         ]);
     }
 
+    /**
+     * @return array<string,mixed>
+     */
+    protected function marketEventsPanelViewModel(): array
+    {
+        $base = [
+            'enabled' => $this->marketEventsPanelEnabled(),
+            'tab' => $this->marketsPanelTab,
+            'error' => $this->marketEventsErrorBanner,
+            'last_sync_at' => null,
+            'sync_summary' => $this->marketEventsSyncSummary,
+            'upcoming_events' => collect(),
+            'selected_event' => null,
+            'prefill' => [
+                'best_match' => null,
+                'candidates' => [],
+                'threshold' => 0.35,
+            ],
+        ];
+
+        if (! $base['enabled']) {
+            return $base;
+        }
+
+        try {
+            $upcomingEvents = $this->upcomingMarketEventsForPanel();
+            $selectedEvent = $this->selectedMarketEventForPanel($upcomingEvents);
+
+            $base['last_sync_at'] = Event::query()
+                ->where('source', 'asana_calendar')
+                ->max('updated_at');
+            $base['upcoming_events'] = $upcomingEvents;
+            $base['selected_event'] = $selectedEvent;
+            $base['prefill'] = $selectedEvent
+                ? $this->marketEventPrefillData($selectedEvent)
+                : ['best_match' => null, 'candidates' => [], 'threshold' => 0.35];
+        } catch (\Throwable $e) {
+            Log::error('Retail markets events panel render failed', [
+                'queue' => $this->queue,
+                'plan_id' => $this->plan->id ?? null,
+                'selected_event_id' => $this->marketSelectedEventId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+
+            $base['error'] = 'Market events panel is temporarily unavailable. Draft planning is still available.';
+        }
+
+        return $base;
+    }
+
+    protected function marketEventsPanelEnabled(): bool
+    {
+        return $this->queue === 'markets' && (bool) config('features.market_events_panel', true);
+    }
+
+    /**
+     * @return Collection<int,Event>
+     */
+    protected function upcomingMarketEventsForPanel(): Collection
+    {
+        $start = now()->startOfDay()->toDateString();
+        $end = now()->addWeeks(4)->endOfDay()->toDateString();
+
+        return Event::query()
+            ->with('market')
+            ->whereDate('starts_at', '>=', $start)
+            ->whereDate('starts_at', '<=', $end)
+            ->orderBy('starts_at')
+            ->orderBy('display_name')
+            ->limit(80)
+            ->get()
+            ->sortBy(fn (Event $event) => [
+                $event->source === 'asana_calendar' ? 0 : 1,
+                (string) ($event->starts_at?->toDateString() ?? '9999-12-31'),
+                Str::lower((string) ($event->display_name ?: $event->name)),
+                (int) $event->id,
+            ])
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int,Event>|null  $upcomingEvents
+     */
+    protected function selectedMarketEventForPanel(?Collection $upcomingEvents = null): ?Event
+    {
+        $eventId = (int) ($this->marketSelectedEventId ?: 0);
+        if ($eventId <= 0) {
+            return null;
+        }
+
+        if ($upcomingEvents) {
+            $fromList = $upcomingEvents->firstWhere('id', $eventId);
+            if ($fromList) {
+                return $fromList;
+            }
+        }
+
+        return Event::query()->with('market')->find($eventId);
+    }
+
+    /**
+     * @return array{best_match:?array,candidates:array<int,array<string,mixed>>,threshold:float}
+     */
+    protected function marketEventPrefillData(Event $event): array
+    {
+        $threshold = 0.35;
+        $eventDate = $event->starts_at;
+        if (! $eventDate) {
+            return ['best_match' => null, 'candidates' => [], 'threshold' => $threshold];
+        }
+
+        $groups = MarketPlan::query()
+            ->where('status', 'published')
+            ->whereNotNull('event_date')
+            ->selectRaw('MIN(id) as id')
+            ->select('event_title', 'normalized_title', 'event_date')
+            ->groupBy('event_title', 'normalized_title', 'event_date')
+            ->orderByDesc('event_date')
+            ->get();
+
+        if ($groups->isEmpty()) {
+            return ['best_match' => null, 'candidates' => [], 'threshold' => $threshold];
+        }
+
+        $matcher = app(EventMatchingService::class);
+        $selectedTitle = (string) ($event->display_name ?: $event->name);
+        $normalizedSelectedTitle = $matcher->normalizeTitle($selectedTitle);
+        $targetYears = [$eventDate->year - 1, $eventDate->year - 2];
+
+        $scored = [];
+
+        foreach ($groups as $group) {
+            $candidateDate = $group->event_date;
+            if (! $candidateDate) {
+                continue;
+            }
+
+            $candidateYear = (int) $candidateDate->year;
+            if (! in_array($candidateYear, $targetYears, true)) {
+                continue;
+            }
+
+            $dateDiffDays = $this->anniversaryDateDiffDays($eventDate, $candidateDate);
+            if ($dateDiffDays > 30) {
+                continue;
+            }
+
+            $normalizedCandidate = (string) ($group->normalized_title ?: $matcher->normalizeTitle((string) $group->event_title));
+            $titleScore = $matcher->similarity($normalizedSelectedTitle, $normalizedCandidate);
+            $dateBonus = max(0.0, 1 - ($dateDiffDays / 30));
+            $score = round(min(1.0, ($titleScore * 0.85) + ($dateBonus * 0.15)), 4);
+
+            $summary = $this->marketPlanGroupSummary(
+                (int) $group->id,
+                (string) $group->event_title,
+                $candidateDate->toDateString(),
+                (string) $normalizedCandidate
+            );
+
+            $summary['score'] = $score;
+            $summary['score_percent'] = (int) round($score * 100);
+            $summary['title_score_percent'] = (int) round($titleScore * 100);
+            $summary['date_diff_days'] = $dateDiffDays;
+
+            $scored[] = $summary;
+        }
+
+        usort($scored, function (array $a, array $b): int {
+            return [$b['score'], $b['event_date'], $a['id']] <=> [$a['score'], $a['event_date'], $b['id']];
+        });
+
+        $candidates = array_slice($scored, 0, 8);
+        $best = $candidates[0] ?? null;
+
+        return [
+            'best_match' => ($best && (float) $best['score'] >= $threshold) ? $best : null,
+            'candidates' => $candidates,
+            'threshold' => $threshold,
+        ];
+    }
+
+    protected function anniversaryDateDiffDays($selectedDate, $candidateDate): int
+    {
+        try {
+            $candidateAnniversary = $candidateDate->copy()->year((int) $selectedDate->year);
+        } catch (\Throwable $e) {
+            return 999;
+        }
+
+        return (int) abs($candidateAnniversary->diffInDays($selectedDate, false));
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function marketPlanGroupSummary(int $representativeId, string $eventTitle, string $eventDate, string $normalizedTitle): array
+    {
+        $rows = MarketPlan::query()
+            ->where('status', 'published')
+            ->where('normalized_title', $normalizedTitle)
+            ->whereDate('event_date', $eventDate)
+            ->orderBy('id')
+            ->get(['id', 'box_type', 'scent', 'box_count']);
+
+        $fullBoxes = 0;
+        $halfBoxes = 0;
+        $topShelfBoxes = 0;
+
+        foreach ($rows as $row) {
+            $boxType = strtolower(trim((string) $row->box_type));
+            $count = max(0, (int) $row->box_count);
+
+            if ($boxType === 'full') {
+                $fullBoxes += $count;
+            } elseif ($boxType === 'half') {
+                $halfBoxes += $count;
+            } elseif ($boxType === 'top_shelf') {
+                $topShelfBoxes += $count;
+            }
+        }
+
+        return [
+            'id' => $representativeId,
+            'event_title' => $eventTitle,
+            'event_date' => $eventDate,
+            'normalized_title' => $normalizedTitle,
+            'rows_count' => $rows->count(),
+            'distinct_scents' => $rows->pluck('scent')->filter()->unique(fn ($s) => Str::lower(trim((string) $s)))->count(),
+            'full_boxes' => $fullBoxes,
+            'half_boxes' => $halfBoxes,
+            'top_shelf_boxes' => $topShelfBoxes,
+        ];
+    }
+
     public function render()
     {
         $items = $this->plan->items()
@@ -558,6 +1120,7 @@ class Plan extends Component
             ->get();
         $sizeQuery = trim($this->inventorySizeSearch);
         $marketSourceLabels = [];
+        $marketEventsPanel = $this->marketEventsPanelViewModel();
 
         $scents = Scent::query()
             ->orderBy('name')
@@ -629,6 +1192,7 @@ class Plan extends Component
             'quote' => $this->quote,
             'queueMeta' => $this->queueMeta(),
             'marketSourceLabels' => $marketSourceLabels,
+            'marketEventsPanel' => $marketEventsPanel,
         ]);
     }
 
@@ -644,6 +1208,10 @@ class Plan extends Component
             $payload['queue_type'] = $this->queue;
         }
 
+        if ($this->supportsRetailPlanEventColumn() && $this->queue === 'markets' && $this->marketSelectedEventId) {
+            $payload['event_id'] = $this->marketSelectedEventId;
+        }
+
         return RetailPlan::query()->create($payload);
     }
 
@@ -653,6 +1221,28 @@ class Plan extends Component
 
         if ($supports === null) {
             $supports = Schema::hasColumn('retail_plans', 'queue_type');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsRetailPlanEventColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plans', 'event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsOrderEventColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('orders', 'event_id');
         }
 
         return $supports;
