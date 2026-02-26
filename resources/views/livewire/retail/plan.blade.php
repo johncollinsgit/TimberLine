@@ -43,7 +43,7 @@
     </div>
     @if(!empty($queueMeta['markets_help']))
       <div class="mt-4 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-50/85">
-        Markets planning can use the Events tab below for 4-week lookahead prefill, or the dedicated Events + Market Pour Lists tools for deeper forecasting.
+        Markets planning can use the Upcoming Events prefill section below for 4-week lookahead, or the dedicated Events + Market Pour Lists tools for deeper forecasting.
         <a href="{{ route('events.index') }}" class="underline decoration-amber-200/60 underline-offset-2">Events</a>
         ·
         <a href="{{ route('markets.lists.index') }}" class="underline decoration-amber-200/60 underline-offset-2">Market Pour Lists</a>
@@ -52,30 +52,228 @@
   </section>
 
   <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 min-w-0" data-rp-grid>
+    @if(($queueMeta['key'] ?? '') === 'markets' && ($marketEventsPanel['enabled'] ?? false))
+      @php($selectedUpcomingEvent = $marketEventsPanel['selected_event'] ?? null)
+      @php($candidateGroups = $marketEventsPanel['candidate_prior_events'] ?? [])
+      @php($candidatePreview = $marketEventsPanel['candidate_preview'] ?? [])
+      <div class="xl:col-span-12" data-rp-panel="events-prefill" data-size="full" draggable="true">
+        <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0" data-rp-surface>
+          <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Upcoming Events (Next 4 weeks)</div>
+              <div class="mt-2 text-xs text-emerald-100/65">
+                @if(!empty($marketEventsPanel['last_sync_at']))
+                  Last sync:
+                  {{ \Illuminate\Support\Carbon::parse($marketEventsPanel['last_sync_at'])->timezone(config('app.timezone'))->format('M j, Y g:i A') }}
+                @else
+                  Last sync: never
+                @endif
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div>
+                <label class="sr-only" for="market-match-window">Match window days</label>
+                <select
+                  id="market-match-window"
+                  wire:model.live="matchWindowDays"
+                  class="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white focus:border-emerald-300/30 focus:outline-none"
+                >
+                  @foreach([14,30,45,60] as $days)
+                    <option value="{{ $days }}">±{{ $days }} days</option>
+                  @endforeach
+                </select>
+              </div>
+              <button
+                type="button"
+                wire:click="syncMarketEventsPanel"
+                class="rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-white/90 hover:bg-emerald-500/15"
+              >
+                Sync Events
+              </button>
+            </div>
+          </div>
+
+          @if(!empty($marketEventsPanel['error']))
+            <div class="mt-3 rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-100/90">
+              {{ $marketEventsPanel['error'] }}
+            </div>
+          @endif
+
+          @if(!empty($marketEventsPanel['sync_summary']))
+            <div class="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-50/90">
+              Synced {{ $marketEventsPanel['sync_summary']['fetched'] ?? 0 }} event(s), upserted {{ $marketEventsPanel['sync_summary']['upserted'] ?? 0 }} for the 4-week lookahead.
+            </div>
+          @endif
+
+          <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]" data-rp-body>
+            <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-3">
+              <div class="mb-2 text-xs uppercase tracking-[0.22em] text-emerald-100/55">Upcoming Events</div>
+              @if(($marketEventsPanel['upcoming_events'] ?? collect())->isEmpty())
+                <div class="rounded-xl border border-dashed border-emerald-200/15 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
+                  No upcoming events found in next 4 weeks.
+                </div>
+              @else
+                <div class="space-y-2 max-h-80 overflow-auto pr-1">
+                  @foreach(($marketEventsPanel['upcoming_events'] ?? collect()) as $event)
+                    @php($isSelectedUpcoming = (int)($marketEventsPanel['selected_upcoming_event_id'] ?? 0) === (int)$event->id)
+                    <button
+                      type="button"
+                      wire:click="selectUpcomingEvent({{ $event->id }})"
+                      class="w-full rounded-xl border px-3 py-3 text-left transition {{ $isSelectedUpcoming ? 'border-emerald-300/35 bg-emerald-500/12' : 'border-emerald-200/10 bg-black/10 hover:bg-white/5' }}"
+                    >
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="text-xs text-emerald-100/60">
+                          {{ $event->starts_at?->format('M j, Y') ?? 'Date TBD' }}
+                          @if($event->ends_at && optional($event->ends_at)->toDateString() !== optional($event->starts_at)->toDateString())
+                            – {{ $event->ends_at?->format('M j, Y') }}
+                          @endif
+                        </div>
+                        @if($isSelectedUpcoming)
+                          <span class="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-50">
+                            Selected
+                          </span>
+                        @endif
+                      </div>
+                      <div class="mt-1 text-sm font-medium text-white">
+                        {{ $event->display_name ?: $event->name ?: 'Untitled Event' }}
+                      </div>
+                      @php($eventLocation = trim(implode(', ', array_filter([(string) ($event->city ?? ''), (string) ($event->state ?? '')]))))
+                      @if($eventLocation !== '')
+                        <div class="mt-1 text-xs text-emerald-100/55">
+                          {{ $eventLocation }}
+                        </div>
+                      @endif
+                    </button>
+                  @endforeach
+                </div>
+              @endif
+            </div>
+
+            <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-3">
+              <div class="mb-2 text-xs uppercase tracking-[0.22em] text-emerald-100/55">Event Propagation</div>
+              @if(!$selectedUpcomingEvent)
+                <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
+                  Select an upcoming event to match it with a prior-year market plan and prefill box counts.
+                </div>
+              @else
+                <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Selected Upcoming Event</div>
+                <div class="mt-1 text-sm font-semibold text-white">{{ $selectedUpcomingEvent->display_name ?: $selectedUpcomingEvent->name }}</div>
+                <div class="mt-1 text-xs text-emerald-100/60">
+                  {{ $selectedUpcomingEvent->starts_at?->format('M j, Y') ?? 'Date TBD' }}
+                  @if($selectedUpcomingEvent->ends_at && optional($selectedUpcomingEvent->ends_at)->toDateString() !== optional($selectedUpcomingEvent->starts_at)->toDateString())
+                    – {{ $selectedUpcomingEvent->ends_at?->format('M j, Y') }}
+                  @endif
+                </div>
+
+                <div class="mt-4">
+                  <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Candidates within ±{{ (int)($marketEventsPanel['match_window_days'] ?? 30) }} days (prior years)</div>
+
+                  @if(empty($candidateGroups))
+                    <div class="mt-2 rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
+                      No candidates found. Try widening the match window or syncing events.
+                    </div>
+                  @else
+                    <div class="mt-2 space-y-3 max-h-72 overflow-auto pr-1">
+                      @foreach($candidateGroups as $group)
+                        <div class="rounded-xl border border-emerald-200/10 bg-black/10 p-2">
+                          <div class="px-1 pb-2 text-xs font-semibold text-emerald-100/70">{{ $group['year'] ?? 'Year' }}</div>
+                          <div class="space-y-2">
+                            @foreach(($group['items'] ?? []) as $candidate)
+                              @php($isSelectedCandidate = (int)($marketEventsPanel['selected_candidate_event_id'] ?? 0) === (int)($candidate['event_id'] ?? 0))
+                              @php($signedDiff = (int)($candidate['days_diff_signed'] ?? 0))
+                              <div class="rounded-lg border border-emerald-200/10 bg-black/15 px-3 py-2">
+                                <div class="flex flex-wrap items-start justify-between gap-2">
+                                  <div class="min-w-0">
+                                    <div class="text-xs text-emerald-100/60">
+                                      {{ !empty($candidate['starts_at']) ? \Illuminate\Support\Carbon::parse($candidate['starts_at'])->format('M j, Y') : 'Date TBD' }}
+                                      @if(!empty($candidate['ends_at']) && $candidate['ends_at'] !== ($candidate['starts_at'] ?? null))
+                                        – {{ \Illuminate\Support\Carbon::parse($candidate['ends_at'])->format('M j, Y') }}
+                                      @endif
+                                      · {{ $signedDiff > 0 ? '+' : '' }}{{ $signedDiff }} day{{ abs($signedDiff) === 1 ? '' : 's' }}
+                                    </div>
+                                    <div class="mt-1 text-xs font-medium text-white break-words">{{ $candidate['title'] ?? 'Historical event' }}</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    wire:click="selectCandidateEvent({{ (int)($candidate['event_id'] ?? 0) }})"
+                                    class="shrink-0 rounded-full border px-3 py-1 text-[11px] transition {{ $isSelectedCandidate ? 'border-emerald-300/35 bg-emerald-500/15 text-white' : 'border-emerald-300/20 bg-emerald-500/8 text-emerald-50/90 hover:bg-emerald-500/12' }}"
+                                  >
+                                    Preview
+                                  </button>
+                                </div>
+                              </div>
+                            @endforeach
+                          </div>
+                        </div>
+                      @endforeach
+                    </div>
+                  @endif
+                </div>
+
+                <div class="mt-4 rounded-xl border border-emerald-200/10 bg-black/10 p-3">
+                  <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Prefill Preview</div>
+                  @if(empty($candidatePreview))
+                    <div class="mt-2 text-sm text-emerald-50/70">Select a candidate and click Preview.</div>
+                  @else
+                    <div class="mt-2 text-sm font-medium text-white">{{ $candidatePreview['candidate_title'] ?? 'Candidate Event' }}</div>
+                    <div class="mt-1 text-xs text-emerald-100/60">
+                      @if(!empty($candidatePreview['candidate_date']))
+                        {{ \Illuminate\Support\Carbon::parse($candidatePreview['candidate_date'])->format('M j, Y') }}
+                      @endif
+                    </div>
+
+                    @if(!empty($candidatePreview['has_plan_data']))
+                      @php($summary = $candidatePreview['summary'] ?? [])
+                      <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div class="rounded-lg border border-emerald-200/10 bg-emerald-500/5 px-3 py-2">
+                          <div class="text-[10px] uppercase tracking-[0.18em] text-emerald-100/55">Full Boxes</div>
+                          <div class="mt-1 text-lg font-semibold text-white">{{ (int)($summary['full_boxes'] ?? 0) }}</div>
+                        </div>
+                        <div class="rounded-lg border border-emerald-200/10 bg-emerald-500/5 px-3 py-2">
+                          <div class="text-[10px] uppercase tracking-[0.18em] text-emerald-100/55">Half Boxes</div>
+                          <div class="mt-1 text-lg font-semibold text-white">{{ (int)($summary['half_boxes'] ?? 0) }}</div>
+                        </div>
+                        <div class="rounded-lg border border-emerald-200/10 bg-emerald-500/5 px-3 py-2">
+                          <div class="text-[10px] uppercase tracking-[0.18em] text-emerald-100/55">Square Add-ons</div>
+                          <div class="mt-1 text-lg font-semibold text-white">{{ (int)($summary['square_add_ons'] ?? 0) }}</div>
+                        </div>
+                      </div>
+                    @else
+                      <div class="mt-3 rounded-lg border border-amber-300/15 bg-amber-500/8 px-3 py-2 text-xs text-amber-50/90">
+                        {{ $candidatePreview['message'] ?? 'No plan found for this candidate.' }}
+                      </div>
+                    @endif
+
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        wire:click="applyCandidatePrefill"
+                        @disabled(empty($candidatePreview['can_apply']))
+                        class="rounded-xl border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Apply Prefill
+                      </button>
+                      <button
+                        type="button"
+                        wire:click="clearEventSelection"
+                        class="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-emerald-100/80 hover:text-white"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+                  @endif
+                </div>
+              @endif
+            </div>
+          </div>
+        </div>
+      </div>
+    @endif
+
     <div class="xl:col-span-12" data-rp-panel="add-scents" data-size="full" draggable="true">
       <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0" data-rp-surface>
         <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <div class="flex min-w-0 items-center gap-2">
-            <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Add Additional Scents to the list</div>
-            @if(($queueMeta['key'] ?? '') === 'markets' && ($marketEventsPanel['enabled'] ?? false))
-              <div class="inline-flex items-center rounded-full border border-emerald-300/20 bg-black/20 p-0.5">
-                <button
-                  type="button"
-                  wire:click="setMarketsPanelTab('draft')"
-                  class="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition {{ ($marketEventsPanel['tab'] ?? 'draft') === 'draft' ? 'bg-emerald-400/25 text-white' : 'text-emerald-100/65 hover:text-white' }}"
-                >
-                  Draft
-                </button>
-                <button
-                  type="button"
-                  wire:click="setMarketsPanelTab('events')"
-                  class="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition {{ ($marketEventsPanel['tab'] ?? 'draft') === 'events' ? 'bg-emerald-400/25 text-white' : 'text-emerald-100/65 hover:text-white' }}"
-                >
-                  Events
-                </button>
-              </div>
-            @endif
-          </div>
+          <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Add Additional Scents to the list</div>
           <div class="flex items-center gap-1">
             <button type="button" data-rp-size="square" class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-white/80">Square</button>
             <button type="button" data-rp-size="half" class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-white/80">Half</button>
@@ -83,158 +281,7 @@
           </div>
         </div>
         <div class="mt-3 min-w-0" data-rp-body>
-          @if(($queueMeta['key'] ?? '') === 'markets' && ($marketEventsPanel['enabled'] ?? false) && (($marketEventsPanel['tab'] ?? 'draft') === 'events'))
-            @php($selectedEvent = $marketEventsPanel['selected_event'] ?? null)
-            @php($prefill = $marketEventsPanel['prefill'] ?? ['best_match' => null, 'candidates' => [], 'threshold' => 0.35])
-            <div class="space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200/10 bg-black/20 px-3 py-2">
-                <div class="text-xs text-emerald-100/70">
-                  Upcoming events (next 4 weeks)
-                  @if(!empty($marketEventsPanel['last_sync_at']))
-                    <span class="ml-2 text-emerald-100/45">
-                      Last sync:
-                      {{ \Illuminate\Support\Carbon::parse($marketEventsPanel['last_sync_at'])->local()->format('M j, Y g:i A') }}
-                    </span>
-                  @endif
-                </div>
-                <button
-                  type="button"
-                  wire:click="syncMarketEventsPanel"
-                  class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1 text-xs text-white/85 hover:bg-emerald-500/15"
-                >
-                  Sync Events
-                </button>
-              </div>
-
-              @if(!empty($marketEventsPanel['error']))
-                <div class="rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-100/90">
-                  {{ $marketEventsPanel['error'] }}
-                </div>
-              @endif
-
-              @if(!empty($marketEventsPanel['sync_summary']))
-                <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-50/90">
-                  Synced {{ $marketEventsPanel['sync_summary']['fetched'] ?? 0 }} event(s), upserted {{ $marketEventsPanel['sync_summary']['upserted'] ?? 0 }}.
-                </div>
-              @endif
-
-              @if(($marketEventsPanel['upcoming_events'] ?? collect())->isEmpty())
-                <div class="rounded-2xl border border-dashed border-emerald-200/15 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
-                  No upcoming events found in next 4 weeks.
-                </div>
-              @else
-                <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-                  <div class="space-y-2">
-                    @foreach(($marketEventsPanel['upcoming_events'] ?? collect()) as $event)
-                      @php($isSelectedEvent = (int)($marketSelectedEventId ?? 0) === (int)$event->id)
-                      <button
-                        type="button"
-                        wire:click="selectMarketEvent({{ $event->id }})"
-                        class="w-full rounded-2xl border px-3 py-3 text-left transition {{ $isSelectedEvent ? 'border-emerald-300/35 bg-emerald-500/12' : 'border-emerald-200/10 bg-black/15 hover:bg-white/5' }}"
-                      >
-                        <div class="text-sm font-medium text-white">
-                          {{ $event->display_name ?: $event->name ?: 'Untitled Event' }}
-                        </div>
-                        <div class="mt-1 text-xs text-emerald-100/60">
-                          {{ $event->starts_at?->format('M j, Y') ?? 'Date TBD' }}
-                          @if($event->ends_at && optional($event->ends_at)->toDateString() !== optional($event->starts_at)->toDateString())
-                            – {{ $event->ends_at?->format('M j, Y') }}
-                          @endif
-                          @if($event->market?->name)
-                            · {{ $event->market->name }}
-                          @endif
-                        </div>
-                      </button>
-                    @endforeach
-                  </div>
-
-                  <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
-                    @if($selectedEvent)
-                      <div class="text-xs uppercase tracking-[0.24em] text-emerald-100/55">Selected Event</div>
-                      <div class="mt-2 text-base font-semibold text-white">{{ $selectedEvent->display_name ?: $selectedEvent->name }}</div>
-                      <div class="mt-1 text-xs text-emerald-100/60">
-                        {{ $selectedEvent->starts_at?->format('M j, Y') ?? 'Date TBD' }}
-                        @if($selectedEvent->city || $selectedEvent->state)
-                          · {{ trim(($selectedEvent->city ? $selectedEvent->city.', ' : '').($selectedEvent->state ?? ''), ', ') }}
-                        @endif
-                      </div>
-
-                      <div class="mt-4 space-y-3">
-                        @if(!empty($prefill['best_match']))
-                          @php($best = $prefill['best_match'])
-                          <div class="rounded-2xl border border-emerald-300/15 bg-emerald-500/8 p-3">
-                            <div class="text-xs uppercase tracking-[0.18em] text-emerald-100/55">Best Historical Match</div>
-                            <div class="mt-1 text-sm font-medium text-white">{{ $best['event_title'] ?? 'Historical event' }}</div>
-                            <div class="mt-1 text-xs text-emerald-100/60">
-                              {{ !empty($best['event_date']) ? \Illuminate\Support\Carbon::parse($best['event_date'])->format('M j, Y') : 'Date unknown' }}
-                              · {{ $best['score_percent'] ?? 0 }}% confidence
-                              @if(isset($best['date_diff_days']))
-                                · {{ $best['date_diff_days'] }}d date offset
-                              @endif
-                            </div>
-                            <div class="mt-2 text-xs text-emerald-50/80">
-                              Boxes sent last time:
-                              {{ $best['full_boxes'] ?? 0 }} full,
-                              {{ $best['half_boxes'] ?? 0 }} half
-                              @if(($best['top_shelf_boxes'] ?? 0) > 0)
-                                · {{ $best['top_shelf_boxes'] }} top shelf (not loaded into this panel)
-                              @endif
-                            </div>
-                            <button
-                              type="button"
-                              wire:click="loadMatchedMarketEventBoxes"
-                              class="mt-3 rounded-xl border border-emerald-300/25 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500/20"
-                            >
-                              Load Last Year's Boxes
-                            </button>
-                          </div>
-                        @else
-                          <div class="rounded-2xl border border-amber-300/15 bg-amber-500/8 p-3 text-xs text-amber-50/90">
-                            No confident match found (threshold {{ (int) round((float)($prefill['threshold'] ?? 0.35) * 100) }}%). Pick a past event manually below.
-                          </div>
-                        @endif
-
-                        @if(!empty($prefill['candidates']))
-                          <div>
-                            <div class="text-xs uppercase tracking-[0.18em] text-emerald-100/55">Past Events (Manual Pick)</div>
-                            <div class="mt-2 space-y-2 max-h-56 overflow-auto pr-1">
-                              @foreach(($prefill['candidates'] ?? []) as $candidate)
-                                @php($isPicked = (int)($marketSelectedHistoryPlanId ?? 0) === (int)($candidate['id'] ?? 0))
-                                <button
-                                  type="button"
-                                  wire:click="selectMarketHistoryCandidate({{ (int)($candidate['id'] ?? 0) }})"
-                                  class="w-full rounded-xl border px-3 py-2 text-left transition {{ $isPicked ? 'border-emerald-300/35 bg-emerald-500/12' : 'border-emerald-200/10 bg-black/10 hover:bg-white/5' }}"
-                                >
-                                  <div class="text-xs font-medium text-white">{{ $candidate['event_title'] ?? 'Historical event' }}</div>
-                                  <div class="mt-1 text-[11px] text-emerald-100/60">
-                                    {{ !empty($candidate['event_date']) ? \Illuminate\Support\Carbon::parse($candidate['event_date'])->format('M j, Y') : 'Date unknown' }}
-                                    · {{ $candidate['score_percent'] ?? 0 }}%
-                                    · {{ $candidate['full_boxes'] ?? 0 }} full / {{ $candidate['half_boxes'] ?? 0 }} half
-                                  </div>
-                                </button>
-                              @endforeach
-                            </div>
-                            <button
-                              type="button"
-                              wire:click="loadSelectedMarketHistoryBoxes"
-                              class="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-xs text-white/90 hover:bg-emerald-500/15"
-                            >
-                              Load Selected Past Event Boxes
-                            </button>
-                          </div>
-                        @endif
-                      </div>
-                    @else
-                      <div class="h-full rounded-2xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-                        Select an upcoming event to match it with a prior-year market plan and prefill box counts.
-                      </div>
-                    @endif
-                  </div>
-                </div>
-              @endif
-            </div>
-          @else
-            <div class="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-end min-w-0">
+          <div class="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-end min-w-0">
               <div class="{{ ($queueMeta['key'] ?? '') === 'markets' ? 'md:col-span-7' : 'md:col-span-5' }}">
                 <label class="text-xs text-emerald-100/60">Scent</label>
                 <livewire:components.scent-combobox
@@ -287,8 +334,7 @@
                   {{ $queueMeta['add_button_label'] ?? 'Add to Retail/Pour List' }}
                 </button>
               @endif
-            </div>
-          @endif
+          </div>
         </div>
       </div>
     </div>
@@ -330,8 +376,8 @@
                     Market Draft
                   @elseif(($item->source ?? '') === 'market_box_manual')
                     Market Box
-                  @elseif(($item->source ?? '') === 'market_box_event_prefill')
-                    Event Prefill
+                  @elseif(in_array(($item->source ?? ''), ['market_box_event_prefill', 'event_prefill'], true))
+                    {{ $item->source_title ? 'Event Prefill · '.$item->source_title : 'Event Prefill' }}
                   @elseif(($queueMeta['key'] ?? '') === 'markets')
                     Market Draft
                   @else
