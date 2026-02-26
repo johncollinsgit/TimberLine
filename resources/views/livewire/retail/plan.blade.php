@@ -129,206 +129,64 @@
             <button type="button" data-rp-size="full" class="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-white/80">Full</button>
           </div>
         </div>
-        <div class="mt-4" data-rp-body>
+        <div class="mt-4 space-y-2" data-rp-body>
           @if($items->isEmpty())
             <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
               {{ $queueMeta['empty_label'] ?? 'No items yet. Prefill from retail orders or add inventory below.' }}
             </div>
-          @endif
-
-          @if(!$items->isEmpty() && (($queueMeta['key'] ?? '') === 'markets'))
-            <div class="overflow-x-auto rounded-2xl border border-emerald-200/10 bg-black/20">
-              <table class="min-w-[980px] w-full text-left text-sm text-white/90">
-                <thead class="bg-emerald-500/5">
-                  <tr class="border-b border-emerald-200/10 text-xs uppercase tracking-[0.2em] text-emerald-100/60">
-                    <th class="px-3 py-3 font-medium">
-                      <button type="button" wire:click="sortMarketsBy('market')" class="inline-flex items-center gap-2 hover:text-white/90 transition">
-                        Market
-                        <span class="text-[10px]">
-                          @if(($marketsSort ?? '') === 'market')
-                            {{ ($marketsSortDirection ?? 'asc') === 'asc' ? '↑' : '↓' }}
-                          @else
-                            ↕
-                          @endif
-                        </span>
-                      </button>
-                    </th>
-                    <th class="px-3 py-3 font-medium">
-                      <button type="button" wire:click="sortMarketsBy('event_date')" class="inline-flex items-center gap-2 hover:text-white/90 transition">
-                        Date
-                        <span class="text-[10px]">
-                          @if(($marketsSort ?? '') === 'event_date')
-                            {{ ($marketsSortDirection ?? 'asc') === 'asc' ? '↑' : '↓' }}
-                          @else
-                            ↕
-                          @endif
-                        </span>
-                      </button>
-                    </th>
-                    <th class="px-3 py-3 font-medium">
-                      <button type="button" wire:click="sortMarketsBy('event')" class="inline-flex items-center gap-2 hover:text-white/90 transition">
-                        Event
-                        <span class="text-[10px]">
-                          @if(($marketsSort ?? '') === 'event')
-                            {{ ($marketsSortDirection ?? 'asc') === 'asc' ? '↑' : '↓' }}
-                          @else
-                            ↕
-                          @endif
-                        </span>
-                      </button>
-                    </th>
-                    <th class="px-3 py-3 font-medium">
-                      <button type="button" wire:click="sortMarketsBy('scent')" class="inline-flex items-center gap-2 hover:text-white/90 transition">
-                        Scent
-                        <span class="text-[10px]">
-                          @if(($marketsSort ?? '') === 'scent')
-                            {{ ($marketsSortDirection ?? 'asc') === 'asc' ? '↑' : '↓' }}
-                          @else
-                            ↕
-                          @endif
-                        </span>
-                      </button>
-                    </th>
-                    <th class="px-3 py-3 font-medium">
-                      <button type="button" wire:click="sortMarketsBy('source')" class="inline-flex items-center gap-2 hover:text-white/90 transition">
-                        Source
-                        <span class="text-[10px]">
-                          @if(($marketsSort ?? '') === 'source')
-                            {{ ($marketsSortDirection ?? 'asc') === 'asc' ? '↑' : '↓' }}
-                          @else
-                            ↕
-                          @endif
-                        </span>
-                      </button>
-                    </th>
-                    <th class="px-3 py-3 font-medium text-right">
-                      <button type="button" wire:click="sortMarketsBy('quantity')" class="inline-flex items-center gap-2 hover:text-white/90 transition">
-                        Boxes
-                        <span class="text-[10px]">
-                          @if(($marketsSort ?? '') === 'quantity')
-                            {{ ($marketsSortDirection ?? 'asc') === 'asc' ? '↑' : '↓' }}
-                          @else
-                            ↕
-                          @endif
-                        </span>
-                      </button>
-                    </th>
-                    <th class="px-3 py-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-emerald-200/10">
-                  @foreach($items as $item)
-                    @php
-                      $row = $marketRows[$item->id] ?? [];
-                      $needsMapping = ($item->status ?? 'draft') === 'needs_mapping' && empty($item->scent_id);
-                    @endphp
-                    <tr wire:key="markets-plan-row-{{ $item->id }}" class="align-middle {{ $needsMapping ? 'bg-amber-500/5' : 'bg-transparent' }}">
-                      <td class="px-3 py-3">
-                        <div class="font-medium text-white/90">{{ $row['market_name'] ?? 'Unassigned market' }}</div>
-                        @if(!empty($marketSourceLabels[$item->id]))
-                          <div class="mt-0.5 text-[11px] text-emerald-100/55">Draft for {{ $marketSourceLabels[$item->id] }}</div>
-                        @endif
-                      </td>
-                      <td class="px-3 py-3 text-xs text-emerald-100/70">
-                        {{ $row['event_date_label'] ?? 'No date' }}
-                      </td>
-                      <td class="px-3 py-3 text-xs text-emerald-100/70">
-                        {{ $row['event_name'] ?? '—' }}
-                      </td>
-                      <td class="px-3 py-3">
-                        <div class="text-sm text-white/90">
-                          {{ $row['scent_name'] ?? ($scents->firstWhere('id', $item->scent_id)?->display_name ?? $scents->firstWhere('id', $item->scent_id)?->name ?? ($item->sku ?: 'Unknown scent')) }}
-                        </div>
-                        <div class="text-[11px] text-emerald-100/55">Market Box</div>
-                      </td>
-                      <td class="px-3 py-3">
-                        <div class="text-xs text-emerald-100/70">{{ $row['source_label'] ?? 'Market Draft' }}</div>
-                        @if($needsMapping)
-                          <span class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
-                            Needs mapping
-                          </span>
-                        @endif
-                      </td>
-                      <td class="px-3 py-3">
-                        <div class="flex justify-end">
-                          <div class="flex items-center gap-1 rounded-xl border border-emerald-200/15 bg-black/30 px-2 py-1">
-                            <button type="button" wire:click="decrementItemQuantity({{ $item->id }})"
-                              class="h-7 w-7 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
-                              −
-                            </button>
-                            <input type="number" min="1" step="1" value="{{ $item->quantity }}"
-                              wire:change="updateItemQuantity({{ $item->id }}, $event.target.value)"
-                              class="w-14 rounded-md border border-emerald-200/10 bg-black/20 px-1.5 py-1 text-center text-xs text-white/90 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                            <button type="button" wire:click="incrementItemQuantity({{ $item->id }})"
-                              class="h-7 w-7 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
-                              +
-                            </button>
-                          </div>
-                        </div>
-                        <div class="mt-1 text-right text-[11px] text-emerald-100/55">
-                          {{ $row['box_label'] ?? $this->marketBoxLabel($item) }}
-                        </div>
-                      </td>
-                      <td class="px-3 py-3 text-right">
-                        <button type="button" wire:click="removeItem({{ $item->id }})"
-                          class="px-2.5 py-1 rounded-full text-xs border border-red-400/20 bg-red-500/10 text-red-100 hover:bg-red-500/20 transition">
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  @endforeach
-                </tbody>
-              </table>
-            </div>
-            <div class="mt-2 text-xs text-emerald-100/55">
-              Sort columns to review market drafts, adjust half-box units in place, then publish to send the finalized plan to the pouring room.
-            </div>
-          @endif
-
-          @if(!$items->isEmpty() && (($queueMeta['key'] ?? '') !== 'markets'))
-            <div class="space-y-2">
-              @foreach($items as $item)
-              <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
-                <div class="min-w-0">
-                  <div class="text-sm text-white/90">
+          @else
+            @foreach($items as $item)
+            <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
+              <div class="min-w-0">
+                <div class="text-sm text-white/90">
+                  @if(($queueMeta['key'] ?? '') === 'markets')
+                    {{ $scents->firstWhere('id', $item->scent_id)?->display_name ?? $scents->firstWhere('id', $item->scent_id)?->name ?? ($item->sku ?: 'Unknown scent') }}
+                    <span class="text-emerald-100/60">· Market Box</span>
+                  @else
                     {{ $scents->firstWhere('id', $item->scent_id)?->display_name ?? $scents->firstWhere('id', $item->scent_id)?->name ?? 'Unknown' }}
                     <span class="text-emerald-100/60">· {{ $sizes->firstWhere('id', $item->size_id)?->display ?? $sizes->firstWhere('id', $item->size_id)?->code ?? '—' }}</span>
-                  </div>
-                  <div class="text-xs text-emerald-100/60">
-                    @if(isset($marketSourceLabels[$item->id]))
-                      {{ $marketSourceLabels[$item->id] }}
-                    @elseif(($item->source ?? '') === 'inventory')
-                      Inventory
-                    @elseif(($item->source ?? '') === 'market_box_draft')
-                      Market Draft
-                    @elseif(($item->source ?? '') === 'market_box_manual')
-                      Market Box
-                    @elseif(($queueMeta['key'] ?? '') === 'markets')
-                      Market Draft
-                    @else
-                      Order
-                    @endif
-                    @if(($item->status ?? 'draft') === 'needs_mapping' && (($queueMeta['key'] ?? '') !== 'markets' || empty($item->scent_id)))
-                      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
-                        Needs mapping
-                      </span>
-                    @endif
-                  </div>
+                  @endif
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <div class="flex items-center rounded-full border border-emerald-200/15 bg-black/30 px-2 py-1 shrink-0">
-                    <button type="button" wire:click="decrementItemQuantity({{ $item->id }})"
-                      class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
-                      −
-                    </button>
+                <div class="text-xs text-emerald-100/60">
+                  @if(isset($marketSourceLabels[$item->id]))
+                    {{ $marketSourceLabels[$item->id] }}
+                  @elseif(($item->source ?? '') === 'inventory')
+                    Inventory
+                  @elseif(($item->source ?? '') === 'market_box_draft')
+                    Market Draft
+                  @elseif(($item->source ?? '') === 'market_box_manual')
+                    Market Box
+                  @elseif(($queueMeta['key'] ?? '') === 'markets')
+                    Market Draft
+                  @else
+                    Order
+                  @endif
+                  @if(($item->status ?? 'draft') === 'needs_mapping' && (($queueMeta['key'] ?? '') !== 'markets' || empty($item->scent_id)))
+                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                      Needs mapping
+                    </span>
+                  @endif
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="flex items-center rounded-full border border-emerald-200/15 bg-black/30 px-2 py-1 shrink-0">
+                  <button type="button" wire:click="decrementItemQuantity({{ $item->id }})"
+                    class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
+                    −
+                  </button>
+                  @if(($queueMeta['key'] ?? '') === 'markets')
+                    <span class="w-20 text-center text-xs text-white/90">{{ $this->marketBoxLabel($item) }}</span>
+                  @else
                     <input type="number" min="1" value="{{ $item->quantity }}"
                       wire:change="updateItemQuantity({{ $item->id }}, $event.target.value)"
                       class="w-12 bg-transparent text-center text-xs text-white/90 focus:outline-none appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                    <button type="button" wire:click="incrementItemQuantity({{ $item->id }})"
-                      class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
-                      +
-                    </button>
-                  </div>
+                  @endif
+                  <button type="button" wire:click="incrementItemQuantity({{ $item->id }})"
+                    class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
+                    +
+                  </button>
+                </div>
+                @if(($queueMeta['key'] ?? '') !== 'markets')
                   <div class="flex items-center rounded-full border border-emerald-200/10 bg-black/20 px-2 py-1 shrink-0">
                     <span class="text-[10px] text-emerald-100/60 mr-2">Additional for inventory</span>
                     <button type="button" wire:click="decrementItemInventoryQuantity({{ $item->id }})"
@@ -343,14 +201,14 @@
                       +
                     </button>
                   </div>
-                  <button type="button" wire:click="removeItem({{ $item->id }})"
-                    class="px-2.5 py-1 rounded-full text-xs border border-red-400/20 bg-red-500/10 text-red-100 hover:bg-red-500/20 transition">
-                    Remove
-                  </button>
-                </div>
+                @endif
+                <button type="button" wire:click="removeItem({{ $item->id }})"
+                  class="px-2.5 py-1 rounded-full text-xs border border-red-400/20 bg-red-500/10 text-red-100 hover:bg-red-500/20 transition">
+                  Remove
+                </button>
               </div>
-              @endforeach
             </div>
+            @endforeach
           @endif
         </div>
         <div class="mt-4">
