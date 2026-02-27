@@ -8,21 +8,15 @@
         <div class="mt-2 text-xs text-emerald-100/70 italic">“{{ $quote }}”</div>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="button" wire:click="prefillFromOrders"
-          class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition">
-          {{ $queueMeta['prefill_label'] ?? 'Prefill from Retail Orders' }}
-        </button>
-        <button type="button" wire:click="clearScents"
-          class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition">
-          Clear Scents
-        </button>
-        @if(($queueMeta['key'] ?? '') === 'markets')
-          <button type="button" wire:click="submitSelectedEventToPouringRoom"
-            @disabled(!(($selectedMarketEvent?->id ?? null) && $this->selectedEventCanSubmit((int) $selectedMarketEvent->id)))
-            class="px-4 py-2 rounded-full text-xs border border-emerald-400/40 bg-emerald-500/25 text-white font-semibold hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-50">
-            Send Selected Event
+        @if(($queueMeta['key'] ?? '') !== 'markets')
+          <button type="button" wire:click="prefillFromOrders"
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition">
+            {{ $queueMeta['prefill_label'] ?? 'Prefill from Retail Orders' }}
           </button>
-        @else
+          <button type="button" wire:click="clearScents"
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition">
+            Clear Scents
+          </button>
           <button type="button" wire:click="publishPlan"
             class="px-4 py-2 rounded-full text-xs border border-emerald-400/40 bg-emerald-500/25 text-white font-semibold hover:bg-emerald-500/30 transition">
             Publish to Pouring
@@ -53,34 +47,24 @@
   </section>
 
   @if(($queueMeta['key'] ?? '') === 'markets')
-    <section wire:init="loadMarketEventsPanel" class="grid grid-cols-1 gap-4 xl:grid-cols-12 min-w-0">
-      <div class="xl:col-span-4 min-w-0">
-        @livewire(
-          \App\Livewire\Retail\Markets\UpcomingEventsPanel::class,
-          [
-            'planId' => $plan->id,
-            'selectedEventId' => $selectedUpcomingEventId,
-            'stateTab' => $marketEventsStateTab,
-            'lookaheadDays' => 30,
-          ],
-          key('markets-upcoming-events-panel')
-        )
-      </div>
-      <div class="xl:col-span-8 min-w-0">
+    <section wire:init="loadMarketEventsPanel" class="min-w-0">
+      <div class="min-w-0">
         @livewire(
           \App\Livewire\Retail\Markets\EventMatchWizard::class,
           [
+            'planId' => $plan->id,
             'upcomingEventId' => $selectedUpcomingEventId,
             'selectedCandidateEventId' => $selectedCandidateEventId,
             'matchWindowDays' => $matchWindowDays,
           ],
-          key('markets-event-match-wizard-'.(int)($selectedUpcomingEventId ?? 0).'-'.(int)$matchWindowDays)
+          key('markets-event-match-wizard-'.(int)$plan->id.'-'.(int)($selectedUpcomingEventId ?? 0).'-'.(int)($selectedCandidateEventId ?? 0).'-'.(int)$matchWindowDays)
         )
       </div>
     </section>
   @endif
 
   <div class="grid grid-cols-1 gap-4 sm:gap-6 min-w-0">
+    @if(($queueMeta['key'] ?? '') !== 'markets')
     <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0">
       <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Add Additional Scents to the list</div>
       <div class="mt-3 min-w-0">
@@ -147,39 +131,11 @@
         </div>
       </div>
     </section>
+    @endif
 
+    @if(($queueMeta['key'] ?? '') !== 'markets')
     <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
       <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Candles to be poured</div>
-
-      @if(($queueMeta['key'] ?? '') === 'markets')
-        <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/15 p-3">
-          @livewire(
-            \App\Livewire\Retail\Markets\DraftEventNavPills::class,
-            [
-              'planId' => $plan->id,
-              'selectedEventId' => $selectedUpcomingEventId,
-            ],
-            key('markets-draft-event-nav-'.(int)$plan->id)
-          )
-
-          @livewire(
-            \App\Livewire\Retail\Markets\DraftEventEditor::class,
-            [
-              'planId' => $plan->id,
-              'selectedEventId' => $selectedUpcomingEventId,
-            ],
-            key('markets-draft-event-editor-'.(int)$plan->id.'-'.(int)($selectedUpcomingEventId ?? 0))
-          )
-        </div>
-
-        <div class="mt-4">
-          <button type="button" wire:click="submitSelectedEventToPouringRoom"
-            @disabled(!(($selectedMarketEvent?->id ?? null) && $this->selectedEventCanSubmit((int) $selectedMarketEvent->id)))
-            class="w-full rounded-xl border border-emerald-400/40 bg-emerald-500/25 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-50">
-            Send Selected Event to Pouring Room
-          </button>
-        </div>
-      @else
         <div class="mt-4 space-y-2">
           @if($items->isEmpty())
             <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
@@ -245,8 +201,8 @@
             Publish to Pouring room
           </button>
         </div>
-      @endif
     </section>
+    @endif
   </div>
 </div>
 

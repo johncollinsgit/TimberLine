@@ -147,7 +147,7 @@ test('candidate matching runs only after explicit action', function () {
         'upcomingEventId' => $upcoming->id,
         'matchWindowDays' => 30,
     ])
-        ->assertSeeText('Click “Find Match” on an upcoming event to run candidate matching.')
+        ->assertSeeText('Run the local match scan to rank historical events for this upcoming date.')
         ->call('handleRunCandidateMatch', $upcoming->id, 30)
         ->assertSeeText('Explicit Match Candidate Event 2025');
 });

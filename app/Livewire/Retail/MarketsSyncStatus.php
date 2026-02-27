@@ -16,6 +16,7 @@ class MarketsSyncStatus extends Component
     public string $syncStatus = 'idle';
     public ?string $syncMessage = null;
     public ?string $error = null;
+    public ?string $lastError = null;
 
     public function mount(int $planId = 0, string $queue = 'markets'): void
     {
@@ -30,6 +31,7 @@ class MarketsSyncStatus extends Component
             $this->syncMessage = null;
             $this->lastSyncedAt = null;
             $this->lastSyncedHuman = null;
+            $this->lastError = null;
             return;
         }
 
@@ -37,6 +39,7 @@ class MarketsSyncStatus extends Component
             $state = app(MarketEventSyncCoordinator::class)->queueStatus();
             $this->syncStatus = (string) ($state['status'] ?? 'idle');
             $this->lastSyncedAt = (string) ($state['last_sync_at'] ?? '') ?: null;
+            $this->lastError = (string) ($state['last_error'] ?? '') ?: null;
             $this->lastSyncedHuman = null;
             if ($this->lastSyncedAt !== null) {
                 try {
@@ -52,6 +55,7 @@ class MarketsSyncStatus extends Component
             $this->syncMessage = null;
             $this->lastSyncedAt = null;
             $this->lastSyncedHuman = null;
+            $this->lastError = null;
             $this->error = 'Unable to load sync status.';
         }
     }
@@ -71,6 +75,7 @@ class MarketsSyncStatus extends Component
             $reason = (string) ($gate['reason'] ?? 'unknown');
             $message = match ($reason) {
                 'running' => 'Market event sync is already running.',
+                'queued' => 'Market event sync is already queued.',
                 'cooldown' => 'Market event sync was run recently. Please wait a few minutes.',
                 'missing_table' => 'Event sync status table is missing. Run migrations.',
                 default => 'Market event sync is temporarily unavailable.',
@@ -109,10 +114,10 @@ class MarketsSyncStatus extends Component
         $last = (string) ($state['last_sync_status'] ?? '');
 
         return match ($status) {
-            'running' => 'Sync in progress.',
-            'queued' => 'Sync queued.',
+            'running' => 'Syncing stored events in the background.',
+            'queued' => 'Queued for the next worker.',
             'failed' => 'Last sync failed.',
-            'success' => 'Last sync succeeded.',
+            'success' => 'Stored events are current.',
             'unavailable' => 'Sync status unavailable.',
             default => match ($last) {
                 'failed' => 'Last sync failed.',

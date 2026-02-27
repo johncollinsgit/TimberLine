@@ -1,11 +1,13 @@
 <div>
   @if($hasQueueEvents)
   <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-3">
-    @livewire(
-      \App\Livewire\Retail\MarketsSyncStatus::class,
-      ['planId' => $planId, 'queue' => 'markets'],
-      key('markets-sync-status-'.(int) $planId)
-    )
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Step 1</div>
+        <div class="mt-1 text-sm font-semibold text-white">Choose Upcoming Event</div>
+      </div>
+      <div class="text-[11px] text-emerald-100/55">Stored events only. Select one event to continue.</div>
+    </div>
 
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <button type="button" wire:click="setStateTab('needs_mapping')"
@@ -39,18 +41,9 @@
               <div class="text-xs text-emerald-100/60">{{ !empty($event['starts_at']) ? \Illuminate\Support\Carbon::parse($event['starts_at'])->format('M j, Y') : 'Date TBD' }}</div>
               <div class="mt-1 text-sm font-medium text-white">{{ $event['display_name'] ?: $event['name'] ?: 'Untitled Event' }}</div>
               @if((int)($event['draft_rows_count'] ?? 0) > 0)
-                <div class="mt-1 text-[11px] text-emerald-100/55">{{ (int)$event['draft_rows_count'] }} draft rows</div>
+                  <div class="mt-1 text-[11px] text-emerald-100/55">{{ (int)$event['draft_rows_count'] }} draft rows</div>
               @endif
             </button>
-            <div class="mt-2 flex justify-end">
-              <button
-                type="button"
-                wire:click="matchEvent({{ (int)($event['id'] ?? 0) }})"
-                class="rounded-full border border-emerald-300/20 bg-emerald-500/8 px-3 py-1 text-[11px] text-emerald-50/90 hover:bg-emerald-500/12"
-              >
-                Find Match
-              </button>
-            </div>
           </div>
         @empty
           <div class="rounded-xl border border-dashed border-emerald-200/15 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">

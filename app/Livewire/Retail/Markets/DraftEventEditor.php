@@ -4,6 +4,7 @@ namespace App\Livewire\Retail\Markets;
 
 use App\Models\Event;
 use App\Models\RetailPlanItem;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
 class DraftEventEditor extends Component
@@ -74,7 +75,7 @@ class DraftEventEditor extends Component
             : null;
 
         $items = collect();
-        if ($eventId > 0) {
+        if ($eventId > 0 && Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
             $items = RetailPlanItem::query()
                 ->where('retail_plan_id', $this->planId)
                 ->where('status', '!=', 'published')

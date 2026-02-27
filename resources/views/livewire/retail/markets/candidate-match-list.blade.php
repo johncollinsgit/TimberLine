@@ -7,7 +7,7 @@
 
   @if(!$hasMatchRun)
     <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-      Click “Find Match” on an upcoming event to run candidate matching.
+      Run the local match scan to rank historical events for this upcoming date.
     </div>
   @elseif(empty($candidates))
     <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
@@ -28,13 +28,16 @@
                   · {{ trim(($candidate['city'] ?? '').', '.($candidate['state'] ?? ''), ' ,') }}
                 @endif
               </div>
+              <div class="mt-2 text-[10px] text-emerald-100/45">
+                Title {{ (int)($candidate['title_score_percent'] ?? 0) }} · Date {{ (int)($candidate['date_score_percent'] ?? 0) }} · Location {{ (int)($candidate['location_score_percent'] ?? 0) }}
+              </div>
             </div>
             <button
               type="button"
               wire:click="selectCandidate({{ (int)($candidate['event_id'] ?? 0) }})"
               class="shrink-0 rounded-full border px-3 py-1 text-[11px] transition {{ $isSelected ? 'border-emerald-300/35 bg-emerald-500/15 text-white' : 'border-emerald-300/20 bg-emerald-500/8 text-emerald-50/90 hover:bg-emerald-500/12' }}"
             >
-              {{ $isSelected ? 'Selected' : 'Preview' }}
+              {{ $isSelected ? 'Selected' : 'Choose' }}
             </button>
           </div>
         </div>

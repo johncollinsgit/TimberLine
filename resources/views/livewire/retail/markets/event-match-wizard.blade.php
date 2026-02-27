@@ -1,72 +1,314 @@
-<div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-3">
-  <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Event Match Wizard</div>
-
-  @if(!$upcomingEventId || empty($upcomingEvent))
-    <div class="mt-3 rounded-xl border border-dashed border-emerald-200/15 bg-black/10 p-4 text-sm text-emerald-50/70">
-      Step 1: Select an upcoming event from the left panel.
-    </div>
-  @else
-    <div class="mt-3 rounded-xl border border-emerald-200/10 bg-black/10 p-3">
-      <div class="text-xs uppercase tracking-[0.2em] text-emerald-100/55">Step 1 · Selected Upcoming Event</div>
-      <div class="mt-1 text-sm font-semibold text-white">{{ $upcomingEvent['display_name'] ?: $upcomingEvent['name'] ?: 'Untitled Event' }}</div>
-      <div class="mt-1 text-xs text-emerald-100/60">
-        {{ !empty($upcomingEvent['starts_at']) ? \Illuminate\Support\Carbon::parse($upcomingEvent['starts_at'])->format('M j, Y') : 'Date TBD' }}
+<div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] min-w-0">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div class="min-w-0">
+      <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Markets Planner</div>
+      <div class="mt-2 text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white">One Event At A Time</div>
+      <div class="mt-2 max-w-2xl text-sm text-emerald-50/70">
+        Stored events only. Pick an upcoming event, choose a historical match if you want one, build the draft, then publish.
       </div>
     </div>
-
-    <div class="mt-3 rounded-xl border border-emerald-200/10 bg-black/10 p-3">
-      <div class="text-xs uppercase tracking-[0.2em] text-emerald-100/55">Step 2 · Find Historical Match</div>
-      <div class="mt-2">
-        @livewire(
-          \App\Livewire\Retail\Markets\CandidateMatchList::class,
-          [
-            'upcomingEventId' => $upcomingEventId,
-            'selectedCandidateEventId' => $selectedCandidateEventId,
-            'matchWindowDays' => $matchWindowDays,
-          ],
-          key('candidate-match-list-'.(int)($upcomingEventId ?? 0).'-'.(int)$matchWindowDays)
-        )
-      </div>
+    <div class="w-full max-w-md">
+      @livewire(
+        \App\Livewire\Retail\MarketsSyncStatus::class,
+        ['planId' => $planId, 'queue' => 'markets'],
+        key('markets-sync-status-stepper-'.(int) $planId)
+      )
     </div>
+  </div>
 
-    @if($selectedCandidateEventId)
-      <div class="mt-3 rounded-xl border border-emerald-200/10 bg-black/10 p-3">
-        <div class="text-xs uppercase tracking-[0.2em] text-emerald-100/55">Step 3 · Preview Historical Boxes</div>
-        <div class="mt-2">
+  <div class="mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
+    @foreach($steps as $number => $meta)
+      @php($active = $step === $number)
+      <button
+        type="button"
+        wire:click="goToStep({{ $number }})"
+        @disabled(!($meta['ready'] ?? false))
+        class="rounded-2xl border px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-45 {{ $active ? 'border-emerald-300/35 bg-emerald-500/16 text-white' : 'border-emerald-200/10 bg-black/15 text-emerald-100/70 hover:bg-white/5' }}"
+      >
+        <div class="text-[10px] uppercase tracking-[0.28em] {{ $active ? 'text-emerald-50/90' : 'text-emerald-100/45' }}">Step {{ $number }}</div>
+        <div class="mt-1 text-sm font-semibold">{{ $meta['label'] }}</div>
+      </button>
+    @endforeach
+  </div>
+
+  @if($step === 1)
+    <div class="mt-5">
+      @livewire(
+        \App\Livewire\Retail\Markets\UpcomingEventsPanel::class,
+        [
+          'planId' => $planId,
+          'selectedEventId' => $upcomingEventId,
+          'stateTab' => 'needs_mapping',
+          'lookaheadDays' => 30,
+        ],
+        key('markets-upcoming-events-stepper-'.(int)$planId.'-'.(int)($upcomingEventId ?? 0))
+      )
+    </div>
+  @endif
+
+  @if($step === 2)
+    <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
+        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Selected Event</div>
+        @if(!empty($upcomingEvent))
+          <div class="mt-2 text-lg font-semibold text-white">{{ $upcomingEvent['display_name'] ?: $upcomingEvent['name'] ?: 'Untitled Event' }}</div>
+          <div class="mt-2 text-xs text-emerald-100/60">
+            {{ !empty($upcomingEvent['starts_at']) ? \Illuminate\Support\Carbon::parse($upcomingEvent['starts_at'])->format('M j, Y') : 'Date TBD' }}
+            @if(!empty($upcomingEvent['ends_at']) && $upcomingEvent['ends_at'] !== $upcomingEvent['starts_at'])
+              – {{ \Illuminate\Support\Carbon::parse($upcomingEvent['ends_at'])->format('M j, Y') }}
+            @endif
+          </div>
+          @if(!empty($upcomingEvent['city']) || !empty($upcomingEvent['state']) || !empty($upcomingEvent['venue']))
+            <div class="mt-2 text-xs text-emerald-100/55">
+              {{ trim(($upcomingEvent['city'] ?? '').', '.($upcomingEvent['state'] ?? ''), ' ,') }}
+              @if(!empty($upcomingEvent['venue']))
+                <span class="block mt-1">{{ $upcomingEvent['venue'] }}</span>
+              @endif
+            </div>
+          @endif
+        @endif
+      </div>
+
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Historical Match</div>
+            <div class="mt-1 text-sm text-emerald-50/70">Run a local match scan, then load the closest historical event or start clean.</div>
+          </div>
+          <button
+            type="button"
+            wire:click="runMatchSearch"
+            @disabled(!$upcomingEventId)
+            class="rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-sm text-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Scan Historical Matches
+          </button>
+        </div>
+
+        <div class="mt-4">
           @livewire(
-            \App\Livewire\Retail\Markets\PrefillPreviewPanel::class,
-            ['candidateEventId' => $selectedCandidateEventId],
-            key('prefill-preview-panel-'.(int)$selectedCandidateEventId)
+            \App\Livewire\Retail\Markets\CandidateMatchList::class,
+            [
+              'upcomingEventId' => $upcomingEventId,
+              'selectedCandidateEventId' => $selectedCandidateEventId,
+              'matchWindowDays' => $matchWindowDays,
+            ],
+            key('candidate-match-list-stepper-'.(int)($upcomingEventId ?? 0).'-'.(int)$matchWindowDays)
+          )
+        </div>
+
+        @if(!empty($selectedCandidateEvent))
+          <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/20 p-4">
+            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Selected Match</div>
+            <div class="mt-2 text-sm font-semibold text-white">{{ $selectedCandidateEvent['title'] }}</div>
+            <div class="mt-1 text-[11px] text-emerald-100/55">
+              {{ !empty($selectedCandidateEvent['starts_at']) ? \Illuminate\Support\Carbon::parse($selectedCandidateEvent['starts_at'])->format('M j, Y') : 'Date TBD' }}
+              @if(!empty($selectedCandidateEvent['city']) || !empty($selectedCandidateEvent['state']))
+                · {{ trim(($selectedCandidateEvent['city'] ?? '').', '.($selectedCandidateEvent['state'] ?? ''), ' ,') }}
+              @endif
+            </div>
+          </div>
+        @endif
+
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            wire:click="startFreshDraft"
+            @disabled(!$upcomingEventId)
+            class="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm text-emerald-50/85 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            No Match, Start Fresh
+          </button>
+          <button
+            type="button"
+            wire:click="useSelectedMatch"
+            @if((int)($draftSummary['line_count'] ?? 0) > 0)
+              onclick="return confirm('This will overwrite existing draft lines for this event. Continue?');"
+            @endif
+            @disabled(!$selectedCandidateEventId)
+            class="rounded-xl border border-emerald-300/30 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Apply Match & Build Draft
+          </button>
+        </div>
+      </div>
+    </div>
+  @endif
+
+  @if($step === 3)
+    <div class="mt-5 space-y-4">
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0">
+            <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Build Draft</div>
+            <div class="mt-1 text-lg font-semibold text-white">{{ $upcomingEvent['display_name'] ?? $upcomingEvent['name'] ?? 'Select an event first' }}</div>
+            <div class="mt-1 text-xs text-emerald-100/60">
+              @if(!empty($selectedCandidateEvent))
+                Using {{ $selectedCandidateEvent['title'] }} as the historical source.
+              @elseif($startFresh)
+                Starting with an empty draft for this event.
+              @else
+                Select a historical match or start fresh first.
+              @endif
+            </div>
+          </div>
+          <div class="grid w-full items-end gap-2 md:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,10rem))] lg:w-auto lg:min-w-[48rem]">
+            <div class="min-w-0">
+              <label class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Scent</label>
+              <div class="mt-2">
+                @livewire(
+                  \App\Livewire\Components\ScentCombobox::class,
+                  [
+                    'emitKey' => 'markets-stepper',
+                    'selectedId' => (int)($selectedScentId ?? 0),
+                    'allowWholesaleCustom' => false,
+                  ],
+                  key('markets-stepper-scent-'.(int)$planId.'-'.(int)($upcomingEventId ?? 0))
+                )
+              </div>
+              @if(!$selectedScentId)
+                <div class="mt-2 text-[11px] text-emerald-100/50">Select a scent to add boxes.</div>
+              @endif
+            </div>
+            <button
+              type="button"
+              wire:click="addHalfBox"
+              @disabled(!$upcomingEventId || !$selectedScentId)
+              class="rounded-2xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add Half Box
+            </button>
+            <button
+              type="button"
+              wire:click="addFullBox"
+              @disabled(!$upcomingEventId || !$selectedScentId)
+              class="rounded-2xl border border-emerald-300/35 bg-emerald-500/22 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add Full Box
+            </button>
+            <button
+              type="button"
+              wire:click="addTopShelf"
+              @disabled(!$upcomingEventId)
+              class="rounded-2xl border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add Top Shelf
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
+        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Draft Contents</div>
+        <div class="mt-1 text-xs text-emerald-100/60">Everything below is scoped to the selected upcoming event.</div>
+        <div class="mt-4">
+          @livewire(
+            \App\Livewire\Retail\Markets\DraftEventEditor::class,
+            [
+              'planId' => $planId,
+              'selectedEventId' => $upcomingEventId,
+            ],
+            key('markets-stepper-draft-editor-'.(int)$planId.'-'.(int)($upcomingEventId ?? 0))
           )
         </div>
       </div>
-
-      <div class="mt-3 rounded-xl border border-emerald-200/10 bg-black/10 p-3">
-        <div class="text-xs uppercase tracking-[0.2em] text-emerald-100/55">Step 4 · Confirm Mapping</div>
-        <div class="mt-2 text-xs text-emerald-100/70">
-          This saves a baseline mapping for future years and creates a draft pour plan for this event.
-        </div>
-        <div class="mt-3 flex flex-wrap justify-end gap-2">
-          @if($step < 4)
-            <button type="button" wire:click="goToConfirm"
-              class="rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-xs text-white/90">
-              Continue
-            </button>
-          @endif
-          @if($step >= 4)
-            <button type="button" wire:click="confirmAndCreateDraft"
-              class="rounded-xl border border-emerald-300/30 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-white">
-              Confirm & Create Draft
-            </button>
-          @endif
-        </div>
-      </div>
-    @endif
-
-    @if($step === 5)
-      <div class="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-3 text-xs text-emerald-50/90">
-        Step 5 complete: draft created. Use “Candles to be poured” below for this selected event.
-      </div>
-    @endif
+    </div>
   @endif
+
+  @if($step === 4)
+    <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
+        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Review</div>
+        <div class="mt-2 text-lg font-semibold text-white">{{ $upcomingEvent['display_name'] ?? $upcomingEvent['name'] ?? 'No event selected' }}</div>
+        <div class="mt-2 text-sm text-emerald-50/75">
+          Match source:
+          @if(!empty($selectedCandidateEvent))
+            <span class="text-white">{{ $selectedCandidateEvent['title'] }}</span>
+          @elseif($startFresh)
+            <span class="text-white">None, built from scratch</span>
+          @else
+            <span class="text-white">Not selected</span>
+          @endif
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl border border-white/8 bg-black/20 p-4">
+            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Draft Lines</div>
+            <div class="mt-2 text-2xl font-semibold text-white">{{ (int)($draftSummary['line_count'] ?? 0) }}</div>
+          </div>
+          <div class="rounded-2xl border border-white/8 bg-black/20 p-4">
+            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Half-Box Units</div>
+            <div class="mt-2 text-2xl font-semibold text-white">{{ (int)($draftSummary['unit_count'] ?? 0) }}</div>
+          </div>
+          <div class="rounded-2xl border border-white/8 bg-black/20 p-4">
+            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Top Scents</div>
+            <div class="mt-2 text-sm text-white">
+              @if(empty($draftSummary['top_scents']))
+                No scents added yet
+              @else
+                {{ collect($draftSummary['top_scents'])->pluck('name')->implode(', ') }}
+              @endif
+            </div>
+          </div>
+        </div>
+
+        @if(!empty($draftSummary['top_scents']))
+          <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/20 p-4">
+            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Top Scent Mix</div>
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              @foreach($draftSummary['top_scents'] as $row)
+                <div class="rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-sm text-emerald-50/85">
+                  {{ $row['name'] }} <span class="text-emerald-100/45">· {{ (int)($row['units'] ?? 0) }} units</span>
+                </div>
+              @endforeach
+            </div>
+          </div>
+        @endif
+      </div>
+
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
+        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Publish</div>
+        <div class="mt-2 text-sm text-emerald-50/70">
+          Publish only when the draft looks correct. This moves the selected event into the pouring flow and resets the planner for the next event.
+        </div>
+        <button
+          type="button"
+          wire:click="publish"
+          onclick="return confirm('Publish this draft to the pouring room?');"
+          @disabled(!$upcomingEventId || (int)($draftSummary['line_count'] ?? 0) <= 0)
+          class="mt-4 w-full rounded-2xl border border-emerald-400/40 bg-emerald-500/25 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Publish To Pouring Room
+        </button>
+      </div>
+    </div>
+  @endif
+
+  <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <button
+      type="button"
+      wire:click="back"
+      @disabled($step <= 1)
+      class="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm text-emerald-50/85 disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      Back
+    </button>
+
+    <button
+      type="button"
+      wire:click="next"
+      @disabled(($step === 1 && !$upcomingEventId) || ($step === 2 && !$this->canAccessStep(3)) || ($step === 3 && !$this->canAccessStep(4)) || $step >= 4)
+      class="rounded-xl border border-emerald-300/25 bg-emerald-500/12 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      @if($step >= 4)
+        Review Complete
+      @elseif($step === 3)
+        Review Draft
+      @elseif($step === 2)
+        Build Boxes
+      @else
+        Choose Match
+      @endif
+    </button>
+  </div>
 </div>

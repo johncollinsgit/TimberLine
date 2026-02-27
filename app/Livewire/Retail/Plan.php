@@ -82,6 +82,10 @@ class Plan extends Component
         'marketsEventStateTabChanged' => 'handleMarketsEventStateTabChanged',
         'marketsMappingConfirmed' => 'handleMarketsMappingConfirmed',
         'marketsDraftUpdated' => 'handleMarketsDraftUpdated',
+        'marketsAddHalfBoxRequested' => 'addMarketHalfBox',
+        'marketsAddFullBoxRequested' => 'addMarketFullBox',
+        'marketsAddTopShelfRequested' => 'addTopShelfTemplate',
+        'marketsPublishRequested' => 'submitSelectedEventToPouringRoom',
     ];
 
     protected $queryString = [
@@ -1495,18 +1499,22 @@ class Plan extends Component
         ]);
     }
 
-    public function addMarketHalfBox(): void
+    public function addMarketHalfBox(?int $scentId = null, ?int $upcomingEventId = null): void
     {
+        $this->primeMarketDraftContext($upcomingEventId, $scentId);
         $this->addMarketBoxUnits(1);
     }
 
-    public function addMarketFullBox(): void
+    public function addMarketFullBox(?int $scentId = null, ?int $upcomingEventId = null): void
     {
+        $this->primeMarketDraftContext($upcomingEventId, $scentId);
         $this->addMarketBoxUnits(2);
     }
 
-    public function addTopShelfTemplate(): void
+    public function addTopShelfTemplate(?int $upcomingEventId = null): void
     {
+        $this->primeMarketDraftContext($upcomingEventId);
+
         if ($this->queue !== 'markets') {
             return;
         }
@@ -1640,6 +1648,31 @@ class Plan extends Component
 
         $this->inventoryScentId = $scentId;
         $this->inventoryScentSearch = $scentName ?? '';
+    }
+
+    protected function primeMarketDraftContext(?int $upcomingEventId = null, ?int $scentId = null): void
+    {
+        if ($this->queue !== 'markets') {
+            return;
+        }
+
+        if ($upcomingEventId && $upcomingEventId > 0) {
+            if (! Event::query()->whereKey($upcomingEventId)->exists()) {
+                return;
+            }
+
+            $this->selectedUpcomingEventId = (int) $upcomingEventId;
+            $this->marketSelectedEventId = $this->selectedUpcomingEventId;
+
+            if ($this->supportsRetailPlanEventColumn()) {
+                $this->plan->event_id = $this->selectedUpcomingEventId;
+                $this->plan->save();
+            }
+        }
+
+        if ($scentId !== null) {
+            $this->inventoryScentId = $scentId > 0 ? (int) $scentId : null;
+        }
     }
 
     public function selectInventorySize(): void

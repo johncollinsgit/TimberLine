@@ -29,7 +29,7 @@ class MarketEventSyncCoordinator
             ];
         }
 
-        return $this->formatState($this->state());
+        return $this->formatState($this->normalizeTransientState($this->state()));
     }
 
     public function canQueue(int $weeks, bool $force = false): array
@@ -38,7 +38,7 @@ class MarketEventSyncCoordinator
             return ['allowed' => false, 'reason' => 'missing_table', 'state' => $this->queueStatus()];
         }
 
-        $state = $this->state();
+        $state = $this->normalizeTransientState($this->state());
         $cooldownMinutes = max(1, (int) config('features.market_events_sync_cooldown_minutes', 10));
         $now = now();
 
@@ -252,6 +252,40 @@ class MarketEventSyncCoordinator
         }
 
         return null;
+    }
+
+    protected function normalizeTransientState(MarketEventSyncState $state): MarketEventSyncState
+    {
+        $status = (string) ($state->status ?? 'idle');
+        if (! in_array($status, ['queued', 'running'], true)) {
+            return $state;
+        }
+
+        $timeoutMinutes = max(10, (int) config('features.market_events_sync_timeout_minutes', 15));
+        $reference = $status === 'running'
+            ? ($state->started_at ?: $state->queued_at)
+            : $state->queued_at;
+
+        if (! $reference || $reference->gt(now()->subMinutes($timeoutMinutes))) {
+            return $state;
+        }
+
+        $state->fill([
+            'status' => 'failed',
+            'finished_at' => now(),
+            'last_sync_at' => now(),
+            'last_sync_status' => 'failed',
+            'last_error' => 'Market event sync timed out before completion.',
+        ])->save();
+
+        Log::warning('Market event sync marked failed after timeout', [
+            'status' => $status,
+            'timeout_minutes' => $timeoutMinutes,
+            'queued_at' => $state->queued_at?->toIso8601String(),
+            'started_at' => $state->started_at?->toIso8601String(),
+        ]);
+
+        return $state;
     }
 
     protected function syncStateTableExists(): bool

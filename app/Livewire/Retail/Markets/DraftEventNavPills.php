@@ -4,6 +4,7 @@ namespace App\Livewire\Retail\Markets;
 
 use App\Models\Event;
 use App\Models\RetailPlanItem;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
 class DraftEventNavPills extends Component
@@ -60,16 +61,19 @@ class DraftEventNavPills extends Component
 
     protected function loadEvents(): void
     {
-        $draftEventIds = RetailPlanItem::query()
-            ->where('retail_plan_id', $this->planId)
-            ->where('status', '!=', 'published')
-            ->whereNotNull('upcoming_event_id')
-            ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
-            ->pluck('upcoming_event_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
+        $draftEventIds = [];
+        if (Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+            $draftEventIds = RetailPlanItem::query()
+                ->where('retail_plan_id', $this->planId)
+                ->where('status', '!=', 'published')
+                ->whereNotNull('upcoming_event_id')
+                ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
+                ->pluck('upcoming_event_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
 
         if ($draftEventIds === []) {
             $this->events = [];
