@@ -235,7 +235,7 @@ class Plan extends Component
                                 'status' => 'draft',
                             ]
                         );
-                        if ($upcomingEventId && Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+                        if ($upcomingEventId && $this->supportsRetailPlanItemUpcomingEventColumn()) {
                             $item->upcoming_event_id = $upcomingEventId;
                             $item->save();
                         }
@@ -270,7 +270,7 @@ class Plan extends Component
                         'status' => $scentId ? 'draft' : 'needs_mapping',
                     ]
                 );
-                if ($upcomingEventId && Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+                if ($upcomingEventId && $this->supportsRetailPlanItemUpcomingEventColumn()) {
                     $item->upcoming_event_id = $upcomingEventId;
                     $item->save();
                 }
@@ -868,14 +868,17 @@ class Plan extends Component
                 ->keyBy('upcoming_event_id')
             : collect();
 
-        $draftCountsByEventId = RetailPlanItem::query()
-            ->selectRaw('upcoming_event_id, COUNT(*) as row_count')
-            ->where('retail_plan_id', $this->plan->id)
-            ->whereNotNull('upcoming_event_id')
-            ->where('status', '!=', 'published')
-            ->when($eventIds !== [], fn ($q) => $q->whereIn('upcoming_event_id', $eventIds))
-            ->groupBy('upcoming_event_id')
-            ->pluck('row_count', 'upcoming_event_id');
+        $draftCountsByEventId = collect();
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $draftCountsByEventId = RetailPlanItem::query()
+                ->selectRaw('upcoming_event_id, COUNT(*) as row_count')
+                ->where('retail_plan_id', $this->plan->id)
+                ->whereNotNull('upcoming_event_id')
+                ->where('status', '!=', 'published')
+                ->when($eventIds !== [], fn ($q) => $q->whereIn('upcoming_event_id', $eventIds))
+                ->groupBy('upcoming_event_id')
+                ->pluck('row_count', 'upcoming_event_id');
+        }
 
         $this->upcomingMarketEventRows = $events
             ->map(function (Event $event) use ($mappingsByUpcomingId, $draftCountsByEventId): array {
@@ -1223,13 +1226,16 @@ class Plan extends Component
                 continue;
             }
 
-            $existing = RetailPlanItem::query()
-                ->where('retail_plan_id', $this->plan->id)
-                ->where('source', 'market_top_shelf_template')
-                ->where('upcoming_event_id', $selectedEvent->id)
-                ->where('scent_id', $scentId)
-                ->where('status', '!=', 'published')
-                ->first();
+            $existing = null;
+            if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                $existing = RetailPlanItem::query()
+                    ->where('retail_plan_id', $this->plan->id)
+                    ->where('source', 'market_top_shelf_template')
+                    ->where('upcoming_event_id', $selectedEvent->id)
+                    ->where('scent_id', $scentId)
+                    ->where('status', '!=', 'published')
+                    ->first();
+            }
 
             if ($existing) {
                 $existing->quantity = max(1, (int) $existing->quantity + max(1, $quantityPerScent));
@@ -1258,7 +1264,7 @@ class Plan extends Component
                 'sku' => Str::limit("mkttop:{$selectedEvent->id}:{$sourceMarketPlanLineId}:{$scentId}", 255, ''),
             ];
 
-            if (Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+            if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
                 $payload['upcoming_event_id'] = $selectedEvent->id;
             }
             if ($sourceEvent && Schema::hasColumn('retail_plan_items', 'source_event_id')) {
@@ -1398,7 +1404,7 @@ class Plan extends Component
                 if (($existing->status ?? 'draft') === 'needs_mapping') {
                     $existing->status = 'draft';
                 }
-                if (Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
                     $existing->upcoming_event_id = $selectedEvent->id;
                 }
                 if ($sourceEvent && Schema::hasColumn('retail_plan_items', 'source_event_id')) {
@@ -1437,7 +1443,7 @@ class Plan extends Component
             'sku' => Str::limit(implode(':', $skuParts), 255, ''),
         ];
 
-        if (Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
             $payload['upcoming_event_id'] = $selectedEvent->id;
         }
 
@@ -1533,13 +1539,16 @@ class Plan extends Component
                     continue;
                 }
 
-                $existing = RetailPlanItem::query()
-                    ->where('retail_plan_id', $this->plan->id)
-                    ->where('source', 'market_top_shelf_template')
-                    ->where('upcoming_event_id', $selectedEvent->id)
-                    ->where('scent_id', $scentId)
-                    ->where('status', '!=', 'published')
-                    ->first();
+                $existing = null;
+                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                    $existing = RetailPlanItem::query()
+                        ->where('retail_plan_id', $this->plan->id)
+                        ->where('source', 'market_top_shelf_template')
+                        ->where('upcoming_event_id', $selectedEvent->id)
+                        ->where('scent_id', $scentId)
+                        ->where('status', '!=', 'published')
+                        ->first();
+                }
 
                 if ($existing) {
                     $existing->quantity = max(1, (int) $existing->quantity + 1);
@@ -1557,7 +1566,7 @@ class Plan extends Component
                     'status' => 'draft',
                     'sku' => Str::limit("mkttop:manual:{$selectedEvent->id}:{$scentId}", 255, ''),
                 ];
-                if (Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
                     $payload['upcoming_event_id'] = $selectedEvent->id;
                 }
 
@@ -1605,7 +1614,7 @@ class Plan extends Component
             'sku' => 'market-box',
         ];
 
-        if (Schema::hasColumn('retail_plan_items', 'upcoming_event_id')) {
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
             $payload['upcoming_event_id'] = $selectedEvent->id;
         }
 
@@ -1741,7 +1750,7 @@ class Plan extends Component
     public function clearScents(): void
     {
         $eventIds = collect();
-        if ($this->queue === 'markets') {
+        if ($this->queue === 'markets' && $this->supportsRetailPlanItemUpcomingEventColumn()) {
             $eventIds = RetailPlanItem::query()
                 ->where('retail_plan_id', $this->plan->id)
                 ->whereNotNull('upcoming_event_id')
@@ -1785,11 +1794,14 @@ class Plan extends Component
         }
 
         $marketSources = ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'];
-        $eventItems = $this->plan->items()
-            ->where('status', '!=', 'published')
-            ->where('upcoming_event_id', $event->id)
-            ->whereIn('source', $marketSources)
-            ->get();
+        $eventItems = collect();
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $eventItems = $this->plan->items()
+                ->where('status', '!=', 'published')
+                ->where('upcoming_event_id', $event->id)
+                ->whereIn('source', $marketSources)
+                ->get();
+        }
 
         if ($eventItems->isEmpty()) {
             $this->dispatch('toast', [
@@ -2214,12 +2226,21 @@ class Plan extends Component
 
     protected function selectedEventCanSubmit(int $eventId): bool
     {
-        $items = RetailPlanItem::query()
-            ->where('retail_plan_id', $this->plan->id)
-            ->where('status', '!=', 'published')
-            ->where('upcoming_event_id', $eventId)
-            ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
-            ->get();
+        if (! $this->supportsRetailPlanItemUpcomingEventColumn()) {
+            return false;
+        }
+
+        $items = collect();
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $items = RetailPlanItem::query()
+                ->where('retail_plan_id', $this->plan->id)
+                ->where('status', '!=', 'published')
+                ->where('upcoming_event_id', $eventId)
+                ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
+                ->get();
+        } else {
+            return false;
+        }
 
         if ($items->isEmpty()) {
             return false;
@@ -2239,11 +2260,14 @@ class Plan extends Component
         if ($forceStatus !== null && in_array($forceStatus, ['needs_mapping', 'mapped', 'drafted', 'submitted'], true)) {
             $next = $forceStatus;
         } else {
-            $hasDraftRows = RetailPlanItem::query()
-                ->where('retail_plan_id', $this->plan->id)
-                ->where('status', '!=', 'published')
-                ->where('upcoming_event_id', $eventId)
-                ->exists();
+            $hasDraftRows = false;
+            if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                $hasDraftRows = RetailPlanItem::query()
+                    ->where('retail_plan_id', $this->plan->id)
+                    ->where('status', '!=', 'published')
+                    ->where('upcoming_event_id', $eventId)
+                    ->exists();
+            }
             $hasMapping = $this->supportsEventMappingsTable()
                 ? EventMapping::query()->where('upcoming_event_id', $eventId)->exists()
                 : false;
@@ -2584,6 +2608,17 @@ class Plan extends Component
 
         if ($supports === null) {
             $supports = Schema::hasColumn('retail_plans', 'event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsRetailPlanItemUpcomingEventColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plan_items', 'upcoming_event_id');
         }
 
         return $supports;
