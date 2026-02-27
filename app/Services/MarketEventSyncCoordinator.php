@@ -46,6 +46,10 @@ class MarketEventSyncCoordinator
             return ['allowed' => false, 'reason' => 'running', 'state' => $this->formatState($state)];
         }
 
+        if (($state->status ?? null) === 'queued') {
+            return ['allowed' => true, 'reason' => null, 'state' => $this->formatState($state)];
+        }
+
         if (! $force) {
             $recentAt = $state->queued_at ?: $state->started_at ?: $state->last_sync_at;
             if ($recentAt && $recentAt->gt($now->copy()->subMinutes($cooldownMinutes))) {
@@ -69,6 +73,8 @@ class MarketEventSyncCoordinator
             'weeks' => max(1, $weeks),
             'queued_by_user_id' => $userId,
             'queued_at' => now(),
+            'started_at' => null,
+            'finished_at' => null,
         ]);
         $state->save();
 
@@ -135,6 +141,7 @@ class MarketEventSyncCoordinator
         $state->fill([
             'status' => 'running',
             'weeks' => $weeks,
+            'queued_at' => $state->queued_at ?: now(),
             'started_at' => now(),
             'finished_at' => null,
         ])->save();

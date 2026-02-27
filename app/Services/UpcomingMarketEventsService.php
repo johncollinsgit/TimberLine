@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -33,7 +34,7 @@ class UpcomingMarketEventsService
         $payload = $this->fetchCalendarEvents($calendarId, $apiKey, $weeks);
         $items = (array) ($payload['items'] ?? []);
 
-        $upserted = [];
+        $upsertedById = [];
 
         foreach ($items as $calendarEvent) {
             if (!is_array($calendarEvent)) {
@@ -41,7 +42,7 @@ class UpcomingMarketEventsService
             }
 
             $event = DB::transaction(fn () => $this->upsertMarketEventFromCalendar($calendarEvent));
-            $upserted[] = [
+            $upsertedById[(int) $event->id] = [
                 'id' => (int) $event->id,
                 'title' => (string) ($event->display_name ?: $event->name),
                 'date' => $event->starts_at?->toDateString(),
@@ -50,8 +51,8 @@ class UpcomingMarketEventsService
 
         $result = [
             'fetched' => count($items),
-            'upserted' => count($upserted),
-            'events' => $upserted,
+            'upserted' => count($upsertedById),
+            'events' => array_values($upsertedById),
         ];
 
         Log::info('UpcomingMarketEventsService sync complete', [
@@ -69,8 +70,8 @@ class UpcomingMarketEventsService
      */
     public function fetchCalendarEvents(string $calendarId, string $apiKey, int $weeks): array
     {
-        // Include a short lookback so current-month/recent events remain visible in the planner.
-        $timeMin = now()->subDays(21)->startOfDay()->toIso8601String();
+        // Include a 30-day lookback so recently-shifted events remain selectable in the planner.
+        $timeMin = now()->subDays(30)->startOfDay()->toIso8601String();
         $timeMax = now()->addWeeks($weeks)->endOfDay()->toIso8601String();
 
         $url = 'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events';
@@ -119,7 +120,7 @@ class UpcomingMarketEventsService
     public function upsertMarketEventFromCalendar(array $calendarEvent): Event
     {
         $title = trim((string) ($calendarEvent['summary'] ?? 'Untitled Market Event'));
-        $sourceRef = (string) ($calendarEvent['id'] ?? '');
+        $sourceRef = trim((string) ($calendarEvent['id'] ?? $calendarEvent['iCalUID'] ?? ''));
         $startsAt = $this->parseGoogleDate((array) ($calendarEvent['start'] ?? []));
         $endsAt = $this->parseGoogleDate((array) ($calendarEvent['end'] ?? []));
         $location = trim((string) ($calendarEvent['location'] ?? ''));
@@ -138,16 +139,19 @@ class UpcomingMarketEventsService
             'state' => $state,
             'venue' => $location !== '' ? $location : null,
             'source' => 'asana_calendar',
-            'source_ref' => $sourceRef,
-            'status' => 'planned',
+            'source_ref' => $sourceRef !== '' ? $sourceRef : null,
         ];
 
-        $existing = Event::query()
-            ->where('source', 'asana_calendar')
-            ->where('source_ref', $sourceRef)
-            ->first();
+        $existing = null;
+        if ($sourceRef !== '') {
+            $existing = Event::query()
+                ->where('source', 'asana_calendar')
+                ->where('source_ref', $sourceRef)
+                ->first();
+        }
 
         if ($existing) {
+            $payload['status'] = $this->nextPlanningStatusForSyncedEvent($existing);
             $existing->fill($payload)->save();
             return $existing;
         }
@@ -163,11 +167,36 @@ class UpcomingMarketEventsService
             });
 
         if ($duplicate) {
-            $duplicate->fill(collect($payload)->except(['source_ref'])->all())->save();
+            $payload['status'] = $this->nextPlanningStatusForSyncedEvent($duplicate);
+            $duplicatePayload = $payload;
+            if ($sourceRef === '') {
+                unset($duplicatePayload['source_ref']);
+            }
+            $duplicate->fill($duplicatePayload)->save();
             return $duplicate;
         }
 
+        $payload['status'] = 'needs_mapping';
+
         return Event::query()->create($payload);
+    }
+
+    protected function nextPlanningStatusForSyncedEvent(Event $event): string
+    {
+        $status = strtolower(trim((string) ($event->status ?? '')));
+        if (in_array($status, ['submitted', 'drafted'], true)) {
+            return $status;
+        }
+
+        $hasMapping = Schema::hasTable('event_mappings')
+            ? DB::table('event_mappings')->where('upcoming_event_id', $event->id)->exists()
+            : false;
+
+        if ($hasMapping) {
+            return 'mapped';
+        }
+
+        return 'needs_mapping';
     }
 
     protected function normalizedCalendarTitleKey(string $title): string

@@ -16,8 +16,13 @@ return new class extends Migration
         }
 
         if (Schema::hasColumn('orders', 'due_date')) {
-            // Backfill due_at from due_date at 00:00:00 (SQLite/MySQL compatible)
-            DB::statement("UPDATE orders SET due_at = TIMESTAMP(due_date) WHERE due_at IS NULL AND due_date IS NOT NULL");
+            $driver = Schema::getConnection()->getDriverName();
+
+            if ($driver === 'sqlite') {
+                DB::statement("UPDATE orders SET due_at = datetime(due_date) WHERE due_at IS NULL AND due_date IS NOT NULL");
+            } else {
+                DB::statement("UPDATE orders SET due_at = TIMESTAMP(due_date) WHERE due_at IS NULL AND due_date IS NOT NULL");
+            }
         }
     }
 
