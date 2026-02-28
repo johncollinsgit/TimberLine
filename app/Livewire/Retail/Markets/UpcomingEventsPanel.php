@@ -2,9 +2,12 @@
 
 namespace App\Livewire\Retail\Markets;
 
+use Carbon\CarbonInterface;
 use App\Models\Event;
 use App\Models\EventMapping;
 use App\Models\RetailPlanItem;
+use App\Services\MarketEventSyncCoordinator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -22,6 +25,15 @@ class UpcomingEventsPanel extends Component
     public ?int $selectedEventId = null;
     public string $stateTab = 'needs_mapping';
     public int $lookaheadDays = 30;
+    public int $historyDays = 365;
+    public int $pickerLimit = 50;
+    public string $dateMode = 'future';
+    public string $searchTerm = '';
+    public string $fromDate = '';
+    public string $toDate = '';
+    public string $sourceLabel = 'DB (synced calendar events)';
+    public string $windowLabel = '';
+    public ?string $lastSyncAt = null;
 
     /** @var array<int,array<string,mixed>> */
     public array $rows = [];
@@ -34,6 +46,8 @@ class UpcomingEventsPanel extends Component
             ? $stateTab
             : 'needs_mapping';
         $this->lookaheadDays = max(7, min(90, $lookaheadDays));
+        $this->historyDays = max(30, $this->historyDays);
+        $this->applyDefaultDateWindow();
 
         $this->loadRows();
     }
@@ -52,10 +66,21 @@ class UpcomingEventsPanel extends Component
         $this->dispatch('marketsEventStateTabChanged', stateTab: $this->stateTab);
     }
 
+    public function setDateMode(string $mode): void
+    {
+        $this->dateMode = in_array($mode, ['future', 'past', 'all'], true)
+            ? $mode
+            : 'future';
+
+        $this->applyDefaultDateWindow();
+        $this->loadRows();
+    }
+
     public function selectEvent(int $eventId): void
     {
         $this->selectedEventId = $eventId;
         $this->dispatch('marketsUpcomingEventSelected', eventId: $eventId);
+        $this->dispatch('markets-upcoming-event-selected', id: $eventId);
     }
 
     public function matchEvent(int $eventId): void
@@ -85,20 +110,34 @@ class UpcomingEventsPanel extends Component
         $this->handleMarketsRefreshRequested($upcomingEventId);
     }
 
+    public function updatedSearchTerm(string $value): void
+    {
+        $this->searchTerm = trim($value);
+        $this->loadRows();
+    }
+
+    public function updatedFromDate(string $value): void
+    {
+        $this->fromDate = $this->normalizeDateInput($value, $this->defaultWindowBounds($this->dateMode)[0]);
+        $this->loadRows();
+    }
+
+    public function updatedToDate(string $value): void
+    {
+        $this->toDate = $this->normalizeDateInput($value, $this->defaultWindowBounds($this->dateMode)[1]);
+        $this->loadRows();
+    }
+
     protected function loadRows(): void
     {
         $startedAt = microtime(true);
-        $start = now()->startOfDay()->toDateString();
-        $end = now()->addDays($this->lookaheadDays)->endOfDay()->toDateString();
+        [$from, $to] = $this->resolveWindowBounds();
+        $this->windowLabel = sprintf('Showing events from %s - %s', $from->format('M j, Y'), $to->format('M j, Y'));
 
-        $events = Event::query()
-            ->select(['id', 'name', 'display_name', 'starts_at', 'ends_at', 'city', 'state', 'status', 'source_ref'])
-            ->whereNotNull('starts_at')
-            ->whereBetween('starts_at', [$start, $end])
-            ->orderBy('starts_at')
-            ->orderBy('display_name')
-            ->limit(120)
-            ->get();
+        $syncState = app(MarketEventSyncCoordinator::class)->queueStatus();
+        $this->lastSyncAt = ! empty($syncState['last_sync_at']) ? (string) $syncState['last_sync_at'] : null;
+
+        $events = $this->getEventsForPicker($this->dateMode, $from, $to, $this->searchTerm);
 
         $eventIds = $events->pluck('id')->map(fn ($id) => (int) $id)->all();
         $mappedIds = [];
@@ -154,6 +193,10 @@ class UpcomingEventsPanel extends Component
             Log::info('UpcomingEventsPanel loadRows', [
                 'plan_id' => $this->planId,
                 'state_tab' => $this->stateTab,
+                'date_mode' => $this->dateMode,
+                'search_term' => $this->searchTerm,
+                'from_date' => $this->fromDate,
+                'to_date' => $this->toDate,
                 'lookahead_days' => $this->lookaheadDays,
                 'row_count' => count($this->rows),
                 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
@@ -171,6 +214,89 @@ class UpcomingEventsPanel extends Component
             ->values();
     }
 
+    protected function getEventsForPicker(string $mode, CarbonInterface $from, CarbonInterface $to, string $searchTerm = ''): Collection
+    {
+        $searchTerm = trim($searchTerm);
+        $query = Event::query()
+            ->select(['id', 'name', 'display_name', 'starts_at', 'ends_at', 'city', 'state', 'status', 'source_ref'])
+            ->whereNotNull('starts_at')
+            ->whereBetween('starts_at', [$from->toDateString(), $to->toDateString()])
+            ->when($searchTerm !== '', function ($q) use ($searchTerm) {
+                $like = '%'.$searchTerm.'%';
+
+                $q->where(function ($inner) use ($like) {
+                    $inner->where('name', 'like', $like)
+                        ->orWhere('display_name', 'like', $like)
+                        ->orWhere('city', 'like', $like)
+                        ->orWhere('state', 'like', $like);
+                });
+            });
+
+        if ($mode === 'past') {
+            $query->orderByDesc('starts_at');
+        } else {
+            $query->orderBy('starts_at');
+        }
+
+        return $query
+            ->orderBy('display_name')
+            ->limit($this->pickerLimit)
+            ->get();
+    }
+
+    protected function applyDefaultDateWindow(): void
+    {
+        [$from, $to] = $this->defaultWindowBounds($this->dateMode);
+        $this->fromDate = $from->toDateString();
+        $this->toDate = $to->toDateString();
+    }
+
+    /**
+     * @return array{0:CarbonInterface,1:CarbonInterface}
+     */
+    protected function defaultWindowBounds(string $mode): array
+    {
+        $today = now()->startOfDay();
+
+        return match ($mode) {
+            'past' => [$today->copy()->subDays($this->historyDays), $today->copy()->subDay()],
+            'all' => [$today->copy()->subDays($this->historyDays), $today->copy()->addDays($this->lookaheadDays)],
+            default => [$today, $today->copy()->addDays($this->lookaheadDays)],
+        };
+    }
+
+    /**
+     * @return array{0:CarbonInterface,1:CarbonInterface}
+     */
+    protected function resolveWindowBounds(): array
+    {
+        [$defaultFrom, $defaultTo] = $this->defaultWindowBounds($this->dateMode);
+
+        $from = Carbon::parse($this->normalizeDateInput($this->fromDate, $defaultFrom))->startOfDay();
+        $to = Carbon::parse($this->normalizeDateInput($this->toDate, $defaultTo))->endOfDay();
+
+        if ($to->lt($from)) {
+            $to = $from->copy()->endOfDay();
+            $this->toDate = $to->toDateString();
+        }
+
+        return [$from, $to];
+    }
+
+    protected function normalizeDateInput(?string $value, CarbonInterface $fallback): string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return $fallback->toDateString();
+        }
+
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable) {
+            return $fallback->toDateString();
+        }
+    }
+
     public function render()
     {
         $rows = collect($this->rows);
@@ -183,7 +309,6 @@ class UpcomingEventsPanel extends Component
                 'drafted' => $rows->where('planning_state', 'drafted')->count(),
                 'submitted' => $rows->where('planning_state', 'submitted')->count(),
             ],
-            'hasQueueEvents' => $rows->whereIn('planning_state', ['needs_mapping', 'mapped', 'drafted'])->isNotEmpty(),
         ]);
     }
 }

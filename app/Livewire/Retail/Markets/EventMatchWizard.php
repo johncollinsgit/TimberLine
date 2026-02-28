@@ -22,6 +22,8 @@ class EventMatchWizard extends Component
     public ?int $selectedCandidateEventId = null;
     public int $matchWindowDays = 30;
     public int $step = 1;
+    public bool $eventChosen = false;
+    public bool $matchDecisionMade = false;
     public bool $startFresh = false;
     public ?int $selectedScentId = null;
 
@@ -44,18 +46,11 @@ class EventMatchWizard extends Component
         $this->upcomingEventId = $upcomingEventId;
         $this->selectedCandidateEventId = $selectedCandidateEventId;
         $this->matchWindowDays = max(14, min(60, $matchWindowDays));
+        $this->step = 1;
 
         $this->loadUpcomingEvent();
         $this->loadSelectedCandidateEvent();
         $this->loadDraftSummary();
-
-        if ($this->upcomingEventId) {
-            $this->step = 2;
-        }
-
-        if ($this->draftHasContent()) {
-            $this->step = 3;
-        }
     }
 
     public function handleUpcomingEventSelected(int $eventId): void
@@ -63,6 +58,8 @@ class EventMatchWizard extends Component
         $this->upcomingEventId = $eventId > 0 ? $eventId : null;
         $this->selectedCandidateEventId = null;
         $this->selectedCandidateEvent = null;
+        $this->eventChosen = $this->upcomingEventId !== null;
+        $this->matchDecisionMade = false;
         $this->startFresh = false;
         $this->selectedScentId = null;
         $this->loadUpcomingEvent();
@@ -101,11 +98,12 @@ class EventMatchWizard extends Component
     {
         $this->upcomingEventId = $upcomingEventId > 0 ? $upcomingEventId : null;
         $this->selectedCandidateEventId = $candidateEventId > 0 ? $candidateEventId : null;
+        $this->eventChosen = $this->upcomingEventId !== null;
+        $this->matchDecisionMade = $this->selectedCandidateEventId !== null;
         $this->startFresh = false;
         $this->loadUpcomingEvent();
         $this->loadSelectedCandidateEvent();
         $this->loadDraftSummary();
-        $this->step = 3;
     }
 
     public function goToStep(int $step): void
@@ -122,22 +120,7 @@ class EventMatchWizard extends Component
 
     public function next(): void
     {
-        if ($this->step === 1 && $this->upcomingEventId) {
-            $this->step = 2;
-
-            return;
-        }
-
-        if ($this->step === 2 && $this->canAccessStep(3)) {
-            $this->step = 3;
-
-            return;
-        }
-
-        if ($this->step === 3 && $this->canAccessStep(4)) {
-            $this->loadDraftSummary();
-            $this->step = 4;
-        }
+        // Progression is handled by explicit step actions and step-nav clicks.
     }
 
     public function runMatchSearch(): void
@@ -155,6 +138,9 @@ class EventMatchWizard extends Component
             return;
         }
 
+        $this->eventChosen = true;
+        $this->matchDecisionMade = true;
+        $this->startFresh = false;
         $this->dispatch('marketsMappingConfirmed', upcomingEventId: (int) $this->upcomingEventId, candidateEventId: (int) $this->selectedCandidateEventId);
         $this->step = 3;
     }
@@ -165,6 +151,8 @@ class EventMatchWizard extends Component
             return;
         }
 
+        $this->eventChosen = true;
+        $this->matchDecisionMade = true;
         $this->selectedCandidateEventId = null;
         $this->selectedCandidateEvent = null;
         $this->startFresh = true;
@@ -322,15 +310,15 @@ class EventMatchWizard extends Component
         }
 
         if ($step === 2) {
-            return $this->upcomingEventId !== null;
+            return $this->eventChosen;
         }
 
         if ($step === 3) {
-            return $this->upcomingEventId !== null && ($this->startFresh || $this->selectedCandidateEventId !== null || $this->draftHasContent());
+            return $this->eventChosen && $this->matchDecisionMade;
         }
 
         if ($step === 4) {
-            return $this->upcomingEventId !== null && $this->draftHasContent();
+            return $this->eventChosen && $this->matchDecisionMade && $this->draftHasContent();
         }
 
         return false;

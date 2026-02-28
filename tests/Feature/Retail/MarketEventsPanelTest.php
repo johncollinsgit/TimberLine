@@ -81,7 +81,18 @@ test('initial markets plan render does not invoke sync coordinator or matching s
     ]);
 
     $coordinator = \Mockery::mock(MarketEventSyncCoordinator::class);
-    $coordinator->shouldNotReceive('queueStatus');
+    $coordinator->shouldReceive('queueStatus')->andReturn([
+        'status' => 'idle',
+        'weeks' => 4,
+        'queued_at' => null,
+        'started_at' => null,
+        'finished_at' => null,
+        'last_sync_at' => null,
+        'last_sync_status' => null,
+        'last_http_status' => null,
+        'last_error' => null,
+        'last_result' => [],
+    ])->zeroOrMoreTimes();
     $coordinator->shouldNotReceive('canQueue');
     $coordinator->shouldNotReceive('markQueued');
     $coordinator->shouldNotReceive('runSync');
@@ -150,4 +161,53 @@ test('candidate matching runs only after explicit action', function () {
         ->assertSeeText('Run the local match scan to rank historical events for this upcoming date.')
         ->call('handleRunCandidateMatch', $upcoming->id, 30)
         ->assertSeeText('Explicit Match Candidate Event 2025');
+});
+
+test('event picker supports future past all scopes and local search without http', function () {
+    Event::query()->create([
+        'name' => 'Future Nashville Popup',
+        'display_name' => 'Future Nashville Popup 2026',
+        'starts_at' => now()->addDays(12)->toDateString(),
+        'ends_at' => now()->addDays(12)->toDateString(),
+        'city' => 'Nashville',
+        'state' => 'TN',
+        'source' => 'asana_calendar',
+        'source_ref' => 'scope-future-1',
+        'status' => 'needs_mapping',
+    ]);
+
+    Event::query()->create([
+        'name' => 'Past Franklin Market',
+        'display_name' => 'Past Franklin Market 2025',
+        'starts_at' => now()->subDays(20)->toDateString(),
+        'ends_at' => now()->subDays(20)->toDateString(),
+        'city' => 'Franklin',
+        'state' => 'TN',
+        'source' => 'asana_calendar',
+        'source_ref' => 'scope-past-1',
+        'status' => 'needs_mapping',
+    ]);
+
+    Http::fake();
+
+    $component = Livewire::test(UpcomingEventsPanel::class, [
+        'planId' => 0,
+        'stateTab' => 'needs_mapping',
+        'lookaheadDays' => 30,
+    ]);
+
+    $component
+        ->assertSeeText('Future Nashville Popup 2026')
+        ->assertDontSeeText('Past Franklin Market 2025')
+        ->call('setDateMode', 'past')
+        ->assertSeeText('Past Franklin Market 2025')
+        ->assertDontSeeText('Future Nashville Popup 2026')
+        ->call('setDateMode', 'all')
+        ->assertSeeText('Future Nashville Popup 2026')
+        ->assertSeeText('Past Franklin Market 2025')
+        ->set('searchTerm', 'Franklin')
+        ->assertSeeText('Past Franklin Market 2025')
+        ->assertDontSeeText('Future Nashville Popup 2026');
+
+    Http::assertNothingSent();
 });

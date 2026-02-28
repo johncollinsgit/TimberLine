@@ -294,21 +294,18 @@
       Back
     </button>
 
-    <button
-      type="button"
-      wire:click="next"
-      @disabled(($step === 1 && !$upcomingEventId) || ($step === 2 && !$this->canAccessStep(3)) || ($step === 3 && !$this->canAccessStep(4)) || $step >= 4)
-      class="rounded-xl border border-emerald-300/25 bg-emerald-500/12 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
-    >
-      @if($step >= 4)
-        Review Complete
-      @elseif($step === 3)
-        Review Draft
-      @elseif($step === 2)
-        Build Boxes
-      @else
-        Choose Match
-      @endif
-    </button>
+    @if($step === 1)
+      <div class="text-[11px] text-emerald-100/50">
+        Select an upcoming event to continue.
+      </div>
+    @elseif($step === 2)
+      <div class="text-[11px] text-emerald-100/50">
+        Choose a match or start fresh to build the draft.
+      </div>
+    @elseif($step === 3 && !$this->canAccessStep(4))
+      <div class="text-[11px] text-emerald-100/50">
+        Step 4 unlocks once this event has at least one draft line.
+      </div>
+    @endif
   </div>
 </div>
