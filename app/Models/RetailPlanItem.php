@@ -21,6 +21,7 @@ class RetailPlanItem extends Model
         'inventory_quantity',
         'source',
         'status',
+        'upcoming_event_id',
     ];
 
     public function plan()

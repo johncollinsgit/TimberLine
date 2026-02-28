@@ -33,6 +33,12 @@ class EventMatchWizard extends Component
         'top_scents' => [],
     ];
     public bool $draftSummaryLoaded = false;
+    /** @var array<string,mixed> */
+    public array $prefillStatus = [
+        'state' => 'idle',
+        'message' => '',
+        'template_row_count' => 0,
+    ];
 
     public function mount(int $planId = 0, ?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 45): void
     {
@@ -59,6 +65,7 @@ class EventMatchWizard extends Component
         $this->selectedScentId = null;
         $this->loadUpcomingEvent();
         $this->resetDraftSummary();
+        $this->resetPrefillStatus();
         $this->step = $this->upcomingEventId ? 2 : 1;
     }
 
@@ -79,6 +86,7 @@ class EventMatchWizard extends Component
     {
         $this->selectedCandidateEventId = $candidateEventId > 0 ? $candidateEventId : null;
         $this->startFresh = false;
+        $this->resetPrefillStatus();
         $this->loadSelectedCandidateEvent();
     }
 
@@ -103,6 +111,27 @@ class EventMatchWizard extends Component
         $this->loadUpcomingEvent();
         $this->loadSelectedCandidateEvent();
         $this->loadDraftSummary();
+    }
+
+    #[On('marketsPrefillStatusChanged')]
+    public function handlePrefillStatusChanged(
+        int $upcomingEventId = 0,
+        int $candidateEventId = 0,
+        string $state = 'info',
+        string $message = '',
+        int $templateRowCount = 0
+    ): void {
+        $currentUpcoming = (int) ($this->upcomingEventId ?: 0);
+        if ($upcomingEventId > 0 && $currentUpcoming > 0 && $upcomingEventId !== $currentUpcoming) {
+            return;
+        }
+
+        $currentCandidate = (int) ($this->selectedCandidateEventId ?: 0);
+        if ($candidateEventId > 0 && $currentCandidate > 0 && $candidateEventId !== $currentCandidate) {
+            return;
+        }
+
+        $this->setPrefillStatus($state, $message, $templateRowCount);
     }
 
     public function goToStep(int $step): void
@@ -144,6 +173,7 @@ class EventMatchWizard extends Component
         $this->eventChosen = true;
         $this->matchDecisionMade = true;
         $this->startFresh = false;
+        $this->setPrefillStatus('applying', 'Checking the historical event and copying boxes into this draft...', 0);
         $this->dispatch('marketsMappingConfirmed', upcomingEventId: (int) $this->upcomingEventId, candidateEventId: (int) $this->selectedCandidateEventId);
         $this->step = 3;
     }
@@ -159,6 +189,7 @@ class EventMatchWizard extends Component
         $this->selectedCandidateEventId = null;
         $this->selectedCandidateEvent = null;
         $this->startFresh = true;
+        $this->setPrefillStatus('start_fresh', 'Starting with an empty draft. Add a scent to begin building boxes.', 0);
         $this->loadDraftSummary();
         $this->step = 3;
     }
@@ -264,6 +295,24 @@ class EventMatchWizard extends Component
             'line_count' => 0,
             'unit_count' => 0,
             'top_scents' => [],
+        ];
+    }
+
+    protected function resetPrefillStatus(): void
+    {
+        $this->prefillStatus = [
+            'state' => 'idle',
+            'message' => '',
+            'template_row_count' => 0,
+        ];
+    }
+
+    protected function setPrefillStatus(string $state, string $message, int $templateRowCount = 0): void
+    {
+        $this->prefillStatus = [
+            'state' => trim($state) !== '' ? $state : 'info',
+            'message' => trim($message),
+            'template_row_count' => max(0, $templateRowCount),
         ];
     }
 

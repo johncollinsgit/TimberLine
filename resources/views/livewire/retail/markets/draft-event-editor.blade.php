@@ -5,7 +5,7 @@
     </div>
   @elseif($items->isEmpty())
     <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
-      No draft boxes for {{ $event->display_name ?: $event->name ?: 'selected event' }} yet.
+      No draft boxes for {{ $event->display_name ?: $event->name ?: 'selected event' }} yet. Add a scent to start building boxes.
     </div>
   @else
     <div class="text-xs text-emerald-100/65">

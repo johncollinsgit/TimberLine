@@ -204,6 +204,22 @@
       <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
         <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Draft Contents</div>
         <div class="mt-1 text-xs text-emerald-100/60">Everything below is scoped to the selected upcoming event.</div>
+        @if(!empty($prefillStatus['message']))
+          @php($prefillState = (string)($prefillStatus['state'] ?? 'info'))
+          <div class="mt-4 rounded-2xl border px-4 py-3 text-sm
+            {{ in_array($prefillState, ['missing_mappings', 'error'], true)
+              ? 'border-rose-300/20 bg-rose-500/10 text-rose-50'
+              : (in_array($prefillState, ['no_history_rows', 'start_fresh'], true)
+                  ? 'border-amber-300/20 bg-amber-500/10 text-amber-50'
+                  : 'border-emerald-300/20 bg-emerald-500/10 text-emerald-50') }}">
+            {{ $prefillStatus['message'] }}
+            @if($prefillState === 'applied' && (int)($prefillStatus['template_row_count'] ?? 0) > 0)
+              <div class="mt-1 text-xs text-emerald-100/75">
+                {{ (int)($prefillStatus['template_row_count'] ?? 0) }} historical template row{{ (int)($prefillStatus['template_row_count'] ?? 0) === 1 ? '' : 's' }} copied into this draft.
+              </div>
+            @endif
+          </div>
+        @endif
         <div class="mt-4">
           @livewire(
             \App\Livewire\Retail\Markets\DraftEventEditor::class,
