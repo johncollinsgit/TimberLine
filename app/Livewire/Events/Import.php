@@ -150,17 +150,14 @@ class Import extends Component
                     continue;
                 }
 
-                $scent = Scent::query()->where('name', $scentName)->first();
+                $scent = $this->resolveScentByText($scentName);
                 if (! $scent) {
                     $this->warnings[] = "Unknown scent: {$scentName}";
                     $skippedLines++;
                     continue;
                 }
 
-                $size = Size::query()
-                    ->where('label', $sizeLabel)
-                    ->orWhere('code', $sizeLabel)
-                    ->first();
+                $size = $this->resolveSizeByText($sizeLabel);
                 if (! $size) {
                     $this->warnings[] = "Unknown size: {$sizeLabel}";
                     $skippedLines++;
@@ -237,5 +234,74 @@ class Import extends Component
     public function render()
     {
         return view('livewire.events.import')->layout('layouts.app');
+    }
+
+    protected function resolveScentByText(string $value): ?Scent
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        $exact = Scent::query()
+            ->where('name', $value)
+            ->orWhere('display_name', $value)
+            ->orWhere('abbreviation', $value)
+            ->first();
+        if ($exact) {
+            return $exact;
+        }
+
+        $normalized = Scent::normalizeName($value);
+
+        return Scent::query()
+            ->get(['id', 'name', 'display_name', 'abbreviation'])
+            ->first(function (Scent $candidate) use ($normalized): bool {
+                foreach (array_filter([$candidate->name, $candidate->display_name, $candidate->abbreviation]) as $label) {
+                    if (Scent::normalizeName((string) $label) === $normalized) {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+    }
+
+    protected function resolveSizeByText(string $value): ?Size
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        $exact = Size::query()
+            ->where('label', $value)
+            ->orWhere('code', $value)
+            ->first();
+        if ($exact) {
+            return $exact;
+        }
+
+        $normalized = $this->normalizeSizeText($value);
+
+        return Size::query()
+            ->get(['id', 'code', 'label'])
+            ->first(function (Size $candidate) use ($normalized): bool {
+                foreach (array_filter([$candidate->code, $candidate->label]) as $label) {
+                    if ($this->normalizeSizeText((string) $label) === $normalized) {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+    }
+
+    protected function normalizeSizeText(string $value): string
+    {
+        $value = Str::lower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '', $value) ?? $value;
+
+        return trim($value);
     }
 }

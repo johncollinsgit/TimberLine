@@ -173,3 +173,37 @@ test('events import converts blank dates to null and skips malformed rows', func
                 && ($context['error'] ?? null) !== null;
         });
 });
+
+test('events import matches scent display names and normalized size labels', function () {
+    Scent::query()->firstOrCreate(['name' => 'blue_ridge_internal'], [
+        'name' => 'blue_ridge_internal',
+        'display_name' => 'Blue Ridge',
+        'abbreviation' => 'BR',
+        'is_active' => true,
+    ]);
+
+    Size::query()->firstOrCreate(['code' => '16oz-cotton'], [
+        'code' => '16oz-cotton',
+        'label' => '16 oz Cotton',
+        'is_active' => true,
+    ]);
+
+    $component = new Import();
+    $method = new ReflectionMethod($component, 'importRows');
+    $method->setAccessible(true);
+
+    $report = $method->invoke($component, [[
+        'name' => 'Flexible Match Event',
+        'starts_at' => '2025-02-11',
+        'status' => 'published',
+        'scent' => 'Blue Ridge',
+        'size' => '16oz cotton',
+        'planned_qty' => 1,
+        'sent_qty' => 2,
+    ]]);
+
+    expect($report['shipments_created'])->toBe(1);
+    expect($report['market_plans_created'])->toBe(1);
+    expect(EventShipment::query()->count())->toBe(1);
+    expect(MarketPlan::query()->count())->toBe(1);
+});
