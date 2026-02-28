@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Events;
 
+use App\Models\MarketPlan;
 use App\Models\Event;
 use App\Models\EventShipment;
 use App\Models\Scent;
 use App\Models\Size;
+use App\Services\EventMatchingService;
+use Carbon\Carbon;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -53,9 +56,24 @@ class Import extends Component
             fclose($handle);
         }
 
+        $this->report = $this->importRows($rows);
+
+        $this->dispatch('toast', ['type' => 'success', 'message' => 'Import complete.']);
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $rows
+     * @return array<string,int>
+     */
+    protected function importRows(array $rows): array
+    {
         $createdEvents = 0;
+        $updatedEvents = 0;
         $createdLines = 0;
+        $createdMarketPlans = 0;
+        $updatedMarketPlans = 0;
         $skippedLines = 0;
+        $matcher = app(EventMatchingService::class);
 
         foreach ($rows as $row) {
             $name = trim((string) ($row['name'] ?? $row['event'] ?? ''));
@@ -81,6 +99,7 @@ class Import extends Component
             if ($event->wasRecentlyCreated) {
                 $createdEvents++;
             } else {
+                $updatedEvents++;
                 $event->fill([
                     'venue' => $row['venue'] ?? $event->venue,
                     'city' => $row['city'] ?? $event->city,
@@ -125,15 +144,62 @@ class Import extends Component
                 'sold_qty' => $row['sold_qty'] ?? null,
             ]);
             $createdLines++;
+
+            $eventTitle = $name;
+            $scentLabel = $scentName;
+            $rawBoxCount = $row['sent_qty'] ?? $row['sent'] ?? $row['planned_qty'] ?? $row['planned'] ?? 0;
+            $boxCount = max(0, (int) round((float) $rawBoxCount));
+
+            $eventDate = null;
+            try {
+                $startsAt = trim((string) ($row['starts_at'] ?? ''));
+                if ($startsAt !== '') {
+                    $eventDate = Carbon::parse($startsAt)->toDateString();
+                }
+            } catch (\Throwable $e) {
+                $eventDate = null;
+            }
+
+            if ($eventTitle === '' || $scentLabel === '' || ! $eventDate || $boxCount <= 0) {
+                continue;
+            }
+
+            $marketPlan = MarketPlan::query()
+                ->where('event_title', $eventTitle)
+                ->whereDate('event_date', $eventDate)
+                ->where('scent', $scentLabel)
+                ->first();
+
+            if ($marketPlan) {
+                $marketPlan->fill([
+                    'normalized_title' => $matcher->normalizeTitle($eventTitle),
+                    'box_type' => 'full',
+                    'box_count' => $boxCount,
+                    'status' => 'published',
+                ])->save();
+                $updatedMarketPlans++;
+            } else {
+                MarketPlan::query()->create([
+                    'event_title' => $eventTitle,
+                    'event_date' => $eventDate,
+                    'scent' => $scentLabel,
+                    'normalized_title' => $matcher->normalizeTitle($eventTitle),
+                    'box_type' => 'full',
+                    'box_count' => $boxCount,
+                    'status' => 'published',
+                ]);
+                $createdMarketPlans++;
+            }
         }
 
-        $this->report = [
-            'events' => $createdEvents,
-            'shipments' => $createdLines,
+        return [
+            'events_created' => $createdEvents,
+            'events_updated' => $updatedEvents,
+            'shipments_created' => $createdLines,
+            'market_plans_created' => $createdMarketPlans,
+            'market_plans_updated' => $updatedMarketPlans,
             'skipped' => $skippedLines,
         ];
-
-        $this->dispatch('toast', ['type' => 'success', 'message' => 'Import complete.']);
     }
 
     public function render()

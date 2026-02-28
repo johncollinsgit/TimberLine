@@ -26,7 +26,15 @@
     </div>
 
     @if(!empty($report))
-      <div class="text-xs text-emerald-100/70">Imported: {{ $report['events'] }} events, {{ $report['shipments'] }} shipments, skipped {{ $report['skipped'] }} rows.</div>
+      <div class="text-xs text-emerald-100/70">
+        Imported:
+        {{ (int)($report['events_created'] ?? 0) }} events created,
+        {{ (int)($report['events_updated'] ?? 0) }} events updated,
+        {{ (int)($report['shipments_created'] ?? 0) }} shipments created,
+        {{ (int)($report['market_plans_created'] ?? 0) }} market plans created,
+        {{ (int)($report['market_plans_updated'] ?? 0) }} market plans updated,
+        skipped {{ (int)($report['skipped'] ?? 0) }} rows.
+      </div>
     @endif
 
     @if(!empty($warnings))
