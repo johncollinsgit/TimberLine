@@ -34,7 +34,7 @@ export default defineConfig(() => ({
 
   // Make sure prod build matches what Laravel expects
   build: {
-    manifest: true,
+    manifest: 'manifest.json',
     outDir: 'public/build',
     emptyOutDir: true,
   },
