@@ -9,6 +9,7 @@ use App\Models\Scent;
 use App\Models\Size;
 use App\Services\EventMatchingService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -74,6 +75,23 @@ class Import extends Component
         $updatedMarketPlans = 0;
         $skippedLines = 0;
         $matcher = app(EventMatchingService::class);
+        $nullIfBlank = function ($value): ?string {
+            $value = trim((string) $value);
+
+            return $value === '' ? null : $value;
+        };
+        $parseDateOrNull = function ($value): ?Carbon {
+            $value = trim((string) $value);
+            if ($value === '') {
+                return null;
+            }
+
+            try {
+                return Carbon::parse($value);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
 
         foreach ($rows as $row) {
             $name = trim((string) ($row['name'] ?? $row['event'] ?? ''));
@@ -82,113 +100,127 @@ class Import extends Component
                 continue;
             }
 
-            $event = Event::query()->firstOrCreate([
-                'name' => $name,
-                'starts_at' => $row['starts_at'] ?? null,
-            ], [
-                'venue' => $row['venue'] ?? null,
-                'city' => $row['city'] ?? null,
-                'state' => $row['state'] ?? null,
-                'ends_at' => $row['ends_at'] ?? null,
-                'due_date' => $row['due_date'] ?? null,
-                'ship_date' => $row['ship_date'] ?? null,
-                'status' => $row['status'] ?? 'planned',
-                'notes' => $row['notes'] ?? null,
-            ]);
-
-            if ($event->wasRecentlyCreated) {
-                $createdEvents++;
-            } else {
-                $updatedEvents++;
-                $event->fill([
-                    'venue' => $row['venue'] ?? $event->venue,
-                    'city' => $row['city'] ?? $event->city,
-                    'state' => $row['state'] ?? $event->state,
-                    'ends_at' => $row['ends_at'] ?? $event->ends_at,
-                    'due_date' => $row['due_date'] ?? $event->due_date,
-                    'ship_date' => $row['ship_date'] ?? $event->ship_date,
-                    'status' => $row['status'] ?? $event->status,
-                ])->save();
-            }
-
-            $scentName = trim((string) ($row['scent'] ?? ''));
-            $sizeLabel = trim((string) ($row['size'] ?? ''));
-            if ($scentName === '' || $sizeLabel === '') {
-                continue;
-            }
-
-            $scent = Scent::query()->where('name', $scentName)->first();
-            if (!$scent) {
-                $this->warnings[] = "Unknown scent: {$scentName}";
-                $skippedLines++;
-                continue;
-            }
-
-            $size = Size::query()
-                ->where('label', $sizeLabel)
-                ->orWhere('code', $sizeLabel)
-                ->first();
-            if (!$size) {
-                $this->warnings[] = "Unknown size: {$sizeLabel}";
-                $skippedLines++;
-                continue;
-            }
-
-            EventShipment::query()->create([
-                'event_id' => $event->id,
-                'scent_id' => $scent->id,
-                'size_id' => $size->id,
-                'planned_qty' => (int) ($row['planned_qty'] ?? $row['planned'] ?? 0),
-                'sent_qty' => $row['sent_qty'] ?? $row['sent'] ?? null,
-                'returned_qty' => $row['returned_qty'] ?? $row['returned'] ?? null,
-                'sold_qty' => $row['sold_qty'] ?? null,
-            ]);
-            $createdLines++;
-
-            $eventTitle = $name;
-            $scentLabel = $scentName;
-            $rawBoxCount = $row['sent_qty'] ?? $row['sent'] ?? $row['planned_qty'] ?? $row['planned'] ?? 0;
-            $boxCount = max(0, (int) round((float) $rawBoxCount));
-
-            $eventDate = null;
             try {
-                $startsAt = trim((string) ($row['starts_at'] ?? ''));
-                if ($startsAt !== '') {
-                    $eventDate = Carbon::parse($startsAt)->toDateString();
+                $eventPayload = [
+                    'name' => $name,
+                    'venue' => $nullIfBlank($row['venue'] ?? null),
+                    'city' => $nullIfBlank($row['city'] ?? null),
+                    'state' => $nullIfBlank($row['state'] ?? null),
+                    'starts_at' => $parseDateOrNull($row['starts_at'] ?? null),
+                    'ends_at' => $parseDateOrNull($row['ends_at'] ?? null),
+                    'due_date' => $parseDateOrNull($row['due_date'] ?? null),
+                    'ship_date' => $parseDateOrNull($row['ship_date'] ?? null),
+                    'status' => $nullIfBlank($row['status'] ?? 'published') ?? 'published',
+                    'notes' => $nullIfBlank($row['notes'] ?? null),
+                ];
+
+                $event = Event::query()->firstOrCreate([
+                    'name' => $eventPayload['name'],
+                    'starts_at' => $eventPayload['starts_at'],
+                ], [
+                    'venue' => $eventPayload['venue'],
+                    'city' => $eventPayload['city'],
+                    'state' => $eventPayload['state'],
+                    'ends_at' => $eventPayload['ends_at'],
+                    'due_date' => $eventPayload['due_date'],
+                    'ship_date' => $eventPayload['ship_date'],
+                    'status' => $eventPayload['status'],
+                    'notes' => $eventPayload['notes'],
+                ]);
+
+                if ($event->wasRecentlyCreated) {
+                    $createdEvents++;
+                } else {
+                    $updatedEvents++;
+                    $event->fill([
+                        'venue' => $eventPayload['venue'],
+                        'city' => $eventPayload['city'],
+                        'state' => $eventPayload['state'],
+                        'ends_at' => $eventPayload['ends_at'],
+                        'due_date' => $eventPayload['due_date'],
+                        'ship_date' => $eventPayload['ship_date'],
+                        'status' => $eventPayload['status'],
+                        'notes' => $eventPayload['notes'],
+                    ])->save();
+                }
+
+                $scentName = trim((string) ($row['scent'] ?? ''));
+                $sizeLabel = trim((string) ($row['size'] ?? ''));
+                if ($scentName === '' || $sizeLabel === '') {
+                    continue;
+                }
+
+                $scent = Scent::query()->where('name', $scentName)->first();
+                if (! $scent) {
+                    $this->warnings[] = "Unknown scent: {$scentName}";
+                    $skippedLines++;
+                    continue;
+                }
+
+                $size = Size::query()
+                    ->where('label', $sizeLabel)
+                    ->orWhere('code', $sizeLabel)
+                    ->first();
+                if (! $size) {
+                    $this->warnings[] = "Unknown size: {$sizeLabel}";
+                    $skippedLines++;
+                    continue;
+                }
+
+                EventShipment::query()->create([
+                    'event_id' => $event->id,
+                    'scent_id' => $scent->id,
+                    'size_id' => $size->id,
+                    'planned_qty' => (int) ($row['planned_qty'] ?? $row['planned'] ?? 0),
+                    'sent_qty' => $row['sent_qty'] ?? $row['sent'] ?? null,
+                    'returned_qty' => $row['returned_qty'] ?? $row['returned'] ?? null,
+                    'sold_qty' => $row['sold_qty'] ?? null,
+                ]);
+                $createdLines++;
+
+                $eventTitle = $name;
+                $scentLabel = $scentName;
+                $rawBoxCount = $row['sent_qty'] ?? $row['sent'] ?? $row['planned_qty'] ?? $row['planned'] ?? 0;
+                $boxCount = max(0, (int) round((float) $rawBoxCount));
+                $eventDate = $eventPayload['starts_at']?->toDateString();
+
+                if ($eventTitle === '' || $scentLabel === '' || ! $eventDate || $boxCount <= 0) {
+                    continue;
+                }
+
+                $marketPlan = MarketPlan::query()
+                    ->where('event_title', $eventTitle)
+                    ->whereDate('event_date', $eventDate)
+                    ->where('scent', $scentLabel)
+                    ->first();
+
+                if ($marketPlan) {
+                    $marketPlan->fill([
+                        'normalized_title' => $matcher->normalizeTitle($eventTitle),
+                        'box_type' => 'full',
+                        'box_count' => $boxCount,
+                        'status' => 'published',
+                    ])->save();
+                    $updatedMarketPlans++;
+                } else {
+                    MarketPlan::query()->create([
+                        'event_title' => $eventTitle,
+                        'event_date' => $eventDate,
+                        'scent' => $scentLabel,
+                        'normalized_title' => $matcher->normalizeTitle($eventTitle),
+                        'box_type' => 'full',
+                        'box_count' => $boxCount,
+                        'status' => 'published',
+                    ]);
+                    $createdMarketPlans++;
                 }
             } catch (\Throwable $e) {
-                $eventDate = null;
-            }
-
-            if ($eventTitle === '' || $scentLabel === '' || ! $eventDate || $boxCount <= 0) {
-                continue;
-            }
-
-            $marketPlan = MarketPlan::query()
-                ->where('event_title', $eventTitle)
-                ->whereDate('event_date', $eventDate)
-                ->where('scent', $scentLabel)
-                ->first();
-
-            if ($marketPlan) {
-                $marketPlan->fill([
-                    'normalized_title' => $matcher->normalizeTitle($eventTitle),
-                    'box_type' => 'full',
-                    'box_count' => $boxCount,
-                    'status' => 'published',
-                ])->save();
-                $updatedMarketPlans++;
-            } else {
-                MarketPlan::query()->create([
-                    'event_title' => $eventTitle,
-                    'event_date' => $eventDate,
-                    'scent' => $scentLabel,
-                    'normalized_title' => $matcher->normalizeTitle($eventTitle),
-                    'box_type' => 'full',
-                    'box_count' => $boxCount,
-                    'status' => 'published',
+                Log::warning('events import row failed', [
+                    'row' => $row,
+                    'error' => $e->getMessage(),
                 ]);
-                $createdMarketPlans++;
+                $skippedLines++;
+                continue;
             }
         }
 

@@ -7,6 +7,7 @@ use App\Models\MarketPlan;
 use App\Models\Scent;
 use App\Models\Size;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 
 uses(RefreshDatabase::class);
 
@@ -110,4 +111,65 @@ test('events import updates existing market plan rows instead of duplicating the
 
     expect(MarketPlan::query()->count())->toBe(1);
     expect((int) MarketPlan::query()->first()->box_count)->toBe(5);
+});
+
+test('events import converts blank dates to null and skips malformed rows', function () {
+    Scent::query()->firstOrCreate(['name' => 'Blue Ridge'], [
+        'name' => 'Blue Ridge',
+        'display_name' => 'Blue Ridge',
+        'is_active' => true,
+    ]);
+
+    Size::query()->firstOrCreate(['code' => '16oz-cotton'], [
+        'code' => '16oz-cotton',
+        'label' => '16 oz Cotton',
+        'is_active' => true,
+    ]);
+
+    Log::spy();
+
+    $component = new Import();
+    $method = new ReflectionMethod($component, 'importRows');
+    $method->setAccessible(true);
+
+    $report = $method->invoke($component, [
+        [
+            'name' => 'Blank Date Event',
+            'starts_at' => '2025-02-09',
+            'due_date' => '',
+            'ship_date' => '',
+            'status' => '',
+            'scent' => 'Blue Ridge',
+            'size' => '16oz-cotton',
+            'planned_qty' => 1,
+            'sent_qty' => 2,
+        ],
+        [
+            'name' => 'Broken Row Event',
+            'starts_at' => '2025-02-10',
+            'venue' => [],
+            'scent' => 'Blue Ridge',
+            'size' => '16oz-cotton',
+            'planned_qty' => 1,
+            'sent_qty' => 2,
+        ],
+    ]);
+
+    $event = Event::query()->where('name', 'Blank Date Event')->first();
+    expect($event)->not->toBeNull();
+    expect($event->due_date)->toBeNull();
+    expect($event->ship_date)->toBeNull();
+    expect((string) $event->status)->toBe('published');
+
+    expect($report['events_created'])->toBe(1);
+    expect($report['shipments_created'])->toBe(1);
+    expect($report['market_plans_created'])->toBe(1);
+    expect($report['skipped'])->toBe(1);
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(function (string $message, array $context): bool {
+            return $message === 'events import row failed'
+                && ($context['error'] ?? null) !== null;
+        });
 });
