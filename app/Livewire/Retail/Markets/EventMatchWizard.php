@@ -39,6 +39,7 @@ class EventMatchWizard extends Component
         'unit_count' => 0,
         'top_scents' => [],
     ];
+    public bool $draftSummaryLoaded = false;
 
     public function mount(int $planId = 0, ?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 30): void
     {
@@ -50,7 +51,7 @@ class EventMatchWizard extends Component
 
         $this->loadUpcomingEvent();
         $this->loadSelectedCandidateEvent();
-        $this->loadDraftSummary();
+        $this->resetDraftSummary();
     }
 
     public function handleUpcomingEventSelected(int $eventId): void
@@ -63,7 +64,7 @@ class EventMatchWizard extends Component
         $this->startFresh = false;
         $this->selectedScentId = null;
         $this->loadUpcomingEvent();
-        $this->loadDraftSummary();
+        $this->resetDraftSummary();
         $this->step = $this->upcomingEventId ? 2 : 1;
     }
 
@@ -108,6 +109,10 @@ class EventMatchWizard extends Component
 
     public function goToStep(int $step): void
     {
+        if ($step >= 4 && ! $this->draftSummaryLoaded) {
+            $this->loadDraftSummary();
+        }
+
         if ($this->canAccessStep($step)) {
             $this->step = $step;
         }
@@ -166,7 +171,7 @@ class EventMatchWizard extends Component
             return;
         }
 
-        $this->dispatch('marketsPublishRequested');
+        $this->dispatch('marketsPublishRequested', upcomingEventId: (int) ($this->upcomingEventId ?? 0));
     }
 
     public function addHalfBox(): void
@@ -254,13 +259,19 @@ class EventMatchWizard extends Component
         ];
     }
 
-    protected function loadDraftSummary(): void
+    protected function resetDraftSummary(): void
     {
+        $this->draftSummaryLoaded = false;
         $this->draftSummary = [
             'line_count' => 0,
             'unit_count' => 0,
             'top_scents' => [],
         ];
+    }
+
+    protected function loadDraftSummary(): void
+    {
+        $this->resetDraftSummary();
 
         if ($this->planId <= 0 || ! $this->supportsRetailPlanItemUpcomingEventColumn() || ! $this->upcomingEventId) {
             return;
@@ -274,6 +285,8 @@ class EventMatchWizard extends Component
             ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
             ->with(['scent:id,name,display_name'])
             ->get();
+
+        $this->draftSummaryLoaded = true;
 
         if ($items->isEmpty()) {
             return;
