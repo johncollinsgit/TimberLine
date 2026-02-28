@@ -47,17 +47,14 @@
   </section>
 
   @if(($queueMeta['key'] ?? '') === 'markets')
-    <section wire:init="loadMarketEventsPanel" class="min-w-0">
+    <section class="min-w-0">
       <div class="min-w-0">
         @livewire(
-          \App\Livewire\Retail\Markets\EventMatchWizard::class,
+          \App\Livewire\Retail\Markets\MarketsPlanner::class,
           [
             'planId' => $plan->id,
-            'upcomingEventId' => $selectedUpcomingEventId,
-            'selectedCandidateEventId' => $selectedCandidateEventId,
-            'matchWindowDays' => $matchWindowDays,
           ],
-          key('markets-event-match-wizard-'.(int)$plan->id.'-'.(int)($selectedUpcomingEventId ?? 0).'-'.(int)($selectedCandidateEventId ?? 0).'-'.(int)$matchWindowDays)
+          key('markets-planner-'.(int)$plan->id)
         )
       </div>
     </section>

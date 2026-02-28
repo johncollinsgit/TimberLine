@@ -98,7 +98,7 @@
             wire:key="upcoming-event-{{ (int)($event['id'] ?? 0) }}"
             x-data="{ selecting: false }"
             x-on:markets-upcoming-event-selected.window="selecting = false"
-            class="rounded-xl border px-3 py-2 transition {{ $isSelected ? 'border-emerald-300/35 bg-emerald-500/12' : 'border-emerald-200/10 bg-black/10 hover:bg-white/5' }}"
+            class="rounded-xl border px-3 py-2 transition {{ $isSelected ? 'border-emerald-300/35 bg-emerald-500/14 shadow-[0_0_0_1px_rgba(110,231,183,0.08)]' : 'border-emerald-200/10 bg-black/10 hover:border-emerald-300/25 hover:bg-emerald-500/8' }}"
           >
             <button
               type="button"
@@ -106,7 +106,7 @@
               wire:click="selectEvent({{ (int)($event['id'] ?? 0) }})"
               wire:loading.attr="disabled"
               wire:target="selectEvent({{ (int)($event['id'] ?? 0) }})"
-              class="w-full text-left"
+              class="w-full cursor-pointer text-left disabled:cursor-progress"
             >
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">

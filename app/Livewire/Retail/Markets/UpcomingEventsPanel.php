@@ -11,16 +11,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class UpcomingEventsPanel extends Component
 {
-    protected $listeners = [
-        'marketsRefreshRequested' => 'handleMarketsRefreshRequested',
-        'marketsDraftUpdated' => 'handleMarketsDraftUpdated',
-        'marketsMappingConfirmed' => 'handleMarketsMappingConfirmed',
-    ];
-
     public int $planId = 0;
     public ?int $selectedEventId = null;
     public string $stateTab = 'needs_mapping';
@@ -89,6 +84,7 @@ class UpcomingEventsPanel extends Component
         $this->dispatch('marketsMatchSimilarEventRequested', marketEventId: $eventId);
     }
 
+    #[On('marketsRefreshRequested')]
     public function handleMarketsRefreshRequested(?int $eventId = null): void
     {
         $this->loadRows();
@@ -98,11 +94,13 @@ class UpcomingEventsPanel extends Component
         }
     }
 
+    #[On('marketsDraftUpdated')]
     public function handleMarketsDraftUpdated(int $eventId): void
     {
         $this->handleMarketsRefreshRequested($eventId);
     }
 
+    #[On('marketsMappingConfirmed')]
     public function handleMarketsMappingConfirmed(int $upcomingEventId, int $candidateEventId): void
     {
         unset($candidateEventId);

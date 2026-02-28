@@ -31,10 +31,6 @@
     @endforeach
   </div>
 
-  <div class="mt-3 text-xs text-emerald-100/50">
-    step={{ (int) $step }} selected={{ (int)($debugLastSelectedEventId ?? 0) }}
-  </div>
-
   @if($step === 1)
     <div class="mt-5">
       @livewire(
@@ -71,7 +67,7 @@
             </div>
           @endif
         @else
-          <div class="mt-2 text-sm text-emerald-50/70">Selected upcoming event ID: {{ (int)($upcomingEventId ?? $debugLastSelectedEventId ?? 0) }}</div>
+          <div class="mt-2 text-sm text-emerald-50/70">Selected upcoming event ID: {{ (int)($upcomingEventId ?? 0) }}</div>
           <div class="mt-2 text-xs text-emerald-100/55">Event details are still loading or unavailable. You can still scan historical matches.</div>
         @endif
       </div>
@@ -80,7 +76,7 @@
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Historical Match</div>
-            <div class="mt-1 text-sm text-emerald-50/70">Run a local match scan, then load the closest historical event or start clean.</div>
+            <div class="mt-1 text-sm text-emerald-50/70">Run a local match scan across a 45-day prior-year window, then load the closest historical event or start clean.</div>
           </div>
           <button
             type="button"

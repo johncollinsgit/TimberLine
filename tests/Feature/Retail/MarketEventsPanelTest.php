@@ -2,7 +2,9 @@
 
 use App\Livewire\Retail\Markets\UpcomingEventsPanel;
 use App\Livewire\Retail\Markets\CandidateMatchList;
+use App\Livewire\Retail\Markets\MarketsPlanner;
 use App\Livewire\Retail\Plan as RetailPlanComponent;
+use App\Models\RetailPlan;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\EventMatchingService;
@@ -61,6 +63,18 @@ test('markets panel renders upcoming db events without outbound http calls', fun
         ->assertSeeText('Franklin Night Market 2026');
 
     Http::assertNothingSent();
+});
+
+test('markets planner mounts as a thin wrapper around the markets wizard', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Markets Planner Wrapper Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->assertSet('planId', $plan->id)
+        ->assertSeeText('One Event At A Time');
 });
 
 test('initial markets plan render does not invoke sync coordinator or matching service', function () {
@@ -158,7 +172,7 @@ test('candidate matching runs only after explicit action', function () {
         'upcomingEventId' => $upcoming->id,
         'matchWindowDays' => 30,
     ])
-        ->assertSeeText('Run the local match scan to rank historical events for this upcoming date.')
+        ->assertSeeText('Run the local match scan to rank historical events within 30 days of this upcoming date.')
         ->call('handleRunCandidateMatch', $upcoming->id, 30)
         ->assertSeeText('Explicit Match Candidate Event 2025');
 });

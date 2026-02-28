@@ -7,11 +7,11 @@
 
   @if(!$hasMatchRun)
     <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-      Run the local match scan to rank historical events for this upcoming date.
+      Run the local match scan to rank historical events within {{ (int) $matchWindowDays }} days of this upcoming date.
     </div>
   @elseif(empty($candidates))
     <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-      No prior-year candidates found in this window.
+      No prior-year candidates found within {{ (int) $matchWindowDays }} days.
     </div>
   @else
     <div class="max-h-72 overflow-y-auto pr-1 space-y-2">

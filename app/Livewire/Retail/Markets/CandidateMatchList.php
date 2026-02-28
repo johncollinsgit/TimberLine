@@ -7,24 +7,21 @@ use App\Services\EventMatchingService;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class CandidateMatchList extends Component
 {
-    protected $listeners = [
-        'marketsRunCandidateMatch' => 'handleRunCandidateMatch',
-    ];
-
     public ?int $upcomingEventId = null;
     public ?int $selectedCandidateEventId = null;
-    public int $matchWindowDays = 30;
+    public int $matchWindowDays = 45;
     public bool $hasMatchRun = false;
 
     /** @var array<int,array<string,mixed>> */
     public array $candidates = [];
     public ?string $error = null;
 
-    public function mount(?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 30): void
+    public function mount(?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 45): void
     {
         $this->upcomingEventId = $upcomingEventId;
         $this->selectedCandidateEventId = $selectedCandidateEventId;
@@ -54,6 +51,7 @@ class CandidateMatchList extends Component
         $this->dispatch('marketsCandidateSelected', candidateEventId: $candidateEventId);
     }
 
+    #[On('marketsRunCandidateMatch')]
     public function handleRunCandidateMatch(int $upcomingEventId, ?int $matchWindowDays = null): void
     {
         $this->upcomingEventId = $upcomingEventId > 0 ? $upcomingEventId : null;

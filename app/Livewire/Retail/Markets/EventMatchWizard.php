@@ -13,7 +13,7 @@ class EventMatchWizard extends Component
     public int $planId = 0;
     public ?int $upcomingEventId = null;
     public ?int $selectedCandidateEventId = null;
-    public int $matchWindowDays = 30;
+    public int $matchWindowDays = 45;
     public int $step = 1;
     public bool $eventChosen = false;
     public bool $matchDecisionMade = false;
@@ -33,9 +33,8 @@ class EventMatchWizard extends Component
         'top_scents' => [],
     ];
     public bool $draftSummaryLoaded = false;
-    public int $debugLastSelectedEventId = 0;
 
-    public function mount(int $planId = 0, ?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 30): void
+    public function mount(int $planId = 0, ?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 45): void
     {
         $this->planId = max(0, $planId);
         $this->upcomingEventId = $upcomingEventId;
@@ -51,7 +50,6 @@ class EventMatchWizard extends Component
     #[On('marketsUpcomingEventSelected')]
     public function handleUpcomingEventSelected(int $eventId): void
     {
-        $this->debugLastSelectedEventId = max(0, $eventId);
         $this->upcomingEventId = $eventId > 0 ? $eventId : null;
         $this->selectedCandidateEventId = null;
         $this->selectedCandidateEvent = null;

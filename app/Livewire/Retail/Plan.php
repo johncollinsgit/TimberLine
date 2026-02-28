@@ -47,7 +47,7 @@ class Plan extends Component
     public ?int $selectedCandidateEventId = null;
     public string $marketEventsStateTab = 'mapped';
     public bool $showMappingPreview = false;
-    public int $matchWindowDays = 30;
+    public int $matchWindowDays = 45;
     public ?string $marketEventsLastSyncAt = null;
     public bool $marketEventsPanelLoaded = false;
 
@@ -76,16 +76,6 @@ class Plan extends Component
 
     protected $listeners = [
         'scentSelected' => 'handleScentSelected',
-        'marketsUpcomingEventSelected' => 'handleMarketsUpcomingEventSelected',
-        'marketsMatchSimilarEventRequested' => 'matchSimilarEvent',
-        'marketsDraftEventSelected' => 'handleMarketsDraftEventSelected',
-        'marketsEventStateTabChanged' => 'handleMarketsEventStateTabChanged',
-        'marketsMappingConfirmed' => 'handleMarketsMappingConfirmed',
-        'marketsDraftUpdated' => 'handleMarketsDraftUpdated',
-        'marketsAddHalfBoxRequested' => 'addMarketHalfBox',
-        'marketsAddFullBoxRequested' => 'addMarketFullBox',
-        'marketsAddTopShelfRequested' => 'addTopShelfTemplate',
-        'marketsPublishRequested' => 'submitSelectedEventToPouringRoom',
     ];
 
     protected $queryString = [
@@ -323,12 +313,13 @@ class Plan extends Component
     public function updatedMatchWindowDays(mixed $value): void
     {
         $window = (int) $value;
-        $this->matchWindowDays = in_array($window, [14, 30, 45, 60], true) ? $window : 30;
+        $this->matchWindowDays = in_array($window, [14, 30, 45, 60], true) ? $window : 45;
     }
 
     public function handleMarketsUpcomingEventSelected(int $eventId): void
     {
-        $this->selectUpcomingEvent($eventId);
+        // Step 1 selection is owned by EventMatchWizard to avoid rehydrating the entire Plan component.
+        unset($eventId);
     }
 
     public function handleMarketsDraftEventSelected(int $eventId): void
@@ -1810,12 +1801,14 @@ class Plan extends Component
         ]);
     }
 
-    public function submitSelectedEventToPouringRoom(): void
+    public function submitSelectedEventToPouringRoom(?int $upcomingEventId = null): void
     {
         if ($this->queue !== 'markets') {
             $this->publishPlan();
             return;
         }
+
+        $this->primeMarketDraftContext($upcomingEventId);
 
         $event = $this->selectedUpcomingEventForPanel();
         if (! $event) {
@@ -2468,14 +2461,8 @@ class Plan extends Component
         $selectedMarketEvent = null;
 
         if ($this->queue === 'markets') {
-            $selectedMarketEventId = (int) ($this->selectedUpcomingEventId ?: 0);
-            if ($selectedMarketEventId > 0) {
-                $selectedMarketEvent = Event::query()
-                    ->select(['id', 'name', 'display_name', 'starts_at'])
-                    ->find($selectedMarketEventId);
-            }
-
             $items = collect();
+            $sizes = collect();
         }
 
         if (!isset($items)) {
@@ -2484,15 +2471,17 @@ class Plan extends Component
                 ->get();
         }
 
-        $sizes = Size::query()
-            ->when($sizeQuery !== '', function ($q) use ($sizeQuery) {
-                $q->where('code', 'like', '%'.$sizeQuery.'%')
-                  ->orWhere('label', 'like', '%'.$sizeQuery.'%');
-            })
-            ->orderBy('label')
-            ->orderBy('code')
-            ->limit(30)
-            ->get();
+        if (! isset($sizes)) {
+            $sizes = Size::query()
+                ->when($sizeQuery !== '', function ($q) use ($sizeQuery) {
+                    $q->where('code', 'like', '%'.$sizeQuery.'%')
+                      ->orWhere('label', 'like', '%'.$sizeQuery.'%');
+                })
+                ->orderBy('label')
+                ->orderBy('code')
+                ->limit(30)
+                ->get();
+        }
 
         return view('livewire.retail.plan', [
             'items' => $items,

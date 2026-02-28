@@ -1,0 +1,459 @@
+<?php
+
+namespace App\Livewire\Retail\Markets;
+
+use App\Models\Event;
+use App\Models\EventMapping;
+use App\Models\Order;
+use App\Models\OrderLine;
+use App\Models\RetailPlan;
+use App\Models\RetailPlanItem;
+use App\Models\ScentTemplate;
+use App\Models\Size;
+use App\Services\MarketEventSyncCoordinator;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Livewire\Attributes\On;
+use Livewire\Component;
+
+class MarketsPlanner extends Component
+{
+    public int $planId = 0;
+    public RetailPlan $plan;
+
+    public function mount(int $planId): void
+    {
+        $this->planId = max(0, $planId);
+        $this->plan = RetailPlan::query()->findOrFail($this->planId);
+    }
+
+    #[On('marketsMappingConfirmed')]
+    public function handleMarketsMappingConfirmed(int $upcomingEventId, int $candidateEventId): void
+    {
+        $upcoming = Event::query()->find($upcomingEventId);
+        $candidate = Event::query()->find($candidateEventId);
+        if (! $upcoming || ! $candidate) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Could not confirm mapping because one of the events was not found.']);
+            return;
+        }
+
+        if (! $this->supportsEventMappingsTable()) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Event mappings table missing. Run migrations first.']);
+            return;
+        }
+
+        EventMapping::query()->updateOrCreate(
+            ['upcoming_event_id' => $upcoming->id],
+            [
+                'past_event_id' => $candidate->id,
+                'created_by' => auth()->id(),
+            ]
+        );
+
+        $this->rememberSelectedEvent($upcoming);
+        app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
+        $this->syncEventPlanningStatus((int) $upcoming->id);
+        $this->dispatch('marketsRefreshRequested', eventId: (int) $upcoming->id);
+    }
+
+    #[On('marketsDraftUpdated')]
+    public function handleMarketsDraftUpdated(int $eventId): void
+    {
+        if ($eventId > 0) {
+            $this->syncEventPlanningStatus($eventId);
+        }
+    }
+
+    #[On('marketsAddHalfBoxRequested')]
+    public function addMarketHalfBox(?int $scentId = null, ?int $upcomingEventId = null): void
+    {
+        $this->addMarketBoxUnits(1, $scentId, $upcomingEventId);
+    }
+
+    #[On('marketsAddFullBoxRequested')]
+    public function addMarketFullBox(?int $scentId = null, ?int $upcomingEventId = null): void
+    {
+        $this->addMarketBoxUnits(2, $scentId, $upcomingEventId);
+    }
+
+    #[On('marketsAddTopShelfRequested')]
+    public function addTopShelfTemplate(?int $upcomingEventId = null): void
+    {
+        $selectedEvent = $this->selectedEventById($upcomingEventId);
+        if (! $selectedEvent) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an event first before adding Top Shelf defaults.']);
+            return;
+        }
+
+        $template = $this->activeTopShelfTemplate();
+        if (! $template || $template->items->isEmpty()) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'No active Top Shelf default template is configured.']);
+            return;
+        }
+
+        $this->rememberSelectedEvent($selectedEvent);
+        $added = 0;
+        $merged = 0;
+
+        DB::transaction(function () use ($selectedEvent, $template, &$added, &$merged): void {
+            foreach ($template->items as $templateItem) {
+                $scentId = (int) ($templateItem->scent_id ?? 0);
+                if ($scentId <= 0) {
+                    continue;
+                }
+
+                $existing = null;
+                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                    $existing = RetailPlanItem::query()
+                        ->where('retail_plan_id', $this->plan->id)
+                        ->where('source', 'market_top_shelf_template')
+                        ->where('upcoming_event_id', $selectedEvent->id)
+                        ->where('scent_id', $scentId)
+                        ->where('status', '!=', 'published')
+                        ->first();
+                }
+
+                if ($existing) {
+                    $existing->quantity = max(1, (int) $existing->quantity + 1);
+                    $existing->save();
+                    $merged++;
+                    continue;
+                }
+
+                $payload = [
+                    'retail_plan_id' => $this->plan->id,
+                    'scent_id' => $scentId,
+                    'size_id' => null,
+                    'quantity' => 1,
+                    'source' => 'market_top_shelf_template',
+                    'status' => 'draft',
+                    'sku' => Str::limit("mkttop:manual:{$selectedEvent->id}:{$scentId}", 255, ''),
+                ];
+                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                    $payload['upcoming_event_id'] = $selectedEvent->id;
+                }
+
+                RetailPlanItem::query()->create($payload);
+                $added++;
+            }
+        });
+
+        $this->syncEventPlanningStatus((int) $selectedEvent->id, 'drafted');
+        $this->dispatch('marketsRefreshRequested', eventId: (int) $selectedEvent->id);
+        $this->dispatch('marketsDraftUpdated', eventId: (int) $selectedEvent->id);
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Top Shelf default template applied. Added {$added}, merged {$merged}.",
+        ]);
+    }
+
+    #[On('marketsPublishRequested')]
+    public function submitSelectedEventToPouringRoom(?int $upcomingEventId = null): void
+    {
+        $event = $this->selectedEventById($upcomingEventId);
+        if (! $event) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an upcoming event first.']);
+            return;
+        }
+
+        if (! $this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Retail plan items missing upcoming event support. Run migrations first.']);
+            return;
+        }
+
+        $this->rememberSelectedEvent($event);
+
+        $marketSources = ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'];
+        $eventItems = $this->plan->items()
+            ->where('status', '!=', 'published')
+            ->where('upcoming_event_id', $event->id)
+            ->whereIn('source', $marketSources)
+            ->get();
+
+        if ($eventItems->isEmpty()) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'No draft boxes found for the selected event.']);
+            return;
+        }
+
+        $invalid = $eventItems->contains(fn (RetailPlanItem $item) => (int) ($item->scent_id ?? 0) <= 0 || (int) ($item->quantity ?? 0) <= 0);
+        if ($invalid) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'All boxes must have a mapped scent and quantity before sending to Pouring Room.']);
+            return;
+        }
+
+        DB::transaction(function () use ($event, $eventItems): void {
+            $today = CarbonImmutable::today();
+            $marketOrderPayload = [
+                'order_type' => 'event',
+                'order_label' => 'Markets Box Plan · '.($event->display_name ?: $event->name),
+                'order_number' => 'MKT-BOX-' . $today->format('Ymd') . '-' . $event->id,
+                'source' => 'internal',
+                'status' => 'submitted_to_pouring',
+                'ordered_at' => now(),
+                'ship_by_at' => $today,
+                'due_at' => $today,
+                'published_at' => now(),
+            ];
+            if ($this->supportsOrderEventColumn()) {
+                $marketOrderPayload['event_id'] = $event->id;
+            }
+
+            $marketOrder = Order::query()->create($marketOrderPayload);
+
+            [$size16CottonId, $size8CottonId, $sizeWaxMeltId] = $this->marketBoxSizeIds();
+            foreach ($eventItems as $item) {
+                $qty = max(1, (int) $item->quantity);
+                $scentId = (int) $item->scent_id;
+
+                if (($item->source ?? '') === 'market_top_shelf_template') {
+                    $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $qty);
+                } else {
+                    $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $qty * 2);
+                    $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size8CottonId, $qty * 4);
+                    $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $sizeWaxMeltId, $qty * 4);
+                }
+
+                $item->order_id = $marketOrder->id;
+                $item->status = 'published';
+                $item->save();
+            }
+        }, 3);
+
+        $this->syncEventPlanningStatus((int) $event->id, 'submitted');
+        $this->dispatch('marketsRefreshRequested', eventId: (int) $event->id);
+
+        $eventLabel = (string) ($event->display_name ?: $event->name ?: 'Event');
+        $eventDate = $event->starts_at?->format('M j, Y') ?? 'Date TBD';
+
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Sent to Pouring Room: {$eventLabel} ({$eventDate}).",
+        ]);
+        $this->dispatch('event-submitted', [
+            'title' => 'Sent to Pouring Room',
+            'subtitle' => "{$eventLabel} · {$eventDate}",
+            'pegasus_gif' => asset('images/pegasus.gif'),
+        ]);
+        $this->dispatch('retail-plan-published', [
+            'title' => 'Sent to Pouring Room',
+            'subtitle' => "{$eventLabel} · {$eventDate}",
+            'pegasus_gif' => asset('images/pegasus.gif'),
+        ]);
+    }
+
+    protected function addMarketBoxUnits(int $halfBoxUnits, ?int $scentId = null, ?int $upcomingEventId = null): void
+    {
+        $selectedEvent = $this->selectedEventById($upcomingEventId);
+        if (! $selectedEvent) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an event first before adding market boxes.']);
+            return;
+        }
+
+        $scentId = $scentId && $scentId > 0 ? (int) $scentId : null;
+        if (! $scentId) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select a scent first before adding market boxes.']);
+            return;
+        }
+
+        $this->rememberSelectedEvent($selectedEvent);
+
+        $payload = [
+            'retail_plan_id' => $this->plan->id,
+            'scent_id' => $scentId,
+            'size_id' => null,
+            'quantity' => max(1, $halfBoxUnits),
+            'source' => 'market_box_manual',
+            'status' => 'draft',
+            'sku' => 'market-box',
+        ];
+
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $payload['upcoming_event_id'] = $selectedEvent->id;
+        }
+
+        RetailPlanItem::query()->create($payload);
+
+        $this->syncEventPlanningStatus((int) $selectedEvent->id, 'drafted');
+        $this->dispatch('marketsRefreshRequested', eventId: (int) $selectedEvent->id);
+        $this->dispatch('marketsDraftUpdated', eventId: (int) $selectedEvent->id);
+        $this->dispatch('toast', ['type' => 'success', 'message' => 'Market box scent added to plan.']);
+    }
+
+    protected function selectedEventById(?int $upcomingEventId = null): ?Event
+    {
+        $eventId = (int) ($upcomingEventId ?: 0);
+        if ($eventId <= 0) {
+            return null;
+        }
+
+        return Event::query()->select(['id', 'name', 'display_name', 'starts_at', 'ends_at', 'city', 'state', 'status'])->find($eventId);
+    }
+
+    protected function rememberSelectedEvent(Event $event): void
+    {
+        if ($this->supportsRetailPlanEventColumn() && (int) ($this->plan->event_id ?? 0) !== (int) $event->id) {
+            $this->plan->event_id = $event->id;
+            $this->plan->save();
+        }
+    }
+
+    protected function syncEventPlanningStatus(int $eventId, ?string $forceStatus = null): void
+    {
+        $event = Event::query()->find($eventId);
+        if (! $event) {
+            return;
+        }
+
+        if ($forceStatus !== null && in_array($forceStatus, ['needs_mapping', 'mapped', 'drafted', 'submitted'], true)) {
+            $next = $forceStatus;
+        } else {
+            $hasDraftRows = $this->supportsRetailPlanItemUpcomingEventColumn()
+                ? RetailPlanItem::query()
+                    ->where('retail_plan_id', $this->plan->id)
+                    ->where('status', '!=', 'published')
+                    ->where('upcoming_event_id', $eventId)
+                    ->exists()
+                : false;
+            $hasMapping = $this->supportsEventMappingsTable()
+                ? EventMapping::query()->where('upcoming_event_id', $eventId)->exists()
+                : false;
+
+            $next = $this->planningStateForEvent((string) ($event->status ?? ''), $hasMapping, $hasDraftRows);
+        }
+
+        if ((string) $event->status !== $next) {
+            $event->status = $next;
+            $event->save();
+        }
+    }
+
+    protected function planningStateForEvent(string $status, bool $hasMapping, bool $hasDraftRows): string
+    {
+        $status = strtolower(trim($status));
+        if ($status === 'submitted') {
+            return 'submitted';
+        }
+
+        if ($hasDraftRows || $status === 'drafted') {
+            return 'drafted';
+        }
+
+        if ($hasMapping || $status === 'mapped') {
+            return 'mapped';
+        }
+
+        return 'needs_mapping';
+    }
+
+    protected function activeTopShelfTemplate(): ?ScentTemplate
+    {
+        return ScentTemplate::query()
+            ->with(['items.scent:id,name,display_name'])
+            ->where('type', 'top_shelf')
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->first();
+    }
+
+    protected function marketBoxSizeIds(): array
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $sizes = Size::query()->get(['id', 'code', 'label']);
+        $findByContains = function (array $needles) use ($sizes): ?int {
+            foreach ($sizes as $size) {
+                $haystack = Str::lower(trim(($size->code ?? '').' '.($size->label ?? '')));
+                foreach ($needles as $needle) {
+                    if (str_contains($haystack, Str::lower($needle))) {
+                        return (int) $size->id;
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        $cached = [
+            $findByContains(['16oz-cotton', '16 oz cotton', '16oz cotton wick']),
+            $findByContains(['8oz-cotton', '8 oz cotton', '8oz cotton wick']),
+            $findByContains(['wax-melts', 'wax melts', 'wax melt']),
+        ];
+
+        return $cached;
+    }
+
+    protected function createMarketBoxOrderLine(int $orderId, int $scentId, ?int $sizeId, int $qty): void
+    {
+        if (! $sizeId || $qty <= 0) {
+            return;
+        }
+
+        $size = Size::query()->find($sizeId);
+
+        OrderLine::query()->create([
+            'order_id' => $orderId,
+            'scent_id' => $scentId,
+            'size_id' => $sizeId,
+            'size_code' => $size?->code,
+            'ordered_qty' => $qty,
+            'extra_qty' => 0,
+            'quantity' => $qty,
+            'wick_type' => str_contains((string) ($size?->code ?? ''), 'cotton') ? 'cotton' : null,
+        ]);
+    }
+
+    protected function supportsRetailPlanItemUpcomingEventColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plan_items', 'upcoming_event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsRetailPlanEventColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plans', 'event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsOrderEventColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('orders', 'event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsEventMappingsTable(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasTable('event_mappings');
+        }
+
+        return $supports;
+    }
+
+    public function render()
+    {
+        return view('livewire.retail.markets.markets-planner');
+    }
+}

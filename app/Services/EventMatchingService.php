@@ -94,7 +94,7 @@ class EventMatchingService
      *
      * @return Collection<int,array<string,mixed>>
      */
-    public function candidatesForUpcoming(Event $upcoming, int $windowDays = 30, int $yearsBack = 5): Collection
+    public function candidatesForUpcoming(Event $upcoming, int $windowDays = 45, int $yearsBack = 5): Collection
     {
         $startedAt = microtime(true);
         $startsAt = $upcoming->starts_at;
