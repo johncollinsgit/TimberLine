@@ -5,18 +5,11 @@ namespace App\Livewire\Retail\Markets;
 use App\Models\Event;
 use App\Models\RetailPlanItem;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class EventMatchWizard extends Component
 {
-    protected $listeners = [
-        'scentSelected' => 'handleScentSelected',
-        'marketsUpcomingEventSelected' => 'handleUpcomingEventSelected',
-        'marketsCandidateSelected' => 'handleCandidateSelected',
-        'marketsDraftUpdated' => 'handleDraftUpdated',
-        'marketsMappingConfirmed' => 'handleMappingConfirmed',
-    ];
-
     public int $planId = 0;
     public ?int $upcomingEventId = null;
     public ?int $selectedCandidateEventId = null;
@@ -40,6 +33,7 @@ class EventMatchWizard extends Component
         'top_scents' => [],
     ];
     public bool $draftSummaryLoaded = false;
+    public int $debugLastSelectedEventId = 0;
 
     public function mount(int $planId = 0, ?int $upcomingEventId = null, ?int $selectedCandidateEventId = null, int $matchWindowDays = 30): void
     {
@@ -54,8 +48,10 @@ class EventMatchWizard extends Component
         $this->resetDraftSummary();
     }
 
+    #[On('marketsUpcomingEventSelected')]
     public function handleUpcomingEventSelected(int $eventId): void
     {
+        $this->debugLastSelectedEventId = max(0, $eventId);
         $this->upcomingEventId = $eventId > 0 ? $eventId : null;
         $this->selectedCandidateEventId = null;
         $this->selectedCandidateEvent = null;
@@ -68,6 +64,7 @@ class EventMatchWizard extends Component
         $this->step = $this->upcomingEventId ? 2 : 1;
     }
 
+    #[On('scentSelected')]
     public function handleScentSelected(string $key, ?int $scentId = null, ?string $scentName = null): void
     {
         unset($scentName);
@@ -79,6 +76,7 @@ class EventMatchWizard extends Component
         $this->selectedScentId = $scentId && $scentId > 0 ? (int) $scentId : null;
     }
 
+    #[On('marketsCandidateSelected')]
     public function handleCandidateSelected(int $candidateEventId): void
     {
         $this->selectedCandidateEventId = $candidateEventId > 0 ? $candidateEventId : null;
@@ -86,6 +84,7 @@ class EventMatchWizard extends Component
         $this->loadSelectedCandidateEvent();
     }
 
+    #[On('marketsDraftUpdated')]
     public function handleDraftUpdated(int $eventId): void
     {
         if ((int) ($this->upcomingEventId ?: 0) !== (int) $eventId) {
@@ -95,6 +94,7 @@ class EventMatchWizard extends Component
         $this->loadDraftSummary();
     }
 
+    #[On('marketsMappingConfirmed')]
     public function handleMappingConfirmed(int $upcomingEventId, int $candidateEventId): void
     {
         $this->upcomingEventId = $upcomingEventId > 0 ? $upcomingEventId : null;
@@ -274,6 +274,7 @@ class EventMatchWizard extends Component
         $this->resetDraftSummary();
 
         if ($this->planId <= 0 || ! $this->supportsRetailPlanItemUpcomingEventColumn() || ! $this->upcomingEventId) {
+            $this->draftSummaryLoaded = true;
             return;
         }
 

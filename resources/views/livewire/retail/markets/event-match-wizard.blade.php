@@ -31,6 +31,10 @@
     @endforeach
   </div>
 
+  <div class="mt-3 text-xs text-emerald-100/50">
+    step={{ (int) $step }} selected={{ (int)($debugLastSelectedEventId ?? 0) }}
+  </div>
+
   @if($step === 1)
     <div class="mt-5">
       @livewire(
@@ -66,6 +70,9 @@
               @endif
             </div>
           @endif
+        @else
+          <div class="mt-2 text-sm text-emerald-50/70">Selected upcoming event ID: {{ (int)($upcomingEventId ?? $debugLastSelectedEventId ?? 0) }}</div>
+          <div class="mt-2 text-xs text-emerald-100/55">Event details are still loading or unavailable. You can still scan historical matches.</div>
         @endif
       </div>
 
