@@ -3,7 +3,8 @@
 namespace App\Livewire\Retail\Markets;
 
 use App\Models\Event;
-use App\Services\EventMatchingService;
+use App\Models\EventBoxPlan;
+use App\Models\EventInstance;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -40,6 +41,7 @@ class CandidateMatchList extends Component
     public function updatedMatchWindowDays(mixed $value): void
     {
         $this->matchWindowDays = max(14, min(60, (int) $value));
+        $this->selectedCandidateEventId = null;
         $this->hasMatchRun = false;
         $this->error = null;
         $this->candidates = [];
@@ -74,40 +76,21 @@ class CandidateMatchList extends Component
             return;
         }
 
-        $upcoming = Event::query()->select(['id', 'name', 'display_name', 'starts_at', 'ends_at', 'city', 'state', 'source_ref'])->find($upcomingId);
+        $upcoming = Event::query()
+            ->select(['id', 'name', 'display_name', 'starts_at', 'ends_at', 'city', 'state', 'source_ref'])
+            ->find($upcomingId);
         if (! $upcoming || ! $upcoming->starts_at) {
             return;
         }
 
         $window = max(14, min(60, (int) $this->matchWindowDays));
         $version = app(MarketEventSyncCoordinator::class)->matchingCacheVersion();
-        $cacheKey = "markets:candidates:v3:{$version}:{$upcoming->id}:{$window}";
+        $cacheKey = "markets:event-instances:v1:{$version}:{$upcoming->id}:{$window}";
 
         try {
             $this->candidates = Cache::remember($cacheKey, now()->addMinutes(15), function () use ($upcoming, $window): array {
                 $startedAt = microtime(true);
-                $rows = app(EventMatchingService::class)->candidatesForUpcoming($upcoming, $window, 5)
-                    ->take(25)
-                    ->map(function (array $row): array {
-                        /** @var Event|null $candidate */
-                        $candidate = $row['event'] ?? null;
-
-                        return [
-                            'event_id' => (int) ($row['candidate_event_id'] ?? $candidate?->id ?? 0),
-                            'title' => (string) ($candidate?->display_name ?: $candidate?->name ?: 'Untitled Event'),
-                            'starts_at' => $candidate?->starts_at?->toDateString(),
-                            'city' => (string) ($candidate?->city ?? ''),
-                            'state' => (string) ($candidate?->state ?? ''),
-                            'match_score' => (float) ($row['match_score'] ?? 0),
-                            'match_score_percent' => (int) round(((float) ($row['match_score'] ?? 0)) * 100),
-                            'title_score_percent' => (int) round(((float) ($row['title_score'] ?? 0)) * 100),
-                            'date_score_percent' => (int) round(((float) ($row['date_score'] ?? 0)) * 100),
-                            'location_score_percent' => (int) round(((float) ($row['location_score'] ?? 0)) * 100),
-                            'days_diff' => (int) ($row['days_diff'] ?? 0),
-                        ];
-                    })
-                    ->values()
-                    ->all();
+                $rows = $this->rankCandidatesForUpcoming($upcoming, $window);
 
                 Log::info('CandidateMatchList cache miss', [
                     'upcoming_event_id' => $upcoming->id,
@@ -128,6 +111,138 @@ class CandidateMatchList extends Component
             $this->error = 'Failed to load candidate matches.';
             $this->candidates = [];
         }
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function rankCandidatesForUpcoming(Event $upcoming, int $window): array
+    {
+        $upcomingTitle = (string) ($upcoming->display_name ?: $upcoming->name);
+        $upcomingSeriesKey = EventInstance::seriesKey($upcomingTitle);
+        $upcomingTokens = array_values(array_filter(explode(' ', $upcomingSeriesKey), fn (string $token): bool => strlen($token) >= 2));
+        $upcomingState = trim((string) ($upcoming->state ?? ''));
+
+        $baseQuery = EventInstance::query()
+            ->whereNotNull('starts_at')
+            ->whereDate('starts_at', '<', $upcoming->starts_at->toDateString());
+
+        if ($upcomingState !== '' && (clone $baseQuery)->where('state', $upcomingState)->exists()) {
+            $baseQuery->where('state', $upcomingState);
+        }
+
+        $tokensForSql = array_slice(array_values(array_unique($upcomingTokens)), 0, 2);
+        foreach ($tokensForSql as $token) {
+            $baseQuery->where('title', 'like', '%'.$token.'%');
+        }
+
+        $pool = $baseQuery
+            ->orderByDesc('starts_at')
+            ->limit(400)
+            ->get(['id', 'title', 'starts_at', 'ends_at', 'state', 'notes']);
+
+        if ($pool->isEmpty()) {
+            return [];
+        }
+
+        $ranked = $pool
+            ->map(function (EventInstance $instance) use ($upcoming, $upcomingState, $upcomingSeriesKey, $upcomingTokens, $window): ?array {
+                $seriesKey = EventInstance::seriesKey($instance->title);
+                $daysDiff = EventInstance::dayDistance($upcoming->starts_at, $instance->starts_at);
+                if ($daysDiff === null) {
+                    return null;
+                }
+
+                $titleScore = $this->titleScore($upcomingSeriesKey, $seriesKey, $upcomingTokens);
+                $dateScore = max(0.0, 1 - (min($daysDiff, $window * 2) / max(1, $window * 2)));
+                $stateScore = ($upcomingState !== '' && trim((string) ($instance->state ?? '')) === $upcomingState) ? 1.0 : 0.6;
+                $matchScore = ($titleScore * 0.6) + ($dateScore * 0.3) + ($stateScore * 0.1);
+
+                if ($titleScore < 0.2 && $daysDiff > $window) {
+                    return null;
+                }
+
+                return [
+                    'event_id' => (int) $instance->id,
+                    'title' => (string) $instance->title,
+                    'starts_at' => $instance->starts_at?->toDateString(),
+                    'ends_at' => $instance->ends_at?->toDateString(),
+                    'state' => (string) ($instance->state ?? ''),
+                    'match_score' => $matchScore,
+                    'match_score_percent' => (int) round($matchScore * 100),
+                    'title_score_percent' => (int) round($titleScore * 100),
+                    'date_score_percent' => (int) round($dateScore * 100),
+                    'location_score_percent' => (int) round($stateScore * 100),
+                    'days_diff' => $daysDiff,
+                    'notes_snippet' => $instance->notes ? mb_strimwidth((string) $instance->notes, 0, 140, '...') : '',
+                ];
+            })
+            ->filter()
+            ->sortByDesc('match_score')
+            ->take(10)
+            ->values();
+
+        if ($ranked->isEmpty()) {
+            return [];
+        }
+
+        $topIds = $ranked->pluck('event_id')->all();
+        $instancesWithPlans = EventInstance::query()
+            ->with(['boxPlans' => fn ($query) => $query->orderByDesc('box_count_sent')->orderBy('id')])
+            ->whereIn('id', $topIds)
+            ->get(['id', 'title', 'notes', 'starts_at', 'ends_at', 'state'])
+            ->keyBy('id');
+
+        return $ranked
+            ->map(function (array $row) use ($instancesWithPlans): array {
+                /** @var EventInstance|null $instance */
+                $instance = $instancesWithPlans->get((int) $row['event_id']);
+
+                if (! $instance) {
+                    $row['box_plan_count'] = 0;
+                    $row['box_preview'] = [];
+                    $row['top_scent'] = null;
+
+                    return $row;
+                }
+
+                /** @var EventBoxPlan|null $firstLine */
+                $firstLine = $instance->boxPlans->first();
+
+                $row['box_plan_count'] = $instance->boxPlans->count();
+                $row['box_preview'] = $instance->boxPlans->take(4)->map(function (EventBoxPlan $line): array {
+                    return [
+                        'scent_raw' => (string) $line->scent_raw,
+                        'box_count_sent' => $line->box_count_sent !== null ? (float) $line->box_count_sent : null,
+                        'is_split_box' => (bool) $line->is_split_box,
+                    ];
+                })->all();
+                $row['top_scent'] = $firstLine?->scent_raw;
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    protected function titleScore(string $upcomingSeriesKey, string $seriesKey, array $upcomingTokens): float
+    {
+        if ($upcomingSeriesKey === '' || $seriesKey === '') {
+            return 0.0;
+        }
+
+        similar_text($upcomingSeriesKey, $seriesKey, $similarityPercent);
+        $similarity = $similarityPercent / 100;
+
+        $matchingTokens = 0;
+        foreach ($upcomingTokens as $token) {
+            if (str_contains($seriesKey, $token)) {
+                $matchingTokens++;
+            }
+        }
+        $tokenScore = count($upcomingTokens) > 0 ? ($matchingTokens / count($upcomingTokens)) : 0;
+
+        return min(1.0, ($similarity * 0.7) + ($tokenScore * 0.3));
     }
 
     public function render()
