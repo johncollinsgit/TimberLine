@@ -122,24 +122,40 @@ class CandidateMatchList extends Component
         $upcomingSeriesKey = EventInstance::seriesKey($upcomingTitle);
         $upcomingTokens = array_values(array_filter(explode(' ', $upcomingSeriesKey), fn (string $token): bool => strlen($token) >= 2));
         $upcomingState = trim((string) ($upcoming->state ?? ''));
-
-        $baseQuery = EventInstance::query()
-            ->whereNotNull('starts_at')
-            ->whereDate('starts_at', '<', $upcoming->starts_at->toDateString());
-
-        if ($upcomingState !== '' && (clone $baseQuery)->where('state', $upcomingState)->exists()) {
-            $baseQuery->where('state', $upcomingState);
-        }
-
         $tokensForSql = array_slice(array_values(array_unique($upcomingTokens)), 0, 2);
-        foreach ($tokensForSql as $token) {
-            $baseQuery->where('title', 'like', '%'.$token.'%');
+        $pool = $this->candidatePoolForUpcoming(
+            $upcoming,
+            $tokensForSql,
+            preferSameState: $upcomingState !== '',
+            applyTokenFilter: ! empty($tokensForSql)
+        );
+
+        if ($pool->isEmpty() && ! empty($tokensForSql)) {
+            $pool = $this->candidatePoolForUpcoming(
+                $upcoming,
+                $tokensForSql,
+                preferSameState: $upcomingState !== '',
+                applyTokenFilter: false
+            );
         }
 
-        $pool = $baseQuery
-            ->orderByDesc('starts_at')
-            ->limit(400)
-            ->get(['id', 'title', 'starts_at', 'ends_at', 'state', 'notes']);
+        if ($pool->isEmpty() && $upcomingState !== '') {
+            $pool = $this->candidatePoolForUpcoming(
+                $upcoming,
+                $tokensForSql,
+                preferSameState: false,
+                applyTokenFilter: ! empty($tokensForSql)
+            );
+        }
+
+        if ($pool->isEmpty() && $upcomingState !== '' && ! empty($tokensForSql)) {
+            $pool = $this->candidatePoolForUpcoming(
+                $upcoming,
+                $tokensForSql,
+                preferSameState: false,
+                applyTokenFilter: false
+            );
+        }
 
         if ($pool->isEmpty()) {
             return [];
@@ -223,6 +239,35 @@ class CandidateMatchList extends Component
             })
             ->values()
             ->all();
+    }
+
+    protected function candidatePoolForUpcoming(
+        Event $upcoming,
+        array $tokensForSql,
+        bool $preferSameState,
+        bool $applyTokenFilter
+    ) {
+        $query = EventInstance::query()
+            ->whereNotNull('starts_at')
+            ->whereDate('starts_at', '<', $upcoming->starts_at->toDateString());
+
+        $upcomingState = trim((string) ($upcoming->state ?? ''));
+        if ($preferSameState && $upcomingState !== '') {
+            $query->where('state', $upcomingState);
+        }
+
+        if ($applyTokenFilter && ! empty($tokensForSql)) {
+            $query->where(function ($innerQuery) use ($tokensForSql): void {
+                foreach ($tokensForSql as $token) {
+                    $innerQuery->orWhere('title', 'like', '%'.$token.'%');
+                }
+            });
+        }
+
+        return $query
+            ->orderByDesc('starts_at')
+            ->limit(400)
+            ->get(['id', 'title', 'starts_at', 'ends_at', 'state', 'notes']);
     }
 
     protected function titleScore(string $upcomingSeriesKey, string $seriesKey, array $upcomingTokens): float

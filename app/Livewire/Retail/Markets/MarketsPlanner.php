@@ -13,6 +13,7 @@ use App\Models\RetailPlanItem;
 use App\Models\Scent;
 use App\Models\ScentTemplate;
 use App\Models\Size;
+use App\Services\MarketDurationTemplateService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -101,6 +102,45 @@ class MarketsPlanner extends Component
         }
     }
 
+    #[On('marketsDurationTemplateRequested')]
+    public function handleMarketsDurationTemplateRequested(int $upcomingEventId, int $durationDays): void
+    {
+        $upcoming = Event::query()->find($upcomingEventId);
+        if (! $upcoming) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an event first before applying a starter template.']);
+
+            return;
+        }
+
+        $durationDays = max(1, min(3, $durationDays));
+        $template = app(MarketDurationTemplateService::class)->templateForDays($durationDays);
+        $lines = collect($template['lines'] ?? []);
+
+        if ($lines->isEmpty()) {
+            $message = "No {$durationDays}-day starter template is available yet.";
+            $this->dispatchPrefillStatus('no_history_rows', $message, $upcoming->id, 0, 0);
+            $this->dispatch('toast', ['type' => 'warning', 'message' => $message]);
+
+            return;
+        }
+
+        $this->rememberSelectedEvent($upcoming);
+        [$added, $merged] = $this->applyDurationStarterTemplate($upcoming, $lines);
+        $rowCount = $lines->count();
+        $avgBoxes = (float) ($template['average_boxes'] ?? 0);
+
+        $message = "Applied {$durationDays}-day starter template. {$rowCount} starter rows"
+            ." using ".rtrim(rtrim(number_format($avgBoxes, 1), '0'), '.')." average boxes."
+            ." Added {$added}, merged {$merged}.";
+
+        $this->syncEventPlanningStatus((int) $upcoming->id, 'drafted');
+        $this->dispatch('marketsRefreshRequested', eventId: (int) $upcoming->id);
+        $this->dispatch('marketsDraftUpdated', eventId: (int) $upcoming->id);
+        $this->dispatch('marketsDraftCreated', upcomingEventId: (int) $upcoming->id, durationDays: $durationDays, templateRowCount: $rowCount);
+        $this->dispatchPrefillStatus('applied', $message, $upcoming->id, 0, $rowCount);
+        $this->dispatch('toast', ['type' => 'success', 'message' => $message]);
+    }
+
     #[On('marketsAddHalfBoxRequested')]
     public function addMarketHalfBox(?int $scentId = null, ?int $upcomingEventId = null): void
     {
@@ -152,6 +192,9 @@ class MarketsPlanner extends Component
 
                 if ($existing) {
                     $existing->quantity = max(1, (int) $existing->quantity + 1);
+                    if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                        $existing->box_tier = 'top_shelf';
+                    }
                     $existing->save();
                     $merged++;
                     continue;
@@ -168,6 +211,12 @@ class MarketsPlanner extends Component
                 ];
                 if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
                     $payload['upcoming_event_id'] = $selectedEvent->id;
+                }
+                if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                    $payload['box_tier'] = 'top_shelf';
+                }
+                if ($this->supportsRetailPlanItemNotesColumn()) {
+                    $payload['notes'] = null;
                 }
 
                 RetailPlanItem::query()->create($payload);
@@ -200,7 +249,7 @@ class MarketsPlanner extends Component
 
         $this->rememberSelectedEvent($event);
 
-        $marketSources = ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'];
+        $marketSources = RetailPlanItem::marketDraftSources();
         $eventItems = $this->plan->items()
             ->where('status', '!=', 'published')
             ->where('upcoming_event_id', $event->id)
@@ -241,8 +290,11 @@ class MarketsPlanner extends Component
             foreach ($eventItems as $item) {
                 $qty = max(1, (int) $item->quantity);
                 $scentId = (int) $item->scent_id;
+                $boxTier = $this->supportsRetailPlanItemBoxTierColumn()
+                    ? strtolower(trim((string) ($item->box_tier ?? 'standard')))
+                    : (($item->source ?? '') === 'market_top_shelf_template' ? 'top_shelf' : 'standard');
 
-                if (($item->source ?? '') === 'market_top_shelf_template') {
+                if ($boxTier === 'top_shelf') {
                     $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $qty);
                 } else {
                     $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $qty * 2);
@@ -306,6 +358,12 @@ class MarketsPlanner extends Component
 
         if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
             $payload['upcoming_event_id'] = $selectedEvent->id;
+        }
+        if ($this->supportsRetailPlanItemBoxTierColumn()) {
+            $payload['box_tier'] = 'standard';
+        }
+        if ($this->supportsRetailPlanItemNotesColumn()) {
+            $payload['notes'] = null;
         }
 
         RetailPlanItem::query()->create($payload);
@@ -431,6 +489,9 @@ class MarketsPlanner extends Component
                 if (($existing->status ?? 'draft') === 'needs_mapping') {
                     $existing->status = 'draft';
                 }
+                if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                    $existing->box_tier = 'top_shelf';
+                }
                 $existing->save();
                 $merged++;
                 continue;
@@ -450,6 +511,12 @@ class MarketsPlanner extends Component
 
             if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
                 $payload['upcoming_event_id'] = $selectedEvent->id;
+            }
+            if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                $payload['box_tier'] = 'top_shelf';
+            }
+            if ($this->supportsRetailPlanItemNotesColumn()) {
+                $payload['notes'] = null;
             }
 
             RetailPlanItem::query()->create($payload);
@@ -477,7 +544,7 @@ class MarketsPlanner extends Component
             $existing = RetailPlanItem::query()
                 ->where('retail_plan_id', $this->plan->id)
                 ->whereNull('size_id')
-                ->whereIn('source', ['market_box_manual', 'market_box_draft', 'market_box_event_prefill', 'event_prefill'])
+                ->whereIn('source', RetailPlanItem::marketMergeableSources())
                 ->when(
                     $this->supportsRetailPlanItemUpcomingEventColumn(),
                     fn ($query) => $query->where('upcoming_event_id', $selectedEvent->id)
@@ -493,6 +560,9 @@ class MarketsPlanner extends Component
                 }
                 if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
                     $existing->upcoming_event_id = $selectedEvent->id;
+                }
+                if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                    $existing->box_tier = $boxType === 'top_shelf' ? 'top_shelf' : 'standard';
                 }
                 $existing->save();
 
@@ -528,6 +598,12 @@ class MarketsPlanner extends Component
         if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
             $payload['upcoming_event_id'] = $selectedEvent->id;
         }
+        if ($this->supportsRetailPlanItemBoxTierColumn()) {
+            $payload['box_tier'] = $boxType === 'top_shelf' ? 'top_shelf' : 'standard';
+        }
+        if ($this->supportsRetailPlanItemNotesColumn()) {
+            $payload['notes'] = null;
+        }
 
         RetailPlanItem::query()->create($payload);
 
@@ -537,6 +613,108 @@ class MarketsPlanner extends Component
     protected function resolveScentIdFromText(string $scent): ?int
     {
         return $this->resolveSingleScentIdFromText($scent);
+    }
+
+    /**
+     * @param  Collection<int,array<string,mixed>>  $lines
+     * @return array{0:int,1:int}
+     */
+    protected function applyDurationStarterTemplate(Event $upcomingEvent, Collection $lines): array
+    {
+        $added = 0;
+        $merged = 0;
+
+        DB::transaction(function () use ($upcomingEvent, $lines, &$added, &$merged): void {
+            foreach ($lines as $index => $line) {
+                $scentRaw = trim((string) ($line['scent_raw'] ?? ''));
+                $halfBoxUnits = max(1, (int) ($line['half_box_units'] ?? 1));
+                $scentId = $this->resolveScentIdFromText($scentRaw);
+                $result = $this->mergeDurationTemplateItem(
+                    $upcomingEvent,
+                    $index + 1,
+                    $scentId,
+                    $halfBoxUnits,
+                    $scentRaw,
+                    (string) ($line['box_tier'] ?? 'standard')
+                );
+
+                $added += $result['added'];
+                $merged += $result['merged'];
+            }
+        }, 3);
+
+        return [$added, $merged];
+    }
+
+    /**
+     * @return array{added:int,merged:int}
+     */
+    protected function mergeDurationTemplateItem(
+        Event $selectedEvent,
+        int $templateIndex,
+        ?int $scentId,
+        int $halfBoxUnits,
+        string $rawScent,
+        string $boxTier = 'standard'
+    ): array {
+        $halfBoxUnits = max(1, $halfBoxUnits);
+        $boxTier = strtolower(trim($boxTier)) === 'top_shelf' ? 'top_shelf' : 'standard';
+
+        if ($scentId) {
+            $existing = RetailPlanItem::query()
+                ->where('retail_plan_id', $this->plan->id)
+                ->whereNull('size_id')
+                ->whereIn('source', RetailPlanItem::marketMergeableSources())
+                ->when(
+                    $this->supportsRetailPlanItemUpcomingEventColumn(),
+                    fn ($query) => $query->where('upcoming_event_id', $selectedEvent->id)
+                )
+                ->where('scent_id', $scentId)
+                ->where('status', '!=', 'published')
+                ->first();
+
+            if ($existing) {
+                $existing->quantity = max(1, (int) $existing->quantity + $halfBoxUnits);
+                if (($existing->status ?? 'draft') === 'needs_mapping') {
+                    $existing->status = 'draft';
+                }
+                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                    $existing->upcoming_event_id = $selectedEvent->id;
+                }
+                if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                    $existing->box_tier = $boxTier;
+                }
+                $existing->save();
+
+                return ['added' => 0, 'merged' => 1];
+            }
+        }
+
+        $payload = [
+            'retail_plan_id' => $this->plan->id,
+            'order_id' => null,
+            'order_line_id' => null,
+            'scent_id' => $scentId,
+            'size_id' => null,
+            'quantity' => $halfBoxUnits,
+            'source' => 'market_duration_template',
+            'status' => $scentId ? 'draft' : 'needs_mapping',
+            'sku' => Str::limit('mkttpl:'.$selectedEvent->id.':'.$templateIndex.':'.(Str::slug($rawScent) ?: 'scent'), 255, ''),
+        ];
+
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $payload['upcoming_event_id'] = $selectedEvent->id;
+        }
+        if ($this->supportsRetailPlanItemBoxTierColumn()) {
+            $payload['box_tier'] = $boxTier;
+        }
+        if ($this->supportsRetailPlanItemNotesColumn()) {
+            $payload['notes'] = null;
+        }
+
+        RetailPlanItem::query()->create($payload);
+
+        return ['added' => 1, 'merged' => 0];
     }
 
     /**
@@ -744,6 +922,28 @@ class MarketsPlanner extends Component
 
         if ($supports === null) {
             $supports = Schema::hasColumn('retail_plans', 'event_id');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsRetailPlanItemBoxTierColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plan_items', 'box_tier');
+        }
+
+        return $supports;
+    }
+
+    protected function supportsRetailPlanItemNotesColumn(): bool
+    {
+        static $supports = null;
+
+        if ($supports === null) {
+            $supports = Schema::hasColumn('retail_plan_items', 'notes');
         }
 
         return $supports;

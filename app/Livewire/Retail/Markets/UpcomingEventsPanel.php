@@ -6,6 +6,7 @@ use Carbon\CarbonInterface;
 use App\Models\Event;
 use App\Models\EventMapping;
 use App\Models\RetailPlanItem;
+use App\Services\MarketDurationTemplateService;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -29,6 +30,8 @@ class UpcomingEventsPanel extends Component
     public string $sourceLabel = 'DB (synced calendar events)';
     public string $windowLabel = '';
     public ?string $lastSyncAt = null;
+    public ?int $starterTemplateAppliedDays = null;
+    public string $starterTemplateNotice = '';
 
     /** @var array<int,array<string,mixed>> */
     public array $rows = [];
@@ -50,6 +53,7 @@ class UpcomingEventsPanel extends Component
     public function updatedSelectedEventId(?int $value): void
     {
         $this->selectedEventId = $value ? (int) $value : null;
+        $this->clearStarterTemplateNotice();
     }
 
     public function setStateTab(string $tab): void
@@ -74,8 +78,31 @@ class UpcomingEventsPanel extends Component
     public function selectEvent(int $eventId): void
     {
         $this->selectedEventId = $eventId;
+        $this->clearStarterTemplateNotice();
         $this->dispatch('marketsUpcomingEventSelected', eventId: $eventId);
         $this->dispatch('markets-upcoming-event-selected', id: $eventId);
+    }
+
+    public function applyDurationTemplate(int $dayCount): void
+    {
+        $eventId = (int) ($this->selectedEventId ?: 0);
+        if ($eventId <= 0) {
+            return;
+        }
+
+        $dayCount = max(1, min(3, $dayCount));
+        $this->dispatch('marketsUpcomingEventSelected', eventId: $eventId);
+        $this->dispatch('marketsDurationTemplateRequested', upcomingEventId: $eventId, durationDays: $dayCount);
+    }
+
+    public function continueWithStarterDraft(): void
+    {
+        $eventId = (int) ($this->selectedEventId ?: 0);
+        if ($eventId <= 0 || $this->starterTemplateAppliedDays === null) {
+            return;
+        }
+
+        $this->dispatch('marketsOpenDraftRequested', upcomingEventId: $eventId);
     }
 
     public function matchEvent(int $eventId): void
@@ -98,6 +125,19 @@ class UpcomingEventsPanel extends Component
     public function handleMarketsDraftUpdated(int $eventId): void
     {
         $this->handleMarketsRefreshRequested($eventId);
+    }
+
+    #[On('marketsDraftCreated')]
+    public function handleMarketsDraftCreated(int $upcomingEventId, int $durationDays): void
+    {
+        $this->handleMarketsRefreshRequested($upcomingEventId);
+        if ((int) ($this->selectedEventId ?: 0) !== $upcomingEventId) {
+            $this->selectedEventId = $upcomingEventId;
+        }
+
+        $this->starterTemplateAppliedDays = max(1, min(3, $durationDays));
+        $this->starterTemplateNotice = "Draft created from {$this->starterTemplateAppliedDays}-day starter template.";
+        $this->stateTab = 'drafted';
     }
 
     #[On('marketsMappingConfirmed')]
@@ -298,6 +338,14 @@ class UpcomingEventsPanel extends Component
     public function render()
     {
         $rows = collect($this->rows);
+        $selectedEventDurationDays = $this->selectedEventDurationDays();
+        $templates = collect(app(MarketDurationTemplateService::class)->templates())
+            ->map(function (array $template) use ($selectedEventDurationDays): array {
+                $template['recommended'] = $selectedEventDurationDays > 0 && (int) ($template['day_count'] ?? 0) === $selectedEventDurationDays;
+
+                return $template;
+            })
+            ->all();
 
         return view('livewire.retail.markets.upcoming-events-panel', [
             'events' => $this->eventsForTab(),
@@ -307,6 +355,31 @@ class UpcomingEventsPanel extends Component
                 'drafted' => $rows->where('planning_state', 'drafted')->count(),
                 'submitted' => $rows->where('planning_state', 'submitted')->count(),
             ],
+            'durationTemplates' => $templates,
+            'selectedEventDurationDays' => $selectedEventDurationDays,
         ]);
+    }
+
+    protected function selectedEventDurationDays(): int
+    {
+        $eventId = (int) ($this->selectedEventId ?: 0);
+        if ($eventId <= 0) {
+            return 0;
+        }
+
+        $event = Event::query()->select(['id', 'starts_at', 'ends_at'])->find($eventId);
+        if (! $event || ! $event->starts_at) {
+            return 0;
+        }
+
+        $endsAt = $event->ends_at ?: $event->starts_at;
+
+        return max(1, (int) $event->starts_at->diffInDays($endsAt) + 1);
+    }
+
+    protected function clearStarterTemplateNotice(): void
+    {
+        $this->starterTemplateAppliedDays = null;
+        $this->starterTemplateNotice = '';
     }
 }

@@ -3,6 +3,7 @@
 use App\Livewire\Retail\Markets\EventMatchWizard;
 use App\Livewire\Retail\Markets\UpcomingEventsPanel;
 use App\Livewire\Retail\Markets\CandidateMatchList;
+use App\Livewire\Retail\Markets\DraftEventEditor;
 use App\Livewire\Retail\Markets\MarketsPlanner;
 use App\Livewire\Retail\Plan as RetailPlanComponent;
 use App\Models\EventBoxPlan;
@@ -11,9 +12,11 @@ use App\Models\RetailPlan;
 use App\Models\Event;
 use App\Models\RetailPlanItem;
 use App\Models\Scent;
+use App\Models\Size;
 use App\Models\User;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -154,6 +157,36 @@ test('candidate matching runs only after explicit action', function () {
         ->assertSeeText('Run the local match scan to rank historical box-plan templates within 30 days of this upcoming date.')
         ->call('handleRunCandidateMatch', $upcoming->id, 30)
         ->assertSeeText('Explicit Match Candidate Event, TN');
+});
+
+test('candidate matching falls back when sql token prefilter would otherwise hide a valid historical template', function () {
+    $upcoming = Event::query()->create([
+        'name' => '03.21.26 Frosty Farmer',
+        'display_name' => '03.21.26 Frosty Farmer',
+        'starts_at' => '2026-03-21',
+        'ends_at' => '2026-03-21',
+        'state' => 'SC',
+        'status' => 'needs_mapping',
+    ]);
+
+    EventInstance::query()->create([
+        'title' => 'Frosty Weekend, SC',
+        'starts_at' => '2025-03-15',
+        'ends_at' => '2025-03-16',
+        'state' => 'SC',
+        'status' => 'completed',
+    ]);
+
+    $coordinator = \Mockery::mock(MarketEventSyncCoordinator::class);
+    $coordinator->shouldReceive('matchingCacheVersion')->once()->andReturn(1);
+    $this->app->instance(MarketEventSyncCoordinator::class, $coordinator);
+
+    Livewire::test(CandidateMatchList::class, [
+        'upcomingEventId' => $upcoming->id,
+        'matchWindowDays' => 45,
+    ])
+        ->call('handleRunCandidateMatch', $upcoming->id, 45)
+        ->assertSeeText('Frosty Weekend, SC');
 });
 
 test('event picker supports future past all scopes and local search without http', function () {
@@ -351,4 +384,228 @@ test('selecting a historical match still copies templates when event_mappings is
 
     expect(Schema::hasTable('event_mappings'))->toBeFalse();
     expect(RetailPlanItem::query()->count())->toBe(1);
+});
+
+test('duration starter template creates a draft from fixed 1 to 3 day averages', function () {
+    Cache::flush();
+
+    $plan = RetailPlan::query()->create([
+        'name' => 'Duration Starter Template Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $upcoming = Event::query()->create([
+        'name' => '04.11.26 Test Weekend Market',
+        'display_name' => '04.11.26 Test Weekend Market',
+        'starts_at' => '2026-04-11',
+        'ends_at' => '2026-04-12',
+        'status' => 'needs_mapping',
+    ]);
+
+    foreach (['Blue Ridge', 'Moss Trail', 'Cedar Smoke'] as $scentName) {
+        Scent::query()->firstOrCreate(['name' => $scentName], [
+            'display_name' => $scentName,
+            'is_active' => true,
+        ]);
+    }
+
+    $historical = EventInstance::query()->create([
+        'title' => 'Test Weekend Market, SC',
+        'starts_at' => '2025-04-12',
+        'ends_at' => '2025-04-13',
+        'state' => 'SC',
+        'status' => 'completed',
+    ]);
+
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $historical->id,
+        'scent_raw' => 'Blue Ridge',
+        'box_count_sent' => 2,
+    ]);
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $historical->id,
+        'scent_raw' => 'Moss Trail',
+        'box_count_sent' => 1,
+    ]);
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $historical->id,
+        'scent_raw' => 'Cedar Smoke',
+        'box_count_sent' => 1,
+    ]);
+
+    app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
+
+    Livewire::test(UpcomingEventsPanel::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $upcoming->id,
+        'stateTab' => 'needs_mapping',
+        'lookaheadDays' => 30,
+    ])
+        ->assertSeeText('Quick Start Templates')
+        ->assertSeeText('Use 2-Day Starter');
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('handleMarketsDurationTemplateRequested', $upcoming->id, 2)
+        ->assertDispatched('marketsDraftCreated')
+        ->assertDispatched('marketsDraftUpdated')
+        ->assertDispatched('marketsPrefillStatusChanged');
+
+    $items = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $upcoming->id)
+        ->where('source', 'market_duration_template')
+        ->get();
+
+    expect($items->isNotEmpty())->toBeTrue();
+    expect((string) $upcoming->fresh()->status)->toBe('drafted');
+
+    Livewire::test(UpcomingEventsPanel::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $upcoming->id,
+        'stateTab' => 'drafted',
+        'lookaheadDays' => 30,
+    ])
+        ->call('handleMarketsDraftCreated', $upcoming->id, 2)
+        ->assertSeeText('Draft created from 2-day starter template.')
+        ->assertSeeText('Continue');
+
+    Livewire::test(EventMatchWizard::class, [
+        'planId' => $plan->id,
+        'upcomingEventId' => $upcoming->id,
+    ])
+        ->call('handleDraftCreated', $upcoming->id, 2, $items->count())
+        ->call('handleOpenDraftRequested', $upcoming->id)
+        ->assertSet('step', 3)
+        ->assertSet('draftSummary.line_count', $items->count());
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $upcoming->id,
+    ])
+        ->assertSeeText('Blue Ridge');
+});
+
+test('draft event editor saves inline edits for draft boxes', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Draft Editor Inline Edit Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '03.14.26 TR Winter Pop Up',
+        'display_name' => '03.14.26 TR Winter Pop Up',
+        'starts_at' => '2026-03-14',
+        'ends_at' => '2026-03-14',
+        'status' => 'drafted',
+    ]);
+
+    $originalScent = Scent::query()->create([
+        'name' => 'Blue Ridge',
+        'display_name' => 'Blue Ridge',
+        'is_active' => true,
+    ]);
+
+    $updatedScent = Scent::query()->create([
+        'name' => 'Moss Trail',
+        'display_name' => 'Moss Trail',
+        'is_active' => true,
+    ]);
+
+    $size = Size::query()->firstOrCreate(
+        ['code' => '16oz-cotton'],
+        [
+            'label' => '16 oz Cotton',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]
+    );
+
+    $item = RetailPlanItem::query()->create([
+        'retail_plan_id' => $plan->id,
+        'scent_id' => $originalScent->id,
+        'size_id' => null,
+        'quantity' => 2,
+        'source' => 'event_prefill',
+        'status' => 'draft',
+        'upcoming_event_id' => $event->id,
+        'box_tier' => 'standard',
+        'notes' => null,
+    ]);
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->set("draftRows.{$item->id}.quantity", 5)
+        ->set("draftRows.{$item->id}.scent_id", $updatedScent->id)
+        ->set("draftRows.{$item->id}.size_id", $size->id)
+        ->set("draftRows.{$item->id}.box_tier", 'top_shelf')
+        ->set("draftRows.{$item->id}.notes", 'Runner requested an extra 16oz focus.')
+        ->call('saveItem', $item->id)
+        ->assertSeeText('Saved.');
+
+    $item->refresh();
+
+    expect((int) $item->quantity)->toBe(5);
+    expect((int) $item->scent_id)->toBe($updatedScent->id);
+    expect((int) $item->size_id)->toBe($size->id);
+    expect((string) $item->box_tier)->toBe('top_shelf');
+    expect((string) $item->notes)->toBe('Runner requested an extra 16oz focus.');
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->assertSet("draftRows.{$item->id}.quantity", 5)
+        ->assertSet("draftRows.{$item->id}.scent_id", $updatedScent->id)
+        ->assertSet("draftRows.{$item->id}.size_id", $size->id)
+        ->assertSet("draftRows.{$item->id}.box_tier", 'top_shelf')
+        ->assertSet("draftRows.{$item->id}.notes", 'Runner requested an extra 16oz focus.');
+});
+
+test('draft event editor reloads db rows when mounted state is empty', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Draft Editor Reload Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '03.27.26 - 03.29.26 Flowertown Festival, SC',
+        'display_name' => '03.27.26 - 03.29.26 Flowertown Festival, SC',
+        'starts_at' => '2026-03-27',
+        'ends_at' => '2026-03-29',
+        'status' => 'drafted',
+    ]);
+
+    $scent = Scent::query()->firstOrCreate(
+        ['name' => 'Garden Mint'],
+        [
+            'display_name' => 'Garden Mint',
+            'is_active' => true,
+        ]
+    );
+
+    $item = RetailPlanItem::query()->create([
+        'retail_plan_id' => $plan->id,
+        'scent_id' => $scent->id,
+        'size_id' => null,
+        'quantity' => 2,
+        'source' => 'event_prefill',
+        'status' => 'draft',
+        'upcoming_event_id' => $event->id,
+        'box_tier' => 'standard',
+        'notes' => null,
+    ]);
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->assertSeeText('Garden Mint')
+        ->set('draftRows', [])
+        ->assertSeeText('Garden Mint')
+        ->assertSet("draftRows.{$item->id}.quantity", 2);
 });

@@ -172,6 +172,8 @@
             <div class="mt-1 text-xs text-emerald-100/60">
               @if(!empty($selectedCandidateEvent))
                 Using {{ $selectedCandidateEvent['title'] }} as the historical box-plan source.
+              @elseif((int)($draftSummary['line_count'] ?? 0) > 0)
+                Using a starter template or existing draft for this event.
               @elseif($startFresh)
                 Starting with an empty draft for this event.
               @else
@@ -179,8 +181,9 @@
               @endif
             </div>
           </div>
-          <div class="grid w-full items-end gap-2 md:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,10rem))] lg:w-auto lg:min-w-[48rem]">
-            <div class="min-w-0">
+          <div class="flex w-full flex-col gap-3 lg:w-auto lg:min-w-[52rem]">
+            <div class="md:flex md:flex-row md:items-end md:gap-4">
+              <div class="w-full flex-1 min-w-[16rem] md:min-w-[22rem]">
               <label class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Scent</label>
               <div class="mt-2">
                 @livewire(
@@ -189,6 +192,7 @@
                     'emitKey' => 'markets-stepper',
                     'selectedId' => (int)($selectedScentId ?? 0),
                     'allowWholesaleCustom' => false,
+                    'placeholder' => 'Search scents for this draft…',
                   ],
                   key('markets-stepper-scent-'.(int)$planId.'-'.(int)($upcomingEventId ?? 0))
                 )
@@ -196,31 +200,34 @@
               @if(!$selectedScentId)
                 <div class="mt-2 text-[11px] text-emerald-100/50">Select a scent to add boxes.</div>
               @endif
+              </div>
+              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:justify-end md:shrink-0">
+                <button
+                  type="button"
+                  wire:click="addHalfBox"
+                  @disabled(!$upcomingEventId || !$selectedScentId)
+                  class="w-full rounded-2xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  Add Half Box
+                </button>
+                <button
+                  type="button"
+                  wire:click="addFullBox"
+                  @disabled(!$upcomingEventId || !$selectedScentId)
+                  class="w-full rounded-2xl border border-emerald-300/35 bg-emerald-500/22 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  Add Full Box
+                </button>
+                <button
+                  type="button"
+                  wire:click="addTopShelf"
+                  @disabled(!$upcomingEventId)
+                  class="w-full rounded-2xl border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  Add Top Shelf
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              wire:click="addHalfBox"
-              @disabled(!$upcomingEventId || !$selectedScentId)
-              class="rounded-2xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Add Half Box
-            </button>
-            <button
-              type="button"
-              wire:click="addFullBox"
-              @disabled(!$upcomingEventId || !$selectedScentId)
-              class="rounded-2xl border border-emerald-300/35 bg-emerald-500/22 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Add Full Box
-            </button>
-            <button
-              type="button"
-              wire:click="addTopShelf"
-              @disabled(!$upcomingEventId)
-              class="rounded-2xl border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Add Top Shelf
-            </button>
           </div>
         </div>
       </div>
@@ -267,6 +274,8 @@
           Match source:
           @if(!empty($selectedCandidateEvent))
             <span class="text-white">{{ $selectedCandidateEvent['title'] }}</span>
+          @elseif((int)($draftSummary['line_count'] ?? 0) > 0)
+            <span class="text-white">Starter template or existing draft</span>
           @elseif($startFresh)
             <span class="text-white">None, built from scratch</span>
           @else

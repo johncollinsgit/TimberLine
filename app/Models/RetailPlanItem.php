@@ -10,6 +10,23 @@ class RetailPlanItem extends Model
 {
     use HasFactory;
 
+    public const MARKET_DRAFT_SOURCES = [
+        'market_box_draft',
+        'market_box_manual',
+        'market_box_event_prefill',
+        'event_prefill',
+        'market_top_shelf_template',
+        'market_duration_template',
+    ];
+
+    public const MARKET_MERGEABLE_SOURCES = [
+        'market_box_manual',
+        'market_box_draft',
+        'market_box_event_prefill',
+        'event_prefill',
+        'market_duration_template',
+    ];
+
     protected $fillable = [
         'retail_plan_id',
         'order_id',
@@ -22,6 +39,8 @@ class RetailPlanItem extends Model
         'source',
         'status',
         'upcoming_event_id',
+        'box_tier',
+        'notes',
     ];
 
     public function plan()
@@ -37,5 +56,21 @@ class RetailPlanItem extends Model
     public function size(): BelongsTo
     {
         return $this->belongsTo(\App\Models\Size::class, 'size_id');
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public static function marketDraftSources(): array
+    {
+        return self::MARKET_DRAFT_SOURCES;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public static function marketMergeableSources(): array
+    {
+        return self::MARKET_MERGEABLE_SOURCES;
     }
 }

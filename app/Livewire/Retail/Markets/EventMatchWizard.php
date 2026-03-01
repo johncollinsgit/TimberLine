@@ -66,9 +66,12 @@ class EventMatchWizard extends Component
         $this->startFresh = false;
         $this->selectedScentId = null;
         $this->loadUpcomingEvent();
-        $this->resetDraftSummary();
         $this->resetPrefillStatus();
-        $this->step = $this->upcomingEventId ? 2 : 1;
+        $this->loadDraftSummary();
+        if ($this->draftHasContent()) {
+            $this->matchDecisionMade = true;
+        }
+        $this->step = 1;
     }
 
     #[On('scentSelected')]
@@ -100,6 +103,33 @@ class EventMatchWizard extends Component
         }
 
         $this->loadDraftSummary();
+        if ($this->draftHasContent()) {
+            $this->eventChosen = true;
+            $this->matchDecisionMade = true;
+        }
+    }
+
+    #[On('marketsDraftCreated')]
+    public function handleDraftCreated(int $upcomingEventId, int $durationDays, int $templateRowCount = 0): void
+    {
+        $this->upcomingEventId = $upcomingEventId > 0 ? $upcomingEventId : $this->upcomingEventId;
+        $this->loadUpcomingEvent();
+        $this->selectedCandidateEventId = null;
+        $this->selectedCandidateEvent = null;
+        $this->startFresh = false;
+        $this->loadDraftSummary();
+
+        if ($this->draftHasContent()) {
+            $this->eventChosen = true;
+            $this->matchDecisionMade = true;
+        }
+
+        $days = max(1, min(3, $durationDays));
+        $this->setPrefillStatus(
+            'applied',
+            "Draft created from {$days}-day starter template.",
+            $templateRowCount
+        );
     }
 
     #[On('marketsMappingConfirmed')]
@@ -134,6 +164,23 @@ class EventMatchWizard extends Component
         }
 
         $this->setPrefillStatus($state, $message, $templateRowCount);
+    }
+
+    #[On('marketsOpenDraftRequested')]
+    public function handleOpenDraftRequested(int $upcomingEventId): void
+    {
+        if ($upcomingEventId > 0) {
+            $this->upcomingEventId = $upcomingEventId;
+            $this->loadUpcomingEvent();
+        }
+
+        $this->loadDraftSummary();
+
+        if ($this->draftHasContent()) {
+            $this->eventChosen = true;
+            $this->matchDecisionMade = true;
+            $this->step = 3;
+        }
     }
 
     public function goToStep(int $step): void
@@ -344,7 +391,7 @@ class EventMatchWizard extends Component
             ->where('retail_plan_id', $this->planId)
             ->where('status', '!=', 'published')
             ->where('upcoming_event_id', $this->upcomingEventId)
-            ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
+            ->whereIn('source', RetailPlanItem::marketDraftSources())
             ->with(['scent:id,name,display_name'])
             ->get();
 

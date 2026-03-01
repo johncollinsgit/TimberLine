@@ -90,6 +90,72 @@
       </button>
     </div>
 
+    <div class="mt-3 rounded-2xl border border-emerald-200/10 bg-black/20 p-3">
+      <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Quick Start Templates</div>
+          <div class="mt-1 text-xs text-emerald-100/60">
+            Fixed 1, 2, and 3-day starter drafts built from historical average box volume and the top 15 scents overall.
+          </div>
+          @if((int)($selectedEventDurationDays ?? 0) > 0)
+            <div class="mt-1 text-[11px] text-emerald-50/75">
+              Selected event length: {{ (int)$selectedEventDurationDays }} day{{ (int)$selectedEventDurationDays === 1 ? '' : 's' }}.
+            </div>
+          @endif
+        </div>
+        <div class="text-[11px] text-emerald-100/45">
+          @if(!$selectedEventId)
+            Select an event first to apply a starter.
+          @else
+            Choose a starter to jump straight into a draft.
+          @endif
+        </div>
+      </div>
+
+      <div class="mt-3 grid gap-3 lg:grid-cols-3">
+        @foreach(($durationTemplates ?? []) as $template)
+          @php($dayCount = (int)($template['day_count'] ?? 0))
+          <div class="rounded-2xl border px-3 py-3 {{ !empty($template['recommended']) ? 'border-emerald-300/30 bg-emerald-500/10' : 'border-emerald-200/10 bg-black/10' }}">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="text-sm font-semibold text-white">{{ $template['label'] ?? ($dayCount.'-Day Starter') }}</div>
+                <div class="mt-1 text-[11px] text-emerald-100/55">
+                  Avg {{ rtrim(rtrim(number_format((float)($template['average_boxes'] ?? 0), 1), '0'), '.') }} boxes
+                  · {{ (int)($template['scent_count'] ?? 0) }} scents
+                </div>
+              </div>
+              @if(!empty($template['recommended']))
+                <span class="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-50">Recommended</span>
+              @endif
+            </div>
+            <button
+              type="button"
+              wire:click="applyDurationTemplate({{ $dayCount }})"
+              @disabled(!$selectedEventId || empty($template['available']))
+              class="mt-3 w-full rounded-xl border border-emerald-300/25 bg-emerald-500/12 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Use {{ $dayCount }}-Day Starter
+            </button>
+          </div>
+        @endforeach
+      </div>
+
+      @if(!empty($starterTemplateNotice))
+        <div class="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-sm text-emerald-50">{{ $starterTemplateNotice }}</div>
+            <button
+              type="button"
+              wire:click="continueWithStarterDraft"
+              class="w-full rounded-xl border border-emerald-300/25 bg-emerald-500/12 px-4 py-2 text-sm font-semibold text-white sm:w-auto"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      @endif
+    </div>
+
     <div class="mt-3 max-h-[24rem] overflow-y-auto pr-1">
       <div class="space-y-2">
         @forelse($events as $event)

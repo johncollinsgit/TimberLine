@@ -4,6 +4,8 @@ namespace App\Livewire\Events;
 
 use App\Models\EventBoxPlan;
 use App\Models\EventInstance;
+use App\Services\MarketDurationTemplateService;
+use App\Services\MarketEventSyncCoordinator;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +64,8 @@ class ImportMarketBoxPlans extends Component
 
         $this->report = $this->importRows($rows);
         $this->selectedBatchId = (string) ($this->report['import_batch_id'] ?? '');
+        app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
+        app(MarketDurationTemplateService::class)->forgetCachedTemplates();
         $this->dispatch('toast', ['type' => 'success', 'message' => 'Market box plans import complete.']);
     }
 
@@ -92,6 +96,8 @@ class ImportMarketBoxPlans extends Component
         ];
 
         $this->selectedBatchId = null;
+        app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
+        app(MarketDurationTemplateService::class)->forgetCachedTemplates();
         $this->dispatch('toast', [
             'type' => 'success',
             'message' => "Deleted import batch {$batchId}.",

@@ -67,7 +67,7 @@ class DraftEventNavPills extends Component
                 ->where('retail_plan_id', $this->planId)
                 ->where('status', '!=', 'published')
                 ->whereNotNull('upcoming_event_id')
-                ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
+                ->whereIn('source', RetailPlanItem::marketDraftSources())
                 ->pluck('upcoming_event_id')
                 ->map(fn ($id) => (int) $id)
                 ->unique()
