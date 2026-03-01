@@ -3,6 +3,7 @@
     <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Events</div>
     <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Import Event History</div>
     <div class="mt-2 text-sm text-emerald-50/70">Upload a CSV to backfill past events and shipments.</div>
+    <a href="{{ route('events.import-market-box-plans') }}" class="mt-3 inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/15 px-4 py-2 text-xs text-white/90">Need historical market box templates? Import Market Box Plans</a>
   </section>
 
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 space-y-4">

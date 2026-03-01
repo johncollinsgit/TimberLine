@@ -7,11 +7,11 @@
 
   @if(!$hasMatchRun)
     <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-      Run the local match scan to rank historical events within {{ (int) $matchWindowDays }} days of this upcoming date.
+      Run the local match scan to rank historical box-plan templates within {{ (int) $matchWindowDays }} days of this upcoming date.
     </div>
   @elseif(empty($candidates))
     <div class="rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-4 text-sm text-emerald-50/70">
-      No prior-year candidates found within {{ (int) $matchWindowDays }} days.
+      No prior-year box-plan candidates found within {{ (int) $matchWindowDays }} days.
     </div>
   @else
     <div class="max-h-72 overflow-y-auto pr-1 space-y-2">
@@ -24,10 +24,34 @@
               <div class="mt-1 text-sm font-medium text-white break-words">{{ $candidate['title'] ?? 'Historical event' }}</div>
               <div class="mt-1 text-[11px] text-emerald-100/55">
                 {{ !empty($candidate['starts_at']) ? \Illuminate\Support\Carbon::parse($candidate['starts_at'])->format('M j, Y') : 'Date TBD' }}
-                @if(!empty($candidate['city']) || !empty($candidate['state']))
-                  · {{ trim(($candidate['city'] ?? '').', '.($candidate['state'] ?? ''), ' ,') }}
+                @if(!empty($candidate['ends_at']) && $candidate['ends_at'] !== $candidate['starts_at'])
+                  – {{ \Illuminate\Support\Carbon::parse($candidate['ends_at'])->format('M j, Y') }}
+                @endif
+                @if(!empty($candidate['state']))
+                  · {{ $candidate['state'] }}
                 @endif
               </div>
+              @if(!empty($candidate['notes_snippet']))
+                <div class="mt-2 text-[11px] text-emerald-100/55">{{ $candidate['notes_snippet'] }}</div>
+              @endif
+              @if(!empty($candidate['box_preview']))
+                <div class="mt-2 space-y-1 text-[11px] text-emerald-50/75">
+                  @foreach($candidate['box_preview'] as $line)
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="truncate">{{ $line['scent_raw'] }}</span>
+                      <span class="shrink-0">
+                        {{ $line['box_count_sent'] !== null ? rtrim(rtrim(number_format((float) $line['box_count_sent'], 2), '0'), '.') : '—' }}
+                        @if(!empty($line['is_split_box']))
+                          <span class="text-amber-100/70">split</span>
+                        @endif
+                      </span>
+                    </div>
+                  @endforeach
+                  @if((int)($candidate['box_plan_count'] ?? 0) > count($candidate['box_preview']))
+                    <div class="text-[10px] text-emerald-100/45">+{{ (int)($candidate['box_plan_count'] ?? 0) - count($candidate['box_preview']) }} more lines</div>
+                  @endif
+                </div>
+              @endif
               <div class="mt-2 text-[10px] text-emerald-100/45">
                 Title {{ (int)($candidate['title_score_percent'] ?? 0) }} · Date {{ (int)($candidate['date_score_percent'] ?? 0) }} · Location {{ (int)($candidate['location_score_percent'] ?? 0) }}
               </div>

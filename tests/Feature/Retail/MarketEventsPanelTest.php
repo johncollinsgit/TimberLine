@@ -5,18 +5,17 @@ use App\Livewire\Retail\Markets\UpcomingEventsPanel;
 use App\Livewire\Retail\Markets\CandidateMatchList;
 use App\Livewire\Retail\Markets\MarketsPlanner;
 use App\Livewire\Retail\Plan as RetailPlanComponent;
+use App\Models\EventBoxPlan;
+use App\Models\EventInstance;
 use App\Models\RetailPlan;
 use App\Models\Event;
-use App\Models\MarketPlan;
 use App\Models\RetailPlanItem;
 use App\Models\Scent;
 use App\Models\User;
-use App\Services\EventMatchingService;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Collection;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -119,13 +118,6 @@ test('initial markets plan render does not invoke sync coordinator or matching s
     $coordinator->shouldNotReceive('bumpMatchingCacheVersion');
     $this->app->instance(MarketEventSyncCoordinator::class, $coordinator);
 
-    $matching = \Mockery::mock(EventMatchingService::class);
-    $matching->shouldNotReceive('candidatesForUpcoming');
-    $matching->shouldNotReceive('bestMatch');
-    $matching->shouldNotReceive('similarity');
-    $matching->shouldNotReceive('normalizeTitle');
-    $this->app->instance(EventMatchingService::class, $matching);
-
     Livewire::test(RetailPlanComponent::class, ['queue' => 'markets'])
         ->assertSet('queue', 'markets');
 });
@@ -143,43 +135,25 @@ test('candidate matching runs only after explicit action', function () {
         'status' => 'needs_mapping',
     ]);
 
-    $candidate = Event::query()->create([
-        'name' => 'Explicit Match Candidate Event',
-        'display_name' => 'Explicit Match Candidate Event 2025',
+    EventInstance::query()->create([
+        'title' => 'Explicit Match Candidate Event, TN',
         'starts_at' => now()->subYear()->addDays(6)->toDateString(),
-        'ends_at' => now()->subYear()->addDays(6)->toDateString(),
-        'city' => 'Nashville',
+        'ends_at' => now()->subYear()->addDays(8)->toDateString(),
         'state' => 'TN',
-        'status' => 'planned',
+        'status' => 'completed',
     ]);
 
     $coordinator = \Mockery::mock(MarketEventSyncCoordinator::class);
     $coordinator->shouldReceive('matchingCacheVersion')->once()->andReturn(1);
     $this->app->instance(MarketEventSyncCoordinator::class, $coordinator);
 
-    $matching = \Mockery::mock(EventMatchingService::class);
-    $matching->shouldReceive('candidatesForUpcoming')
-        ->once()
-        ->andReturn(Collection::make([
-            [
-                'candidate_event_id' => $candidate->id,
-                'event' => $candidate->fresh(),
-                'match_score' => 0.92,
-                'title_score' => 0.95,
-                'date_score' => 0.88,
-                'location_score' => 1.0,
-                'days_diff' => 2,
-            ],
-        ]));
-    $this->app->instance(EventMatchingService::class, $matching);
-
     Livewire::test(CandidateMatchList::class, [
         'upcomingEventId' => $upcoming->id,
         'matchWindowDays' => 30,
     ])
-        ->assertSeeText('Run the local match scan to rank historical events within 30 days of this upcoming date.')
+        ->assertSeeText('Run the local match scan to rank historical box-plan templates within 30 days of this upcoming date.')
         ->call('handleRunCandidateMatch', $upcoming->id, 30)
-        ->assertSeeText('Explicit Match Candidate Event 2025');
+        ->assertSeeText('Explicit Match Candidate Event, TN');
 });
 
 test('event picker supports future past all scopes and local search without http', function () {
@@ -258,31 +232,22 @@ test('selecting a historical match copies market plan rows into draft boxes', fu
         'status' => 'needs_mapping',
     ]);
 
-    $candidate = Event::query()->create([
-        'name' => 'TR Winter Pop Up 02.08.25',
-        'display_name' => 'TR Winter Pop Up 02.08.25',
+    $candidate = EventInstance::query()->create([
+        'title' => 'TR Winter Pop Up, SC',
         'starts_at' => '2025-02-08',
         'ends_at' => '2025-02-08',
-        'status' => 'mapped',
+        'state' => 'SC',
+        'status' => 'completed',
     ]);
 
-    $normalizedTitle = app(EventMatchingService::class)
-        ->normalizeTitle((string) ($candidate->display_name ?: $candidate->name));
-
     foreach ([
-        ['box_type' => 'half', 'scent' => (string) $scents[0]->display_name, 'box_count' => 1],
-        ['box_type' => 'full', 'scent' => (string) $scents[1]->display_name, 'box_count' => 1],
-        ['box_type' => 'half', 'scent' => (string) $scents[2]->display_name, 'box_count' => 1],
+        ['scent_raw' => (string) $scents[0]->display_name, 'box_count_sent' => 1, 'is_split_box' => false],
+        ['scent_raw' => (string) $scents[1]->display_name, 'box_count_sent' => 1, 'is_split_box' => false],
+        ['scent_raw' => (string) $scents[2]->display_name, 'box_count_sent' => 0.5, 'is_split_box' => false],
     ] as $row) {
-        MarketPlan::query()->create([
-            'event_title' => (string) ($candidate->display_name ?: $candidate->name),
-            'event_date' => '2025-02-08',
-            'normalized_title' => $normalizedTitle,
-            'box_type' => $row['box_type'],
-            'scent' => $row['scent'],
-            'box_count' => $row['box_count'],
-            'status' => 'published',
-        ]);
+        EventBoxPlan::query()->create(array_merge($row, [
+            'event_instance_id' => $candidate->id,
+        ]));
     }
 
     $component = Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
@@ -292,11 +257,6 @@ test('selecting a historical match copies market plan rows into draft boxes', fu
         ->assertDispatched('marketsDraftUpdated')
         ->assertDispatched('marketsPrefillStatusChanged');
 
-    $this->assertDatabaseHas('event_mappings', [
-        'upcoming_event_id' => $upcoming->id,
-        'past_event_id' => $candidate->id,
-    ]);
-
     $items = RetailPlanItem::query()
         ->where('retail_plan_id', $plan->id)
         ->where('upcoming_event_id', $upcoming->id)
@@ -304,7 +264,7 @@ test('selecting a historical match copies market plan rows into draft boxes', fu
         ->get();
 
     expect($items)->toHaveCount(3);
-    expect((int) $items->sum('quantity'))->toBe(4);
+    expect((int) $items->sum('quantity'))->toBe(5);
     expect((string) $upcoming->fresh()->status)->toBe('drafted');
 });
 
@@ -323,12 +283,12 @@ test('wizard shows no-history guidance when the selected historical event has no
         'status' => 'needs_mapping',
     ]);
 
-    $candidate = Event::query()->create([
-        'name' => 'TR Winter Pop Up 02.08.25',
-        'display_name' => 'TR Winter Pop Up 02.08.25',
+    $candidate = EventInstance::query()->create([
+        'title' => 'TR Winter Pop Up, SC',
         'starts_at' => '2025-02-08',
         'ends_at' => '2025-02-08',
-        'status' => 'mapped',
+        'state' => 'SC',
+        'status' => 'completed',
     ]);
 
     Livewire::test(EventMatchWizard::class, [
@@ -348,9 +308,9 @@ test('wizard shows no-history guidance when the selected historical event has no
         ->assertSeeText('Historical event has no boxes to copy. Start building boxes by adding a scent.');
 });
 
-test('selecting a historical match shows migration guidance when mappings table is missing', function () {
+test('selecting a historical match still copies templates when event_mappings is unavailable', function () {
     $plan = RetailPlan::query()->create([
-        'name' => 'Missing Mappings Table Test',
+        'name' => 'Event Instance Templates Ignore Mappings Table',
         'status' => 'draft',
         'queue_type' => 'markets',
     ]);
@@ -363,37 +323,32 @@ test('selecting a historical match shows migration guidance when mappings table 
         'status' => 'needs_mapping',
     ]);
 
-    $candidate = Event::query()->create([
-        'name' => 'TR Winter Pop Up 02.08.25',
-        'display_name' => 'TR Winter Pop Up 02.08.25',
+    $candidate = EventInstance::query()->create([
+        'title' => 'TR Winter Pop Up, SC',
         'starts_at' => '2025-02-08',
         'ends_at' => '2025-02-08',
-        'status' => 'mapped',
+        'state' => 'SC',
+        'status' => 'completed',
     ]);
 
-    Schema::drop('event_mappings');
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $candidate->id,
+        'scent_raw' => 'TR Winter Pop Up',
+        'box_count_sent' => 1,
+        'is_split_box' => false,
+    ]);
+
+    if (Schema::hasTable('event_mappings')) {
+        Schema::drop('event_mappings');
+    }
 
     $component = Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
         ->call('handleMarketsMappingConfirmed', $upcoming->id, $candidate->id);
 
-    $component->assertDispatched('marketsPrefillStatusChanged');
+    $component
+        ->assertDispatched('marketsPrefillStatusChanged')
+        ->assertDispatched('marketsDraftUpdated');
 
     expect(Schema::hasTable('event_mappings'))->toBeFalse();
-    expect(RetailPlanItem::query()->count())->toBe(0);
-
-    Livewire::test(EventMatchWizard::class, [
-        'planId' => $plan->id,
-        'upcomingEventId' => $upcoming->id,
-        'selectedCandidateEventId' => $candidate->id,
-    ])
-        ->set('step', 3)
-        ->call(
-            'handlePrefillStatusChanged',
-            $upcoming->id,
-            $candidate->id,
-            'missing_mappings',
-            'Mappings table missing. Run migrations: php artisan migrate',
-            0
-        )
-        ->assertSeeText('Mappings table missing. Run migrations: php artisan migrate');
+    expect(RetailPlanItem::query()->count())->toBe(1);
 });

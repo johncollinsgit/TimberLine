@@ -3,8 +3,9 @@
 namespace App\Livewire\Retail\Markets;
 
 use App\Models\Event;
+use App\Models\EventBoxPlan;
+use App\Models\EventInstance;
 use App\Models\EventMapping;
-use App\Models\MarketPlan;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\RetailPlan;
@@ -12,11 +13,8 @@ use App\Models\RetailPlanItem;
 use App\Models\Scent;
 use App\Models\ScentTemplate;
 use App\Models\Size;
-use App\Services\EventMatchingService;
-use App\Services\MarketEventSyncCoordinator;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -39,44 +37,25 @@ class MarketsPlanner extends Component
     public function handleMarketsMappingConfirmed(int $upcomingEventId, int $candidateEventId): void
     {
         $upcoming = Event::query()->find($upcomingEventId);
-        $candidate = Event::query()->find($candidateEventId);
+        $candidate = EventInstance::query()->with(['boxPlans' => fn ($query) => $query->orderBy('id')])->find($candidateEventId);
         if (! $upcoming || ! $candidate) {
             $this->dispatchPrefillStatus(
                 'error',
-                'Could not load the selected historical event. Pick another match or start fresh.',
-                $upcoming,
-                $candidate
+                'Could not load the selected historical template. Pick another match or start fresh.',
+                $upcoming?->id,
+                $candidate?->id
             );
-            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Could not confirm mapping because one of the events was not found.']);
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Could not confirm the template because one of the records was not found.']);
 
             return;
         }
-
-        if (! $this->supportsEventMappingsTable()) {
-            $message = 'Mappings table missing. Run migrations: php artisan migrate';
-            $this->logMissingMappingsTableWarning((int) $upcoming->id, (int) $candidate->id);
-            $this->dispatchPrefillStatus('missing_mappings', $message, $upcoming, $candidate);
-            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Event mappings table missing. Run migrations first.']);
-
-            return;
-        }
-
-        EventMapping::query()->updateOrCreate(
-            ['upcoming_event_id' => $upcoming->id],
-            [
-                'past_event_id' => $candidate->id,
-                'created_by' => auth()->id(),
-            ]
-        );
 
         $this->rememberSelectedEvent($upcoming);
-        app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
-        $rows = $this->marketPlanRowsForCandidateEvent($candidate);
+        $rows = $candidate->boxPlans;
 
         Log::info('MarketsPlanner historical prefill evaluated', [
             'upcoming_event_id' => (int) $upcoming->id,
-            'candidate_event_id' => (int) $candidate->id,
-            'has_event_mappings_table' => true,
+            'candidate_event_instance_id' => (int) $candidate->id,
             'template_row_count' => $rows->count(),
         ]);
 
@@ -84,19 +63,19 @@ class MarketsPlanner extends Component
             $message = 'Historical event has no boxes to copy. Start building boxes by adding a scent.';
             $this->syncEventPlanningStatus((int) $upcoming->id, 'mapped');
             $this->dispatch('marketsRefreshRequested', eventId: (int) $upcoming->id);
-            $this->dispatchPrefillStatus('no_history_rows', $message, $upcoming, $candidate);
+            $this->dispatchPrefillStatus('no_history_rows', $message, $upcoming->id, $candidate->id);
             $this->dispatch('toast', ['type' => 'warning', 'message' => $message]);
 
             return;
         }
 
-        [$added, $merged, $skipped] = $this->applyMarketPlanRowsPrefill($rows, $upcoming);
+        [$added, $merged, $skipped] = $this->applyEventBoxPlanRowsPrefill($rows, $upcoming);
 
         if ($added === 0 && $merged === 0) {
             $message = 'Historical event has no usable boxes to copy. Start building boxes by adding a scent.';
             $this->syncEventPlanningStatus((int) $upcoming->id, 'mapped');
             $this->dispatch('marketsRefreshRequested', eventId: (int) $upcoming->id);
-            $this->dispatchPrefillStatus('no_history_rows', $message, $upcoming, $candidate, $rows->count());
+            $this->dispatchPrefillStatus('no_history_rows', $message, $upcoming->id, $candidate->id, $rows->count());
             $this->dispatch('toast', ['type' => 'warning', 'message' => $message]);
 
             return;
@@ -104,13 +83,13 @@ class MarketsPlanner extends Component
 
         $rowCount = $rows->count();
         $message = "Copied {$rowCount} historical box row".($rowCount === 1 ? '' : 's')
-            ." from ".($candidate->display_name ?: $candidate->name).". Added {$added}, merged {$merged}"
+            ." from ".$candidate->title.". Added {$added}, merged {$merged}"
             .($skipped ? ", skipped {$skipped}" : '').'.';
 
         $this->syncEventPlanningStatus((int) $upcoming->id, 'drafted');
         $this->dispatch('marketsRefreshRequested', eventId: (int) $upcoming->id);
         $this->dispatch('marketsDraftUpdated', eventId: (int) $upcoming->id);
-        $this->dispatchPrefillStatus('applied', $message, $upcoming, $candidate, $rowCount);
+        $this->dispatchPrefillStatus('applied', $message, $upcoming->id, $candidate->id, $rowCount);
         $this->dispatch('toast', ['type' => 'success', 'message' => $message]);
     }
 
@@ -337,63 +316,23 @@ class MarketsPlanner extends Component
         $this->dispatch('toast', ['type' => 'success', 'message' => 'Market box scent added to plan.']);
     }
 
-    protected function dispatchPrefillStatus(string $state, string $message, ?Event $upcoming = null, ?Event $candidate = null, int $templateRowCount = 0): void
+    protected function dispatchPrefillStatus(string $state, string $message, ?int $upcomingEventId = null, ?int $candidateEventId = null, int $templateRowCount = 0): void
     {
         $this->dispatch(
             'marketsPrefillStatusChanged',
-            upcomingEventId: (int) ($upcoming?->id ?? 0),
-            candidateEventId: (int) ($candidate?->id ?? 0),
+            upcomingEventId: (int) ($upcomingEventId ?? 0),
+            candidateEventId: (int) ($candidateEventId ?? 0),
             state: $state,
             message: $message,
             templateRowCount: max(0, $templateRowCount)
         );
     }
 
-    protected function logMissingMappingsTableWarning(int $upcomingEventId, int $candidateEventId): void
-    {
-        if (! Cache::add('markets:event-mappings-missing-warning', true, now()->addMinutes(10))) {
-            return;
-        }
-
-        Log::warning('MarketsPlanner missing event_mappings table', [
-            'plan_id' => (int) $this->plan->id,
-            'upcoming_event_id' => $upcomingEventId,
-            'candidate_event_id' => $candidateEventId,
-            'expected_table' => 'event_mappings',
-            'action' => 'run php artisan migrate',
-        ]);
-    }
-
     /**
-     * @return Collection<int,MarketPlan>
-     */
-    protected function marketPlanRowsForCandidateEvent(Event $candidate): Collection
-    {
-        if (! $candidate->starts_at) {
-            return collect();
-        }
-
-        $normalizedTitle = app(EventMatchingService::class)
-            ->normalizeTitle((string) ($candidate->display_name ?: $candidate->name));
-        $eventDate = $candidate->starts_at->toDateString();
-
-        if ($normalizedTitle === '') {
-            return collect();
-        }
-
-        return MarketPlan::query()
-            ->where('status', 'published')
-            ->whereDate('event_date', $eventDate)
-            ->where('normalized_title', $normalizedTitle)
-            ->orderBy('id')
-            ->get();
-    }
-
-    /**
-     * @param  Collection<int,MarketPlan>  $rows
+     * @param  Collection<int,EventBoxPlan>  $rows
      * @return array{0:int,1:int,2:int}
      */
-    protected function applyMarketPlanRowsPrefill(Collection $rows, Event $upcomingEvent): array
+    protected function applyEventBoxPlanRowsPrefill(Collection $rows, Event $upcomingEvent): array
     {
         $added = 0;
         $merged = 0;
@@ -403,42 +342,31 @@ class MarketsPlanner extends Component
             $this->rememberSelectedEvent($upcomingEvent);
 
             foreach ($rows as $row) {
-                $boxType = strtolower(trim((string) $row->box_type));
-                $boxCount = max(0, (int) $row->box_count);
+                $sentBoxes = max(0, (float) ($row->box_count_sent ?? 0));
 
-                if ($boxCount <= 0) {
+                if ($sentBoxes <= 0) {
                     $skipped++;
                     continue;
                 }
 
-                if ($boxType === 'top_shelf') {
-                    $result = $this->mergeTopShelfTemplatePrefillItems($upcomingEvent, (int) $row->id, $boxCount);
-                    $added += $result['added'];
-                    $merged += $result['merged'];
-                    $skipped += $result['skipped'];
-                    continue;
-                }
-
-                if (! in_array($boxType, ['full', 'half'], true)) {
-                    $skipped++;
-                    continue;
-                }
-
-                $splitScentIds = $this->resolveSplitScentIdsFromText((string) $row->scent);
-                if (count($splitScentIds) === 2) {
-                    if ($boxType !== 'full') {
+                $rawScent = (string) $row->scent_raw;
+                $splitScentIds = $this->resolveSplitScentIdsFromText($rawScent);
+                if ((bool) $row->is_split_box || count($splitScentIds) === 2) {
+                    if (count($splitScentIds) !== 2) {
                         $skipped++;
                         continue;
                     }
+
+                    $halfBoxUnitsPerScent = max(1, (int) round($sentBoxes));
 
                     foreach ($splitScentIds as $index => $splitScentId) {
                         $result = $this->mergeMarketEventPrefillItem(
                             $upcomingEvent,
                             (int) $row->id,
                             (int) $splitScentId,
-                            $boxCount,
-                            (string) $row->scent,
-                            'full',
+                            $halfBoxUnitsPerScent,
+                            $rawScent,
+                            'split',
                             $index + 1
                         );
 
@@ -449,15 +377,15 @@ class MarketsPlanner extends Component
                     continue;
                 }
 
-                $scentId = $this->resolveScentIdFromText((string) $row->scent);
-                $halfBoxUnits = $boxType === 'full' ? ($boxCount * 2) : $boxCount;
+                $scentId = $this->resolveScentIdFromText($rawScent);
+                $halfBoxUnits = max(1, (int) round($sentBoxes * 2));
                 $result = $this->mergeMarketEventPrefillItem(
                     $upcomingEvent,
                     (int) $row->id,
                     $scentId,
                     $halfBoxUnits,
-                    (string) $row->scent,
-                    $boxType
+                    $rawScent,
+                    'full'
                 );
 
                 $added += $result['added'];

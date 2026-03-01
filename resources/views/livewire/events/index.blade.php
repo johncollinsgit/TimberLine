@@ -4,6 +4,8 @@
     <div class="mt-2 flex items-center justify-between">
       <div class="text-3xl font-['Fraunces'] font-semibold text-white">Market Events</div>
       <div class="flex items-center gap-2">
+        <a href="{{ route('events.browse') }}" class="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-4 py-2 text-xs text-white/90">Browse Box Plans</a>
+        <a href="{{ route('events.import-market-box-plans') }}" class="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80">Import Box Plans</a>
         <a href="{{ route('events.import') }}" class="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80">Import History</a>
         <a href="{{ route('events.create') }}" class="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-4 py-2 text-xs text-white/90">New Event</a>
       </div>

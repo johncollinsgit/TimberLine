@@ -3,6 +3,8 @@
 namespace App\Livewire\Retail\Markets;
 
 use App\Models\Event;
+use App\Models\EventInstance;
+use App\Models\EventBoxPlan;
 use App\Models\RetailPlanItem;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\On;
@@ -271,7 +273,10 @@ class EventMatchWizard extends Component
             return;
         }
 
-        $event = Event::query()->select(['id', 'name', 'display_name', 'starts_at', 'city', 'state', 'venue'])->find($eventId);
+        $event = EventInstance::query()
+            ->with(['boxPlans' => fn ($query) => $query->orderByDesc('box_count_sent')->orderBy('id')])
+            ->select(['id', 'title', 'starts_at', 'ends_at', 'state', 'notes', 'source_sheet'])
+            ->find($eventId);
         if (! $event) {
             $this->selectedCandidateEvent = null;
 
@@ -280,11 +285,20 @@ class EventMatchWizard extends Component
 
         $this->selectedCandidateEvent = [
             'id' => (int) $event->id,
-            'title' => (string) ($event->display_name ?: $event->name ?: 'Historical event'),
+            'title' => (string) ($event->title ?: 'Historical event'),
             'starts_at' => $event->starts_at?->toDateString(),
-            'city' => (string) ($event->city ?? ''),
+            'ends_at' => $event->ends_at?->toDateString(),
             'state' => (string) ($event->state ?? ''),
-            'venue' => (string) ($event->venue ?? ''),
+            'notes_snippet' => $event->notes ? mb_strimwidth((string) $event->notes, 0, 160, '...') : '',
+            'source_sheet' => (string) ($event->source_sheet ?? ''),
+            'box_preview' => $event->boxPlans->take(4)->map(function (EventBoxPlan $line): array {
+                return [
+                    'scent_raw' => (string) $line->scent_raw,
+                    'box_count_sent' => $line->box_count_sent !== null ? (float) $line->box_count_sent : null,
+                    'is_split_box' => (bool) $line->is_split_box,
+                ];
+            })->all(),
+            'box_plan_count' => $event->boxPlans->count(),
         ];
     }
 

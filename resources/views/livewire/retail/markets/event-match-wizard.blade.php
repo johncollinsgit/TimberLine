@@ -76,7 +76,7 @@
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Historical Match</div>
-            <div class="mt-1 text-sm text-emerald-50/70">Run a local match scan across a 45-day prior-year window, then load the closest historical event or start clean.</div>
+            <div class="mt-1 text-sm text-emerald-50/70">Run a local match scan across a 45-day prior-year window, then load the closest historical box-plan template or start clean.</div>
           </div>
           <button
             type="button"
@@ -106,10 +106,34 @@
             <div class="mt-2 text-sm font-semibold text-white">{{ $selectedCandidateEvent['title'] }}</div>
             <div class="mt-1 text-[11px] text-emerald-100/55">
               {{ !empty($selectedCandidateEvent['starts_at']) ? \Illuminate\Support\Carbon::parse($selectedCandidateEvent['starts_at'])->format('M j, Y') : 'Date TBD' }}
-              @if(!empty($selectedCandidateEvent['city']) || !empty($selectedCandidateEvent['state']))
-                · {{ trim(($selectedCandidateEvent['city'] ?? '').', '.($selectedCandidateEvent['state'] ?? ''), ' ,') }}
+              @if(!empty($selectedCandidateEvent['ends_at']) && $selectedCandidateEvent['ends_at'] !== $selectedCandidateEvent['starts_at'])
+                – {{ \Illuminate\Support\Carbon::parse($selectedCandidateEvent['ends_at'])->format('M j, Y') }}
+              @endif
+              @if(!empty($selectedCandidateEvent['state']))
+                · {{ $selectedCandidateEvent['state'] }}
               @endif
             </div>
+            @if(!empty($selectedCandidateEvent['notes_snippet']))
+              <div class="mt-2 text-[11px] text-emerald-100/55">{{ $selectedCandidateEvent['notes_snippet'] }}</div>
+            @endif
+            @if(!empty($selectedCandidateEvent['box_preview']))
+              <div class="mt-3 space-y-1 rounded-xl border border-emerald-200/10 bg-black/10 p-3 text-[11px] text-emerald-50/80">
+                @foreach($selectedCandidateEvent['box_preview'] as $line)
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate">{{ $line['scent_raw'] }}</span>
+                    <span class="shrink-0">
+                      {{ $line['box_count_sent'] !== null ? rtrim(rtrim(number_format((float) $line['box_count_sent'], 2), '0'), '.') : '—' }}
+                      @if(!empty($line['is_split_box']))
+                        <span class="text-amber-100/70">split</span>
+                      @endif
+                    </span>
+                  </div>
+                @endforeach
+                @if((int)($selectedCandidateEvent['box_plan_count'] ?? 0) > count($selectedCandidateEvent['box_preview']))
+                  <div class="text-[10px] text-emerald-100/45">+{{ (int)($selectedCandidateEvent['box_plan_count'] ?? 0) - count($selectedCandidateEvent['box_preview']) }} more lines</div>
+                @endif
+              </div>
+            @endif
           </div>
         @endif
 
@@ -147,7 +171,7 @@
             <div class="mt-1 text-lg font-semibold text-white">{{ $upcomingEvent['display_name'] ?? $upcomingEvent['name'] ?? 'Select an event first' }}</div>
             <div class="mt-1 text-xs text-emerald-100/60">
               @if(!empty($selectedCandidateEvent))
-                Using {{ $selectedCandidateEvent['title'] }} as the historical source.
+                Using {{ $selectedCandidateEvent['title'] }} as the historical box-plan source.
               @elseif($startFresh)
                 Starting with an empty draft for this event.
               @else
