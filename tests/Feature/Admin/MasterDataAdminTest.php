@@ -44,7 +44,7 @@ test('admin master data endpoints paginate and patch rows', function () {
     ]);
 
     $this->actingAs($user)
-        ->getJson('/admin/master/scents?per_page=1&search=Blue')
+        ->getJson('/admin/master/scents?perPage=1&search=Blue&sortField=name&sortDir=asc')
         ->assertOk()
         ->assertJsonPath('meta.pagination.total', 1)
         ->assertJsonPath('meta.filters.search', 'Blue')
@@ -52,6 +52,9 @@ test('admin master data endpoints paginate and patch rows', function () {
         ->assertJsonPath('meta.filters.dir', 'asc')
         ->assertJsonPath('meta.supports_active_filter', true)
         ->assertJsonPath('meta.columns.0.key', 'name')
+        ->assertJsonCount(1, 'rows')
+        ->assertJsonPath('rows.0.id', $blue->id)
+        ->assertJsonPath('rows.0.name', 'Blue Ridge')
         ->assertJsonPath('data.0.id', $blue->id)
         ->assertJsonPath('data.0.name', 'Blue Ridge');
 

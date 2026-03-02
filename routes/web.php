@@ -122,6 +122,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/wholesale/custom-scents', AdminWholesaleCustomScentsCrud::class)->name('admin.wholesale.custom-scents');
         Route::get('/admin/oils/blends', AdminOilBlendsCrud::class)->name('admin.oils.blends');
         Route::get('/admin/oils/abbreviations', AdminOilAbbreviationsCrud::class)->name('admin.oils.abbreviations');
+        Route::get('/admin/master-data', [AdminMasterDataController::class, 'index'])->name('admin.master.ui');
+        Route::get('/admin/master/{resource}', [AdminMasterDataController::class, 'list'])->name('admin.master.index-data');
+        Route::post('/admin/master/{resource}', [AdminMasterDataController::class, 'store'])->name('admin.master.store');
+        Route::patch('/admin/master/{resource}/{record}', [AdminMasterDataController::class, 'update'])->name('admin.master.update');
         Route::delete('/admin/master/{resource}/{record}', [AdminMasterDataController::class, 'destroy'])->name('admin.master.destroy');
 
         // Admin tools
