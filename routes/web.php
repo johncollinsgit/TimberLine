@@ -41,6 +41,7 @@ use App\Livewire\Markets\EventBrowserShow as MarketsEventBrowserShow;
 use App\Livewire\Pouring\Requests as PourRequests;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WikiController;
@@ -121,6 +122,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/wholesale/custom-scents', AdminWholesaleCustomScentsCrud::class)->name('admin.wholesale.custom-scents');
         Route::get('/admin/oils/blends', AdminOilBlendsCrud::class)->name('admin.oils.blends');
         Route::get('/admin/oils/abbreviations', AdminOilAbbreviationsCrud::class)->name('admin.oils.abbreviations');
+        Route::delete('/admin/master/{resource}/{record}', [AdminMasterDataController::class, 'destroy'])->name('admin.master.destroy');
 
         // Admin tools
         Route::post('/admin/tools/clear-orders', function () {
