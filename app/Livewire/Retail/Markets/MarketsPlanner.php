@@ -135,7 +135,6 @@ class MarketsPlanner extends Component
 
         $this->syncEventPlanningStatus((int) $upcoming->id, 'drafted');
         $this->dispatch('marketsRefreshRequested', eventId: (int) $upcoming->id);
-        $this->dispatch('marketsDraftUpdated', eventId: (int) $upcoming->id);
         $this->dispatch('marketsDraftCreated', upcomingEventId: (int) $upcoming->id, durationDays: $durationDays, templateRowCount: $rowCount);
         $this->dispatchPrefillStatus('applied', $message, $upcoming->id, 0, $rowCount);
         $this->dispatch('toast', ['type' => 'success', 'message' => $message]);
@@ -169,59 +168,16 @@ class MarketsPlanner extends Component
         }
 
         $this->rememberSelectedEvent($selectedEvent);
-        $added = 0;
-        $merged = 0;
+        $result = ['added' => 0, 'merged' => 0];
 
-        DB::transaction(function () use ($selectedEvent, $template, &$added, &$merged): void {
-            foreach ($template->items as $templateItem) {
-                $scentId = (int) ($templateItem->scent_id ?? 0);
-                if ($scentId <= 0) {
-                    continue;
-                }
-
-                $existing = null;
-                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
-                    $existing = RetailPlanItem::query()
-                        ->where('retail_plan_id', $this->plan->id)
-                        ->where('source', 'market_top_shelf_template')
-                        ->where('upcoming_event_id', $selectedEvent->id)
-                        ->where('scent_id', $scentId)
-                        ->where('status', '!=', 'published')
-                        ->first();
-                }
-
-                if ($existing) {
-                    $existing->quantity = max(1, (int) $existing->quantity + 1);
-                    if ($this->supportsRetailPlanItemBoxTierColumn()) {
-                        $existing->box_tier = 'top_shelf';
-                    }
-                    $existing->save();
-                    $merged++;
-                    continue;
-                }
-
-                $payload = [
-                    'retail_plan_id' => $this->plan->id,
-                    'scent_id' => $scentId,
-                    'size_id' => null,
-                    'quantity' => 1,
-                    'source' => 'market_top_shelf_template',
-                    'status' => 'draft',
-                    'sku' => Str::limit("mkttop:manual:{$selectedEvent->id}:{$scentId}", 255, ''),
-                ];
-                if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
-                    $payload['upcoming_event_id'] = $selectedEvent->id;
-                }
-                if ($this->supportsRetailPlanItemBoxTierColumn()) {
-                    $payload['box_tier'] = 'top_shelf';
-                }
-                if ($this->supportsRetailPlanItemNotesColumn()) {
-                    $payload['notes'] = null;
-                }
-
-                RetailPlanItem::query()->create($payload);
-                $added++;
-            }
+        DB::transaction(function () use ($selectedEvent, &$result): void {
+            $result = $this->mergeTopShelfBoxItem(
+                $selectedEvent,
+                0,
+                1,
+                'market_top_shelf_template',
+                $this->topShelfDefaultConfiguration()
+            );
         });
 
         $this->syncEventPlanningStatus((int) $selectedEvent->id, 'drafted');
@@ -229,7 +185,7 @@ class MarketsPlanner extends Component
         $this->dispatch('marketsDraftUpdated', eventId: (int) $selectedEvent->id);
         $this->dispatch('toast', [
             'type' => 'success',
-            'message' => "Top Shelf default template applied. Added {$added}, merged {$merged}.",
+            'message' => "Top Shelf default template applied. Added {$result['added']}, merged {$result['merged']}.",
         ]);
     }
 
@@ -261,9 +217,28 @@ class MarketsPlanner extends Component
             return;
         }
 
-        $invalid = $eventItems->contains(fn (RetailPlanItem $item) => (int) ($item->scent_id ?? 0) <= 0 || (int) ($item->quantity ?? 0) <= 0);
+        $invalid = $eventItems->contains(function (RetailPlanItem $item): bool {
+            if ((int) ($item->quantity ?? 0) <= 0) {
+                return true;
+            }
+
+            $boxTier = $this->supportsRetailPlanItemBoxTierColumn()
+                ? strtolower(trim((string) ($item->box_tier ?? 'standard')))
+                : (($item->source ?? '') === 'market_top_shelf_template' ? 'top_shelf' : 'standard');
+
+            if ($boxTier !== 'top_shelf') {
+                return (int) ($item->scent_id ?? 0) <= 0;
+            }
+
+            return ! RetailPlanItem::topShelfConfigurationIsComplete(
+                RetailPlanItem::decodeTopShelfConfiguration(
+                    $this->supportsRetailPlanItemNotesColumn() ? $item->notes : null,
+                    $item->scent_id ? (int) $item->scent_id : null
+                )
+            );
+        });
         if ($invalid) {
-            $this->dispatch('toast', ['type' => 'warning', 'message' => 'All boxes must have a mapped scent and quantity before sending to Pouring Room.']);
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'All boxes must have a valid scent setup and quantity before sending to Pouring Room.']);
             return;
         }
 
@@ -295,7 +270,14 @@ class MarketsPlanner extends Component
                     : (($item->source ?? '') === 'market_top_shelf_template' ? 'top_shelf' : 'standard');
 
                 if ($boxTier === 'top_shelf') {
-                    $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $qty);
+                    $this->publishTopShelfRow(
+                        $marketOrder->id,
+                        $item,
+                        $qty,
+                        $size16CottonId,
+                        $size8CottonId,
+                        $sizeWaxMeltId
+                    );
                 } else {
                     $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size16CottonId, $qty * 2);
                     $this->createMarketBoxOrderLine($marketOrder->id, $scentId, $size8CottonId, $qty * 4);
@@ -407,7 +389,20 @@ class MarketsPlanner extends Component
                     continue;
                 }
 
-                $rawScent = (string) $row->scent_raw;
+                $rawScent = trim((string) $row->scent_raw);
+                if (RetailPlanItem::isTopShelfLabel($rawScent)) {
+                    $result = $this->mergeTopShelfBoxItem(
+                        $upcomingEvent,
+                        (int) $row->id,
+                        max(1, (int) round($sentBoxes)),
+                        'event_prefill'
+                    );
+
+                    $added += $result['added'];
+                    $merged += $result['merged'];
+                    continue;
+                }
+
                 $splitScentIds = $this->resolveSplitScentIdsFromText($rawScent);
                 if ((bool) $row->is_split_box || count($splitScentIds) === 2) {
                     if (count($splitScentIds) !== 2) {
@@ -464,66 +459,108 @@ class MarketsPlanner extends Component
             return ['added' => 0, 'merged' => 0, 'skipped' => 1];
         }
 
-        $added = 0;
-        $merged = 0;
+        $result = $this->mergeTopShelfBoxItem(
+            $selectedEvent,
+            $sourceMarketPlanLineId,
+            max(1, $quantityPerScent),
+            'market_top_shelf_template',
+            $this->topShelfDefaultConfiguration()
+        );
 
-        foreach ($template->items as $templateItem) {
-            $scentId = (int) ($templateItem->scent_id ?? 0);
-            if ($scentId <= 0) {
-                continue;
-            }
+        return [
+            'added' => $result['added'],
+            'merged' => $result['merged'],
+            'skipped' => 0,
+        ];
+    }
 
-            $existing = null;
+    /**
+     * @param  array<string,mixed>|null  $configuration
+     * @return array{added:int,merged:int}
+     */
+    protected function mergeTopShelfBoxItem(
+        Event $selectedEvent,
+        int $sourceMarketPlanLineId,
+        int $boxCount,
+        string $source = 'event_prefill',
+        ?array $configuration = null
+    ): array {
+        $boxCount = max(1, $boxCount);
+        $configuration = RetailPlanItem::normalizeTopShelfConfiguration(
+            $configuration ?? [],
+            $this->topShelfDefaultPrimaryScentId()
+        );
+        $notes = $this->supportsRetailPlanItemNotesColumn()
+            ? RetailPlanItem::encodeTopShelfConfiguration($configuration, $this->topShelfDefaultPrimaryScentId())
+            : null;
+        $primaryScentId = $this->topShelfPrimaryScentId($configuration);
+
+        $existing = RetailPlanItem::query()
+            ->where('retail_plan_id', $this->plan->id)
+            ->whereNull('size_id')
+            ->where('source', $source)
+            ->when(
+                $this->supportsRetailPlanItemUpcomingEventColumn(),
+                fn ($query) => $query->where('upcoming_event_id', $selectedEvent->id)
+            )
+            ->where('status', '!=', 'published')
+            ->when(
+                $this->supportsRetailPlanItemBoxTierColumn(),
+                fn ($query) => $query->where('box_tier', 'top_shelf')
+            )
+            ->when(
+                $this->supportsRetailPlanItemNotesColumn(),
+                fn ($query) => $query->where('notes', $notes)
+            )
+            ->first();
+
+        if ($existing) {
+            $existing->quantity = max(1, (int) $existing->quantity + $boxCount);
+            $existing->scent_id = $primaryScentId;
+            $existing->status = RetailPlanItem::topShelfConfigurationIsComplete($configuration) ? 'draft' : 'needs_mapping';
             if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
-                $existing = RetailPlanItem::query()
-                    ->where('retail_plan_id', $this->plan->id)
-                    ->where('source', 'market_top_shelf_template')
-                    ->where('upcoming_event_id', $selectedEvent->id)
-                    ->where('scent_id', $scentId)
-                    ->where('status', '!=', 'published')
-                    ->first();
-            }
-
-            if ($existing) {
-                $existing->quantity = max(1, (int) $existing->quantity + max(1, $quantityPerScent));
-                if (($existing->status ?? 'draft') === 'needs_mapping') {
-                    $existing->status = 'draft';
-                }
-                if ($this->supportsRetailPlanItemBoxTierColumn()) {
-                    $existing->box_tier = 'top_shelf';
-                }
-                $existing->save();
-                $merged++;
-                continue;
-            }
-
-            $payload = [
-                'retail_plan_id' => $this->plan->id,
-                'order_id' => null,
-                'order_line_id' => null,
-                'scent_id' => $scentId,
-                'size_id' => null,
-                'quantity' => max(1, $quantityPerScent),
-                'source' => 'market_top_shelf_template',
-                'status' => 'draft',
-                'sku' => Str::limit("mkttop:{$selectedEvent->id}:{$sourceMarketPlanLineId}:{$scentId}", 255, ''),
-            ];
-
-            if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
-                $payload['upcoming_event_id'] = $selectedEvent->id;
+                $existing->upcoming_event_id = $selectedEvent->id;
             }
             if ($this->supportsRetailPlanItemBoxTierColumn()) {
-                $payload['box_tier'] = 'top_shelf';
+                $existing->box_tier = 'top_shelf';
             }
             if ($this->supportsRetailPlanItemNotesColumn()) {
-                $payload['notes'] = null;
+                $existing->notes = $notes;
             }
+            $existing->save();
 
-            RetailPlanItem::query()->create($payload);
-            $added++;
+            return ['added' => 0, 'merged' => 1];
         }
 
-        return ['added' => $added, 'merged' => $merged, 'skipped' => 0];
+        $payload = [
+            'retail_plan_id' => $this->plan->id,
+            'order_id' => null,
+            'order_line_id' => null,
+            'scent_id' => $primaryScentId,
+            'size_id' => null,
+            'quantity' => $boxCount,
+            'source' => $source,
+            'status' => RetailPlanItem::topShelfConfigurationIsComplete($configuration) ? 'draft' : 'needs_mapping',
+            'sku' => Str::limit(
+                'mkttop:'.$selectedEvent->id.':'.$sourceMarketPlanLineId.':'.($sourceMarketPlanLineId > 0 ? $sourceMarketPlanLineId : 'manual'),
+                255,
+                ''
+            ),
+        ];
+
+        if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $payload['upcoming_event_id'] = $selectedEvent->id;
+        }
+        if ($this->supportsRetailPlanItemBoxTierColumn()) {
+            $payload['box_tier'] = 'top_shelf';
+        }
+        if ($this->supportsRetailPlanItemNotesColumn()) {
+            $payload['notes'] = $notes;
+        }
+
+        RetailPlanItem::query()->create($payload);
+
+        return ['added' => 1, 'merged' => 0];
     }
 
     /**
@@ -776,6 +813,88 @@ class MarketsPlanner extends Component
 
                 return false;
             })?->id;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function topShelfDefaultConfiguration(): array
+    {
+        $template = $this->activeTopShelfTemplate();
+        $slots = $template
+            ? $template->items
+                ->pluck('scent_id')
+                ->filter(fn ($id): bool => (int) $id > 0)
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->take(12)
+                ->values()
+                ->all()
+            : [];
+
+        $preset = match (count($slots)) {
+            2 => 'split_6_6',
+            3 => 'split_4_4_4',
+            4 => 'split_3_3_3_3',
+            default => count($slots) >= 5 ? 'different_12' : 'same_12',
+        };
+
+        return RetailPlanItem::normalizeTopShelfConfiguration([
+            'preset' => $preset,
+            'size_mode' => '16oz',
+            'slots' => $slots,
+        ], $slots[0] ?? null);
+    }
+
+    protected function topShelfDefaultPrimaryScentId(): ?int
+    {
+        return $this->topShelfPrimaryScentId($this->topShelfDefaultConfiguration());
+    }
+
+    /**
+     * @param  array<string,mixed>  $configuration
+     */
+    protected function topShelfPrimaryScentId(array $configuration): ?int
+    {
+        foreach ((array) ($configuration['composition'] ?? []) as $slot) {
+            $scentId = (int) ($slot['scent_id'] ?? 0);
+            if ($scentId > 0) {
+                return $scentId;
+            }
+        }
+
+        return null;
+    }
+
+    protected function publishTopShelfRow(
+        int $orderId,
+        RetailPlanItem $item,
+        int $boxCount,
+        ?int $size16CottonId,
+        ?int $size8CottonId,
+        ?int $sizeWaxMeltId
+    ): void {
+        $configuration = RetailPlanItem::decodeTopShelfConfiguration(
+            $this->supportsRetailPlanItemNotesColumn() ? $item->notes : null,
+            $item->scent_id ? (int) $item->scent_id : null
+        );
+        $sizeMode = (string) ($configuration['size_mode'] ?? '16oz');
+        $sizeId = match ($sizeMode) {
+            '8oz' => $size8CottonId,
+            'wax_melt' => $sizeWaxMeltId,
+            default => $size16CottonId,
+        };
+
+        foreach ((array) ($configuration['composition'] ?? []) as $slot) {
+            $scentId = (int) ($slot['scent_id'] ?? 0);
+            $unitsPerBox = max(0, (int) ($slot['units_per_box'] ?? 0));
+
+            if ($scentId <= 0 || $unitsPerBox <= 0) {
+                continue;
+            }
+
+            $this->createMarketBoxOrderLine($orderId, $scentId, $sizeId, $boxCount * $unitsPerBox);
+        }
     }
 
     protected function selectedEventById(?int $upcomingEventId = null): ?Event

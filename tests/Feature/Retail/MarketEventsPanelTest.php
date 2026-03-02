@@ -14,6 +14,7 @@ use App\Models\RetailPlanItem;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Models\User;
+use App\Services\MarketDurationTemplateService;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -403,7 +404,25 @@ test('duration starter template creates a draft from fixed 1 to 3 day averages',
         'status' => 'needs_mapping',
     ]);
 
-    foreach (['Blue Ridge', 'Moss Trail', 'Cedar Smoke'] as $scentName) {
+    $starterPoolScents = [
+        'Blue Ridge',
+        'Moss Trail',
+        'Cedar Smoke',
+        'Room Refresh',
+        'Golden Hour',
+        'Pine Hollow',
+        'Sunwashed Linen',
+        'Blackberry Ember',
+        'Salt Air',
+        'Foggy Harbor',
+        'Juniper Trail',
+        'Sweet Tea',
+        'White Oak',
+        'Saddle Leather',
+        'Garden Mint',
+    ];
+
+    foreach ($starterPoolScents as $scentName) {
         Scent::query()->firstOrCreate(['name' => $scentName], [
             'display_name' => $scentName,
             'is_active' => true,
@@ -418,23 +437,26 @@ test('duration starter template creates a draft from fixed 1 to 3 day averages',
         'status' => 'completed',
     ]);
 
+    foreach ($starterPoolScents as $index => $scentName) {
+        EventBoxPlan::query()->create([
+            'event_instance_id' => $historical->id,
+            'scent_raw' => $scentName,
+            'box_count_sent' => ($index % 4) + 1,
+        ]);
+    }
+
     EventBoxPlan::query()->create([
         'event_instance_id' => $historical->id,
-        'scent_raw' => 'Blue Ridge',
-        'box_count_sent' => 2,
-    ]);
-    EventBoxPlan::query()->create([
-        'event_instance_id' => $historical->id,
-        'scent_raw' => 'Moss Trail',
-        'box_count_sent' => 1,
-    ]);
-    EventBoxPlan::query()->create([
-        'event_instance_id' => $historical->id,
-        'scent_raw' => 'Cedar Smoke',
-        'box_count_sent' => 1,
+        'scent_raw' => 'Top Shelf',
+        'box_count_sent' => 5,
     ]);
 
-    app(MarketEventSyncCoordinator::class)->bumpMatchingCacheVersion();
+    $template = app(MarketDurationTemplateService::class)->templateForDays(2);
+
+    expect($template['lines'] ?? [])->toHaveCount(15);
+    expect(collect($template['lines'] ?? [])->pluck('scent_raw')->contains(
+        fn ($value): bool => strtolower(trim((string) $value)) === 'top shelf'
+    ))->toBeFalse();
 
     Livewire::test(UpcomingEventsPanel::class, [
         'planId' => $plan->id,
@@ -448,7 +470,6 @@ test('duration starter template creates a draft from fixed 1 to 3 day averages',
     Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
         ->call('handleMarketsDurationTemplateRequested', $upcoming->id, 2)
         ->assertDispatched('marketsDraftCreated')
-        ->assertDispatched('marketsDraftUpdated')
         ->assertDispatched('marketsPrefillStatusChanged');
 
     $items = RetailPlanItem::query()
@@ -458,6 +479,7 @@ test('duration starter template creates a draft from fixed 1 to 3 day averages',
         ->get();
 
     expect($items->isNotEmpty())->toBeTrue();
+    expect($items->pluck('source')->unique()->all())->toBe(['market_duration_template']);
     expect((string) $upcoming->fresh()->status)->toBe('drafted');
 
     Livewire::test(UpcomingEventsPanel::class, [
@@ -539,20 +561,26 @@ test('draft event editor saves inline edits for draft boxes', function () {
         'selectedEventId' => $event->id,
     ])
         ->set("draftRows.{$item->id}.quantity", 5)
-        ->set("draftRows.{$item->id}.scent_id", $updatedScent->id)
         ->set("draftRows.{$item->id}.size_id", $size->id)
         ->set("draftRows.{$item->id}.box_tier", 'top_shelf')
-        ->set("draftRows.{$item->id}.notes", 'Runner requested an extra 16oz focus.')
+        ->set("draftRows.{$item->id}.scent_id", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.preset", 'split_6_6')
+        ->set("draftRows.{$item->id}.top_shelf.size_mode", '8oz')
+        ->set("draftRows.{$item->id}.top_shelf.slots.0", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.1", $originalScent->id)
         ->call('saveItem', $item->id)
         ->assertSeeText('Saved.');
 
     $item->refresh();
+    $topShelfConfiguration = RetailPlanItem::decodeTopShelfConfiguration($item->notes, $item->scent_id);
 
     expect((int) $item->quantity)->toBe(5);
     expect((int) $item->scent_id)->toBe($updatedScent->id);
     expect((int) $item->size_id)->toBe($size->id);
     expect((string) $item->box_tier)->toBe('top_shelf');
-    expect((string) $item->notes)->toBe('Runner requested an extra 16oz focus.');
+    expect((string) ($topShelfConfiguration['preset'] ?? ''))->toBe('split_6_6');
+    expect((string) ($topShelfConfiguration['size_mode'] ?? ''))->toBe('8oz');
+    expect((array) ($topShelfConfiguration['slots'] ?? []))->toBe([$updatedScent->id, $originalScent->id]);
 
     Livewire::test(DraftEventEditor::class, [
         'planId' => $plan->id,
@@ -562,7 +590,8 @@ test('draft event editor saves inline edits for draft boxes', function () {
         ->assertSet("draftRows.{$item->id}.scent_id", $updatedScent->id)
         ->assertSet("draftRows.{$item->id}.size_id", $size->id)
         ->assertSet("draftRows.{$item->id}.box_tier", 'top_shelf')
-        ->assertSet("draftRows.{$item->id}.notes", 'Runner requested an extra 16oz focus.');
+        ->assertSet("draftRows.{$item->id}.top_shelf.preset", 'split_6_6')
+        ->assertSet("draftRows.{$item->id}.top_shelf.size_mode", '8oz');
 });
 
 test('draft event editor reloads db rows when mounted state is empty', function () {

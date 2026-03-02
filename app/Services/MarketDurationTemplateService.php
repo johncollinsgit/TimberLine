@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\EventBoxPlan;
 use App\Models\EventInstance;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class MarketDurationTemplateService
@@ -14,12 +13,23 @@ class MarketDurationTemplateService
      */
     public function templates(): array
     {
+        $dayCounts = [1, 2, 3];
+
         return Cache::remember(
             $this->cacheKey(),
             now()->addHours(24),
-            fn (): array => collect([1, 2, 3])
-                ->map(fn (int $days): array => $this->buildTemplate($days))
-                ->all()
+            function () use ($dayCounts): array {
+                $topScents = $this->topScents();
+                $averageBoxesByDuration = $this->averageBoxesByDuration($dayCounts);
+
+                return collect($dayCounts)
+                    ->map(fn (int $days): array => $this->buildTemplate(
+                        $days,
+                        $topScents,
+                        (float) ($averageBoxesByDuration[$days] ?? ($days * 6))
+                    ))
+                    ->all();
+            }
         );
     }
 
@@ -32,39 +42,60 @@ class MarketDurationTemplateService
 
         return collect($this->templates())
             ->first(fn (array $row): bool => (int) ($row['day_count'] ?? 0) === $days)
-            ?? $this->buildTemplate($days);
+            ?? $this->buildTemplate($days, $this->topScents(), (float) ($days * 6));
     }
 
     /**
-     * @return array<string,mixed>
+     * @param  array<int,int>  $dayCounts
+     * @return array<int,float>
      */
-    protected function buildTemplate(int $days): array
+    protected function averageBoxesByDuration(array $dayCounts): array
     {
+        $averages = array_fill_keys($dayCounts, 0.0);
         $instances = EventInstance::query()
-            ->with(['boxPlans' => fn ($query) => $query->whereNotNull('box_count_sent')->orderBy('id')])
+            ->with(['boxPlans' => fn ($query) => $query->whereNotNull('box_count_sent')])
             ->whereNotNull('starts_at')
-            ->get(['id', 'starts_at', 'ends_at'])
-            ->filter(function (EventInstance $instance) use ($days): bool {
-                $startsAt = $instance->starts_at;
-                if (! $startsAt) {
-                    return false;
-                }
+            ->get(['id', 'starts_at', 'ends_at']);
 
-                $endsAt = $instance->ends_at ?: $startsAt;
-                $duration = (int) $startsAt->diffInDays($endsAt) + 1;
-
-                return $duration === $days;
-            })
-            ->values();
-
-        $topScents = $this->topScents();
-        $averageBoxes = $instances->isEmpty()
-            ? (float) ($days * 6)
-            : (float) round(
-                $instances->avg(fn (EventInstance $instance) => (float) $instance->boxPlans->sum(fn (EventBoxPlan $line) => (float) ($line->box_count_sent ?? 0))),
-                1
+        foreach ($dayCounts as $dayCount) {
+            $matching = $instances->filter(
+                fn (EventInstance $instance): bool => $this->durationDaysForInstance($instance) === $dayCount
             );
 
+            $averages[$dayCount] = $matching->isEmpty()
+                ? (float) ($dayCount * 6)
+                : (float) round(
+                    $matching->avg(
+                        fn (EventInstance $instance) => (float) $instance->boxPlans->sum(
+                            fn (EventBoxPlan $line) => (float) ($line->box_count_sent ?? 0)
+                        )
+                    ),
+                    1
+                );
+        }
+
+        return $averages;
+    }
+
+    protected function durationDaysForInstance(EventInstance $instance): int
+    {
+        $startsAt = $instance->starts_at;
+        if (! $startsAt) {
+            return 0;
+        }
+
+        $endsAt = $instance->ends_at ?: $startsAt;
+
+        return max(1, (int) $startsAt->diffInDays($endsAt) + 1);
+    }
+
+    /**
+     * @param  array<int,string>  $topScents
+     * @return array<string,mixed>
+     */
+    protected function buildTemplate(int $days, array $topScents, float $averageBoxes): array
+    {
+        $days = max(1, min(3, $days));
         $lineBlueprints = $this->buildLinesForTemplate($topScents, $averageBoxes);
 
         return [
@@ -87,6 +118,7 @@ class MarketDurationTemplateService
             ->where('is_split_box', false)
             ->whereNotNull('box_count_sent')
             ->whereRaw("TRIM(COALESCE(scent_raw, '')) != ''")
+            ->whereRaw("LOWER(TRIM(COALESCE(scent_raw, ''))) != 'top shelf'")
             ->groupBy('scent_raw')
             ->orderByDesc('sent_total')
             ->limit(15)

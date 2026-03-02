@@ -38,6 +38,61 @@ class DraftEventEditor extends Component
         $this->loadDraftRows(true);
     }
 
+    public function updatedDraftRows(mixed $value, ?string $name = null): void
+    {
+        unset($value);
+
+        if ($name === null || $name === '') {
+            return;
+        }
+
+        if (! preg_match('/^(\d+)\.(.+)$/', $name, $matches)) {
+            return;
+        }
+
+        $itemId = (int) ($matches[1] ?? 0);
+        $field = (string) ($matches[2] ?? '');
+        $row = $this->draftRows[$itemId] ?? null;
+
+        if (! is_array($row)) {
+            return;
+        }
+
+        if ($field === 'box_tier') {
+            $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+            $this->draftRows[$itemId]['box_tier'] = $boxTier;
+
+            if ($boxTier === 'top_shelf') {
+                $fallbackScentId = $this->normalizeNullableId($row['scent_id'] ?? null);
+                $this->draftRows[$itemId]['top_shelf'] = $this->normalizeTopShelfConfiguration(
+                    $row['top_shelf'] ?? [],
+                    $fallbackScentId
+                );
+            }
+
+            return;
+        }
+
+        if (
+            str_starts_with($field, 'top_shelf')
+            || ($field === 'scent_id' && $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard')) === 'top_shelf')
+        ) {
+            $fallbackScentId = $this->normalizeNullableId($row['scent_id'] ?? null);
+            $topShelf = is_array($row['top_shelf'] ?? null) ? $row['top_shelf'] : [];
+
+            if ($field === 'scent_id' && $fallbackScentId) {
+                $slots = is_array($topShelf['slots'] ?? null) ? array_values($topShelf['slots']) : [];
+                $slots[0] = $fallbackScentId;
+                $topShelf['slots'] = $slots;
+            }
+
+            $this->draftRows[$itemId]['top_shelf'] = $this->normalizeTopShelfConfiguration(
+                $topShelf,
+                $fallbackScentId
+            );
+        }
+    }
+
     #[On('marketsDraftUpdated')]
     public function handleDraftUpdated(int $eventId): void
     {
@@ -67,22 +122,40 @@ class DraftEventEditor extends Component
             return;
         }
 
-        $quantity = max(1, (int) ($row['quantity'] ?? 1));
+        $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+        $quantity = $this->normalizeQuantity($row['quantity'] ?? 1, $boxTier);
         $scentId = $this->normalizeNullableId($row['scent_id'] ?? null);
         $sizeId = $this->normalizeNullableId($row['size_id'] ?? null);
-        $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
-        $notes = $this->normalizeNotes($row['notes'] ?? null);
-
-        if ($scentId && ! Scent::query()->whereKey($scentId)->exists()) {
-            $this->setRowStatus($itemId, 'error', 'Selected scent no longer exists.');
-
-            return;
-        }
 
         if ($sizeId && ! Size::query()->whereKey($sizeId)->exists()) {
             $this->setRowStatus($itemId, 'error', 'Selected size no longer exists.');
 
             return;
+        }
+
+        $topShelfConfiguration = null;
+        $notes = null;
+
+        if ($boxTier === 'top_shelf') {
+            $topShelfConfiguration = $this->normalizeTopShelfConfiguration($row['top_shelf'] ?? [], $scentId);
+            $invalidSlotIds = $this->invalidTopShelfSlotIds($topShelfConfiguration);
+
+            if ($invalidSlotIds !== []) {
+                $this->setRowStatus($itemId, 'error', 'One or more Top Shelf scents no longer exist.');
+
+                return;
+            }
+
+            $notes = RetailPlanItem::encodeTopShelfConfiguration($topShelfConfiguration, $scentId);
+            $scentId = $this->primaryScentIdForTopShelfConfiguration($topShelfConfiguration) ?: $scentId;
+        } else {
+            if ($scentId && ! Scent::query()->whereKey($scentId)->exists()) {
+                $this->setRowStatus($itemId, 'error', 'Selected scent no longer exists.');
+
+                return;
+            }
+
+            $notes = $this->normalizeNotes($row['notes_text'] ?? $row['notes'] ?? null);
         }
 
         $item = $this->itemQuery()->findOrFail($itemId);
@@ -98,14 +171,23 @@ class DraftEventEditor extends Component
             $item->notes = $notes;
         }
 
-        $item->status = $scentId ? 'draft' : 'needs_mapping';
+        $item->status = $boxTier === 'top_shelf'
+            ? ($topShelfConfiguration !== null && RetailPlanItem::topShelfConfigurationIsComplete($topShelfConfiguration) ? 'draft' : 'needs_mapping')
+            : ($scentId ? 'draft' : 'needs_mapping');
         $item->save();
 
         $this->draftRows[$itemId]['quantity'] = $quantity;
         $this->draftRows[$itemId]['scent_id'] = $scentId;
         $this->draftRows[$itemId]['size_id'] = $sizeId;
         $this->draftRows[$itemId]['box_tier'] = $boxTier;
-        $this->draftRows[$itemId]['notes'] = $notes;
+        $this->draftRows[$itemId]['notes'] = $notes ?? '';
+        $this->draftRows[$itemId]['notes_text'] = $boxTier === 'top_shelf' ? '' : ($notes ?? '');
+        $this->draftRows[$itemId]['status'] = (string) $item->status;
+
+        if ($boxTier === 'top_shelf' && $topShelfConfiguration !== null) {
+            $this->draftRows[$itemId]['top_shelf'] = $topShelfConfiguration;
+        }
+
         $this->setRowStatus($itemId, 'success', 'Saved.');
 
         $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
@@ -126,6 +208,57 @@ class DraftEventEditor extends Component
         return $value.' '.(((float) $boxes) === 1.0 ? 'box' : 'boxes');
     }
 
+    public function quantityLabelForRow(array $row): string
+    {
+        $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+        $quantity = max(1, (int) ($row['quantity'] ?? 1));
+
+        if ($boxTier === 'top_shelf') {
+            return $quantity.' '.($quantity === 1 ? 'Top Shelf box' : 'Top Shelf boxes');
+        }
+
+        return $this->marketBoxLabelFromUnits($quantity);
+    }
+
+    public function topShelfDescription(array $row): string
+    {
+        $configuration = $this->normalizeTopShelfConfiguration(
+            $row['top_shelf'] ?? [],
+            $this->normalizeNullableId($row['scent_id'] ?? null)
+        );
+
+        $preset = RetailPlanItem::TOP_SHELF_PRESETS[(string) ($configuration['preset'] ?? 'same_12')] ?? '12 Same';
+        $sizeMode = RetailPlanItem::TOP_SHELF_SIZE_MODES[(string) ($configuration['size_mode'] ?? '16oz')] ?? '16oz';
+
+        if ((string) ($configuration['size_mode'] ?? '') === 'wax_melt') {
+            $sizeMode .= ' · '.(int) ($configuration['wax_melt_capacity'] ?? 12).' per box';
+        }
+
+        return $preset.' · '.$sizeMode;
+    }
+
+    public function topShelfCompositionPreview(array $row, array $scentLookup = []): string
+    {
+        $configuration = $this->normalizeTopShelfConfiguration(
+            $row['top_shelf'] ?? [],
+            $this->normalizeNullableId($row['scent_id'] ?? null)
+        );
+
+        $parts = [];
+
+        foreach ((array) ($configuration['composition'] ?? []) as $slot) {
+            $scentId = (int) ($slot['scent_id'] ?? 0);
+            $units = max(1, (int) ($slot['units_per_box'] ?? 0));
+            $label = $scentId > 0
+                ? (string) ($scentLookup[$scentId] ?? "Scent #{$scentId}")
+                : 'Choose scent';
+
+            $parts[] = $units.'x '.$label;
+        }
+
+        return implode(' | ', $parts);
+    }
+
     public function render()
     {
         $eventId = (int) ($this->selectedEventId ?: 0);
@@ -143,9 +276,18 @@ class DraftEventEditor extends Component
             $this->loadDraftRows();
         }
 
-        $canSubmit = ! empty($this->draftRows) && ! collect($this->draftRows)->contains(function (array $row): bool {
-            return (int) ($row['quantity'] ?? 0) <= 0 || (int) ($row['scent_id'] ?? 0) <= 0;
-        });
+        $canSubmit = ! empty($this->draftRows) && ! collect($this->draftRows)->contains(
+            fn (array $row): bool => ! $this->rowCanSubmit($row)
+        );
+
+        $scentOptions = Scent::query()
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query->whereNull('is_wholesale_custom')
+                    ->orWhere('is_wholesale_custom', false);
+            })
+            ->orderByRaw('COALESCE(display_name, name)')
+            ->get(['id', 'name', 'display_name']);
 
         return view('livewire.retail.markets.draft-event-editor', [
             'event' => $event,
@@ -154,19 +296,19 @@ class DraftEventEditor extends Component
                 ['id', 'asc'],
             ]),
             'canSubmit' => $canSubmit,
-            'scentOptions' => Scent::query()
-                ->where('is_active', true)
-                ->where(function ($query): void {
-                    $query->whereNull('is_wholesale_custom')
-                        ->orWhere('is_wholesale_custom', false);
-                })
-                ->orderByRaw('COALESCE(display_name, name)')
-                ->get(['id', 'name', 'display_name']),
+            'scentOptions' => $scentOptions,
+            'scentLookup' => $scentOptions
+                ->mapWithKeys(fn (Scent $scent): array => [
+                    (int) $scent->id => (string) ($scent->display_name ?: $scent->name),
+                ])
+                ->all(),
             'sizeOptions' => Size::query()
                 ->where('is_active', true)
                 ->orderBy('sort_order')
                 ->orderBy('label')
                 ->get(['id', 'code', 'label']),
+            'topShelfPresetOptions' => RetailPlanItem::TOP_SHELF_PRESETS,
+            'topShelfSizeModes' => RetailPlanItem::TOP_SHELF_SIZE_MODES,
         ]);
     }
 
@@ -188,26 +330,34 @@ class DraftEventEditor extends Component
             ->get();
 
         foreach ($items as $item) {
+            $boxTier = $this->supportsRetailPlanItemBoxTierColumn()
+                ? $this->normalizeBoxTier((string) ($item->box_tier ?? 'standard'))
+                : $this->legacyTierForItem($item);
+            $topShelf = $boxTier === 'top_shelf'
+                ? RetailPlanItem::decodeTopShelfConfiguration(
+                    $this->supportsRetailPlanItemNotesColumn() ? $item->notes : null,
+                    $item->scent_id ? (int) $item->scent_id : null
+                )
+                : RetailPlanItem::defaultTopShelfConfiguration($item->scent_id ? (int) $item->scent_id : null);
+
             $this->draftRows[(int) $item->id] = [
                 'id' => (int) $item->id,
                 'quantity' => max(1, (int) ($item->quantity ?? 1)),
                 'scent_id' => $item->scent_id ? (int) $item->scent_id : null,
                 'size_id' => $item->size_id ? (int) $item->size_id : null,
-                'box_tier' => $this->supportsRetailPlanItemBoxTierColumn()
-                    ? $this->normalizeBoxTier((string) ($item->box_tier ?? 'standard'))
-                    : $this->legacyTierForItem($item),
+                'box_tier' => $boxTier,
                 'notes' => $this->supportsRetailPlanItemNotesColumn()
                     ? (string) ($item->notes ?? '')
                     : '',
+                'notes_text' => $boxTier === 'top_shelf'
+                    ? ''
+                    : ($this->supportsRetailPlanItemNotesColumn() ? (string) ($item->notes ?? '') : ''),
+                'top_shelf' => $topShelf,
                 'source' => (string) ($item->source ?? ''),
                 'status' => (string) ($item->status ?? 'draft'),
                 'scent_label' => (string) ($item->scent?->display_name ?: $item->scent?->name ?: ''),
                 'size_label' => (string) ($item->size?->label ?: $item->size?->code ?: ''),
-                'sort_order' => $this->sortOrderForTier(
-                    $this->supportsRetailPlanItemBoxTierColumn()
-                        ? $this->normalizeBoxTier((string) ($item->box_tier ?? 'standard'))
-                        : $this->legacyTierForItem($item)
-                ),
+                'sort_order' => $this->sortOrderForTier($boxTier),
             ];
         }
 
@@ -231,11 +381,38 @@ class DraftEventEditor extends Component
             ->whereIn('source', RetailPlanItem::marketDraftSources());
     }
 
+    protected function rowCanSubmit(array $row): bool
+    {
+        $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+
+        if ((int) ($row['quantity'] ?? 0) <= 0) {
+            return false;
+        }
+
+        if ($boxTier === 'top_shelf') {
+            return RetailPlanItem::topShelfConfigurationIsComplete(
+                $this->normalizeTopShelfConfiguration(
+                    $row['top_shelf'] ?? [],
+                    $this->normalizeNullableId($row['scent_id'] ?? null)
+                )
+            );
+        }
+
+        return (int) ($row['scent_id'] ?? 0) > 0;
+    }
+
     protected function normalizeNullableId(mixed $value): ?int
     {
         $value = is_string($value) ? trim($value) : $value;
 
         return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
+    }
+
+    protected function normalizeQuantity(mixed $value, string $boxTier): int
+    {
+        $quantity = max(1, (int) $value);
+
+        return $this->normalizeBoxTier($boxTier) === 'top_shelf' ? $quantity : $quantity;
     }
 
     protected function normalizeBoxTier(string $value): string
@@ -250,6 +427,56 @@ class DraftEventEditor extends Component
         $value = trim((string) $value);
 
         return $value !== '' ? mb_substr($value, 0, 1000) : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $configuration
+     * @return array<int,int>
+     */
+    protected function invalidTopShelfSlotIds(array $configuration): array
+    {
+        $slotIds = collect((array) ($configuration['composition'] ?? []))
+            ->pluck('scent_id')
+            ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($slotIds->isEmpty()) {
+            return [];
+        }
+
+        $existing = Scent::query()
+            ->whereIn('id', $slotIds->all())
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        return array_values(array_diff($slotIds->all(), $existing));
+    }
+
+    /**
+     * @param  array<string,mixed>|mixed  $value
+     * @return array<string,mixed>
+     */
+    protected function normalizeTopShelfConfiguration(mixed $value, ?int $fallbackScentId = null): array
+    {
+        return RetailPlanItem::normalizeTopShelfConfiguration(
+            is_array($value) ? $value : [],
+            $fallbackScentId
+        );
+    }
+
+    protected function primaryScentIdForTopShelfConfiguration(array $configuration): ?int
+    {
+        foreach ((array) ($configuration['composition'] ?? []) as $slot) {
+            $scentId = $this->normalizeNullableId($slot['scent_id'] ?? null);
+            if ($scentId) {
+                return $scentId;
+            }
+        }
+
+        return null;
     }
 
     protected function setRowStatus(int $itemId, string $type, string $message): void

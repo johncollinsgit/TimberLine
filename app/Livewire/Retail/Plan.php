@@ -1389,7 +1389,7 @@ class Plan extends Component
             $existing = RetailPlanItem::query()
                 ->where('retail_plan_id', $this->plan->id)
                 ->whereNull('size_id')
-                ->whereIn('source', ['market_box_manual', 'market_box_draft', 'market_box_event_prefill', 'event_prefill'])
+                ->whereIn('source', RetailPlanItem::marketMergeableSources())
                 ->where('scent_id', $scentId)
                 ->where('status', '!=', 'published')
                 ->first();
@@ -1819,7 +1819,7 @@ class Plan extends Component
             return;
         }
 
-        $marketSources = ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'];
+        $marketSources = RetailPlanItem::marketDraftSources();
         $eventItems = collect();
         if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
             $eventItems = $this->plan->items()
@@ -1951,7 +1951,7 @@ class Plan extends Component
             }
 
             if ($this->queue === 'markets') {
-                $marketBoxItems = $items->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template']);
+                $marketBoxItems = $items->whereIn('source', RetailPlanItem::marketDraftSources());
                 $publishableBoxes = $marketBoxItems->filter(fn ($item) => (int) ($item->scent_id ?? 0) > 0 && (int) ($item->quantity ?? 0) > 0);
 
                 if ($publishableBoxes->isNotEmpty()) {
@@ -2262,7 +2262,7 @@ class Plan extends Component
                 ->where('retail_plan_id', $this->plan->id)
                 ->where('status', '!=', 'published')
                 ->where('upcoming_event_id', $eventId)
-                ->whereIn('source', ['market_box_draft', 'market_box_manual', 'market_box_event_prefill', 'event_prefill', 'market_top_shelf_template'])
+                ->whereIn('source', RetailPlanItem::marketDraftSources())
                 ->get();
         } else {
             return false;
