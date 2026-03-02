@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class ScentTemplate extends Model
 {
@@ -12,11 +13,18 @@ class ScentTemplate extends Model
         'name',
         'type',
         'is_default',
+        'configuration',
     ];
 
     protected $casts = [
         'is_default' => 'boolean',
+        'configuration' => 'array',
     ];
+
+    public function scopeTopShelf(Builder $query): Builder
+    {
+        return $query->where('type', 'top_shelf');
+    }
 
     public function items(): HasMany
     {
