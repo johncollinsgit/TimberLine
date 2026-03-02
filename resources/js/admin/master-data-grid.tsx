@@ -8,6 +8,7 @@ import {
     GridColumn,
     Item,
     EditableGridCell,
+    type Theme,
 } from "@glideapps/glide-data-grid";
 import {
     startTransition,
@@ -74,6 +75,11 @@ type SaveState = "idle" | "saving" | "saved";
 
 const SAVE_DEBOUNCE_MS = 450;
 
+type ElementSize = {
+    width: number;
+    height: number;
+};
+
 function useDebouncedValue<T>(value: T, delayMs: number): T {
     const [debounced, setDebounced] = useState(value);
 
@@ -86,9 +92,9 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
     return debounced;
 }
 
-function useElementWidth<T extends HTMLElement>(): [RefObject<T | null>, number] {
+function useElementSize<T extends HTMLElement>(): [RefObject<T | null>, ElementSize] {
     const ref = useRef<T | null>(null);
-    const [width, setWidth] = useState(0);
+    const [size, setSize] = useState<ElementSize>({ width: 0, height: 0 });
 
     useEffect(() => {
         const element = ref.current;
@@ -96,19 +102,105 @@ function useElementWidth<T extends HTMLElement>(): [RefObject<T | null>, number]
             return;
         }
 
-        const update = () => {
-            setWidth(element.clientWidth);
+        const update = (width: number, height: number) => {
+            setSize((current) => {
+                if (current.width === width && current.height === height) {
+                    return current;
+                }
+
+                return { width, height };
+            });
         };
 
-        update();
+        update(element.clientWidth, element.clientHeight);
 
-        const observer = new ResizeObserver(update);
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) {
+                return;
+            }
+
+            update(
+                Math.round(entry.contentRect.width),
+                Math.round(entry.contentRect.height)
+            );
+        });
         observer.observe(element);
 
         return () => observer.disconnect();
     }, []);
 
-    return [ref, width];
+    return [ref, size];
+}
+
+function readCssVar(name: string, fallback: string): string {
+    if (typeof window === "undefined") {
+        return fallback;
+    }
+
+    const styleRoot = document.body ?? document.documentElement;
+    const value = window.getComputedStyle(styleRoot).getPropertyValue(name).trim();
+
+    return value === "" ? fallback : value;
+}
+
+function alphaColor(rgbTriplet: string, alpha: number): string {
+    return `rgba(${rgbTriplet}, ${alpha})`;
+}
+
+function resolveGridTheme(): Partial<Theme> {
+    const accent = readCssVar("--mf-accent", "16, 185, 129");
+    const accentSoft = readCssVar("--mf-accent-2", accent);
+    const panelBg = readCssVar("--mf-input-bg", "rgba(8, 25, 19, 0.55)");
+    const panelBgAlt = readCssVar("--mf-panel-bg-2", "rgba(9, 30, 22, 0.55)");
+    const panelBorder = readCssVar("--mf-panel-border", "rgba(110, 231, 183, 0.12)");
+    const panelBorderStrong = readCssVar("--mf-panel-strong-border", "rgba(110, 231, 183, 0.22)");
+    const textPrimary = readCssVar("--mf-text-1", "rgba(236, 253, 245, 0.94)");
+    const textSecondary = readCssVar("--mf-text-2", "rgba(209, 250, 229, 0.78)");
+    const textMuted = readCssVar("--mf-text-3", "rgba(167, 243, 208, 0.58)");
+    const fontBody = readCssVar(
+        "--mf-font-body",
+        "Manrope, ui-sans-serif, system-ui, sans-serif"
+    );
+
+    return {
+        accentColor: alphaColor(accent, 1),
+        accentFg: "#ecfdf5",
+        accentLight: alphaColor(accent, 0.16),
+        textDark: textPrimary,
+        textMedium: textSecondary,
+        textLight: textMuted,
+        textBubble: textPrimary,
+        bgIconHeader: alphaColor(accentSoft, 0.18),
+        fgIconHeader: "#d1fae5",
+        textHeader: textPrimary,
+        textGroupHeader: textMuted,
+        textHeaderSelected: "#ecfdf5",
+        bgCell: panelBg,
+        bgCellMedium: panelBgAlt,
+        bgHeader: alphaColor(accent, 0.08),
+        bgHeaderHasFocus: alphaColor(accent, 0.14),
+        bgHeaderHovered: alphaColor(accent, 0.11),
+        bgBubble: alphaColor(accent, 0.1),
+        bgBubbleSelected: alphaColor(accent, 0.18),
+        bgSearchResult: alphaColor(accent, 0.18),
+        borderColor: panelBorder,
+        drilldownBorder: panelBorderStrong,
+        linkColor: alphaColor(accent, 1),
+        cellHorizontalPadding: 14,
+        cellVerticalPadding: 8,
+        headerFontStyle: "600 13px",
+        headerIconSize: 16,
+        baseFontStyle: "13px",
+        markerFontStyle: "600 12px",
+        fontFamily: fontBody,
+        editorFontSize: "13px",
+        lineHeight: 1.4,
+        resizeIndicatorColor: alphaColor(accent, 1),
+        horizontalBorderColor: panelBorder,
+        headerBottomBorderColor: panelBorderStrong,
+        roundingRadius: 10,
+    };
 }
 
 function normalizeText(value: string): string {
@@ -263,13 +355,13 @@ function MasterDataGridApp(props: RootDataset) {
     const [error, setError] = useState("");
     const [saveState, setSaveState] = useState<SaveState>("idle");
     const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
-    const [gridWrapRef, gridWidth] = useElementWidth<HTMLDivElement>();
+    const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
+    const [gridTheme] = useState<Partial<Theme>>(() => resolveGridTheme());
     const saveTimersRef = useRef<Map<string, number>>(new Map());
     const saveFlashTimerRef = useRef<number | null>(null);
 
-    const activeTab = resources.find((resource) => resource.key === activeResource) ?? resources[0] ?? null;
     const gridColumns = buildGridColumns(meta);
-    const gridHeight = 620;
+    const canRenderGrid = gridBounds.width > 0 && gridBounds.height > 0;
 
     useEffect(() => {
         axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
@@ -519,9 +611,9 @@ function MasterDataGridApp(props: RootDataset) {
         const cellErrorKey = `${rowData.id}:${columnMeta.key}`;
         const themeOverride = cellErrors[cellErrorKey]
             ? {
-                bgCell: "#fff1f2",
+                bgCell: "rgba(76, 5, 25, 0.92)",
                 borderColor: "#fb7185",
-                textDark: "#9f1239",
+                textDark: "#ffe4e6",
             }
             : undefined;
 
@@ -611,186 +703,202 @@ function MasterDataGridApp(props: RootDataset) {
                     ? "Loading…"
                     : `${meta?.pagination.total ?? rows.length} row${(meta?.pagination.total ?? rows.length) === 1 ? "" : "s"}`;
 
+    const fieldClass =
+        "h-11 w-full appearance-none rounded-2xl border border-white/10 bg-black/25 px-3 text-sm text-white/90 outline-none transition placeholder:text-emerald-50/35 focus:border-emerald-300/30 focus:bg-black/30";
+    const buttonClass =
+        "inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50";
+
     return (
-        <div className="space-y-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                        {resources.map((resource) => (
-                            <button
-                                key={resource.key}
-                                type="button"
-                                onClick={() => {
-                                    startTransition(() => {
-                                        setActiveResource(resource.key);
-                                        setSearchInput("");
-                                        setActiveFilter("");
-                                        setPage(1);
-                                        setError("");
-                                        setNotice("");
-                                    });
-                                }}
-                                className={
-                                    "rounded-2xl border px-3 py-2 text-sm font-medium transition " +
-                                    (resource.key === activeResource
-                                        ? "border-emerald-300 bg-emerald-50 text-emerald-900"
-                                        : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50")
-                                }
-                            >
-                                {resource.label}
-                            </button>
-                        ))}
-                    </div>
-
+        <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="rounded-3xl border border-white/10 bg-black/15 p-4 md:p-5">
+                <div className="space-y-4">
                     <div>
-                        <div className="text-lg font-semibold text-zinc-950">
-                            {activeTab?.label ?? "Master Data"}
+                        <div className="text-[11px] uppercase tracking-[0.32em] text-emerald-100/50">
+                            Resource Tables
                         </div>
-                        <div className="text-sm text-zinc-500">
-                            {activeTab?.description ?? ""}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {resources.map((resource) => {
+                                const isActive = resource.key === activeResource;
+
+                                return (
+                                    <button
+                                        key={resource.key}
+                                        type="button"
+                                        onClick={() => {
+                                            startTransition(() => {
+                                                setActiveResource(resource.key);
+                                                setSearchInput("");
+                                                setActiveFilter("");
+                                                setPage(1);
+                                                setError("");
+                                                setNotice("");
+                                            });
+                                        }}
+                                        className={
+                                            "max-w-full rounded-2xl border px-4 py-3 text-left transition " +
+                                            (isActive
+                                                ? "border-emerald-300/35 bg-emerald-500/15 text-emerald-50 shadow-[0_10px_28px_rgba(16,185,129,0.12)]"
+                                                : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10 hover:text-white")
+                                        }
+                                    >
+                                        <span className="block text-sm font-semibold">{resource.label}</span>
+                                        {isActive ? (
+                                            <span className="mt-1 block text-[11px] leading-5 text-emerald-50/70">
+                                                {resource.description}
+                                            </span>
+                                        ) : null}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                </div>
 
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,16rem)_10rem_12rem_8rem_auto_auto]">
-                    <input
-                        type="search"
-                        value={searchInput}
-                        onChange={(event) => setSearchInput(event.target.value)}
-                        placeholder="Search name, code, abbreviation…"
-                        className="h-11 rounded-2xl border border-zinc-200 px-3 text-sm text-zinc-900 outline-none transition focus:border-emerald-300"
-                    />
+                    <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.8fr)_12rem_12rem_8rem_auto_auto]">
+                        <input
+                            type="search"
+                            value={searchInput}
+                            onChange={(event) => setSearchInput(event.target.value)}
+                            placeholder="Search name, code, abbreviation…"
+                            className={fieldClass}
+                        />
 
-                    {meta?.supports_active_filter ? (
+                        {meta?.supports_active_filter ? (
+                            <select
+                                value={activeFilter}
+                                onChange={(event) => setActiveFilter(event.target.value)}
+                                className={fieldClass}
+                            >
+                                <option value="">All Rows</option>
+                                <option value="true">Active</option>
+                                <option value="false">Inactive</option>
+                            </select>
+                        ) : null}
+
                         <select
-                            value={activeFilter}
-                            onChange={(event) => setActiveFilter(event.target.value)}
-                            className="h-11 rounded-2xl border border-zinc-200 px-3 text-sm text-zinc-900 outline-none transition focus:border-emerald-300"
+                            value={sortField}
+                            onChange={(event) => setSortField(event.target.value)}
+                            className={fieldClass}
                         >
-                            <option value="">All Rows</option>
-                            <option value="true">Active</option>
-                            <option value="false">Inactive</option>
+                            {(meta?.columns ?? []).length > 0 ? (
+                                (meta?.columns ?? []).map((column) => (
+                                    <option key={column.key} value={column.key}>
+                                        Sort: {column.label}
+                                    </option>
+                                ))
+                            ) : (
+                                <option value="">Sort: Loading…</option>
+                            )}
                         </select>
-                    ) : (
-                        <div />
-                    )}
 
-                    <select
-                        value={sortField}
-                        onChange={(event) => setSortField(event.target.value)}
-                        className="h-11 rounded-2xl border border-zinc-200 px-3 text-sm text-zinc-900 outline-none transition focus:border-emerald-300"
-                    >
-                        {(meta?.columns ?? []).map((column) => (
-                            <option key={column.key} value={column.key}>
-                                Sort: {column.label}
-                            </option>
-                        ))}
-                    </select>
+                        <select
+                            value={sortDir}
+                            onChange={(event) => setSortDir(event.target.value === "desc" ? "desc" : "asc")}
+                            className={fieldClass}
+                        >
+                            <option value="asc">Ascending</option>
+                            <option value="desc">Descending</option>
+                        </select>
 
-                    <select
-                        value={sortDir}
-                        onChange={(event) => setSortDir(event.target.value === "desc" ? "desc" : "asc")}
-                        className="h-11 rounded-2xl border border-zinc-200 px-3 text-sm text-zinc-900 outline-none transition focus:border-emerald-300"
-                    >
-                        <option value="asc">Asc</option>
-                        <option value="desc">Desc</option>
-                    </select>
+                        <button
+                            type="button"
+                            onClick={() => void handleAddRow()}
+                            className={buttonClass}
+                        >
+                            Add Row
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => void handleAddRow()}
-                        className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-                    >
-                        Add Row
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setReloadToken((current) => current + 1)}
-                        className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-                    >
-                        Refresh
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setReloadToken((current) => current + 1)}
+                            className={buttonClass}
+                        >
+                            Refresh
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </section>
 
             {error !== "" ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
                     {error}
                 </div>
             ) : null}
 
             {notice !== "" ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-50">
                     {notice}
                 </div>
             ) : null}
 
-            <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
-                    {gridStatus}
-                </div>
-                {Object.keys(cellErrors).length > 0 ? (
-                    <div className="text-xs text-rose-700">
-                        {Object.keys(cellErrors).length} cell error{Object.keys(cellErrors).length === 1 ? "" : "s"}
+            <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-100/60">
+                        {gridStatus}
                     </div>
-                ) : null}
-            </div>
-
-            <div
-                ref={gridWrapRef}
-                className="overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50"
-            >
-                {gridWidth > 0 ? (
-                    <DataEditor
-                        columns={gridColumns}
-                        rows={rows.length}
-                        getCellContent={getCellContent}
-                        onCellEdited={handleCellEdited}
-                        onCellClicked={handleCellClicked}
-                        onPaste={true}
-                        width={gridWidth}
-                        height={gridHeight}
-                        rowMarkers="number"
-                        smoothScrollX={true}
-                        smoothScrollY={true}
-                        overscrollY={48}
-                    />
-                ) : (
-                    <div className="flex h-[620px] items-center justify-center text-sm text-zinc-500">
-                        Loading grid…
-                    </div>
-                )}
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs text-zinc-500">
-                    Page {meta?.pagination.page ?? 1} of {meta?.pagination.last_page ?? 1}
-                    {" · "}
-                    {meta?.pagination.total ?? rows.length} total rows
+                    {Object.keys(cellErrors).length > 0 ? (
+                        <div className="text-xs text-rose-100/90">
+                            {Object.keys(cellErrors).length} cell error{Object.keys(cellErrors).length === 1 ? "" : "s"}
+                        </div>
+                    ) : null}
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setPage((current) => Math.max(1, current - 1))}
-                        disabled={(meta?.pagination.page ?? 1) <= 1}
-                        className="rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 transition enabled:hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Previous
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setPage((current) =>
-                                Math.min(meta?.pagination.last_page ?? current, current + 1)
-                            )
-                        }
-                        disabled={(meta?.pagination.page ?? 1) >= (meta?.pagination.last_page ?? 1)}
-                        className="rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 transition enabled:hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Next
-                    </button>
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div ref={gridWrapRef} className="h-full min-h-0 w-full">
+                        {canRenderGrid ? (
+                            <DataEditor
+                                columns={gridColumns}
+                                rows={rows.length}
+                                getCellContent={getCellContent}
+                                onCellEdited={handleCellEdited}
+                                onCellClicked={handleCellClicked}
+                                onPaste={true}
+                                width={gridBounds.width}
+                                height={gridBounds.height}
+                                rowMarkers="number"
+                                smoothScrollX={true}
+                                smoothScrollY={true}
+                                overscrollY={32}
+                                rowHeight={40}
+                                headerHeight={42}
+                                theme={gridTheme}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-emerald-50/60">
+                                Loading grid…
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs text-emerald-50/65">
+                        Page {meta?.pagination.page ?? 1} of {meta?.pagination.last_page ?? 1}
+                        {" · "}
+                        {meta?.pagination.total ?? rows.length} total rows
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setPage((current) => Math.max(1, current - 1))}
+                            disabled={(meta?.pagination.page ?? 1) <= 1}
+                            className={buttonClass}
+                        >
+                            Previous
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setPage((current) =>
+                                    Math.min(meta?.pagination.last_page ?? current, current + 1)
+                                )
+                            }
+                            disabled={(meta?.pagination.page ?? 1) >= (meta?.pagination.last_page ?? 1)}
+                            className={buttonClass}
+                        >
+                            Next
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
