@@ -163,7 +163,9 @@ class MarketsPlanner extends Component
 
         $template = $this->activeTopShelfTemplate();
         if (! $template || $template->items->isEmpty()) {
-            $this->dispatch('toast', ['type' => 'warning', 'message' => 'No active Top Shelf default template is configured.']);
+            Log::info('Top shelf template add skipped: no active template configured', [
+                'upcoming_event_id' => (int) $selectedEvent->id,
+            ]);
             return;
         }
 
@@ -486,14 +488,38 @@ class MarketsPlanner extends Component
         ?array $configuration = null
     ): array {
         $boxCount = max(1, $boxCount);
+        $defaultPrimaryScentId = $this->topShelfDefaultPrimaryScentId();
+        $rawConfiguration = $configuration ?? [];
+
+        if ($rawConfiguration === [] && ! $defaultPrimaryScentId) {
+            Log::info('Top shelf merge skipped: no default template configuration available', [
+                'upcoming_event_id' => (int) $selectedEvent->id,
+                'source_market_plan_line_id' => $sourceMarketPlanLineId,
+                'source' => $source,
+            ]);
+
+            return ['added' => 0, 'merged' => 0];
+        }
+
         $configuration = RetailPlanItem::normalizeTopShelfConfiguration(
-            $configuration ?? [],
-            $this->topShelfDefaultPrimaryScentId()
+            $rawConfiguration,
+            $defaultPrimaryScentId
         );
-        $notes = $this->supportsRetailPlanItemNotesColumn()
-            ? RetailPlanItem::encodeTopShelfConfiguration($configuration, $this->topShelfDefaultPrimaryScentId())
-            : null;
         $primaryScentId = $this->topShelfPrimaryScentId($configuration);
+
+        if (! $primaryScentId) {
+            Log::info('Top shelf merge skipped: configuration has no primary scent', [
+                'upcoming_event_id' => (int) $selectedEvent->id,
+                'source_market_plan_line_id' => $sourceMarketPlanLineId,
+                'source' => $source,
+            ]);
+
+            return ['added' => 0, 'merged' => 0];
+        }
+
+        $notes = $this->supportsRetailPlanItemNotesColumn()
+            ? RetailPlanItem::encodeTopShelfConfiguration($configuration, $primaryScentId)
+            : null;
 
         $existing = RetailPlanItem::query()
             ->where('retail_plan_id', $this->plan->id)
@@ -821,16 +847,23 @@ class MarketsPlanner extends Component
     protected function topShelfDefaultConfiguration(): array
     {
         $template = $this->activeTopShelfTemplate();
+        if (! $template) {
+            return [];
+        }
+
         $slots = $template
-            ? $template->items
-                ->pluck('scent_id')
-                ->filter(fn ($id): bool => (int) $id > 0)
-                ->map(fn ($id): int => (int) $id)
-                ->unique()
-                ->take(12)
-                ->values()
-                ->all()
-            : [];
+            ->items
+            ->pluck('scent_id')
+            ->filter(fn ($id): bool => (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->take(12)
+            ->values()
+            ->all();
+
+        if ($slots === []) {
+            return [];
+        }
 
         $preset = match (count($slots)) {
             2 => 'split_6_6',
@@ -848,7 +881,12 @@ class MarketsPlanner extends Component
 
     protected function topShelfDefaultPrimaryScentId(): ?int
     {
-        return $this->topShelfPrimaryScentId($this->topShelfDefaultConfiguration());
+        $configuration = $this->topShelfDefaultConfiguration();
+        if ($configuration === []) {
+            return null;
+        }
+
+        return $this->topShelfPrimaryScentId($configuration);
     }
 
     /**
@@ -965,6 +1003,23 @@ class MarketsPlanner extends Component
 
     protected function activeTopShelfTemplate(): ?ScentTemplate
     {
+        static $loggedMissingTables = false;
+
+        $templatesTableExists = Schema::hasTable('scent_templates');
+        $templateItemsTableExists = Schema::hasTable('scent_template_items');
+
+        if (! $templatesTableExists || ! $templateItemsTableExists) {
+            if (! $loggedMissingTables) {
+                Log::warning('Top shelf templates disabled: template tables missing', [
+                    'scent_templates_exists' => $templatesTableExists,
+                    'scent_template_items_exists' => $templateItemsTableExists,
+                ]);
+                $loggedMissingTables = true;
+            }
+
+            return null;
+        }
+
         return ScentTemplate::query()
             ->with(['items.scent:id,name,display_name'])
             ->where('type', 'top_shelf')

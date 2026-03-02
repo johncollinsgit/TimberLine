@@ -28,6 +28,7 @@ class EventMatchWizard extends Component
     public bool $startFresh = false;
     public ?int $selectedScentId = null;
     public bool $matchScanRan = false;
+    public ?int $lastAutoScannedUpcomingEventId = null;
     public bool $templatesOpen = false;
     public ?string $selectedTemplateKey = null;
     public int $draftBoxTotal = 0;
@@ -218,6 +219,20 @@ class EventMatchWizard extends Component
         }
     }
 
+    public function updatedStep(mixed $value): void
+    {
+        unset($value);
+
+        $this->maybeAutoScanStep2();
+    }
+
+    public function updatedUpcomingEventId(mixed $value): void
+    {
+        $this->upcomingEventId = $value ? (int) $value : null;
+
+        $this->maybeAutoScanStep2();
+    }
+
     public function selectUpcomingEvent(int $eventId): void
     {
         if ($eventId <= 0) {
@@ -267,6 +282,7 @@ class EventMatchWizard extends Component
         }
 
         $this->step = 2;
+        $this->maybeAutoScanStep2();
     }
 
     public function goToStep(int $step): void
@@ -277,6 +293,7 @@ class EventMatchWizard extends Component
 
         if ($this->canAccessStep($step)) {
             $this->step = $step;
+            $this->maybeAutoScanStep2();
         }
     }
 
@@ -936,6 +953,25 @@ class EventMatchWizard extends Component
         $this->selectedCandidateEvent = null;
         $this->draftBoxTotal = 0;
         $this->uiError = null;
+    }
+
+    private function maybeAutoScanStep2(): void
+    {
+        if ((int) $this->step !== 2) {
+            return;
+        }
+
+        $eventId = (int) ($this->upcomingEventId ?? 0);
+        if ($eventId <= 0) {
+            return;
+        }
+
+        if ($this->lastAutoScannedUpcomingEventId === $eventId) {
+            return;
+        }
+
+        $this->scanHistoricalMatches();
+        $this->lastAutoScannedUpcomingEventId = $eventId;
     }
 
     protected function resetDraftSummary(): void
