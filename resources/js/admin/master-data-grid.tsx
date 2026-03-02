@@ -403,6 +403,7 @@ function MasterDataGridApp(props: RootDataset) {
 
     const gridColumns = buildGridColumns(meta);
     const canRenderGrid = gridBounds.width > 0 && gridBounds.height > 0;
+    const gridViewportHeight = Math.max(gridBounds.height, 360);
 
     useEffect(() => {
         axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
@@ -892,8 +893,12 @@ function MasterDataGridApp(props: RootDataset) {
                     ) : null}
                 </div>
 
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                    <div ref={gridWrapRef} className="h-full min-h-0 w-full" style={gridCssVars}>
+                <div className="flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div
+                        ref={gridWrapRef}
+                        className="flex-1 min-h-[22rem] w-full"
+                        style={gridCssVars}
+                    >
                         {canRenderGrid ? (
                             <DataEditor
                                 columns={gridColumns}
@@ -903,7 +908,7 @@ function MasterDataGridApp(props: RootDataset) {
                                 onCellClicked={handleCellClicked}
                                 onPaste={true}
                                 width={gridBounds.width}
-                                height={gridBounds.height}
+                                height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
                                 smoothScrollX={true}
                                 smoothScrollY={true}
