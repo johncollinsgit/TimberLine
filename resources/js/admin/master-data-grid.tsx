@@ -152,39 +152,45 @@ function alphaColor(rgbTriplet: string, alpha: number): string {
 function resolveGridTheme(): Theme {
     const accent = readCssVar("--mf-accent", "16, 185, 129");
     const accentSoft = readCssVar("--mf-accent-2", accent);
-    const panelBg = readCssVar("--mf-input-bg", "rgba(8, 25, 19, 0.55)");
-    const panelBgAlt = readCssVar("--mf-panel-bg-2", "rgba(9, 30, 22, 0.55)");
     const panelBorder = readCssVar("--mf-panel-border", "rgba(110, 231, 183, 0.12)");
     const panelBorderStrong = readCssVar("--mf-panel-strong-border", "rgba(110, 231, 183, 0.22)");
-    const textPrimary = readCssVar("--mf-text-1", "rgba(236, 253, 245, 0.94)");
-    const textSecondary = readCssVar("--mf-text-2", "rgba(209, 250, 229, 0.78)");
-    const textMuted = readCssVar("--mf-text-3", "rgba(167, 243, 208, 0.58)");
     const fontBody = readCssVar(
         "--mf-font-body",
         "Manrope, ui-sans-serif, system-ui, sans-serif"
     );
+    const canvasText = "#e8fff5";
+    const canvasTextMuted = "#b8d8ca";
+    const canvasTextSubtle = "#7ca997";
+    const canvasCell = "#091510";
+    const canvasCellAlt = "#0d1b15";
+    const canvasHeader = "#113428";
+    const canvasHeaderFocus = "#164235";
+    const canvasHeaderHover = "#153d30";
+    const canvasBubble = "#163d31";
+    const canvasBubbleSelected = "#1d4b3c";
+    const canvasSearch = "#194536";
 
     return {
         accentColor: alphaColor(accent, 1),
         accentFg: "#ecfdf5",
         accentLight: alphaColor(accent, 0.16),
-        textDark: textPrimary,
-        textMedium: textSecondary,
-        textLight: textMuted,
-        textBubble: textPrimary,
+        textDark: canvasText,
+        textMedium: canvasTextMuted,
+        textLight: canvasTextSubtle,
+        textBubble: canvasText,
         bgIconHeader: alphaColor(accentSoft, 0.18),
         fgIconHeader: "#d1fae5",
-        textHeader: textPrimary,
-        textGroupHeader: textMuted,
+        textHeader: canvasText,
+        textGroupHeader: canvasTextSubtle,
         textHeaderSelected: "#ecfdf5",
-        bgCell: panelBg,
-        bgCellMedium: panelBgAlt,
-        bgHeader: alphaColor(accent, 0.08),
-        bgHeaderHasFocus: alphaColor(accent, 0.14),
-        bgHeaderHovered: alphaColor(accent, 0.11),
-        bgBubble: alphaColor(accent, 0.1),
-        bgBubbleSelected: alphaColor(accent, 0.18),
-        bgSearchResult: alphaColor(accent, 0.18),
+        bgCell: canvasCell,
+        bgCellMedium: canvasCellAlt,
+        bgHeader: canvasHeader,
+        bgHeaderHasFocus: canvasHeaderFocus,
+        bgHeaderHovered: canvasHeaderHover,
+        bgBubble: canvasBubble,
+        bgBubbleSelected: canvasBubbleSelected,
+        bgSearchResult: canvasSearch,
         borderColor: panelBorder,
         drilldownBorder: panelBorderStrong,
         linkColor: alphaColor(accent, 1),
@@ -910,8 +916,8 @@ function MasterDataGridApp(props: RootDataset) {
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
-                                smoothScrollX={true}
-                                smoothScrollY={true}
+                                smoothScrollX={false}
+                                smoothScrollY={false}
                                 overscrollY={32}
                                 rowHeight={40}
                                 headerHeight={42}
