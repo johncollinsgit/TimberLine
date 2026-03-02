@@ -16,6 +16,7 @@ import {
     useEffect,
     useRef,
     useState,
+    type CSSProperties,
     type RefObject,
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -148,7 +149,7 @@ function alphaColor(rgbTriplet: string, alpha: number): string {
     return `rgba(${rgbTriplet}, ${alpha})`;
 }
 
-function resolveGridTheme(): Partial<Theme> {
+function resolveGridTheme(): Theme {
     const accent = readCssVar("--mf-accent", "16, 185, 129");
     const accentSoft = readCssVar("--mf-accent-2", accent);
     const panelBg = readCssVar("--mf-input-bg", "rgba(8, 25, 19, 0.55)");
@@ -201,6 +202,46 @@ function resolveGridTheme(): Partial<Theme> {
         headerBottomBorderColor: panelBorderStrong,
         roundingRadius: 10,
     };
+}
+
+function gridThemeVars(theme: Theme): CSSProperties {
+    return {
+        "--gdg-accent-color": theme.accentColor,
+        "--gdg-accent-fg": theme.accentFg,
+        "--gdg-accent-light": theme.accentLight,
+        "--gdg-text-dark": theme.textDark,
+        "--gdg-text-medium": theme.textMedium,
+        "--gdg-text-light": theme.textLight,
+        "--gdg-text-bubble": theme.textBubble,
+        "--gdg-bg-icon-header": theme.bgIconHeader,
+        "--gdg-fg-icon-header": theme.fgIconHeader,
+        "--gdg-text-header": theme.textHeader,
+        "--gdg-text-group-header": theme.textGroupHeader ?? theme.textHeader,
+        "--gdg-text-header-selected": theme.textHeaderSelected,
+        "--gdg-bg-cell": theme.bgCell,
+        "--gdg-bg-cell-medium": theme.bgCellMedium,
+        "--gdg-bg-header": theme.bgHeader,
+        "--gdg-bg-header-has-focus": theme.bgHeaderHasFocus,
+        "--gdg-bg-header-hovered": theme.bgHeaderHovered,
+        "--gdg-bg-bubble": theme.bgBubble,
+        "--gdg-bg-bubble-selected": theme.bgBubbleSelected,
+        "--gdg-bg-search-result": theme.bgSearchResult,
+        "--gdg-border-color": theme.borderColor,
+        "--gdg-horizontal-border-color": theme.horizontalBorderColor ?? theme.borderColor,
+        "--gdg-drilldown-border": theme.drilldownBorder,
+        "--gdg-link-color": theme.linkColor,
+        "--gdg-cell-horizontal-padding": `${theme.cellHorizontalPadding}px`,
+        "--gdg-cell-vertical-padding": `${theme.cellVerticalPadding}px`,
+        "--gdg-header-font-style": theme.headerFontStyle,
+        "--gdg-base-font-style": theme.baseFontStyle,
+        "--gdg-marker-font-style": theme.markerFontStyle,
+        "--gdg-font-family": theme.fontFamily,
+        "--gdg-editor-font-size": theme.editorFontSize,
+        "--gdg-resize-indicator-color": theme.resizeIndicatorColor,
+        "--gdg-header-bottom-border-color": theme.headerBottomBorderColor,
+        "--gdg-rounding-radius":
+            theme.roundingRadius == null ? undefined : `${theme.roundingRadius}px`,
+    } as CSSProperties;
 }
 
 function normalizeText(value: string): string {
@@ -356,7 +397,7 @@ function MasterDataGridApp(props: RootDataset) {
     const [saveState, setSaveState] = useState<SaveState>("idle");
     const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
-    const [gridTheme] = useState<Partial<Theme>>(() => resolveGridTheme());
+    const [gridTheme] = useState<Theme>(() => resolveGridTheme());
     const saveTimersRef = useRef<Map<string, number>>(new Map());
     const saveFlashTimerRef = useRef<number | null>(null);
 
@@ -703,10 +744,11 @@ function MasterDataGridApp(props: RootDataset) {
                     ? "Loading…"
                     : `${meta?.pagination.total ?? rows.length} row${(meta?.pagination.total ?? rows.length) === 1 ? "" : "s"}`;
 
+    const gridCssVars = gridThemeVars(gridTheme);
     const fieldClass =
         "h-11 w-full appearance-none rounded-2xl border border-white/10 bg-black/25 px-3 text-sm text-white/90 outline-none transition placeholder:text-emerald-50/35 focus:border-emerald-300/30 focus:bg-black/30";
     const buttonClass =
-        "inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50";
+        "inline-flex h-11 shrink-0 appearance-none items-center justify-center rounded-full border border-emerald-300/20 bg-black/25 px-4 text-sm font-medium text-emerald-50/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-emerald-300/30 hover:bg-emerald-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50";
 
     return (
         <div className="flex h-full min-h-0 flex-col gap-5">
@@ -735,10 +777,10 @@ function MasterDataGridApp(props: RootDataset) {
                                             });
                                         }}
                                         className={
-                                            "max-w-full rounded-2xl border px-4 py-3 text-left transition " +
+                                            "max-w-full appearance-none rounded-2xl border px-4 py-3 text-left transition " +
                                             (isActive
                                                 ? "border-emerald-300/35 bg-emerald-500/15 text-emerald-50 shadow-[0_10px_28px_rgba(16,185,129,0.12)]"
-                                                : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10 hover:text-white")
+                                                : "border-white/10 bg-black/25 text-emerald-50/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:border-emerald-300/20 hover:bg-emerald-500/8 hover:text-white")
                                         }
                                     >
                                         <span className="block text-sm font-semibold">{resource.label}</span>
@@ -753,51 +795,59 @@ function MasterDataGridApp(props: RootDataset) {
                         </div>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.8fr)_12rem_12rem_8rem_auto_auto]">
-                        <input
-                            type="search"
-                            value={searchInput}
-                            onChange={(event) => setSearchInput(event.target.value)}
-                            placeholder="Search name, code, abbreviation…"
-                            className={fieldClass}
-                        />
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="min-w-[16rem] flex-1 basis-[20rem]">
+                            <input
+                                type="search"
+                                value={searchInput}
+                                onChange={(event) => setSearchInput(event.target.value)}
+                                placeholder="Search name, code, abbreviation…"
+                                className={fieldClass}
+                            />
+                        </div>
 
                         {meta?.supports_active_filter ? (
-                            <select
-                                value={activeFilter}
-                                onChange={(event) => setActiveFilter(event.target.value)}
-                                className={fieldClass}
-                            >
-                                <option value="">All Rows</option>
-                                <option value="true">Active</option>
-                                <option value="false">Inactive</option>
-                            </select>
+                            <div className="w-full min-w-[11rem] flex-none sm:w-auto">
+                                <select
+                                    value={activeFilter}
+                                    onChange={(event) => setActiveFilter(event.target.value)}
+                                    className={fieldClass}
+                                >
+                                    <option value="">All Rows</option>
+                                    <option value="true">Active</option>
+                                    <option value="false">Inactive</option>
+                                </select>
+                            </div>
                         ) : null}
 
-                        <select
-                            value={sortField}
-                            onChange={(event) => setSortField(event.target.value)}
-                            className={fieldClass}
-                        >
-                            {(meta?.columns ?? []).length > 0 ? (
-                                (meta?.columns ?? []).map((column) => (
-                                    <option key={column.key} value={column.key}>
-                                        Sort: {column.label}
-                                    </option>
-                                ))
-                            ) : (
-                                <option value="">Sort: Loading…</option>
-                            )}
-                        </select>
+                        <div className="w-full min-w-[12rem] flex-none sm:w-auto">
+                            <select
+                                value={sortField}
+                                onChange={(event) => setSortField(event.target.value)}
+                                className={fieldClass}
+                            >
+                                {(meta?.columns ?? []).length > 0 ? (
+                                    (meta?.columns ?? []).map((column) => (
+                                        <option key={column.key} value={column.key}>
+                                            Sort: {column.label}
+                                        </option>
+                                    ))
+                                ) : (
+                                    <option value="">Sort: Loading…</option>
+                                )}
+                            </select>
+                        </div>
 
-                        <select
-                            value={sortDir}
-                            onChange={(event) => setSortDir(event.target.value === "desc" ? "desc" : "asc")}
-                            className={fieldClass}
-                        >
-                            <option value="asc">Ascending</option>
-                            <option value="desc">Descending</option>
-                        </select>
+                        <div className="w-full min-w-[10rem] flex-none sm:w-auto">
+                            <select
+                                value={sortDir}
+                                onChange={(event) => setSortDir(event.target.value === "desc" ? "desc" : "asc")}
+                                className={fieldClass}
+                            >
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
 
                         <button
                             type="button"
@@ -843,7 +893,7 @@ function MasterDataGridApp(props: RootDataset) {
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                    <div ref={gridWrapRef} className="h-full min-h-0 w-full">
+                    <div ref={gridWrapRef} className="h-full min-h-0 w-full" style={gridCssVars}>
                         {canRenderGrid ? (
                             <DataEditor
                                 columns={gridColumns}
@@ -854,7 +904,7 @@ function MasterDataGridApp(props: RootDataset) {
                                 onPaste={true}
                                 width={gridBounds.width}
                                 height={gridBounds.height}
-                                rowMarkers="number"
+                                rowMarkers={{ kind: "number", theme: gridTheme }}
                                 smoothScrollX={true}
                                 smoothScrollY={true}
                                 overscrollY={32}
