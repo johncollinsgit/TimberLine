@@ -35,8 +35,19 @@
       opacity:.9;
     }
 
-    .mf-nav-item { will-change: transform; }
+    .mf-nav-item {
+      will-change: transform;
+      position: relative;
+      min-width: 0;
+    }
     .mf-nav-item:hover { transform: translateX(2px); }
+    .mf-nav-item .mf-nav-label{
+      display: inline-block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .mf-sidebar-sort-item { cursor: grab; touch-action: manipulation; }
     .mf-sidebar-sort-item:active { cursor: grabbing; }
     .mf-sidebar-ghost { opacity: .45; }
@@ -923,6 +934,8 @@
       width: 5.4rem !important;
       min-width: 5.4rem !important;
       max-width: 5.4rem !important;
+      overflow: hidden;
+      white-space: nowrap;
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
       width: 2.6rem !important;
@@ -939,11 +952,60 @@
       display: none !important;
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item{
-      font-size: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 2.75rem !important;
+      height: 2.75rem !important;
+      margin-inline: auto;
       padding-inline: .55rem !important;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item:hover{
+      transform: none;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item .mf-nav-label{
+      display: none !important;
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
       margin-inline: auto;
+    }
+    @media (max-width: 1023px){
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar{
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        overflow: visible;
+        white-space: normal;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
+        width: auto !important;
+        max-width: 100% !important;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-sidebar-brand-name],
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-brand-name]{
+        display: inline !important;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-theme-selector{
+        display: inline-flex !important;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group-heading],
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-panel,
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-footer{
+        display: block !important;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item{
+        display: flex !important;
+        width: auto !important;
+        height: auto !important;
+        margin-inline: 0;
+        justify-content: flex-start !important;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item .mf-nav-label{
+        display: inline-block !important;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
+        margin-inline: 0;
+      }
     }
     .mf-app-card :where(.sticky){
       max-width: 100%;
@@ -1242,7 +1304,7 @@
           <button
             type="button"
             id="mf-sidebar-collapse-toggle"
-            class="mf-sidebar-pin-btn"
+            class="hidden lg:inline-flex mf-sidebar-pin-btn"
             aria-pressed="false"
             aria-label="Collapse sidebar"
             title="Collapse sidebar"
@@ -1280,8 +1342,8 @@
                 data-sidebar-item
                 data-sidebar-key="{{ $item['key'] }}"
               >
-                <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
-                  {{ $item['label'] }}
+                <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate title="{{ $item['label'] }}" class="mf-transition mf-nav-item">
+                  <span class="mf-nav-label">{{ $item['label'] }}</span>
                 </flux:sidebar.item>
               </div>
             @endforeach
@@ -1292,13 +1354,13 @@
               </summary>
               <div class="mt-2 rounded-xl p-2 space-y-1">
                 <div class="{{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') ? 'mf-active-pill' : '' }}">
-                  <flux:sidebar.item icon="folder-open" href="{{ route('wiki.wholesale-processes') }}" class="mf-transition mf-nav-item">
-                    Wholesale Processes
+                  <flux:sidebar.item icon="folder-open" href="{{ route('wiki.wholesale-processes') }}" title="Wholesale Processes" class="mf-transition mf-nav-item">
+                    <span class="mf-nav-label">Wholesale Processes</span>
                   </flux:sidebar.item>
                 </div>
                 <div class="{{ request()->routeIs('wiki.article') && request()->route('slug') === 'market-room' ? 'mf-active-pill' : '' }}">
-                  <flux:sidebar.item icon="sparkles" href="{{ route('wiki.article', ['slug' => 'market-room']) }}" class="mf-transition mf-nav-item">
-                    Market Room Process
+                  <flux:sidebar.item icon="sparkles" href="{{ route('wiki.article', ['slug' => 'market-room']) }}" title="Market Room Process" class="mf-transition mf-nav-item">
+                    <span class="mf-nav-label">Market Room Process</span>
                   </flux:sidebar.item>
                 </div>
               </div>
@@ -1308,8 +1370,8 @@
 
         @if(!$isPouring)
         <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
-          <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
-            Due soon
+          <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate title="Due soon" class="mf-transition mf-nav-item">
+            <span class="mf-nav-label">Due soon</span>
           </flux:sidebar.item>
 
           @if($isAdmin || $isManager)

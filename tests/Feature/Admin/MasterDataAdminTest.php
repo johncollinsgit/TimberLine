@@ -92,6 +92,20 @@ test('admin scent intake tab renders inside the shared shell', function () {
         ->assertSeeText('This screen shows import exceptions that need human review.');
 });
 
+test('admin imports tab renders the import runs dashboard instead of the scent intake queue', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get('/admin?tab=imports')
+        ->assertOk()
+        ->assertSeeText('Shopify Import Runs')
+        ->assertSeeText('Open Scent Intake')
+        ->assertDontSeeText('New Scent Intake');
+});
+
 test('admin master data endpoints paginate and patch rows', function () {
     $user = User::factory()->create([
         'role' => 'admin',

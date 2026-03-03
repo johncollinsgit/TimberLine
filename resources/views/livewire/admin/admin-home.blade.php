@@ -1,18 +1,18 @@
 @php
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
-  $tabLinkClass = 'inline-flex h-10 shrink-0 items-center justify-center rounded-xl border px-3 text-xs font-semibold transition';
+  $tabLinkClass = 'inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-2 text-[11px] font-semibold transition sm:h-10 sm:px-3 sm:text-xs';
 @endphp
 
-<div class="space-y-6">
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
+<div class="space-y-4 sm:space-y-6">
+  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] sm:p-6">
     <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Administration</div>
-    <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Admin Workspace</div>
+    <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">Admin Workspace</div>
     <div class="mt-2 text-sm text-emerald-50/70">System controls, scent intake, and canonical master data now live in one place.</div>
   </section>
 
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 md:p-6">
-    <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-3">
+  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-3 sm:p-4 md:p-6">
+    <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-2 sm:pb-3">
       @if($isAdmin)
         <a
           href="{{ route('admin.index', ['tab' => 'users']) }}"
@@ -77,11 +77,11 @@
       </a>
     </div>
 
-    <div class="mt-6 space-y-6">
+    <div class="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
       @if($tab === 'users' && $isAdmin)
         <livewire:admin.users.users-index />
       @elseif($tab === 'imports')
-        <livewire:admin.imports.import-exceptions />
+        <livewire:admin.import-runs />
       @elseif($tab === 'scent-intake')
         <livewire:admin.imports.import-exceptions />
       @elseif($tab === 'catalog')
@@ -102,12 +102,12 @@
       @elseif($tab === 'oils')
         <livewire:admin.oils.oil-abbreviations-crud />
       @elseif($tab === 'master-data')
-        <div class="flex min-h-[calc(100vh-16rem)] flex-col gap-6">
-          <section class="rounded-3xl border border-white/10 bg-black/15 p-6 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)]">
+        <div class="flex min-h-0 flex-col gap-4 sm:min-h-[calc(100vh-16rem)] sm:gap-6">
+          <section class="rounded-3xl border border-white/10 bg-black/15 p-4 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-6">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Canonical Tables</div>
-                <h2 class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Normalized Catalog</h2>
+                <h2 class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">Normalized Catalog</h2>
                 <p class="mt-2 max-w-3xl text-sm text-emerald-50/70">
                   This grid edits the same canonical tables that Scent Intake and the retail planners read from.
                 </p>
@@ -122,7 +122,7 @@
             </div>
           </section>
 
-          <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/15 p-4 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] md:p-6">
+          <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/15 p-3 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-4 md:p-6">
             <div
               id="master-data-grid"
               data-resources='@json($masterDataResources)'

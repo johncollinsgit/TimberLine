@@ -8,7 +8,7 @@
       </div>
       <a href="{{ route('admin.mapping-exceptions') }}"
          class="h-9 px-4 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-white">
-        Fix Exceptions
+        Open Scent Intake
       </a>
     </div>
   </section>

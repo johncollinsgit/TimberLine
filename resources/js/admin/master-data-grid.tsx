@@ -901,14 +901,15 @@ function MasterDataGridApp(props: RootDataset) {
                     ) : null}
                 </div>
 
-                <div className="flex min-h-[24rem] flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:min-h-[24rem]">
                     <div
                         ref={gridWrapRef}
-                        className="flex-1 min-h-[22rem] w-full"
+                        className="flex-1 min-h-[16rem] w-full sm:min-h-[22rem]"
                         style={gridCssVars}
                     >
                         {canRenderGrid ? (
                             <DataEditor
+                                key={activeResource}
                                 columns={gridColumns}
                                 rows={rows.length}
                                 getCellContent={getCellContent}
@@ -979,6 +980,7 @@ function mountMasterDataGrid() {
     }
 
     rootElement.dataset.mfMounted = "1";
+    rootElement.replaceChildren();
     const root = createRoot(rootElement);
     root.render(<MasterDataGridApp {...parseRootDataset(rootElement)} />);
 }
