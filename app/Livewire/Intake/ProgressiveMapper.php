@@ -2,11 +2,15 @@
 
 namespace App\Livewire\Intake;
 
+use App\Models\CandleClubScent;
 use App\Models\MappingException;
 use App\Models\OrderLine;
 use App\Models\Scent;
+use App\Models\ScentAlias;
 use App\Models\Size;
+use App\Models\WholesaleCustomScent;
 use App\Services\ScentGuessEngine;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
@@ -18,6 +22,7 @@ class ProgressiveMapper extends Component
     public array $guesses = [];
     public ?int $selectedScentId = null;
     public bool $manualMode = false;
+    public string $existingScentSearch = '';
 
     public ?int $sizeId = null;
     public ?string $wickType = null;
@@ -26,6 +31,12 @@ class ProgressiveMapper extends Component
     public string $candleClubYear = '';
     public string $candleClubScent = '';
     public string $candleClubOil = '';
+    public string $newScentName = '';
+    public string $newScentDisplay = '';
+    public string $newScentAbbr = '';
+    public string $newScentOil = '';
+    public bool $newScentIsBlend = false;
+    public ?int $newScentBlendCount = null;
 
     public array $relatedExceptionIds = [];
     public array $applyExceptionIds = [];
@@ -59,6 +70,8 @@ class ProgressiveMapper extends Component
     public function acceptGuess(int $scentId): void
     {
         $this->selectedScentId = $scentId;
+        $selected = Scent::query()->find($scentId, ['name', 'display_name']);
+        $this->existingScentSearch = (string) ($selected?->display_name ?: $selected?->name ?: '');
         $this->step = 3;
     }
 
@@ -107,39 +120,84 @@ class ProgressiveMapper extends Component
             }
             $monthName = \Carbon\Carbon::create()->month((int) $this->candleClubMonth)->format('F');
             $display = $monthName . ' ' . $this->candleClubYear . ' Candle Club — ' . $name;
-            $scent = Scent::query()->create([
-                'name' => $display,
+            $normalized = Scent::normalizeName($display);
+            $scent = Scent::query()->firstOrCreate(
+                ['name' => $normalized],
+                [
+                    'display_name' => $display,
+                    'oil_reference_name' => trim($this->candleClubOil),
+                    'is_candle_club' => true,
+                    'is_active' => true,
+                ]
+            );
+            $scent->forceFill([
                 'display_name' => $display,
-                'oil_reference_name' => $this->candleClubOil,
+                'oil_reference_name' => trim($this->candleClubOil),
                 'is_candle_club' => true,
                 'is_active' => true,
-            ]);
+            ])->save();
+            CandleClubScent::query()->updateOrCreate(
+                ['month' => (int) $this->candleClubMonth, 'year' => (int) $this->candleClubYear],
+                ['scent_id' => $scent->id]
+            );
             $scentId = $scent->id;
         }
 
-        foreach ($exceptions as $exception) {
-            $line = $exception->order_line_id ? OrderLine::query()->find($exception->order_line_id) : null;
-            if (!$line) {
-                continue;
+        if (!$scentId) {
+            $scent = $this->resolveSelectedOrNewScent($exceptions);
+            if (!$scent) {
+                return;
             }
-            if ($scentId) {
-                $line->scent_id = $scentId;
-            }
-            if ($this->sizeId) {
-                $line->size_id = $this->sizeId;
-            }
-            if ($this->wickType) {
-                $line->wick_type = $this->wickType;
-            }
-            $line->save();
 
-            if (!empty($line->scent_id) && !empty($line->size_id)) {
-                $exception->resolved_at = now();
-                $exception->resolved_by = auth()->id();
-                $exception->canonical_scent_id = $line->scent_id;
-                $exception->save();
-            }
+            $scentId = $scent->id;
         }
+
+        DB::transaction(function () use ($exceptions, $scentId): void {
+            foreach ($exceptions as $exception) {
+                $line = $exception->order_line_id ? OrderLine::query()->find($exception->order_line_id) : null;
+                if (!$line) {
+                    continue;
+                }
+
+                $line->scent_id = $scentId;
+                if ($this->sizeId) {
+                    $line->size_id = $this->sizeId;
+                }
+                if ($this->wickType) {
+                    $line->wick_type = $this->wickType;
+                }
+                if (Schema::hasColumn('order_lines', 'scent_name')) {
+                    $line->scent_name = Scent::query()->find($scentId)?->name;
+                }
+                if ($this->sizeId && Schema::hasColumn('order_lines', 'size_code')) {
+                    $line->size_code = Size::query()->find($this->sizeId)?->code;
+                }
+                $line->save();
+
+                if (!empty($line->scent_id) && !empty($line->size_id)) {
+                    $exception->resolved_at = now();
+                    $exception->resolved_by = auth()->id();
+                    $exception->canonical_scent_id = $line->scent_id;
+                    $exception->save();
+
+                    if ($exception->order_id) {
+                        $hasOpen = MappingException::query()
+                            ->where('order_id', $exception->order_id)
+                            ->whereNull('resolved_at')
+                            ->exists();
+
+                        if (! $hasOpen) {
+                            \App\Models\Order::query()
+                                ->whereKey($exception->order_id)
+                                ->update(['requires_shipping_review' => false]);
+                        }
+                    }
+                }
+            }
+        });
+
+        $this->syncAliases($exceptions, $scentId);
+        $this->syncWholesaleCustomMappings($exceptions, $scentId);
 
         $this->dispatch('toast', ['type' => 'success', 'message' => 'Mapping applied.']);
         $this->dispatch('intake-done');
@@ -225,6 +283,13 @@ class ProgressiveMapper extends Component
         if (!$this->selectedScentId && !empty($this->guesses)) {
             $this->selectedScentId = $this->guesses[0]['id'] ?? null;
         }
+
+        if ($this->selectedScentId && $this->existingScentSearch === '') {
+            $selected = Scent::query()->find($this->selectedScentId, ['name', 'display_name']);
+            $this->existingScentSearch = (string) ($selected?->display_name ?: $selected?->name ?: '');
+        }
+
+        $this->prefillNewScentFields($exception);
     }
 
     protected function detectWick(string $value): ?string
@@ -278,6 +343,181 @@ class ProgressiveMapper extends Component
     {
         return view('livewire.intake.progressive-mapper', [
             'sizes' => Size::query()->orderBy('label')->orderBy('code')->get(),
+            'matchingScents' => $this->matchingScents(),
         ]);
+    }
+
+    protected function resolveSelectedOrNewScent($exceptions): ?Scent
+    {
+        if ($this->selectedScentId) {
+            $selected = Scent::query()->find($this->selectedScentId);
+            if ($selected) {
+                return $selected;
+            }
+        }
+
+        $existing = $this->findExistingScent($this->existingScentSearch);
+        if ($existing) {
+            $this->selectedScentId = (int) $existing->id;
+
+            return $existing;
+        }
+
+        $name = trim($this->newScentName);
+        if ($name === '') {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Pick an existing scent or enter a new scent name.']);
+
+            return null;
+        }
+
+        $normalized = Scent::normalizeName($name);
+        $displayName = trim($this->newScentDisplay) !== '' ? trim($this->newScentDisplay) : $name;
+        $scent = $this->findExistingScent($name);
+
+        if (! $scent) {
+            $scent = Scent::query()->create([
+                'name' => $normalized,
+                'display_name' => $displayName,
+                'abbreviation' => trim($this->newScentAbbr) !== '' ? trim($this->newScentAbbr) : null,
+                'oil_reference_name' => trim($this->newScentOil) !== '' ? trim($this->newScentOil) : null,
+                'is_blend' => $this->newScentIsBlend,
+                'blend_oil_count' => $this->newScentIsBlend ? ($this->newScentBlendCount ?: null) : null,
+                'is_wholesale_custom' => $exceptions->contains(fn (MappingException $exception) => filled($exception->account_name)),
+                'is_active' => true,
+            ]);
+        } else {
+            $scent->fill(array_filter([
+                'display_name' => $scent->display_name ?: $displayName,
+                'abbreviation' => $scent->abbreviation ?: (trim($this->newScentAbbr) !== '' ? trim($this->newScentAbbr) : null),
+                'oil_reference_name' => $scent->oil_reference_name ?: (trim($this->newScentOil) !== '' ? trim($this->newScentOil) : null),
+                'blend_oil_count' => $scent->blend_oil_count ?: ($this->newScentIsBlend ? ($this->newScentBlendCount ?: null) : null),
+            ], fn ($value) => $value !== null && $value !== ''));
+            if ($this->newScentIsBlend) {
+                $scent->is_blend = true;
+            }
+            if ($exceptions->contains(fn (MappingException $exception) => filled($exception->account_name))) {
+                $scent->is_wholesale_custom = true;
+            }
+            $scent->is_active = true;
+            if ($scent->isDirty()) {
+                $scent->save();
+            }
+        }
+
+        $this->selectedScentId = (int) $scent->id;
+
+        return $scent;
+    }
+
+    protected function findExistingScent(?string $value): ?Scent
+    {
+        $needle = Scent::normalizeName((string) $value);
+        if ($needle === '') {
+            return null;
+        }
+
+        return Scent::query()
+            ->get()
+            ->first(function (Scent $scent) use ($needle): bool {
+                return Scent::normalizeName((string) $scent->name) === $needle
+                    || Scent::normalizeName((string) ($scent->display_name ?? '')) === $needle;
+            });
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int,Scent>
+     */
+    protected function matchingScents()
+    {
+        return Scent::query()
+            ->when(trim($this->existingScentSearch) !== '', function ($query): void {
+                $search = '%'.trim($this->existingScentSearch).'%';
+                $query->where(function ($inner) use ($search): void {
+                    $inner->where('name', 'like', $search)
+                        ->orWhere('display_name', 'like', $search)
+                        ->orWhere('abbreviation', 'like', $search);
+                });
+            })
+            ->orderByRaw('COALESCE(display_name, name)')
+            ->limit(8)
+            ->get(['id', 'name', 'display_name', 'abbreviation']);
+    }
+
+    protected function prefillNewScentFields(?MappingException $exception): void
+    {
+        $rawLabel = trim((string) ($exception?->raw_scent_name ?: $exception?->raw_title ?: ''));
+        if ($rawLabel === '') {
+            return;
+        }
+
+        if ($this->newScentName === '') {
+            $this->newScentName = $rawLabel;
+        }
+
+        if ($this->newScentDisplay === '') {
+            $this->newScentDisplay = $rawLabel;
+        }
+    }
+
+    protected function syncAliases($exceptions, int $scentId): void
+    {
+        if (! Schema::hasTable('scent_aliases')) {
+            return;
+        }
+
+        $scent = Scent::query()->find($scentId, ['name', 'display_name']);
+        $canonicalValues = collect([
+            trim((string) ($scent?->name ?? '')),
+            trim((string) ($scent?->display_name ?? '')),
+        ])->filter()->all();
+
+        $exceptions
+            ->flatMap(function (MappingException $exception): array {
+                return [
+                    trim((string) ($exception->raw_scent_name ?? '')),
+                    trim((string) ($exception->raw_title ?? '')),
+                ];
+            })
+            ->filter()
+            ->unique()
+            ->each(function (string $alias) use ($canonicalValues, $scentId): void {
+                if (in_array($alias, $canonicalValues, true)) {
+                    return;
+                }
+
+                ScentAlias::query()->updateOrCreate(
+                    ['alias' => $alias, 'scope' => 'markets'],
+                    ['scent_id' => $scentId]
+                );
+            });
+    }
+
+    protected function syncWholesaleCustomMappings($exceptions, int $scentId): void
+    {
+        if (! Schema::hasTable('wholesale_custom_scents')) {
+            return;
+        }
+
+        $exceptions
+            ->filter(fn (MappingException $exception): bool => filled($exception->account_name))
+            ->each(function (MappingException $exception) use ($scentId): void {
+                $accountName = trim((string) $exception->account_name);
+                $customName = trim((string) ($exception->raw_scent_name ?: $exception->raw_title ?: ''));
+
+                if ($accountName === '' || $customName === '') {
+                    return;
+                }
+
+                WholesaleCustomScent::query()->updateOrCreate(
+                    [
+                        'account_name' => $accountName,
+                        'custom_scent_name' => $customName,
+                    ],
+                    [
+                        'canonical_scent_id' => $scentId,
+                        'active' => true,
+                    ]
+                );
+            });
     }
 }

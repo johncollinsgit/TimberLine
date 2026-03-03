@@ -408,6 +408,8 @@ function MasterDataGridApp(props: RootDataset) {
     const saveFlashTimerRef = useRef<number | null>(null);
 
     const gridColumns = buildGridColumns(meta);
+    const activeResourceMeta =
+        resources.find((resource) => resource.key === activeResource) ?? null;
     const canRenderGrid = gridBounds.width > 0 && gridBounds.height > 0;
     const gridViewportHeight = Math.max(gridBounds.height, 360);
 
@@ -765,7 +767,7 @@ function MasterDataGridApp(props: RootDataset) {
                         <div className="text-[11px] uppercase tracking-[0.32em] text-emerald-100/50">
                             Resource Tables
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                             {resources.map((resource) => {
                                 const isActive = resource.key === activeResource;
 
@@ -784,22 +786,22 @@ function MasterDataGridApp(props: RootDataset) {
                                             });
                                         }}
                                         className={
-                                            "max-w-full appearance-none rounded-2xl border px-4 py-3 text-left transition " +
+                                            "inline-flex h-10 shrink-0 items-center rounded-md border px-3 text-xs font-semibold transition " +
                                             (isActive
-                                                ? "border-emerald-300/35 bg-emerald-500/15 text-emerald-50 shadow-[0_10px_28px_rgba(16,185,129,0.12)]"
-                                                : "border-white/10 bg-black/25 text-emerald-50/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:border-emerald-300/20 hover:bg-emerald-500/8 hover:text-white")
+                                                ? "border-emerald-300/30 bg-emerald-500/12 text-emerald-50"
+                                                : "border-white/10 bg-black/25 text-emerald-50/70 hover:border-emerald-300/20 hover:bg-emerald-500/8 hover:text-white")
                                         }
                                     >
-                                        <span className="block text-sm font-semibold">{resource.label}</span>
-                                        {isActive ? (
-                                            <span className="mt-1 block text-[11px] leading-5 text-emerald-50/70">
-                                                {resource.description}
-                                            </span>
-                                        ) : null}
+                                        {resource.label}
                                     </button>
                                 );
                             })}
                         </div>
+                        {activeResourceMeta?.description ? (
+                            <div className="mt-2 text-xs text-emerald-50/60">
+                                {activeResourceMeta.description}
+                            </div>
+                        ) : null}
                     </div>
 
                     <div className="flex flex-wrap items-end gap-3">
@@ -916,8 +918,11 @@ function MasterDataGridApp(props: RootDataset) {
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
-                                smoothScrollX={false}
-                                smoothScrollY={false}
+                                cellActivationBehavior="double-click"
+                                smoothScrollX={true}
+                                smoothScrollY={true}
+                                preventDiagonalScrolling={true}
+                                overscrollX={96}
                                 overscrollY={32}
                                 rowHeight={40}
                                 headerHeight={42}
@@ -966,9 +971,27 @@ function MasterDataGridApp(props: RootDataset) {
     );
 }
 
-const rootElement = document.getElementById("master-data-grid");
+function mountMasterDataGrid() {
+    const rootElement = document.getElementById("master-data-grid");
 
-if (rootElement) {
+    if (!rootElement || rootElement.dataset.mfMounted === "1") {
+        return;
+    }
+
+    rootElement.dataset.mfMounted = "1";
     const root = createRoot(rootElement);
     root.render(<MasterDataGridApp {...parseRootDataset(rootElement)} />);
+}
+
+mountMasterDataGrid();
+
+if (typeof window !== "undefined") {
+    const registry = window as typeof window & {
+        __mfMasterDataGridBound?: boolean;
+    };
+
+    if (!registry.__mfMasterDataGridBound) {
+        registry.__mfMasterDataGridBound = true;
+        document.addEventListener("livewire:navigated", mountMasterDataGrid);
+    }
 }

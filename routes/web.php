@@ -15,7 +15,6 @@ use App\Livewire\Dashboard\Launchpad as DashboardLaunchpad;
 use App\Livewire\Retail\Plan as RetailPlan;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\ImportRuns as AdminImportRuns;
-use App\Livewire\Admin\Imports\ImportExceptions as AdminImportExceptions;
 use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
 use App\Livewire\Admin\Catalog\SizesCrud as AdminSizesCrud;
 use App\Livewire\Admin\Catalog\WicksCrud as AdminWicksCrud;
@@ -107,9 +106,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/system-controls', function () {
             return redirect()->route('admin.index');
         });
+        Route::get('/admin/scent-intake', function () {
+            return redirect()->route('admin.index', ['tab' => 'scent-intake']);
+        })->name('admin.scent-intake');
 
-        Route::get('/admin/mapping-exceptions', AdminImportExceptions::class)
-            ->name('admin.mapping-exceptions');
+        Route::get('/admin/mapping-exceptions', function () {
+            return redirect()->route('admin.index', ['tab' => 'scent-intake']);
+        })->name('admin.mapping-exceptions');
 
         Route::get('/admin/import-runs', AdminImportRuns::class)
             ->name('admin.import-runs');

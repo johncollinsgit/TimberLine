@@ -6,6 +6,7 @@ use App\Models\MappingException;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Scent;
+use App\Models\ScentAlias;
 use App\Models\ShopifyImportRun;
 use App\Models\Size;
 use Illuminate\Support\Facades\DB;
@@ -330,20 +331,42 @@ class MappingExceptions extends Component
             $existing = Scent::query()->get()->first(function ($scent) use ($normalized) {
                 return Scent::normalizeName($scent->name) === $normalized;
             });
-            $scent = $existing ?? Scent::query()->create(
+            $displayName = $this->newScentDisplay !== '' ? $this->newScentDisplay : $normalized;
+            $isWholesaleCustom = !empty($this->modalExceptionIds)
+                ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->whereNotNull('account_name')->exists()
+                : false;
+
+            $scent = $existing ?? Scent::query()->firstOrCreate(
                 ['name' => $normalized],
                 [
-                    'display_name' => $this->newScentDisplay !== '' ? $this->newScentDisplay : $normalized,
+                    'display_name' => $displayName,
                     'abbreviation' => $this->newScentAbbr ?: null,
                     'oil_reference_name' => $this->newScentOil ?: null,
                     'is_blend' => $this->newScentIsBlend,
                     'blend_oil_count' => $this->newScentIsBlend ? ($this->newScentBlendCount ?: null) : null,
                     'is_active' => true,
-                    'is_wholesale_custom' => !empty($this->modalExceptionIds)
-                        ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->whereNotNull('account_name')->exists()
-                        : false,
+                    'is_wholesale_custom' => $isWholesaleCustom,
                 ]
             );
+
+            if ($existing) {
+                $scent->fill(array_filter([
+                    'display_name' => $scent->display_name ?: $displayName,
+                    'abbreviation' => $scent->abbreviation ?: ($this->newScentAbbr ?: null),
+                    'oil_reference_name' => $scent->oil_reference_name ?: ($this->newScentOil ?: null),
+                    'blend_oil_count' => $scent->blend_oil_count ?: ($this->newScentIsBlend ? ($this->newScentBlendCount ?: null) : null),
+                ], fn ($value) => $value !== null && $value !== ''));
+                if ($this->newScentIsBlend) {
+                    $scent->is_blend = true;
+                }
+                if ($isWholesaleCustom) {
+                    $scent->is_wholesale_custom = true;
+                }
+                $scent->is_active = true;
+                if ($scent->isDirty()) {
+                    $scent->save();
+                }
+            }
             $scentId = $scent->id;
         }
 
@@ -433,6 +456,32 @@ class MappingExceptions extends Component
                     $existing->save();
                 }
             }
+        }
+
+        if ($scentId && Schema::hasTable('scent_aliases')) {
+            $scent = Scent::query()->find($scentId, ['name', 'display_name']);
+            $canonicalValues = collect([
+                trim((string) ($scent?->name ?? '')),
+                trim((string) ($scent?->display_name ?? '')),
+            ])->filter()->all();
+
+            $exceptions
+                ->flatMap(fn (MappingException $exception): array => [
+                    trim((string) ($exception->raw_scent_name ?? '')),
+                    trim((string) ($exception->raw_title ?? '')),
+                ])
+                ->filter()
+                ->unique()
+                ->each(function (string $alias) use ($canonicalValues, $scentId): void {
+                    if (in_array($alias, $canonicalValues, true)) {
+                        return;
+                    }
+
+                    ScentAlias::query()->updateOrCreate(
+                        ['alias' => $alias, 'scope' => 'markets'],
+                        ['scent_id' => $scentId]
+                    );
+                });
         }
 
         $this->showModal = false;

@@ -24,24 +24,28 @@ class CatalogSeeder extends Seeder
             }
             $seen[$key] = true;
 
-            Scent::query()->create([
-                'name' => $clean,
-                'display_name' => $clean,
-                'is_active' => true,
-            ]);
+            Scent::query()->firstOrCreate(
+                ['name' => $clean],
+                [
+                    'display_name' => $clean,
+                    'is_active' => true,
+                ]
+            );
         }
 
         $sizes = $this->canonicalSizes();
         $sort = 1;
         foreach ($sizes as $size) {
-            Size::query()->create([
-                'code' => $size['code'],
-                'label' => $size['label'],
-                'wholesale_price' => $size['wholesale'],
-                'retail_price' => $size['retail'],
-                'is_active' => true,
-                'sort_order' => $sort++,
-            ]);
+            Size::query()->firstOrCreate(
+                ['code' => $size['code']],
+                [
+                    'label' => $size['label'],
+                    'wholesale_price' => $size['wholesale'],
+                    'retail_price' => $size['retail'],
+                    'is_active' => true,
+                    'sort_order' => $sort++,
+                ]
+            );
         }
     }
 

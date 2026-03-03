@@ -1,66 +1,88 @@
 @php
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
-  $isManager = $user?->isManager() ?? false;
+  $tabLinkClass = 'inline-flex h-10 shrink-0 items-center justify-center rounded-xl border px-3 text-xs font-semibold transition';
 @endphp
 
 <div class="space-y-6">
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
     <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Administration</div>
-    <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">System Controls</div>
-    <div class="mt-2 text-sm text-emerald-50/70">Manage users, catalogs, and Shopify import fixes.</div>
+    <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Admin Workspace</div>
+    <div class="mt-2 text-sm text-emerald-50/70">System controls, scent intake, and canonical master data now live in one place.</div>
   </section>
 
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 md:p-6">
-    <div class="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+    <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-3">
       @if($isAdmin)
-        <button
-          wire:click="setTab('users')"
-          class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'users' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+        <a
+          href="{{ route('admin.index', ['tab' => 'users']) }}"
+          wire:navigate
+          class="{{ $tabLinkClass }} {{ $tab === 'users' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
           Manage Users
-        </button>
+        </a>
       @endif
-      <button
-        wire:click="setTab('imports')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'imports' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      <a
+        href="{{ route('admin.index', ['tab' => 'imports']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'imports' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Fix Imports
-      </button>
-      <button
-        wire:click="setTab('catalog')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'catalog' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'scent-intake']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'scent-intake' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
+        Scent Intake
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'catalog']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'catalog' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Scent Catalog
-      </button>
-      <button
-        wire:click="setTab('sizes-wicks')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'sizes-wicks' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'sizes-wicks']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'sizes-wicks' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Sizes & Wicks
-      </button>
-      <button
-        wire:click="setTab('wholesale-custom')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'wholesale-custom' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'wholesale-custom']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'wholesale-custom' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Wholesale Custom Scents
-      </button>
-      <button
-        wire:click="setTab('blends')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'blends' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'blends']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'blends' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Oil Blends
-      </button>
-      <button
-        wire:click="setTab('candle-club')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'candle-club' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'candle-club']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'candle-club' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Candle Club
-      </button>
-      <button
-        wire:click="setTab('oils')"
-        class="px-3 py-2 text-sm font-semibold rounded-full {{ $tab === 'oils' ? 'bg-emerald-500/20 text-emerald-50 border border-emerald-400/40' : 'border border-white/10 text-white/70 hover:text-white' }}">
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'oils']) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'oils' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
         Scent Oil Abbreviations
-      </button>
+      </a>
+      <a
+        href="{{ route('admin.index', ['tab' => 'master-data', 'resource' => $masterDataActiveResource]) }}"
+        wire:navigate
+        class="{{ $tabLinkClass }} {{ $tab === 'master-data' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
+        Master Data
+      </a>
     </div>
 
     <div class="mt-6 space-y-6">
       @if($tab === 'users' && $isAdmin)
         <livewire:admin.users.users-index />
       @elseif($tab === 'imports')
+        <livewire:admin.imports.import-exceptions />
+      @elseif($tab === 'scent-intake')
         <livewire:admin.imports.import-exceptions />
       @elseif($tab === 'catalog')
         <div class="grid gap-6">
@@ -79,7 +101,46 @@
         <livewire:admin.candle-club.candle-club-scents-crud />
       @elseif($tab === 'oils')
         <livewire:admin.oils.oil-abbreviations-crud />
+      @elseif($tab === 'master-data')
+        <div class="flex min-h-[calc(100vh-16rem)] flex-col gap-6">
+          <section class="rounded-3xl border border-white/10 bg-black/15 p-6 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)]">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Canonical Tables</div>
+                <h2 class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Normalized Catalog</h2>
+                <p class="mt-2 max-w-3xl text-sm text-emerald-50/70">
+                  This grid edits the same canonical tables that Scent Intake and the retail planners read from.
+                </p>
+              </div>
+              <a
+                href="{{ route('admin.index', ['tab' => 'scent-intake']) }}"
+                wire:navigate
+                class="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10"
+              >
+                Open Scent Intake
+              </a>
+            </div>
+          </section>
+
+          <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/15 p-4 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] md:p-6">
+            <div
+              id="master-data-grid"
+              data-resources='@json($masterDataResources)'
+              data-active-resource="{{ $masterDataActiveResource }}"
+              data-base-endpoint="{{ $masterDataBaseEndpoint }}"
+              class="h-full min-h-0"
+            >
+              <div class="flex h-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-emerald-50/65">
+                Loading master data grid…
+              </div>
+            </div>
+          </section>
+        </div>
       @endif
     </div>
   </section>
+
+  @once
+    @vite('resources/js/admin/master-data-grid.tsx')
+  @endonce
 </div>

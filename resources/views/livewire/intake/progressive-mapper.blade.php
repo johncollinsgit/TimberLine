@@ -80,6 +80,52 @@
           @endif
         </div>
       @endif
+    @else
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs text-emerald-100/60">Use existing scent</label>
+          <input
+            type="text"
+            wire:model.live.debounce.250ms="existingScentSearch"
+            placeholder="Search by name, display, or abbreviation"
+            class="mt-1 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90"
+          >
+        </div>
+
+        @if($matchingScents->isNotEmpty())
+          <div class="grid gap-2 md:grid-cols-2">
+            @foreach($matchingScents as $scent)
+              <button
+                type="button"
+                wire:click="$set('selectedScentId', {{ $scent->id }})"
+                class="flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition {{ (int) $selectedScentId === (int) $scent->id ? 'border-emerald-300/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-white/5 text-white/80 hover:border-emerald-300/20 hover:text-white' }}"
+              >
+                <span>{{ $scent->display_name ?: $scent->name }}</span>
+                @if($scent->abbreviation)
+                  <span class="text-[11px] text-emerald-100/60">{{ $scent->abbreviation }}</span>
+                @endif
+              </button>
+            @endforeach
+          </div>
+        @endif
+      </div>
+
+      <div class="rounded-2xl border border-emerald-200/10 bg-black/20 p-4">
+        <div class="text-xs uppercase tracking-[0.28em] text-emerald-100/60">Or create a canonical scent</div>
+        <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <input type="text" wire:model.defer="newScentName" placeholder="Canonical name" class="rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90">
+          <input type="text" wire:model.defer="newScentDisplay" placeholder="Display name" class="rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90">
+          <input type="text" wire:model.defer="newScentAbbr" placeholder="Abbreviation" class="rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90">
+          <input type="text" wire:model.defer="newScentOil" placeholder="Oil reference name" class="rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90">
+          <label class="inline-flex items-center gap-2 text-xs text-emerald-50/70">
+            <input type="checkbox" wire:model="newScentIsBlend" class="rounded border-emerald-200/30 bg-black/30">
+            Treat as blend
+          </label>
+          @if($newScentIsBlend)
+            <input type="number" min="1" wire:model.defer="newScentBlendCount" placeholder="Blend oil count" class="rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90">
+          @endif
+        </div>
+      </div>
     @endif
 
     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">

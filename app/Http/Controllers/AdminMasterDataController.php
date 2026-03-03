@@ -18,31 +18,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
 
 class AdminMasterDataController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request)
     {
-        $resources = $this->availableResources();
-        $activeResource = (string) $request->query('resource', array_key_first($resources) ?: 'scents');
-
-        if (! array_key_exists($activeResource, $resources)) {
-            $activeResource = (string) (array_key_first($resources) ?: 'scents');
-        }
-
-        return view('admin.master-data', [
-            'resources' => array_values(array_map(
-                fn (array $definition, string $key): array => [
-                    'key' => $key,
-                    'label' => (string) ($definition['label'] ?? $key),
-                    'description' => (string) ($definition['description'] ?? ''),
-                ],
-                $resources,
-                array_keys($resources)
-            )),
-            'activeResource' => $activeResource,
-            'baseEndpoint' => url('/admin/master'),
+        return redirect()->route('admin.index', [
+            'tab' => 'master-data',
+            'resource' => $this->defaultResourceKey((string) $request->query('resource', '')),
         ]);
     }
 
@@ -182,6 +165,36 @@ class AdminMasterDataController extends Controller
             $this->resourceDefinitions(),
             fn (array $definition): bool => $this->resourceIsAvailable($definition)
         );
+    }
+
+    /**
+     * @return array<int,array{key:string,label:string,description:string}>
+     */
+    public function resourceTabs(): array
+    {
+        $resources = $this->availableResources();
+
+        return array_values(array_map(
+            fn (array $definition, string $key): array => [
+                'key' => $key,
+                'label' => (string) ($definition['label'] ?? $key),
+                'description' => (string) ($definition['description'] ?? ''),
+            ],
+            $resources,
+            array_keys($resources)
+        ));
+    }
+
+    public function defaultResourceKey(?string $requested = null): string
+    {
+        $resources = $this->availableResources();
+        $activeResource = (string) ($requested ?: array_key_first($resources) ?: 'scents');
+
+        if (! array_key_exists($activeResource, $resources)) {
+            $activeResource = (string) (array_key_first($resources) ?: 'scents');
+        }
+
+        return $activeResource;
     }
 
     /**

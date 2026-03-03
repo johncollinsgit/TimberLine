@@ -453,6 +453,29 @@
       border-radius: .55rem;
       flex: 0 0 auto;
     }
+    .mf-sidebar-pin-btn{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: .7rem;
+      border: 1px solid var(--mf-panel-border);
+      background: rgba(255,255,255,.04);
+      color: var(--mf-sidebar-text);
+      font-size: .85rem;
+      font-weight: 700;
+      line-height: 1;
+      transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+    .mf-sidebar-pin-btn:hover{
+      background: rgba(255,255,255,.08);
+      border-color: var(--mf-panel-strong-border);
+    }
+    .mf-sidebar-pin-btn:focus-visible{
+      outline: none;
+      box-shadow: 0 0 0 3px var(--mf-focus-ring);
+    }
     .mf-sidebar-theme-slot{
       padding-inline: .75rem;
       padding-top: .35rem;
@@ -880,6 +903,31 @@
       background: linear-gradient(to bottom, var(--btn-primary-hover), color-mix(in srgb, var(--btn-primary-hover) 84%, #000 16%)) !important;
       border-color: var(--btn-primary-hover) !important;
     }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar{
+      width: 5.4rem !important;
+      min-width: 5.4rem !important;
+      max-width: 5.4rem !important;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
+      width: 2.6rem !important;
+      padding-inline: .35rem !important;
+      justify-content: center;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-sidebar-brand-name],
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-brand-name],
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-theme-selector,
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group-heading],
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-panel,
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-footer{
+      display: none !important;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item{
+      font-size: 0 !important;
+      padding-inline: .55rem !important;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
+      margin-inline: auto;
+    }
     .mf-app-card :where(.sticky){
       max-width: 100%;
     }
@@ -1163,6 +1211,7 @@
 
   {{-- Sidebar --}}
   <flux:sidebar
+    id="app-sidebar"
     sticky
     collapsible="mobile"
     class="relative overflow-hidden mf-transition border-e mf-sidebar-theme-shell"
@@ -1171,7 +1220,19 @@
 
     <div class="relative mf-fade-in">
       <flux:sidebar.header class="mf-transition mf-sidebar-header">
-        <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition mf-home-pill" />
+        <div class="flex items-center gap-2">
+          <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition mf-home-pill" />
+          <button
+            type="button"
+            id="mf-sidebar-collapse-toggle"
+            class="mf-sidebar-pin-btn"
+            aria-pressed="false"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            &lt;
+          </button>
+        </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
@@ -1395,6 +1456,41 @@
 </script>
 <script>
   (function () {
+    const storageKey = 'mf.sidebarCollapsed';
+    function applyState(collapsed, toggle) {
+      document.body.setAttribute('data-mf-sidebar-collapsed', collapsed ? '1' : '0');
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+        toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        toggle.setAttribute('title', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        toggle.textContent = collapsed ? '>' : '<';
+      }
+    }
+
+    function bindSidebarToggle() {
+      const toggle = document.getElementById('mf-sidebar-collapse-toggle');
+      if (!toggle || toggle.dataset.mfBound === '1') {
+        return;
+      }
+
+      toggle.dataset.mfBound = '1';
+      const saved = window.localStorage.getItem(storageKey);
+      applyState(saved === '1', toggle);
+
+      toggle.addEventListener('click', () => {
+        const next = document.body.getAttribute('data-mf-sidebar-collapsed') !== '1';
+        window.localStorage.setItem(storageKey, next ? '1' : '0');
+        applyState(next, toggle);
+      });
+    }
+
+    applyState(window.localStorage.getItem(storageKey) === '1', null);
+    bindSidebarToggle();
+    document.addEventListener('livewire:navigated', bindSidebarToggle);
+  })();
+</script>
+<script>
+  (function () {
     function scrollTop() {
       const main = document.getElementById('app-main');
       const doScroll = () => {
@@ -1409,7 +1505,6 @@
     }
     document.addEventListener('livewire:navigated', scrollTop);
     document.addEventListener('livewire:navigation', scrollTop);
-    document.addEventListener('admin-tab-changed', scrollTop);
   })();
 </script>
 

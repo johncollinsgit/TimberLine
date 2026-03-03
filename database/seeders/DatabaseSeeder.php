@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             TenantSeeder::class,
+            MasterDataSeeder::class,
             OrderSeeder::class, // <-- singular (matches OrderSeeder.php)
             ScentTemplateSeeder::class,
         ]);
