@@ -418,12 +418,22 @@
       position: relative;
       z-index: 1;
     }
+    .mf-sidebar-header .mf-sidebar-brand-row{
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      width: 100%;
+      min-width: 0;
+    }
     .mf-sidebar-header :where([data-flux-sidebar-brand], a[href]).mf-home-pill{
       display: inline-flex;
       align-items: center;
       gap: .55rem;
+      flex: 1 1 auto;
       min-height: 2.35rem;
-      width: calc(100% - 2.4rem);
+      min-width: 0;
+      width: auto;
+      max-width: 100%;
       padding: .45rem .65rem;
       border-radius: 9999px;
       border: 1px solid var(--mf-panel-border);
@@ -441,6 +451,11 @@
     }
     .mf-sidebar-header .mf-home-pill [data-flux-sidebar-brand-name],
     .mf-sidebar-header .mf-home-pill [data-flux-brand-name]{
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: .875rem;
       font-weight: 600;
       line-height: 1.1;
@@ -466,6 +481,7 @@
       font-size: .85rem;
       font-weight: 700;
       line-height: 1;
+      flex: 0 0 auto;
       transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
     }
     .mf-sidebar-pin-btn:hover{
@@ -910,6 +926,7 @@
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
       width: 2.6rem !important;
+      max-width: 2.6rem !important;
       padding-inline: .35rem !important;
       justify-content: center;
     }
@@ -1220,7 +1237,7 @@
 
     <div class="relative mf-fade-in">
       <flux:sidebar.header class="mf-transition mf-sidebar-header">
-        <div class="flex items-center gap-2">
+        <div class="mf-sidebar-brand-row">
           <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition mf-home-pill" />
           <button
             type="button"
@@ -1255,7 +1272,7 @@
       @endauth
 
       <flux:sidebar.nav class="mf-sidebar-nav">
-        <flux:sidebar.group heading="Modern Forestry Backstage" class="grid mf-sidebar-group-balanced">
+        <flux:sidebar.group heading="Navigation" class="grid mf-sidebar-group-balanced">
           <div class="space-y-1" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
             @foreach($orderedSidebarItems as $item)
               <div
