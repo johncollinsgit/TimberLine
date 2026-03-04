@@ -966,8 +966,14 @@
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item .mf-nav-label{
       display: none !important;
     }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item [data-content]{
+      display: none !important;
+    }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
       margin-inline: auto;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group] > div:first-child{
+      display: none !important;
     }
     @media (max-width: 1023px){
       body[data-mf-sidebar-collapsed="1"] #app-sidebar{
@@ -1003,8 +1009,14 @@
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item .mf-nav-label{
         display: inline-block !important;
       }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item [data-content]{
+        display: block !important;
+      }
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
         margin-inline: 0;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group] > div:first-child{
+        display: block !important;
       }
     }
     .mf-app-card :where(.sticky){
@@ -1229,17 +1241,17 @@
 
   $sidebarItems = [];
   if (!$isPouring) {
-      $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document-check', 'href' => $hrefRetailPlan, 'label' => 'All Pour Lists', 'current' => $retailPlanActive];
+      $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => $hrefRetailPlan, 'label' => 'All Pour Lists', 'current' => $retailPlanActive];
       $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
       $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
   }
   if ($isAdmin || $isManager) {
       $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
   }
-  $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'fire', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
-  $sidebarItems[] = ['key' => 'markets', 'icon' => 'clipboard-document', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
+  $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
+  $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
   if ($isAdmin || $isManager) {
-      $sidebarItems[] = ['key' => 'administration', 'icon' => 'cog', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
+      $sidebarItems[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
   }
   if (!$isPouring) {
       $sidebarItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => $hrefAnalytics, 'label' => 'Analytics', 'current' => $analyticsActive];
