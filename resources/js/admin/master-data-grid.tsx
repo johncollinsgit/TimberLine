@@ -8,6 +8,7 @@ import {
     GridColumn,
     Item,
     EditableGridCell,
+    type EditListItem,
     type Theme,
 } from "@glideapps/glide-data-grid";
 import {
@@ -70,11 +71,23 @@ type RootDataset = {
     resources: ResourceTab[];
     activeResource: string;
     baseEndpoint: string;
+    bulkEndpointBase: string;
 };
 
 type SaveState = "idle" | "saving" | "saved";
 
-const SAVE_DEBOUNCE_MS = 450;
+type PendingChange = {
+    id: number;
+    field: string;
+    value: unknown;
+    previousValue: unknown;
+};
+
+type BulkSaveError = {
+    id: number;
+    field: string;
+    message: string;
+};
 
 type ElementSize = {
     width: number;
@@ -281,6 +294,7 @@ function parseRootDataset(root: HTMLElement): RootDataset {
         resources,
         activeResource: root.dataset.activeResource || resources[0]?.key || "scents",
         baseEndpoint: root.dataset.baseEndpoint || "/admin/master",
+        bulkEndpointBase: root.dataset.bulkEndpointBase || "/admin/master-data",
     };
 }
 
@@ -384,8 +398,39 @@ function buildGridColumns(meta: ResponseMeta | null): GridColumn[] {
     ];
 }
 
+function cellChangeKey(id: number, field: string): string {
+    return `${id}:${field}`;
+}
+
+function applyPendingChanges(
+    rows: RowData[],
+    pendingChanges: Record<string, PendingChange>
+): RowData[] {
+    if (Object.keys(pendingChanges).length === 0) {
+        return rows;
+    }
+
+    return rows.map((row) => {
+        let nextRow = row;
+
+        Object.values(pendingChanges).forEach((change) => {
+            if (change.id !== row.id) {
+                return;
+            }
+
+            if (nextRow === row) {
+                nextRow = { ...row };
+            }
+
+            nextRow[change.field] = change.value;
+        });
+
+        return nextRow;
+    });
+}
+
 function MasterDataGridApp(props: RootDataset) {
-    const { resources, baseEndpoint } = props;
+    const { resources, baseEndpoint, bulkEndpointBase } = props;
     const [activeResource, setActiveResource] = useState(props.activeResource);
     const [rows, setRows] = useState<RowData[]>([]);
     const [meta, setMeta] = useState<ResponseMeta | null>(null);
@@ -401,10 +446,11 @@ function MasterDataGridApp(props: RootDataset) {
     const [notice, setNotice] = useState("");
     const [error, setError] = useState("");
     const [saveState, setSaveState] = useState<SaveState>("idle");
+    const [pendingChanges, setPendingChanges] = useState<Record<string, PendingChange>>({});
     const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
     const [gridTheme] = useState<Theme>(() => resolveGridTheme());
-    const saveTimersRef = useRef<Map<string, number>>(new Map());
+    const pendingChangesRef = useRef<Record<string, PendingChange>>({});
     const saveFlashTimerRef = useRef<number | null>(null);
 
     const gridColumns = buildGridColumns(meta);
@@ -412,10 +458,15 @@ function MasterDataGridApp(props: RootDataset) {
         resources.find((resource) => resource.key === activeResource) ?? null;
     const canRenderGrid = gridBounds.width > 0 && gridBounds.height > 0;
     const gridViewportHeight = Math.max(gridBounds.height, 360);
+    const dirtyCount = Object.keys(pendingChanges).length;
 
     useEffect(() => {
         axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
     }, []);
+
+    useEffect(() => {
+        pendingChangesRef.current = pendingChanges;
+    }, [pendingChanges]);
 
     useEffect(() => {
         let cancelled = false;
@@ -440,11 +491,13 @@ function MasterDataGridApp(props: RootDataset) {
                     return;
                 }
 
-                const nextRows = Array.isArray(response.data?.data) ? (response.data.data as RowData[]) : [];
+                const nextRows = Array.isArray(response.data?.data)
+                    ? (response.data.data as RowData[])
+                    : [];
                 const nextMeta = (response.data?.meta ?? null) as ResponseMeta | null;
 
                 startTransition(() => {
-                    setRows(nextRows);
+                    setRows(applyPendingChanges(nextRows, pendingChangesRef.current));
                     setMeta(nextMeta);
                     setSortField(String(nextMeta?.filters?.sort || sortField || nextMeta?.columns?.[0]?.key || ""));
                     setSortDir((nextMeta?.filters?.dir || sortDir || "asc") as "asc" | "desc");
@@ -506,60 +559,147 @@ function MasterDataGridApp(props: RootDataset) {
         );
     };
 
-    const queuePatch = (
-        rowIndex: number,
+    const trackPendingChange = (
         rowId: number,
         field: string,
         previousValue: unknown,
         nextValue: unknown
     ) => {
-        const timerKey = `${rowId}:${field}`;
-        const existingTimer = saveTimersRef.current.get(timerKey);
+        const changeKey = cellChangeKey(rowId, field);
 
-        if (existingTimer) {
-            window.clearTimeout(existingTimer);
-        }
+        setPendingChanges((current) => {
+            const existing = current[changeKey];
+            const baseline = existing ? existing.previousValue : previousValue;
 
-        setSaveState("saving");
-        setNotice("Saving…");
+            if (Object.is(nextValue, baseline)) {
+                if (!existing) {
+                    return current;
+                }
+
+                const next = { ...current };
+                delete next[changeKey];
+                return next;
+            }
+
+            return {
+                ...current,
+                [changeKey]: {
+                    id: rowId,
+                    field,
+                    value: nextValue,
+                    previousValue: baseline,
+                },
+            };
+        });
+
         setCellErrors((current) => {
-            if (!current[timerKey]) {
+            if (!current[changeKey]) {
                 return current;
             }
 
             const next = { ...current };
-            delete next[timerKey];
+            delete next[changeKey];
             return next;
         });
+        setSaveState("idle");
+        setNotice("Unsaved changes");
+        setError("");
+    };
 
-        const timerId = window.setTimeout(async () => {
-            try {
-                await axios.patch(`${baseEndpoint}/${activeResource}/${rowId}`, {
-                    [field]: nextValue,
+    const handleSaveChanges = async () => {
+        const batch = Object.values(pendingChangesRef.current);
+
+        if (batch.length === 0) {
+            return;
+        }
+
+        const batchValueMap = new Map(
+            batch.map((change) => [cellChangeKey(change.id, change.field), change.value])
+        );
+
+        try {
+            setSaveState("saving");
+            setNotice(`Saving ${batch.length} change${batch.length === 1 ? "" : "s"}…`);
+            setError("");
+
+            const response = await axios.post(
+                `${bulkEndpointBase}/${activeResource}/bulk-update`,
+                {
+                    changes: batch.map(({ id, field, value }) => ({
+                        id,
+                        field,
+                        value,
+                    })),
+                }
+            );
+
+            const responseErrors = Array.isArray(response.data?.errors)
+                ? (response.data.errors as BulkSaveError[])
+                : [];
+            const failedKeys = new Set(
+                responseErrors.map((item) => cellChangeKey(item.id, item.field))
+            );
+
+            setPendingChanges((current) => {
+                const next = { ...current };
+
+                batch.forEach((change) => {
+                    const changeKey = cellChangeKey(change.id, change.field);
+
+                    if (failedKeys.has(changeKey)) {
+                        return;
+                    }
+
+                    if (!next[changeKey]) {
+                        return;
+                    }
+
+                    if (Object.is(next[changeKey].value, batchValueMap.get(changeKey))) {
+                        delete next[changeKey];
+                    }
                 });
+
+                return next;
+            });
+
+            setCellErrors((current) => {
+                const next = { ...current };
+
+                batch.forEach((change) => {
+                    const changeKey = cellChangeKey(change.id, change.field);
+                    delete next[changeKey];
+                });
+
+                responseErrors.forEach((item) => {
+                    next[cellChangeKey(item.id, item.field)] = item.message;
+                });
+
+                return next;
+            });
+
+            setReloadToken((current) => current + 1);
+
+            if (responseErrors.length === 0) {
                 setSaveState("saved");
-                setNotice("Saved");
-                setError("");
-            } catch (requestError) {
-                updateRowValue(rowIndex, field, previousValue);
-
-                const message = axios.isAxiosError(requestError)
-                    ? requestError.response?.data?.message || "Could not save that cell."
-                    : "Could not save that cell.";
-
-                setSaveState("idle");
-                setNotice("");
-                setError(message);
-                setCellErrors((current) => ({
-                    ...current,
-                    [timerKey]: message,
-                }));
-            } finally {
-                saveTimersRef.current.delete(timerKey);
+                setNotice("Changes saved");
+                return;
             }
-        }, SAVE_DEBOUNCE_MS);
 
-        saveTimersRef.current.set(timerKey, timerId);
+            setSaveState("idle");
+            setNotice(
+                response.data?.updated > 0
+                    ? `Saved ${response.data.updated} change${response.data.updated === 1 ? "" : "s"}; fix the highlighted cells.`
+                    : "Fix the highlighted cells and save again."
+            );
+        } catch (requestError) {
+            const message = axios.isAxiosError(requestError)
+                ? requestError.response?.data?.message || "Could not save changes."
+                : "Could not save changes.";
+
+            setSaveState("idle");
+            setNotice("");
+            setError(message);
+        }
     };
 
     const handleAddRow = async () => {
@@ -607,6 +747,28 @@ function MasterDataGridApp(props: RootDataset) {
 
         try {
             await axios.delete(`${baseEndpoint}/${activeResource}/${row.id}`);
+            setPendingChanges((current) => {
+                const next = { ...current };
+
+                Object.keys(next).forEach((key) => {
+                    if (next[key]?.id === row.id) {
+                        delete next[key];
+                    }
+                });
+
+                return next;
+            });
+            setCellErrors((current) => {
+                const next = { ...current };
+
+                Object.keys(next).forEach((key) => {
+                    if (key.startsWith(`${row.id}:`)) {
+                        delete next[key];
+                    }
+                });
+
+                return next;
+            });
             setSaveState("saved");
             setNotice("Row deleted");
             setReloadToken((current) => current + 1);
@@ -658,14 +820,20 @@ function MasterDataGridApp(props: RootDataset) {
             };
         }
 
-        const cellErrorKey = `${rowData.id}:${columnMeta.key}`;
-        const themeOverride = cellErrors[cellErrorKey]
+        const changeKey = cellChangeKey(rowData.id, columnMeta.key);
+        const themeOverride = cellErrors[changeKey]
             ? {
                 bgCell: "rgba(76, 5, 25, 0.92)",
                 borderColor: "#fb7185",
                 textDark: "#ffe4e6",
             }
-            : undefined;
+            : pendingChanges[changeKey]
+                ? {
+                    bgCell: "rgba(15, 23, 42, 0.94)",
+                    borderColor: "#34d399",
+                    textDark: "#ecfdf5",
+                }
+                : undefined;
 
         const rawValue = rowData[columnMeta.key];
 
@@ -713,24 +881,28 @@ function MasterDataGridApp(props: RootDataset) {
         };
     };
 
-    const handleCellEdited = (cell: Item, nextCell: EditableGridCell) => {
-        const [col, rowIndex] = cell;
-        const columnMeta = getColumnMeta(col);
-        const row = rows[rowIndex];
+    const handleCellsEdited = (edits: readonly EditListItem[]) => {
+        edits.forEach((edit) => {
+            const [col, rowIndex] = edit.location;
+            const columnMeta = getColumnMeta(col);
+            const row = rows[rowIndex];
 
-        if (!columnMeta || !row) {
-            return;
-        }
+            if (!columnMeta || !row) {
+                return;
+            }
 
-        const previousValue = row[columnMeta.key];
-        const nextValue = coerceValueFromCell(columnMeta, nextCell, previousValue);
+            const previousValue = row[columnMeta.key];
+            const nextValue = coerceValueFromCell(columnMeta, edit.value, previousValue);
 
-        if (Object.is(nextValue, previousValue)) {
-            return;
-        }
+            if (Object.is(nextValue, previousValue)) {
+                return;
+            }
 
-        updateRowValue(rowIndex, columnMeta.key, nextValue);
-        queuePatch(rowIndex, row.id, columnMeta.key, previousValue, nextValue);
+            updateRowValue(rowIndex, columnMeta.key, nextValue);
+            trackPendingChange(row.id, columnMeta.key, previousValue, nextValue);
+        });
+
+        return true;
     };
 
     const handleCellClicked = (cell: Item) => {
@@ -747,6 +919,8 @@ function MasterDataGridApp(props: RootDataset) {
     const gridStatus =
         saveState === "saving"
             ? "Saving…"
+            : dirtyCount > 0
+                ? `${dirtyCount} unsaved change${dirtyCount === 1 ? "" : "s"}`
             : saveState === "saved"
                 ? "Saved"
                 : loading
@@ -783,6 +957,9 @@ function MasterDataGridApp(props: RootDataset) {
                                                 setPage(1);
                                                 setError("");
                                                 setNotice("");
+                                                setPendingChanges({});
+                                                setCellErrors({});
+                                                setSaveState("idle");
                                             });
                                         }}
                                         className={
@@ -868,6 +1045,15 @@ function MasterDataGridApp(props: RootDataset) {
 
                         <button
                             type="button"
+                            onClick={() => void handleSaveChanges()}
+                            disabled={dirtyCount === 0 || saveState === "saving"}
+                            className={buttonClass}
+                        >
+                            Save {dirtyCount > 0 ? `${dirtyCount} ` : ""}Change{dirtyCount === 1 ? "" : "s"}
+                        </button>
+
+                        <button
+                            type="button"
                             onClick={() => setReloadToken((current) => current + 1)}
                             className={buttonClass}
                         >
@@ -913,7 +1099,7 @@ function MasterDataGridApp(props: RootDataset) {
                                 columns={gridColumns}
                                 rows={rows.length}
                                 getCellContent={getCellContent}
-                                onCellEdited={handleCellEdited}
+                                onCellsEdited={handleCellsEdited}
                                 onCellClicked={handleCellClicked}
                                 onPaste={true}
                                 width={gridBounds.width}

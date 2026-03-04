@@ -16,11 +16,23 @@ class ShopifyBundleImportTest extends TestCase
 
     public function testBundleExpandsIntoMultipleLines(): void
     {
-        Size::query()->create(['code' => '8oz-cotton', 'label' => '8oz Cotton Wick', 'is_active' => true]);
-        Size::query()->create(['code' => 'wax-melts', 'label' => 'Wax Melts', 'is_active' => true]);
+        Size::query()->firstOrCreate(
+            ['code' => '8oz-cotton'],
+            ['label' => '8oz Cotton Wick', 'is_active' => true]
+        );
+        Size::query()->firstOrCreate(
+            ['code' => 'wax-melts'],
+            ['label' => 'Wax Melts', 'is_active' => true]
+        );
 
-        $river = Scent::query()->create(['name' => 'River Birch', 'display_name' => 'River Birch', 'is_active' => true]);
-        $pumpkin = Scent::query()->create(['name' => 'Pumpkin Chai', 'display_name' => 'Pumpkin Chai', 'is_active' => true]);
+        $river = Scent::query()->firstOrCreate(
+            ['name' => 'River Birch'],
+            ['display_name' => 'River Birch', 'is_active' => true]
+        );
+        $pumpkin = Scent::query()->firstOrCreate(
+            ['name' => 'Pumpkin Chai'],
+            ['display_name' => 'Pumpkin Chai', 'is_active' => true]
+        );
 
         $orderData = [
             'id' => 123,
@@ -55,7 +67,10 @@ class ShopifyBundleImportTest extends TestCase
 
     public function testBundleMissingScentCreatesImportException(): void
     {
-        Size::query()->create(['code' => '8oz-cotton', 'label' => '8oz Cotton Wick', 'is_active' => true]);
+        Size::query()->firstOrCreate(
+            ['code' => '8oz-cotton'],
+            ['label' => '8oz Cotton Wick', 'is_active' => true]
+        );
 
         $orderData = [
             'id' => 456,
@@ -84,9 +99,18 @@ class ShopifyBundleImportTest extends TestCase
 
     public function testReimportDoesNotDuplicateBundleLines(): void
     {
-        Size::query()->create(['code' => '8oz-cotton', 'label' => '8oz Cotton Wick', 'is_active' => true]);
-        Scent::query()->create(['name' => 'River Birch', 'display_name' => 'River Birch', 'is_active' => true]);
-        Scent::query()->create(['name' => 'Pumpkin Chai', 'display_name' => 'Pumpkin Chai', 'is_active' => true]);
+        Size::query()->firstOrCreate(
+            ['code' => '8oz-cotton'],
+            ['label' => '8oz Cotton Wick', 'is_active' => true]
+        );
+        Scent::query()->firstOrCreate(
+            ['name' => 'River Birch'],
+            ['display_name' => 'River Birch', 'is_active' => true]
+        );
+        Scent::query()->firstOrCreate(
+            ['name' => 'Pumpkin Chai'],
+            ['display_name' => 'Pumpkin Chai', 'is_active' => true]
+        );
 
         $orderData = [
             'id' => 789,

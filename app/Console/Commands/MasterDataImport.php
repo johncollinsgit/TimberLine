@@ -98,16 +98,36 @@ class MasterDataImport extends Command
             $upsert = (bool) $this->option('upsert');
             $summaries = [];
 
-            if (isset($knownFiles['base_oils.csv'])) {
-                $summaries['base_oils'] = $this->runImportStep(
-                    'base_oils.csv',
-                    fn (): array => $this->importBaseOils($knownFiles['base_oils.csv'], $upsert)
-                );
-            }
             if (isset($knownFiles['scents_master.csv'])) {
                 $summaries['scents'] = $this->runImportStep(
                     'scents_master.csv',
                     fn (): array => $this->importScents($knownFiles['scents_master.csv'], $upsert)
+                );
+            }
+            if (isset($knownFiles['collections_long.csv'])) {
+                if (Schema::hasTable('collections')) {
+                    $summaries['collections'] = $this->runImportStep(
+                        'collections_long.csv',
+                        fn (): array => $this->importCollections($knownFiles['collections_long.csv'], $upsert)
+                    );
+                } else {
+                    $this->warn('Skipped collections_long.csv because the collections table does not exist.');
+                }
+            }
+            if (isset($knownFiles['seasonal_scents.csv'])) {
+                if (Schema::hasTable('seasonal_scents')) {
+                    $summaries['seasonal_scents'] = $this->runImportStep(
+                        'seasonal_scents.csv',
+                        fn (): array => $this->importSeasonalScents($knownFiles['seasonal_scents.csv'], $upsert)
+                    );
+                } else {
+                    $this->warn('Skipped seasonal_scents.csv because the seasonal_scents table does not exist.');
+                }
+            }
+            if (isset($knownFiles['base_oils.csv'])) {
+                $summaries['base_oils'] = $this->runImportStep(
+                    'base_oils.csv',
+                    fn (): array => $this->importBaseOils($knownFiles['base_oils.csv'], $upsert)
                 );
             }
             if (isset($knownFiles['blends.csv'])) {
@@ -234,6 +254,8 @@ class MasterDataImport extends Command
     {
         $supported = [
             'scents_master.csv',
+            'collections_long.csv',
+            'seasonal_scents.csv',
             'base_oils.csv',
             'blends.csv',
             'blend_components.csv',
@@ -266,7 +288,7 @@ class MasterDataImport extends Command
         );
 
         foreach ($rows as $row) {
-            $name = $this->normalizeText((string) ($row['scent_name'] ?? ''));
+            $name = $this->canonicalizeName((string) ($row['scent_name'] ?? ''));
             if ($name === '') {
                 $summary['skipped']++;
                 continue;
@@ -322,7 +344,7 @@ class MasterDataImport extends Command
         );
 
         foreach ($rows as $row) {
-            $name = $this->normalizeText((string) ($row['name'] ?? ''));
+            $name = $this->canonicalizeName((string) ($row['name'] ?? ''));
             if ($name === '') {
                 $summary['skipped']++;
                 continue;
@@ -371,7 +393,7 @@ class MasterDataImport extends Command
         );
 
         foreach ($rows as $row) {
-            $name = $this->normalizeText((string) ($row['blend_name'] ?? ''));
+            $name = $this->canonicalizeName((string) ($row['blend_name'] ?? ''));
             if ($name === '') {
                 $summary['skipped']++;
                 continue;
@@ -431,8 +453,8 @@ class MasterDataImport extends Command
         }
 
         foreach ($rows as $row) {
-            $blendName = $this->normalizeText((string) ($row['blend_name'] ?? ''));
-            $baseOilName = $this->normalizeText((string) ($row['base_oil_name'] ?? ''));
+            $blendName = $this->canonicalizeName((string) ($row['blend_name'] ?? ''));
+            $baseOilName = $this->canonicalizeName((string) ($row['base_oil_name'] ?? ''));
             $ratioWeight = max(1, (int) round((float) ($row['ratio_weight'] ?? 0)));
 
             if ($blendName === '' || $baseOilName === '') {
@@ -515,9 +537,9 @@ class MasterDataImport extends Command
             : [];
 
         foreach ($rows as $row) {
-            $oilName = $this->normalizeText((string) ($row['Oil Name'] ?? ''));
+            $oilName = $this->canonicalizeName((string) ($row['Oil Name'] ?? ''));
             $abbreviation = $this->normalizeNullable((string) ($row['Abbreviations'] ?? ''));
-            $scentName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
+            $scentName = $this->canonicalizeName((string) ($row['Scent Name'] ?? ''));
 
             if ($oilName !== '') {
                 /** @var OilAbbreviation|null $oil */
@@ -807,6 +829,105 @@ class MasterDataImport extends Command
     }
 
     /**
+     * @return array{inserted:int,updated:int,skipped:int}
+     */
+    protected function importCollections(string $path, bool $upsert): array
+    {
+        $rows = $this->readCsv($path);
+        $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $lookup = [];
+
+        foreach (DB::table('collections')->get(['id', 'name']) as $collection) {
+            $this->indexNaturalLookupValue($lookup, (int) $collection->id, [(string) $collection->name]);
+        }
+
+        foreach ($rows as $row) {
+            $name = $this->collectionNameFromRow($row);
+
+            if ($name === '') {
+                $summary['skipped']++;
+                continue;
+            }
+
+            if ($this->lookupNaturalLookupValue($lookup, [$name]) !== null) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            $collectionId = (int) DB::table('collections')->insertGetId([
+                'name' => $name,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->indexNaturalLookupValue($lookup, $collectionId, [$name]);
+            $summary['inserted']++;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @return array{inserted:int,updated:int,skipped:int}
+     */
+    protected function importSeasonalScents(string $path, bool $upsert): array
+    {
+        $rows = $this->readCsv($path);
+        $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $scentLookup = $this->makeLookupMap(
+            Scent::query()->get(['id', 'name', 'display_name', 'abbreviation']),
+            fn (Scent $scent): array => [$scent->name, $scent->display_name, $scent->abbreviation]
+        );
+        $existing = [];
+
+        foreach (DB::table('seasonal_scents')->get(['scent_id', 'season']) as $row) {
+            $existing[$this->seasonalScentLookupKey((int) $row->scent_id, (string) $row->season)] = true;
+        }
+
+        foreach ($rows as $row) {
+            $scentName = $this->canonicalizeName($this->firstMatchingValue($row, [
+                'scent_name', 'Scent Name', 'scent', 'Scent', 'name', 'Name',
+            ]));
+            $season = $this->normalizeSeasonValue($this->firstMatchingValue($row, [
+                'season', 'Season',
+            ]));
+
+            if ($scentName === '' || $season === '') {
+                $summary['skipped']++;
+                continue;
+            }
+
+            /** @var Scent|null $scent */
+            $scent = $this->lookupByNaturalKeys($scentLookup, [$scentName]);
+
+            if (! $scent) {
+                $summary['skipped']++;
+                $this->warnings[] = "Missing FK for seasonal_scents: scent='{$scentName}' season='{$season}'";
+                continue;
+            }
+
+            $lookupKey = $this->seasonalScentLookupKey((int) $scent->id, $season);
+
+            if (isset($existing[$lookupKey])) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            DB::table('seasonal_scents')->insert([
+                'scent_id' => $scent->id,
+                'season' => $season,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $existing[$lookupKey] = true;
+            $summary['inserted']++;
+        }
+
+        return $summary;
+    }
+
+    /**
      * @param  iterable<int,Model>  $models
      * @return array<string,Model>
      */
@@ -839,6 +960,23 @@ class MasterDataImport extends Command
     }
 
     /**
+     * @param  array<string,mixed>  $lookup
+     * @param  array<int,string|null>  $values
+     */
+    protected function lookupNaturalLookupValue(array $lookup, array $values): mixed
+    {
+        foreach ($values as $value) {
+            foreach ($this->candidateNaturalKeys((string) ($value ?? '')) as $key) {
+                if (array_key_exists($key, $lookup)) {
+                    return $lookup[$key];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  array<string,Model>  $lookup
      * @param  array<int,string|null>  $values
      */
@@ -847,6 +985,19 @@ class MasterDataImport extends Command
         foreach ($values as $value) {
             foreach ($this->candidateNaturalKeys((string) ($value ?? '')) as $key) {
                 $lookup[$key] ??= $model;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string,mixed>  $lookup
+     * @param  array<int,string|null>  $values
+     */
+    protected function indexNaturalLookupValue(array &$lookup, mixed $value, array $values): void
+    {
+        foreach ($values as $candidate) {
+            foreach ($this->candidateNaturalKeys((string) ($candidate ?? '')) as $key) {
+                $lookup[$key] ??= $value;
             }
         }
     }
@@ -880,13 +1031,13 @@ class MasterDataImport extends Command
      */
     protected function naturalKeyVariants(string $value): array
     {
-        $base = $this->normalizeText($value);
+        $base = $this->canonicalizeName($value);
         if ($base === '') {
             return [];
         }
 
         $variants = [$base];
-        $stripped = $this->stripTrailingAnnotations($base);
+        $stripped = $this->canonicalizeName($this->stripTrailingAnnotations($base));
 
         if ($stripped !== $base) {
             $variants[] = $stripped;
@@ -894,7 +1045,7 @@ class MasterDataImport extends Command
 
         foreach ($variants as $variant) {
             $punctuationStripped = preg_replace('/[^\pL\pN\s]+/u', ' ', $variant);
-            $punctuationStripped = $this->normalizeText(is_string($punctuationStripped) ? $punctuationStripped : '');
+            $punctuationStripped = $this->canonicalizeName(is_string($punctuationStripped) ? $punctuationStripped : '');
 
             if ($punctuationStripped !== '' && $punctuationStripped !== $variant) {
                 $variants[] = $punctuationStripped;
@@ -916,6 +1067,23 @@ class MasterDataImport extends Command
         $value = preg_replace('/\s+/u', ' ', $value);
 
         return trim(mb_strtolower(is_string($value) ? $value : ''));
+    }
+
+    protected function canonicalizeName(string $value): string
+    {
+        $value = $this->normalizeText($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        $aliases = [
+            $this->normalizeMatchValue('Orange Sanalwood') => 'Orange Sandalwood',
+            $this->normalizeMatchValue('Orange Sanalwood Blend') => 'Orange Sandalwood Blend',
+            $this->normalizeMatchValue('Pumpin Chai') => 'Pumpkin Chai',
+        ];
+
+        return $aliases[$this->normalizeMatchValue($value)] ?? $value;
     }
 
     protected function stripTrailingAnnotations(string $value): string
@@ -944,7 +1112,7 @@ class MasterDataImport extends Command
 
     protected function blendNameFromRecipeOil(string $oilName): ?string
     {
-        $oilName = $this->normalizeText($oilName);
+        $oilName = $this->canonicalizeName($oilName);
         if ($oilName === '') {
             return null;
         }
@@ -964,6 +1132,11 @@ class MasterDataImport extends Command
     protected function candleClubLookupKey(int $month, int $year): string
     {
         return $year.':'.$month;
+    }
+
+    protected function seasonalScentLookupKey(int $scentId, string $season): string
+    {
+        return $scentId.':'.$this->normalizeMatchValue($season);
     }
 
     /**
@@ -1006,11 +1179,11 @@ class MasterDataImport extends Command
     protected function extractCustomScentMatchCandidates(array $row): array
     {
         $customName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
-        $stripped = $this->stripTrailingAnnotations($customName);
+        $stripped = $this->canonicalizeName($this->stripTrailingAnnotations($customName));
         $abbreviation = $this->normalizeText((string) ($row['Abbreviation'] ?? ''));
 
         return array_values(array_unique(array_filter([
-            $customName,
+            $this->canonicalizeName($customName),
             $stripped,
             $abbreviation,
         ])));
@@ -1057,6 +1230,48 @@ class MasterDataImport extends Command
         }
 
         return array_values(array_unique($keys));
+    }
+
+    /**
+     * @param  array<string,string>  $row
+     * @param  array<int,string>  $keys
+     */
+    protected function firstMatchingValue(array $row, array $keys): string
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $row)) {
+                return (string) ($row[$key] ?? '');
+            }
+        }
+
+        foreach ($row as $value) {
+            if ($this->normalizeText((string) $value) !== '') {
+                return (string) $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  array<string,string>  $row
+     */
+    protected function collectionNameFromRow(array $row): string
+    {
+        return $this->normalizeText($this->firstMatchingValue($row, [
+            'collection_name', 'Collection Name', 'collection', 'Collection', 'name', 'Name',
+        ]));
+    }
+
+    protected function normalizeSeasonValue(string $value): string
+    {
+        $value = $this->normalizeText($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        return Str::headline(mb_strtolower($value));
     }
 
     /**

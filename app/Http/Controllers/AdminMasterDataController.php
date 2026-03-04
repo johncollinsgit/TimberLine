@@ -10,6 +10,7 @@ use App\Models\Scent;
 use App\Models\ScentAlias;
 use App\Models\Size;
 use App\Models\Wick;
+use App\Models\WholesaleCustomScent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -17,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 
 class AdminMasterDataController extends Controller
@@ -99,7 +101,7 @@ class AdminMasterDataController extends Controller
         $incoming = $this->normalizePayload($definition, $request->all(), true);
         $payload = array_replace($defaults, $incoming);
 
-        validator($payload, $this->rulesFor($resource, $definition, false))->validate();
+        validator($payload, $this->rulesFor($resource, $definition, false, null, $payload))->validate();
         $model->fill($payload);
         $model->save();
 
@@ -121,7 +123,9 @@ class AdminMasterDataController extends Controller
             ]);
         }
 
-        validator($payload, $this->rulesFor($resource, $definition, true, $model->getKey()))->validate();
+        $fullPayload = array_replace($this->existingPayload($definition, $model), $payload);
+
+        validator($payload, $this->rulesFor($resource, $definition, true, $model->getKey(), $fullPayload))->validate();
 
         try {
             $model->fill($payload);
@@ -135,6 +139,89 @@ class AdminMasterDataController extends Controller
 
         return response()->json([
             'data' => $this->serializeRecord($resource, $definition, $model->fresh()),
+        ]);
+    }
+
+    public function bulkUpdate(Request $request, string $resource): JsonResponse
+    {
+        $definition = $this->resourceDefinition($resource);
+        $validated = validator($request->all(), [
+            'changes' => ['required', 'array', 'min:1'],
+            'changes.*.id' => ['required', 'integer', 'min:1'],
+            'changes.*.field' => ['required', 'string'],
+            'changes.*.value' => ['present'],
+        ])->validate();
+
+        $allowedFields = $this->fieldKeys($definition);
+        $updated = 0;
+        $errors = [];
+
+        foreach ((array) ($validated['changes'] ?? []) as $change) {
+            $recordId = (int) ($change['id'] ?? 0);
+            $field = (string) ($change['field'] ?? '');
+
+            if (! in_array($field, $allowedFields, true)) {
+                $errors[] = [
+                    'id' => $recordId,
+                    'field' => $field,
+                    'message' => 'That field cannot be edited.',
+                ];
+
+                continue;
+            }
+
+            /** @var Model|null $model */
+            $model = $this->newQuery($definition)->find($recordId);
+
+            if (! $model) {
+                $errors[] = [
+                    'id' => $recordId,
+                    'field' => $field,
+                    'message' => 'That row no longer exists.',
+                ];
+
+                continue;
+            }
+
+            $normalizedChange = $this->normalizePayload($definition, [
+                $field => $change['value'] ?? null,
+            ], true);
+            $payload = $this->existingPayload($definition, $model);
+            $payload[$field] = $normalizedChange[$field] ?? null;
+
+            try {
+                validator($payload, $this->rulesFor($resource, $definition, false, $recordId, $payload))->validate();
+            } catch (ValidationException $e) {
+                $errors[] = [
+                    'id' => $recordId,
+                    'field' => $field,
+                    'message' => (string) collect($e->errors())->flatten()->first(),
+                ];
+
+                continue;
+            }
+
+            try {
+                $model->fill([$field => $payload[$field]]);
+
+                if (! $model->isDirty($field)) {
+                    continue;
+                }
+
+                $model->save();
+                $updated++;
+            } catch (QueryException) {
+                $errors[] = [
+                    'id' => $recordId,
+                    'field' => $field,
+                    'message' => 'Could not save that cell.',
+                ];
+            }
+        }
+
+        return response()->json([
+            'updated' => $updated,
+            'errors' => $errors,
         ]);
     }
 
@@ -265,6 +352,22 @@ class AdminMasterDataController extends Controller
                     ['key' => 'blend_id', 'label' => 'Blend', 'type' => 'select', 'default' => null, 'options' => 'blends', 'rules' => ['required', 'integer', 'exists:blends,id']],
                     ['key' => 'base_oil_id', 'label' => 'Base Oil', 'type' => 'select', 'default' => null, 'options' => 'base-oils', 'rules' => ['required', 'integer', 'exists:base_oils,id']],
                     ['key' => 'ratio_weight', 'label' => 'Ratio', 'type' => 'number', 'default' => 1, 'rules' => ['required', 'integer', 'min:1']],
+                ],
+            ],
+            'wholesale-custom-scents' => [
+                'label' => 'Wholesale Custom Scents',
+                'description' => 'Account-specific names mapped back to canonical scents.',
+                'model' => WholesaleCustomScent::class,
+                'search' => ['account_name', 'custom_scent_name', 'notes'],
+                'sort' => ['account_name', 'custom_scent_name', 'updated_at'],
+                'default_sort' => 'account_name',
+                'active_field' => 'active',
+                'fields' => [
+                    ['key' => 'account_name', 'label' => 'Account', 'type' => 'text', 'default' => '', 'rules' => ['required', 'string', 'max:255']],
+                    ['key' => 'custom_scent_name', 'label' => 'Custom Scent', 'type' => 'text', 'default' => '', 'rules' => ['required', 'string', 'max:255']],
+                    ['key' => 'canonical_scent_id', 'label' => 'Canonical', 'type' => 'select', 'default' => null, 'nullable' => true, 'options' => 'scents', 'rules' => ['nullable', 'integer', 'exists:scents,id']],
+                    ['key' => 'notes', 'label' => 'Notes', 'type' => 'text', 'default' => '', 'nullable' => true, 'rules' => ['nullable', 'string', 'max:1000']],
+                    ['key' => 'active', 'label' => 'Active', 'type' => 'checkbox', 'default' => true, 'rules' => ['boolean']],
                 ],
             ],
             'oil-abbreviations' => [
@@ -462,6 +565,10 @@ class AdminMasterDataController extends Controller
                 'base_oil_id' => BaseOil::query()->orderBy('name')->value('id'),
                 'ratio_weight' => 1,
             ],
+            'wholesale-custom-scents' => [
+                'account_name' => 'New Account',
+                'custom_scent_name' => $this->nextUniqueValue(WholesaleCustomScent::class, 'custom_scent_name', 'New Custom Scent'),
+            ],
             'oil-abbreviations' => [
                 'name' => $this->nextUniqueValue(OilAbbreviation::class, 'name', 'New Oil Reference'),
             ],
@@ -537,7 +644,22 @@ class AdminMasterDataController extends Controller
      * @param  array<string,mixed>  $definition
      * @return array<string,mixed>
      */
-    protected function rulesFor(string $resource, array $definition, bool $partial, ?int $recordId = null): array
+    protected function existingPayload(array $definition, Model $model): array
+    {
+        $payload = [];
+
+        foreach ($this->fieldKeys($definition) as $field) {
+            $payload[$field] = $model->getAttribute($field);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     * @return array<string,mixed>
+     */
+    protected function rulesFor(string $resource, array $definition, bool $partial, ?int $recordId = null, array $input = []): array
     {
         $rules = [];
 
@@ -554,13 +676,39 @@ class AdminMasterDataController extends Controller
                 $fieldRules[] = Rule::unique('sizes', 'code')->ignore($recordId);
             }
 
+            if ($resource === 'blend-components' && in_array($key, ['blend_id', 'base_oil_id'], true)) {
+                $blendId = (int) Arr::get($input, 'blend_id', 0);
+                $baseOilId = (int) Arr::get($input, 'base_oil_id', 0);
+
+                if ($blendId > 0 && $baseOilId > 0) {
+                    $fieldRules[] = Rule::unique('blend_components', $key)
+                        ->where(fn ($query) => $query
+                            ->where('blend_id', $blendId)
+                            ->where('base_oil_id', $baseOilId))
+                        ->ignore($recordId);
+                }
+            }
+
+            if ($resource === 'wholesale-custom-scents' && in_array($key, ['account_name', 'custom_scent_name'], true)) {
+                $accountName = $this->normalizeText((string) Arr::get($input, 'account_name', ''));
+                $customScentName = $this->normalizeText((string) Arr::get($input, 'custom_scent_name', ''));
+
+                if ($accountName !== '' && $customScentName !== '') {
+                    $fieldRules[] = Rule::unique('wholesale_custom_scents', $key)
+                        ->where(fn ($query) => $query
+                            ->where('account_name', $accountName)
+                            ->where('custom_scent_name', $customScentName))
+                        ->ignore($recordId);
+                }
+            }
+
             if ($resource === 'scent-aliases' && $key === 'alias') {
                 $fieldRules = [
                     'required',
                     'string',
                     'max:255',
                     Rule::unique('scent_aliases', 'alias')
-                        ->where(fn ($query) => $query->where('scope', request()->input('scope', 'markets')))
+                        ->where(fn ($query) => $query->where('scope', Arr::get($input, 'scope', 'markets')))
                         ->ignore($recordId),
                 ];
             }

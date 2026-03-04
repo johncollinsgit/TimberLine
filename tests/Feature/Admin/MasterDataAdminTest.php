@@ -12,6 +12,7 @@ use App\Models\ScentAlias;
 use App\Models\Size;
 use App\Models\User;
 use App\Models\WholesaleCustomScent;
+use Illuminate\Database\QueryException;
 use App\Livewire\Admin\Imports\ImportExceptions;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,7 +76,9 @@ test('admin master data tab renders the shared grid shell', function () {
         ->assertSeeText('Normalized Catalog')
         ->assertSee('data-resources=', false)
         ->assertSee('"key":"scents"', false)
-        ->assertSee('data-base-endpoint="'.url('/admin/master').'"', false);
+        ->assertSee('"key":"wholesale-custom-scents"', false)
+        ->assertSee('data-base-endpoint="'.url('/admin/master').'"', false)
+        ->assertSee('data-bulk-endpoint-base="'.url('/admin/master-data').'"', false);
 });
 
 test('admin scent intake tab renders inside the shared shell', function () {
@@ -162,6 +165,71 @@ test('admin master data endpoints can create a default row', function () {
         ->postJson('/admin/master/base-oils', [])
         ->assertCreated()
         ->assertJsonPath('data.name', 'New Base Oil');
+});
+
+test('admin master data bulk update saves valid cells and returns cell-level errors', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $alpha = BaseOil::query()->create([
+        'name' => 'Alpha',
+        'active' => true,
+    ]);
+
+    BaseOil::query()->create([
+        'name' => 'Bravo',
+        'active' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->postJson('/admin/master-data/base-oils/bulk-update', [
+            'changes' => [
+                [
+                    'id' => $alpha->id,
+                    'field' => 'supplier',
+                    'value' => 'The Forestry Studio',
+                ],
+                [
+                    'id' => $alpha->id,
+                    'field' => 'name',
+                    'value' => 'Bravo',
+                ],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('updated', 1)
+        ->assertJsonCount(1, 'errors')
+        ->assertJsonPath('errors.0.id', $alpha->id)
+        ->assertJsonPath('errors.0.field', 'name');
+
+    expect((string) $alpha->fresh()->supplier)->toBe('The Forestry Studio');
+    expect((string) $alpha->fresh()->name)->toBe('Alpha');
+});
+
+test('blend components enforce a unique blend and base oil pair at the database layer', function () {
+    $blend = Blend::query()->create([
+        'name' => 'Morning Blend',
+        'is_blend' => true,
+    ]);
+
+    $baseOil = BaseOil::query()->create([
+        'name' => 'Cedar Mist',
+        'active' => true,
+    ]);
+
+    BlendComponent::query()->create([
+        'blend_id' => $blend->id,
+        'base_oil_id' => $baseOil->id,
+        'ratio_weight' => 1,
+    ]);
+
+    expect(fn () => BlendComponent::query()->create([
+        'blend_id' => $blend->id,
+        'base_oil_id' => $baseOil->id,
+        'ratio_weight' => 2,
+    ]))->toThrow(QueryException::class);
 });
 
 test('master data seeder populates the supporting resource tables', function () {

@@ -128,6 +128,7 @@
               data-resources='@json($masterDataResources)'
               data-active-resource="{{ $masterDataActiveResource }}"
               data-base-endpoint="{{ $masterDataBaseEndpoint }}"
+              data-bulk-endpoint-base="{{ url('/admin/master-data') }}"
               class="h-full min-h-0"
             >
               <div class="flex h-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-emerald-50/65">
