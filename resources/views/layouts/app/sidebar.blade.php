@@ -435,6 +435,9 @@
       gap: .5rem;
       width: 100%;
       min-width: 0;
+      position: relative;
+      padding-right: 1.1rem;
+      transition: padding 180ms cubic-bezier(.2,.8,.2,1);
     }
     .mf-sidebar-header :where([data-flux-sidebar-brand], a[href]).mf-home-pill{
       display: inline-flex;
@@ -479,29 +482,56 @@
       border-radius: .55rem;
       flex: 0 0 auto;
     }
+    #app-sidebar{
+      transition:
+        width 220ms cubic-bezier(.2,.8,.2,1),
+        min-width 220ms cubic-bezier(.2,.8,.2,1),
+        max-width 220ms cubic-bezier(.2,.8,.2,1),
+        padding 220ms cubic-bezier(.2,.8,.2,1);
+    }
     .mf-sidebar-pin-btn{
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 2rem;
-      height: 2rem;
-      border-radius: .7rem;
+      position: absolute;
+      top: 50%;
+      right: 0;
+      z-index: 3;
+      width: 1.9rem;
+      height: 1.9rem;
+      border-radius: 999px;
       border: 1px solid var(--mf-panel-border);
-      background: rgba(255,255,255,.04);
+      background: color-mix(in srgb, var(--mf-panel-bg-2) 92%, rgba(255,255,255,.06));
       color: var(--mf-sidebar-text);
-      font-size: .85rem;
+      font-size: 0;
       font-weight: 700;
       line-height: 1;
-      flex: 0 0 auto;
-      transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+      box-shadow: 0 14px 24px -20px rgba(0,0,0,.85);
+      backdrop-filter: blur(8px);
+      transform: translate(50%, -50%);
+      transition: background-color 160ms ease, border-color 160ms ease, transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 160ms ease;
     }
     .mf-sidebar-pin-btn:hover{
       background: rgba(255,255,255,.08);
       border-color: var(--mf-panel-strong-border);
+      transform: translate(50%, -50%) scale(1.04);
+      box-shadow: 0 16px 28px -20px rgba(0,0,0,.9);
+    }
+    .mf-sidebar-pin-btn:active{
+      transform: translate(50%, -50%) scale(.98);
     }
     .mf-sidebar-pin-btn:focus-visible{
       outline: none;
       box-shadow: 0 0 0 3px var(--mf-focus-ring);
+    }
+    .mf-sidebar-pin-icon{
+      display: block;
+      font-size: 1rem;
+      line-height: 1;
+      transition: transform 180ms cubic-bezier(.2,.8,.2,1);
+    }
+    .mf-sidebar-pin-btn[data-collapsed="1"] .mf-sidebar-pin-icon{
+      transform: rotate(180deg);
     }
     .mf-sidebar-theme-slot{
       padding-inline: .75rem;
@@ -745,7 +775,7 @@
     .mf-sidebar-theme-shell :where(a[href]):hover{
       background: var(--mf-nav-bg-hover);
     }
-    .mf-sidebar-theme-shell :where([aria-current="page"], .mf-active-pill > *){
+    .mf-sidebar-theme-shell :where([aria-current="page"], [data-flux-sidebar-item][data-current], .mf-active-pill [data-flux-sidebar-item]){
       background: linear-gradient(to right, var(--mf-nav-bg-active), rgba(255,255,255,0));
       box-shadow: inset 0 0 0 1px var(--mf-nav-border-active);
       border-radius: 14px;
@@ -931,49 +961,60 @@
       border-color: var(--btn-primary-hover) !important;
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar{
-      width: 5.4rem !important;
-      min-width: 5.4rem !important;
-      max-width: 5.4rem !important;
       overflow: hidden;
       white-space: nowrap;
     }
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
-      width: 2.6rem !important;
-      max-width: 2.6rem !important;
-      padding-inline: .35rem !important;
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-header{
+      padding-inline: 0;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-brand-row{
       justify-content: center;
+      padding-right: 0;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
+      width: 100% !important;
+      max-width: none !important;
+      min-height: 2.5rem;
+      padding-inline: 0 !important;
+      justify-content: center;
+      border-radius: .95rem;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill img{
+      width: 1.55rem;
+      height: 1.55rem;
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-sidebar-brand-name],
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-brand-name],
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-theme-selector,
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-theme-slot,
     body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group-heading],
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-panel,
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-footer{
       display: none !important;
     }
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item{
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      width: 2.75rem !important;
-      height: 2.75rem !important;
-      margin-inline: auto;
-      padding-inline: .55rem !important;
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-nav{
+      padding-inline: 0;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-nav > * + *{
+      margin-top: .45rem;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-group-balanced{
+      padding-inline: 0;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-group-balanced > .space-y-1{
+      padding: .2rem 0;
+      background: transparent;
+      border-color: transparent;
+    }
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-sort-item{
+      display: flex;
+      justify-content: center;
     }
     body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item:hover{
       transform: none;
     }
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item .mf-nav-label{
-      display: none !important;
-    }
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item [data-content]{
-      display: none !important;
-    }
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
-      margin-inline: auto;
-    }
-    body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group] > div:first-child{
-      display: none !important;
+    body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-active-pill::after{
+      opacity: 0;
+      transform: translateY(-50%) scaleY(.65);
     }
     @media (max-width: 1023px){
       body[data-mf-sidebar-collapsed="1"] #app-sidebar{
@@ -986,37 +1027,43 @@
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill{
         width: auto !important;
         max-width: 100% !important;
+        min-height: 2.35rem;
       }
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-sidebar-brand-name],
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-home-pill [data-flux-brand-name]{
         display: inline !important;
       }
-      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-theme-selector{
-        display: inline-flex !important;
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-header{
+        padding-inline: .75rem;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-brand-row{
+        justify-content: flex-start;
+        padding-right: 1.1rem;
+      }
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-theme-slot{
+        display: block !important;
       }
       body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group-heading],
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-panel,
       body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-footer{
         display: block !important;
       }
-      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item{
-        display: flex !important;
-        width: auto !important;
-        height: auto !important;
-        margin-inline: 0;
-        justify-content: flex-start !important;
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-nav{
+        padding-inline: .35rem;
       }
-      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item .mf-nav-label{
-        display: inline-block !important;
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-nav > * + *{
+        margin-top: .7rem;
       }
-      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item [data-content]{
-        display: block !important;
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-group-balanced{
+        padding-inline: .25rem;
       }
-      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-nav-item svg{
-        margin-inline: 0;
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-group-balanced > .space-y-1{
+        padding: .35rem;
+        background: linear-gradient(to bottom, rgba(255,255,255,.01), rgba(255,255,255,0));
+        border-color: rgba(255,255,255,.03);
       }
-      body[data-mf-sidebar-collapsed="1"] #app-sidebar [data-flux-sidebar-group] > div:first-child{
-        display: block !important;
+      body[data-mf-sidebar-collapsed="1"] #app-sidebar .mf-sidebar-sort-item{
+        display: block;
       }
     }
     .mf-app-card :where(.sticky){
@@ -1078,7 +1125,7 @@
       border-color: rgba(255,255,255,.025);
       background: linear-gradient(to bottom, rgba(255,255,255,.008), rgba(255,255,255,0));
     }
-    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell :where([aria-current="page"], .mf-active-pill > *){
+    body[data-mf-theme="steve-jobs"] .mf-sidebar-theme-shell :where([aria-current="page"], [data-flux-sidebar-item][data-current], .mf-active-pill [data-flux-sidebar-item]){
       color: var(--mf-sidebar-text) !important;
     }
     /* Steve Jobs theme: force dark text on light surfaces/cards/controls */
@@ -1320,8 +1367,9 @@
             aria-pressed="false"
             aria-label="Collapse sidebar"
             title="Collapse sidebar"
+            data-collapsed="0"
           >
-            &lt;
+            <span class="mf-sidebar-pin-icon" aria-hidden="true">‹</span>
           </button>
         </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
@@ -1548,25 +1596,39 @@
 <script>
   (function () {
     const storageKey = 'mf.sidebarCollapsed';
+    const desktopMedia = window.matchMedia('(min-width: 1024px)');
+    const handleMediaChange = () => {
+      applyState(window.localStorage.getItem(storageKey) === '1', document.getElementById('mf-sidebar-collapse-toggle'));
+    };
+
     function applyState(collapsed, toggle) {
       document.body.setAttribute('data-mf-sidebar-collapsed', collapsed ? '1' : '0');
+      const sidebar = document.getElementById('app-sidebar');
+      if (sidebar) {
+        if (collapsed && desktopMedia.matches) {
+          sidebar.setAttribute('data-flux-sidebar-collapsed-desktop', '');
+        } else {
+          sidebar.removeAttribute('data-flux-sidebar-collapsed-desktop');
+        }
+      }
       if (toggle) {
         toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
         toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
         toggle.setAttribute('title', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-        toggle.textContent = collapsed ? '>' : '<';
+        toggle.setAttribute('data-collapsed', collapsed ? '1' : '0');
       }
     }
 
     function bindSidebarToggle() {
       const toggle = document.getElementById('mf-sidebar-collapse-toggle');
+      const savedCollapsed = window.localStorage.getItem(storageKey) === '1';
+      applyState(savedCollapsed, toggle);
+
       if (!toggle || toggle.dataset.mfBound === '1') {
         return;
       }
 
       toggle.dataset.mfBound = '1';
-      const saved = window.localStorage.getItem(storageKey);
-      applyState(saved === '1', toggle);
 
       toggle.addEventListener('click', () => {
         const next = document.body.getAttribute('data-mf-sidebar-collapsed') !== '1';
@@ -1575,7 +1637,17 @@
       });
     }
 
-    applyState(window.localStorage.getItem(storageKey) === '1', null);
+    const registry = window;
+    if (!registry.__mfSidebarCollapseMediaBound) {
+      registry.__mfSidebarCollapseMediaBound = true;
+      if (typeof desktopMedia.addEventListener === 'function') {
+        desktopMedia.addEventListener('change', handleMediaChange);
+      } else if (typeof desktopMedia.addListener === 'function') {
+        desktopMedia.addListener(handleMediaChange);
+      }
+    }
+
+    applyState(window.localStorage.getItem(storageKey) === '1', document.getElementById('mf-sidebar-collapse-toggle'));
     bindSidebarToggle();
     document.addEventListener('livewire:navigated', bindSidebarToggle);
   })();
