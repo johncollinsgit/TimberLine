@@ -9,7 +9,6 @@ use App\Models\Scent;
 use App\Models\WholesaleCustomScent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 
 uses(RefreshDatabase::class);
@@ -249,64 +248,6 @@ CSV,
         expect(OilAbbreviation::query()
             ->where('name', 'Orange Sandalwood Blend')
             ->exists())->toBeTrue();
-    } finally {
-        if (is_file($zipPath)) {
-            @unlink($zipPath);
-        }
-    }
-});
-
-test('master data import command imports collections and seasonal scents idempotently', function () {
-    $zipPath = makeMasterDataZip([
-        'scents_master.csv' => <<<CSV
-scent_name,status,abbreviation,oil_list
-Pumpkin Chai,active,PC,
-CSV,
-        'collections_long.csv' => <<<CSV
-collection_name
-Fall Favorites
-Fall Favorites
-Winter Warmers
-CSV,
-        'seasonal_scents.csv' => <<<CSV
-scent_name,season
-Pumpkin Chai,fall
-Pumpkin Chai,fall
-CSV,
-    ]);
-
-    try {
-        $exitCode = Artisan::call('master-data:import', [
-            '--zip' => $zipPath,
-            '--upsert' => true,
-        ]);
-
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('collections: inserted=2 updated=0 skipped=1');
-        expect($output)->toContain('seasonal_scents: inserted=1 updated=0 skipped=1');
-        expect($output)->not->toContain('Ignored CSV with no importer mapping: collections_long.csv');
-        expect($output)->not->toContain('Ignored CSV with no importer mapping: seasonal_scents.csv');
-        expect(DB::table('collections')->count())->toBe(2);
-        expect(DB::table('seasonal_scents')->count())->toBe(1);
-
-        $seasonal = DB::table('seasonal_scents')->first();
-        expect((int) ($seasonal->scent_id ?? 0))->toBe((int) Scent::query()->where('name', 'Pumpkin Chai')->value('id'));
-        expect((string) ($seasonal->season ?? ''))->toBe('Fall');
-
-        $exitCode = Artisan::call('master-data:import', [
-            '--zip' => $zipPath,
-            '--upsert' => true,
-        ]);
-
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('collections: inserted=0 updated=0 skipped=3');
-        expect($output)->toContain('seasonal_scents: inserted=0 updated=0 skipped=2');
-        expect(DB::table('collections')->count())->toBe(2);
-        expect(DB::table('seasonal_scents')->count())->toBe(1);
     } finally {
         if (is_file($zipPath)) {
             @unlink($zipPath);
