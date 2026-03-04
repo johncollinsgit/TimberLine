@@ -47,6 +47,16 @@ class CustomScentsCrud extends Component
         $this->resetPage();
     }
 
+    public function updatedFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedPerPage(): void
+    {
+        $this->resetPage();
+    }
+
     public function openCreate(): void
     {
         $this->showCreate = !$this->showCreate;

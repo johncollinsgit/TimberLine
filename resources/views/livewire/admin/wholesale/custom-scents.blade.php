@@ -52,6 +52,9 @@
   @endif
 
   <div class="mt-4 flex flex-wrap items-center gap-2">
+    <div class="mr-auto text-xs text-white/50">
+      {{ $records->total() }} {{ \Illuminate\Support\Str::plural('custom scent', $records->total()) }}
+    </div>
     <flux:input wire:model.live="search" placeholder="Search account or scent..." />
     <div class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2">
       <span class="text-[11px] uppercase tracking-wide text-white/50">Filter</span>
@@ -83,7 +86,7 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-white/5">
-        @foreach($records as $record)
+        @forelse($records as $record)
           <tr class="hover:bg-white/5">
             <td class="px-4 py-3 text-white">{{ $record->account_name }}</td>
             <td class="px-4 py-3 text-white">{{ $record->custom_scent_name }}</td>
@@ -102,7 +105,17 @@
               <button type="button" wire:click="openDelete({{ $record->id }})" class="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] text-red-100">Delete</button>
             </td>
           </tr>
-        @endforeach
+        @empty
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-sm text-white/55">
+              @if($search !== '' || $filter !== 'all')
+                No wholesale custom scents match the current search/filter.
+              @else
+                No wholesale custom scents yet. Add one manually or import the wholesale custom scent data first.
+              @endif
+            </td>
+          </tr>
+        @endforelse
       </tbody>
     </table>
   </div>
