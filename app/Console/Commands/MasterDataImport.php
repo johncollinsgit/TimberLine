@@ -5,51 +5,85 @@ namespace App\Console\Commands;
 use App\Models\BaseOil;
 use App\Models\Blend;
 use App\Models\BlendComponent;
+use App\Models\CandleClubScent;
 use App\Models\OilAbbreviation;
 use App\Models\Scent;
+use App\Models\WholesaleCustomScent;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Throwable;
 use ZipArchive;
 
 class MasterDataImport extends Command
 {
-    protected $signature = 'master-data:import {--zip= : Absolute path to the normalized export zip} {--upsert : Update existing rows instead of skipping them}';
+    protected $signature = 'master-data:import
+        {--zip= : Path to the normalized export zip}
+        {--dir= : Path to the extracted normalized export directory}
+        {--upsert : Update existing rows instead of skipping them}';
 
-    protected $description = 'Import normalized master data CSVs from a zip export.';
+    protected $description = 'Import normalized master data CSVs from a zip export or extracted directory.';
 
     /** @var array<int,string> */
     protected array $warnings = [];
 
     public function handle(): int
     {
-        $zipPath = (string) $this->option('zip');
-        if ($zipPath === '') {
-            $this->error('Missing required option: --zip=/absolute/path/to/export.zip');
+        $this->warnings = [];
+
+        $zipPath = trim((string) $this->option('zip'));
+        $directoryPath = trim((string) $this->option('dir'));
+        $tempDirectory = null;
+        $emptyStateMessage = 'No CSV files were found.';
+
+        if ($zipPath === '' && $directoryPath === '') {
+            $this->error('Missing required option: provide either --zip=... or --dir=...');
 
             return self::FAILURE;
         }
 
-        if (! is_file($zipPath)) {
-            $this->error("Zip file not found: {$zipPath}");
+        if ($zipPath !== '' && $directoryPath !== '') {
+            $this->error('Use either --zip or --dir, not both.');
 
             return self::FAILURE;
         }
 
-        if (! class_exists(ZipArchive::class)) {
-            $this->error('ZipArchive is not available in this PHP build.');
+        if ($zipPath !== '') {
+            if (! is_file($zipPath)) {
+                $this->error("Zip file not found: {$zipPath}");
 
-            return self::FAILURE;
+                return self::FAILURE;
+            }
+
+            if (! class_exists(ZipArchive::class)) {
+                $this->error('ZipArchive is not available in this PHP build.');
+
+                return self::FAILURE;
+            }
+
+            $tempDirectory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'master-data-import-'.Str::uuid();
+            File::ensureDirectoryExists($tempDirectory);
+            $emptyStateMessage = 'No CSV files were found in the zip.';
+        } else {
+            if (! is_dir($directoryPath)) {
+                $this->error("Import directory not found: {$directoryPath}");
+
+                return self::FAILURE;
+            }
+
+            $emptyStateMessage = 'No CSV files were found in the directory.';
         }
-
-        $tempDirectory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'master-data-import-'.Str::uuid();
-        File::ensureDirectoryExists($tempDirectory);
 
         try {
-            $files = $this->extractZip($zipPath, $tempDirectory);
+            $files = $zipPath !== ''
+                ? $this->extractZip($zipPath, (string) $tempDirectory)
+                : $this->discoverCsvFiles($directoryPath);
+
             if ($files === []) {
-                $this->warn('No CSV files were found in the zip.');
+                $this->warn($emptyStateMessage);
 
                 return self::SUCCESS;
             }
@@ -58,28 +92,63 @@ class MasterDataImport extends Command
             $ignoredFiles = array_values(array_diff(array_keys($files), array_keys($knownFiles)));
 
             foreach ($ignoredFiles as $ignoredFile) {
-                $this->warning("Ignored CSV with no importer mapping: {$ignoredFile}");
+                $this->warn("Ignored CSV with no importer mapping: {$ignoredFile}");
             }
 
             $upsert = (bool) $this->option('upsert');
             $summaries = [];
 
-            if (isset($knownFiles['scents_master.csv'])) {
-                $summaries['scents'] = $this->importScents($knownFiles['scents_master.csv'], $upsert);
-            }
             if (isset($knownFiles['base_oils.csv'])) {
-                $summaries['base_oils'] = $this->importBaseOils($knownFiles['base_oils.csv'], $upsert);
+                $summaries['base_oils'] = $this->runImportStep(
+                    'base_oils.csv',
+                    fn (): array => $this->importBaseOils($knownFiles['base_oils.csv'], $upsert)
+                );
+            }
+            if (isset($knownFiles['scents_master.csv'])) {
+                $summaries['scents'] = $this->runImportStep(
+                    'scents_master.csv',
+                    fn (): array => $this->importScents($knownFiles['scents_master.csv'], $upsert)
+                );
             }
             if (isset($knownFiles['blends.csv'])) {
-                $summaries['blends'] = $this->importBlends($knownFiles['blends.csv'], $upsert);
+                $summaries['blends'] = $this->runImportStep(
+                    'blends.csv',
+                    fn (): array => $this->importBlends($knownFiles['blends.csv'], $upsert)
+                );
             }
             if (isset($knownFiles['blend_components.csv'])) {
-                $summaries['blend_components'] = $this->importBlendComponents($knownFiles['blend_components.csv'], $upsert);
+                $summaries['blend_components'] = $this->runImportStep(
+                    'blend_components.csv',
+                    fn (): array => $this->importBlendComponents($knownFiles['blend_components.csv'], $upsert)
+                );
             }
             if (isset($knownFiles['scent_recipes_pour_room.csv'])) {
-                $recipesSummary = $this->importPourRoomRecipes($knownFiles['scent_recipes_pour_room.csv'], $upsert);
+                $recipesSummary = $this->runImportStep(
+                    'scent_recipes_pour_room.csv',
+                    fn (): array => $this->importPourRoomRecipes($knownFiles['scent_recipes_pour_room.csv'], $upsert)
+                );
                 $summaries['oil_abbreviations'] = $recipesSummary['oil_abbreviations'];
                 $summaries['scents.oil_blend_id'] = $recipesSummary['scent_links'];
+            }
+            if (isset($knownFiles['candle_club_scent_recipes.csv'])) {
+                $candleClubSummary = $this->runImportStep(
+                    'candle_club_scent_recipes.csv',
+                    fn (): array => $this->importCandleClubScents($knownFiles['candle_club_scent_recipes.csv'], $upsert)
+                );
+                $summaries['candle_club_scents'] = $candleClubSummary['links'];
+                $summaries['candle_club_scents.scent_rows'] = $candleClubSummary['scents'];
+            }
+            if (isset($knownFiles['wholesale_custom_scents_sheet.csv'])) {
+                $summaries['wholesale_custom_scents.active'] = $this->runImportStep(
+                    'wholesale_custom_scents_sheet.csv',
+                    fn (): array => $this->importWholesaleCustomScents($knownFiles['wholesale_custom_scents_sheet.csv'], $upsert, true)
+                );
+            }
+            if (isset($knownFiles['retired_wholesale_custom_scents_sheet.csv'])) {
+                $summaries['wholesale_custom_scents.retired'] = $this->runImportStep(
+                    'retired_wholesale_custom_scents_sheet.csv',
+                    fn (): array => $this->importWholesaleCustomScents($knownFiles['retired_wholesale_custom_scents_sheet.csv'], $upsert, false)
+                );
             }
 
             foreach ($summaries as $label => $summary) {
@@ -96,10 +165,21 @@ class MasterDataImport extends Command
                 $this->warn($warning);
             }
         } finally {
-            File::deleteDirectory($tempDirectory);
+            if ($tempDirectory !== null) {
+                File::deleteDirectory($tempDirectory);
+            }
         }
 
         return self::SUCCESS;
+    }
+
+    protected function runImportStep(string $label, callable $callback): mixed
+    {
+        try {
+            return DB::transaction(fn () => $callback());
+        } catch (Throwable $e) {
+            throw new \RuntimeException("Failed importing {$label}: {$e->getMessage()}", 0, $e);
+        }
     }
 
     /**
@@ -117,10 +197,18 @@ class MasterDataImport extends Command
         $zip->extractTo($tempDirectory);
         $zip->close();
 
+        return $this->discoverCsvFiles($tempDirectory);
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function discoverCsvFiles(string $directory): array
+    {
         $files = [];
 
-        foreach (File::allFiles($tempDirectory) as $file) {
-            $relative = str_replace($tempDirectory.DIRECTORY_SEPARATOR, '', $file->getPathname());
+        foreach (File::allFiles($directory) as $file) {
+            $relative = str_replace($directory.DIRECTORY_SEPARATOR, '', $file->getPathname());
             $relative = str_replace('\\', '/', $relative);
             $basename = basename($relative);
 
@@ -150,6 +238,9 @@ class MasterDataImport extends Command
             'blends.csv',
             'blend_components.csv',
             'scent_recipes_pour_room.csv',
+            'candle_club_scent_recipes.csv',
+            'wholesale_custom_scents_sheet.csv',
+            'retired_wholesale_custom_scents_sheet.csv',
         ];
 
         return array_filter(
@@ -169,6 +260,10 @@ class MasterDataImport extends Command
             'descriptions', 'date_discontinued', 'additional_notes', 'scent_name_norm',
         ]);
         $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $lookup = $this->makeLookupMap(
+            Scent::query()->get(['id', 'name', 'display_name', 'abbreviation', 'oil_reference_name', 'is_active']),
+            fn (Scent $scent): array => [$scent->name, $scent->display_name]
+        );
 
         foreach ($rows as $row) {
             $name = $this->normalizeText((string) ($row['scent_name'] ?? ''));
@@ -177,9 +272,8 @@ class MasterDataImport extends Command
                 continue;
             }
 
-            $scent = Scent::query()
-                ->whereRaw('lower(name) = ?', [mb_strtolower($name)])
-                ->first();
+            /** @var Scent|null $scent */
+            $scent = $this->lookupByNaturalKeys($lookup, [$name]);
 
             $payload = [
                 'name' => $name,
@@ -190,7 +284,8 @@ class MasterDataImport extends Command
             ];
 
             if (! $scent) {
-                Scent::query()->create($payload);
+                $scent = Scent::query()->create($payload);
+                $this->indexModel($lookup, $scent, [$payload['name'], $payload['display_name']]);
                 $summary['inserted']++;
                 continue;
             }
@@ -207,6 +302,7 @@ class MasterDataImport extends Command
             }
 
             $scent->save();
+            $this->indexModel($lookup, $scent, [$payload['name'], $payload['display_name']]);
             $summary['updated']++;
         }
 
@@ -220,6 +316,10 @@ class MasterDataImport extends Command
     {
         $rows = $this->readCsv($path, ['name'], ['name']);
         $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $lookup = $this->makeLookupMap(
+            BaseOil::query()->get(['id', 'name', 'active']),
+            fn (BaseOil $oil): array => [$oil->name]
+        );
 
         foreach ($rows as $row) {
             $name = $this->normalizeText((string) ($row['name'] ?? ''));
@@ -228,11 +328,13 @@ class MasterDataImport extends Command
                 continue;
             }
 
-            $oil = BaseOil::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->first();
+            /** @var BaseOil|null $oil */
+            $oil = $this->lookupByNaturalKeys($lookup, [$name]);
             $payload = ['name' => $name, 'active' => true];
 
             if (! $oil) {
-                BaseOil::query()->create($payload);
+                $oil = BaseOil::query()->create($payload);
+                $this->indexModel($lookup, $oil, [$payload['name']]);
                 $summary['inserted']++;
                 continue;
             }
@@ -249,6 +351,7 @@ class MasterDataImport extends Command
             }
 
             $oil->save();
+            $this->indexModel($lookup, $oil, [$payload['name']]);
             $summary['updated']++;
         }
 
@@ -262,6 +365,10 @@ class MasterDataImport extends Command
     {
         $rows = $this->readCsv($path, ['blend_name'], ['blend_name', 'blend_abbreviation']);
         $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $lookup = $this->makeLookupMap(
+            Blend::query()->get(['id', 'name', 'is_blend']),
+            fn (Blend $blend): array => [$blend->name]
+        );
 
         foreach ($rows as $row) {
             $name = $this->normalizeText((string) ($row['blend_name'] ?? ''));
@@ -270,11 +377,13 @@ class MasterDataImport extends Command
                 continue;
             }
 
-            $blend = Blend::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->first();
+            /** @var Blend|null $blend */
+            $blend = $this->lookupByNaturalKeys($lookup, [$name]);
             $payload = ['name' => $name, 'is_blend' => true];
 
             if (! $blend) {
-                Blend::query()->create($payload);
+                $blend = Blend::query()->create($payload);
+                $this->indexModel($lookup, $blend, [$payload['name']]);
                 $summary['inserted']++;
                 continue;
             }
@@ -291,6 +400,7 @@ class MasterDataImport extends Command
             }
 
             $blend->save();
+            $this->indexModel($lookup, $blend, [$payload['name']]);
             $summary['updated']++;
         }
 
@@ -306,6 +416,19 @@ class MasterDataImport extends Command
             'blend_name', 'blend_abbreviation', 'base_oil_name', 'ratio_weight',
         ]);
         $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $blendLookup = $this->makeLookupMap(
+            Blend::query()->get(['id', 'name']),
+            fn (Blend $blend): array => [$blend->name]
+        );
+        $baseOilLookup = $this->makeLookupMap(
+            BaseOil::query()->get(['id', 'name']),
+            fn (BaseOil $oil): array => [$oil->name]
+        );
+        $componentLookup = [];
+
+        foreach (BlendComponent::query()->get(['id', 'blend_id', 'base_oil_id', 'ratio_weight']) as $component) {
+            $componentLookup[$this->blendComponentLookupKey((int) $component->blend_id, (int) $component->base_oil_id)] = $component;
+        }
 
         foreach ($rows as $row) {
             $blendName = $this->normalizeText((string) ($row['blend_name'] ?? ''));
@@ -317,8 +440,10 @@ class MasterDataImport extends Command
                 continue;
             }
 
-            $blend = Blend::query()->whereRaw('lower(name) = ?', [mb_strtolower($blendName)])->first();
-            $baseOil = BaseOil::query()->whereRaw('lower(name) = ?', [mb_strtolower($baseOilName)])->first();
+            /** @var Blend|null $blend */
+            $blend = $this->lookupByNaturalKeys($blendLookup, [$blendName]);
+            /** @var BaseOil|null $baseOil */
+            $baseOil = $this->lookupByNaturalKeys($baseOilLookup, [$baseOilName]);
 
             if (! $blend || ! $baseOil) {
                 $summary['skipped']++;
@@ -326,17 +451,16 @@ class MasterDataImport extends Command
                 continue;
             }
 
-            $component = BlendComponent::query()
-                ->where('blend_id', $blend->id)
-                ->where('base_oil_id', $baseOil->id)
-                ->first();
+            $lookupKey = $this->blendComponentLookupKey((int) $blend->id, (int) $baseOil->id);
+            $component = $componentLookup[$lookupKey] ?? null;
 
             if (! $component) {
-                BlendComponent::query()->create([
+                $component = BlendComponent::query()->create([
                     'blend_id' => $blend->id,
                     'base_oil_id' => $baseOil->id,
                     'ratio_weight' => $ratioWeight,
                 ]);
+                $componentLookup[$lookupKey] = $component;
                 $summary['inserted']++;
                 continue;
             }
@@ -373,6 +497,22 @@ class MasterDataImport extends Command
         $oilSummary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
         $linkSummary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
         $supportsOilBlendColumn = Schema::hasColumn('scents', 'oil_blend_id');
+        $oilLookup = $this->makeLookupMap(
+            OilAbbreviation::query()->get(['id', 'name', 'abbreviation', 'is_active']),
+            fn (OilAbbreviation $oil): array => [$oil->name]
+        );
+        $blendLookup = $supportsOilBlendColumn
+            ? $this->makeLookupMap(
+                Blend::query()->get(['id', 'name']),
+                fn (Blend $blend): array => [$blend->name]
+            )
+            : [];
+        $scentLookup = $supportsOilBlendColumn
+            ? $this->makeLookupMap(
+                Scent::query()->get(['id', 'name', 'display_name', 'oil_blend_id']),
+                fn (Scent $scent): array => [$scent->name, $scent->display_name]
+            )
+            : [];
 
         foreach ($rows as $row) {
             $oilName = $this->normalizeText((string) ($row['Oil Name'] ?? ''));
@@ -380,7 +520,8 @@ class MasterDataImport extends Command
             $scentName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
 
             if ($oilName !== '') {
-                $oil = OilAbbreviation::query()->whereRaw('lower(name) = ?', [mb_strtolower($oilName)])->first();
+                /** @var OilAbbreviation|null $oil */
+                $oil = $this->lookupByNaturalKeys($oilLookup, [$oilName]);
                 $payload = [
                     'name' => $oilName,
                     'abbreviation' => $abbreviation,
@@ -388,12 +529,14 @@ class MasterDataImport extends Command
                 ];
 
                 if (! $oil) {
-                    OilAbbreviation::query()->create($payload);
+                    $oil = OilAbbreviation::query()->create($payload);
+                    $this->indexModel($oilLookup, $oil, [$payload['name']]);
                     $oilSummary['inserted']++;
                 } elseif ($upsert) {
                     $oil->fill($payload);
                     if ($oil->isDirty()) {
                         $oil->save();
+                        $this->indexModel($oilLookup, $oil, [$payload['name']]);
                         $oilSummary['updated']++;
                     } else {
                         $oilSummary['skipped']++;
@@ -416,8 +559,10 @@ class MasterDataImport extends Command
                 continue;
             }
 
-            $blend = Blend::query()->whereRaw('lower(name) = ?', [mb_strtolower($blendName)])->first();
-            $scent = Scent::query()->whereRaw('lower(name) = ?', [mb_strtolower($scentName)])->first();
+            /** @var Blend|null $blend */
+            $blend = $this->lookupByNaturalKeys($blendLookup, [$blendName]);
+            /** @var Scent|null $scent */
+            $scent = $this->lookupByNaturalKeys($scentLookup, [$scentName]);
 
             if (! $blend || ! $scent) {
                 $linkSummary['skipped']++;
@@ -446,6 +591,357 @@ class MasterDataImport extends Command
         ];
     }
 
+    /**
+     * @return array{
+     *   links: array{inserted:int,updated:int,skipped:int},
+     *   scents: array{inserted:int,updated:int,skipped:int}
+     * }
+     */
+    protected function importCandleClubScents(string $path, bool $upsert): array
+    {
+        $rows = $this->readCsv($path, ['month', 'scent_name'], [
+            'month', 'scent_name', 'oil_1', 'oil_2', 'abbreviations', 'additional_notes', 'unnamed_6', 'unnamed_7', 'unnamed_8',
+        ]);
+        $linkSummary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $scentSummary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $scentLookup = $this->makeLookupMap(
+            Scent::query()->get(['id', 'name', 'display_name', 'oil_reference_name', 'is_candle_club', 'is_active']),
+            fn (Scent $scent): array => [$scent->name, $scent->display_name]
+        );
+        $linkLookup = [];
+
+        foreach (CandleClubScent::query()->with('scent:id,name,display_name,oil_reference_name,is_candle_club,is_active')->get(['id', 'month', 'year', 'scent_id']) as $link) {
+            $linkLookup[$this->candleClubLookupKey((int) $link->month, (int) $link->year)] = $link;
+        }
+
+        foreach ($rows as $row) {
+            $rawPeriod = $this->normalizeText((string) ($row['month'] ?? ''));
+            $rawScentName = $this->normalizeText((string) ($row['scent_name'] ?? ''));
+
+            if ($rawPeriod === '' || $rawScentName === '') {
+                $linkSummary['skipped']++;
+                $scentSummary['skipped']++;
+                continue;
+            }
+
+            $period = $this->parseCandleClubPeriod($rawPeriod);
+            if ($period === null) {
+                $this->warnings[] = "Skipped candle_club_scent_recipes row with ambiguous month value '{$rawPeriod}'";
+                $linkSummary['skipped']++;
+                $scentSummary['skipped']++;
+                continue;
+            }
+
+            $month = $period['month'];
+            $year = $period['year'];
+            $displayBaseName = $this->normalizeText($this->stripTrailingAnnotations($rawScentName));
+            if ($displayBaseName === '') {
+                $displayBaseName = $rawScentName;
+            }
+
+            $display = \Carbon\Carbon::create()->month($month)->format('F')." {$year} Candle Club — {$displayBaseName}";
+            $oilReference = $this->normalizeNullable($this->candleClubOilReference([
+                (string) ($row['oil_1'] ?? ''),
+                (string) ($row['oil_2'] ?? ''),
+            ]));
+            $payload = [
+                'name' => $display,
+                'display_name' => $display,
+                'oil_reference_name' => $oilReference,
+                'is_candle_club' => true,
+                'is_active' => true,
+            ];
+
+            $lookupKey = $this->candleClubLookupKey($month, $year);
+            /** @var CandleClubScent|null $link */
+            $link = $linkLookup[$lookupKey] ?? null;
+
+            if ($link && ! $upsert) {
+                $linkSummary['skipped']++;
+                $scentSummary['skipped']++;
+                continue;
+            }
+
+            /** @var Scent|null $scent */
+            $scent = $link?->scent;
+
+            if (! $scent) {
+                $scent = $this->lookupByNaturalKeys($scentLookup, [$display]);
+            }
+
+            if (! $scent) {
+                $scent = Scent::query()->create($payload);
+                $this->indexModel($scentLookup, $scent, [$payload['name'], $payload['display_name']]);
+                $scentSummary['inserted']++;
+            } elseif ($upsert) {
+                $scent->fill($payload);
+                if ($scent->isDirty()) {
+                    $scent->save();
+                    $this->indexModel($scentLookup, $scent, [$payload['name'], $payload['display_name']]);
+                    $scentSummary['updated']++;
+                } else {
+                    $scentSummary['skipped']++;
+                }
+            } else {
+                $scentSummary['skipped']++;
+            }
+
+            if (! $link) {
+                $link = CandleClubScent::query()->create([
+                    'month' => $month,
+                    'year' => $year,
+                    'scent_id' => $scent->id,
+                ]);
+                $link->setRelation('scent', $scent);
+                $linkLookup[$lookupKey] = $link;
+                $linkSummary['inserted']++;
+                continue;
+            }
+
+            if ((int) $link->scent_id === (int) $scent->id) {
+                $linkSummary['skipped']++;
+                continue;
+            }
+
+            $link->scent_id = $scent->id;
+            $link->save();
+            $link->setRelation('scent', $scent);
+            $linkSummary['updated']++;
+        }
+
+        return [
+            'links' => $linkSummary,
+            'scents' => $scentSummary,
+        ];
+    }
+
+    /**
+     * @return array{inserted:int,updated:int,skipped:int}
+     */
+    protected function importWholesaleCustomScents(string $path, bool $upsert, bool $active): array
+    {
+        $rows = $this->readCsv($path, ['Scent Name', 'Wholesale Account Name'], [
+            'Scent Name', 'Oil #1', 'Oil #2', 'Oil #3', 'Total Oils', 'Abbreviation', 'Wholesale Account Name', 'Notes',
+        ]);
+        $summary = ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
+        $lookup = [];
+        $scentLookup = $this->makeLookupMap(
+            Scent::query()->get(['id', 'name', 'display_name', 'abbreviation']),
+            fn (Scent $scent): array => [$scent->name, $scent->display_name, $scent->abbreviation]
+        );
+
+        foreach (WholesaleCustomScent::query()->get(['id', 'account_name', 'custom_scent_name', 'canonical_scent_id', 'notes', 'active']) as $record) {
+            $this->indexWholesaleCustomScent($lookup, $record);
+        }
+
+        foreach ($rows as $row) {
+            $accountName = $this->normalizeText((string) ($row['Wholesale Account Name'] ?? ''));
+            $customScentName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
+
+            if ($accountName === '' || $customScentName === '') {
+                $summary['skipped']++;
+                continue;
+            }
+
+            /** @var WholesaleCustomScent|null $record */
+            $record = $this->lookupWholesaleCustomScent($lookup, $accountName, $customScentName);
+            /** @var Scent|null $canonical */
+            $canonical = $this->lookupByNaturalKeys($scentLookup, $this->extractCustomScentMatchCandidates($row));
+
+            if (! $canonical) {
+                $this->warnings[] = "No canonical scent match for wholesale_custom_scents: account='{$accountName}' scent='{$customScentName}'";
+            }
+
+            $notesProvided = array_key_exists('Notes', $row);
+            $notes = $notesProvided ? $this->normalizeNullable((string) ($row['Notes'] ?? '')) : null;
+
+            $createPayload = [
+                'account_name' => $accountName,
+                'custom_scent_name' => $customScentName,
+                'canonical_scent_id' => $canonical?->id,
+                'active' => $active,
+            ];
+
+            if ($notesProvided) {
+                $createPayload['notes'] = $notes;
+            }
+
+            if (! $record) {
+                $record = WholesaleCustomScent::query()->create($createPayload);
+                $this->indexWholesaleCustomScent($lookup, $record);
+                $summary['inserted']++;
+                continue;
+            }
+
+            if (! $upsert) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            $updatePayload = [
+                'account_name' => $accountName,
+                'custom_scent_name' => $customScentName,
+                'active' => $active,
+            ];
+
+            if ($canonical) {
+                $updatePayload['canonical_scent_id'] = $canonical->id;
+            }
+
+            if ($notesProvided) {
+                $updatePayload['notes'] = $notes;
+            }
+
+            $record->fill($updatePayload);
+            if (! $record->isDirty()) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            $record->save();
+            $this->indexWholesaleCustomScent($lookup, $record);
+            $summary['updated']++;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param  iterable<int,Model>  $models
+     * @return array<string,Model>
+     */
+    protected function makeLookupMap(iterable $models, callable $resolver): array
+    {
+        $lookup = [];
+
+        foreach ($models as $model) {
+            $this->indexModel($lookup, $model, $resolver($model));
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * @param  array<string,Model>  $lookup
+     * @param  array<int,string|null>  $values
+     */
+    protected function lookupByNaturalKeys(array $lookup, array $values): ?Model
+    {
+        foreach ($values as $value) {
+            foreach ($this->candidateNaturalKeys((string) ($value ?? '')) as $key) {
+                if (isset($lookup[$key])) {
+                    return $lookup[$key];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,Model>  $lookup
+     * @param  array<int,string|null>  $values
+     */
+    protected function indexModel(array &$lookup, Model $model, array $values): void
+    {
+        foreach ($values as $value) {
+            foreach ($this->candidateNaturalKeys((string) ($value ?? '')) as $key) {
+                $lookup[$key] ??= $model;
+            }
+        }
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function candidateNaturalKeys(string $value): array
+    {
+        $keys = [];
+
+        foreach ($this->naturalKeyVariants($value) as $variant) {
+            $normalized = $this->normalizeMatchValue($variant);
+            if ($normalized === '') {
+                continue;
+            }
+
+            $keys[] = 'match:'.$normalized;
+            $slug = Str::slug($normalized);
+
+            if ($slug !== '') {
+                $keys[] = 'slug:'.$slug;
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function naturalKeyVariants(string $value): array
+    {
+        $base = $this->normalizeText($value);
+        if ($base === '') {
+            return [];
+        }
+
+        $variants = [$base];
+        $stripped = $this->stripTrailingAnnotations($base);
+
+        if ($stripped !== $base) {
+            $variants[] = $stripped;
+        }
+
+        foreach ($variants as $variant) {
+            $punctuationStripped = preg_replace('/[^\pL\pN\s]+/u', ' ', $variant);
+            $punctuationStripped = $this->normalizeText(is_string($punctuationStripped) ? $punctuationStripped : '');
+
+            if ($punctuationStripped !== '' && $punctuationStripped !== $variant) {
+                $variants[] = $punctuationStripped;
+            }
+        }
+
+        return array_values(array_unique(array_filter($variants)));
+    }
+
+    protected function normalizeMatchValue(string $value): string
+    {
+        $value = $this->normalizeText($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = str_replace('&', ' and ', $value);
+        $value = preg_replace('/[-_]+/u', ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', $value);
+
+        return trim(mb_strtolower(is_string($value) ? $value : ''));
+    }
+
+    protected function stripTrailingAnnotations(string $value): string
+    {
+        $value = $this->normalizeText($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/\s*\*.*$/u', '', $value);
+        $value = is_string($value) ? $value : '';
+
+        do {
+            $updated = preg_replace('/\s*\([^)]*\)\s*$/u', '', $value);
+            $updated = $this->normalizeText(is_string($updated) ? $updated : '');
+
+            if ($updated === '' || $updated === $value) {
+                break;
+            }
+
+            $value = $updated;
+        } while (true);
+
+        return $this->normalizeText($value);
+    }
+
     protected function blendNameFromRecipeOil(string $oilName): ?string
     {
         $oilName = $this->normalizeText($oilName);
@@ -458,6 +954,109 @@ class MasterDataImport extends Command
         }
 
         return null;
+    }
+
+    protected function blendComponentLookupKey(int $blendId, int $baseOilId): string
+    {
+        return $blendId.':'.$baseOilId;
+    }
+
+    protected function candleClubLookupKey(int $month, int $year): string
+    {
+        return $year.':'.$month;
+    }
+
+    /**
+     * @return array{month:int,year:int}|null
+     */
+    protected function parseCandleClubPeriod(string $value): ?array
+    {
+        $value = $this->normalizeText($value);
+        if ($value === '' || preg_match('/^\d{4}$/', $value) === 1) {
+            return null;
+        }
+
+        try {
+            $parsed = \Carbon\Carbon::parse($value);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return [
+            'month' => (int) $parsed->month,
+            'year' => (int) $parsed->year,
+        ];
+    }
+
+    /**
+     * @param  array<int,string>  $values
+     */
+    protected function candleClubOilReference(array $values): string
+    {
+        return implode(' | ', array_values(array_filter(array_map(
+            fn (string $value): string => $this->normalizeText($value),
+            $values
+        ))));
+    }
+
+    /**
+     * @param  array<string,string>  $row
+     * @return array<int,string>
+     */
+    protected function extractCustomScentMatchCandidates(array $row): array
+    {
+        $customName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
+        $stripped = $this->stripTrailingAnnotations($customName);
+        $abbreviation = $this->normalizeText((string) ($row['Abbreviation'] ?? ''));
+
+        return array_values(array_unique(array_filter([
+            $customName,
+            $stripped,
+            $abbreviation,
+        ])));
+    }
+
+    /**
+     * @param  array<string,WholesaleCustomScent>  $lookup
+     */
+    protected function lookupWholesaleCustomScent(array $lookup, string $accountName, string $customScentName): ?WholesaleCustomScent
+    {
+        foreach ($this->wholesaleCustomLookupKeys($accountName, $customScentName) as $key) {
+            if (isset($lookup[$key])) {
+                return $lookup[$key];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,WholesaleCustomScent>  $lookup
+     */
+    protected function indexWholesaleCustomScent(array &$lookup, WholesaleCustomScent $record): void
+    {
+        foreach ($this->wholesaleCustomLookupKeys($record->account_name, $record->custom_scent_name) as $key) {
+            $lookup[$key] ??= $record;
+        }
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function wholesaleCustomLookupKeys(string $accountName, string $customScentName): array
+    {
+        $normalizedAccount = WholesaleCustomScent::normalizeAccountName($accountName);
+        if ($normalizedAccount === '') {
+            return [];
+        }
+
+        $keys = [];
+
+        foreach ($this->candidateNaturalKeys($customScentName) as $candidate) {
+            $keys[] = $normalizedAccount.'|'.$candidate;
+        }
+
+        return array_values(array_unique($keys));
     }
 
     /**

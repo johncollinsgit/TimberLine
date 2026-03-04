@@ -3,10 +3,13 @@
 use App\Models\BaseOil;
 use App\Models\Blend;
 use App\Models\BlendComponent;
+use App\Models\CandleClubScent;
 use App\Models\OilAbbreviation;
 use App\Models\Scent;
+use App\Models\WholesaleCustomScent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 
 uses(RefreshDatabase::class);
 
@@ -27,6 +30,20 @@ function makeMasterDataZip(array $files): string
     $zip->close();
 
     return $path;
+}
+
+function makeMasterDataDirectory(array $files): string
+{
+    $path = sys_get_temp_dir().DIRECTORY_SEPARATOR.'master-data-dir-'.uniqid('', true);
+    $root = $path.DIRECTORY_SEPARATOR.'normalized_export_for_codex';
+
+    File::ensureDirectoryExists($root);
+
+    foreach ($files as $name => $contents) {
+        File::put($root.DIRECTORY_SEPARATOR.$name, $contents);
+    }
+
+    return $root;
 }
 
 test('master data import command imports in dependency order and is idempotent', function () {
@@ -104,5 +121,93 @@ CSV,
         if (is_file($zipPath)) {
             @unlink($zipPath);
         }
+    }
+});
+
+test('master data import command supports extracted directories and imports reference tables idempotently', function () {
+    $canonical = Scent::query()->create([
+        'name' => 'Walking on Sunshine',
+        'display_name' => 'Walking on Sunshine',
+        'abbreviation' => 'WOS',
+        'is_active' => true,
+    ]);
+
+    $retiredCanonical = Scent::query()->create([
+        'name' => 'Sage Pomegranate',
+        'display_name' => 'Sage Pomegranate',
+        'is_active' => true,
+    ]);
+
+    $directory = makeMasterDataDirectory([
+        'candle_club_scent_recipes.csv' => <<<CSV
+month,scent_name,oil_1,oil_2,abbreviations,additional_notes,unnamed_6,unnamed_7,unnamed_8
+2024-07-01 00:00:00,Walking on Sunshine (WOS),Citrus Agave 1,Blood Orange 1,WOS,,,,
+2021,Rose Champagne,Love Spell (1),Rose Petal Gelato (1),,,,,
+CSV,
+        'wholesale_custom_scents_sheet.csv' => <<<CSV
+Scent Name,Oil #1,Oil #2,Oil #3,Total Oils,Abbreviation,Wholesale Account Name
+Walking on Sunshine (WOS),Citrus Agave 1,Blood Orange 1,,2,WOS,Monroe 816
+CSV,
+        'retired_wholesale_custom_scents_sheet.csv' => <<<CSV
+Scent Name,Oil #1,Oil #2,Total Oils,Abbreviation,Wholesale Account Name,Notes
+Sage Pomegranate,Sage Pomegranate,,1,,Persnickety Plum,Wholesale account closed.
+CSV,
+    ]);
+
+    try {
+        $exitCode = Artisan::call('master-data:import', [
+            '--dir' => $directory,
+            '--upsert' => true,
+        ]);
+
+        $output = Artisan::output();
+
+        expect($exitCode)->toBe(0);
+        expect($output)->toContain('candle_club_scents: inserted=1 updated=0 skipped=1');
+        expect($output)->toContain('candle_club_scents.scent_rows: inserted=1 updated=0 skipped=1');
+        expect($output)->toContain('wholesale_custom_scents.active: inserted=1 updated=0 skipped=0');
+        expect($output)->toContain('wholesale_custom_scents.retired: inserted=1 updated=0 skipped=0');
+        expect($output)->toContain("Skipped candle_club_scent_recipes row with ambiguous month value '2021'");
+
+        $candleClub = CandleClubScent::query()->with('scent')->firstOrFail();
+        expect((int) $candleClub->month)->toBe(7);
+        expect((int) $candleClub->year)->toBe(2024);
+        expect((string) $candleClub->scent->display_name)->toBe('July 2024 Candle Club — Walking on Sunshine');
+        expect((string) $candleClub->scent->oil_reference_name)->toBe('Citrus Agave 1 | Blood Orange 1');
+        expect((bool) $candleClub->scent->is_candle_club)->toBeTrue();
+
+        $activeWholesale = WholesaleCustomScent::query()
+            ->where('account_name', 'Monroe 816')
+            ->where('custom_scent_name', 'Walking on Sunshine (WOS)')
+            ->firstOrFail();
+
+        expect((int) ($activeWholesale->canonical_scent_id ?? 0))->toBe((int) $canonical->id);
+        expect((bool) $activeWholesale->active)->toBeTrue();
+
+        $retiredWholesale = WholesaleCustomScent::query()
+            ->where('account_name', 'Persnickety Plum')
+            ->where('custom_scent_name', 'Sage Pomegranate')
+            ->firstOrFail();
+
+        expect((int) ($retiredWholesale->canonical_scent_id ?? 0))->toBe((int) $retiredCanonical->id);
+        expect((bool) $retiredWholesale->active)->toBeFalse();
+        expect((string) $retiredWholesale->notes)->toBe('Wholesale account closed.');
+
+        $exitCode = Artisan::call('master-data:import', [
+            '--dir' => $directory,
+            '--upsert' => true,
+        ]);
+
+        $output = Artisan::output();
+
+        expect($exitCode)->toBe(0);
+        expect($output)->toContain('candle_club_scents: inserted=0 updated=0 skipped=2');
+        expect($output)->toContain('candle_club_scents.scent_rows: inserted=0 updated=0 skipped=2');
+        expect($output)->toContain('wholesale_custom_scents.active: inserted=0 updated=0 skipped=1');
+        expect($output)->toContain('wholesale_custom_scents.retired: inserted=0 updated=0 skipped=1');
+        expect(CandleClubScent::query()->count())->toBe(1);
+        expect(WholesaleCustomScent::query()->count())->toBe(2);
+    } finally {
+        File::deleteDirectory(dirname($directory));
     }
 });
