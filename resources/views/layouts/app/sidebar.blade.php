@@ -1013,8 +1013,10 @@
       transform: none;
     }
     #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-active-pill::after{
-      opacity: 0;
-      transform: translateY(-50%) scaleY(.65);
+      left: 2px;
+      height: 1.35rem;
+      opacity: 1;
+      transform: translateY(-50%) scaleY(.9);
     }
     .mf-app-card :where(.sticky){
       max-width: 100%;
@@ -1301,7 +1303,7 @@
   <flux:sidebar
     id="app-sidebar"
     sticky
-    collapsible="mobile"
+    :collapsible="true"
     class="relative overflow-hidden mf-transition border-e mf-sidebar-theme-shell"
   >
     <div class="mf-sidebar-glow absolute inset-0"></div>
@@ -1351,7 +1353,7 @@
                 data-sidebar-item
                 data-sidebar-key="{{ $item['key'] }}"
               >
-                <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate title="{{ $item['label'] }}" class="mf-transition mf-nav-item">
+                <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
                   <span class="mf-nav-label">{{ $item['label'] }}</span>
                 </flux:sidebar.item>
               </div>
@@ -1363,12 +1365,12 @@
               </summary>
               <div class="mt-2 rounded-xl p-2 space-y-1">
                 <div class="{{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') ? 'mf-active-pill' : '' }}">
-                  <flux:sidebar.item icon="folder-open" href="{{ route('wiki.wholesale-processes') }}" title="Wholesale Processes" class="mf-transition mf-nav-item">
+                  <flux:sidebar.item icon="folder-open" href="{{ route('wiki.wholesale-processes') }}" class="mf-transition mf-nav-item">
                     <span class="mf-nav-label">Wholesale Processes</span>
                   </flux:sidebar.item>
                 </div>
                 <div class="{{ request()->routeIs('wiki.article') && request()->route('slug') === 'market-room' ? 'mf-active-pill' : '' }}">
-                  <flux:sidebar.item icon="sparkles" href="{{ route('wiki.article', ['slug' => 'market-room']) }}" title="Market Room Process" class="mf-transition mf-nav-item">
+                  <flux:sidebar.item icon="sparkles" href="{{ route('wiki.article', ['slug' => 'market-room']) }}" class="mf-transition mf-nav-item">
                     <span class="mf-nav-label">Market Room Process</span>
                   </flux:sidebar.item>
                 </div>
@@ -1379,7 +1381,7 @@
 
         @if(!$isPouring)
         <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
-          <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate title="Due soon" class="mf-transition mf-nav-item">
+          <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
             <span class="mf-nav-label">Due soon</span>
           </flux:sidebar.item>
 
