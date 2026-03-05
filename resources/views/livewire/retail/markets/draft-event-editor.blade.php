@@ -24,20 +24,7 @@
       @php($detailsOpen = (bool) ($openDetails[$rowId] ?? false))
 
       <div wire:key="draft-row-{{ $rowId }}" class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-3">
-        <div class="flex flex-wrap items-center gap-2 text-[10px] text-emerald-100/60">
-          <span class="rounded-full border border-white/10 bg-black/20 px-2 py-0.5">
-            {{ $boxTier === 'top_shelf' ? 'Top Shelf' : 'Standard' }}
-          </span>
-          <span>{{ $this->sourceLabel($row) }}</span>
-          <span>·</span>
-          <span>{{ $this->quantityLabelForRow($row) }}</span>
-          @if(!empty($row['size_label']))
-            <span>·</span>
-            <span>{{ $row['size_label'] }}</span>
-          @endif
-        </div>
-
-        <div class="mt-2 flex flex-col gap-2 xl:flex-row xl:items-center">
+        <div class="flex flex-col gap-2 xl:flex-row xl:items-center">
           <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
             @if($boxTier === 'top_shelf')
               <button
@@ -78,6 +65,14 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">
+            <button
+              type="button"
+              title="{{ $this->rowInfoText($row) }}"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/12 bg-white/5 text-xs text-white/80 hover:bg-white/10"
+              aria-label="Row info"
+            >
+              i
+            </button>
             @if($boxTier !== 'top_shelf')
               <button
                 type="button"

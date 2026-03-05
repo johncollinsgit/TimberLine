@@ -433,7 +433,7 @@ class MarketsPlanner extends Component
                 }
 
                 $scentId = $this->resolveScentIdFromText($rawScent);
-                $halfBoxUnits = max(1, (int) round($sentBoxes * 2));
+                $halfBoxUnits = $this->normalizedStandardHalfBoxUnits($sentBoxes);
                 $result = $this->mergeMarketEventPrefillItem(
                     $upcomingEvent,
                     (int) $row->id,
@@ -786,11 +786,14 @@ class MarketsPlanner extends Component
     protected function resolveSplitScentIdsFromText(string $scent): array
     {
         $scent = trim($scent);
-        if ($scent === '' || ! str_contains($scent, '/')) {
+        if ($scent === '' || (! str_contains($scent, '/') && ! str_contains($scent, '+'))) {
             return [];
         }
 
-        $parts = array_values(array_filter(array_map('trim', explode('/', $scent))));
+        $parts = array_values(array_filter(array_map(
+            'trim',
+            preg_split('/\s*(?:\/|\+)\s*/', $scent) ?: []
+        )));
         if (count($parts) !== 2) {
             return [];
         }
@@ -816,11 +819,24 @@ class MarketsPlanner extends Component
             return null;
         }
 
-        $normalized = Scent::normalizeName($scent);
+        $variants = $this->scentResolutionVariants($scent);
+        $normalizedVariants = array_values(array_unique(array_filter(array_map(
+            fn (string $value): string => Scent::normalizeName($value),
+            $variants
+        ))));
+        $searchKeys = array_values(array_unique(array_filter(array_map(
+            fn (string $value): string => $this->scentSearchKey($value),
+            $variants
+        ))));
+
         $match = Scent::query()
-            ->where('name', $scent)
-            ->orWhere('display_name', $scent)
-            ->orWhere('abbreviation', $scent)
+            ->where(function ($query) use ($variants): void {
+                foreach ($variants as $value) {
+                    $query->orWhere('name', $value)
+                        ->orWhere('display_name', $value)
+                        ->orWhere('abbreviation', $value);
+                }
+            })
             ->get(['id', 'name', 'display_name', 'abbreviation'])
             ->first();
 
@@ -828,17 +844,165 @@ class MarketsPlanner extends Component
             return (int) $match->id;
         }
 
-        return Scent::query()
-            ->get(['id', 'name', 'display_name', 'abbreviation'])
-            ->first(function (Scent $candidate) use ($normalized) {
-                foreach (array_filter([$candidate->name, $candidate->display_name, $candidate->abbreviation]) as $name) {
-                    if (Scent::normalizeName((string) $name) === $normalized) {
-                        return true;
+        $candidates = $this->scentResolutionCandidates();
+
+        foreach ($normalizedVariants as $normalized) {
+            $exact = $candidates->first(function (array $candidate) use ($normalized): bool {
+                return in_array($normalized, $candidate['normalized'], true);
+            });
+            if ($exact) {
+                return (int) $exact['id'];
+            }
+        }
+
+        foreach ($searchKeys as $key) {
+            $exactKey = $candidates->first(function (array $candidate) use ($key): bool {
+                return in_array($key, $candidate['keys'], true);
+            });
+            if ($exactKey) {
+                return (int) $exactKey['id'];
+            }
+        }
+
+        $bestId = null;
+        $bestScore = 0.0;
+
+        foreach ($searchKeys as $needle) {
+            foreach ($candidates as $candidate) {
+                foreach ($candidate['keys'] as $key) {
+                    $score = $this->scentSimilarityScore($needle, $key);
+                    if ($score > $bestScore) {
+                        $bestScore = $score;
+                        $bestId = (int) $candidate['id'];
                     }
                 }
+            }
+        }
 
-                return false;
-            })?->id;
+        return $bestScore >= 0.83 ? $bestId : null;
+    }
+
+    protected function normalizedStandardHalfBoxUnits(float $sentBoxes): int
+    {
+        $halfBoxUnits = max(1, (int) round($sentBoxes * 2));
+
+        // Keep half-box granularity for 0.5 rows, but snap larger odd totals
+        // to full boxes so we don't flood drafts with 1.5/2.5 unless explicit.
+        if ($halfBoxUnits > 1 && $halfBoxUnits % 2 !== 0) {
+            $halfBoxUnits = max(2, (int) round($halfBoxUnits / 2) * 2);
+        }
+
+        return $halfBoxUnits;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function scentResolutionVariants(string $scent): array
+    {
+        $raw = trim($scent);
+        if ($raw === '') {
+            return [];
+        }
+
+        $variants = [$raw];
+
+        foreach (['/', '+', ','] as $delimiter) {
+            if (! str_contains($raw, $delimiter)) {
+                continue;
+            }
+
+            foreach (explode($delimiter, $raw) as $part) {
+                $part = trim($part);
+                if ($part !== '') {
+                    $variants[] = $part;
+                }
+            }
+        }
+
+        return array_values(array_unique($variants));
+    }
+
+    protected function scentSearchKey(string $value): string
+    {
+        $value = Scent::normalizeName($value);
+        $value = Str::lower($value);
+        $value = preg_replace('/\([^)]*\)/', ' ', $value) ?? $value;
+        $value = preg_replace('/\b(wholesale|candle|candles|cotton|wick|wicks|box|boxes|jar|jars|16oz|8oz|oz|wax|melt|melts)\b/', ' ', $value) ?? $value;
+        $value = preg_replace('/\b\d+(?:\.\d+)?\b/', ' ', $value) ?? $value;
+        $value = preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value;
+        $value = preg_replace('/\s+/', ' ', trim($value)) ?? $value;
+
+        return trim($value);
+    }
+
+    protected function scentSimilarityScore(string $needle, string $candidate): float
+    {
+        if ($needle === '' || $candidate === '') {
+            return 0.0;
+        }
+
+        if ($needle === $candidate) {
+            return 1.0;
+        }
+
+        $needleCompact = str_replace(' ', '', $needle);
+        $candidateCompact = str_replace(' ', '', $candidate);
+
+        if ($needleCompact !== '' && $needleCompact === $candidateCompact) {
+            return 0.97;
+        }
+
+        if (strlen($needle) >= 4 && (str_contains($candidate, $needle) || str_contains($needle, $candidate))) {
+            return 0.92;
+        }
+
+        similar_text($needle, $candidate, $similarityPercent);
+        $similarity = $similarityPercent / 100;
+
+        $needleTokens = array_values(array_filter(explode(' ', $needle)));
+        $candidateTokens = array_values(array_filter(explode(' ', $candidate)));
+        $tokenOverlap = 0.0;
+
+        if ($needleTokens !== [] && $candidateTokens !== []) {
+            $common = array_intersect($needleTokens, $candidateTokens);
+            $tokenOverlap = count($common) / max(count($needleTokens), count($candidateTokens));
+        }
+
+        return ($similarity * 0.75) + ($tokenOverlap * 0.25);
+    }
+
+    /**
+     * @return Collection<int,array{id:int,normalized:array<int,string>,keys:array<int,string>}>
+     */
+    protected function scentResolutionCandidates(): Collection
+    {
+        $rows = Scent::query()->get(['id', 'name', 'display_name', 'abbreviation']);
+        
+        return $rows
+            ->map(function (Scent $candidate): array {
+                $labels = array_values(array_unique(array_filter(array_map(
+                    fn ($value): string => trim((string) $value),
+                    [$candidate->name, $candidate->display_name, $candidate->abbreviation]
+                ))));
+
+                $normalized = array_values(array_unique(array_filter(array_map(
+                    fn (string $value): string => Scent::normalizeName($value),
+                    $labels
+                ))));
+
+                $keys = array_values(array_unique(array_filter(array_map(
+                    fn (string $value): string => $this->scentSearchKey($value),
+                    $labels
+                ))));
+
+                return [
+                    'id' => (int) $candidate->id,
+                    'normalized' => $normalized,
+                    'keys' => $keys,
+                ];
+            })
+            ->values();
     }
 
     /**

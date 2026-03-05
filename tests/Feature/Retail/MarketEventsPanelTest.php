@@ -302,6 +302,85 @@ test('selecting a historical match copies market plan rows into draft boxes', fu
     expect((string) $upcoming->fresh()->status)->toBe('drafted');
 });
 
+test('historical prefill maps loose scent text and avoids accidental 1.5 standard boxes', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $plan = RetailPlan::query()->create([
+        'name' => 'Historical Match Fuzzy Mapping Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $coffeehouse = Scent::query()->firstOrCreate(
+        ['name' => 'Coffeehouse'],
+        ['display_name' => 'Coffeehouse', 'is_active' => true]
+    );
+    $lavender = Scent::query()->firstOrCreate(
+        ['name' => 'Lavender'],
+        ['display_name' => 'Lavender', 'is_active' => true]
+    );
+    $sagebrush = Scent::query()->firstOrCreate(
+        ['name' => 'Sagebrush'],
+        ['display_name' => 'Sagebrush', 'is_active' => true]
+    );
+
+    $upcoming = Event::query()->create([
+        'name' => '04.04.26 Downtown Market',
+        'display_name' => '04.04.26 Downtown Market',
+        'starts_at' => '2026-04-04',
+        'ends_at' => '2026-04-04',
+        'status' => 'needs_mapping',
+    ]);
+
+    $candidate = EventInstance::query()->create([
+        'title' => 'Downtown Market, SC',
+        'starts_at' => '2025-04-05',
+        'ends_at' => '2025-04-05',
+        'state' => 'SC',
+        'status' => 'completed',
+    ]);
+
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $candidate->id,
+        'scent_raw' => 'Wholesale Coffee House 16oz Cotton Wick',
+        'box_count_sent' => 1.5,
+        'is_split_box' => false,
+    ]);
+
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $candidate->id,
+        'scent_raw' => 'Lavender + Sagebrush',
+        'box_count_sent' => 1,
+        'is_split_box' => true,
+    ]);
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('handleMarketsMappingConfirmed', $upcoming->id, $candidate->id)
+        ->assertDispatched('marketsDraftUpdated');
+
+    $items = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $upcoming->id)
+        ->where('source', 'event_prefill')
+        ->get();
+
+    $coffeehouseItem = $items->firstWhere('scent_id', $coffeehouse->id);
+    $lavenderItem = $items->firstWhere('scent_id', $lavender->id);
+    $sagebrushItem = $items->firstWhere('scent_id', $sagebrush->id);
+
+    expect($items->whereNull('scent_id'))->toHaveCount(0);
+    expect($coffeehouseItem)->not()->toBeNull();
+    expect((int) ($coffeehouseItem->quantity ?? 0))->toBe(4);
+    expect($lavenderItem)->not()->toBeNull();
+    expect((int) ($lavenderItem->quantity ?? 0))->toBe(1);
+    expect($sagebrushItem)->not()->toBeNull();
+    expect((int) ($sagebrushItem->quantity ?? 0))->toBe(1);
+});
+
 test('wizard shows no-history guidance when the selected historical event has no boxes', function () {
     $plan = RetailPlan::query()->create([
         'name' => 'No History Guidance Test',

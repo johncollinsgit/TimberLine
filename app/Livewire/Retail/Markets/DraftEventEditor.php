@@ -299,6 +299,22 @@ class DraftEventEditor extends Component
         };
     }
 
+    public function rowInfoText(array $row): string
+    {
+        $parts = [
+            $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard')) === 'top_shelf' ? 'Top Shelf' : 'Standard',
+            $this->sourceLabel($row),
+            $this->quantityLabelForRow($row),
+        ];
+
+        $sizeLabel = trim((string) ($row['size_label'] ?? ''));
+        if ($sizeLabel !== '') {
+            $parts[] = 'Size: '.$sizeLabel;
+        }
+
+        return implode(' · ', $parts);
+    }
+
     public function toggleNotes(int $itemId): void
     {
         if (! isset($this->draftRows[$itemId])) {
