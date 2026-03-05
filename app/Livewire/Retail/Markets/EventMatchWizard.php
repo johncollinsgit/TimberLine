@@ -704,7 +704,7 @@ class EventMatchWizard extends Component
             'state' => (string) ($event->state ?? ''),
             'notes_snippet' => $event->notes ? mb_strimwidth((string) $event->notes, 0, 160, '...') : '',
             'source_sheet' => (string) ($event->source_sheet ?? ''),
-            'box_preview' => $event->boxPlans->take(4)->map(function (EventBoxPlan $line): array {
+            'box_preview' => $event->boxPlans->map(function (EventBoxPlan $line): array {
                 return [
                     'scent_raw' => (string) $line->scent_raw,
                     'box_count_sent' => $line->box_count_sent !== null ? (float) $line->box_count_sent : null,
@@ -862,7 +862,7 @@ class EventMatchWizard extends Component
                 $firstLine = $instance->boxPlans->first();
 
                 $row['box_plan_count'] = $instance->boxPlans->count();
-                $row['box_preview'] = $instance->boxPlans->take(4)->map(function (EventBoxPlan $line): array {
+                $row['box_preview'] = $instance->boxPlans->map(function (EventBoxPlan $line): array {
                     return [
                         'scent_raw' => (string) $line->scent_raw,
                         'box_count_sent' => $line->box_count_sent !== null ? (float) $line->box_count_sent : null,

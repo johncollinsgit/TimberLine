@@ -17,6 +17,7 @@ class MarketsSyncStatus extends Component
     public ?string $syncMessage = null;
     public ?string $error = null;
     public ?string $lastError = null;
+    public bool $detailsOpen = false;
 
     public function mount(int $planId = 0, string $queue = 'markets'): void
     {
@@ -103,6 +104,11 @@ class MarketsSyncStatus extends Component
             $this->dispatch('toast', ['type' => 'error', 'message' => 'Failed to queue market event sync.']);
             $this->refresh();
         }
+    }
+
+    public function toggleDetails(): void
+    {
+        $this->detailsOpen = ! $this->detailsOpen;
     }
 
     /**

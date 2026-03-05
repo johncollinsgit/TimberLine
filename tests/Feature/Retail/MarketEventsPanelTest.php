@@ -82,7 +82,7 @@ test('markets planner mounts as a thin wrapper around the markets wizard', funct
 
     Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
         ->assertSet('planId', $plan->id)
-        ->assertSeeText('One Event At A Time');
+        ->assertSeeText('Choose Event to Match');
 });
 
 test('initial markets plan render does not invoke sync coordinator or matching service', function () {

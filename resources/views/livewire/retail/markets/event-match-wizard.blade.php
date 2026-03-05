@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
     <div class="min-w-0">
       <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Markets Planner</div>
-      <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">One Event At A Time</div>
+      <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">Choose Event to Match</div>
       <div class="mt-2 max-w-2xl text-sm text-emerald-50/70">
         Stored events only. Pick an upcoming event, choose a historical match or starter template, build the draft, then publish.
       </div>
@@ -92,7 +92,7 @@
   @endif
 
   @if($step === 2)
-    <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+    <div class="mt-5 grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
       <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
         <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Selected Event</div>
         @if(!empty($upcomingEvent))
@@ -154,17 +154,17 @@
       </div>
 
       <div class="rounded-2xl border border-emerald-200/10 bg-black/15 p-4">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Historical Match</div>
             <div class="mt-1 text-sm text-emerald-50/70">Scan prior-year events, then choose a historical match or a starter template.</div>
           </div>
-          <div class="flex flex-col gap-3 sm:flex-row">
+          <div class="grid w-full grid-cols-1 gap-2 sm:w-auto sm:min-w-[18rem] sm:grid-cols-2">
             <button
               type="button"
               wire:click="scanHistoricalMatches"
               wire:loading.attr="disabled"
-              class="rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-white/10"
+              class="w-full rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-white/10"
             >
               <span wire:loading.remove wire:target="scanHistoricalMatches">Scan historical matches</span>
               <span wire:loading wire:target="scanHistoricalMatches">Scanning...</span>
@@ -173,7 +173,7 @@
             <button
               type="button"
               wire:click="$toggle('templatesOpen')"
-              class="rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm text-white hover:bg-white/10"
+              class="w-full rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm text-white hover:bg-white/10"
             >
               Templates
             </button>
@@ -196,60 +196,67 @@
               No prior-year box-plan candidates were found. Open Templates to use a starter.
             </div>
           @else
-            <div class="max-h-[30rem] space-y-3 overflow-y-auto pr-1">
-              @foreach($matches as $match)
-                @php($isSelected = (int)($selectedMatchId ?? 0) === (int)($match['event_id'] ?? 0))
-                <button
-                  type="button"
-                  wire:key="wizard-match-{{ (int)($match['event_id'] ?? 0) }}"
-                  wire:click="selectMatch({{ (int)($match['event_id'] ?? 0) }})"
-                  class="w-full rounded-xl border p-4 text-left transition {{ $isSelected ? 'border-emerald-400/70 bg-emerald-900/20 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]' : 'border-emerald-200/10 bg-black/10 hover:border-emerald-300/25 hover:bg-emerald-500/8' }}"
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="text-xs text-emerald-100/60">{{ (int)($match['match_score_percent'] ?? 0) }}% match</div>
-                      <div class="mt-1 text-sm font-medium text-white break-words">{{ $match['title'] ?? 'Historical event' }}</div>
-                      <div class="mt-1 text-[11px] text-emerald-100/55">
-                        {{ !empty($match['starts_at']) ? \Illuminate\Support\Carbon::parse($match['starts_at'])->format('M j, Y') : 'Date TBD' }}
-                        @if(!empty($match['ends_at']) && $match['ends_at'] !== $match['starts_at'])
-                          – {{ \Illuminate\Support\Carbon::parse($match['ends_at'])->format('M j, Y') }}
-                        @endif
-                        @if(!empty($match['state']))
-                          · {{ $match['state'] }}
-                        @endif
-                      </div>
-                      <div class="mt-1 text-[11px] text-emerald-100/50">
-                        Draft size {{ (int)($match['draft_box_total'] ?? 0) }} boxes
-                      </div>
-                      @if(!empty($match['notes_snippet']))
-                        <div class="mt-2 text-[11px] text-emerald-100/55">{{ $match['notes_snippet'] }}</div>
-                      @endif
-                      @if(!empty($match['box_preview']))
-                        <div class="mt-3 space-y-1 rounded-xl border border-emerald-200/10 bg-black/20 p-3 text-[11px] text-emerald-50/80">
-                          @foreach($match['box_preview'] as $line)
-                            <div class="flex items-center justify-between gap-3">
-                              <span class="truncate">{{ $line['scent_raw'] }}</span>
-                              <span class="shrink-0">
-                                {{ $line['box_count_sent'] !== null ? rtrim(rtrim(number_format((float) $line['box_count_sent'], 2), '0'), '.') : '—' }}
-                                @if(!empty($line['is_split_box']))
-                                  <span class="text-amber-100/70">split</span>
-                                @endif
-                              </span>
-                            </div>
-                          @endforeach
-                          @if((int)($match['box_plan_count'] ?? 0) > count($match['box_preview']))
-                            <div class="text-[10px] text-emerald-100/45">+{{ (int)($match['box_plan_count'] ?? 0) - count($match['box_preview']) }} more lines</div>
+            <div class="max-h-[34rem] overflow-y-auto pr-1">
+              <div class="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                @foreach($matches as $match)
+                  @php($isSelected = (int)($selectedMatchId ?? 0) === (int)($match['event_id'] ?? 0))
+                  <button
+                    type="button"
+                    wire:key="wizard-match-{{ (int)($match['event_id'] ?? 0) }}"
+                    wire:click="selectMatch({{ (int)($match['event_id'] ?? 0) }})"
+                    class="h-full w-full rounded-xl border p-4 text-left transition {{ $isSelected ? 'border-emerald-400/70 bg-emerald-900/20 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]' : 'border-emerald-200/10 bg-black/10 hover:border-emerald-300/25 hover:bg-emerald-500/8' }}"
+                  >
+                    <div class="flex h-full flex-col gap-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="text-xs text-emerald-100/60">{{ (int)($match['match_score_percent'] ?? 0) }}% match</div>
+                          <div class="mt-1 text-sm font-medium text-white break-words">{{ $match['title'] ?? 'Historical event' }}</div>
+                          <div class="mt-1 text-[11px] text-emerald-100/55">
+                            {{ !empty($match['starts_at']) ? \Illuminate\Support\Carbon::parse($match['starts_at'])->format('M j, Y') : 'Date TBD' }}
+                            @if(!empty($match['ends_at']) && $match['ends_at'] !== $match['starts_at'])
+                              – {{ \Illuminate\Support\Carbon::parse($match['ends_at'])->format('M j, Y') }}
+                            @endif
+                            @if(!empty($match['state']))
+                              · {{ $match['state'] }}
+                            @endif
+                          </div>
+                          <div class="mt-1 text-[11px] text-emerald-100/50">
+                            Draft size {{ (int)($match['draft_box_total'] ?? 0) }} boxes
+                          </div>
+                          @if(!empty($match['notes_snippet']))
+                            <div class="mt-2 text-[11px] text-emerald-100/55 break-words">{{ $match['notes_snippet'] }}</div>
                           @endif
+                        </div>
+
+                        @if($isSelected)
+                          <div class="shrink-0 text-xs text-emerald-100">Selected</div>
+                        @endif
+                      </div>
+
+                      @if(!empty($match['box_preview']))
+                        <div class="rounded-xl border border-emerald-200/10 bg-black/20 p-3">
+                          <div class="mb-2 text-[10px] uppercase tracking-[0.2em] text-emerald-100/45">
+                            {{ count($match['box_preview']) }} candle line{{ count($match['box_preview']) === 1 ? '' : 's' }}
+                          </div>
+                          <div class="max-h-40 space-y-1 overflow-y-auto pr-1 text-[11px] text-emerald-50/80">
+                            @foreach($match['box_preview'] as $line)
+                              <div class="flex items-center justify-between gap-3">
+                                <span class="truncate">{{ $line['scent_raw'] }}</span>
+                                <span class="shrink-0">
+                                  {{ $line['box_count_sent'] !== null ? rtrim(rtrim(number_format((float) $line['box_count_sent'], 2), '0'), '.') : '—' }}
+                                  @if(!empty($line['is_split_box']))
+                                    <span class="text-amber-100/70">split</span>
+                                  @endif
+                                </span>
+                              </div>
+                            @endforeach
+                          </div>
                         </div>
                       @endif
                     </div>
-
-                    @if($isSelected)
-                      <div class="shrink-0 text-xs text-emerald-100">Selected</div>
-                    @endif
-                  </div>
-                </button>
-              @endforeach
+                  </button>
+                @endforeach
+              </div>
             </div>
           @endif
         </div>
