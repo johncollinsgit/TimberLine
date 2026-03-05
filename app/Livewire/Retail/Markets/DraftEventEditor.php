@@ -133,6 +133,34 @@ class DraftEventEditor extends Component
         $this->loadDraftRows();
     }
 
+    #[On('marketsTopShelfAdded')]
+    public function handleTopShelfAdded(int $eventId, int $itemId = 0): void
+    {
+        $selectedEventId = (int) ($this->selectedEventId ?: 0);
+        if ($selectedEventId > 0 && $eventId > 0 && $selectedEventId !== $eventId) {
+            return;
+        }
+
+        $this->loadDraftRows();
+
+        if ($itemId > 0 && isset($this->draftRows[$itemId])) {
+            $this->openTopShelfConfigurator($itemId);
+
+            return;
+        }
+
+        $latestTopShelfRowId = collect($this->draftRows)
+            ->filter(fn (array $row): bool => $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard')) === 'top_shelf')
+            ->sortByDesc(fn (array $row): int => (int) ($row['id'] ?? 0))
+            ->keys()
+            ->map(fn ($id): int => (int) $id)
+            ->first();
+
+        if ($latestTopShelfRowId) {
+            $this->openTopShelfConfigurator($latestTopShelfRowId);
+        }
+    }
+
     public function removeItem(int $itemId): void
     {
         $item = $this->itemQuery()->find($itemId);

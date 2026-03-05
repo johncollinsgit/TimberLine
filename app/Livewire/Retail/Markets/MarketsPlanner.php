@@ -216,7 +216,7 @@ class MarketsPlanner extends Component
         }
 
         $this->rememberSelectedEvent($selectedEvent);
-        $result = ['added' => 0, 'merged' => 0];
+        $result = ['added' => 0, 'merged' => 0, 'item_id' => 0];
 
         DB::transaction(function () use ($selectedEvent, &$result): void {
             $result = $this->mergeTopShelfBoxItem(
@@ -231,6 +231,11 @@ class MarketsPlanner extends Component
         $this->syncEventPlanningStatus((int) $selectedEvent->id, 'drafted');
         $this->dispatch('marketsRefreshRequested', eventId: (int) $selectedEvent->id);
         $this->dispatch('marketsDraftUpdated', eventId: (int) $selectedEvent->id);
+        $this->dispatch(
+            'marketsTopShelfAdded',
+            eventId: (int) $selectedEvent->id,
+            itemId: (int) ($result['item_id'] ?? 0)
+        );
         $this->dispatch('toast', [
             'type' => 'success',
             'message' => "Top Shelf default template applied. Added {$result['added']}, merged {$result['merged']}.",
@@ -538,7 +543,7 @@ class MarketsPlanner extends Component
 
     /**
      * @param  array<string,mixed>|null  $configuration
-     * @return array{added:int,merged:int}
+     * @return array{added:int,merged:int,item_id:int}
      */
     protected function mergeTopShelfBoxItem(
         Event $selectedEvent,
@@ -558,7 +563,7 @@ class MarketsPlanner extends Component
                 'source' => $source,
             ]);
 
-            return ['added' => 0, 'merged' => 0];
+            return ['added' => 0, 'merged' => 0, 'item_id' => 0];
         }
 
         $configuration = RetailPlanItem::normalizeTopShelfConfiguration(
@@ -574,7 +579,7 @@ class MarketsPlanner extends Component
                 'source' => $source,
             ]);
 
-            return ['added' => 0, 'merged' => 0];
+            return ['added' => 0, 'merged' => 0, 'item_id' => 0];
         }
 
         $notes = $this->supportsRetailPlanItemNotesColumn()
@@ -615,7 +620,7 @@ class MarketsPlanner extends Component
             }
             $existing->save();
 
-            return ['added' => 0, 'merged' => 1];
+            return ['added' => 0, 'merged' => 1, 'item_id' => (int) $existing->id];
         }
 
         $payload = [
@@ -644,9 +649,9 @@ class MarketsPlanner extends Component
             $payload['notes'] = $notes;
         }
 
-        RetailPlanItem::query()->create($payload);
+        $created = RetailPlanItem::query()->create($payload);
 
-        return ['added' => 1, 'merged' => 0];
+        return ['added' => 1, 'merged' => 0, 'item_id' => (int) $created->id];
     }
 
     /**

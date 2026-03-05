@@ -34,22 +34,22 @@
       @endphp
 
       <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-2.5">
-        <div class="grid gap-2 xl:grid-cols-[minmax(20rem,1fr)_7rem_auto] xl:items-center">
-          <div class="min-w-0">
+        <div class="flex min-w-0 flex-nowrap items-center gap-2">
+          <div class="min-w-0 flex-1">
             @if($boxTier === 'top_shelf')
               <button
                 type="button"
                 wire:click="openTopShelfConfigurator({{ $rowId }})"
-                class="h-11 w-full rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 text-left hover:bg-amber-500/15"
+                class="h-10 w-full rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 text-left text-sm text-amber-50/95 hover:bg-amber-500/15"
+                title="Top Shelf configuration"
+                aria-label="Open Top Shelf configuration"
               >
-                <div class="text-[10px] uppercase tracking-[0.16em] text-amber-100/70">Top Shelf Line</div>
-                <div class="mt-0.5 truncate text-sm text-amber-50/95">{{ $this->topShelfDescription($row) }}</div>
-                <div class="text-[11px] text-amber-100/70">{{ $topShelfFilledCount }}/{{ $topShelfSlotCount }} slots filled</div>
+                <span class="block truncate">Top Shelf · {{ $topShelfFilledCount }}/{{ $topShelfSlotCount }} slots · {{ $this->topShelfDescription($row) }}</span>
               </button>
             @else
               <select
                 wire:model.live="draftRows.{{ $rowId }}.scent_id"
-                class="h-11 w-full min-w-[18rem] rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                class="h-10 w-full min-w-0 truncate rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
               >
                 <option value="">Select scent...</option>
                 @foreach($scentOptions as $option)
@@ -64,45 +64,79 @@
             min="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
             step="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
             wire:model.live.debounce.250ms="draftRows.{{ $rowId }}.box_count"
-            class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+            class="h-10 w-[5.25rem] shrink-0 rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90 sm:w-[6rem]"
             aria-label="{{ $boxTier === 'top_shelf' ? 'Top shelf boxes' : 'Boxes' }}"
           />
 
-          <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+          <div class="flex shrink-0 items-center gap-1">
             @if($boxTier !== 'top_shelf')
               <button
                 type="button"
                 wire:click="toggleNotes({{ $rowId }})"
-                class="h-10 whitespace-nowrap rounded-xl border border-white/12 bg-white/5 px-3 text-xs text-white/85 hover:bg-white/10"
+                title="{{ $notesOpen ? 'Hide Notes' : 'Notes' }}"
+                aria-label="{{ $notesOpen ? 'Hide Notes' : 'Notes' }}"
+                class="h-10 w-10 rounded-xl border border-white/12 bg-white/5 text-xs text-white/85 hover:bg-white/10 md:w-auto md:px-3"
               >
-                {{ $notesOpen ? 'Hide Notes' : 'Notes' }}
+                <span class="md:hidden" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="mx-auto h-4 w-4">
+                    <path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1.447.894L10 14.118l5.553 2.776A1 1 0 0 0 17 16V4a1 1 0 0 0-1-1H4Z"/>
+                  </svg>
+                </span>
+                <span class="hidden md:inline">{{ $notesOpen ? 'Hide Notes' : 'Notes' }}</span>
+                <span class="sr-only md:hidden">{{ $notesOpen ? 'Hide Notes' : 'Notes' }}</span>
               </button>
             @endif
+
             @if($boxTier === 'top_shelf')
               <button
                 type="button"
                 wire:click="openTopShelfConfigurator({{ $rowId }})"
-                class="h-10 whitespace-nowrap rounded-xl border border-white/12 bg-white/5 px-3 text-xs text-white/85 hover:bg-white/10"
+                title="Top Shelf"
+                aria-label="Top Shelf"
+                class="h-10 w-10 rounded-xl border border-white/12 bg-white/5 text-xs text-white/85 hover:bg-white/10 md:w-auto md:px-3"
               >
-                Top Shelf
+                <span class="md:hidden" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="mx-auto h-4 w-4">
+                    <path d="M4 4.75A1.75 1.75 0 0 1 5.75 3h8.5A1.75 1.75 0 0 1 16 4.75v10.5A1.75 1.75 0 0 1 14.25 17h-8.5A1.75 1.75 0 0 1 4 15.25V4.75Zm2 .75a.75.75 0 0 0 0 1.5h8a.75.75 0 0 0 0-1.5H6Z"/>
+                  </svg>
+                </span>
+                <span class="hidden md:inline">Top Shelf</span>
+                <span class="sr-only md:hidden">Top Shelf</span>
               </button>
             @else
               <button
                 type="button"
                 wire:click="toggleDetails({{ $rowId }})"
-                class="h-10 whitespace-nowrap rounded-xl border border-white/12 bg-white/5 px-3 text-xs text-white/85 hover:bg-white/10"
+                title="{{ $detailsOpen ? 'Hide Details' : 'Details' }}"
+                aria-label="{{ $detailsOpen ? 'Hide Details' : 'Details' }}"
+                class="h-10 w-10 rounded-xl border border-white/12 bg-white/5 text-xs text-white/85 hover:bg-white/10 md:w-auto md:px-3"
               >
-                {{ $detailsOpen ? 'Hide Details' : 'Details' }}
+                <span class="md:hidden" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="mx-auto h-4 w-4">
+                    <path fill-rule="evenodd" d="M18 10A8 8 0 1 1 2 10a8 8 0 0 1 16 0ZM9.25 8.75a.75.75 0 0 1 1.5 0v4a.75.75 0 0 1-1.5 0v-4Zm.75-3a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" clip-rule="evenodd"/>
+                  </svg>
+                </span>
+                <span class="hidden md:inline">{{ $detailsOpen ? 'Hide Details' : 'Details' }}</span>
+                <span class="sr-only md:hidden">{{ $detailsOpen ? 'Hide Details' : 'Details' }}</span>
               </button>
             @endif
+
             <button
               type="button"
               wire:click="removeItem({{ $rowId }})"
               wire:loading.attr="disabled"
               wire:target="removeItem"
-              class="h-10 whitespace-nowrap rounded-xl border border-red-400/20 bg-red-500/10 px-3 text-xs text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Remove"
+              aria-label="Remove"
+              class="h-10 w-10 rounded-xl border border-red-400/20 bg-red-500/10 text-xs text-red-100 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:px-3"
             >
-              Remove
+              <span class="md:hidden" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="mx-auto h-4 w-4">
+                  <path fill-rule="evenodd" d="M8.75 3A1.75 1.75 0 0 0 7 4.75V5H4.5a.75.75 0 0 0 0 1.5h.568l.85 9.065A2 2 0 0 0 7.91 17.5h4.18a2 2 0 0 0 1.992-1.935l.85-9.065h.568a.75.75 0 0 0 0-1.5H13v-.25A1.75 1.75 0 0 0 11.25 3h-2.5ZM8.5 5v-.25a.25.25 0 0 1 .25-.25h2.5a.25.25 0 0 1 .25.25V5h-3Z" clip-rule="evenodd"/>
+                </svg>
+              </span>
+              <span class="hidden md:inline">Remove</span>
+              <span class="sr-only md:hidden">Remove</span>
             </button>
           </div>
         </div>

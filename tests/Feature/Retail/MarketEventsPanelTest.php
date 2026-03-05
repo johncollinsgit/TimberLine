@@ -937,8 +937,8 @@ test('top shelf draft rows render as structured slots instead of concatenated la
         'planId' => $plan->id,
         'selectedEventId' => $event->id,
     ])
-        ->assertSeeText('Top Shelf Line')
-        ->assertSeeText('slots filled')
+        ->assertSeeText('Top Shelf')
+        ->assertSeeText('slots')
         ->assertDontSeeText('6x ');
 });
 
