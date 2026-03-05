@@ -16,28 +16,40 @@
     </div>
 
     @foreach($rows as $row)
-      @php($rowId = (int) ($row['id'] ?? 0))
-      @php($boxTier = (string) ($row['box_tier'] ?? 'standard'))
-      @php($status = $rowStatus[$rowId] ?? null)
-      @php($topShelf = (array) ($row['top_shelf'] ?? []))
-      @php($notesOpen = (bool) ($openNotes[$rowId] ?? false))
-      @php($detailsOpen = (bool) ($openDetails[$rowId] ?? false))
+      @php
+        $rowId = (int) ($row['id'] ?? 0);
+        $boxTier = (string) ($row['box_tier'] ?? 'standard');
+        $status = $rowStatus[$rowId] ?? null;
+        $topShelf = (array) ($row['top_shelf'] ?? []);
+        $notesOpen = (bool) ($openNotes[$rowId] ?? false);
+        $detailsOpen = (bool) ($openDetails[$rowId] ?? false);
+        $topShelfSlots = (array) ($topShelf['composition'] ?? []);
+        $topShelfSlotCount = count($topShelfSlots);
+        $topShelfFilledCount = 0;
+        foreach ($topShelfSlots as $topShelfSlotRow) {
+          if ((int)($topShelfSlotRow['scent_id'] ?? 0) > 0) {
+            $topShelfFilledCount++;
+          }
+        }
+      @endphp
 
-      <div wire:key="draft-row-{{ $rowId }}" class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-2.5">
-        <div class="flex flex-col gap-2 xl:flex-row xl:items-center">
-          <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
+      <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-2.5">
+        <div class="grid gap-2 xl:grid-cols-[minmax(20rem,1fr)_7rem_auto] xl:items-center">
+          <div class="min-w-0">
             @if($boxTier === 'top_shelf')
               <button
                 type="button"
                 wire:click="openTopShelfConfigurator({{ $rowId }})"
-                class="h-11 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 text-left text-xs text-amber-50/85 hover:bg-amber-500/15"
+                class="h-11 w-full rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 text-left hover:bg-amber-500/15"
               >
-                {{ $this->topShelfDescription($row) }} · {{ $this->topShelfCompositionPreview($row, $scentLookup) ?: 'Open details to configure scents' }}
+                <div class="text-[10px] uppercase tracking-[0.16em] text-amber-100/70">Top Shelf Line</div>
+                <div class="mt-0.5 truncate text-sm text-amber-50/95">{{ $this->topShelfDescription($row) }}</div>
+                <div class="text-[11px] text-amber-100/70">{{ $topShelfFilledCount }}/{{ $topShelfSlotCount }} slots filled</div>
               </button>
             @else
               <select
                 wire:model.live="draftRows.{{ $rowId }}.scent_id"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                class="h-11 w-full min-w-[18rem] rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
               >
                 <option value="">Select scent...</option>
                 @foreach($scentOptions as $option)
@@ -45,24 +57,23 @@
                 @endforeach
               </select>
             @endif
-
-            <input
-              type="number"
-              min="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
-              step="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
-              wire:model.live.debounce.250ms="draftRows.{{ $rowId }}.box_count"
-              class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              aria-label="{{ $boxTier === 'top_shelf' ? 'Top shelf boxes' : 'Boxes' }}"
-            />
-
           </div>
 
-          <div class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">
+          <input
+            type="number"
+            min="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
+            step="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
+            wire:model.live.debounce.250ms="draftRows.{{ $rowId }}.box_count"
+            class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+            aria-label="{{ $boxTier === 'top_shelf' ? 'Top shelf boxes' : 'Boxes' }}"
+          />
+
+          <div class="flex flex-wrap items-center gap-2 xl:justify-end">
             @if($boxTier !== 'top_shelf')
               <button
                 type="button"
                 wire:click="toggleNotes({{ $rowId }})"
-                class="rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/85 hover:bg-white/10"
+                class="h-10 whitespace-nowrap rounded-xl border border-white/12 bg-white/5 px-3 text-xs text-white/85 hover:bg-white/10"
               >
                 {{ $notesOpen ? 'Hide Notes' : 'Notes' }}
               </button>
@@ -71,7 +82,7 @@
               <button
                 type="button"
                 wire:click="openTopShelfConfigurator({{ $rowId }})"
-                class="rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/85 hover:bg-white/10"
+                class="h-10 whitespace-nowrap rounded-xl border border-white/12 bg-white/5 px-3 text-xs text-white/85 hover:bg-white/10"
               >
                 Top Shelf
               </button>
@@ -79,7 +90,7 @@
               <button
                 type="button"
                 wire:click="toggleDetails({{ $rowId }})"
-                class="rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/85 hover:bg-white/10"
+                class="h-10 whitespace-nowrap rounded-xl border border-white/12 bg-white/5 px-3 text-xs text-white/85 hover:bg-white/10"
               >
                 {{ $detailsOpen ? 'Hide Details' : 'Details' }}
               </button>
@@ -87,7 +98,9 @@
             <button
               type="button"
               wire:click="removeItem({{ $rowId }})"
-              class="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100"
+              wire:loading.attr="disabled"
+              wire:target="removeItem"
+              class="h-10 whitespace-nowrap rounded-xl border border-red-400/20 bg-red-500/10 px-3 text-xs text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Remove
             </button>

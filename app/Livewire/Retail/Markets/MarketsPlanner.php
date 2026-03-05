@@ -70,7 +70,13 @@ class MarketsPlanner extends Component
             return;
         }
 
-        [$added, $merged, $skipped] = $this->applyEventBoxPlanRowsPrefill($rows, $upcoming);
+        $deleted = 0;
+        [$added, $merged, $skipped] = DB::transaction(function () use ($upcoming, $rows, &$deleted): array {
+            $this->lockUpcomingEventScope($upcoming->id);
+            $deleted = $this->clearEventDraftRows($upcoming->id);
+
+            return $this->applyEventBoxPlanRowsPrefill($rows, $upcoming, wrapTransaction: false);
+        }, 3);
 
         if ($added === 0 && $merged === 0) {
             $message = 'Historical event has no usable boxes to copy. Start building boxes by adding a scent.';
@@ -84,7 +90,8 @@ class MarketsPlanner extends Component
 
         $rowCount = $rows->count();
         $message = "Copied {$rowCount} historical box row".($rowCount === 1 ? '' : 's')
-            ." from ".$candidate->title.". Added {$added}, merged {$merged}"
+            ." from ".$candidate->title.". Replaced {$deleted} existing row".($deleted === 1 ? '' : 's')
+            .". Added {$added}, merged {$merged}"
             .($skipped ? ", skipped {$skipped}" : '').'.';
 
         $this->syncEventPlanningStatus((int) $upcoming->id, 'drafted');
@@ -125,12 +132,19 @@ class MarketsPlanner extends Component
         }
 
         $this->rememberSelectedEvent($upcoming);
-        [$added, $merged] = $this->applyDurationStarterTemplate($upcoming, $lines);
+        $deleted = 0;
+        [$added, $merged] = DB::transaction(function () use ($upcoming, $lines, &$deleted): array {
+            $this->lockUpcomingEventScope($upcoming->id);
+            $deleted = $this->clearEventDraftRows($upcoming->id);
+
+            return $this->applyDurationStarterTemplate($upcoming, $lines, wrapTransaction: false);
+        }, 3);
         $rowCount = $lines->count();
         $avgBoxes = (float) ($template['average_boxes'] ?? 0);
 
         $message = "Applied {$durationDays}-day starter template. {$rowCount} starter rows"
             ." using ".rtrim(rtrim(number_format($avgBoxes, 1), '0'), '.')." average boxes."
+            ." Replaced {$deleted} existing row".($deleted === 1 ? '' : 's')."."
             ." Added {$added}, merged {$merged}.";
 
         $this->syncEventPlanningStatus((int) $upcoming->id, 'drafted');
@@ -138,6 +152,38 @@ class MarketsPlanner extends Component
         $this->dispatch('marketsDraftCreated', upcomingEventId: (int) $upcoming->id, durationDays: $durationDays, templateRowCount: $rowCount);
         $this->dispatchPrefillStatus('applied', $message, $upcoming->id, 0, $rowCount);
         $this->dispatch('toast', ['type' => 'success', 'message' => $message]);
+    }
+
+    #[On('marketsResetDraftRequested')]
+    public function handleMarketsResetDraftRequested(?int $upcomingEventId = null): void
+    {
+        $event = $this->selectedEventById($upcomingEventId);
+        if (! $event) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an event first before resetting the draft.']);
+
+            return;
+        }
+
+        if (! $this->supportsRetailPlanItemUpcomingEventColumn()) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Retail plan items missing upcoming event support. Run migrations first.']);
+
+            return;
+        }
+
+        $deleted = DB::transaction(function () use ($event): int {
+            $this->lockUpcomingEventScope($event->id);
+
+            return $this->clearEventDraftRows($event->id);
+        }, 3);
+
+        $this->syncEventPlanningStatus((int) $event->id);
+        $this->dispatch('marketsRefreshRequested', eventId: (int) $event->id);
+        $this->dispatch('marketsDraftUpdated', eventId: (int) $event->id);
+        $this->dispatch('marketsDraftReset', eventId: (int) $event->id, deletedRows: $deleted);
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Draft reset. Removed {$deleted} row".($deleted === 1 ? '' : 's').'.',
+        ]);
     }
 
     #[On('marketsAddHalfBoxRequested')]
@@ -374,13 +420,13 @@ class MarketsPlanner extends Component
      * @param  Collection<int,EventBoxPlan>  $rows
      * @return array{0:int,1:int,2:int}
      */
-    protected function applyEventBoxPlanRowsPrefill(Collection $rows, Event $upcomingEvent): array
+    protected function applyEventBoxPlanRowsPrefill(Collection $rows, Event $upcomingEvent, bool $wrapTransaction = true): array
     {
         $added = 0;
         $merged = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($rows, $upcomingEvent, &$added, &$merged, &$skipped): void {
+        $apply = function () use ($rows, $upcomingEvent, &$added, &$merged, &$skipped): void {
             $this->rememberSelectedEvent($upcomingEvent);
 
             foreach ($rows as $row) {
@@ -454,7 +500,13 @@ class MarketsPlanner extends Component
                 $added += $result['added'];
                 $merged += $result['merged'];
             }
-        }, 3);
+        };
+
+        if ($wrapTransaction) {
+            DB::transaction($apply, 3);
+        } else {
+            $apply();
+        }
 
         return [$added, $merged, $skipped];
     }
@@ -690,12 +742,12 @@ class MarketsPlanner extends Component
      * @param  Collection<int,array<string,mixed>>  $lines
      * @return array{0:int,1:int}
      */
-    protected function applyDurationStarterTemplate(Event $upcomingEvent, Collection $lines): array
+    protected function applyDurationStarterTemplate(Event $upcomingEvent, Collection $lines, bool $wrapTransaction = true): array
     {
         $added = 0;
         $merged = 0;
 
-        DB::transaction(function () use ($upcomingEvent, $lines, &$added, &$merged): void {
+        $apply = function () use ($upcomingEvent, $lines, &$added, &$merged): void {
             foreach ($lines as $index => $line) {
                 $scentRaw = trim((string) ($line['scent_raw'] ?? ''));
                 $halfBoxUnits = max(1, (int) ($line['half_box_units'] ?? 1));
@@ -712,7 +764,13 @@ class MarketsPlanner extends Component
                 $added += $result['added'];
                 $merged += $result['merged'];
             }
-        }, 3);
+        };
+
+        if ($wrapTransaction) {
+            DB::transaction($apply, 3);
+        } else {
+            $apply();
+        }
 
         return [$added, $merged];
     }
@@ -1262,6 +1320,28 @@ class MarketsPlanner extends Component
             'quantity' => $qty,
             'wick_type' => str_contains((string) ($size?->code ?? ''), 'cotton') ? 'cotton' : null,
         ]);
+    }
+
+    protected function lockUpcomingEventScope(int $eventId): void
+    {
+        Event::query()
+            ->whereKey($eventId)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    protected function clearEventDraftRows(int $eventId): int
+    {
+        if (! $this->supportsRetailPlanItemUpcomingEventColumn()) {
+            return 0;
+        }
+
+        return RetailPlanItem::query()
+            ->where('retail_plan_id', $this->plan->id)
+            ->where('status', '!=', 'published')
+            ->where('upcoming_event_id', $eventId)
+            ->whereIn('source', RetailPlanItem::marketDraftSources())
+            ->delete();
     }
 
     protected function supportsRetailPlanItemUpcomingEventColumn(): bool

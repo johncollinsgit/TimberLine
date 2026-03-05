@@ -6,6 +6,7 @@ use App\Models\Event;
 use App\Models\EventBoxPlan;
 use App\Models\EventInstance;
 use App\Models\RetailPlanItem;
+use App\Models\Scent;
 use App\Services\MarketDurationTemplateService;
 use App\Services\MarketEventSyncCoordinator;
 use Illuminate\Support\Facades\Cache;
@@ -50,7 +51,11 @@ class EventMatchWizard extends Component
     public array $draftSummary = [
         'line_count' => 0,
         'unit_count' => 0,
+        'total_boxes' => 0.0,
+        'standard_line_count' => 0,
+        'top_shelf_line_count' => 0,
         'top_scents' => [],
+        'breakdown' => [],
     ];
 
     public bool $draftSummaryLoaded = false;
@@ -131,6 +136,26 @@ class EventMatchWizard extends Component
             $this->eventChosen = true;
             $this->matchDecisionMade = true;
         }
+    }
+
+    #[On('marketsDraftReset')]
+    public function handleDraftReset(int $eventId, int $deletedRows = 0): void
+    {
+        unset($deletedRows);
+
+        if ((int) ($this->upcomingEventId ?: 0) !== (int) $eventId) {
+            return;
+        }
+
+        $this->loadDraftSummary();
+        $this->loadSelectableUpcomingEvents();
+        $this->step = 2;
+        $this->matchDecisionMade = $this->hasSelectedMatchOrTemplate();
+        $this->setPrefillStatus(
+            'start_fresh',
+            'Draft reset. Choose a historical match or starter template to rebuild.',
+            0
+        );
     }
 
     #[On('marketsDraftCreated')]
@@ -279,6 +304,11 @@ class EventMatchWizard extends Component
             if ($this->draftHasContent()) {
                 $this->matchDecisionMade = true;
             }
+        }
+
+        $this->loadDraftSummary();
+        if ($this->draftHasContent() || $this->hasSelectedMatchOrTemplate()) {
+            $this->matchDecisionMade = true;
         }
 
         $this->step = 2;
@@ -499,6 +529,15 @@ class EventMatchWizard extends Component
         $this->setPrefillStatus('start_fresh', 'Starting with an empty draft. Add a scent to begin building boxes.', 0);
         $this->loadDraftSummary();
         $this->step = 3;
+    }
+
+    public function resetDraft(): void
+    {
+        if (! $this->upcomingEventId) {
+            return;
+        }
+
+        $this->dispatch('marketsResetDraftRequested', upcomingEventId: (int) $this->upcomingEventId);
     }
 
     public function publish(): void
@@ -980,7 +1019,11 @@ class EventMatchWizard extends Component
         $this->draftSummary = [
             'line_count' => 0,
             'unit_count' => 0,
+            'total_boxes' => 0.0,
+            'standard_line_count' => 0,
+            'top_shelf_line_count' => 0,
             'top_scents' => [],
+            'breakdown' => [],
         ];
     }
 
@@ -1013,7 +1056,7 @@ class EventMatchWizard extends Component
         }
 
         $items = RetailPlanItem::query()
-            ->select(['id', 'scent_id', 'quantity'])
+            ->select(['id', 'scent_id', 'quantity', 'box_tier', 'notes'])
             ->where('retail_plan_id', $this->planId)
             ->where('status', '!=', 'published')
             ->where('upcoming_event_id', $this->upcomingEventId)
@@ -1027,27 +1070,132 @@ class EventMatchWizard extends Component
             return;
         }
 
-        $topScents = $items
-            ->filter(fn (RetailPlanItem $item) => (int) ($item->scent_id ?? 0) > 0)
-            ->groupBy('scent_id')
-            ->map(function ($group): array {
-                /** @var RetailPlanItem $first */
-                $first = $group->first();
+        $breakdown = [];
+        $totalBoxes = 0.0;
+        $standardLineCount = 0;
+        $topShelfLineCount = 0;
 
-                return [
-                    'name' => (string) ($first->scent?->display_name ?: $first->scent?->name ?: 'Unknown'),
-                    'units' => (int) $group->sum(fn (RetailPlanItem $item) => (int) ($item->quantity ?? 0)),
+        $standardScentNames = $items
+            ->filter(fn (RetailPlanItem $item): bool => (int) ($item->scent_id ?? 0) > 0)
+            ->mapWithKeys(fn (RetailPlanItem $item): array => [
+                (int) $item->scent_id => (string) ($item->scent?->display_name ?: $item->scent?->name ?: "Scent #".(int) $item->scent_id),
+            ])
+            ->all();
+
+        foreach ($items as $item) {
+            $boxTier = $this->normalizeBoxTier((string) ($item->box_tier ?? 'standard'));
+            $quantity = max(1, (int) ($item->quantity ?? 1));
+
+            if ($boxTier === 'top_shelf') {
+                $topShelfLineCount++;
+                $totalBoxes += $quantity;
+
+                $configuration = RetailPlanItem::decodeTopShelfConfiguration($item->notes, $item->scent_id ? (int) $item->scent_id : null);
+                foreach ((array) ($configuration['composition'] ?? []) as $slot) {
+                    $scentId = (int) ($slot['scent_id'] ?? 0);
+                    $unitsPerBox = max(0, (int) ($slot['units_per_box'] ?? 0));
+
+                    if ($scentId <= 0 || $unitsPerBox <= 0) {
+                        continue;
+                    }
+
+                    if (! isset($breakdown[$scentId])) {
+                        $breakdown[$scentId] = [
+                            'scent_id' => $scentId,
+                            'name' => (string) ($standardScentNames[$scentId] ?? "Scent #{$scentId}"),
+                            'standard_boxes' => 0.0,
+                            'top_shelf_units' => 0,
+                            'total_weight' => 0,
+                        ];
+                    }
+
+                    $slotUnits = $quantity * $unitsPerBox;
+                    $breakdown[$scentId]['top_shelf_units'] += $slotUnits;
+                    $breakdown[$scentId]['total_weight'] += $slotUnits;
+                }
+
+                continue;
+            }
+
+            $standardLineCount++;
+            $standardBoxes = $quantity / 2;
+            $totalBoxes += $standardBoxes;
+            $scentId = (int) ($item->scent_id ?? 0);
+
+            if ($scentId <= 0) {
+                continue;
+            }
+
+            if (! isset($breakdown[$scentId])) {
+                $breakdown[$scentId] = [
+                    'scent_id' => $scentId,
+                    'name' => (string) ($standardScentNames[$scentId] ?? "Scent #{$scentId}"),
+                    'standard_boxes' => 0.0,
+                    'top_shelf_units' => 0,
+                    'total_weight' => 0,
                 ];
+            }
+
+            $breakdown[$scentId]['standard_boxes'] += $standardBoxes;
+            // Standard rows are stored in half-box units; use this for ordering weight.
+            $breakdown[$scentId]['total_weight'] += $quantity;
+        }
+
+        $missingScentIds = collect($breakdown)
+            ->filter(fn (array $row): bool => str_starts_with((string) ($row['name'] ?? ''), 'Scent #'))
+            ->pluck('scent_id')
+            ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($missingScentIds !== []) {
+            $resolvedNames = Scent::query()
+                ->whereIn('id', $missingScentIds)
+                ->get(['id', 'name', 'display_name'])
+                ->mapWithKeys(fn (Scent $scent): array => [
+                    (int) $scent->id => (string) ($scent->display_name ?: $scent->name ?: "Scent #".(int) $scent->id),
+                ])
+                ->all();
+
+            foreach ($resolvedNames as $scentId => $name) {
+                if (isset($breakdown[(int) $scentId])) {
+                    $breakdown[(int) $scentId]['name'] = $name;
+                }
+            }
+        }
+
+        $breakdownRows = collect($breakdown)
+            ->sortByDesc('total_weight')
+            ->values()
+            ->map(function (array $row): array {
+                $row['standard_boxes'] = (float) $row['standard_boxes'];
+                $row['top_shelf_units'] = (int) $row['top_shelf_units'];
+                unset($row['total_weight']);
+
+                return $row;
             })
-            ->sortByDesc('units')
+            ->all();
+
+        $topScents = collect($breakdownRows)
             ->take(4)
+            ->map(fn (array $row): array => [
+                'name' => (string) ($row['name'] ?? 'Unknown'),
+                'units' => (int) ($row['top_shelf_units'] ?? 0),
+                'standard_boxes' => (float) ($row['standard_boxes'] ?? 0),
+            ])
             ->values()
             ->all();
 
         $this->draftSummary = [
             'line_count' => $items->count(),
             'unit_count' => (int) $items->sum(fn (RetailPlanItem $item) => (int) ($item->quantity ?? 0)),
+            'total_boxes' => $totalBoxes,
+            'standard_line_count' => $standardLineCount,
+            'top_shelf_line_count' => $topShelfLineCount,
             'top_scents' => $topScents,
+            'breakdown' => $breakdownRows,
         ];
     }
 
@@ -1062,11 +1210,11 @@ class EventMatchWizard extends Component
         }
 
         if ($step === 3) {
-            return $this->eventChosen && $this->matchDecisionMade;
+            return $this->eventChosen && ($this->matchDecisionMade || $this->hasSelectedMatchOrTemplate() || $this->draftHasContent());
         }
 
         if ($step === 4) {
-            return $this->eventChosen && $this->matchDecisionMade && $this->draftHasContent();
+            return $this->eventChosen && $this->draftHasContent();
         }
 
         return false;
@@ -1075,6 +1223,19 @@ class EventMatchWizard extends Component
     protected function draftHasContent(): bool
     {
         return (int) ($this->draftSummary['line_count'] ?? 0) > 0;
+    }
+
+    protected function hasSelectedMatchOrTemplate(): bool
+    {
+        return (int) ($this->selectedMatchId ?: $this->selectedCandidateEventId ?: 0) > 0
+            || (is_string($this->selectedTemplateKey) && trim($this->selectedTemplateKey) !== '');
+    }
+
+    protected function normalizeBoxTier(string $value): string
+    {
+        $value = strtolower(trim($value));
+
+        return $value === 'top_shelf' ? 'top_shelf' : 'standard';
     }
 
     protected function supportsRetailPlanItemUpcomingEventColumn(): bool

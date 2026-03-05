@@ -135,16 +135,23 @@ class DraftEventEditor extends Component
 
     public function removeItem(int $itemId): void
     {
-        $item = $this->itemQuery()->findOrFail($itemId);
-        $item->delete();
+        $item = $this->itemQuery()->find($itemId);
+        if ($item) {
+            $item->delete();
+        }
 
         unset($this->draftRows[$itemId], $this->rowStatus[$itemId], $this->openNotes[$itemId], $this->openDetails[$itemId]);
         if ($this->activeTopShelfRowId === $itemId) {
             $this->activeTopShelfRowId = null;
         }
 
+        $this->loadDraftRows();
+
         $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
-        $this->dispatch('toast', ['type' => 'warning', 'message' => 'Item removed from draft.']);
+        $this->dispatch('toast', [
+            'type' => $item ? 'warning' : 'info',
+            'message' => $item ? 'Item removed from draft.' : 'Row was already removed.',
+        ]);
     }
 
     public function saveItem(int $itemId): void
@@ -231,7 +238,17 @@ class DraftEventEditor extends Component
             $notes = $this->normalizeNotes($row['notes_text'] ?? $row['notes'] ?? null);
         }
 
-        $item = $this->itemQuery()->findOrFail($itemId);
+        $item = $this->itemQuery()->find($itemId);
+        if (! $item) {
+            unset($this->draftRows[$itemId], $this->rowStatus[$itemId], $this->openNotes[$itemId], $this->openDetails[$itemId]);
+            if ($this->activeTopShelfRowId === $itemId) {
+                $this->activeTopShelfRowId = null;
+            }
+            $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
+            $this->setRowStatus($itemId, 'error', 'Row no longer exists.');
+
+            return false;
+        }
         $item->quantity = $quantity;
         $item->scent_id = $scentId;
         $item->size_id = $sizeId;

@@ -302,6 +302,142 @@ test('selecting a historical match copies market plan rows into draft boxes', fu
     expect((string) $upcoming->fresh()->status)->toBe('drafted');
 });
 
+test('applying the same historical match twice is idempotent for event draft rows', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Historical Match Idempotent Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $scents = collect([
+        Scent::query()->firstOrCreate(['name' => 'Evergreen'], ['display_name' => 'Evergreen', 'is_active' => true]),
+        Scent::query()->firstOrCreate(['name' => 'Fog Trail'], ['display_name' => 'Fog Trail', 'is_active' => true]),
+    ]);
+
+    $upcoming = Event::query()->create([
+        'name' => '05.02.26 Test Event',
+        'display_name' => '05.02.26 Test Event',
+        'starts_at' => '2026-05-02',
+        'ends_at' => '2026-05-02',
+        'status' => 'needs_mapping',
+    ]);
+
+    $candidate = EventInstance::query()->create([
+        'title' => '05.03.25 Test Event, SC',
+        'starts_at' => '2025-05-03',
+        'ends_at' => '2025-05-03',
+        'state' => 'SC',
+        'status' => 'completed',
+    ]);
+
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $candidate->id,
+        'scent_raw' => (string) $scents[0]->display_name,
+        'box_count_sent' => 1,
+        'is_split_box' => false,
+    ]);
+
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $candidate->id,
+        'scent_raw' => (string) $scents[1]->display_name,
+        'box_count_sent' => 0.5,
+        'is_split_box' => false,
+    ]);
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('handleMarketsMappingConfirmed', $upcoming->id, $candidate->id);
+
+    $firstPass = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $upcoming->id)
+        ->whereIn('source', RetailPlanItem::marketDraftSources())
+        ->orderBy('id')
+        ->get(['scent_id', 'quantity'])
+        ->map(fn (RetailPlanItem $item): array => [
+            'scent_id' => (int) $item->scent_id,
+            'quantity' => (int) $item->quantity,
+        ])
+        ->values()
+        ->all();
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('handleMarketsMappingConfirmed', $upcoming->id, $candidate->id);
+
+    $secondPass = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $upcoming->id)
+        ->whereIn('source', RetailPlanItem::marketDraftSources())
+        ->orderBy('id')
+        ->get(['scent_id', 'quantity'])
+        ->map(fn (RetailPlanItem $item): array => [
+            'scent_id' => (int) $item->scent_id,
+            'quantity' => (int) $item->quantity,
+        ])
+        ->values()
+        ->all();
+
+    expect($secondPass)->toBe($firstPass);
+});
+
+test('apply match overwrite clears old event draft rows before recreating template rows', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Historical Match Overwrite Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $oldScent = Scent::query()->firstOrCreate(['name' => 'Old Draft Scent'], ['display_name' => 'Old Draft Scent', 'is_active' => true]);
+    $newScent = Scent::query()->firstOrCreate(['name' => 'New Template Scent'], ['display_name' => 'New Template Scent', 'is_active' => true]);
+
+    $upcoming = Event::query()->create([
+        'name' => '06.06.26 Replace Draft Event',
+        'display_name' => '06.06.26 Replace Draft Event',
+        'starts_at' => '2026-06-06',
+        'ends_at' => '2026-06-06',
+        'status' => 'drafted',
+    ]);
+
+    RetailPlanItem::query()->create([
+        'retail_plan_id' => $plan->id,
+        'scent_id' => $oldScent->id,
+        'size_id' => null,
+        'quantity' => 4,
+        'source' => 'market_box_manual',
+        'status' => 'draft',
+        'upcoming_event_id' => $upcoming->id,
+        'box_tier' => 'standard',
+    ]);
+
+    $candidate = EventInstance::query()->create([
+        'title' => '06.07.25 Replace Draft Event, SC',
+        'starts_at' => '2025-06-07',
+        'ends_at' => '2025-06-07',
+        'state' => 'SC',
+        'status' => 'completed',
+    ]);
+
+    EventBoxPlan::query()->create([
+        'event_instance_id' => $candidate->id,
+        'scent_raw' => (string) $newScent->display_name,
+        'box_count_sent' => 1,
+        'is_split_box' => false,
+    ]);
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('handleMarketsMappingConfirmed', $upcoming->id, $candidate->id)
+        ->assertDispatched('marketsDraftUpdated');
+
+    $rows = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $upcoming->id)
+        ->whereIn('source', RetailPlanItem::marketDraftSources())
+        ->get();
+
+    expect($rows)->toHaveCount(1);
+    expect((int) $rows->first()->scent_id)->toBe($newScent->id);
+    expect((int) $rows->first()->quantity)->toBe(2);
+});
+
 test('historical prefill maps loose scent text and avoids accidental 1.5 standard boxes', function () {
     $user = User::factory()->create([
         'role' => 'admin',
@@ -419,6 +555,46 @@ test('wizard shows no-history guidance when the selected historical event has no
             0
         )
         ->assertSeeText('Historical event has no boxes to copy. Start building boxes by adding a scent.');
+});
+
+test('step 3 is accessible when an event already has draft rows even without a newly selected match', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Step Access Existing Draft Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '07.11.26 Existing Draft Event',
+        'display_name' => '07.11.26 Existing Draft Event',
+        'starts_at' => '2026-07-11',
+        'ends_at' => '2026-07-11',
+        'status' => 'drafted',
+    ]);
+
+    $scent = Scent::query()->firstOrCreate(
+        ['name' => 'Canyon Pine'],
+        ['display_name' => 'Canyon Pine', 'is_active' => true]
+    );
+
+    RetailPlanItem::query()->create([
+        'retail_plan_id' => $plan->id,
+        'scent_id' => $scent->id,
+        'size_id' => null,
+        'quantity' => 2,
+        'source' => 'event_prefill',
+        'status' => 'draft',
+        'upcoming_event_id' => $event->id,
+        'box_tier' => 'standard',
+    ]);
+
+    Livewire::test(EventMatchWizard::class, [
+        'planId' => $plan->id,
+        'upcomingEventId' => $event->id,
+    ])
+        ->set('matchDecisionMade', false)
+        ->call('goToStep', 3)
+        ->assertSet('step', 3);
 });
 
 test('selecting a historical match still copies templates when event_mappings is unavailable', function () {
@@ -671,6 +847,99 @@ test('draft event editor saves inline edits for draft boxes', function () {
         ->assertSet("draftRows.{$item->id}.box_tier", 'top_shelf')
         ->assertSet("draftRows.{$item->id}.top_shelf.preset", 'split_6_6')
         ->assertSet("draftRows.{$item->id}.top_shelf.size_mode", '8oz');
+});
+
+test('draft row delete is resilient to duplicate rapid deletes', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Draft Delete No-Op Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '08.08.26 Delete Event',
+        'display_name' => '08.08.26 Delete Event',
+        'starts_at' => '2026-08-08',
+        'ends_at' => '2026-08-08',
+        'status' => 'drafted',
+    ]);
+
+    $scent = Scent::query()->firstOrCreate(
+        ['name' => 'River Birch'],
+        ['display_name' => 'River Birch', 'is_active' => true]
+    );
+
+    $item = RetailPlanItem::query()->create([
+        'retail_plan_id' => $plan->id,
+        'scent_id' => $scent->id,
+        'size_id' => null,
+        'quantity' => 2,
+        'source' => 'event_prefill',
+        'status' => 'draft',
+        'upcoming_event_id' => $event->id,
+        'box_tier' => 'standard',
+    ]);
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->call('removeItem', $item->id)
+        ->call('removeItem', $item->id)
+        ->assertDispatched('marketsDraftUpdated');
+
+    expect(RetailPlanItem::query()->whereKey($item->id)->exists())->toBeFalse();
+});
+
+test('top shelf draft rows render as structured slots instead of concatenated labels', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Top Shelf Structured Render Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '09.12.26 Top Shelf Event',
+        'display_name' => '09.12.26 Top Shelf Event',
+        'starts_at' => '2026-09-12',
+        'ends_at' => '2026-09-12',
+        'status' => 'drafted',
+    ]);
+
+    $scentA = Scent::query()->firstOrCreate(
+        ['name' => 'Almond Cream Cake'],
+        ['display_name' => 'Almond Cream Cake', 'is_active' => true]
+    );
+    $scentB = Scent::query()->firstOrCreate(
+        ['name' => 'Coffeehouse'],
+        ['display_name' => 'Coffeehouse', 'is_active' => true]
+    );
+
+    $config = RetailPlanItem::normalizeTopShelfConfiguration([
+        'preset' => 'split_6_6',
+        'size_mode' => '16oz',
+        'slots' => [$scentA->id, $scentB->id],
+    ], $scentA->id);
+
+    RetailPlanItem::query()->create([
+        'retail_plan_id' => $plan->id,
+        'scent_id' => $scentA->id,
+        'size_id' => null,
+        'quantity' => 2,
+        'source' => 'event_prefill',
+        'status' => 'draft',
+        'upcoming_event_id' => $event->id,
+        'box_tier' => 'top_shelf',
+        'notes' => RetailPlanItem::encodeTopShelfConfiguration($config, $scentA->id),
+    ]);
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->assertSeeText('Top Shelf Line')
+        ->assertSeeText('slots filled')
+        ->assertDontSeeText('6x ');
 });
 
 test('draft event editor reloads db rows when mounted state is empty', function () {
