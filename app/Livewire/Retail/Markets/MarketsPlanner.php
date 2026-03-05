@@ -433,6 +433,14 @@ class MarketsPlanner extends Component
                 }
 
                 $scentId = $this->resolveScentIdFromText($rawScent);
+                if (! $scentId) {
+                    Log::info('MarketsPlanner could not resolve scent from historical row', [
+                        'upcoming_event_id' => (int) $upcomingEvent->id,
+                        'source_market_plan_row_id' => (int) $row->id,
+                        'raw_scent' => $rawScent,
+                        'sent_boxes' => $sentBoxes,
+                    ]);
+                }
                 $halfBoxUnits = $this->normalizedStandardHalfBoxUnits($sentBoxes);
                 $result = $this->mergeMarketEventPrefillItem(
                     $upcomingEvent,
@@ -866,20 +874,33 @@ class MarketsPlanner extends Component
 
         $bestId = null;
         $bestScore = 0.0;
+        $secondBestScore = 0.0;
 
         foreach ($searchKeys as $needle) {
             foreach ($candidates as $candidate) {
                 foreach ($candidate['keys'] as $key) {
                     $score = $this->scentSimilarityScore($needle, $key);
                     if ($score > $bestScore) {
+                        $secondBestScore = $bestScore;
                         $bestScore = $score;
                         $bestId = (int) $candidate['id'];
+                    } elseif ($score > $secondBestScore) {
+                        $secondBestScore = $score;
                     }
                 }
             }
         }
 
-        return $bestScore >= 0.83 ? $bestId : null;
+        if ($bestId === null) {
+            return null;
+        }
+
+        $gap = $bestScore - $secondBestScore;
+        if ($bestScore >= 0.90 || ($bestScore >= 0.74 && $gap >= 0.06)) {
+            return $bestId;
+        }
+
+        return null;
     }
 
     protected function normalizedStandardHalfBoxUnits(float $sentBoxes): int

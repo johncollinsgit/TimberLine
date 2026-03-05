@@ -26,6 +26,7 @@ class DraftEventEditor extends Component
     public array $openNotes = [];
     /** @var array<int,bool> */
     public array $openDetails = [];
+    public ?int $activeTopShelfRowId = null;
 
     public function mount(int $planId, ?int $selectedEventId = null): void
     {
@@ -75,7 +76,9 @@ class DraftEventEditor extends Component
                     $row['top_shelf'] ?? [],
                     $fallbackScentId
                 );
-                $this->openDetails[$itemId] = true;
+                $this->activeTopShelfRowId = $itemId;
+            } elseif ($this->activeTopShelfRowId === $itemId) {
+                $this->activeTopShelfRowId = null;
             }
 
             return;
@@ -136,6 +139,9 @@ class DraftEventEditor extends Component
         $item->delete();
 
         unset($this->draftRows[$itemId], $this->rowStatus[$itemId], $this->openNotes[$itemId], $this->openDetails[$itemId]);
+        if ($this->activeTopShelfRowId === $itemId) {
+            $this->activeTopShelfRowId = null;
+        }
 
         $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
         $this->dispatch('toast', ['type' => 'warning', 'message' => 'Item removed from draft.']);
@@ -143,9 +149,49 @@ class DraftEventEditor extends Component
 
     public function saveItem(int $itemId): void
     {
+        $this->saveItemInternal($itemId, true);
+    }
+
+    public function saveAllRows(): void
+    {
+        if (empty($this->draftRows)) {
+            return;
+        }
+
+        $saved = 0;
+        $failed = 0;
+
+        foreach (array_keys($this->draftRows) as $itemId) {
+            $ok = $this->saveItemInternal((int) $itemId, false);
+            if ($ok) {
+                $saved++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
+
+        if ($failed > 0) {
+            $message = $saved > 0
+                ? "Saved {$saved} row".($saved === 1 ? '' : 's')."; {$failed} still need attention."
+                : "No rows saved; {$failed} row".($failed === 1 ? '' : 's')." need attention.";
+
+            $this->dispatch('toast', ['type' => 'warning', 'message' => $message]);
+            return;
+        }
+
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Saved {$saved} draft row".($saved === 1 ? '' : 's').'.',
+        ]);
+    }
+
+    protected function saveItemInternal(int $itemId, bool $emitPerRowEvents = true): bool
+    {
         $row = $this->draftRows[$itemId] ?? null;
         if (! is_array($row)) {
-            return;
+            return false;
         }
 
         $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
@@ -157,7 +203,7 @@ class DraftEventEditor extends Component
         if ($sizeId && ! Size::query()->whereKey($sizeId)->exists()) {
             $this->setRowStatus($itemId, 'error', 'Selected size no longer exists.');
 
-            return;
+            return false;
         }
 
         $topShelfConfiguration = null;
@@ -170,7 +216,7 @@ class DraftEventEditor extends Component
             if ($invalidSlotIds !== []) {
                 $this->setRowStatus($itemId, 'error', 'One or more Top Shelf scents no longer exist.');
 
-                return;
+                return false;
             }
 
             $notes = RetailPlanItem::encodeTopShelfConfiguration($topShelfConfiguration, $scentId);
@@ -179,7 +225,7 @@ class DraftEventEditor extends Component
             if ($scentId && ! Scent::query()->whereKey($scentId)->exists()) {
                 $this->setRowStatus($itemId, 'error', 'Selected scent no longer exists.');
 
-                return;
+                return false;
             }
 
             $notes = $this->normalizeNotes($row['notes_text'] ?? $row['notes'] ?? null);
@@ -218,8 +264,12 @@ class DraftEventEditor extends Component
 
         $this->setRowStatus($itemId, 'success', 'Saved.');
 
-        $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
-        $this->dispatch('toast', ['type' => 'success', 'message' => 'Draft row updated.']);
+        if ($emitPerRowEvents) {
+            $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
+            $this->dispatch('toast', ['type' => 'success', 'message' => 'Draft row updated.']);
+        }
+
+        return true;
     }
 
     public function marketBoxLabelFromUnits(int $units): string
@@ -287,34 +337,6 @@ class DraftEventEditor extends Component
         return implode(' | ', $parts);
     }
 
-    public function sourceLabel(array $row): string
-    {
-        $source = (string) ($row['source'] ?? '');
-
-        return match ($source) {
-            'market_box_manual' => 'Manual',
-            'market_top_shelf_template' => 'Top Shelf default',
-            'market_duration_template' => 'Starter template',
-            default => 'Historical template',
-        };
-    }
-
-    public function rowInfoText(array $row): string
-    {
-        $parts = [
-            $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard')) === 'top_shelf' ? 'Top Shelf' : 'Standard',
-            $this->sourceLabel($row),
-            $this->quantityLabelForRow($row),
-        ];
-
-        $sizeLabel = trim((string) ($row['size_label'] ?? ''));
-        if ($sizeLabel !== '') {
-            $parts[] = 'Size: '.$sizeLabel;
-        }
-
-        return implode(' · ', $parts);
-    }
-
     public function toggleNotes(int $itemId): void
     {
         if (! isset($this->draftRows[$itemId])) {
@@ -330,7 +352,36 @@ class DraftEventEditor extends Component
             return;
         }
 
+        if ($this->normalizeBoxTier((string) ($this->draftRows[$itemId]['box_tier'] ?? 'standard')) === 'top_shelf') {
+            $this->activeTopShelfRowId = $itemId;
+            return;
+        }
+
         $this->openDetails[$itemId] = ! (bool) ($this->openDetails[$itemId] ?? false);
+    }
+
+    public function openTopShelfConfigurator(int $itemId): void
+    {
+        if (! isset($this->draftRows[$itemId])) {
+            return;
+        }
+
+        $row = $this->draftRows[$itemId];
+        if ($this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard')) !== 'top_shelf') {
+            return;
+        }
+
+        $fallbackScentId = $this->normalizeNullableId($row['scent_id'] ?? null);
+        $this->draftRows[$itemId]['top_shelf'] = $this->normalizeTopShelfConfiguration(
+            $row['top_shelf'] ?? [],
+            $fallbackScentId
+        );
+        $this->activeTopShelfRowId = $itemId;
+    }
+
+    public function closeTopShelfConfigurator(): void
+    {
+        $this->activeTopShelfRowId = null;
     }
 
     public function render()
@@ -354,12 +405,21 @@ class DraftEventEditor extends Component
             fn (array $row): bool => ! $this->rowCanSubmit($row)
         );
 
+        $selectedScentIds = collect($this->draftRows)
+            ->pluck('scent_id')
+            ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
         $scentOptions = Scent::query()
-            ->where('is_active', true)
-            ->where(function ($query): void {
-                $query->whereNull('is_wholesale_custom')
-                    ->orWhere('is_wholesale_custom', false);
-            })
+            ->when($selectedScentIds !== [], function ($query) use ($selectedScentIds): void {
+                $query->where(function ($inner) use ($selectedScentIds): void {
+                    $inner->where('is_active', true)
+                        ->orWhereIn('id', $selectedScentIds);
+                });
+            }, fn ($query) => $query->where('is_active', true))
             ->orderByRaw('COALESCE(display_name, name)')
             ->get(['id', 'name', 'display_name']);
 
@@ -391,10 +451,12 @@ class DraftEventEditor extends Component
         $existingStatuses = $resetStatuses ? [] : $this->rowStatus;
         $existingOpenNotes = $this->openNotes;
         $existingOpenDetails = $this->openDetails;
+        $previousTopShelfRowId = $this->activeTopShelfRowId;
         $this->draftRows = [];
         $this->rowStatus = [];
         $this->openNotes = [];
         $this->openDetails = [];
+        $this->activeTopShelfRowId = null;
 
         $eventId = (int) ($this->selectedEventId ?: 0);
         if ($eventId <= 0 || ! $this->supportsRetailPlanItemUpcomingEventColumn()) {
@@ -447,6 +509,9 @@ class DraftEventEditor extends Component
 
             $this->openNotes[$itemId] = (bool) ($existingOpenNotes[$itemId] ?? false);
             $this->openDetails[$itemId] = (bool) ($existingOpenDetails[$itemId] ?? false);
+            if ($previousTopShelfRowId === $itemId) {
+                $this->activeTopShelfRowId = $itemId;
+            }
         }
 
         if (! empty($this->draftRows)) {

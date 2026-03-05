@@ -299,9 +299,9 @@
               @endif
             </div>
           </div>
-          <div class="flex w-full flex-col gap-3 lg:w-auto lg:min-w-[52rem]">
-            <div class="md:flex md:flex-row md:items-end md:gap-4">
-              <div class="w-full min-w-[16rem] flex-1 md:min-w-[22rem]">
+          <div class="w-full">
+            <div class="grid w-full gap-3 lg:grid-cols-[minmax(22rem,1fr)_auto] lg:items-end">
+              <div class="w-full min-w-[22rem]">
                 <label class="text-xs uppercase tracking-[0.22em] text-emerald-100/55">Scent</label>
                 <div class="mt-2">
                   @livewire(
@@ -319,7 +319,7 @@
                   <div class="mt-2 text-[11px] text-emerald-100/50">Select a scent to add boxes.</div>
                 @endif
               </div>
-              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:shrink-0 md:justify-end">
+              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
                 <button
                   type="button"
                   wire:click="addHalfBox"
