@@ -104,14 +104,7 @@ class OrderDetail extends Component
             return;
         }
 
-        $currentlyExpanded = (bool) ($this->expandedScents[$scentKey] ?? false);
-
-        // Keep the editor tight: only one scent row can be expanded at a time.
-        foreach (array_keys($this->expandedScents) as $key) {
-            $this->expandedScents[$key] = false;
-        }
-
-        $this->expandedScents[$scentKey] = ! $currentlyExpanded;
+        $this->expandedScents[$scentKey] = ! (bool) ($this->expandedScents[$scentKey] ?? false);
     }
 
     public function saveScentStatuses(): void
