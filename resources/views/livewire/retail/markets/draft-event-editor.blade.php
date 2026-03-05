@@ -92,24 +92,48 @@
           </div>
         @endif
 
+        @php
+          $activeTopShelfComposition = (array) ($activeTopShelf['composition'] ?? []);
+          $activeTopShelfTotalSlots = count($activeTopShelfComposition);
+          $activeTopShelfMissingSlots = collect($activeTopShelfComposition)
+            ->filter(fn ($slot): bool => (int) ($slot['scent_id'] ?? 0) <= 0)
+            ->count();
+        @endphp
         <div class="mt-4 rounded-2xl border border-amber-300/15 bg-black/15 p-3">
-          <div class="text-[10px] uppercase tracking-[0.2em] text-amber-100/70">Top Shelf Scents</div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-[10px] uppercase tracking-[0.2em] text-amber-100/70">Top Shelf Scents</div>
+            @if($activeTopShelfMissingSlots > 0)
+              <div class="text-[11px] font-medium text-rose-200">
+                {{ $activeTopShelfMissingSlots }} of {{ $activeTopShelfTotalSlots }} slots need a scent
+              </div>
+            @else
+              <div class="text-[11px] font-medium text-emerald-200">All slots selected</div>
+            @endif
+          </div>
           <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             @foreach(($activeTopShelf['composition'] ?? []) as $slotIndex => $slot)
-              <div class="space-y-1 rounded-xl border border-white/8 bg-black/20 p-2.5">
+              @php
+                $slotSelected = (int) ($slot['scent_id'] ?? 0) > 0;
+              @endphp
+              <div class="space-y-1 rounded-xl border p-2.5 {{ $slotSelected ? 'border-white/8 bg-black/20' : 'border-rose-300/35 bg-rose-500/10' }}">
                 <div class="flex items-center justify-between gap-2">
-                  <div class="text-xs font-semibold text-white">Slot {{ (int) ($slot['slot'] ?? ($slotIndex + 1)) }}</div>
+                  <div class="text-xs font-semibold {{ $slotSelected ? 'text-white' : 'text-rose-100' }}">
+                    Slot {{ (int) ($slot['slot'] ?? ($slotIndex + 1)) }}
+                  </div>
                   <div class="text-[11px] text-emerald-100/55">{{ (int) ($slot['units_per_box'] ?? 0) }} per box</div>
                 </div>
                 <select
                   wire:model.defer="draftRows.{{ $activeTopShelfRowId }}.top_shelf.slots.{{ $slotIndex }}"
-                  class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                  class="h-10 w-full rounded-xl border px-3 text-sm text-white/90 {{ $slotSelected ? 'border-emerald-200/10 bg-black/20' : 'border-rose-300/40 bg-black/25' }}"
                 >
                   <option value="">Choose scent...</option>
                   @foreach($scentOptions as $option)
                     <option value="{{ $option->id }}">{{ $option->display_name ?: $option->name }}</option>
                   @endforeach
                 </select>
+                @if(! $slotSelected)
+                  <div class="text-[11px] font-medium text-rose-200">Required</div>
+                @endif
               </div>
             @endforeach
           </div>
