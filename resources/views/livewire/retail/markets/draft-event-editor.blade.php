@@ -20,201 +20,200 @@
       @php($boxTier = (string) ($row['box_tier'] ?? 'standard'))
       @php($status = $rowStatus[$rowId] ?? null)
       @php($topShelf = (array) ($row['top_shelf'] ?? []))
+      @php($notesOpen = (bool) ($openNotes[$rowId] ?? false))
+      @php($detailsOpen = (bool) ($openDetails[$rowId] ?? false))
 
-      <div wire:key="draft-row-{{ $rowId }}" class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 space-y-4">
-        <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <div class="min-w-0">
-            <div class="text-sm font-medium text-white/90">
-              {{ $boxTier === 'top_shelf' ? 'Top Shelf Box' : ($row['scent_label'] ?: ($row['scent_id'] ? 'Mapped scent' : 'Needs scent mapping')) }}
-            </div>
-            <div class="mt-1 text-xs text-emerald-100/60">
-              {{ $boxTier === 'top_shelf' ? 'Top Shelf' : 'Standard Market Box' }}
-              · {{
-                ($row['source'] ?? '') === 'market_box_manual'
-                  ? 'Manual'
-                  : ((($row['source'] ?? '') === 'market_top_shelf_template'
-                      ? 'Top Shelf default'
-                      : (($row['source'] ?? '') === 'market_duration_template' ? 'Starter template' : 'Historical template')))
-              }}
-              · {{ $this->quantityLabelForRow($row) }}
-            </div>
+      <div wire:key="draft-row-{{ $rowId }}" class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-3">
+        <div class="flex flex-wrap items-center gap-2 text-[10px] text-emerald-100/60">
+          <span class="rounded-full border border-white/10 bg-black/20 px-2 py-0.5">
+            {{ $boxTier === 'top_shelf' ? 'Top Shelf' : 'Standard' }}
+          </span>
+          <span>{{ $this->sourceLabel($row) }}</span>
+          <span>·</span>
+          <span>{{ $this->quantityLabelForRow($row) }}</span>
+          @if(!empty($row['size_label']))
+            <span>·</span>
+            <span>{{ $row['size_label'] }}</span>
+          @endif
+        </div>
+
+        <div class="mt-2 flex flex-col gap-2 xl:flex-row xl:items-center">
+          <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
             @if($boxTier === 'top_shelf')
-              <div class="mt-2 text-xs text-emerald-100/55">{{ $this->topShelfDescription($row) }}</div>
-              <div class="mt-1 text-xs text-emerald-100/50">{{ $this->topShelfCompositionPreview($row, $scentLookup) }}</div>
+              <button
+                type="button"
+                wire:click="toggleDetails({{ $rowId }})"
+                class="h-11 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 text-left text-xs text-amber-50/85 hover:bg-amber-500/15"
+              >
+                {{ $this->topShelfDescription($row) }} · {{ $this->topShelfCompositionPreview($row, $scentLookup) ?: 'Open details to configure scents' }}
+              </button>
+            @else
+              <select
+                wire:model.live="draftRows.{{ $rowId }}.scent_id"
+                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+              >
+                <option value="">Select scent...</option>
+                @foreach($scentOptions as $option)
+                  <option value="{{ $option->id }}">{{ $option->display_name ?: $option->name }}</option>
+                @endforeach
+              </select>
             @endif
-          </div>
 
-          <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+            <input
+              type="number"
+              min="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
+              step="{{ $boxTier === 'top_shelf' ? 1 : 0.5 }}"
+              wire:model.live.debounce.250ms="draftRows.{{ $rowId }}.box_count"
+              class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+              aria-label="{{ $boxTier === 'top_shelf' ? 'Top shelf boxes' : 'Boxes' }}"
+            />
+
             <button
               type="button"
               wire:click="saveItem({{ $rowId }})"
-              class="w-full rounded-xl border border-emerald-300/25 bg-emerald-500/12 px-4 py-2 text-sm font-semibold text-white sm:w-auto"
+              class="h-11 rounded-2xl border border-emerald-300/25 bg-emerald-500/12 px-4 text-sm font-semibold text-white"
             >
               Save
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">
+            @if($boxTier !== 'top_shelf')
+              <button
+                type="button"
+                wire:click="toggleNotes({{ $rowId }})"
+                class="rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/85 hover:bg-white/10"
+              >
+                {{ $notesOpen ? 'Hide Notes' : 'Notes' }}
+              </button>
+            @endif
+            <button
+              type="button"
+              wire:click="toggleDetails({{ $rowId }})"
+              class="rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/85 hover:bg-white/10"
+            >
+              {{ $detailsOpen ? 'Hide Details' : 'Details' }}
             </button>
             <button
               type="button"
               wire:click="removeItem({{ $rowId }})"
-              class="w-full rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm text-red-100 sm:w-auto"
+              class="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100"
             >
               Remove
             </button>
           </div>
         </div>
 
-        @if($boxTier === 'top_shelf')
-          <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Top Shelf Boxes</label>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                wire:model.live.debounce.300ms="draftRows.{{ $rowId }}.quantity"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              />
+        @if($notesOpen && $boxTier !== 'top_shelf')
+          <div class="mt-2">
+            <textarea
+              wire:model.live.debounce.300ms="draftRows.{{ $rowId }}.notes_text"
+              rows="2"
+              placeholder="Optional notes for this line..."
+              class="w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90 placeholder:text-white/30"
+            ></textarea>
+          </div>
+        @endif
+
+        @if($detailsOpen)
+          <div class="mt-2 rounded-2xl border border-white/8 bg-black/15 p-3 space-y-3">
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div class="space-y-1">
+                <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Line Type</label>
+                <select
+                  wire:model.live="draftRows.{{ $rowId }}.box_tier"
+                  class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="top_shelf">Top Shelf</option>
+                </select>
+              </div>
+
+              @if($boxTier !== 'top_shelf')
+                <div class="space-y-1">
+                  <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Extra Size (Optional)</label>
+                  <select
+                    wire:model.live="draftRows.{{ $rowId }}.size_id"
+                    class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                  >
+                    <option value="">Default size</option>
+                    @foreach($sizeOptions as $option)
+                      <option value="{{ $option->id }}">{{ $option->label ?: $option->code }}</option>
+                    @endforeach
+                  </select>
+                </div>
+              @endif
+
+              @if($boxTier === 'top_shelf')
+                <div class="space-y-1">
+                  <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Composition</label>
+                  <select
+                    wire:model.live="draftRows.{{ $rowId }}.top_shelf.preset"
+                    class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                  >
+                    @foreach($topShelfPresetOptions as $presetValue => $presetLabel)
+                      <option value="{{ $presetValue }}">{{ $presetLabel }}</option>
+                    @endforeach
+                  </select>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Fill Type</label>
+                  <select
+                    wire:model.live="draftRows.{{ $rowId }}.top_shelf.size_mode"
+                    class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                  >
+                    @foreach($topShelfSizeModes as $modeValue => $modeLabel)
+                      <option value="{{ $modeValue }}">{{ $modeLabel }}</option>
+                    @endforeach
+                  </select>
+                </div>
+              @endif
             </div>
 
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Tier Type</label>
-              <select
-                wire:model.live="draftRows.{{ $rowId }}.box_tier"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              >
-                <option value="standard">Standard</option>
-                <option value="top_shelf">Top Shelf</option>
-              </select>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Composition</label>
-              <select
-                wire:model.live="draftRows.{{ $rowId }}.top_shelf.preset"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              >
-                @foreach($topShelfPresetOptions as $presetValue => $presetLabel)
-                  <option value="{{ $presetValue }}">{{ $presetLabel }}</option>
-                @endforeach
-              </select>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Fill Type</label>
-              <select
-                wire:model.live="draftRows.{{ $rowId }}.top_shelf.size_mode"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              >
-                @foreach($topShelfSizeModes as $modeValue => $modeLabel)
-                  <option value="{{ $modeValue }}">{{ $modeLabel }}</option>
-                @endforeach
-              </select>
-            </div>
-
-            @if(($topShelf['size_mode'] ?? '16oz') === 'wax_melt')
-              <div class="space-y-2">
-                <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Melts Per Box</label>
+            @if($boxTier === 'top_shelf' && ($topShelf['size_mode'] ?? '16oz') === 'wax_melt')
+              <div class="max-w-[12rem] space-y-1">
+                <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Melts Per Box</label>
                 <input
                   type="number"
                   min="1"
                   max="36"
                   step="1"
                   wire:model.live.debounce.300ms="draftRows.{{ $rowId }}.top_shelf.wax_melt_capacity"
-                  class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                  class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
                 />
               </div>
             @endif
-          </div>
 
-          <div class="rounded-2xl border border-amber-300/15 bg-amber-500/5 p-4">
-            <div class="text-[11px] uppercase tracking-[0.22em] text-amber-100/70">Top Shelf Builder</div>
-            <div class="mt-1 text-xs text-amber-50/80">
-              Configure the per-box composition here. This stays as a box row and expands into candle lines only when you publish.
-            </div>
-
-            <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              @foreach(($topShelf['composition'] ?? []) as $slotIndex => $slot)
-                <div class="space-y-2 rounded-2xl border border-white/8 bg-black/15 p-3">
-                  <div class="flex items-center justify-between gap-2">
-                    <div class="text-xs font-semibold text-white">Slot {{ (int) ($slot['slot'] ?? ($slotIndex + 1)) }}</div>
-                    <div class="text-[11px] text-emerald-100/55">{{ (int) ($slot['units_per_box'] ?? 0) }} per box</div>
-                  </div>
-                  <select
-                    wire:model.live="draftRows.{{ $rowId }}.top_shelf.slots.{{ $slotIndex }}"
-                    class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-                  >
-                    <option value="">Choose scent…</option>
-                    @foreach($scentOptions as $option)
-                      <option value="{{ $option->id }}">{{ $option->display_name ?: $option->name }}</option>
-                    @endforeach
-                  </select>
+            @if($boxTier === 'top_shelf')
+              <div class="rounded-2xl border border-amber-300/15 bg-amber-500/5 p-3">
+                <div class="text-[10px] uppercase tracking-[0.2em] text-amber-100/70">Top Shelf Scents</div>
+                <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  @foreach(($topShelf['composition'] ?? []) as $slotIndex => $slot)
+                    <div class="space-y-1 rounded-xl border border-white/8 bg-black/15 p-2.5">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="text-xs font-semibold text-white">Slot {{ (int) ($slot['slot'] ?? ($slotIndex + 1)) }}</div>
+                        <div class="text-[11px] text-emerald-100/55">{{ (int) ($slot['units_per_box'] ?? 0) }} per box</div>
+                      </div>
+                      <select
+                        wire:model.live="draftRows.{{ $rowId }}.top_shelf.slots.{{ $slotIndex }}"
+                        class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
+                      >
+                        <option value="">Choose scent...</option>
+                        @foreach($scentOptions as $option)
+                          <option value="{{ $option->id }}">{{ $option->display_name ?: $option->name }}</option>
+                        @endforeach
+                      </select>
+                    </div>
+                  @endforeach
                 </div>
-              @endforeach
-            </div>
-          </div>
-        @else
-          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <div class="space-y-2 xl:col-span-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Scent</label>
-              <select
-                wire:model.live="draftRows.{{ $rowId }}.scent_id"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              >
-                <option value="">Select scent…</option>
-                @foreach($scentOptions as $option)
-                  <option value="{{ $option->id }}">{{ $option->display_name ?: $option->name }}</option>
-                @endforeach
-              </select>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Half-Box Units</label>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                wire:model.live.debounce.300ms="draftRows.{{ $rowId }}.quantity"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Size</label>
-              <select
-                wire:model.live="draftRows.{{ $rowId }}.size_id"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              >
-                <option value="">Default publish sizes</option>
-                @foreach($sizeOptions as $option)
-                  <option value="{{ $option->id }}">{{ $option->label ?: $option->code }}</option>
-                @endforeach
-              </select>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Tier Type</label>
-              <select
-                wire:model.live="draftRows.{{ $rowId }}.box_tier"
-                class="h-11 w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-              >
-                <option value="standard">Standard</option>
-                <option value="top_shelf">Top Shelf</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/55">Notes</label>
-            <textarea
-              wire:model.live.debounce.300ms="draftRows.{{ $rowId }}.notes_text"
-              rows="2"
-              placeholder="Notes for this draft row…"
-              class="w-full rounded-2xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90 placeholder:text-white/30"
-            ></textarea>
+              </div>
+            @endif
           </div>
         @endif
 
         @if(!empty($status['message']))
-          <div class="rounded-xl border px-3 py-2 text-xs {{ ($status['type'] ?? '') === 'error' ? 'border-rose-300/20 bg-rose-500/10 text-rose-100' : 'border-emerald-300/20 bg-emerald-500/10 text-emerald-50' }}">
+          <div class="mt-2 rounded-xl border px-3 py-2 text-xs {{ ($status['type'] ?? '') === 'error' ? 'border-rose-300/20 bg-rose-500/10 text-rose-100' : 'border-emerald-300/20 bg-emerald-500/10 text-emerald-50' }}">
             {{ $status['message'] }}
           </div>
         @endif
@@ -223,7 +222,7 @@
 
     @if(!$canSubmit)
       <div class="rounded-xl border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-50/90">
-        Every standard row needs a scent and quantity. Every Top Shelf row needs a complete composition and quantity before publish.
+        Every standard row needs a scent and boxes quantity. Every Top Shelf row needs complete scent slots and quantity before review.
       </div>
     @endif
   @endif

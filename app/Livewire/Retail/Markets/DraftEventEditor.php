@@ -22,6 +22,10 @@ class DraftEventEditor extends Component
 
     /** @var array<int,array{type:string,message:string}> */
     public array $rowStatus = [];
+    /** @var array<int,bool> */
+    public array $openNotes = [];
+    /** @var array<int,bool> */
+    public array $openDetails = [];
 
     public function mount(int $planId, ?int $selectedEventId = null): void
     {
@@ -61,6 +65,9 @@ class DraftEventEditor extends Component
         if ($field === 'box_tier') {
             $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
             $this->draftRows[$itemId]['box_tier'] = $boxTier;
+            $quantity = max(1, (int) ($row['quantity'] ?? 1));
+            $this->draftRows[$itemId]['quantity'] = $quantity;
+            $this->draftRows[$itemId]['box_count'] = $this->boxCountFromStoredQuantity($quantity, $boxTier);
 
             if ($boxTier === 'top_shelf') {
                 $fallbackScentId = $this->normalizeNullableId($row['scent_id'] ?? null);
@@ -68,7 +75,26 @@ class DraftEventEditor extends Component
                     $row['top_shelf'] ?? [],
                     $fallbackScentId
                 );
+                $this->openDetails[$itemId] = true;
             }
+
+            return;
+        }
+
+        if ($field === 'box_count') {
+            $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+            $quantity = $this->normalizeQuantity($row['box_count'] ?? 1, $boxTier);
+            $this->draftRows[$itemId]['quantity'] = $quantity;
+            $this->draftRows[$itemId]['box_count'] = $this->boxCountFromStoredQuantity($quantity, $boxTier);
+
+            return;
+        }
+
+        if ($field === 'quantity') {
+            $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+            $quantity = max(1, (int) ($row['quantity'] ?? 1));
+            $this->draftRows[$itemId]['quantity'] = $quantity;
+            $this->draftRows[$itemId]['box_count'] = $this->boxCountFromStoredQuantity($quantity, $boxTier);
 
             return;
         }
@@ -109,7 +135,7 @@ class DraftEventEditor extends Component
         $item = $this->itemQuery()->findOrFail($itemId);
         $item->delete();
 
-        unset($this->draftRows[$itemId], $this->rowStatus[$itemId]);
+        unset($this->draftRows[$itemId], $this->rowStatus[$itemId], $this->openNotes[$itemId], $this->openDetails[$itemId]);
 
         $this->dispatch('marketsDraftUpdated', eventId: (int) ($this->selectedEventId ?? 0));
         $this->dispatch('toast', ['type' => 'warning', 'message' => 'Item removed from draft.']);
@@ -123,7 +149,8 @@ class DraftEventEditor extends Component
         }
 
         $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
-        $quantity = $this->normalizeQuantity($row['quantity'] ?? 1, $boxTier);
+        $quantityInput = array_key_exists('box_count', $row) ? ($row['box_count'] ?? null) : ($row['quantity'] ?? 1);
+        $quantity = $this->normalizeQuantity($quantityInput, $boxTier);
         $scentId = $this->normalizeNullableId($row['scent_id'] ?? null);
         $sizeId = $this->normalizeNullableId($row['size_id'] ?? null);
 
@@ -177,6 +204,7 @@ class DraftEventEditor extends Component
         $item->save();
 
         $this->draftRows[$itemId]['quantity'] = $quantity;
+        $this->draftRows[$itemId]['box_count'] = $this->boxCountFromStoredQuantity($quantity, $boxTier);
         $this->draftRows[$itemId]['scent_id'] = $scentId;
         $this->draftRows[$itemId]['size_id'] = $sizeId;
         $this->draftRows[$itemId]['box_tier'] = $boxTier;
@@ -211,7 +239,7 @@ class DraftEventEditor extends Component
     public function quantityLabelForRow(array $row): string
     {
         $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
-        $quantity = max(1, (int) ($row['quantity'] ?? 1));
+        $quantity = $this->normalizeQuantity($row['box_count'] ?? ($row['quantity'] ?? 1), $boxTier);
 
         if ($boxTier === 'top_shelf') {
             return $quantity.' '.($quantity === 1 ? 'Top Shelf box' : 'Top Shelf boxes');
@@ -257,6 +285,36 @@ class DraftEventEditor extends Component
         }
 
         return implode(' | ', $parts);
+    }
+
+    public function sourceLabel(array $row): string
+    {
+        $source = (string) ($row['source'] ?? '');
+
+        return match ($source) {
+            'market_box_manual' => 'Manual',
+            'market_top_shelf_template' => 'Top Shelf default',
+            'market_duration_template' => 'Starter template',
+            default => 'Historical template',
+        };
+    }
+
+    public function toggleNotes(int $itemId): void
+    {
+        if (! isset($this->draftRows[$itemId])) {
+            return;
+        }
+
+        $this->openNotes[$itemId] = ! (bool) ($this->openNotes[$itemId] ?? false);
+    }
+
+    public function toggleDetails(int $itemId): void
+    {
+        if (! isset($this->draftRows[$itemId])) {
+            return;
+        }
+
+        $this->openDetails[$itemId] = ! (bool) ($this->openDetails[$itemId] ?? false);
     }
 
     public function render()
@@ -315,8 +373,12 @@ class DraftEventEditor extends Component
     protected function loadDraftRows(bool $resetStatuses = false): void
     {
         $existingStatuses = $resetStatuses ? [] : $this->rowStatus;
+        $existingOpenNotes = $this->openNotes;
+        $existingOpenDetails = $this->openDetails;
         $this->draftRows = [];
         $this->rowStatus = [];
+        $this->openNotes = [];
+        $this->openDetails = [];
 
         $eventId = (int) ($this->selectedEventId ?: 0);
         if ($eventId <= 0 || ! $this->supportsRetailPlanItemUpcomingEventColumn()) {
@@ -343,6 +405,7 @@ class DraftEventEditor extends Component
             $this->draftRows[(int) $item->id] = [
                 'id' => (int) $item->id,
                 'quantity' => max(1, (int) ($item->quantity ?? 1)),
+                'box_count' => $this->boxCountFromStoredQuantity(max(1, (int) ($item->quantity ?? 1)), $boxTier),
                 'scent_id' => $item->scent_id ? (int) $item->scent_id : null,
                 'size_id' => $item->size_id ? (int) $item->size_id : null,
                 'box_tier' => $boxTier,
@@ -365,6 +428,9 @@ class DraftEventEditor extends Component
             if (isset($existingStatuses[$itemId])) {
                 $this->rowStatus[$itemId] = $existingStatuses[$itemId];
             }
+
+            $this->openNotes[$itemId] = (bool) ($existingOpenNotes[$itemId] ?? false);
+            $this->openDetails[$itemId] = (bool) ($existingOpenDetails[$itemId] ?? false);
         }
 
         if (! empty($this->draftRows)) {
@@ -384,8 +450,9 @@ class DraftEventEditor extends Component
     protected function rowCanSubmit(array $row): bool
     {
         $boxTier = $this->normalizeBoxTier((string) ($row['box_tier'] ?? 'standard'));
+        $quantity = $this->normalizeQuantity($row['box_count'] ?? ($row['quantity'] ?? 0), $boxTier);
 
-        if ((int) ($row['quantity'] ?? 0) <= 0) {
+        if ($quantity <= 0) {
             return false;
         }
 
@@ -410,9 +477,25 @@ class DraftEventEditor extends Component
 
     protected function normalizeQuantity(mixed $value, string $boxTier): int
     {
-        $quantity = max(1, (int) $value);
+        if ($this->normalizeBoxTier($boxTier) === 'top_shelf') {
+            return max(1, (int) round(is_numeric($value) ? (float) $value : 1));
+        }
 
-        return $this->normalizeBoxTier($boxTier) === 'top_shelf' ? $quantity : $quantity;
+        $boxes = is_numeric($value) ? (float) $value : 0.5;
+        $halfBoxUnits = (int) round($boxes * 2);
+
+        return max(1, $halfBoxUnits);
+    }
+
+    protected function boxCountFromStoredQuantity(int $quantity, string $boxTier): float|int
+    {
+        $quantity = max(1, $quantity);
+
+        if ($this->normalizeBoxTier($boxTier) === 'top_shelf') {
+            return $quantity;
+        }
+
+        return max(0.5, $quantity / 2);
     }
 
     protected function normalizeBoxTier(string $value): string

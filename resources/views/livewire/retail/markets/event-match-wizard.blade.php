@@ -326,7 +326,7 @@
                   @disabled(!$upcomingEventId || !$selectedScentId)
                   class="w-full rounded-2xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
-                  Add Half Box
+                  Add 0.5 Box
                 </button>
                 <button
                   type="button"
@@ -334,7 +334,7 @@
                   @disabled(!$upcomingEventId || !$selectedScentId)
                   class="w-full rounded-2xl border border-emerald-300/35 bg-emerald-500/22 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
-                  Add Full Box
+                  Add 1 Box
                 </button>
                 <button
                   type="button"
@@ -342,7 +342,7 @@
                   @disabled(!$upcomingEventId)
                   class="w-full rounded-2xl border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
-                  Add Top Shelf
+                  Add Top Shelf (16oz)
                 </button>
               </div>
             </div>
@@ -379,6 +379,17 @@
             key('markets-stepper-draft-editor-'.(int)$planId.'-'.(int)($upcomingEventId ?? 0))
           )
         </div>
+
+        <div class="mt-4 flex justify-end">
+          <button
+            type="button"
+            wire:click="goToStep(4)"
+            @disabled(!$this->canAccessStep(4))
+            class="rounded-xl border px-6 py-3 text-sm font-semibold transition {{ $this->canAccessStep(4) ? 'border-emerald-300/30 bg-emerald-500/20 text-white hover:bg-emerald-500/28' : 'border-white/10 bg-white/5 text-white/40' }}"
+          >
+            Submit To Review
+          </button>
+        </div>
       </div>
     </div>
   @endif
@@ -409,8 +420,9 @@
             <div class="mt-2 text-2xl font-semibold text-white">{{ (int)($draftSummary['line_count'] ?? 0) }}</div>
           </div>
           <div class="rounded-2xl border border-white/8 bg-black/20 p-4">
-            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Half-Box Units</div>
-            <div class="mt-2 text-2xl font-semibold text-white">{{ (int)($draftSummary['unit_count'] ?? 0) }}</div>
+            <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Total Boxes</div>
+            @php($totalBoxes = ((int)($draftSummary['unit_count'] ?? 0)) / 2)
+            <div class="mt-2 text-2xl font-semibold text-white">{{ rtrim(rtrim(number_format($totalBoxes, 1), '0'), '.') }}</div>
           </div>
           <div class="rounded-2xl border border-white/8 bg-black/20 p-4">
             <div class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/45">Top Scents</div>
