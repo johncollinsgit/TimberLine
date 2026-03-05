@@ -516,7 +516,7 @@
           onclick="return confirm('Publish this draft to the pouring room?');"
           wire:loading.attr="disabled"
           wire:target="publish"
-          @disabled(!$upcomingEventId || (int)($draftSummary['line_count'] ?? 0) <= 0)
+          @disabled(!$upcomingEventId || !$this->canAccessStep(4))
           class="self-end rounded-2xl border border-emerald-400/40 bg-emerald-500/25 px-6 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Publish To Pouring Room
@@ -562,7 +562,7 @@
         </div>
       @elseif($step === 3 && !$this->canAccessStep(4))
         <div class="text-[11px] text-emerald-100/50">
-          Step 4 unlocks once this event has at least one draft line.
+          Step 4 unlocks after every row has quantity plus complete scent setup (Top Shelf must be fully filled).
         </div>
       @endif
     </div>

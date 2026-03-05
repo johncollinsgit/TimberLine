@@ -819,10 +819,19 @@ test('draft event editor saves inline edits for draft boxes', function () {
         ->set("draftRows.{$item->id}.size_id", $size->id)
         ->set("draftRows.{$item->id}.box_tier", 'top_shelf')
         ->set("draftRows.{$item->id}.scent_id", $updatedScent->id)
-        ->set("draftRows.{$item->id}.top_shelf.preset", 'split_6_6')
         ->set("draftRows.{$item->id}.top_shelf.size_mode", '8oz')
         ->set("draftRows.{$item->id}.top_shelf.slots.0", $updatedScent->id)
         ->set("draftRows.{$item->id}.top_shelf.slots.1", $originalScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.2", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.3", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.4", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.5", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.6", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.7", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.8", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.9", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.10", $updatedScent->id)
+        ->set("draftRows.{$item->id}.top_shelf.slots.11", $updatedScent->id)
         ->call('saveItem', $item->id)
         ->assertSeeText('Saved.');
 
@@ -833,9 +842,22 @@ test('draft event editor saves inline edits for draft boxes', function () {
     expect((int) $item->scent_id)->toBe($updatedScent->id);
     expect((int) $item->size_id)->toBe($size->id);
     expect((string) $item->box_tier)->toBe('top_shelf');
-    expect((string) ($topShelfConfiguration['preset'] ?? ''))->toBe('split_6_6');
+    expect((string) ($topShelfConfiguration['preset'] ?? ''))->toBe('different_12');
     expect((string) ($topShelfConfiguration['size_mode'] ?? ''))->toBe('8oz');
-    expect((array) ($topShelfConfiguration['slots'] ?? []))->toBe([$updatedScent->id, $originalScent->id]);
+    expect((array) ($topShelfConfiguration['slots'] ?? []))->toBe([
+        $updatedScent->id,
+        $originalScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+        $updatedScent->id,
+    ]);
 
     Livewire::test(DraftEventEditor::class, [
         'planId' => $plan->id,
@@ -845,7 +867,7 @@ test('draft event editor saves inline edits for draft boxes', function () {
         ->assertSet("draftRows.{$item->id}.scent_id", $updatedScent->id)
         ->assertSet("draftRows.{$item->id}.size_id", $size->id)
         ->assertSet("draftRows.{$item->id}.box_tier", 'top_shelf')
-        ->assertSet("draftRows.{$item->id}.top_shelf.preset", 'split_6_6')
+        ->assertSet("draftRows.{$item->id}.top_shelf.preset", 'different_12')
         ->assertSet("draftRows.{$item->id}.top_shelf.size_mode", '8oz');
 });
 
@@ -940,6 +962,122 @@ test('top shelf draft rows render as structured slots instead of concatenated la
         ->assertSeeText('Top Shelf')
         ->assertSeeText('slots')
         ->assertDontSeeText('6x ');
+});
+
+test('add top shelf reuses pending row and toggles configurator visibility', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Top Shelf Toggle Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '10.04.26 Top Shelf Toggle Event',
+        'display_name' => '10.04.26 Top Shelf Toggle Event',
+        'starts_at' => '2026-10-04',
+        'ends_at' => '2026-10-04',
+        'status' => 'drafted',
+    ]);
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('addTopShelfTemplate', $event->id);
+
+    $topShelfItem = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $event->id)
+        ->where('source', 'market_top_shelf_template')
+        ->where('box_tier', 'top_shelf')
+        ->first();
+
+    expect($topShelfItem)->not->toBeNull();
+    expect((int) RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $event->id)
+        ->where('source', 'market_top_shelf_template')
+        ->where('box_tier', 'top_shelf')
+        ->count())->toBe(1);
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('addTopShelfTemplate', $event->id);
+
+    expect((int) RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $event->id)
+        ->where('source', 'market_top_shelf_template')
+        ->where('box_tier', 'top_shelf')
+        ->count())->toBe(1);
+
+    Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->call('handleTopShelfAdded', $event->id, (int) $topShelfItem->id)
+        ->assertSet('activeTopShelfRowId', (int) $topShelfItem->id)
+        ->call('handleTopShelfAdded', $event->id, (int) $topShelfItem->id)
+        ->assertSet('activeTopShelfRowId', null);
+});
+
+test('step 4 review remains locked until top shelf row is fully filled and saved', function () {
+    $plan = RetailPlan::query()->create([
+        'name' => 'Top Shelf Step 4 Lock Test',
+        'status' => 'draft',
+        'queue_type' => 'markets',
+    ]);
+
+    $event = Event::query()->create([
+        'name' => '10.18.26 Top Shelf Lock Event',
+        'display_name' => '10.18.26 Top Shelf Lock Event',
+        'starts_at' => '2026-10-18',
+        'ends_at' => '2026-10-18',
+        'status' => 'drafted',
+    ]);
+
+    $scent = Scent::query()->firstOrCreate(
+        ['name' => 'Honeysuckle'],
+        ['display_name' => 'Honeysuckle', 'is_active' => true]
+    );
+
+    Livewire::test(MarketsPlanner::class, ['planId' => $plan->id])
+        ->call('addTopShelfTemplate', $event->id);
+
+    $item = RetailPlanItem::query()
+        ->where('retail_plan_id', $plan->id)
+        ->where('upcoming_event_id', $event->id)
+        ->where('source', 'market_top_shelf_template')
+        ->where('box_tier', 'top_shelf')
+        ->firstOrFail();
+
+    $wizardBefore = Livewire::test(EventMatchWizard::class, [
+        'planId' => $plan->id,
+        'upcomingEventId' => $event->id,
+    ]);
+
+    expect($wizardBefore->instance()->canAccessStep(4))->toBeFalse();
+
+    $editor = Livewire::test(DraftEventEditor::class, [
+        'planId' => $plan->id,
+        'selectedEventId' => $event->id,
+    ])
+        ->call('openTopShelfConfigurator', (int) $item->id)
+        ->call('saveTopShelfBuilder')
+        ->assertSet("rowStatus.{$item->id}.type", 'error');
+
+    for ($slot = 0; $slot < 12; $slot++) {
+        $editor->set("draftRows.{$item->id}.top_shelf.slots.{$slot}", $scent->id);
+    }
+
+    $editor->call('saveTopShelfBuilder')
+        ->assertSet("rowStatus.{$item->id}.type", 'success');
+
+    $item->refresh();
+    expect((string) $item->status)->toBe('draft');
+
+    $wizardAfter = Livewire::test(EventMatchWizard::class, [
+        'planId' => $plan->id,
+        'upcomingEventId' => $event->id,
+    ]);
+
+    expect($wizardAfter->instance()->canAccessStep(4))->toBeTrue();
 });
 
 test('draft event editor reloads db rows when mounted state is empty', function () {

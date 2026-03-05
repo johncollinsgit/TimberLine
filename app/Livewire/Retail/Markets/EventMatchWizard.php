@@ -54,6 +54,7 @@ class EventMatchWizard extends Component
         'total_boxes' => 0.0,
         'standard_line_count' => 0,
         'top_shelf_line_count' => 0,
+        'can_submit' => false,
         'top_scents' => [],
         'breakdown' => [],
     ];
@@ -1022,6 +1023,7 @@ class EventMatchWizard extends Component
             'total_boxes' => 0.0,
             'standard_line_count' => 0,
             'top_shelf_line_count' => 0,
+            'can_submit' => false,
             'top_scents' => [],
             'breakdown' => [],
         ];
@@ -1074,6 +1076,7 @@ class EventMatchWizard extends Component
         $totalBoxes = 0.0;
         $standardLineCount = 0;
         $topShelfLineCount = 0;
+        $canSubmit = true;
 
         $standardScentNames = $items
             ->filter(fn (RetailPlanItem $item): bool => (int) ($item->scent_id ?? 0) > 0)
@@ -1085,12 +1088,19 @@ class EventMatchWizard extends Component
         foreach ($items as $item) {
             $boxTier = $this->normalizeBoxTier((string) ($item->box_tier ?? 'standard'));
             $quantity = max(1, (int) ($item->quantity ?? 1));
+            $rawQuantity = (int) ($item->quantity ?? 0);
+            if ($rawQuantity <= 0) {
+                $canSubmit = false;
+            }
 
             if ($boxTier === 'top_shelf') {
                 $topShelfLineCount++;
                 $totalBoxes += $quantity;
 
                 $configuration = RetailPlanItem::decodeTopShelfConfiguration($item->notes, $item->scent_id ? (int) $item->scent_id : null);
+                if (! RetailPlanItem::topShelfConfigurationIsComplete($configuration)) {
+                    $canSubmit = false;
+                }
                 foreach ((array) ($configuration['composition'] ?? []) as $slot) {
                     $scentId = (int) ($slot['scent_id'] ?? 0);
                     $unitsPerBox = max(0, (int) ($slot['units_per_box'] ?? 0));
@@ -1123,6 +1133,7 @@ class EventMatchWizard extends Component
             $scentId = (int) ($item->scent_id ?? 0);
 
             if ($scentId <= 0) {
+                $canSubmit = false;
                 continue;
             }
 
@@ -1194,6 +1205,7 @@ class EventMatchWizard extends Component
             'total_boxes' => $totalBoxes,
             'standard_line_count' => $standardLineCount,
             'top_shelf_line_count' => $topShelfLineCount,
+            'can_submit' => $canSubmit,
             'top_scents' => $topScents,
             'breakdown' => $breakdownRows,
         ];
@@ -1214,7 +1226,7 @@ class EventMatchWizard extends Component
         }
 
         if ($step === 4) {
-            return $this->eventChosen && $this->draftHasContent();
+            return $this->eventChosen && $this->draftHasContent() && $this->draftCanSubmit();
         }
 
         return false;
@@ -1223,6 +1235,11 @@ class EventMatchWizard extends Component
     protected function draftHasContent(): bool
     {
         return (int) ($this->draftSummary['line_count'] ?? 0) > 0;
+    }
+
+    protected function draftCanSubmit(): bool
+    {
+        return (bool) ($this->draftSummary['can_submit'] ?? false);
     }
 
     protected function hasSelectedMatchOrTemplate(): bool

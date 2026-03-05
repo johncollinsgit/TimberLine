@@ -35,34 +35,29 @@
           </button>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div class="space-y-1">
             <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Top Shelf Boxes</label>
             <input
               type="number"
               min="1"
               step="1"
-              wire:model.live.debounce.250ms="draftRows.{{ $activeTopShelfRowId }}.box_count"
+              wire:model.defer="draftRows.{{ $activeTopShelfRowId }}.box_count"
               class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
             />
           </div>
 
           <div class="space-y-1">
             <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Composition</label>
-            <select
-              wire:model.live="draftRows.{{ $activeTopShelfRowId }}.top_shelf.preset"
-              class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
-            >
-              @foreach($topShelfPresetOptions as $presetValue => $presetLabel)
-                <option value="{{ $presetValue }}">{{ $presetLabel }}</option>
-              @endforeach
-            </select>
+            <div class="flex h-10 items-center rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90">
+              12 scent slots
+            </div>
           </div>
 
           <div class="space-y-1">
             <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Fill Type</label>
             <select
-              wire:model.live="draftRows.{{ $activeTopShelfRowId }}.top_shelf.size_mode"
+              wire:model.defer="draftRows.{{ $activeTopShelfRowId }}.top_shelf.size_mode"
               class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
             >
               @foreach($topShelfSizeModes as $modeValue => $modeLabel)
@@ -74,7 +69,7 @@
           <div class="space-y-1">
             <label class="text-[10px] uppercase tracking-[0.2em] text-emerald-100/55">Line Type</label>
             <select
-              wire:model.live="draftRows.{{ $activeTopShelfRowId }}.box_tier"
+              wire:model.defer="draftRows.{{ $activeTopShelfRowId }}.box_tier"
               class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
             >
               <option value="top_shelf">Top Shelf</option>
@@ -91,7 +86,7 @@
               min="1"
               max="36"
               step="1"
-              wire:model.live.debounce.300ms="draftRows.{{ $activeTopShelfRowId }}.top_shelf.wax_melt_capacity"
+              wire:model.defer="draftRows.{{ $activeTopShelfRowId }}.top_shelf.wax_melt_capacity"
               class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
             />
           </div>
@@ -107,7 +102,7 @@
                   <div class="text-[11px] text-emerald-100/55">{{ (int) ($slot['units_per_box'] ?? 0) }} per box</div>
                 </div>
                 <select
-                  wire:model.live="draftRows.{{ $activeTopShelfRowId }}.top_shelf.slots.{{ $slotIndex }}"
+                  wire:model.defer="draftRows.{{ $activeTopShelfRowId }}.top_shelf.slots.{{ $slotIndex }}"
                   class="h-10 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 text-sm text-white/90"
                 >
                   <option value="">Choose scent...</option>
@@ -118,6 +113,18 @@
               </div>
             @endforeach
           </div>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <button
+            type="button"
+            wire:click="saveTopShelfBuilder"
+            wire:loading.attr="disabled"
+            wire:target="saveTopShelfBuilder"
+            class="rounded-xl border border-amber-300/30 bg-amber-500/18 px-5 py-2.5 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Save Top Shelf
+          </button>
         </div>
       </div>
     @endif

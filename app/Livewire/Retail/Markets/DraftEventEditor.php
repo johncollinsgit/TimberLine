@@ -144,6 +144,12 @@ class DraftEventEditor extends Component
         $this->loadDraftRows();
 
         if ($itemId > 0 && isset($this->draftRows[$itemId])) {
+            if ($this->activeTopShelfRowId === $itemId) {
+                $this->closeTopShelfConfigurator();
+
+                return;
+            }
+
             $this->openTopShelfConfigurator($itemId);
 
             return;
@@ -159,6 +165,16 @@ class DraftEventEditor extends Component
         if ($latestTopShelfRowId) {
             $this->openTopShelfConfigurator($latestTopShelfRowId);
         }
+    }
+
+    public function saveTopShelfBuilder(): void
+    {
+        $itemId = (int) ($this->activeTopShelfRowId ?: 0);
+        if ($itemId <= 0 || ! isset($this->draftRows[$itemId])) {
+            return;
+        }
+
+        $this->saveItemInternal($itemId, true);
     }
 
     public function removeItem(int $itemId): void
@@ -250,6 +266,12 @@ class DraftEventEditor extends Component
 
             if ($invalidSlotIds !== []) {
                 $this->setRowStatus($itemId, 'error', 'One or more Top Shelf scents no longer exist.');
+
+                return false;
+            }
+
+            if (! RetailPlanItem::topShelfConfigurationIsComplete($topShelfConfiguration)) {
+                $this->setRowStatus($itemId, 'error', 'Top Shelf requires all scent slots filled before saving.');
 
                 return false;
             }
@@ -486,7 +508,6 @@ class DraftEventEditor extends Component
                 ->orderBy('sort_order')
                 ->orderBy('label')
                 ->get(['id', 'code', 'label']),
-            'topShelfPresetOptions' => RetailPlanItem::TOP_SHELF_PRESETS,
             'topShelfSizeModes' => RetailPlanItem::TOP_SHELF_SIZE_MODES,
         ]);
     }
@@ -670,10 +691,22 @@ class DraftEventEditor extends Component
      */
     protected function normalizeTopShelfConfiguration(mixed $value, ?int $fallbackScentId = null): array
     {
-        return RetailPlanItem::normalizeTopShelfConfiguration(
+        $normalized = RetailPlanItem::normalizeTopShelfConfiguration(
             is_array($value) ? $value : [],
             $fallbackScentId
         );
+
+        $slots = array_values((array) ($normalized['slots'] ?? []));
+        $slots = array_slice(array_pad($slots, 12, null), 0, 12);
+        $sizeMode = (string) ($normalized['size_mode'] ?? '16oz');
+        $waxMeltCapacity = max(1, min(36, (int) ($normalized['wax_melt_capacity'] ?? 12)));
+
+        return RetailPlanItem::normalizeTopShelfConfiguration([
+            'preset' => 'different_12',
+            'size_mode' => $sizeMode,
+            'wax_melt_capacity' => $waxMeltCapacity,
+            'slots' => $slots,
+        ], $fallbackScentId);
     }
 
     protected function primaryScentIdForTopShelfConfiguration(array $configuration): ?int

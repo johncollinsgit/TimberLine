@@ -203,58 +203,76 @@ class MarketsPlanner extends Component
     {
         $selectedEvent = $this->selectedEventById($upcomingEventId);
         if (! $selectedEvent) {
-            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an event first before adding Top Shelf defaults.']);
-            return;
-        }
-
-        $template = $this->activeTopShelfTemplate();
-        $configuration = $this->topShelfDefaultConfiguration();
-        if ($configuration === []) {
-            $seedScentId = RetailPlanItem::query()
-                ->where('retail_plan_id', $this->plan->id)
-                ->where('upcoming_event_id', $selectedEvent->id)
-                ->whereIn('source', RetailPlanItem::marketDraftSources())
-                ->whereNotNull('scent_id')
-                ->value('scent_id');
-
-            if (! $seedScentId) {
-                $seedScentId = Scent::query()
-                    ->where('is_active', true)
-                    ->orderByRaw('COALESCE(display_name, name)')
-                    ->value('id');
-            }
-
-            if ($seedScentId) {
-                $seedScentId = (int) $seedScentId;
-                $configuration = RetailPlanItem::normalizeTopShelfConfiguration([
-                    'preset' => 'same_12',
-                    'size_mode' => '16oz',
-                    'slots' => [$seedScentId],
-                ], $seedScentId);
-            }
-        }
-
-        if ($configuration === []) {
-            $this->dispatch('toast', ['type' => 'warning', 'message' => 'No scents are available yet for a Top Shelf line.']);
-            Log::info('Top shelf template add skipped: no template and no seed scent available', [
-                'upcoming_event_id' => (int) $selectedEvent->id,
-                'has_template' => (bool) $template,
-            ]);
-
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Select an event first before opening Top Shelf builder.']);
             return;
         }
 
         $this->rememberSelectedEvent($selectedEvent);
-        $result = ['added' => 0, 'merged' => 0, 'item_id' => 0];
+        $result = ['added' => 0, 'reused' => 0, 'item_id' => 0];
 
-        DB::transaction(function () use ($selectedEvent, $configuration, &$result): void {
-            $result = $this->mergeTopShelfBoxItem(
-                $selectedEvent,
-                0,
-                1,
-                'market_top_shelf_template',
-                $configuration
-            );
+        DB::transaction(function () use ($selectedEvent, &$result): void {
+            $this->lockUpcomingEventScope((int) $selectedEvent->id);
+
+            $existingIncomplete = RetailPlanItem::query()
+                ->where('retail_plan_id', $this->plan->id)
+                ->where('status', '!=', 'published')
+                ->where('source', 'market_top_shelf_template')
+                ->where('upcoming_event_id', (int) $selectedEvent->id)
+                ->when(
+                    $this->supportsRetailPlanItemBoxTierColumn(),
+                    fn ($query) => $query->where('box_tier', 'top_shelf')
+                )
+                ->orderByDesc('id')
+                ->get(['id', 'notes', 'scent_id'])
+                ->first(function (RetailPlanItem $item): bool {
+                    return ! RetailPlanItem::topShelfConfigurationIsComplete(
+                        RetailPlanItem::decodeTopShelfConfiguration(
+                            $this->supportsRetailPlanItemNotesColumn() ? $item->notes : null,
+                            $item->scent_id ? (int) $item->scent_id : null
+                        )
+                    );
+                });
+
+            if ($existingIncomplete) {
+                $result = ['added' => 0, 'reused' => 1, 'item_id' => (int) $existingIncomplete->id];
+
+                return;
+            }
+
+            $configuration = RetailPlanItem::normalizeTopShelfConfiguration([
+                'preset' => 'different_12',
+                'size_mode' => '16oz',
+                'slots' => array_fill(0, 12, null),
+            ]);
+
+            $payload = [
+                'retail_plan_id' => $this->plan->id,
+                'order_id' => null,
+                'order_line_id' => null,
+                'scent_id' => null,
+                'size_id' => null,
+                'quantity' => 1,
+                'source' => 'market_top_shelf_template',
+                'status' => 'needs_mapping',
+                'sku' => Str::limit(
+                    'mkttop:'.$selectedEvent->id.':manual:'.Str::uuid()->toString(),
+                    255,
+                    ''
+                ),
+            ];
+
+            if ($this->supportsRetailPlanItemUpcomingEventColumn()) {
+                $payload['upcoming_event_id'] = (int) $selectedEvent->id;
+            }
+            if ($this->supportsRetailPlanItemBoxTierColumn()) {
+                $payload['box_tier'] = 'top_shelf';
+            }
+            if ($this->supportsRetailPlanItemNotesColumn()) {
+                $payload['notes'] = RetailPlanItem::encodeTopShelfConfiguration($configuration);
+            }
+
+            $created = RetailPlanItem::query()->create($payload);
+            $result = ['added' => 1, 'reused' => 0, 'item_id' => (int) $created->id];
         });
 
         $this->syncEventPlanningStatus((int) $selectedEvent->id, 'drafted');
@@ -267,7 +285,9 @@ class MarketsPlanner extends Component
         );
         $this->dispatch('toast', [
             'type' => 'success',
-            'message' => "Top Shelf default template applied. Added {$result['added']}, merged {$result['merged']}.",
+            'message' => (int) ($result['reused'] ?? 0) > 0
+                ? 'Top Shelf builder toggled for your current unsaved Top Shelf line.'
+                : 'Top Shelf builder opened. Choose scents and click Save Top Shelf to apply.',
         ]);
     }
 

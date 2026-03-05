@@ -197,13 +197,24 @@ class RetailPlanItem extends Model
     {
         $normalized = self::normalizeTopShelfConfiguration($configuration);
         $composition = (array) ($normalized['composition'] ?? []);
+        $slots = array_values((array) ($normalized['slots'] ?? []));
 
         if ($composition === [] || (int) ($normalized['units_per_box'] ?? 0) <= 0) {
             return false;
         }
 
+        if (count($slots) < 12) {
+            return false;
+        }
+
         foreach ($composition as $slot) {
             if ((int) ($slot['scent_id'] ?? 0) <= 0 || (int) ($slot['units_per_box'] ?? 0) <= 0) {
+                return false;
+            }
+        }
+
+        for ($index = 0; $index < 12; $index++) {
+            if ((int) ($slots[$index] ?? 0) <= 0) {
                 return false;
             }
         }
