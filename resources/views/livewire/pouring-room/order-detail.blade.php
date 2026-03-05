@@ -70,16 +70,15 @@
       </div>
     @else
       <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/15">
-        <div class="overflow-x-auto border-b border-emerald-200/10">
-          <div class="grid min-w-[1320px] grid-cols-[190px_44px_220px_320px_120px_130px_130px_130px_220px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-emerald-100/55 whitespace-nowrap">
+        <div class="border-b border-emerald-200/10">
+          <div class="grid grid-cols-[180px_minmax(0,1.4fr)_minmax(0,1.7fr)_84px_84px_94px_94px_minmax(0,1fr)] items-center gap-1 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
             <div>Status</div>
-            <div></div>
             <div>Scent</div>
             <div>Size Breakdown</div>
-            <div>Boxes</div>
-            <div>Pitchers</div>
-            <div>Wax</div>
-            <div>Oil</div>
+            <div class="text-right">Boxes</div>
+            <div class="text-right">P</div>
+            <div class="text-right">Wax</div>
+            <div class="text-right">Oil</div>
             <div>Oil Name</div>
           </div>
         </div>
@@ -96,61 +95,54 @@
             @endphp
 
             <div class="bg-transparent">
-              <div class="overflow-x-auto">
-                <div
-                  class="grid min-w-[1320px] grid-cols-[190px_44px_220px_320px_120px_130px_130px_130px_220px] items-center gap-2 px-3 py-2 whitespace-nowrap transition hover:bg-white/5"
-                  wire:click="toggleScent('{{ $scentKey }}')"
-                  role="button"
-                  tabindex="0"
-                  onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); $wire.toggleScent('{{ $scentKey }}'); }"
-                >
-                  <div wire:click.stop>
-                    <select
-                      wire:model.live="scentStatuses.{{ $scentKey }}"
-                      class="h-9 w-full rounded-xl border border-emerald-200/20 bg-black/35 px-3 text-xs text-white/90"
-                    >
-                      @if(($row['status'] ?? '') === 'mixed' && $statusValue === 'mixed')
-                        <option value="mixed">Mixed (multiple)</option>
-                      @endif
-                      @foreach($statusOptions as $statusCode => $statusLabel)
-                        <option value="{{ $statusCode }}">{{ $statusLabel }}</option>
-                      @endforeach
-                    </select>
-                  </div>
-
-                  <div class="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs text-white/80">
-                    {{ $isExpanded ? '−' : '+' }}
-                  </div>
-
-                  <div class="min-w-0">
-                    <div class="truncate text-sm font-semibold text-white">{{ $row['scent_label'] ?? 'Unknown scent' }}</div>
-                    @if($statusDirty)
-                      <div class="text-[10px] text-amber-200">Unsaved change</div>
+              <div
+                class="grid grid-cols-[180px_minmax(0,1.4fr)_minmax(0,1.7fr)_84px_84px_94px_94px_minmax(0,1fr)] items-center gap-1 px-2 py-2 transition hover:bg-white/5"
+                wire:click="toggleScent('{{ $scentKey }}')"
+                role="button"
+                tabindex="0"
+                onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); $wire.toggleScent('{{ $scentKey }}'); }"
+              >
+                <div wire:click.stop>
+                  <select
+                    wire:model.live="scentStatuses.{{ $scentKey }}"
+                    class="h-8 w-full rounded-xl border border-emerald-200/20 bg-black/35 px-2 text-[11px] text-white/90"
+                  >
+                    @if(($row['status'] ?? '') === 'mixed' && $statusValue === 'mixed')
+                      <option value="mixed">Mixed (multiple)</option>
                     @endif
-                  </div>
-
-                  <div class="flex items-center gap-3 overflow-x-auto pr-1">
-                    @foreach(($row['size_breakdown'] ?? []) as $sizePart)
-                      <span class="inline-flex items-baseline gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1">
-                        <span class="text-sm font-semibold text-white">{{ (int)($sizePart['qty'] ?? 0) }}</span>
-                        <span class="text-xs text-emerald-100/75">{{ $sizePart['label'] ?? 'Size' }}</span>
-                      </span>
+                    @foreach($statusOptions as $statusCode => $statusLabel)
+                      <option value="{{ $statusCode }}">{{ $statusLabel }}</option>
                     @endforeach
-                  </div>
-
-                  <div class="text-sm font-semibold text-white/95">
-                    @if($boxValue === null)
-                      —
-                    @else
-                      {{ rtrim(rtrim(number_format((float)$boxValue, 1), '0'), '.') }}
-                    @endif
-                  </div>
-
-                  <div class="text-sm font-semibold text-white/95">{{ (int)($row['pitcher_count'] ?? 0) }}</div>
-                  <div class="text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
-                  <div class="text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
-                  <div class="truncate text-sm text-emerald-50/90">{{ $row['oil_name'] ?? '—' }}</div>
+                  </select>
                 </div>
+
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-semibold text-white">{{ $row['scent_label'] ?? 'Unknown scent' }}</div>
+                  @if($statusDirty)
+                    <div class="text-[10px] text-amber-200">Unsaved change</div>
+                  @endif
+                </div>
+
+                <div class="truncate text-xs text-white/85">
+                  @foreach(($row['size_breakdown'] ?? []) as $index => $sizePart)
+                    <span>
+                      {{ (int)($sizePart['qty'] ?? 0) }}x{{ $sizePart['label'] ?? 'Size' }}@if($index < count($row['size_breakdown'] ?? []) - 1) · @endif
+                    </span>
+                  @endforeach
+                </div>
+
+                <div class="text-right text-sm font-semibold text-white/95">
+                  @if($boxValue === null)
+                    —
+                  @else
+                    {{ rtrim(rtrim(number_format((float)$boxValue, 1), '0'), '.') }}
+                  @endif
+                </div>
+
+                <div class="text-right text-sm font-semibold text-white/95">{{ (int)($row['pitcher_count'] ?? 0) }}</div>
+                <div class="text-right text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
+                <div class="text-right text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
+                <div class="truncate text-sm text-emerald-50/90">{{ $row['oil_name'] ?? '—' }}</div>
               </div>
 
               @if($isExpanded)
@@ -162,15 +154,14 @@
                     </div>
                   @endif
 
-                  <div class="overflow-x-auto">
-                    <div class="min-w-[980px] rounded-xl border border-emerald-200/10">
-                      <div class="grid grid-cols-[220px_90px_260px_190px_110px_110px_120px] gap-2 border-b border-emerald-200/10 bg-black/30 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-emerald-100/55 whitespace-nowrap">
+                  <div class="rounded-xl border border-emerald-200/10">
+                      <div class="grid grid-cols-[minmax(0,2fr)_68px_minmax(0,1.4fr)_92px_92px_92px_120px] gap-1 border-b border-emerald-200/10 bg-black/30 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
                         <div>Size</div>
-                        <div>Qty</div>
+                        <div class="text-right">Qty</div>
                         <div>Recipe</div>
-                        <div>Pitchers</div>
-                        <div>Wax</div>
-                        <div>Oil</div>
+                        <div class="text-right">P</div>
+                        <div class="text-right">Wax</div>
+                        <div class="text-right">Oil</div>
                         <div>Status</div>
                       </div>
                       <div class="divide-y divide-emerald-200/10">
@@ -178,29 +169,28 @@
                           @php
                             $detailStatus = (string)($detail['status'] ?? 'queued');
                           @endphp
-                          <div class="grid grid-cols-[220px_90px_260px_190px_110px_110px_120px] gap-2 px-3 py-2 text-xs text-white/85 whitespace-nowrap">
+                          <div class="grid grid-cols-[minmax(0,2fr)_68px_minmax(0,1.4fr)_92px_92px_92px_120px] gap-1 px-2 py-2 text-xs text-white/85">
                             <div class="truncate">
                               {{ $detail['size_label'] ?? 'Unknown size' }}
                               @if(!empty($detail['wick'])) · {{ ucfirst((string)$detail['wick']) }} wick @endif
                             </div>
-                            <div class="font-semibold text-white">{{ (int)($detail['qty'] ?? 0) }}</div>
+                            <div class="text-right font-semibold text-white">{{ (int)($detail['qty'] ?? 0) }}</div>
                             <div class="truncate text-emerald-50/80">{{ $detail['recipe_name'] ?: '—' }}</div>
-                            <div class="text-emerald-50/80">
+                            <div class="text-right text-emerald-50/80">
                               @if(!empty($detail['ingredients']))
-                                {{ (int)($detail['pitcher_count'] ?? 0) }} pitcher{{ (int)($detail['pitcher_count'] ?? 0) === 1 ? '' : 's' }}
+                                {{ (int)($detail['pitcher_count'] ?? 0) }}P
                               @else
-                                No formulation
+                                —
                               @endif
                             </div>
-                            <div>{{ rtrim(rtrim(number_format((float)($detail['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
-                            <div>{{ rtrim(rtrim(number_format((float)($detail['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
+                            <div class="text-right">{{ rtrim(rtrim(number_format((float)($detail['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
+                            <div class="text-right">{{ rtrim(rtrim(number_format((float)($detail['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
                             <div>
                               {{ $detailStatus === 'mixed' ? 'Mixed' : ($statusOptions[$detailStatus] ?? ucfirst(str_replace('_', ' ', $detailStatus))) }}
                             </div>
                           </div>
                         @endforeach
                       </div>
-                    </div>
                   </div>
 
                   @if(!empty($row['recipe_components']))
