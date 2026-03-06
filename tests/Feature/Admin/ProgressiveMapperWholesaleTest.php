@@ -187,3 +187,41 @@ test('press enter selects scent when search narrows to one match', function () {
         ->call('selectOnlyMatch')
         ->assertSet('selectedScentId', $target->id);
 });
+
+test('search finds vintage amber even when many alphabetically earlier scents exist', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $now = now();
+    $bulkRows = [];
+    for ($index = 1; $index <= 1305; $index++) {
+        $label = str_pad((string) $index, 4, '0', STR_PAD_LEFT);
+        $bulkRows[] = [
+            'name' => 'alpha filler '.$label,
+            'display_name' => 'Alpha Filler '.$label,
+            'is_active' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+    }
+
+    foreach (array_chunk($bulkRows, 300) as $chunk) {
+        Scent::query()->insert($chunk);
+    }
+
+    Scent::query()->create([
+        'name' => 'vintage amber',
+        'display_name' => 'Vintage Amber',
+        'is_wholesale_custom' => true,
+        'is_active' => true,
+    ]);
+
+    $exception = makeWholesaleException('Custom Scent', '8oz Cotton Wick', 'Custom Scent', 'ERIN NUTZ');
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('existingScentSearch', 'vintage amber')
+        ->assertSee('Vintage Amber');
+});

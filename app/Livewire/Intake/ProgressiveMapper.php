@@ -284,7 +284,7 @@ class ProgressiveMapper extends Component
 
         $account = trim((string) ($sample->account_name ?? ''));
         if ($account !== '') {
-            $query->whereRaw('lower(coalesce(account_name, "")) = ?', [mb_strtolower($account)]);
+            $query->whereRaw("lower(coalesce(account_name, '')) = ?", [mb_strtolower($account)]);
         }
 
         $rows = $query
@@ -377,23 +377,41 @@ class ProgressiveMapper extends Component
     {
         $search = trim($this->existingScentSearch);
         if ($search === '') {
-            $search = trim((string) ($context['raw_label'] ?? ''));
-        }
-
-        if ($search === '') {
             return collect();
         }
 
         $isWholesale = (bool) ($context['is_wholesale'] ?? false);
         $needle = $this->normalizeSearchText($search);
+        $tokenSource = $this->compactSearchText($needle);
+        $tokens = collect(explode(' ', $tokenSource))
+            ->map(fn (string $token): string => trim($token))
+            ->filter(fn (string $token): bool => $token !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($needle === '' || $tokens === []) {
+            return collect();
+        }
 
         /** @var array<int,array<string,mixed>> $candidates */
         $candidates = [];
 
+        $scentSearchColumns = ['display_name', 'name'];
+        if (Schema::hasColumn('scents', 'abbreviation')) {
+            $scentSearchColumns[] = 'abbreviation';
+        }
+        if (Schema::hasColumn('scents', 'oil_reference_name')) {
+            $scentSearchColumns[] = 'oil_reference_name';
+        }
+
         $canonicalRows = Scent::query()
             ->with(['oilBlend:id,name'])
+            ->where(function ($query) use ($tokens, $scentSearchColumns): void {
+                $this->applyLooseTextSearch($query, $tokens, $scentSearchColumns);
+            })
             ->orderByRaw('COALESCE(display_name, name)')
-            ->limit(1200)
+            ->limit(180)
             ->get(['id', 'name', 'display_name', 'abbreviation', 'oil_reference_name', 'is_wholesale_custom', 'is_blend', 'is_candle_club', 'oil_blend_id']);
 
         foreach ($canonicalRows as $scent) {
@@ -410,7 +428,7 @@ class ProgressiveMapper extends Component
                 (string) ($scent->oilBlend?->name ?? ''),
             ]);
 
-            if ($score < 0.1) {
+            if ($score < 0.08) {
                 continue;
             }
 
@@ -429,11 +447,25 @@ class ProgressiveMapper extends Component
         }
 
         if (Schema::hasTable('wholesale_custom_scents')) {
+            $customSearchColumns = ['custom_scent_name'];
+            if (Schema::hasColumn('wholesale_custom_scents', 'account_name')) {
+                $customSearchColumns[] = 'account_name';
+            }
+            if (Schema::hasColumn('wholesale_custom_scents', 'notes')) {
+                $customSearchColumns[] = 'notes';
+            }
+
             $customQuery = WholesaleCustomScent::query()
                 ->with(['canonicalScent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club,oil_blend_id'])
                 ->where('active', true)
                 ->whereNotNull('canonical_scent_id')
-                ->limit(600)
+                ->where(function ($query) use ($tokens, $customSearchColumns, $scentSearchColumns): void {
+                    $this->applyLooseTextSearch($query, $tokens, $customSearchColumns);
+                    $query->orWhereHas('canonicalScent', function ($canonicalQuery) use ($tokens, $scentSearchColumns): void {
+                        $this->applyLooseTextSearch($canonicalQuery, $tokens, $scentSearchColumns);
+                    });
+                })
+                ->limit(300)
                 ->get();
 
             $accountNeedle = WholesaleCustomScent::normalizeAccountName((string) ($context['account_name'] ?? ''));
@@ -479,7 +511,7 @@ class ProgressiveMapper extends Component
         }
 
         if (Schema::hasTable('scent_aliases')) {
-            $aliasScopes = ['markets'];
+            $aliasScopes = ['markets', 'retail', 'global'];
             if ($isWholesale) {
                 $aliasScopes[] = 'wholesale';
                 $aliasScopes[] = 'order_type:wholesale';
@@ -491,7 +523,10 @@ class ProgressiveMapper extends Component
             $aliases = ScentAlias::query()
                 ->with(['scent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club,oil_blend_id'])
                 ->whereIn('scope', array_values(array_unique($aliasScopes)))
-                ->limit(800)
+                ->where(function ($query) use ($tokens): void {
+                    $this->applyLooseTextSearch($query, $tokens, ['alias']);
+                })
+                ->limit(220)
                 ->get();
 
             foreach ($aliases as $alias) {
@@ -540,12 +575,44 @@ class ProgressiveMapper extends Component
                 <=> [$aPref, (float) ($a['score'] ?? 0), (string) ($b['name'] ?? '')];
         });
 
-        return collect(array_slice($rows, 0, 12))
+        return collect(array_slice($rows, 0, 8))
             ->map(function (array $row): array {
                 $row['score'] = (int) max(1, min(99, round(((float) ($row['score'] ?? 0)) * 100)));
                 return $row;
             })
             ->values();
+    }
+
+    protected function compactSearchText(string $value): string
+    {
+        $compact = $this->normalizeSearchText($value);
+        $compact = preg_replace('/[^a-z0-9]+/i', ' ', $compact) ?? $compact;
+        $compact = preg_replace('/\s+/', ' ', $compact) ?? $compact;
+        return trim($compact);
+    }
+
+    /**
+     * @param  array<int,string>  $tokens
+     * @param  array<int,string>  $columns
+     */
+    protected function applyLooseTextSearch($query, array $tokens, array $columns): void
+    {
+        if ($tokens === [] || $columns === []) {
+            return;
+        }
+
+        foreach ($tokens as $token) {
+            $like = '%'.$token.'%';
+            $query->where(function ($tokenQuery) use ($columns, $like): void {
+                foreach ($columns as $index => $column) {
+                    if ($index === 0) {
+                        $tokenQuery->whereRaw("lower(coalesce({$column}, '')) like ?", [$like]);
+                    } else {
+                        $tokenQuery->orWhereRaw("lower(coalesce({$column}, '')) like ?", [$like]);
+                    }
+                }
+            });
+        }
     }
 
     /**

@@ -1,5 +1,6 @@
 @php
   $context = $mappingContext ?? [];
+  $searchInput = trim((string) ($existingScentSearch ?? ''));
   $rawLabel = trim((string) ($context['raw_label'] ?? ''));
   $rawVariant = trim((string) ($context['raw_variant'] ?? ''));
   $accountName = trim((string) ($context['account_name'] ?? ''));
@@ -55,7 +56,7 @@
       </div>
     @else
       <div class="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm text-white/75">
-        No scent matches found for this search.
+        {{ $searchInput === '' ? 'Start typing to search scent options.' : 'No scent matches found for this search.' }}
       </div>
     @endif
   </div>
