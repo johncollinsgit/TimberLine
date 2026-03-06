@@ -1,7 +1,7 @@
 @php
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
-  $tabLinkClass = 'inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-2 text-[11px] font-semibold transition sm:h-10 sm:px-3 sm:text-xs';
+  $tabLinkClass = 'inline-flex min-h-[2.25rem] max-w-[9.5rem] items-center justify-center rounded-xl border px-2 py-1 text-center text-[11px] font-semibold leading-tight whitespace-normal transition sm:min-h-[2.5rem] sm:max-w-[11rem] sm:px-3 sm:text-xs';
 @endphp
 
 <div class="space-y-4 sm:space-y-6">
@@ -12,7 +12,7 @@
   </section>
 
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-3 sm:p-4 md:p-6">
-    <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-2 sm:pb-3">
+    <div class="flex flex-wrap items-stretch gap-2 border-b border-white/10 pb-2 sm:pb-3">
       @if($isAdmin)
         <a
           href="{{ route('admin.index', ['tab' => 'users']) }}"
