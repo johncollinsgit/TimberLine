@@ -56,7 +56,7 @@
       <div>
         <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Scent Summary</div>
         <div class="mt-1 text-sm text-emerald-50/75">
-          One row per scent. Expand for size-level pitcher + recipe details.
+          One row per scent. Expand for size-level recipe details.
         </div>
       </div>
       <div class="text-xs text-emerald-100/65">
@@ -71,12 +71,10 @@
     @else
       <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/15">
         <div class="border-b border-emerald-200/10">
-          <div class="grid grid-cols-[180px_minmax(0,1.4fr)_minmax(0,1.7fr)_84px_84px_94px_94px_minmax(0,1fr)] items-center gap-1 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
+          <div class="grid grid-cols-[180px_minmax(0,1.5fr)_minmax(0,2fr)_110px_110px_minmax(0,1fr)] items-center gap-1 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
             <div>Status</div>
             <div>Scent</div>
             <div>Size Breakdown</div>
-            <div class="text-right">Boxes</div>
-            <div class="text-right">P</div>
             <div class="text-right">Wax</div>
             <div class="text-right">Oil</div>
             <div>Oil Name</div>
@@ -91,12 +89,11 @@
               $statusValue = (string)($scentStatuses[$scentKey] ?? ($row['status'] ?? 'queued'));
               $persistedStatus = (string)($persistedScentStatuses[$scentKey] ?? ($row['status'] ?? 'queued'));
               $statusDirty = $statusValue !== $persistedStatus;
-              $boxValue = $row['inferred_boxes'] ?? null;
             @endphp
 
             <div class="bg-transparent">
               <div
-                class="grid grid-cols-[180px_minmax(0,1.4fr)_minmax(0,1.7fr)_84px_84px_94px_94px_minmax(0,1fr)] items-center gap-1 px-2 py-2 transition hover:bg-white/5"
+                class="grid grid-cols-[180px_minmax(0,1.5fr)_minmax(0,2fr)_110px_110px_minmax(0,1fr)] items-center gap-1 px-2 py-2 transition hover:bg-white/5"
                 wire:click="toggleScent('{{ $scentKey }}')"
                 role="button"
                 tabindex="0"
@@ -131,15 +128,6 @@
                   @endforeach
                 </div>
 
-                <div class="text-right text-sm font-semibold text-white/95">
-                  @if($boxValue === null)
-                    —
-                  @else
-                    {{ rtrim(rtrim(number_format((float)$boxValue, 1), '0'), '.') }}
-                  @endif
-                </div>
-
-                <div class="text-right text-sm font-semibold text-white/95">{{ (int)($row['pitcher_count'] ?? 0) }}</div>
                 <div class="text-right text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
                 <div class="text-right text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
                 <div class="truncate text-sm text-emerald-50/90">{{ $row['oil_name'] ?? '—' }}</div>
@@ -155,11 +143,10 @@
                   @endif
 
                   <div class="rounded-xl border border-emerald-200/10">
-                      <div class="grid grid-cols-[minmax(0,2fr)_68px_minmax(0,1.4fr)_92px_92px_92px_120px] gap-1 border-b border-emerald-200/10 bg-black/30 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
+                      <div class="grid grid-cols-[minmax(0,2fr)_68px_minmax(0,1.4fr)_110px_110px_120px] gap-1 border-b border-emerald-200/10 bg-black/30 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
                         <div>Size</div>
                         <div class="text-right">Qty</div>
                         <div>Recipe</div>
-                        <div class="text-right">P</div>
                         <div class="text-right">Wax</div>
                         <div class="text-right">Oil</div>
                         <div>Status</div>
@@ -169,20 +156,13 @@
                           @php
                             $detailStatus = (string)($detail['status'] ?? 'queued');
                           @endphp
-                          <div class="grid grid-cols-[minmax(0,2fr)_68px_minmax(0,1.4fr)_92px_92px_92px_120px] gap-1 px-2 py-2 text-xs text-white/85">
+                          <div class="grid grid-cols-[minmax(0,2fr)_68px_minmax(0,1.4fr)_110px_110px_120px] gap-1 px-2 py-2 text-xs text-white/85">
                             <div class="truncate">
                               {{ $detail['size_label'] ?? 'Unknown size' }}
                               @if(!empty($detail['wick'])) · {{ ucfirst((string)$detail['wick']) }} wick @endif
                             </div>
                             <div class="text-right font-semibold text-white">{{ (int)($detail['qty'] ?? 0) }}</div>
                             <div class="truncate text-emerald-50/80">{{ $detail['recipe_name'] ?: '—' }}</div>
-                            <div class="text-right text-emerald-50/80">
-                              @if(!empty($detail['ingredients']))
-                                {{ (int)($detail['pitcher_count'] ?? 0) }}P
-                              @else
-                                —
-                              @endif
-                            </div>
                             <div class="text-right">{{ rtrim(rtrim(number_format((float)($detail['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
                             <div class="text-right">{{ rtrim(rtrim(number_format((float)($detail['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
                             <div>
