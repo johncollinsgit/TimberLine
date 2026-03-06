@@ -140,9 +140,8 @@ class ProgressiveMapper extends Component
 
         try {
             DB::transaction(function () use ($exceptions, $scentId): void {
+                // Core mapping must stay atomic.
                 $this->applyMappingToExceptions($exceptions, $scentId);
-                $this->syncAliases($exceptions, $scentId);
-                $this->syncWholesaleCustomMappings($exceptions, $scentId);
             });
         } catch (Throwable $e) {
             Log::error('ProgressiveMapperSaveFailed', [
@@ -160,6 +159,29 @@ class ProgressiveMapper extends Component
             ]);
 
             return;
+        }
+
+        // These enrichments should never block the primary mapping flow.
+        try {
+            $this->syncAliases($exceptions, $scentId);
+        } catch (Throwable $e) {
+            Log::warning('ProgressiveMapperAliasSyncFailed', [
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+                'exception_ids' => $exceptions->pluck('id')->all(),
+                'selected_scent_id' => $scentId,
+            ]);
+        }
+
+        try {
+            $this->syncWholesaleCustomMappings($exceptions, $scentId);
+        } catch (Throwable $e) {
+            Log::warning('ProgressiveMapperWholesaleCustomSyncFailed', [
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+                'exception_ids' => $exceptions->pluck('id')->all(),
+                'selected_scent_id' => $scentId,
+            ]);
         }
 
         $mappedCount = $exceptions->count();
@@ -181,11 +203,21 @@ class ProgressiveMapper extends Component
 
     protected function applyMappingToExceptions(Collection $exceptions, int $scentId): void
     {
-        $scentName = Schema::hasColumn('order_lines', 'scent_name')
+        $hasOrderLineScentId = Schema::hasColumn('order_lines', 'scent_id');
+        $hasOrderLineSizeId = Schema::hasColumn('order_lines', 'size_id');
+        $hasOrderLineWickType = Schema::hasColumn('order_lines', 'wick_type');
+        $hasOrderLineScentName = Schema::hasColumn('order_lines', 'scent_name');
+        $hasOrderLineSizeCode = Schema::hasColumn('order_lines', 'size_code');
+        $hasMappingExceptionResolvedAt = Schema::hasColumn('mapping_exceptions', 'resolved_at');
+        $hasMappingExceptionResolvedBy = Schema::hasColumn('mapping_exceptions', 'resolved_by');
+        $hasMappingExceptionCanonicalScentId = Schema::hasColumn('mapping_exceptions', 'canonical_scent_id');
+        $hasOrderRequiresShippingReview = Schema::hasColumn('orders', 'requires_shipping_review');
+
+        $scentName = $hasOrderLineScentName
             ? (Scent::query()->find($scentId)?->name)
             : null;
 
-        $sizeCode = ($this->sizeId && Schema::hasColumn('order_lines', 'size_code'))
+        $sizeCode = ($this->sizeId && $hasOrderLineSizeCode)
             ? (Size::query()->find($this->sizeId)?->code)
             : null;
 
@@ -198,28 +230,38 @@ class ProgressiveMapper extends Component
                 continue;
             }
 
-            $line->scent_id = $scentId;
-            if ($this->sizeId) {
+            if ($hasOrderLineScentId) {
+                $line->scent_id = $scentId;
+            }
+            if ($this->sizeId && $hasOrderLineSizeId) {
                 $line->size_id = $this->sizeId;
             }
-            if ($this->wickType && Schema::hasColumn('order_lines', 'wick_type')) {
+            if ($this->wickType && $hasOrderLineWickType) {
                 $line->wick_type = $this->wickType;
             }
-            if (Schema::hasColumn('order_lines', 'scent_name')) {
+            if ($hasOrderLineScentName) {
                 $line->scent_name = $scentName;
             }
-            if ($this->sizeId && Schema::hasColumn('order_lines', 'size_code')) {
+            if ($this->sizeId && $hasOrderLineSizeCode) {
                 $line->size_code = $sizeCode;
             }
             $line->save();
 
             if (! empty($line->scent_id) && ! empty($line->size_id)) {
-                $exception->resolved_at = now();
-                $exception->resolved_by = auth()->id();
-                $exception->canonical_scent_id = $line->scent_id;
-                $exception->save();
+                if ($hasMappingExceptionResolvedAt) {
+                    $exception->resolved_at = now();
+                }
+                if ($hasMappingExceptionResolvedBy) {
+                    $exception->resolved_by = auth()->id();
+                }
+                if ($hasMappingExceptionCanonicalScentId) {
+                    $exception->canonical_scent_id = $line->scent_id;
+                }
+                if ($exception->isDirty()) {
+                    $exception->save();
+                }
 
-                if ($exception->order_id) {
+                if ($exception->order_id && $hasOrderRequiresShippingReview && $hasMappingExceptionResolvedAt) {
                     $hasOpen = MappingException::query()
                         ->where('order_id', $exception->order_id)
                         ->whereNull('resolved_at')
@@ -844,7 +886,12 @@ class ProgressiveMapper extends Component
             ->values();
 
         foreach ($aliases as $alias) {
+            $alias = mb_substr($alias, 0, 255);
             if (in_array($alias, $canonicalValues, true)) {
+                continue;
+            }
+
+            if ($alias === '') {
                 continue;
             }
 
@@ -866,8 +913,8 @@ class ProgressiveMapper extends Component
         $exceptions
             ->filter(fn (MappingException $exception): bool => filled($exception->account_name))
             ->each(function (MappingException $exception) use ($scentId): void {
-                $accountName = trim((string) $exception->account_name);
-                $customName = trim((string) ($exception->raw_scent_name ?: $exception->raw_title ?: ''));
+                $accountName = mb_substr(trim((string) $exception->account_name), 0, 255);
+                $customName = mb_substr(trim((string) ($exception->raw_scent_name ?: $exception->raw_title ?: '')), 0, 255);
 
                 if ($accountName === '' || $customName === '') {
                     return;
