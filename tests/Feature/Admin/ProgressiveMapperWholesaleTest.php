@@ -13,7 +13,8 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-function makeWholesaleException(string $rawTitle, string $rawVariant, string $rawScentName, string $accountName, ?int $scentId = null): MappingException {
+function makeWholesaleException(string $rawTitle, string $rawVariant, string $rawScentName, string $accountName, ?int $scentId = null): MappingException
+{
     $order = Order::query()->create([
         'order_type' => 'wholesale',
         'source' => 'shopify',
@@ -49,50 +50,14 @@ function makeWholesaleException(string $rawTitle, string $rawVariant, string $ra
     ]);
 }
 
-test('guided guesses prioritize wholesale custom candidates in wholesale context', function () {
+test('search results include wholesale custom mapping candidates', function () {
     $user = User::factory()->create([
         'role' => 'admin',
         'email_verified_at' => now(),
     ]);
     $this->actingAs($user);
 
-    $wholesaleScent = Scent::query()->create([
-        'name' => 'nightfall reserve',
-        'display_name' => 'Nightfall Reserve',
-        'is_wholesale_custom' => true,
-        'is_active' => true,
-    ]);
-
-    Scent::query()->create([
-        'name' => 'nightfall',
-        'display_name' => 'Nightfall',
-        'is_active' => true,
-    ]);
-
-    WholesaleCustomScent::query()->create([
-        'account_name' => 'Acme Candle Co',
-        'custom_scent_name' => 'Scent of the Month',
-        'canonical_scent_id' => $wholesaleScent->id,
-        'active' => true,
-    ]);
-
-    $exception = makeWholesaleException('Scent of the Month', '8oz Cotton Wick', 'Scent of the Month', 'Acme Candle Co');
-
-    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
-        ->call('classify', 'wholesale-custom-existing')
-        ->assertSet('step', 2)
-        ->assertSet('guesses.0.id', $wholesaleScent->id)
-        ->assertSet('guesses.0.mapping_type', 'Wholesale Custom Scent');
-});
-
-test('advanced search returns wholesale custom records by custom scent name', function () {
-    $user = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-    $this->actingAs($user);
-
-    $customBlend = Scent::query()->create([
+    $wholesaleBlend = Scent::query()->create([
         'name' => 'fresh coffee reserve',
         'display_name' => 'Fresh Coffee Reserve',
         'is_wholesale_custom' => true,
@@ -103,20 +68,19 @@ test('advanced search returns wholesale custom records by custom scent name', fu
     WholesaleCustomScent::query()->create([
         'account_name' => 'Summit Goods',
         'custom_scent_name' => 'Morning Roast Club Blend',
-        'canonical_scent_id' => $customBlend->id,
+        'canonical_scent_id' => $wholesaleBlend->id,
         'active' => true,
     ]);
 
     $exception = makeWholesaleException('Morning Roast Club Blend', '8oz Cotton Wick', 'Morning Roast Club Blend', 'Summit Goods');
 
     Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
-        ->call('manualSearch')
         ->set('existingScentSearch', 'Morning Roast Club Blend')
         ->assertSee('Fresh Coffee Reserve')
         ->assertSee('Wholesale Custom Blend');
 });
 
-test('save can apply mapping to remaining repeated wholesale labels and persist account scoped rule', function () {
+test('save maps selected scent and applies to same-name unresolved wholesale items when enabled', function () {
     $user = User::factory()->create([
         'role' => 'admin',
         'email_verified_at' => now(),
@@ -134,10 +98,8 @@ test('save can apply mapping to remaining repeated wholesale labels and persist 
     $second = makeWholesaleException('Scent of the Month', '8oz Cotton Wick', 'Scent of the Month', 'Trail House');
 
     Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$first->id]])
-        ->call('classify', 'wholesale-custom-existing')
         ->set('selectedScentId', $scent->id)
-        ->set('batchApplyRemaining', true)
-        ->set('batchScope', 'this_account')
+        ->set('applySameName', true)
         ->call('save')
         ->assertDispatched('intake-done');
 
@@ -149,4 +111,30 @@ test('save can apply mapping to remaining repeated wholesale labels and persist 
         ->where('custom_scent_name', 'Scent of the Month')
         ->where('canonical_scent_id', $scent->id)
         ->exists())->toBeTrue();
+});
+
+test('save only maps current exception when same-name apply toggle is off', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $scent = Scent::query()->create([
+        'name' => 'river birch',
+        'display_name' => 'River Birch',
+        'is_active' => true,
+    ]);
+
+    $first = makeWholesaleException('Scent of the Month', '8oz Cotton Wick', 'Scent of the Month', 'Pine House');
+    $second = makeWholesaleException('Scent of the Month', '8oz Cotton Wick', 'Scent of the Month', 'Pine House');
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$first->id]])
+        ->set('selectedScentId', $scent->id)
+        ->set('applySameName', false)
+        ->call('save')
+        ->assertDispatched('intake-done');
+
+    expect(MappingException::query()->find($first->id)?->resolved_at)->not->toBeNull();
+    expect(MappingException::query()->find($second->id)?->resolved_at)->toBeNull();
 });
