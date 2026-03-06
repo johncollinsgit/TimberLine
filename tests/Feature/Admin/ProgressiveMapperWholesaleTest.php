@@ -252,3 +252,79 @@ test('search finds vintage amber even when many alphabetically earlier scents ex
         ->set('existingScentSearch', 'vintage amber')
         ->assertSee('Vintage Amber');
 });
+
+test('save merges duplicate order lines instead of failing unique scent-size constraint', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $target = Scent::query()->create([
+        'name' => 'vintage amber',
+        'display_name' => 'Vintage Amber',
+        'is_active' => true,
+    ]);
+
+    $size = Size::query()->firstOrCreate(
+        ['code' => '8oz-cotton'],
+        ['label' => '8oz Cotton Wick', 'is_active' => true]
+    );
+
+    $order = Order::query()->create([
+        'order_type' => 'wholesale',
+        'source' => 'shopify',
+        'order_number' => 'WH-2001',
+        'status' => 'new',
+    ]);
+
+    $existingMapped = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Vintage Amber',
+        'raw_variant' => '8oz Cotton Wick',
+        'scent_id' => $target->id,
+        'size_id' => $size->id,
+        'ordered_qty' => 4,
+        'quantity' => 4,
+        'extra_qty' => 0,
+    ]);
+
+    $unmapped = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Custom Scent',
+        'raw_variant' => '8oz Cotton Wick',
+        'scent_id' => null,
+        'size_id' => $size->id,
+        'ordered_qty' => 6,
+        'quantity' => 6,
+        'extra_qty' => 0,
+    ]);
+
+    $exception = MappingException::query()->create([
+        'store_key' => 'wholesale',
+        'order_id' => $order->id,
+        'order_line_id' => $unmapped->id,
+        'account_name' => 'ERIN NUTZ',
+        'raw_title' => 'Custom Scent',
+        'raw_variant' => '8oz Cotton Wick',
+        'raw_scent_name' => 'Custom Scent',
+        'reason' => null,
+        'payload_json' => [],
+    ]);
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('selectedScentId', $target->id)
+        ->set('applySameName', false)
+        ->call('save')
+        ->assertDispatched('intake-done');
+
+    expect(OrderLine::query()->whereKey($unmapped->id)->exists())->toBeFalse();
+
+    $merged = OrderLine::query()->findOrFail($existingMapped->id);
+    expect((int) $merged->ordered_qty)->toBe(10);
+    expect((int) ($merged->quantity ?? 0))->toBe(10);
+
+    $resolved = MappingException::query()->findOrFail($exception->id);
+    expect((int) ($resolved->order_line_id ?? 0))->toBe((int) $existingMapped->id);
+    expect($resolved->resolved_at)->not->toBeNull();
+});

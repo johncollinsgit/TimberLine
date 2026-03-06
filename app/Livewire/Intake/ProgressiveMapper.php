@@ -12,6 +12,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\QueryException;
 use Livewire\Component;
 use Throwable;
 
@@ -245,7 +246,22 @@ class ProgressiveMapper extends Component
             if ($this->sizeId && $hasOrderLineSizeCode) {
                 $line->size_code = $sizeCode;
             }
-            $line->save();
+            try {
+                $line->save();
+            } catch (QueryException $e) {
+                $targetScentId = $hasOrderLineScentId
+                    ? (int) ($line->scent_id ?? 0)
+                    : 0;
+                $targetSizeId = $hasOrderLineSizeId
+                    ? (int) ($line->size_id ?? 0)
+                    : 0;
+
+                if (! $this->isOrderScentSizeUniqueViolation($e) || $targetScentId <= 0 || $targetSizeId <= 0) {
+                    throw $e;
+                }
+
+                $line = $this->mergeLineIntoExistingScentSize($line, $targetScentId, $targetSizeId);
+            }
 
             if (! empty($line->scent_id) && ! empty($line->size_id)) {
                 if ($hasMappingExceptionResolvedAt) {
@@ -931,5 +947,68 @@ class ProgressiveMapper extends Component
                     ]
                 );
             });
+    }
+
+    protected function isOrderScentSizeUniqueViolation(QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $message = strtolower((string) $e->getMessage());
+
+        if (in_array($sqlState, ['23000', '23505'], true) && str_contains($message, 'order_lines')) {
+            return true;
+        }
+
+        return str_contains($message, 'order_lines_unique_order_scent_size_not_null')
+            || str_contains($message, 'order_lines_order_scent_size_unique')
+            || str_contains($message, 'duplicate entry')
+            || str_contains($message, 'unique constraint failed: order_lines.order_id, order_lines.scent_id, order_lines.size_id');
+    }
+
+    protected function mergeLineIntoExistingScentSize(OrderLine $line, int $scentId, int $sizeId): OrderLine
+    {
+        $hasQuantity = Schema::hasColumn('order_lines', 'quantity');
+        $hasExtraQty = Schema::hasColumn('order_lines', 'extra_qty');
+
+        $existing = OrderLine::query()
+            ->where('order_id', $line->order_id)
+            ->where('scent_id', $scentId)
+            ->where('size_id', $sizeId)
+            ->whereKeyNot($line->id)
+            ->first();
+
+        if (! $existing) {
+            // No merge target found; propagate the original failure.
+            throw new \RuntimeException('Unable to merge duplicate order line mapping for this scent/size.');
+        }
+
+        $existing->ordered_qty = (int) ($existing->ordered_qty ?? 0) + (int) ($line->ordered_qty ?? 0);
+
+        if ($hasQuantity) {
+            $existing->quantity = (int) ($existing->quantity ?? 0) + (int) ($line->quantity ?? $line->ordered_qty ?? 0);
+        }
+
+        if ($hasExtraQty) {
+            $existing->extra_qty = (int) ($existing->extra_qty ?? 0) + (int) ($line->extra_qty ?? 0);
+        }
+
+        if (Schema::hasColumn('order_lines', 'scent_name') && blank($existing->scent_name) && filled($line->scent_name)) {
+            $existing->scent_name = $line->scent_name;
+        }
+        if (Schema::hasColumn('order_lines', 'size_code') && blank($existing->size_code) && filled($line->size_code)) {
+            $existing->size_code = $line->size_code;
+        }
+        if (Schema::hasColumn('order_lines', 'wick_type') && blank($existing->wick_type) && filled($line->wick_type)) {
+            $existing->wick_type = $line->wick_type;
+        }
+
+        $existing->save();
+
+        MappingException::query()
+            ->where('order_line_id', $line->id)
+            ->update(['order_line_id' => $existing->id]);
+
+        $line->delete();
+
+        return $existing;
     }
 }
