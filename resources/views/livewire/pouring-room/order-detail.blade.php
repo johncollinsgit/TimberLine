@@ -71,13 +71,13 @@
     @else
       <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/15">
         <div class="border-b border-emerald-200/10">
-          <div class="grid grid-cols-[180px_minmax(0,1.5fr)_minmax(0,2fr)_110px_110px_minmax(0,1fr)] items-center gap-1 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
+          <div class="grid grid-cols-[180px_minmax(0,1.45fr)_minmax(0,1.25fr)_116px_116px_minmax(0,1.35fr)] items-center gap-2 px-2 py-2 text-[10px] uppercase tracking-[0.16em] text-emerald-100/55">
             <div>Status</div>
             <div>Scent</div>
             <div>Size Breakdown</div>
             <div class="text-right">Wax</div>
             <div class="text-right">Oil</div>
-            <div>Oil Name</div>
+            <div class="pl-2">Oil Name</div>
           </div>
         </div>
 
@@ -93,7 +93,7 @@
 
             <div class="bg-transparent">
               <div
-                class="grid grid-cols-[180px_minmax(0,1.5fr)_minmax(0,2fr)_110px_110px_minmax(0,1fr)] items-center gap-1 px-2 py-2 transition hover:bg-white/5"
+                class="grid grid-cols-[180px_minmax(0,1.45fr)_minmax(0,1.25fr)_116px_116px_minmax(0,1.35fr)] items-center gap-2 px-2 py-2 transition hover:bg-white/5"
                 wire:click="toggleScent('{{ $scentKey }}')"
                 role="button"
                 tabindex="0"
@@ -130,7 +130,7 @@
 
                 <div class="text-right text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['wax_grams'] ?? 0), 1), '0'), '.') }}g</div>
                 <div class="text-right text-sm font-semibold text-white/95">{{ rtrim(rtrim(number_format((float)($row['oil_grams'] ?? 0), 1), '0'), '.') }}g</div>
-                <div class="truncate text-sm text-emerald-50/90">{{ $row['oil_name'] ?? '—' }}</div>
+                <div class="pl-2 truncate text-sm text-emerald-50/90">{{ $row['oil_name'] ?? '—' }}</div>
               </div>
 
               @if($isExpanded)
