@@ -5,11 +5,13 @@ namespace App\Livewire\Components;
 use App\Models\Scent;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Attributes\Modelable;
 use Livewire\Component;
 
 class ScentCombobox extends Component
 {
     public string $query = '';
+    #[Modelable]
     public ?int $selectedId = null;
     public string $placeholder = 'Start typing a scent…';
     public string $emitEvent = 'scentSelected';
@@ -20,12 +22,33 @@ class ScentCombobox extends Component
 
     public function mount(?int $selectedId = null): void
     {
-        $this->selectedId = $selectedId;
-        if ($selectedId) {
-            $scent = Scent::query()->find($selectedId);
+        if ($this->selectedId === null && $selectedId) {
+            $this->selectedId = $selectedId;
+        }
+
+        if ($this->selectedId) {
+            $scent = Scent::query()->find($this->selectedId);
             if ($scent) {
                 $this->query = (string) ($scent->display_name ?: $scent->name);
             }
+        }
+    }
+
+    public function updatedSelectedId($value): void
+    {
+        $id = (int) $value;
+        if ($id <= 0) {
+            $this->selectedId = null;
+            if ($this->query !== '') {
+                $this->query = '';
+            }
+            return;
+        }
+
+        $this->selectedId = $id;
+        $scent = Scent::query()->find($id);
+        if ($scent) {
+            $this->query = (string) ($scent->display_name ?: $scent->name);
         }
     }
 

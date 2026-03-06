@@ -25,8 +25,8 @@
         <label class="text-xs text-white/70">Canonical scent (optional)</label>
         <div class="mt-1">
           <livewire:components.scent-combobox
+            wire:model.live="create.canonical_scent_id"
             :emit-key="'wholesale-create'"
-            :selected-id="(int)($create['canonical_scent_id'] ?? 0)"
             :allow-wholesale-custom="true"
             :include-inactive="true"
             wire:key="wholesale-create-combo"
@@ -135,8 +135,8 @@
           <label class="text-xs text-white/70">Canonical scent (optional)</label>
           <div class="mt-1">
             <livewire:components.scent-combobox
+              wire:model.live="edit.canonical_scent_id"
               :emit-key="'wholesale-edit'"
-              :selected-id="(int)($edit['canonical_scent_id'] ?? 0)"
               :allow-wholesale-custom="true"
               :include-inactive="true"
               wire:key="wholesale-edit-combo-{{ $editingId }}"

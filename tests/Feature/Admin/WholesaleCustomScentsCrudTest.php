@@ -75,3 +75,26 @@ test('wholesale custom scents edit can map canonical scent from selection event'
 
     expect((int) WholesaleCustomScent::query()->findOrFail($row->id)->canonical_scent_id)->toBe((int) $canonical->id);
 });
+
+test('wholesale custom scents edit can map canonical scent via bound field', function () {
+    $canonical = Scent::query()->create([
+        'name' => 'forest amber',
+        'display_name' => 'Forest Amber',
+        'is_active' => true,
+    ]);
+
+    $row = WholesaleCustomScent::query()->create([
+        'account_name' => 'TRAIL HOUSE',
+        'custom_scent_name' => 'Custom Scent',
+        'canonical_scent_id' => null,
+        'active' => true,
+    ]);
+
+    Livewire::test(CustomScentsCrud::class)
+        ->call('openEdit', $row->id)
+        ->set('edit.canonical_scent_id', $canonical->id)
+        ->call('save')
+        ->assertSet('showEdit', false);
+
+    expect((int) WholesaleCustomScent::query()->findOrFail($row->id)->canonical_scent_id)->toBe((int) $canonical->id);
+});
