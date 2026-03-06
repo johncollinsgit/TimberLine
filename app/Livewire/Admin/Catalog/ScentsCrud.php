@@ -5,7 +5,7 @@ namespace App\Livewire\Admin\Catalog;
 use App\Models\OrderLine;
 use App\Models\Scent;
 use App\Models\Blend;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -158,30 +158,68 @@ class ScentsCrud extends Component
 
     protected function validateCreate(): array
     {
-        return validator($this->create, [
+        $payload = $this->normalizedPayload($this->create);
+
+        return validator($payload, [
             'name' => ['required', 'string', 'max:255'],
             'display_name' => ['nullable', 'string', 'max:255'],
             'abbreviation' => ['nullable', 'string', 'max:64'],
             'oil_reference_name' => ['nullable', 'string', 'max:255'],
             'is_blend' => ['boolean'],
-            'oil_blend_id' => ['nullable', 'exists:blends,id'],
-            'blend_oil_count' => ['nullable', 'integer', 'min:1'],
+            'oil_blend_id' => [
+                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
+                'nullable',
+                'exists:blends,id',
+            ],
+            'blend_oil_count' => [
+                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
+                'nullable',
+                'integer',
+                'min:1',
+            ],
             'is_active' => ['boolean'],
         ])->validate();
     }
 
     protected function validateEdit(): array
     {
-        return validator($this->edit, [
+        $payload = $this->normalizedPayload($this->edit);
+
+        return validator($payload, [
             'name' => ['required', 'string', 'max:255'],
             'display_name' => ['nullable', 'string', 'max:255'],
             'abbreviation' => ['nullable', 'string', 'max:64'],
             'oil_reference_name' => ['nullable', 'string', 'max:255'],
             'is_blend' => ['boolean'],
-            'oil_blend_id' => ['nullable', 'exists:blends,id'],
-            'blend_oil_count' => ['nullable', 'integer', 'min:1'],
+            'oil_blend_id' => [
+                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
+                'nullable',
+                'exists:blends,id',
+            ],
+            'blend_oil_count' => [
+                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
+                'nullable',
+                'integer',
+                'min:1',
+            ],
             'is_active' => ['boolean'],
         ])->validate();
+    }
+
+    public function updatedCreateIsBlend($value): void
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOL)) {
+            $this->create['oil_blend_id'] = null;
+            $this->create['blend_oil_count'] = null;
+        }
+    }
+
+    public function updatedEditIsBlend($value): void
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOL)) {
+            $this->edit['oil_blend_id'] = null;
+            $this->edit['blend_oil_count'] = null;
+        }
     }
 
     protected function assertUniqueName(string $name, ?int $ignoreId = null): void
@@ -218,5 +256,25 @@ class ScentsCrud extends Component
     protected function normalizeScentName(string $name): string
     {
         return Scent::normalizeName($name);
+    }
+
+    protected function normalizedPayload(array $payload): array
+    {
+        $normalized = $payload;
+        $normalized['is_blend'] = (bool) ($payload['is_blend'] ?? false);
+        $normalized['is_active'] = (bool) ($payload['is_active'] ?? true);
+
+        $oilBlendId = $payload['oil_blend_id'] ?? null;
+        $normalized['oil_blend_id'] = blank($oilBlendId) ? null : (int) $oilBlendId;
+
+        $blendOilCount = $payload['blend_oil_count'] ?? null;
+        $normalized['blend_oil_count'] = blank($blendOilCount) ? null : (int) $blendOilCount;
+
+        if (! $normalized['is_blend']) {
+            $normalized['oil_blend_id'] = null;
+            $normalized['blend_oil_count'] = null;
+        }
+
+        return $normalized;
     }
 }

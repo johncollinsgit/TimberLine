@@ -26,23 +26,28 @@
       <div>
         <flux:input wire:model.defer="create.oil_reference_name" label="Oil Ref" />
       </div>
-      <div class="md:col-span-2">
-        <label class="text-xs text-white/70">Blend Recipe</label>
-        <select wire:model.defer="create.oil_blend_id" class="mt-1 w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
-          <option value="">None</option>
-          @foreach($blends as $blend)
-            <option value="{{ $blend->id }}">{{ $blend->name }}</option>
-          @endforeach
-        </select>
-        @error('create.oil_blend_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-      </div>
-      <div class="md:col-span-2">
+      <div>
         <label class="text-xs text-white/70">Blend?</label>
-        <div class="mt-1 flex items-center gap-3">
+        <div class="mt-1 flex h-10 items-center">
           <input type="checkbox" wire:model.defer="create.is_blend" class="rounded border-white/20 bg-white/10" />
-          <flux:input wire:model.defer="create.blend_oil_count" label="Oil count" type="number" min="1" />
         </div>
       </div>
+      @if($create['is_blend'] ?? false)
+        <div class="md:col-span-2">
+          <label class="text-xs text-white/70">Blend Recipe</label>
+          <select wire:model.defer="create.oil_blend_id" class="mt-1 w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
+            <option value="">None</option>
+            @foreach($blends as $blend)
+              <option value="{{ $blend->id }}">{{ $blend->name }}</option>
+            @endforeach
+          </select>
+          @error('create.oil_blend_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+        <div>
+          <flux:input wire:model.defer="create.blend_oil_count" label="Oil count" type="number" min="1" />
+          @error('create.blend_oil_count') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+      @endif
       <div class="flex items-center gap-2">
         <input type="checkbox" wire:model.defer="create.is_active" class="rounded border-white/20 bg-white/10" />
         <span class="text-sm text-white/80">Active</span>
@@ -120,22 +125,28 @@
           <flux:input wire:model.defer="edit.display_name" label="Display Name" />
           <flux:input wire:model.defer="edit.abbreviation" label="Abbrev" />
           <flux:input wire:model.defer="edit.oil_reference_name" label="Oil Ref" />
-          <div class="md:col-span-2">
-            <label class="text-xs text-white/70">Blend Recipe</label>
-            <select wire:model.defer="edit.oil_blend_id" class="mt-1 w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
-              <option value="">None</option>
-              @foreach($blends as $blend)
-                <option value="{{ $blend->id }}">{{ $blend->name }}</option>
-              @endforeach
-            </select>
-          </div>
-          <div class="md:col-span-2">
+          <div>
             <label class="text-xs text-white/70">Blend?</label>
-            <div class="mt-1 flex items-center gap-3">
+            <div class="mt-1 flex h-10 items-center">
               <input type="checkbox" wire:model.defer="edit.is_blend" class="rounded border-white/20 bg-white/10" />
-              <flux:input wire:model.defer="edit.blend_oil_count" label="Oil count" type="number" min="1" />
             </div>
           </div>
+          @if($edit['is_blend'] ?? false)
+            <div class="md:col-span-2">
+              <label class="text-xs text-white/70">Blend Recipe</label>
+              <select wire:model.defer="edit.oil_blend_id" class="mt-1 w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
+                <option value="">None</option>
+                @foreach($blends as $blend)
+                  <option value="{{ $blend->id }}">{{ $blend->name }}</option>
+                @endforeach
+              </select>
+              @error('edit.oil_blend_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+            <div>
+              <flux:input wire:model.defer="edit.blend_oil_count" label="Oil count" type="number" min="1" />
+              @error('edit.blend_oil_count') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+          @endif
           <div class="flex items-center gap-2">
             <input type="checkbox" wire:model.defer="edit.is_active" class="rounded border-white/20 bg-white/10" />
             <span class="text-sm text-white/80">Active</span>
