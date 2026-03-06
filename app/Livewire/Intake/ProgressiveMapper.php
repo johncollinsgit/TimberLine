@@ -53,6 +53,34 @@ class ProgressiveMapper extends Component
         }
     }
 
+    public function selectOnlyMatch(): void
+    {
+        $context = $this->mappingContext();
+        $matches = $this->matchingScents($context);
+        if ($matches->isEmpty()) {
+            return;
+        }
+
+        if ($matches->count() === 1) {
+            $candidate = (array) $matches->first();
+            $this->selectScent((int) ($candidate['id'] ?? 0));
+            return;
+        }
+
+        $needle = $this->normalizeSearchText($this->existingScentSearch);
+        if ($needle === '') {
+            return;
+        }
+
+        $exact = $matches->first(function (array $candidate) use ($needle): bool {
+            return $this->normalizeSearchText((string) ($candidate['name'] ?? '')) === $needle;
+        });
+
+        if ($exact) {
+            $this->selectScent((int) ($exact['id'] ?? 0));
+        }
+    }
+
     public function save(): void
     {
         if ($this->exceptionIds === []) {
@@ -363,16 +391,10 @@ class ProgressiveMapper extends Component
         $candidates = [];
 
         $canonicalRows = Scent::query()
-            ->where(function ($query) use ($search): void {
-                $like = '%'.$search.'%';
-                $query->where('name', 'like', $like)
-                    ->orWhere('display_name', 'like', $like)
-                    ->orWhere('abbreviation', 'like', $like)
-                    ->orWhere('oil_reference_name', 'like', $like);
-            })
+            ->with(['oilBlend:id,name'])
             ->orderByRaw('COALESCE(display_name, name)')
-            ->limit(24)
-            ->get(['id', 'name', 'display_name', 'abbreviation', 'oil_reference_name', 'is_wholesale_custom', 'is_blend', 'is_candle_club']);
+            ->limit(1200)
+            ->get(['id', 'name', 'display_name', 'abbreviation', 'oil_reference_name', 'is_wholesale_custom', 'is_blend', 'is_candle_club', 'oil_blend_id']);
 
         foreach ($canonicalRows as $scent) {
             $name = (string) ($scent->display_name ?: $scent->name ?: '');
@@ -380,11 +402,13 @@ class ProgressiveMapper extends Component
                 continue;
             }
 
-            $score = max(
-                $this->textSimilarity($needle, $this->normalizeSearchText($name)),
-                $this->textSimilarity($needle, $this->normalizeSearchText((string) ($scent->abbreviation ?? ''))),
-                $this->textSimilarity($needle, $this->normalizeSearchText((string) ($scent->oil_reference_name ?? '')))
-            );
+            $score = $this->candidateScoreFromFields($needle, [
+                $name,
+                (string) ($scent->name ?? ''),
+                (string) ($scent->abbreviation ?? ''),
+                (string) ($scent->oil_reference_name ?? ''),
+                (string) ($scent->oilBlend?->name ?? ''),
+            ]);
 
             if ($score < 0.1) {
                 continue;
@@ -406,16 +430,10 @@ class ProgressiveMapper extends Component
 
         if (Schema::hasTable('wholesale_custom_scents')) {
             $customQuery = WholesaleCustomScent::query()
-                ->with(['canonicalScent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club'])
+                ->with(['canonicalScent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club,oil_blend_id'])
                 ->where('active', true)
                 ->whereNotNull('canonical_scent_id')
-                ->where(function ($query) use ($search): void {
-                    $like = '%'.$search.'%';
-                    $query->where('custom_scent_name', 'like', $like)
-                        ->orWhere('account_name', 'like', $like)
-                        ->orWhere('notes', 'like', $like);
-                })
-                ->limit(50)
+                ->limit(600)
                 ->get();
 
             $accountNeedle = WholesaleCustomScent::normalizeAccountName((string) ($context['account_name'] ?? ''));
@@ -432,10 +450,17 @@ class ProgressiveMapper extends Component
                 }
 
                 $customName = trim((string) $row->custom_scent_name);
-                $score = max(
-                    $this->textSimilarity($needle, $this->normalizeSearchText($customName)),
-                    $this->textSimilarity($needle, $this->normalizeSearchText($name))
-                ) + 0.14;
+                $score = $this->candidateScoreFromFields($needle, [
+                    $customName,
+                    $name,
+                    (string) ($scent->name ?? ''),
+                    (string) ($row->notes ?? ''),
+                    (string) ($row->account_name ?? ''),
+                ]) + 0.14;
+
+                if ($score < 0.1) {
+                    continue;
+                }
 
                 $why = 'matched wholesale custom scent name';
                 if ($accountNeedle !== '' && WholesaleCustomScent::normalizeAccountName((string) $row->account_name) === $accountNeedle) {
@@ -464,10 +489,9 @@ class ProgressiveMapper extends Component
             }
 
             $aliases = ScentAlias::query()
-                ->with(['scent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club'])
+                ->with(['scent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club,oil_blend_id'])
                 ->whereIn('scope', array_values(array_unique($aliasScopes)))
-                ->where('alias', 'like', '%'.$search.'%')
-                ->limit(50)
+                ->limit(800)
                 ->get();
 
             foreach ($aliases as $alias) {
@@ -481,7 +505,18 @@ class ProgressiveMapper extends Component
                     continue;
                 }
 
-                $score = $this->textSimilarity($needle, $this->normalizeSearchText((string) $alias->alias)) + 0.12;
+                $score = max(
+                    $this->candidateScoreFromFields($needle, [
+                        (string) $alias->alias,
+                        $name,
+                        (string) ($scent->name ?? ''),
+                    ]),
+                    0.0
+                ) + 0.12;
+
+                if ($score < 0.1) {
+                    continue;
+                }
 
                 $this->upsertCandidate($candidates, [
                     'id' => (int) $scent->id,
@@ -511,6 +546,27 @@ class ProgressiveMapper extends Component
                 return $row;
             })
             ->values();
+    }
+
+    /**
+     * @param  array<int,string>  $fields
+     */
+    protected function candidateScoreFromFields(string $needle, array $fields): float
+    {
+        $best = 0.0;
+        foreach ($fields as $value) {
+            $normalized = $this->normalizeSearchText($value);
+            if ($normalized === '') {
+                continue;
+            }
+
+            $score = $this->textSimilarity($needle, $normalized);
+            if ($score > $best) {
+                $best = $score;
+            }
+        }
+
+        return $best;
     }
 
     protected function candidateType(Scent $scent, bool $viaWholesaleCustom): string

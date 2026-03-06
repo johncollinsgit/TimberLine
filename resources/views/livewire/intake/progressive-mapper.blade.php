@@ -25,31 +25,30 @@
       <input
         type="text"
         wire:model.live.debounce.250ms="existingScentSearch"
+        wire:keydown.enter.prevent="selectOnlyMatch"
         placeholder="Search"
         class="mt-1 w-full rounded-xl border border-emerald-200/20 bg-black/25 px-3 py-2 text-sm text-white/90"
       >
+      <div class="mt-1 text-[11px] text-emerald-100/65">Type to narrow. Press Enter when only one match remains.</div>
     </div>
 
     @if($matchingScents->isNotEmpty())
-      <div class="space-y-2">
+      <div class="rounded-xl border border-emerald-200/15 bg-black/15 divide-y divide-emerald-200/10">
         @foreach($matchingScents as $candidate)
-          <label class="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 transition {{ (int) $selectedScentId === (int) $candidate['id'] ? 'border-emerald-300/45 bg-emerald-500/16' : 'border-white/15 bg-white/10 hover:border-emerald-300/25 hover:bg-white/15' }}">
+          <label class="flex cursor-pointer items-center gap-2 px-3 py-2 transition {{ (int) $selectedScentId === (int) $candidate['id'] ? 'bg-emerald-500/18' : 'hover:bg-white/10' }}">
             <input
               type="radio"
               name="selected-scent"
               value="{{ (int) $candidate['id'] }}"
               wire:model.live="selectedScentId"
-              class="mt-1 border-emerald-200/40 bg-black/30 text-emerald-400"
+              class="h-3.5 w-3.5 border-emerald-200/40 bg-black/30 text-emerald-400"
             >
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="truncate font-semibold text-white">{{ $candidate['name'] }}</div>
-                <div class="flex items-center gap-2">
-                  <span class="inline-flex items-center rounded-full border border-emerald-200/25 bg-emerald-400/12 px-2 py-0.5 text-[10px] text-emerald-50">{{ $candidate['mapping_type'] }}</span>
-                  <span class="text-[11px] text-emerald-100/70">{{ $candidate['score'] }}%</span>
-                </div>
+            <div class="min-w-0 flex-1 flex items-center justify-between gap-2">
+              <div class="truncate text-sm font-medium text-white">{{ $candidate['name'] }}</div>
+              <div class="flex shrink-0 items-center gap-2">
+                <span class="text-[10px] text-emerald-100/70">{{ $candidate['mapping_type'] }}</span>
+                <span class="text-[10px] text-emerald-100/65">{{ $candidate['score'] }}%</span>
               </div>
-              <div class="mt-1 text-[11px] text-emerald-100/70">{{ $candidate['why'] }}</div>
             </div>
           </label>
         @endforeach

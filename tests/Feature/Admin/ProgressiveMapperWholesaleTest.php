@@ -80,6 +80,28 @@ test('search results include wholesale custom mapping candidates', function () {
         ->assertSee('Wholesale Custom Blend');
 });
 
+test('search can find scents by partial phrase inside longer names', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    Scent::query()->create([
+        'name' => 'march 2026 candle club — vintage amber',
+        'display_name' => 'March 2026 Candle Club — Vintage Amber',
+        'is_candle_club' => true,
+        'is_active' => true,
+    ]);
+
+    $exception = makeWholesaleException('Custom Scent', '8oz Cotton Wick', 'Custom Scent', 'ERIN NUTZ');
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('existingScentSearch', 'vintage amber')
+        ->assertSee('Vintage Amber')
+        ->assertSee('Subscription Drop');
+});
+
 test('save maps selected scent and applies to same-name unresolved wholesale items when enabled', function () {
     $user = User::factory()->create([
         'role' => 'admin',
@@ -137,4 +159,31 @@ test('save only maps current exception when same-name apply toggle is off', func
 
     expect(MappingException::query()->find($first->id)?->resolved_at)->not->toBeNull();
     expect(MappingException::query()->find($second->id)?->resolved_at)->toBeNull();
+});
+
+test('press enter selects scent when search narrows to one match', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $target = Scent::query()->create([
+        'name' => 'vintage amber reserve',
+        'display_name' => 'Vintage Amber Reserve',
+        'is_active' => true,
+    ]);
+
+    Scent::query()->create([
+        'name' => 'forest trail',
+        'display_name' => 'Forest Trail',
+        'is_active' => true,
+    ]);
+
+    $exception = makeWholesaleException('Custom Scent', '8oz Cotton Wick', 'Custom Scent', 'ERIN NUTZ');
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('existingScentSearch', 'Vintage Amber Reserve')
+        ->call('selectOnlyMatch')
+        ->assertSet('selectedScentId', $target->id);
 });
