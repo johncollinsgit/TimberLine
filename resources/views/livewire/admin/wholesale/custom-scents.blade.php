@@ -75,6 +75,58 @@
     </div>
   </div>
 
+  @if($showEdit && $editingId)
+    <div class="mt-4 rounded-2xl border border-emerald-300/25 bg-emerald-950/25 p-4 shadow-[0_18px_42px_-26px_rgba(16,185,129,0.7)]">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/15 pb-3">
+        <div>
+          <div class="text-[11px] uppercase tracking-[0.24em] text-emerald-100/70">Edit Mapping</div>
+          <div class="mt-1 text-sm font-semibold text-white">
+            {{ $edit['account_name'] ?? '' }} · {{ $edit['custom_scent_name'] ?? '' }}
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            wire:click="save"
+            class="inline-flex h-10 items-center rounded-xl border border-emerald-300/45 bg-emerald-500/25 px-4 text-sm font-semibold text-white hover:bg-emerald-500/35"
+          >
+            Save Changes
+          </button>
+          <button
+            type="button"
+            wire:click="closeEdit"
+            class="inline-flex h-10 items-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/80 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 md:grid-cols-2">
+        <flux:input wire:model.defer="edit.account_name" label="Account name" />
+        <flux:input wire:model.defer="edit.custom_scent_name" label="Custom scent name" />
+        <div class="md:col-span-2">
+          <label class="text-xs text-white/70">Canonical scent (optional)</label>
+          <div class="mt-1">
+            <livewire:components.scent-combobox
+              wire:model.live="edit.canonical_scent_id"
+              :emit-key="'wholesale-edit'"
+              :allow-wholesale-custom="true"
+              :include-inactive="true"
+              wire:key="wholesale-edit-combo-{{ $editingId }}"
+            />
+          </div>
+          @error('edit.canonical_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+        <flux:input wire:model.defer="edit.notes" label="Notes" />
+        <div class="flex items-center gap-2">
+          <input type="checkbox" wire:model.defer="edit.active" class="rounded border-white/20 bg-white/10" />
+          <span class="text-sm text-white/80">Active</span>
+        </div>
+      </div>
+    </div>
+  @endif
+
   <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
     <table class="min-w-full text-sm">
       <thead class="bg-white/5 text-white/70">
@@ -88,7 +140,7 @@
       </thead>
       <tbody class="divide-y divide-white/5">
         @forelse($records as $record)
-          <tr class="hover:bg-white/5">
+          <tr class="{{ (int)$editingId === (int)$record->id ? 'bg-emerald-500/10' : 'hover:bg-white/5' }}">
             <td class="px-4 py-3 text-white">{{ $record->account_name }}</td>
             <td class="px-4 py-3 text-white">{{ $record->custom_scent_name }}</td>
             <td class="px-4 py-3 text-white/80">
@@ -102,8 +154,20 @@
               @endif
             </td>
             <td class="px-4 py-3 text-right space-x-2">
-              <button type="button" wire:click="openEdit({{ $record->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100">Edit</button>
-              <button type="button" wire:click="openDelete({{ $record->id }})" class="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] text-red-100">Delete</button>
+              <button
+                type="button"
+                wire:click.prevent.stop="openEdit({{ $record->id }})"
+                class="inline-flex h-8 items-center rounded-lg border border-emerald-400/35 bg-emerald-500/20 px-3 text-[11px] font-semibold text-emerald-50 hover:bg-emerald-500/30"
+              >
+                {{ (int)$editingId === (int)$record->id ? 'Editing…' : 'Edit Mapping' }}
+              </button>
+              <button
+                type="button"
+                wire:click.prevent.stop="openDelete({{ $record->id }})"
+                class="inline-flex h-8 items-center rounded-lg border border-red-400/35 bg-red-500/15 px-3 text-[11px] font-semibold text-red-100 hover:bg-red-500/25"
+              >
+                Delete
+              </button>
             </td>
           </tr>
         @empty
@@ -123,39 +187,6 @@
 
   <div class="mt-4">{{ $records->links() }}</div>
 </section>
-
-@if($showEdit)
-  <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
-    <div class="w-full max-w-2xl rounded-2xl border border-white/10 bg-zinc-950 p-6">
-      <div class="text-lg font-semibold text-white">Edit Custom Scent</div>
-      <div class="mt-4 grid gap-3 md:grid-cols-2">
-        <flux:input wire:model.defer="edit.account_name" label="Account name" />
-        <flux:input wire:model.defer="edit.custom_scent_name" label="Custom scent name" />
-        <div class="md:col-span-2">
-          <label class="text-xs text-white/70">Canonical scent (optional)</label>
-          <div class="mt-1">
-            <livewire:components.scent-combobox
-              wire:model.live="edit.canonical_scent_id"
-              :emit-key="'wholesale-edit'"
-              :allow-wholesale-custom="true"
-              :include-inactive="true"
-              wire:key="wholesale-edit-combo-{{ $editingId }}"
-            />
-          </div>
-        </div>
-        <flux:input wire:model.defer="edit.notes" label="Notes" />
-        <div class="flex items-center gap-2">
-          <input type="checkbox" wire:model.defer="edit.active" class="rounded border-white/20 bg-white/10" />
-          <span class="text-sm text-white/80">Active</span>
-        </div>
-      </div>
-      <div class="mt-4 flex items-center gap-2">
-        <button type="button" wire:click="save" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white">Save</button>
-        <button type="button" wire:click="$set('showEdit', false)" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
-      </div>
-    </div>
-  </div>
-@endif
 
 @if($showDelete)
   <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>

@@ -105,6 +105,13 @@ class CustomScentsCrud extends Component
         $this->showEdit = true;
     }
 
+    public function closeEdit(): void
+    {
+        $this->showEdit = false;
+        $this->editingId = null;
+        $this->edit = [];
+    }
+
     public function save(): void
     {
         if (!$this->editingId) {
@@ -122,8 +129,7 @@ class CustomScentsCrud extends Component
             'active' => (bool) ($data['active'] ?? true),
         ]);
 
-        $this->showEdit = false;
-        $this->editingId = null;
+        $this->closeEdit();
 
         $this->dispatch('toast', ['message' => 'Wholesale custom scent updated.', 'style' => 'success']);
     }
