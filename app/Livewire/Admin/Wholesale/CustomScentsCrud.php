@@ -5,16 +5,13 @@ namespace App\Livewire\Admin\Wholesale;
 use App\Models\WholesaleCustomScent;
 use App\Models\Scent;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class CustomScentsCrud extends Component
 {
     use WithPagination;
-
-    protected $listeners = [
-        'scentSelected' => 'handleScentSelected',
-    ];
 
     public string $search = '';
     public string $filter = 'all'; // all | mapped | unmapped
@@ -62,7 +59,8 @@ class CustomScentsCrud extends Component
         $this->showCreate = !$this->showCreate;
     }
 
-    public function handleScentSelected(string $key, ?int $scentId = null): void
+    #[On('scentSelected')]
+    public function handleScentSelected(string $key, ?int $scentId = null, ?string $scentName = null): void
     {
         if ($key === 'wholesale-create') {
             $this->create['canonical_scent_id'] = $scentId;

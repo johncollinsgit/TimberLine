@@ -3,6 +3,7 @@
     <input
       type="text"
       wire:model.live.debounce.200ms="query"
+      wire:keydown.enter.prevent="selectOnlyMatch"
       placeholder="{{ $placeholder }}"
       class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90 placeholder:text-white/35
             focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
@@ -21,7 +22,10 @@
           <li>
             <button type="button" wire:click="select({{ $option->id }})"
               class="w-full px-3 py-2 text-left text-sm text-white/85 hover:bg-emerald-500/10">
-              {{ $option->name }}
+              {{ $option->display_name ?: $option->name }}
+              @if(!$option->is_active)
+                <span class="ml-2 text-[10px] uppercase tracking-wide text-amber-200/80">Inactive</span>
+              @endif
             </button>
           </li>
         @endforeach

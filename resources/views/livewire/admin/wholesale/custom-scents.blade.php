@@ -28,6 +28,7 @@
             :emit-key="'wholesale-create'"
             :selected-id="(int)($create['canonical_scent_id'] ?? 0)"
             :allow-wholesale-custom="true"
+            :include-inactive="true"
             wire:key="wholesale-create-combo"
           />
         </div>
@@ -137,6 +138,7 @@
               :emit-key="'wholesale-edit'"
               :selected-id="(int)($edit['canonical_scent_id'] ?? 0)"
               :allow-wholesale-custom="true"
+              :include-inactive="true"
               wire:key="wholesale-edit-combo-{{ $editingId }}"
             />
           </div>
