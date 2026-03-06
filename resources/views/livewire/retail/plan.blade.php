@@ -7,10 +7,12 @@
         <div class="mt-2 text-sm text-emerald-50/70 break-words">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
         <div class="mt-2 text-xs text-emerald-100/70 italic">“{{ $quote }}”</div>
       </div>
+      @php($wholesaleNeedsSelection = ($queueMeta['key'] ?? '') === 'wholesale' && empty($selectedWholesaleOrderId))
       <div class="flex flex-wrap gap-2">
         @if(($queueMeta['key'] ?? '') !== 'markets')
           <button type="button" wire:click="prefillFromOrders"
-            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition">
+            @if($wholesaleNeedsSelection) disabled @endif
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition disabled:cursor-not-allowed disabled:opacity-40">
             {{ $queueMeta['prefill_label'] ?? 'Prefill from Retail Orders' }}
           </button>
           <button type="button" wire:click="clearScents"
@@ -18,7 +20,8 @@
             Clear Scents
           </button>
           <button type="button" wire:click="publishPlan"
-            class="px-4 py-2 rounded-full text-xs border border-emerald-400/40 bg-emerald-500/25 text-white font-semibold hover:bg-emerald-500/30 transition">
+            @if($wholesaleNeedsSelection) disabled @endif
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/40 bg-emerald-500/25 text-white font-semibold hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-40">
             Publish to Pouring
           </button>
         @endif
@@ -61,6 +64,64 @@
   @endif
 
   <div class="grid grid-cols-1 gap-4 sm:gap-6 min-w-0">
+    @if(($queueMeta['key'] ?? '') === 'wholesale')
+    <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Select Wholesale Order</div>
+        <div class="text-xs text-emerald-100/70">{{ $wholesaleOrders->count() }} open orders</div>
+      </div>
+
+      @if($wholesaleOrders->isEmpty())
+        <div class="mt-3 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
+          No open wholesale orders found.
+        </div>
+      @else
+        <div class="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+          @foreach($wholesaleOrders as $orderRow)
+            <button
+              type="button"
+              wire:click="selectWholesaleOrder({{ (int) $orderRow['id'] }})"
+              class="rounded-2xl border px-4 py-3 text-left transition {{ ((int) ($selectedWholesaleOrderId ?? 0) === (int) $orderRow['id']) ? 'border-emerald-300/35 bg-emerald-500/18' : 'border-emerald-200/10 bg-emerald-500/5 hover:border-emerald-300/20 hover:bg-emerald-500/10' }}"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-semibold text-white" title="{{ $orderRow['display_name'] }}">{{ $orderRow['display_name'] }}</div>
+                  <div class="mt-1 text-xs text-emerald-100/65">
+                    #{{ $orderRow['order_number'] }} · {{ ucfirst($orderRow['status']) }}
+                    @if($orderRow['due_at'])
+                      · Due {{ \Illuminate\Support\Carbon::parse($orderRow['due_at'])->format('M j') }}
+                    @endif
+                  </div>
+                </div>
+                <div class="text-right text-xs text-emerald-100/70">
+                  <div>{{ (int) $orderRow['lines_count'] }} lines</div>
+                  <div>{{ (int) $orderRow['units_total'] }} units</div>
+                </div>
+              </div>
+            </button>
+          @endforeach
+        </div>
+      @endif
+
+      @if($selectedWholesaleOrder)
+        <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4">
+          <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/65">Selected Order Overview</div>
+          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
+            <span class="font-semibold">{{ $selectedWholesaleOrder['display_name'] }}</span>
+            <span class="text-emerald-100/65">#{{ $selectedWholesaleOrder['order_number'] }}</span>
+            <span class="text-emerald-100/65">{{ ucfirst($selectedWholesaleOrder['status']) }}</span>
+            @if($selectedWholesaleOrder['due_at'])
+              <span class="text-emerald-100/65">Due {{ \Illuminate\Support\Carbon::parse($selectedWholesaleOrder['due_at'])->format('M j, Y') }}</span>
+            @endif
+          </div>
+          <div class="mt-2 text-xs text-emerald-100/70">
+            {{ (int) $selectedWholesaleOrder['lines_count'] }} line items · {{ (int) $selectedWholesaleOrder['units_total'] }} total units
+          </div>
+        </div>
+      @endif
+    </section>
+    @endif
+
     @if(($queueMeta['key'] ?? '') !== 'markets')
     <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0">
       <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Add Additional Scents to the list</div>
@@ -194,7 +255,8 @@
         </div>
         <div class="mt-4">
           <button type="button" wire:click="publishPlan"
-            class="w-full rounded-xl border border-emerald-400/40 bg-emerald-500/25 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/30 transition">
+            @if($wholesaleNeedsSelection) disabled @endif
+            class="w-full rounded-xl border border-emerald-400/40 bg-emerald-500/25 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-40">
             Publish to Pouring room
           </button>
         </div>

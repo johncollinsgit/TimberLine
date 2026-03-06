@@ -73,6 +73,7 @@ class Plan extends Component
     public int $inventoryQty = 1;
     public string $inventoryScentSearch = '';
     public string $inventorySizeSearch = '';
+    public ?int $selectedWholesaleOrderId = null;
 
     protected $listeners = [
         'scentSelected' => 'handleScentSelected',
@@ -106,7 +107,11 @@ class Plan extends Component
             : null;
         $this->selectedUpcomingEventId = $this->marketSelectedEventId;
 
-        if ($this->queue !== 'markets' && $this->plan->items()->count() === 0) {
+        if ($this->queue === 'wholesale') {
+            $this->selectedWholesaleOrderId = $this->resolveDraftWholesaleOrderId();
+        }
+
+        if ($this->queue === 'retail' && $this->plan->items()->count() === 0) {
             $this->prefillFromOrdersInternal(true);
         }
     }
@@ -130,6 +135,45 @@ class Plan extends Component
     {
         if ($this->queue === 'markets') {
             $this->prefillFromMarketDraftsInternal($silent);
+            return;
+        }
+
+        if ($this->queue === 'wholesale') {
+            $orderId = (int) ($this->selectedWholesaleOrderId ?? 0);
+            if ($orderId <= 0) {
+                if (! $silent) {
+                    $this->dispatch('toast', [
+                        'type' => 'warning',
+                        'message' => 'Select a wholesale order first.',
+                    ]);
+                }
+                return;
+            }
+
+            $order = $this->wholesaleOpenOrdersQuery()
+                ->with(['lines'])
+                ->find($orderId);
+
+            if (! $order) {
+                $this->selectedWholesaleOrderId = null;
+                if (! $silent) {
+                    $this->dispatch('toast', [
+                        'type' => 'warning',
+                        'message' => 'That wholesale order is no longer available.',
+                    ]);
+                }
+                return;
+            }
+
+            $sync = $this->syncWholesaleOrderIntoDraft($order);
+
+            if (! $silent) {
+                $this->dispatch('toast', [
+                    'type' => 'success',
+                    'message' => "Loaded wholesale order #{$order->id}. Added {$sync['added']}, updated {$sync['updated']}, removed {$sync['removed']}.",
+                ]);
+            }
+
             return;
         }
 
@@ -1681,6 +1725,33 @@ class Plan extends Component
         $this->inventorySizeId = $size?->id;
     }
 
+    public function selectWholesaleOrder(int $orderId): void
+    {
+        if ($this->queue !== 'wholesale') {
+            return;
+        }
+
+        $order = $this->wholesaleOpenOrdersQuery()
+            ->with(['lines'])
+            ->find($orderId);
+
+        if (! $order) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'That wholesale order is no longer available.',
+            ]);
+            return;
+        }
+
+        $this->selectedWholesaleOrderId = (int) $order->id;
+        $sync = $this->syncWholesaleOrderIntoDraft($order);
+
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Loaded wholesale order #{$order->id}. Added {$sync['added']}, updated {$sync['updated']}, removed {$sync['removed']}.",
+        ]);
+    }
+
     public function removeItem(int $itemId): void
     {
         $item = RetailPlanItem::query()
@@ -1793,6 +1864,10 @@ class Plan extends Component
                 $this->syncEventPlanningStatus((int) $eventId);
                 $this->dispatch('marketsRefreshRequested', eventId: (int) $eventId);
             }
+        }
+
+        if ($this->queue === 'wholesale') {
+            $this->selectedWholesaleOrderId = null;
         }
 
         $this->dispatch('toast', [
@@ -1913,6 +1988,35 @@ class Plan extends Component
         if ($this->queue === 'markets' && $this->selectedUpcomingEventId) {
             $this->submitSelectedEventToPouringRoom();
             return;
+        }
+
+        if ($this->queue === 'wholesale' && ! $this->selectedWholesaleOrderId) {
+            $this->selectedWholesaleOrderId = $this->resolveDraftWholesaleOrderId();
+        }
+
+        if ($this->queue === 'wholesale') {
+            $selectedOrderId = (int) ($this->selectedWholesaleOrderId ?? 0);
+            if ($selectedOrderId <= 0) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Select a wholesale order before publishing to Pouring Room.',
+                ]);
+                return;
+            }
+
+            $hasSelectedRows = $this->plan->items()
+                ->where('status', '!=', 'published')
+                ->where('source', 'order')
+                ->where('order_id', $selectedOrderId)
+                ->exists();
+
+            if (! $hasSelectedRows) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Load the selected wholesale order into the draft before publishing.',
+                ]);
+                return;
+            }
         }
 
         if ($this->plan->published_at) {
@@ -2071,6 +2175,7 @@ class Plan extends Component
         $this->marketSelectedHistoryPlanId = null;
         $this->marketEventsStateTab = 'mapped';
         $this->marketEventsErrorBanner = null;
+        $this->selectedWholesaleOrderId = null;
         $this->prefillFromOrdersInternal(true);
 
         $this->dispatch('toast', [
@@ -2451,6 +2556,132 @@ class Plan extends Component
         ];
     }
 
+    protected function wholesaleOpenOrdersQuery()
+    {
+        return Order::query()
+            ->where('order_type', 'wholesale')
+            ->whereNull('published_at')
+            ->whereIn('status', ['new', 'reviewed']);
+    }
+
+    /**
+     * @return array{added:int,updated:int,removed:int}
+     */
+    protected function syncWholesaleOrderIntoDraft(Order $order): array
+    {
+        $order->loadMissing(['lines']);
+
+        $activeLines = collect($order->lines)
+            ->map(function (OrderLine $line): array {
+                $qty = (int) ($line->ordered_qty ?? 0) + (int) ($line->extra_qty ?? 0);
+
+                return [
+                    'line' => $line,
+                    'qty' => $qty,
+                ];
+            })
+            ->filter(fn (array $row) => $row['qty'] > 0)
+            ->values();
+
+        $activeLineIds = $activeLines->pluck('line.id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $added = 0;
+        $updated = 0;
+        $removed = 0;
+
+        DB::transaction(function () use ($order, $activeLines, $activeLineIds, &$added, &$updated, &$removed): void {
+            $removed += RetailPlanItem::query()
+                ->where('retail_plan_id', $this->plan->id)
+                ->where('source', 'order')
+                ->where(function ($query) use ($order) {
+                    $query->whereNull('order_id')
+                        ->orWhere('order_id', '!=', $order->id);
+                })
+                ->delete();
+
+            $selectedOrderRows = RetailPlanItem::query()
+                ->where('retail_plan_id', $this->plan->id)
+                ->where('source', 'order')
+                ->where('order_id', $order->id);
+
+            if ($activeLineIds->isNotEmpty()) {
+                $removed += (clone $selectedOrderRows)
+                    ->whereNotIn('order_line_id', $activeLineIds->all())
+                    ->delete();
+            } else {
+                $removed += $selectedOrderRows->delete();
+            }
+
+            foreach ($activeLines as $row) {
+                /** @var OrderLine $line */
+                $line = $row['line'];
+                $qty = (int) $row['qty'];
+
+                $payload = [
+                    'order_id' => $order->id,
+                    'scent_id' => $line->scent_id,
+                    'size_id' => $line->size_id,
+                    'sku' => $line->sku,
+                    'quantity' => $qty,
+                    'source' => 'order',
+                    'status' => ($line->scent_id && $line->size_id) ? 'draft' : 'needs_mapping',
+                ];
+
+                $existing = RetailPlanItem::query()
+                    ->where('retail_plan_id', $this->plan->id)
+                    ->where('order_line_id', $line->id)
+                    ->first();
+
+                if ($existing) {
+                    $existing->fill($payload);
+                    $existing->save();
+                    $updated++;
+                    continue;
+                }
+
+                RetailPlanItem::query()->create([
+                    'retail_plan_id' => $this->plan->id,
+                    'order_line_id' => $line->id,
+                    ...$payload,
+                ]);
+
+                $added++;
+            }
+        }, 3);
+
+        return [
+            'added' => $added,
+            'updated' => $updated,
+            'removed' => $removed,
+        ];
+    }
+
+    protected function resolveDraftWholesaleOrderId(): ?int
+    {
+        if ($this->queue !== 'wholesale') {
+            return null;
+        }
+
+        $ids = RetailPlanItem::query()
+            ->where('retail_plan_id', $this->plan->id)
+            ->where('source', 'order')
+            ->whereNotNull('order_id')
+            ->pluck('order_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->count() === 1) {
+            return (int) $ids->first();
+        }
+
+        return null;
+    }
+
     public function render()
     {
         $itemsQuery = $this->plan->items()
@@ -2459,6 +2690,8 @@ class Plan extends Component
             ->orderBy('id');
         $sizeQuery = trim($this->inventorySizeSearch);
         $selectedMarketEvent = null;
+        $wholesaleOrders = collect();
+        $selectedWholesaleOrder = null;
 
         if ($this->queue === 'markets') {
             $items = collect();
@@ -2483,12 +2716,47 @@ class Plan extends Component
                 ->get();
         }
 
+        if ($this->queue === 'wholesale') {
+            $openOrders = $this->wholesaleOpenOrdersQuery()
+                ->with(['lines:id,order_id,ordered_qty,extra_qty,scent_id,size_id'])
+                ->orderByRaw('COALESCE(due_at, ordered_at, created_at) asc')
+                ->orderBy('id')
+                ->limit(50)
+                ->get();
+
+            $wholesaleOrders = $openOrders->map(function (Order $order) {
+                $units = collect($order->lines)
+                    ->sum(fn (OrderLine $line) => max(0, (int) ($line->ordered_qty ?? 0) + (int) ($line->extra_qty ?? 0)));
+
+                return [
+                    'id' => (int) $order->id,
+                    'label' => (string) ($order->order_label ?: $order->order_number ?: 'Wholesale Order #'.$order->id),
+                    'display_name' => (string) ($order->display_name ?: 'Wholesale Order #'.$order->id),
+                    'order_number' => (string) ($order->order_number ?: '—'),
+                    'status' => (string) ($order->status ?: 'new'),
+                    'due_at' => $order->due_at,
+                    'lines_count' => (int) $order->lines->count(),
+                    'units_total' => (int) $units,
+                ];
+            });
+
+            if ($this->selectedWholesaleOrderId) {
+                $selectedWholesaleOrder = $wholesaleOrders->firstWhere('id', (int) $this->selectedWholesaleOrderId);
+                if (! $selectedWholesaleOrder) {
+                    $this->selectedWholesaleOrderId = null;
+                }
+            }
+        }
+
         return view('livewire.retail.plan', [
             'items' => $items,
             'sizes' => $sizes,
             'quote' => $this->quote,
             'queueMeta' => $this->queueMeta(),
             'selectedMarketEvent' => $selectedMarketEvent,
+            'selectedWholesaleOrderId' => $this->selectedWholesaleOrderId,
+            'wholesaleOrders' => $wholesaleOrders,
+            'selectedWholesaleOrder' => $selectedWholesaleOrder,
         ]);
     }
 
@@ -2719,21 +2987,26 @@ class Plan extends Component
     {
         $queue = $this->queueDisplayName();
         $prefillLabel = match ($this->queue) {
-            'wholesale' => 'Prefill from Wholesale Orders',
+            'wholesale' => 'Load Selected Wholesale Order',
             'markets' => 'Prefill from Market Drafts',
             default => 'Prefill from Retail Orders',
         };
 
         $emptyLabel = match ($this->queue) {
             'markets' => 'No items yet. Prefill from market drafts or add inventory below.',
-            'wholesale' => 'No items yet. Prefill from wholesale orders or add inventory below.',
+            'wholesale' => 'Select a wholesale order first, then adjust quantities or remove lines as needed.',
             default => 'No items yet. Prefill from retail orders or add inventory below.',
+        };
+
+        $subtitle = match ($this->queue) {
+            'wholesale' => 'Select one wholesale order, review/edit the draft, then publish that order to the pouring room.',
+            default => 'Draft list for today. Publish to push to the pouring room.',
         };
 
         return [
             'key' => $this->queue,
             'title' => $queue.'/Pour List',
-            'subtitle' => 'Draft list for today. Publish to push to the pouring room.',
+            'subtitle' => $subtitle,
             'prefill_label' => $prefillLabel,
             'add_button_label' => 'Add to '.$queue.'/Pour List',
             'empty_label' => $emptyLabel,
