@@ -98,6 +98,11 @@ class CustomScentsCrud extends Component
 
     public function openEdit(int $id): void
     {
+        if ($this->showEdit && (int) $this->editingId === $id) {
+            $this->closeEdit();
+            return;
+        }
+
         $record = WholesaleCustomScent::query()->findOrFail($id);
         $this->editingId = $id;
         $this->edit = [
@@ -252,7 +257,10 @@ class CustomScentsCrud extends Component
 
     public function render()
     {
-        $query = WholesaleCustomScent::query()->with('canonicalScent');
+        $query = WholesaleCustomScent::query()->with([
+            'canonicalScent',
+            'canonicalScent.oilBlend.components.baseOil',
+        ]);
 
         if ($this->search !== '') {
             $s = '%' . $this->search . '%';

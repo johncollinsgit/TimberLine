@@ -2,6 +2,9 @@
 
 use App\Livewire\Admin\Wholesale\CustomScentsCrud;
 use App\Livewire\Components\ScentCombobox;
+use App\Models\BaseOil;
+use App\Models\Blend;
+use App\Models\BlendComponent;
 use App\Models\Scent;
 use App\Models\WholesaleCustomScent;
 use Illuminate\Http\UploadedFile;
@@ -135,4 +138,64 @@ CSV;
     $scent = Scent::query()->findOrFail((int) $mapping->canonical_scent_id);
     expect((bool) $scent->is_wholesale_custom)->toBeTrue();
     expect((bool) $scent->is_blend)->toBeTrue();
+});
+
+test('wholesale custom list shows oils used column from canonical blend components', function () {
+    $blend = Blend::query()->create([
+        'name' => 'Vintage Amber',
+        'is_blend' => true,
+    ]);
+
+    $egyptianAmber = BaseOil::query()->create([
+        'name' => 'Egyptian Amber',
+        'active' => true,
+    ]);
+    $lavender = BaseOil::query()->create([
+        'name' => 'Lavender',
+        'active' => true,
+    ]);
+    $caribbeanTeakwood = BaseOil::query()->create([
+        'name' => 'Caribbean Teakwood',
+        'active' => true,
+    ]);
+
+    BlendComponent::query()->create([
+        'blend_id' => $blend->id,
+        'base_oil_id' => $egyptianAmber->id,
+        'ratio_weight' => 2,
+    ]);
+    BlendComponent::query()->create([
+        'blend_id' => $blend->id,
+        'base_oil_id' => $lavender->id,
+        'ratio_weight' => 2,
+    ]);
+    BlendComponent::query()->create([
+        'blend_id' => $blend->id,
+        'base_oil_id' => $caribbeanTeakwood->id,
+        'ratio_weight' => 1,
+    ]);
+
+    $scent = Scent::query()->create([
+        'name' => 'vintage amber',
+        'display_name' => 'Vintage Amber',
+        'oil_blend_id' => $blend->id,
+        'is_blend' => true,
+        'is_active' => true,
+    ]);
+
+    WholesaleCustomScent::query()->create([
+        'account_name' => 'Circa',
+        'custom_scent_name' => 'Vintage Amber',
+        'canonical_scent_id' => $scent->id,
+        'active' => true,
+    ]);
+
+    Livewire::test(CustomScentsCrud::class)
+        ->assertSee('Oils Used')
+        ->assertSee('Oil 1:')
+        ->assertSee('Egyptian Amber')
+        ->assertSee('Oil 2:')
+        ->assertSee('Lavender')
+        ->assertSee('Oil 3:')
+        ->assertSee('Caribbean Teakwood');
 });
