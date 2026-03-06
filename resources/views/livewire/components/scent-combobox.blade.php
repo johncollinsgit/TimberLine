@@ -3,6 +3,8 @@
     <input
       type="text"
       wire:model.live.debounce.200ms="query"
+      wire:focus="openDropdownIfSearching"
+      wire:keydown.escape.prevent="closeDropdown"
       wire:keydown.enter.prevent="selectOnlyMatch"
       placeholder="{{ $placeholder }}"
       class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90 placeholder:text-white/35
@@ -15,7 +17,7 @@
     @endif
   </div>
 
-  @if(count($options) > 0)
+  @if($showDropdown && count($options) > 0)
     <div class="absolute z-20 mt-2 w-full rounded-xl border border-emerald-200/10 bg-[#0f1412] shadow-xl">
       <ul class="max-h-64 overflow-y-auto">
         @foreach($options as $option)

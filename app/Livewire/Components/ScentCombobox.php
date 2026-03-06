@@ -13,6 +13,8 @@ class ScentCombobox extends Component
     public string $query = '';
     #[Modelable]
     public ?int $selectedId = null;
+    public string $selectedLabel = '';
+    public bool $showDropdown = false;
     public string $placeholder = 'Start typing a scent…';
     public string $emitEvent = 'scentSelected';
     public string $emitKey = '';
@@ -29,7 +31,8 @@ class ScentCombobox extends Component
         if ($this->selectedId) {
             $scent = Scent::query()->find($this->selectedId);
             if ($scent) {
-                $this->query = (string) ($scent->display_name ?: $scent->name);
+                $this->selectedLabel = (string) ($scent->display_name ?: $scent->name);
+                $this->query = $this->selectedLabel;
             }
         }
     }
@@ -39,6 +42,8 @@ class ScentCombobox extends Component
         $id = (int) $value;
         if ($id <= 0) {
             $this->selectedId = null;
+            $this->selectedLabel = '';
+            $this->showDropdown = false;
             if ($this->query !== '') {
                 $this->query = '';
             }
@@ -48,8 +53,35 @@ class ScentCombobox extends Component
         $this->selectedId = $id;
         $scent = Scent::query()->find($id);
         if ($scent) {
-            $this->query = (string) ($scent->display_name ?: $scent->name);
+            $this->selectedLabel = (string) ($scent->display_name ?: $scent->name);
+            $this->query = $this->selectedLabel;
         }
+        $this->showDropdown = false;
+    }
+
+    public function updatedQuery($value): void
+    {
+        $query = trim((string) $value);
+
+        if ($query === '') {
+            $this->selectedId = null;
+            $this->selectedLabel = '';
+            $this->showDropdown = false;
+            return;
+        }
+
+        if ($this->selectedLabel !== '' && mb_strtolower($query) === mb_strtolower($this->selectedLabel)) {
+            $this->showDropdown = false;
+            return;
+        }
+
+        // User changed text away from selected scent; require a new explicit selection.
+        if ($this->selectedId !== null) {
+            $this->selectedId = null;
+            $this->selectedLabel = '';
+        }
+
+        $this->showDropdown = true;
     }
 
     public function select(int $scentId): void
@@ -60,7 +92,9 @@ class ScentCombobox extends Component
         }
 
         $this->selectedId = $scentId;
-        $this->query = (string) ($scent->display_name ?: $scent->name);
+        $this->selectedLabel = (string) ($scent->display_name ?: $scent->name);
+        $this->query = $this->selectedLabel;
+        $this->showDropdown = false;
 
         $this->dispatch($this->emitEvent, key: $this->emitKey, scentId: $scentId, scentName: $scent->name);
     }
@@ -68,8 +102,31 @@ class ScentCombobox extends Component
     public function clear(): void
     {
         $this->selectedId = null;
+        $this->selectedLabel = '';
         $this->query = '';
+        $this->showDropdown = false;
         $this->dispatch($this->emitEvent, key: $this->emitKey, scentId: null, scentName: null);
+    }
+
+    public function openDropdownIfSearching(): void
+    {
+        $query = trim($this->query);
+        if ($query === '') {
+            $this->showDropdown = false;
+            return;
+        }
+
+        if ($this->selectedLabel !== '' && mb_strtolower($query) === mb_strtolower($this->selectedLabel)) {
+            $this->showDropdown = false;
+            return;
+        }
+
+        $this->showDropdown = true;
+    }
+
+    public function closeDropdown(): void
+    {
+        $this->showDropdown = false;
     }
 
     public function selectOnlyMatch(): void

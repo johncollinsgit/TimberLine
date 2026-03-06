@@ -106,7 +106,7 @@
             <td class="px-4 py-3 text-white">{{ $record->account_name }}</td>
             <td class="px-4 py-3 text-white">{{ $record->custom_scent_name }}</td>
             <td class="px-4 py-3 text-white/80">
-              {{ $record->canonicalScent?->name ?? '—' }}
+              {{ $record->canonicalScent?->display_name ?: ($record->canonicalScent?->name ?? '—') }}
             </td>
             <td class="px-4 py-3 text-white/80">
               @php
