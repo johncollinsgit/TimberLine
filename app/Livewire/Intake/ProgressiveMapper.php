@@ -33,6 +33,8 @@ class ProgressiveMapper extends Component
     /** @var array<int,int> */
     public array $sameNameExceptionIds = [];
     public bool $applySameName = false;
+    /** @var array<int,array<string,mixed>> */
+    public array $sameNameExceptionPreview = [];
 
     public function mount(array $exceptionIds = []): void
     {
@@ -58,6 +60,22 @@ class ProgressiveMapper extends Component
         }
 
         $scentId = $this->selectedScentId;
+        if (! $scentId && trim($this->existingScentSearch) !== '') {
+            $context = $this->mappingContext();
+            $candidates = $this->matchingScents($context);
+            $searchNeedle = $this->normalizeSearchText($this->existingScentSearch);
+
+            $exact = $candidates->first(function (array $candidate) use ($searchNeedle): bool {
+                return $this->normalizeSearchText((string) ($candidate['name'] ?? '')) === $searchNeedle;
+            });
+
+            if ($exact) {
+                $scentId = (int) ($exact['id'] ?? 0) ?: null;
+            } elseif ($candidates->count() === 1) {
+                $scentId = (int) ($candidates->first()['id'] ?? 0) ?: null;
+            }
+        }
+
         if (! $scentId && trim($this->existingScentSearch) !== '') {
             $existing = $this->findExistingScent($this->existingScentSearch);
             $scentId = $existing?->id;
@@ -176,11 +194,6 @@ class ProgressiveMapper extends Component
             return;
         }
 
-        $rawLabel = trim((string) ($exception->raw_scent_name ?: $exception->raw_title ?: ''));
-        if ($this->existingScentSearch === '' && $rawLabel !== '') {
-            $this->existingScentSearch = $rawLabel;
-        }
-
         $line = $exception->order_line_id
             ? OrderLine::query()->find($exception->order_line_id)
             : null;
@@ -219,6 +232,7 @@ class ProgressiveMapper extends Component
     {
         $this->sameNameExceptionIds = [];
         $this->applySameName = false;
+        $this->sameNameExceptionPreview = [];
 
         $sample = $this->currentExceptionSample();
         if (! $sample) {
@@ -245,11 +259,30 @@ class ProgressiveMapper extends Component
             $query->whereRaw('lower(coalesce(account_name, "")) = ?', [mb_strtolower($account)]);
         }
 
-        $this->sameNameExceptionIds = $query
+        $rows = $query
+            ->with(['order:id,order_number,order_label,customer_name'])
             ->orderByDesc('id')
             ->limit(200)
+            ->get(['id', 'order_id', 'raw_title', 'raw_variant', 'raw_scent_name', 'account_name']);
+
+        $this->sameNameExceptionIds = $rows
             ->pluck('id')
             ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+
+        $this->sameNameExceptionPreview = $rows
+            ->take(8)
+            ->map(function (MappingException $row): array {
+                return [
+                    'id' => (int) $row->id,
+                    'label' => trim((string) ($row->raw_scent_name ?: $row->raw_title ?: 'Unlabeled')),
+                    'variant' => trim((string) ($row->raw_variant ?? '')),
+                    'account_name' => trim((string) ($row->account_name ?? '')),
+                    'order_number' => trim((string) ($row->order?->order_number ?? '')),
+                    'order_customer' => trim((string) (($row->order?->order_label ?: $row->order?->customer_name) ?? '')),
+                ];
+            })
             ->values()
             ->all();
 
@@ -265,6 +298,7 @@ class ProgressiveMapper extends Component
             'contextException' => $exception,
             'mappingContext' => $context,
             'matchingScents' => $this->matchingScents($context),
+            'sameNameExceptionPreview' => $this->sameNameExceptionPreview,
         ]);
     }
 

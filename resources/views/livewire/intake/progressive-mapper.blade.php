@@ -21,11 +21,11 @@
 
   <div class="rounded-2xl border border-emerald-300/20 bg-emerald-950/35 p-4 space-y-3">
     <div>
-      <label class="text-xs text-emerald-100/70">Search scent</label>
+      <label class="text-xs text-emerald-100/70">Search</label>
       <input
         type="text"
         wire:model.live.debounce.250ms="existingScentSearch"
-        placeholder="Type a scent name, wholesale custom name, alias, or abbreviation"
+        placeholder="Search"
         class="mt-1 w-full rounded-xl border border-emerald-200/20 bg-black/25 px-3 py-2 text-sm text-white/90"
       >
     </div>
@@ -72,6 +72,31 @@
           @endif
         </span>
       </label>
+
+      @if(!empty($sameNameExceptionPreview))
+        <div class="mt-3 rounded-xl border border-amber-200/20 bg-black/20 p-3">
+          <div class="text-[11px] uppercase tracking-[0.24em] text-amber-100/70">Will Also Map</div>
+          <div class="mt-2 space-y-1.5">
+            @foreach($sameNameExceptionPreview as $row)
+              <div class="text-xs text-amber-50/90">
+                {{ $row['label'] }}
+                @if($row['variant'] !== '')
+                  · {{ $row['variant'] }}
+                @endif
+                @if($row['account_name'] !== '')
+                  · {{ $row['account_name'] }}
+                @endif
+                @if($row['order_number'] !== '')
+                  · #{{ $row['order_number'] }}
+                @endif
+              </div>
+            @endforeach
+            @if($sameCount > count($sameNameExceptionPreview))
+              <div class="text-[11px] text-amber-100/70">+{{ $sameCount - count($sameNameExceptionPreview) }} more</div>
+            @endif
+          </div>
+        </div>
+      @endif
     </div>
   @endif
 
