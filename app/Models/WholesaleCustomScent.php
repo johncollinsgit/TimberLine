@@ -13,12 +13,22 @@ class WholesaleCustomScent extends Model
     protected $fillable = [
         'account_name',
         'custom_scent_name',
+        'oil_1',
+        'oil_2',
+        'oil_3',
+        'total_oils',
+        'abbreviation',
         'canonical_scent_id',
         'notes',
+        'top_level_recipe_json',
+        'resolved_recipe_json',
         'active',
     ];
 
     protected $casts = [
+        'total_oils' => 'integer',
+        'top_level_recipe_json' => 'array',
+        'resolved_recipe_json' => 'array',
         'active' => 'boolean',
     ];
 

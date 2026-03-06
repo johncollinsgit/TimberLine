@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Wholesale;
 
 use App\Models\WholesaleCustomScent;
 use App\Models\Scent;
+use App\Services\Recipes\NestedOilRecipeResolver;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
@@ -25,6 +26,11 @@ class CustomScentsCrud extends Component
     public array $create = [
         'account_name' => '',
         'custom_scent_name' => '',
+        'oil_1' => '',
+        'oil_2' => '',
+        'oil_3' => '',
+        'total_oils' => null,
+        'abbreviation' => '',
         'canonical_scent_id' => null,
         'notes' => '',
         'active' => true,
@@ -82,13 +88,7 @@ class CustomScentsCrud extends Component
         $data = $this->validateCreate();
         $this->assertUnique($data['account_name'], $data['custom_scent_name']);
 
-        WholesaleCustomScent::query()->create([
-            'account_name' => trim($data['account_name']),
-            'custom_scent_name' => trim($data['custom_scent_name']),
-            'canonical_scent_id' => $data['canonical_scent_id'] ?: null,
-            'notes' => blank($data['notes'] ?? null) ? null : trim($data['notes']),
-            'active' => (bool) ($data['active'] ?? true),
-        ]);
+        WholesaleCustomScent::query()->create($this->withRecipePayload($data));
 
         $this->reset('create');
         $this->create['active'] = true;
@@ -108,6 +108,11 @@ class CustomScentsCrud extends Component
         $this->edit = [
             'account_name' => $record->account_name,
             'custom_scent_name' => $record->custom_scent_name,
+            'oil_1' => $record->oil_1,
+            'oil_2' => $record->oil_2,
+            'oil_3' => $record->oil_3,
+            'total_oils' => $record->total_oils,
+            'abbreviation' => $record->abbreviation,
             'canonical_scent_id' => $record->canonical_scent_id,
             'notes' => $record->notes,
             'active' => (bool) $record->active,
@@ -131,13 +136,9 @@ class CustomScentsCrud extends Component
         $data = $this->validateEdit();
         $this->assertUnique($data['account_name'], $data['custom_scent_name'], $this->editingId);
 
-        WholesaleCustomScent::query()->whereKey($this->editingId)->update([
-            'account_name' => trim($data['account_name']),
-            'custom_scent_name' => trim($data['custom_scent_name']),
-            'canonical_scent_id' => $data['canonical_scent_id'] ?: null,
-            'notes' => blank($data['notes'] ?? null) ? null : trim($data['notes']),
-            'active' => (bool) ($data['active'] ?? true),
-        ]);
+        WholesaleCustomScent::query()->whereKey($this->editingId)->update(
+            $this->withRecipePayload($data, $this->editingId)
+        );
 
         $this->closeEdit();
 
@@ -218,6 +219,11 @@ class CustomScentsCrud extends Component
         return validator($this->create, [
             'account_name' => ['required', 'string', 'max:255'],
             'custom_scent_name' => ['required', 'string', 'max:255'],
+            'oil_1' => ['nullable', 'string', 'max:255'],
+            'oil_2' => ['nullable', 'string', 'max:255'],
+            'oil_3' => ['nullable', 'string', 'max:255'],
+            'total_oils' => ['nullable', 'integer', 'min:0', 'max:999'],
+            'abbreviation' => ['nullable', 'string', 'max:50'],
             'canonical_scent_id' => ['nullable', 'exists:scents,id'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'active' => ['boolean'],
@@ -229,6 +235,11 @@ class CustomScentsCrud extends Component
         return validator($this->edit, [
             'account_name' => ['required', 'string', 'max:255'],
             'custom_scent_name' => ['required', 'string', 'max:255'],
+            'oil_1' => ['nullable', 'string', 'max:255'],
+            'oil_2' => ['nullable', 'string', 'max:255'],
+            'oil_3' => ['nullable', 'string', 'max:255'],
+            'total_oils' => ['nullable', 'integer', 'min:0', 'max:999'],
+            'abbreviation' => ['nullable', 'string', 'max:50'],
             'canonical_scent_id' => ['nullable', 'exists:scents,id'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'active' => ['boolean'],
@@ -283,5 +294,121 @@ class CustomScentsCrud extends Component
         return view('livewire.admin.wholesale.custom-scents', [
             'records' => $records,
         ])->layout('layouts.app');
+    }
+
+    protected function withRecipePayload(array $data, ?int $ignoreId = null): array
+    {
+        $payload = [
+            'account_name' => trim((string) ($data['account_name'] ?? '')),
+            'custom_scent_name' => trim((string) ($data['custom_scent_name'] ?? '')),
+            'oil_1' => blank($data['oil_1'] ?? null) ? null : trim((string) $data['oil_1']),
+            'oil_2' => blank($data['oil_2'] ?? null) ? null : trim((string) $data['oil_2']),
+            'oil_3' => blank($data['oil_3'] ?? null) ? null : trim((string) $data['oil_3']),
+            'total_oils' => isset($data['total_oils']) && $data['total_oils'] !== '' ? (int) $data['total_oils'] : null,
+            'abbreviation' => blank($data['abbreviation'] ?? null) ? null : trim((string) $data['abbreviation']),
+            'canonical_scent_id' => $data['canonical_scent_id'] ?: null,
+            'notes' => blank($data['notes'] ?? null) ? null : trim((string) $data['notes']),
+            'active' => (bool) ($data['active'] ?? true),
+        ];
+
+        $resolver = app(NestedOilRecipeResolver::class);
+        $topLevelComponents = $resolver->parseTopLevelComponents([
+            (string) ($payload['oil_1'] ?? ''),
+            (string) ($payload['oil_2'] ?? ''),
+            (string) ($payload['oil_3'] ?? ''),
+        ]);
+
+        if ($topLevelComponents !== []) {
+            $definitions = $this->recipeDefinitionMap($ignoreId, $resolver);
+            $lookupKey = $resolver->lookupKey((string) $payload['custom_scent_name']);
+            if ($lookupKey !== '') {
+                $definitions[$lookupKey] = $topLevelComponents;
+            }
+
+            $resolved = $resolver->resolveToBaseOils($topLevelComponents, $definitions);
+
+            $payload['top_level_recipe_json'] = [
+                'version' => 1,
+                'slots' => [
+                    'oil_1' => $payload['oil_1'],
+                    'oil_2' => $payload['oil_2'],
+                    'oil_3' => $payload['oil_3'],
+                ],
+                'components' => array_map(fn (array $component): array => [
+                    'name' => (string) ($component['name'] ?? ''),
+                    'weight' => (float) ($component['weight'] ?? 0.0),
+                ], $topLevelComponents),
+            ];
+            $payload['resolved_recipe_json'] = [
+                'version' => 1,
+                'components' => array_map(fn (array $component): array => [
+                    'name' => (string) ($component['name'] ?? ''),
+                    'weight' => (float) ($component['weight'] ?? 0.0),
+                    'percent' => (float) ($component['percent'] ?? 0.0),
+                ], $resolved['components'] ?? []),
+                'warnings' => array_values(array_unique(array_map('strval', $resolved['errors'] ?? []))),
+            ];
+
+            if ($payload['total_oils'] === null) {
+                $payload['total_oils'] = count($topLevelComponents);
+            }
+        } else {
+            $payload['top_level_recipe_json'] = null;
+            $payload['resolved_recipe_json'] = null;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string,array<int,array{name:string,weight:float}>>
+     */
+    protected function recipeDefinitionMap(?int $ignoreId, NestedOilRecipeResolver $resolver): array
+    {
+        $definitions = [];
+
+        WholesaleCustomScent::query()
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->get(['id', 'custom_scent_name', 'oil_1', 'oil_2', 'oil_3', 'top_level_recipe_json'])
+            ->each(function (WholesaleCustomScent $record) use (&$definitions, $resolver): void {
+                $key = $resolver->lookupKey((string) $record->custom_scent_name);
+                if ($key === '' || isset($definitions[$key])) {
+                    return;
+                }
+
+                $jsonComponents = $record->top_level_recipe_json['components'] ?? null;
+                if (is_array($jsonComponents) && $jsonComponents !== []) {
+                    $components = array_values(array_filter(array_map(function ($component): ?array {
+                        if (! is_array($component)) {
+                            return null;
+                        }
+
+                        $name = trim((string) ($component['name'] ?? ''));
+                        $weight = (float) ($component['weight'] ?? 0.0);
+                        if ($name === '' || $weight <= 0) {
+                            return null;
+                        }
+
+                        return ['name' => $name, 'weight' => $weight];
+                    }, $jsonComponents)));
+
+                    if ($components !== []) {
+                        $definitions[$key] = $components;
+                        return;
+                    }
+                }
+
+                $parsed = $resolver->parseTopLevelComponents([
+                    (string) ($record->oil_1 ?? ''),
+                    (string) ($record->oil_2 ?? ''),
+                    (string) ($record->oil_3 ?? ''),
+                ]);
+
+                if ($parsed !== []) {
+                    $definitions[$key] = $parsed;
+                }
+            });
+
+        return $definitions;
     }
 }

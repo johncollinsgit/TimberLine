@@ -70,6 +70,13 @@ CSV);
             ->where('custom_scent_name', 'On the Trail')
             ->firstOrFail();
 
+        expect((string) ($mapping->oil_1 ?? ''))->toBe('Thru Hike Blend');
+        expect((string) ($mapping->oil_2 ?? ''))->toBe('Patchouli Teakwood');
+        expect((string) ($mapping->abbreviation ?? ''))->toBe('OTT');
+        expect((int) ($mapping->total_oils ?? 0))->toBe(2);
+        expect((array) ($mapping->top_level_recipe_json['components'] ?? []))->toHaveCount(2);
+        expect((array) ($mapping->resolved_recipe_json['components'] ?? []))->toHaveCount(3);
+
         $scent = Scent::query()->findOrFail($mapping->canonical_scent_id);
         expect((bool) $scent->is_blend)->toBeTrue();
         expect((bool) $scent->is_wholesale_custom)->toBeTrue();
@@ -90,6 +97,18 @@ CSV);
             'Moss' => 1,
             'Patchouli Teakwood' => 1,
         ]);
+
+        $resolved = collect((array) ($mapping->resolved_recipe_json['components'] ?? []))
+            ->mapWithKeys(fn (array $component): array => [
+                (string) ($component['name'] ?? '') => (float) ($component['percent'] ?? 0.0),
+            ])
+            ->all();
+
+        expect($resolved)->toMatchArray([
+            'Cedar' => 50.0,
+            'Moss' => 25.0,
+            'Patchouli Teakwood' => 25.0,
+        ]);
     } finally {
         if (is_file($csvPath)) {
             @unlink($csvPath);
@@ -97,3 +116,31 @@ CSV);
     }
 });
 
+test('wholesale custom master sync detects circular nested recipes and skips invalid rows', function () {
+    $csvPath = makeWholesaleMasterCsv(<<<CSV
+Wholesale Custom Scents,,,,,,
+Scent Name,Oil #1,Oil #2,Oil #3,Total Oils,Abbreviation ,Wholesale Account Name
+Loop A,Loop B,,,1,,Account One
+Loop B,Loop A,,,1,,Account One
+CSV);
+
+    try {
+        $exit = Artisan::call('wholesale-custom:sync-master', [
+            'csv' => $csvPath,
+            '--replace' => true,
+        ]);
+
+        $output = Artisan::output();
+
+        expect($exit)->toBe(0);
+        expect($output)->toContain('rows_read=2');
+        expect($output)->toContain('rows_skipped=2');
+        expect($output)->toContain('rows_with_recipe_warnings=2');
+
+        expect(WholesaleCustomScent::query()->count())->toBe(0);
+    } finally {
+        if (is_file($csvPath)) {
+            @unlink($csvPath);
+        }
+    }
+});

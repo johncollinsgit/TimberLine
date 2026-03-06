@@ -7,6 +7,7 @@ use App\Models\Blend;
 use App\Models\BlendComponent;
 use App\Models\Scent;
 use App\Models\WholesaleCustomScent;
+use App\Services\Recipes\NestedOilRecipeResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -39,6 +40,7 @@ class SyncWholesaleCustomMaster extends Command
         $summary = [
             'rows_read' => count($rows),
             'rows_skipped' => 0,
+            'rows_with_recipe_warnings' => 0,
             'wholesale_inserted' => 0,
             'wholesale_updated' => 0,
             'wholesale_deleted' => 0,
@@ -49,7 +51,24 @@ class SyncWholesaleCustomMaster extends Command
             'components_written' => 0,
         ];
 
-        $runner = function () use ($rows, $replace, $dryRun, &$summary): void {
+        $resolver = app(NestedOilRecipeResolver::class);
+        $preparedRows = $this->prepareRows($rows, $resolver, $summary);
+        if ($preparedRows === []) {
+            $this->error('No mappable rows were found in the CSV after parsing.');
+            return self::FAILURE;
+        }
+
+        $recipeDefinitions = [];
+        foreach ($preparedRows as $preparedRow) {
+            $lookupKey = $resolver->lookupKey((string) ($preparedRow['custom_scent_name'] ?? ''));
+            if ($lookupKey === '' || isset($recipeDefinitions[$lookupKey])) {
+                continue;
+            }
+
+            $recipeDefinitions[$lookupKey] = $preparedRow['top_level_components'] ?? [];
+        }
+
+        $runner = function () use ($preparedRows, $recipeDefinitions, $resolver, $replace, $dryRun, &$summary): void {
             if ($replace) {
                 $summary['wholesale_deleted'] = WholesaleCustomScent::query()->count();
                 if (! $dryRun) {
@@ -57,35 +76,27 @@ class SyncWholesaleCustomMaster extends Command
                 }
             }
 
-            $blendIndex = Blend::query()
-                ->with(['components.baseOil'])
-                ->get()
-                ->keyBy(fn (Blend $blend): string => $this->blendLookupKey((string) $blend->name));
-
             $scents = Scent::query()
                 ->get(['id', 'name', 'display_name', 'abbreviation'])
                 ->all();
 
-            foreach ($rows as $row) {
-                $accountName = $this->normalizeText((string) ($row['Wholesale Account Name'] ?? ''));
-                $rawScentName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
-                if ($accountName === '' || $rawScentName === '') {
-                    $summary['rows_skipped']++;
-                    continue;
+            foreach ($preparedRows as $row) {
+                $customScentName = (string) ($row['custom_scent_name'] ?? '');
+                $abbreviation = (string) ($row['abbreviation'] ?? '');
+                $accountName = (string) ($row['account_name'] ?? '');
+                $notes = (string) ($row['notes'] ?? '');
+
+                $resolved = $resolver->resolveToBaseOils(
+                    $row['top_level_components'] ?? [],
+                    $recipeDefinitions
+                );
+
+                if (! empty($resolved['errors'])) {
+                    $summary['rows_with_recipe_warnings']++;
                 }
 
-                [$customScentName, $parsedAbbreviation] = $this->extractNameAndAbbreviation($rawScentName);
-                $explicitAbbreviation = $this->normalizeText((string) ($row['Abbreviation'] ?? ''));
-                $abbreviation = $explicitAbbreviation !== '' ? $explicitAbbreviation : $parsedAbbreviation;
-
-                $oils = $this->extractOilRows($row);
-                if ($oils === []) {
-                    $summary['rows_skipped']++;
-                    continue;
-                }
-
-                $components = $this->collapseComponents($this->expandOilComponents($oils, $blendIndex));
-                if ($components === []) {
+                $resolvedComponents = $this->normalizeRatioWeights($resolved['components'] ?? []);
+                if ($resolvedComponents === []) {
                     $summary['rows_skipped']++;
                     continue;
                 }
@@ -108,9 +119,9 @@ class SyncWholesaleCustomMaster extends Command
                     $blend->components()->delete();
                 }
 
-                foreach ($components as $component) {
+                foreach ($resolvedComponents as $component) {
                     $baseOil = BaseOil::query()->firstOrCreate(
-                        ['name' => $component['name']],
+                        ['name' => (string) $component['name']],
                         ['active' => true]
                     );
 
@@ -118,16 +129,11 @@ class SyncWholesaleCustomMaster extends Command
                         BlendComponent::query()->create([
                             'blend_id' => $blend->id,
                             'base_oil_id' => $baseOil->id,
-                            'ratio_weight' => (int) $component['weight'],
+                            'ratio_weight' => (int) $component['ratio_weight'],
                         ]);
                     }
 
                     $summary['components_written']++;
-                }
-
-                if (! $dryRun) {
-                    $blend->load('components.baseOil');
-                    $blendIndex[$this->blendLookupKey((string) $blend->name)] = $blend;
                 }
 
                 $canonicalScent = $this->findMatchingScent($scents, $customScentName, $abbreviation);
@@ -139,7 +145,7 @@ class SyncWholesaleCustomMaster extends Command
                     $canonicalScent->oil_reference_name = $customScentName;
                     $canonicalScent->is_blend = true;
                     $canonicalScent->oil_blend_id = $dryRun ? null : $blend->id;
-                    $canonicalScent->blend_oil_count = count($components);
+                    $canonicalScent->blend_oil_count = count($resolvedComponents);
                     $canonicalScent->is_wholesale_custom = true;
                     $canonicalScent->is_active = true;
 
@@ -158,7 +164,7 @@ class SyncWholesaleCustomMaster extends Command
                     }
                     $canonicalScent->oil_reference_name = $customScentName;
                     $canonicalScent->is_blend = true;
-                    $canonicalScent->blend_oil_count = count($components);
+                    $canonicalScent->blend_oil_count = count($resolvedComponents);
                     $canonicalScent->is_wholesale_custom = true;
                     $canonicalScent->is_active = true;
                     if (! $dryRun) {
@@ -180,6 +186,33 @@ class SyncWholesaleCustomMaster extends Command
 
                 $isNewMapping = ! $mapping->exists;
                 $mapping->canonical_scent_id = $canonicalScent->id;
+                $mapping->oil_1 = $row['oil_1'] ?: null;
+                $mapping->oil_2 = $row['oil_2'] ?: null;
+                $mapping->oil_3 = $row['oil_3'] ?: null;
+                $mapping->total_oils = $row['total_oils'];
+                $mapping->abbreviation = $abbreviation !== '' ? $abbreviation : null;
+                $mapping->notes = $notes !== '' ? $notes : null;
+                $mapping->top_level_recipe_json = [
+                    'version' => 1,
+                    'slots' => [
+                        'oil_1' => $row['oil_1'] ?: null,
+                        'oil_2' => $row['oil_2'] ?: null,
+                        'oil_3' => $row['oil_3'] ?: null,
+                    ],
+                    'components' => array_map(fn (array $component): array => [
+                        'name' => (string) ($component['name'] ?? ''),
+                        'weight' => (float) ($component['weight'] ?? 0.0),
+                    ], $row['top_level_components'] ?? []),
+                ];
+                $mapping->resolved_recipe_json = [
+                    'version' => 1,
+                    'components' => array_map(fn (array $component): array => [
+                        'name' => (string) ($component['name'] ?? ''),
+                        'weight' => (float) ($component['weight'] ?? 0.0),
+                        'percent' => (float) ($component['percent'] ?? 0.0),
+                    ], $resolved['components'] ?? []),
+                    'warnings' => array_values(array_unique(array_map('strval', $resolved['errors'] ?? []))),
+                ];
                 $mapping->active = true;
 
                 if (! $dryRun) {
@@ -197,7 +230,7 @@ class SyncWholesaleCustomMaster extends Command
         DB::transaction($runner);
 
         $this->line('Wholesale custom master sync summary:');
-        $this->line("rows_read={$summary['rows_read']} rows_skipped={$summary['rows_skipped']}");
+        $this->line("rows_read={$summary['rows_read']} rows_skipped={$summary['rows_skipped']} rows_with_recipe_warnings={$summary['rows_with_recipe_warnings']}");
         $this->line("wholesale_custom_scents: inserted={$summary['wholesale_inserted']} updated={$summary['wholesale_updated']} deleted={$summary['wholesale_deleted']}");
         $this->line("scents: inserted={$summary['scents_inserted']} updated={$summary['scents_updated']}");
         $this->line("blends: inserted={$summary['blends_inserted']} updated={$summary['blends_updated']} components_written={$summary['components_written']}");
@@ -248,16 +281,7 @@ class SyncWholesaleCustomMaster extends Command
                     $row[$header] = $line[$index] ?? '';
                 }
 
-                // Normalize header variance from exports like "Abbreviation ".
-                if (! array_key_exists('Abbreviation', $row)) {
-                    foreach ($row as $key => $value) {
-                        if (str_starts_with($key, 'Abbreviation')) {
-                            $row['Abbreviation'] = $value;
-                            break;
-                        }
-                    }
-                }
-
+                $row = $this->normalizeRowHeaders($row);
                 $rows[] = $row;
             }
 
@@ -268,6 +292,7 @@ class SyncWholesaleCustomMaster extends Command
     }
 
     /**
+     * @param  array<string,string>  $row
      * @return array{0:string,1:string}
      */
     protected function extractNameAndAbbreviation(string $value): array
@@ -285,105 +310,61 @@ class SyncWholesaleCustomMaster extends Command
     }
 
     /**
-     * @param  array<string,string>  $row
-     * @return array<int,array{name:string,weight:int}>
+     * @param  array<int,array<string,string>>  $rows
+     * @param  array<string,int>  $summary
+     * @return array<int,array<string,mixed>>
      */
-    protected function extractOilRows(array $row): array
+    protected function prepareRows(array $rows, NestedOilRecipeResolver $resolver, array &$summary): array
     {
-        $rawOilValues = [
-            (string) ($row['Oil #1'] ?? ''),
-            (string) ($row['Oil #2'] ?? ''),
-            (string) ($row['Oil #3'] ?? ''),
-        ];
+        $preparedRows = [];
 
-        $oils = [];
-        foreach ($rawOilValues as $rawOil) {
-            $rawOil = trim($rawOil);
-            if ($rawOil === '') {
+        foreach ($rows as $row) {
+            $accountName = $this->normalizeText((string) ($row['Wholesale Account Name'] ?? ''));
+            $rawScentName = $this->normalizeText((string) ($row['Scent Name'] ?? ''));
+            if ($accountName === '' || $rawScentName === '') {
+                $summary['rows_skipped']++;
                 continue;
             }
 
-            $name = $rawOil;
-            $weight = 1;
-
-            if (preg_match('/^(.*\D)\s+(\d+)$/u', $rawOil, $matches) === 1) {
-                $name = trim((string) $matches[1]);
-                $weight = max(1, (int) $matches[2]);
-            } elseif (preg_match('/^(.*)\((\d+)\)$/u', $rawOil, $matches) === 1) {
-                $name = trim((string) $matches[1]);
-                $weight = max(1, (int) $matches[2]);
-            }
-
-            if ($name !== '') {
-                $oils[] = ['name' => $name, 'weight' => $weight];
-            }
-        }
-
-        return $oils;
-    }
-
-    /**
-     * @param  array<int,array{name:string,weight:int}>  $oils
-     * @param  \Illuminate\Support\Collection<string,Blend>  $blendIndex
-     * @return array<int,array{name:string,weight:int}>
-     */
-    protected function expandOilComponents(array $oils, $blendIndex): array
-    {
-        $components = [];
-
-        foreach ($oils as $oil) {
-            $oilName = trim((string) ($oil['name'] ?? ''));
-            $weight = max(1, (int) ($oil['weight'] ?? 1));
-            if ($oilName === '') {
+            [$customScentName, $parsedAbbreviation] = $this->extractNameAndAbbreviation($rawScentName);
+            if ($customScentName === '') {
+                $summary['rows_skipped']++;
                 continue;
             }
 
-            $blend = $blendIndex[$this->blendLookupKey($oilName)] ?? null;
-            if ($blend && $blend->components->isNotEmpty()) {
-                foreach ($blend->components as $component) {
-                    $baseOilName = trim((string) ($component->baseOil?->name ?? ''));
-                    if ($baseOilName === '') {
-                        continue;
-                    }
+            $explicitAbbreviation = $this->normalizeText((string) ($row['Abbreviation'] ?? ''));
+            $abbreviation = $explicitAbbreviation !== '' ? $explicitAbbreviation : $parsedAbbreviation;
 
-                    $components[] = [
-                        'name' => $baseOilName,
-                        'weight' => max(1, (int) $component->ratio_weight) * $weight,
-                    ];
-                }
+            $oil1 = $this->normalizeText((string) ($row['Oil #1'] ?? ''));
+            $oil2 = $this->normalizeText((string) ($row['Oil #2'] ?? ''));
+            $oil3 = $this->normalizeText((string) ($row['Oil #3'] ?? ''));
+            $topLevelComponents = $resolver->parseTopLevelComponents([$oil1, $oil2, $oil3]);
+
+            if ($topLevelComponents === []) {
+                $summary['rows_skipped']++;
                 continue;
             }
 
-            $components[] = [
-                'name' => $oilName,
-                'weight' => $weight,
+            $totalRaw = $this->normalizeText((string) ($row['Total Oils'] ?? ''));
+            $totalOils = is_numeric($totalRaw)
+                ? max(0, (int) round((float) $totalRaw))
+                : count($topLevelComponents);
+            $notes = $this->normalizeText((string) ($row['Notes'] ?? ''));
+
+            $preparedRows[] = [
+                'account_name' => $accountName,
+                'custom_scent_name' => $customScentName,
+                'abbreviation' => $abbreviation,
+                'oil_1' => $oil1,
+                'oil_2' => $oil2,
+                'oil_3' => $oil3,
+                'total_oils' => $totalOils,
+                'notes' => $notes,
+                'top_level_components' => $topLevelComponents,
             ];
         }
 
-        return $components;
-    }
-
-    /**
-     * @param  array<int,array{name:string,weight:int}>  $components
-     * @return array<int,array{name:string,weight:int}>
-     */
-    protected function collapseComponents(array $components): array
-    {
-        $collapsed = [];
-        foreach ($components as $component) {
-            $name = trim((string) ($component['name'] ?? ''));
-            if ($name === '') {
-                continue;
-            }
-
-            $key = mb_strtolower($name);
-            if (! isset($collapsed[$key])) {
-                $collapsed[$key] = ['name' => $name, 'weight' => 0];
-            }
-            $collapsed[$key]['weight'] += max(1, (int) ($component['weight'] ?? 1));
-        }
-
-        return array_values($collapsed);
+        return $preparedRows;
     }
 
     protected function findMatchingScent(array $scents, string $name, string $abbreviation): ?Scent
@@ -408,11 +389,105 @@ class SyncWholesaleCustomMaster extends Command
         return null;
     }
 
-    protected function blendLookupKey(string $value): string
+    /**
+     * @param  array<int,array{name:string,weight:float,percent:float}>  $components
+     * @return array<int,array{name:string,ratio_weight:int,weight:float,percent:float}>
+     */
+    protected function normalizeRatioWeights(array $components): array
     {
-        $normalized = Scent::normalizeName($value);
-        $normalized = preg_replace('/\s+blend$/u', '', $normalized) ?? $normalized;
-        return trim($normalized);
+        $scaled = [];
+
+        foreach ($components as $component) {
+            $name = trim((string) ($component['name'] ?? ''));
+            $weight = (float) ($component['weight'] ?? 0.0);
+            if ($name === '' || $weight <= 0) {
+                continue;
+            }
+
+            $scaled[] = [
+                'name' => $name,
+                'scaled_weight' => max(1, (int) round($weight * 1000)),
+                'weight' => $weight,
+                'percent' => (float) ($component['percent'] ?? 0.0),
+            ];
+        }
+
+        if ($scaled === []) {
+            return [];
+        }
+
+        $weights = array_map(fn (array $row): int => (int) $row['scaled_weight'], $scaled);
+        $gcd = array_shift($weights);
+        foreach ($weights as $weight) {
+            $gcd = $this->gcd($gcd, $weight);
+        }
+        $gcd = max(1, (int) $gcd);
+
+        return array_map(function (array $row) use ($gcd): array {
+            return [
+                'name' => (string) $row['name'],
+                'ratio_weight' => max(1, intdiv((int) $row['scaled_weight'], $gcd)),
+                'weight' => (float) $row['weight'],
+                'percent' => (float) $row['percent'],
+            ];
+        }, $scaled);
+    }
+
+    protected function gcd(int $a, int $b): int
+    {
+        $a = abs($a);
+        $b = abs($b);
+
+        if ($a === 0) {
+            return max(1, $b);
+        }
+        if ($b === 0) {
+            return max(1, $a);
+        }
+
+        while ($b !== 0) {
+            $tmp = $b;
+            $b = $a % $b;
+            $a = $tmp;
+        }
+
+        return max(1, $a);
+    }
+
+    /**
+     * @param  array<string,string>  $row
+     * @return array<string,string>
+     */
+    protected function normalizeRowHeaders(array $row): array
+    {
+        if (! array_key_exists('Abbreviation', $row)) {
+            foreach ($row as $key => $value) {
+                if (str_starts_with($key, 'Abbreviation')) {
+                    $row['Abbreviation'] = $value;
+                    break;
+                }
+            }
+        }
+
+        if (! array_key_exists('Total Oils', $row)) {
+            foreach ($row as $key => $value) {
+                if (str_starts_with($key, 'Total Oils')) {
+                    $row['Total Oils'] = $value;
+                    break;
+                }
+            }
+        }
+
+        if (! array_key_exists('Notes', $row)) {
+            foreach ($row as $key => $value) {
+                if (mb_strtolower(trim($key)) === 'additional notes') {
+                    $row['Notes'] = $value;
+                    break;
+                }
+            }
+        }
+
+        return $row;
     }
 
     protected function normalizeText(string $value): string
@@ -422,4 +497,3 @@ class SyncWholesaleCustomMaster extends Command
         return is_string($value) ? $value : '';
     }
 }
-

@@ -47,7 +47,22 @@
         </div>
         @error('create.canonical_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
       </div>
-      <div class="md:col-span-4">
+      <div class="md:col-span-2">
+        <flux:input wire:model.defer="create.oil_1" label="Oil #1" />
+      </div>
+      <div class="md:col-span-2">
+        <flux:input wire:model.defer="create.oil_2" label="Oil #2" />
+      </div>
+      <div class="md:col-span-2">
+        <flux:input wire:model.defer="create.oil_3" label="Oil #3" />
+      </div>
+      <div class="md:col-span-2">
+        <flux:input wire:model.defer="create.total_oils" label="Total oils" type="number" />
+      </div>
+      <div class="md:col-span-2">
+        <flux:input wire:model.defer="create.abbreviation" label="Abbreviation" />
+      </div>
+      <div class="md:col-span-2">
         <flux:input wire:model.defer="create.notes" label="Notes" />
       </div>
       <div class="flex items-center gap-2">
@@ -92,8 +107,13 @@
     <table class="min-w-full text-sm">
       <thead class="bg-white/5 text-white/70">
         <tr>
-          <th class="px-4 py-3 text-left">Account</th>
-          <th class="px-4 py-3 text-left">Custom Scent</th>
+          <th class="px-4 py-3 text-left">Wholesale Account Name</th>
+          <th class="px-4 py-3 text-left">Scent Name</th>
+          <th class="px-4 py-3 text-left">Oil #1</th>
+          <th class="px-4 py-3 text-left">Oil #2</th>
+          <th class="px-4 py-3 text-left">Oil #3</th>
+          <th class="px-4 py-3 text-left">Total Oils</th>
+          <th class="px-4 py-3 text-left">Abbreviation</th>
           <th class="px-4 py-3 text-left">Canonical Scent</th>
           <th class="px-4 py-3 text-left">Oils Used</th>
           <th class="px-4 py-3 text-left">Status</th>
@@ -105,15 +125,33 @@
           <tr class="{{ (int)$editingId === (int)$record->id ? 'bg-emerald-500/10' : 'hover:bg-white/5' }}">
             <td class="px-4 py-3 text-white">{{ $record->account_name }}</td>
             <td class="px-4 py-3 text-white">{{ $record->custom_scent_name }}</td>
+            <td class="px-4 py-3 text-white/80">{{ $record->oil_1 ?: '—' }}</td>
+            <td class="px-4 py-3 text-white/80">{{ $record->oil_2 ?: '—' }}</td>
+            <td class="px-4 py-3 text-white/80">{{ $record->oil_3 ?: '—' }}</td>
+            <td class="px-4 py-3 text-white/80">{{ $record->total_oils ?? '—' }}</td>
+            <td class="px-4 py-3 text-white/80">{{ $record->abbreviation ?: '—' }}</td>
             <td class="px-4 py-3 text-white/80">
               {{ $record->canonicalScent?->display_name ?: ($record->canonicalScent?->name ?? '—') }}
             </td>
             <td class="px-4 py-3 text-white/80">
               @php
-                $components = $record->canonicalScent?->oilBlend?->components
-                  ? $record->canonicalScent->oilBlend->components->sortBy('id')->values()
+                $resolved = is_array($record->resolved_recipe_json['components'] ?? null)
+                  ? collect($record->resolved_recipe_json['components'])
                   : collect();
-                $oilLines = $components->take(3)->values();
+                if ($resolved->isEmpty()) {
+                  $fallbackComponents = $record->canonicalScent?->oilBlend?->components
+                    ? $record->canonicalScent->oilBlend->components->sortBy('id')->values()
+                    : collect();
+                  if ($fallbackComponents->isNotEmpty()) {
+                    $resolved = $fallbackComponents->map(function ($component): array {
+                      return [
+                        'name' => (string) ($component->baseOil?->name ?? 'Unknown oil'),
+                        'percent' => 0.0,
+                      ];
+                    });
+                  }
+                }
+                $oilLines = $resolved->take(3)->values();
               @endphp
 
               @if($oilLines->isNotEmpty())
@@ -121,18 +159,16 @@
                   @foreach($oilLines as $index => $component)
                     <div class="truncate">
                       Oil {{ $index + 1 }}:
-                      {{ $component->baseOil?->name ?? 'Unknown oil' }}
-                      @if((int)($component->ratio_weight ?? 1) > 1)
-                        ({{ (int) $component->ratio_weight }})
+                      {{ (string)($component['name'] ?? 'Unknown oil') }}
+                      @if(((float) ($component['percent'] ?? 0.0)) > 0)
+                        ({{ rtrim(rtrim(number_format((float) $component['percent'], 4), '0'), '.') }}%)
                       @endif
                     </div>
                   @endforeach
-                  @if($components->count() > 3)
-                    <div class="text-[11px] text-white/55">+{{ $components->count() - 3 }} more</div>
+                  @if($resolved->count() > 3)
+                    <div class="text-[11px] text-white/55">+{{ $resolved->count() - 3 }} more</div>
                   @endif
                 </div>
-              @elseif(filled($record->canonicalScent?->oil_reference_name))
-                <div class="truncate text-xs text-white/70">{{ $record->canonicalScent?->oil_reference_name }}</div>
               @else
                 <span class="text-white/45">—</span>
               @endif
@@ -164,7 +200,7 @@
 
           @if((int)$editingId === (int)$record->id && $showEdit)
             <tr class="bg-emerald-500/5">
-              <td colspan="6" class="px-4 py-4">
+              <td colspan="11" class="px-4 py-4">
                 <div class="rounded-2xl border border-emerald-300/25 bg-emerald-950/20 p-4">
                   <div class="flex flex-wrap items-start justify-between gap-2 border-b border-emerald-200/15 pb-3">
                     <div>
@@ -193,6 +229,11 @@
                   <div class="mt-4 grid gap-3 md:grid-cols-2">
                     <flux:input wire:model.defer="edit.account_name" label="Account name" />
                     <flux:input wire:model.defer="edit.custom_scent_name" label="Custom scent name" />
+                    <flux:input wire:model.defer="edit.oil_1" label="Oil #1" />
+                    <flux:input wire:model.defer="edit.oil_2" label="Oil #2" />
+                    <flux:input wire:model.defer="edit.oil_3" label="Oil #3" />
+                    <flux:input wire:model.defer="edit.total_oils" label="Total oils" type="number" />
+                    <flux:input wire:model.defer="edit.abbreviation" label="Abbreviation" />
 
                     <div class="md:col-span-2">
                       <label class="text-xs text-white/70">Canonical scent (optional)</label>
@@ -221,7 +262,7 @@
           @endif
         @empty
           <tr>
-            <td colspan="6" class="px-4 py-8 text-center text-sm text-white/55">
+            <td colspan="11" class="px-4 py-8 text-center text-sm text-white/55">
               @if($search !== '' || $filter !== 'all')
                 No wholesale custom scents match the current search/filter.
               @else
