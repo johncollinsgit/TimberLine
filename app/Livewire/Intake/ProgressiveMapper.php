@@ -979,7 +979,9 @@ class ProgressiveMapper extends Component
             return false;
         }
 
-        return str_contains($normalized, 'sale candle');
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+
+        return preg_match('/\b(sale candles?|custom scents?|house blends?)\b/u', $normalized) === 1;
     }
 
     protected function extractScentLabelFromVariant(string $value): string

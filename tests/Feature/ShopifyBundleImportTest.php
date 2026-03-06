@@ -182,4 +182,48 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertSame("Sippin' Sunshine 8oz", (string) $line->raw_variant);
         $this->assertSame(0, MappingException::query()->count());
     }
+
+    public function testCustomScentUsesVariantAsScentSourceForWholesaleImport(): void
+    {
+        $size = Size::query()->firstOrCreate(
+            ['code' => '8oz-cotton'],
+            ['label' => '8oz Cotton Wick', 'is_active' => true]
+        );
+        $scent = Scent::query()->firstOrCreate(
+            ['name' => 'vintage amber'],
+            ['display_name' => 'Vintage Amber', 'is_active' => true]
+        );
+
+        $orderData = [
+            'id' => 902,
+            'name' => '#1005',
+            'created_at' => '2026-02-10T10:00:00Z',
+            'tags' => 'wholesale',
+            'shipping_address' => [
+                'company' => 'ERIN NUTZ',
+            ],
+            'line_items' => [
+                [
+                    'id' => 1002,
+                    'title' => 'Custom Scent',
+                    'variant_title' => 'Vintage Amber 8oz',
+                    'quantity' => 1,
+                    'sku' => null,
+                    'product_type' => 'Wholesale',
+                ],
+            ],
+        ];
+
+        $ingestor = app(ShopifyOrderIngestor::class);
+        $store = ['key' => 'wholesale', 'source' => 'shopify_wholesale'];
+        $ingestor->ingest($store, $orderData);
+
+        $line = OrderLine::query()->first();
+        $this->assertNotNull($line);
+        $this->assertSame((int) $scent->id, (int) $line->scent_id);
+        $this->assertSame((int) $size->id, (int) $line->size_id);
+        $this->assertSame('Custom Scent', (string) $line->raw_title);
+        $this->assertSame('Vintage Amber 8oz', (string) $line->raw_variant);
+        $this->assertSame(0, MappingException::query()->count());
+    }
 }

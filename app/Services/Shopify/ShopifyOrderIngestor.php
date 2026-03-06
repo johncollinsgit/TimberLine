@@ -947,7 +947,9 @@ class ShopifyOrderIngestor
             return false;
         }
 
-        return str_contains($value, 'sale candle');
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return preg_match('/\b(sale candles?|custom scents?|house blends?)\b/u', $value) === 1;
     }
 
     /**
