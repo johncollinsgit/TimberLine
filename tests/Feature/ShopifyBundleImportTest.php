@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\OrderLine;
+use App\Models\MappingException;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Models\ShopifyImportException;
@@ -136,5 +137,49 @@ class ShopifyBundleImportTest extends TestCase
         $ingestor->ingest($store, $orderData);
 
         $this->assertSame(2, OrderLine::query()->count());
+    }
+
+    public function testSaleCandlesUsesVariantAsScentSourceForWholesaleImport(): void
+    {
+        $size = Size::query()->firstOrCreate(
+            ['code' => '8oz-cotton'],
+            ['label' => '8oz Cotton Wick', 'is_active' => true]
+        );
+        $scent = Scent::query()->firstOrCreate(
+            ['name' => "Sippin' Sunshine"],
+            ['display_name' => "Sippin' Sunshine", 'is_active' => true]
+        );
+
+        $orderData = [
+            'id' => 901,
+            'name' => '#1004',
+            'created_at' => '2026-02-10T10:00:00Z',
+            'tags' => 'wholesale',
+            'shipping_address' => [
+                'company' => 'ERIN NUTZ',
+            ],
+            'line_items' => [
+                [
+                    'id' => 1001,
+                    'title' => 'Sale Candles',
+                    'variant_title' => "Sippin' Sunshine 8oz",
+                    'quantity' => 2,
+                    'sku' => null,
+                    'product_type' => 'Wholesale',
+                ],
+            ],
+        ];
+
+        $ingestor = app(ShopifyOrderIngestor::class);
+        $store = ['key' => 'wholesale', 'source' => 'shopify_wholesale'];
+        $ingestor->ingest($store, $orderData);
+
+        $line = OrderLine::query()->first();
+        $this->assertNotNull($line);
+        $this->assertSame((int) $scent->id, (int) $line->scent_id);
+        $this->assertSame((int) $size->id, (int) $line->size_id);
+        $this->assertSame('Sale Candles', (string) $line->raw_title);
+        $this->assertSame("Sippin' Sunshine 8oz", (string) $line->raw_variant);
+        $this->assertSame(0, MappingException::query()->count());
     }
 }

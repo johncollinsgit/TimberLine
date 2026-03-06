@@ -345,8 +345,9 @@ class ProgressiveMapper extends Component
             return;
         }
 
-        $rawLabel = trim((string) ($sample->raw_scent_name ?: $sample->raw_title ?: ''));
-        if ($rawLabel === '') {
+        $sampleLabel = $this->exceptionLookupLabel($sample);
+        $sampleLabelNormalized = $this->normalizeSearchText($sampleLabel);
+        if ($sampleLabelNormalized === '') {
             return;
         }
 
@@ -354,11 +355,7 @@ class ProgressiveMapper extends Component
             ->whereNull('resolved_at')
             ->whereNull('excluded_at')
             ->whereNotIn('id', $this->exceptionIds)
-            ->where('store_key', (string) ($sample->store_key ?? ''))
-            ->where(function ($inner) use ($rawLabel): void {
-                $inner->where('raw_scent_name', $rawLabel)
-                    ->orWhere('raw_title', $rawLabel);
-            });
+            ->where('store_key', (string) ($sample->store_key ?? ''));
 
         $account = trim((string) ($sample->account_name ?? ''));
         if ($account !== '') {
@@ -368,8 +365,14 @@ class ProgressiveMapper extends Component
         $rows = $query
             ->with(['order:id,order_number,order_label,customer_name'])
             ->orderByDesc('id')
-            ->limit(200)
+            ->limit(400)
             ->get(['id', 'order_id', 'raw_title', 'raw_variant', 'raw_scent_name', 'account_name']);
+
+        $rows = $rows
+            ->filter(function (MappingException $row) use ($sampleLabelNormalized): bool {
+                return $this->normalizeSearchText($this->exceptionLookupLabel($row)) === $sampleLabelNormalized;
+            })
+            ->values();
 
         $this->sameNameExceptionIds = $rows
             ->pluck('id')
@@ -382,7 +385,7 @@ class ProgressiveMapper extends Component
             ->map(function (MappingException $row): array {
                 return [
                     'id' => (int) $row->id,
-                    'label' => trim((string) ($row->raw_scent_name ?: $row->raw_title ?: 'Unlabeled')),
+                    'label' => $this->exceptionLookupLabel($row) ?: 'Unlabeled',
                     'variant' => trim((string) ($row->raw_variant ?? '')),
                     'account_name' => trim((string) ($row->account_name ?? '')),
                     'order_number' => trim((string) ($row->order?->order_number ?? '')),
@@ -433,7 +436,7 @@ class ProgressiveMapper extends Component
         $rawTitle = trim((string) ($exception?->raw_title ?? ''));
         $rawVariant = trim((string) ($exception?->raw_variant ?? ''));
         $rawScentName = trim((string) ($exception?->raw_scent_name ?? ''));
-        $rawLabel = $rawScentName !== '' ? $rawScentName : $rawTitle;
+        $rawLabel = $exception ? $this->exceptionLookupLabel($exception) : ($rawScentName !== '' ? $rawScentName : $rawTitle);
 
         return [
             'store_key' => $storeKey,
@@ -895,6 +898,7 @@ class ProgressiveMapper extends Component
                 return [
                     trim((string) ($exception->raw_scent_name ?? '')),
                     trim((string) ($exception->raw_title ?? '')),
+                    $this->exceptionLookupLabel($exception),
                 ];
             })
             ->filter()
@@ -930,7 +934,7 @@ class ProgressiveMapper extends Component
             ->filter(fn (MappingException $exception): bool => filled($exception->account_name))
             ->each(function (MappingException $exception) use ($scentId): void {
                 $accountName = mb_substr(trim((string) $exception->account_name), 0, 255);
-                $customName = mb_substr(trim((string) ($exception->raw_scent_name ?: $exception->raw_title ?: '')), 0, 255);
+                $customName = mb_substr(trim($this->exceptionLookupLabel($exception)), 0, 255);
 
                 if ($accountName === '' || $customName === '') {
                     return;
@@ -947,6 +951,53 @@ class ProgressiveMapper extends Component
                     ]
                 );
             });
+    }
+
+    protected function exceptionLookupLabel(MappingException $exception): string
+    {
+        $rawScentName = trim((string) ($exception->raw_scent_name ?? ''));
+        $rawTitle = trim((string) ($exception->raw_title ?? ''));
+        $rawVariant = trim((string) ($exception->raw_variant ?? ''));
+
+        $primary = $rawScentName !== '' ? $rawScentName : $rawTitle;
+        if ($primary !== '' && ! $this->isVariantDrivenTitle($primary)) {
+            return $primary;
+        }
+
+        $fromVariant = $this->extractScentLabelFromVariant($rawVariant);
+        if ($fromVariant !== '') {
+            return $fromVariant;
+        }
+
+        return $primary;
+    }
+
+    protected function isVariantDrivenTitle(string $value): bool
+    {
+        $normalized = mb_strtolower(trim($value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return str_contains($normalized, 'sale candle');
+    }
+
+    protected function extractScentLabelFromVariant(string $value): string
+    {
+        $clean = trim($value);
+        if ($clean === '') {
+            return '';
+        }
+
+        $clean = preg_replace('/\b(\d+(?:\.\d+)?)\s*oz\b/iu', '', $clean) ?? $clean;
+        $clean = preg_replace('/\b(cotton|wood|cedar)\s*wick\b/iu', '', $clean) ?? $clean;
+        $clean = preg_replace('/\b(wax\s*melts?|room\s*sprays?)\b/iu', '', $clean) ?? $clean;
+        $clean = preg_replace('/\b(jar|tin)\b/iu', '', $clean) ?? $clean;
+        $clean = preg_replace('/[\-–—|\\/]+/u', ' ', $clean) ?? $clean;
+        $clean = preg_replace('/\s{2,}/u', ' ', $clean) ?? $clean;
+        $clean = trim($clean, " \t\n\r\0\x0B,.");
+
+        return $clean;
     }
 
     protected function isOrderScentSizeUniqueViolation(QueryException $e): bool

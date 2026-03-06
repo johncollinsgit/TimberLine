@@ -199,9 +199,21 @@ class ShopifyOrderIngestor
             if (!$scentName && $propertyScent) {
                 $scentName = $this->normalizeScentName($propertyScent);
             }
+            if (!$propertyScent && $this->shouldUseVariantAsScentSource($titleRaw)) {
+                $variantScent = $this->normalizeScentName($variantRaw);
+                if ($variantScent) {
+                    $scentName = $variantScent;
+                }
+            }
             $scentName = $this->bestGuessScent($scentName, $scentIndex);
 
             $rawScentName = $propertyScent ?: $titleRaw;
+            if (!$propertyScent && $this->shouldUseVariantAsScentSource($titleRaw)) {
+                $variantScent = $this->normalizeScentName($variantRaw);
+                if ($variantScent) {
+                    $rawScentName = $variantScent;
+                }
+            }
             if (!$rawScentName && $scentName) {
                 $rawScentName = $scentName;
             }
@@ -922,6 +934,20 @@ class ShopifyOrderIngestor
             || str_contains($value, 'pick 5')
             || str_contains($value, 'pick five')
             || str_contains($value, 'bundle');
+    }
+
+    protected function shouldUseVariantAsScentSource(?string $title): bool
+    {
+        if (! $title) {
+            return false;
+        }
+
+        $value = mb_strtolower(trim($title));
+        if ($value === '') {
+            return false;
+        }
+
+        return str_contains($value, 'sale candle');
     }
 
     /**
