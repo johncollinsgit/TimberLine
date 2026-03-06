@@ -4,13 +4,17 @@ namespace App\Livewire\Admin\Wholesale;
 
 use App\Models\WholesaleCustomScent;
 use App\Models\Scent;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Throwable;
 
 class CustomScentsCrud extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
@@ -32,6 +36,7 @@ class CustomScentsCrud extends Component
 
     public bool $showDelete = false;
     public ?int $deletingId = null;
+    public $masterCsvUpload = null;
 
     protected $queryString = [
         'search' => ['except' => ''],
@@ -149,6 +154,58 @@ class CustomScentsCrud extends Component
         WholesaleCustomScent::query()->whereKey($this->deletingId)->delete();
         $this->showDelete = false;
         $this->dispatch('toast', ['message' => 'Wholesale custom scent deleted.', 'style' => 'success']);
+    }
+
+    public function updatedMasterCsvUpload(): void
+    {
+        if (! $this->masterCsvUpload) {
+            return;
+        }
+
+        $this->syncMasterCsv();
+    }
+
+    public function syncMasterCsv(): void
+    {
+        $this->validate([
+            'masterCsvUpload' => ['required', 'file', 'max:10240', 'mimes:csv,txt'],
+        ]);
+
+        $absolutePath = $this->masterCsvUpload?->getRealPath();
+        if (! is_string($absolutePath) || $absolutePath === '' || ! is_file($absolutePath)) {
+            $this->dispatch('toast', [
+                'type' => 'error',
+                'message' => 'CSV upload failed. Please pick the file again.',
+            ]);
+            $this->reset('masterCsvUpload');
+            return;
+        }
+
+        try {
+            $exitCode = Artisan::call('wholesale-custom:sync-master', [
+                'csv' => $absolutePath,
+                '--replace' => true,
+            ]);
+
+            if ($exitCode !== 0) {
+                throw new \RuntimeException(trim(Artisan::output()) ?: 'Master CSV sync failed.');
+            }
+
+            $this->closeEdit();
+            $this->showCreate = false;
+            $this->resetPage();
+            $this->dispatch('toast', [
+                'type' => 'success',
+                'message' => 'Wholesale custom master CSV synced. Existing mappings replaced.',
+            ]);
+        } catch (Throwable $e) {
+            $this->dispatch('toast', [
+                'type' => 'error',
+                'message' => 'CSV sync failed: '.$e->getMessage(),
+            ]);
+        } finally {
+            $this->reset('masterCsvUpload');
+        }
     }
 
     protected function validateCreate(): array

@@ -4,6 +4,7 @@ use App\Livewire\Admin\Wholesale\CustomScentsCrud;
 use App\Livewire\Components\ScentCombobox;
 use App\Models\Scent;
 use App\Models\WholesaleCustomScent;
+use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 
 test('wholesale custom scents admin shows an explicit empty state', function () {
@@ -97,4 +98,41 @@ test('wholesale custom scents edit can map canonical scent via bound field', fun
         ->assertSet('showEdit', false);
 
     expect((int) WholesaleCustomScent::query()->findOrFail($row->id)->canonical_scent_id)->toBe((int) $canonical->id);
+});
+
+test('wholesale custom admin can upload master csv and replace mappings in one action', function () {
+    WholesaleCustomScent::query()->create([
+        'account_name' => 'Legacy Account',
+        'custom_scent_name' => 'Legacy Scent',
+        'canonical_scent_id' => null,
+        'active' => true,
+    ]);
+
+    $csv = <<<CSV
+Wholesale Custom Scents,,,,,,
+Scent Name,Oil #1,Oil #2,Oil #3,Total Oils,Abbreviation ,Wholesale Account Name
+Vintage Amber,Egyptian Amber 2,Lavender 2,Caribbean Teakwood 1,3,,Circa
+CSV;
+
+    $file = UploadedFile::fake()->createWithContent('wholesale-custom-master.csv', $csv);
+
+    Livewire::test(CustomScentsCrud::class)
+        ->set('masterCsvUpload', $file)
+        ->call('syncMasterCsv');
+
+    expect(WholesaleCustomScent::query()
+        ->where('account_name', 'Legacy Account')
+        ->exists())->toBeFalse();
+
+    $mapping = WholesaleCustomScent::query()
+        ->where('account_name', 'Circa')
+        ->where('custom_scent_name', 'Vintage Amber')
+        ->first();
+
+    expect($mapping)->not->toBeNull();
+    expect((int) ($mapping->canonical_scent_id ?? 0))->toBeGreaterThan(0);
+
+    $scent = Scent::query()->findOrFail((int) $mapping->canonical_scent_id);
+    expect((bool) $scent->is_wholesale_custom)->toBeTrue();
+    expect((bool) $scent->is_blend)->toBeTrue();
 });
