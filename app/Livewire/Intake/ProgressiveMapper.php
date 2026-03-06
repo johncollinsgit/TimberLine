@@ -10,8 +10,10 @@ use App\Models\Size;
 use App\Models\WholesaleCustomScent;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
+use Throwable;
 
 class ProgressiveMapper extends Component
 {
@@ -136,11 +138,29 @@ class ProgressiveMapper extends Component
             return;
         }
 
-        DB::transaction(function () use ($exceptions, $scentId): void {
-            $this->applyMappingToExceptions($exceptions, $scentId);
-            $this->syncAliases($exceptions, $scentId);
-            $this->syncWholesaleCustomMappings($exceptions, $scentId);
-        });
+        try {
+            DB::transaction(function () use ($exceptions, $scentId): void {
+                $this->applyMappingToExceptions($exceptions, $scentId);
+                $this->syncAliases($exceptions, $scentId);
+                $this->syncWholesaleCustomMappings($exceptions, $scentId);
+            });
+        } catch (Throwable $e) {
+            Log::error('ProgressiveMapperSaveFailed', [
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+                'exception_ids' => $this->exceptionIds,
+                'selected_scent_id' => $scentId,
+                'size_id' => $this->sizeId,
+                'wick_type' => $this->wickType,
+            ]);
+
+            $this->dispatch('toast', [
+                'type' => 'error',
+                'message' => 'Mapping failed due to a server error. Please try again.',
+            ]);
+
+            return;
+        }
 
         $mappedCount = $exceptions->count();
         $message = "Mapped {$mappedCount} exception".($mappedCount === 1 ? '' : 's').'.';
@@ -182,7 +202,7 @@ class ProgressiveMapper extends Component
             if ($this->sizeId) {
                 $line->size_id = $this->sizeId;
             }
-            if ($this->wickType) {
+            if ($this->wickType && Schema::hasColumn('order_lines', 'wick_type')) {
                 $line->wick_type = $this->wickType;
             }
             if (Schema::hasColumn('order_lines', 'scent_name')) {

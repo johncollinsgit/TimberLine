@@ -9,6 +9,7 @@ use App\Models\Size;
 use App\Models\User;
 use App\Models\WholesaleCustomScent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -186,6 +187,32 @@ test('press enter selects scent when search narrows to one match', function () {
         ->set('existingScentSearch', 'Vintage Amber Reserve')
         ->call('selectOnlyMatch')
         ->assertSet('selectedScentId', $target->id);
+});
+
+test('save handles database failures gracefully and dispatches error toast', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $target = Scent::query()->create([
+        'name' => 'vintage amber',
+        'display_name' => 'Vintage Amber',
+        'is_active' => true,
+    ]);
+
+    $exception = makeWholesaleException('Custom Scent', '8oz Cotton Wick', 'Custom Scent', 'ERIN NUTZ');
+
+    DB::shouldReceive('transaction')
+        ->once()
+        ->andThrow(new RuntimeException('forced failure'));
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('selectedScentId', $target->id)
+        ->call('save')
+        ->assertDispatched('toast')
+        ->assertNotDispatched('intake-done');
 });
 
 test('search finds vintage amber even when many alphabetically earlier scents exist', function () {

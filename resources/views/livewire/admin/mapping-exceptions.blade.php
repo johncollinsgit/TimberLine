@@ -353,8 +353,8 @@
 
   {{-- Mapping modal --}}
   @if($showModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[1.5px] p-6">
-      <div class="w-full max-w-3xl rounded-3xl border border-emerald-300/20 bg-[#102019]/90 p-6 shadow-[0_28px_90px_-45px_rgba(0,0,0,0.9)]">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+      <div class="w-full max-w-3xl rounded-3xl border border-emerald-300/25 bg-[#0f1412] p-6 shadow-[0_28px_90px_-45px_rgba(0,0,0,0.95)]">
         <div class="flex items-start justify-between">
           <div>
             <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/70">Resolve Mapping</div>
