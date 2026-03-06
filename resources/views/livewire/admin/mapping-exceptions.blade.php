@@ -353,18 +353,20 @@
 
   {{-- Mapping modal --}}
   @if($showModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-      <div class="w-full max-w-2xl rounded-3xl border border-emerald-200/10 bg-[#0f1412] p-6">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[1.5px] p-6">
+      <div class="w-full max-w-3xl rounded-3xl border border-emerald-300/20 bg-[#102019]/90 p-6 shadow-[0_28px_90px_-45px_rgba(0,0,0,0.9)]">
         <div class="flex items-start justify-between">
           <div>
-            <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Resolve Mapping</div>
+            <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/70">Resolve Mapping</div>
             <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white">{{ $modalRawTitle }}</div>
-            <div class="mt-1 text-sm text-emerald-50/70">We’ll guide you through a few quick choices and only ask what’s missing.</div>
+            <div class="mt-1 text-sm text-emerald-50/80">We’ll guide you through quick choices and only ask for what’s missing.</div>
           </div>
-          <button type="button" wire:click="closeModal" class="text-emerald-100/70">Close</button>
+          <button type="button" wire:click="closeModal" class="rounded-full border border-emerald-200/20 bg-white/10 px-3 py-1 text-emerald-50/85 hover:bg-white/15">Close</button>
         </div>
 
-        <livewire:intake.progressive-mapper :exception-ids="$modalExceptionIds" wire:key="progressive-{{ $modalKey }}" />
+        <div class="mt-4 border-t border-emerald-200/15 pt-4">
+          <livewire:intake.progressive-mapper :exception-ids="$modalExceptionIds" wire:key="progressive-{{ $modalKey }}" />
+        </div>
       </div>
     </div>
   @endif
