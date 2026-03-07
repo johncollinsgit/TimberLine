@@ -6,6 +6,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+/playwright-report
+/test-results
 .env
 .env.backup
 .env.production

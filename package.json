@@ -6,7 +6,8 @@
     "build": "vite build",
     "dev": "vite",
     "serve": "php artisan serve",
-    "dev:full": "concurrently -k -n \"LARAVEL,VITE\" -c \"green,blue\" \"php artisan serve\" \"npm run dev\""
+    "dev:full": "concurrently -k -n \"LARAVEL,VITE\" -c \"green,blue\" \"php artisan serve\" \"npm run dev\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",

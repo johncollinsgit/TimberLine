@@ -10,6 +10,8 @@ import {
     EditableGridCell,
     type EditListItem,
     type Theme,
+    type DataEditorRef,
+    type CellClickedEventArgs,
 } from "@glideapps/glide-data-grid";
 import {
     startTransition,
@@ -91,10 +93,33 @@ type BulkSaveError = {
 };
 
 type SaveMode = "auto" | "manual";
+type SaveBatchResult = {
+    failedByKey: Record<string, string>;
+    succeededKeys: string[];
+};
 
 type ElementSize = {
     width: number;
     height: number;
+};
+
+type CellBounds = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
+type PopoverEditorState = {
+    cell: Item;
+    rowIndex: number;
+    rowId: number;
+    colIndex: number;
+    field: string;
+    type: ColumnMeta["type"];
+    originalValue: unknown;
+    draftValue: string;
+    bounds: CellBounds;
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -270,6 +295,10 @@ function normalizeText(value: string): string {
     return value.trim().replace(/\s+/g, " ");
 }
 
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(value, max));
+}
+
 function columnWidth(column: ColumnMeta): number {
     if (column.type === "checkbox") {
         return 124;
@@ -380,6 +409,74 @@ function coerceValueFromCell(
     return normalized;
 }
 
+function draftValueForPopover(column: ColumnMeta, value: unknown): string {
+    if (column.type === "select") {
+        return optionLabelFor(column, value);
+    }
+
+    if (value == null) {
+        return "";
+    }
+
+    return String(value);
+}
+
+function coerceValueFromPopoverDraft(
+    column: ColumnMeta,
+    draftValue: string,
+    previousValue: unknown
+): unknown {
+    if (column.type === "number") {
+        const normalized = normalizeText(draftValue);
+        if (normalized === "") {
+            return column.nullable ? null : 0;
+        }
+
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : previousValue;
+    }
+
+    if (column.type === "select") {
+        const normalized = normalizeText(draftValue);
+        if (normalized === "") {
+            return column.nullable ? null : previousValue;
+        }
+
+        const options = Array.isArray(column.options) ? column.options : [];
+        const match = options.find((option) => {
+            return (
+                String(option.value) === normalized ||
+                option.label.localeCompare(normalized, undefined, { sensitivity: "accent" }) === 0
+            );
+        });
+
+        return match ? match.value : previousValue;
+    }
+
+    const normalized = normalizeText(draftValue);
+    if (normalized === "") {
+        return column.nullable ? null : "";
+    }
+
+    return normalized;
+}
+
+function isSameCellValue(column: ColumnMeta, a: unknown, b: unknown): boolean {
+    if (column.type === "number") {
+        if (a == null && b == null) {
+            return true;
+        }
+
+        return Number(a) === Number(b);
+    }
+
+    if (column.type === "checkbox") {
+        return Boolean(a) === Boolean(b);
+    }
+
+    return String(a ?? "") === String(b ?? "");
+}
+
 function buildGridColumns(meta: ResponseMeta | null): GridColumn[] {
     if (!meta) {
         return [];
@@ -455,10 +552,21 @@ function MasterDataGridApp(props: RootDataset) {
     const [savedCellKeys, setSavedCellKeys] = useState<Record<string, true>>({});
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
     const [gridTheme] = useState<Theme>(() => resolveGridTheme());
+    const dataEditorRef = useRef<DataEditorRef | null>(null);
     const pendingChangesRef = useRef<Record<string, PendingChange>>({});
     const saveFlashTimerRef = useRef<number | null>(null);
     const savedCellTimerRef = useRef<Record<string, number>>({});
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const [selectedCell, setSelectedCell] = useState<Item | null>(null);
+    const [popoverEditor, setPopoverEditor] = useState<PopoverEditorState | null>(null);
+    const [popoverError, setPopoverError] = useState("");
+    const popoverRef = useRef<HTMLDivElement | null>(null);
+    const popoverInputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+    const [diagnostics, setDiagnostics] = useState({
+        popoverVisible: false,
+        focusInsideEditor: false,
+        lastFailedSave: "",
+    });
 
     const gridColumns = buildGridColumns(meta);
     const activeResourceMeta =
@@ -567,6 +675,34 @@ function MasterDataGridApp(props: RootDataset) {
         setPage(1);
     }, [activeFilter, activeResource, search, sortDir, sortField]);
 
+    useEffect(() => {
+        if (!popoverEditor) {
+            setDiagnostics((current) => ({
+                ...current,
+                popoverVisible: false,
+                focusInsideEditor: false,
+            }));
+            return;
+        }
+
+        setDiagnostics((current) => ({
+            ...current,
+            popoverVisible: true,
+        }));
+
+        const timer = window.setTimeout(() => {
+            popoverInputRef.current?.focus();
+            setDiagnostics((current) => ({
+                ...current,
+                focusInsideEditor:
+                    popoverInputRef.current != null &&
+                    document.activeElement === popoverInputRef.current,
+            }));
+        }, 0);
+
+        return () => window.clearTimeout(timer);
+    }, [popoverEditor]);
+
     const updateRowValue = (rowIndex: number, field: string, nextValue: unknown) => {
         setRows((currentRows) =>
             currentRows.map((row, index) =>
@@ -657,7 +793,10 @@ function MasterDataGridApp(props: RootDataset) {
         });
     };
 
-    const saveChangesBatch = async (incomingBatch: PendingChange[], mode: SaveMode) => {
+    const saveChangesBatch = async (
+        incomingBatch: PendingChange[],
+        mode: SaveMode
+    ): Promise<SaveBatchResult> => {
         const batchMap = new Map<string, PendingChange>();
 
         incomingBatch.forEach((change) => {
@@ -670,7 +809,7 @@ function MasterDataGridApp(props: RootDataset) {
             if (mode === "manual") {
                 setNotice("No changes to save.");
             }
-            return;
+            return { failedByKey: {}, succeededKeys: [] };
         }
 
         const batchKeys = Array.from(batchMap.keys());
@@ -685,6 +824,9 @@ function MasterDataGridApp(props: RootDataset) {
             });
             return next;
         });
+
+        let failedByKey: Record<string, string> = {};
+        let succeededKeys: string[] = [];
 
         try {
             setSaveState("saving");
@@ -709,10 +851,13 @@ function MasterDataGridApp(props: RootDataset) {
             const responseErrors = Array.isArray(response.data?.errors)
                 ? (response.data.errors as BulkSaveError[])
                 : [];
+            failedByKey = Object.fromEntries(
+                responseErrors.map((item) => [cellChangeKey(item.id, item.field), item.message])
+            );
             const failedKeys = new Set(
                 responseErrors.map((item) => cellChangeKey(item.id, item.field))
             );
-            const succeededKeys = batchKeys.filter((key) => !failedKeys.has(key));
+            succeededKeys = batchKeys.filter((key) => !failedKeys.has(key));
 
             setPendingChanges((current) => {
                 const next = { ...current };
@@ -759,7 +904,7 @@ function MasterDataGridApp(props: RootDataset) {
                         ? "Changes saved."
                         : "Saved."
                 );
-                return;
+                return { failedByKey, succeededKeys };
             }
 
             setSaveState("idle");
@@ -768,10 +913,17 @@ function MasterDataGridApp(props: RootDataset) {
                     ? `Saved ${response.data.updated} change${response.data.updated === 1 ? "" : "s"}; fix highlighted cells.`
                     : "Fix highlighted cells and save again."
             );
+            return { failedByKey, succeededKeys };
         } catch (requestError) {
             const message = axios.isAxiosError(requestError)
                 ? requestError.response?.data?.message || "Could not save changes."
                 : "Could not save changes.";
+            console.error("[master-data-grid] save batch failed", {
+                message,
+                activeResource,
+                batch,
+            });
+            failedByKey = Object.fromEntries(batchKeys.map((key) => [key, message]));
 
             setCellErrors((current) => {
                 const next = { ...current };
@@ -786,6 +938,11 @@ function MasterDataGridApp(props: RootDataset) {
             setSaveState("idle");
             setNotice("");
             setError(message);
+            setDiagnostics((current) => ({
+                ...current,
+                lastFailedSave: message,
+            }));
+            return { failedByKey, succeededKeys: [] };
         } finally {
             setSavingCellKeys((current) => {
                 const next = { ...current };
@@ -803,11 +960,6 @@ function MasterDataGridApp(props: RootDataset) {
             .then(async () => {
                 await saveChangesBatch(batch, mode);
             });
-    };
-
-    const handleSaveChanges = () => {
-        const batch = Object.values(pendingChangesRef.current);
-        queueBatchSave(batch, "manual");
     };
 
     const handleAddRow = async () => {
@@ -922,6 +1074,243 @@ function MasterDataGridApp(props: RootDataset) {
         return meta.columns[index] ?? null;
     };
 
+    const actionColumnIndex = meta?.columns.length ?? -1;
+
+    const getCellBounds = (cell: Item): CellBounds | null => {
+        const bounds = dataEditorRef.current?.getBounds(cell);
+        if (!bounds) {
+            return null;
+        }
+
+        return {
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+        };
+    };
+
+    const isPopoverEditableColumn = (column: ColumnMeta | null): column is ColumnMeta => {
+        return column != null && (column.type === "text" || column.type === "number" || column.type === "select");
+    };
+
+    const openPopoverEditor = (cell: Item, fallbackBounds?: CellBounds | null) => {
+        const [colIndex, rowIndex] = cell;
+        const columnMeta = getColumnMeta(colIndex);
+        const rowData = rows[rowIndex];
+
+        if (!rowData || !isPopoverEditableColumn(columnMeta)) {
+            return;
+        }
+
+        const bounds = fallbackBounds ?? getCellBounds(cell);
+        if (!bounds) {
+            return;
+        }
+
+        setPopoverError("");
+        setPopoverEditor({
+            cell,
+            rowIndex,
+            rowId: rowData.id,
+            colIndex,
+            field: columnMeta.key,
+            type: columnMeta.type,
+            originalValue: rowData[columnMeta.key],
+            draftValue: draftValueForPopover(columnMeta, rowData[columnMeta.key]),
+            bounds,
+        });
+    };
+
+    const closePopoverEditor = () => {
+        setPopoverEditor(null);
+        setPopoverError("");
+    };
+
+    const findRelativeEditableCell = (
+        fromCell: Item,
+        direction: "next" | "prev"
+    ): Item | null => {
+        if (!meta) {
+            return null;
+        }
+
+        const editableCols = meta.columns
+            .map((column, index) => ({ column, index }))
+            .filter(({ column }) => column.type !== "checkbox")
+            .map(({ index }) => index);
+
+        if (editableCols.length === 0 || rows.length === 0) {
+            return null;
+        }
+
+        const [fromCol, fromRow] = fromCell;
+        const totalCells = rows.length * editableCols.length;
+        if (totalCells === 0) {
+            return null;
+        }
+
+        const currentColPosition = Math.max(0, editableCols.indexOf(fromCol));
+        const currentLinear = fromRow * editableCols.length + currentColPosition;
+        const offset = direction === "next" ? 1 : -1;
+        const nextLinear = currentLinear + offset;
+
+        if (nextLinear < 0 || nextLinear >= totalCells) {
+            return null;
+        }
+
+        const nextRow = Math.floor(nextLinear / editableCols.length);
+        const nextCol = editableCols[nextLinear % editableCols.length];
+
+        return [nextCol, nextRow];
+    };
+
+    const commitPopoverEditor = async (
+        direction: "stay" | "next" | "prev" | "close"
+    ) => {
+        if (!popoverEditor) {
+            return;
+        }
+
+        const columnMeta = getColumnMeta(popoverEditor.colIndex);
+        if (!columnMeta) {
+            closePopoverEditor();
+            return;
+        }
+
+        const nextValue = coerceValueFromPopoverDraft(
+            columnMeta,
+            popoverEditor.draftValue,
+            popoverEditor.originalValue
+        );
+        const changeKey = cellChangeKey(popoverEditor.rowId, popoverEditor.field);
+
+        if (isSameCellValue(columnMeta, nextValue, popoverEditor.originalValue)) {
+            if (direction === "next" || direction === "prev") {
+                const relativeCell = findRelativeEditableCell(popoverEditor.cell, direction);
+                if (relativeCell) {
+                    setSelectedCell(relativeCell);
+                    const nextBounds = getCellBounds(relativeCell);
+                    if (nextBounds) {
+                        openPopoverEditor(relativeCell, nextBounds);
+                        return;
+                    }
+                }
+            }
+
+            closePopoverEditor();
+            return;
+        }
+
+        updateRowValue(popoverEditor.rowIndex, popoverEditor.field, nextValue);
+        trackPendingChange(
+            popoverEditor.rowId,
+            popoverEditor.field,
+            popoverEditor.originalValue,
+            nextValue
+        );
+
+        const result = await saveChangesBatch([
+            {
+                id: popoverEditor.rowId,
+                field: popoverEditor.field,
+                value: nextValue,
+                previousValue: popoverEditor.originalValue,
+            },
+        ], "auto");
+
+        const failure = result.failedByKey[changeKey];
+        if (failure) {
+            updateRowValue(
+                popoverEditor.rowIndex,
+                popoverEditor.field,
+                popoverEditor.originalValue
+            );
+            setPopoverError(failure);
+            setDiagnostics((current) => ({
+                ...current,
+                lastFailedSave: failure,
+            }));
+            return;
+        }
+
+        if (direction === "next" || direction === "prev") {
+            const relativeCell = findRelativeEditableCell(popoverEditor.cell, direction);
+            if (relativeCell) {
+                setSelectedCell(relativeCell);
+                const nextBounds = getCellBounds(relativeCell);
+                if (nextBounds) {
+                    openPopoverEditor(relativeCell, nextBounds);
+                    return;
+                }
+            }
+        }
+
+        closePopoverEditor();
+    };
+
+    const cancelPopoverEditor = () => {
+        if (!popoverEditor) {
+            return;
+        }
+
+        updateRowValue(
+            popoverEditor.rowIndex,
+            popoverEditor.field,
+            popoverEditor.originalValue
+        );
+        closePopoverEditor();
+    };
+
+    const refreshPopoverBounds = () => {
+        if (!popoverEditor) {
+            return;
+        }
+
+        const nextBounds = getCellBounds(popoverEditor.cell);
+        if (!nextBounds) {
+            return;
+        }
+
+        setPopoverEditor((current) => {
+            if (!current) {
+                return current;
+            }
+
+            return {
+                ...current,
+                bounds: nextBounds,
+            };
+        });
+    };
+
+    useEffect(() => {
+        if (!popoverEditor) {
+            return;
+        }
+
+        const onPointerDown = (event: MouseEvent) => {
+            if (!popoverRef.current) {
+                return;
+            }
+
+            const target = event.target as Node | null;
+            if (target && popoverRef.current.contains(target)) {
+                return;
+            }
+
+            void commitPopoverEditor("stay");
+        };
+
+        document.addEventListener("mousedown", onPointerDown, true);
+        window.addEventListener("resize", refreshPopoverBounds);
+
+        return () => {
+            document.removeEventListener("mousedown", onPointerDown, true);
+            window.removeEventListener("resize", refreshPopoverBounds);
+        };
+    }, [popoverEditor]);
+
     const cellPhase = (changeKey: string): CellPhase => {
         if (cellErrors[changeKey]) {
             return "error";
@@ -1010,7 +1399,7 @@ function MasterDataGridApp(props: RootDataset) {
 
             return {
                 kind: GridCellKind.Number,
-                allowOverlay: true,
+                allowOverlay: false,
                 data: Number.isFinite(numericValue as number) ? (numericValue as number) : undefined,
                 displayData:
                     numericValue == null || !Number.isFinite(numericValue as number)
@@ -1030,7 +1419,7 @@ function MasterDataGridApp(props: RootDataset) {
 
         return {
             kind: GridCellKind.Text,
-            allowOverlay: true,
+            allowOverlay: false,
             data: textValue,
             displayData: textValue === "" && columnMeta.type === "select" ? "Select…" : textValue,
             readonly: false,
@@ -1047,6 +1436,10 @@ function MasterDataGridApp(props: RootDataset) {
             const row = rows[rowIndex];
 
             if (!columnMeta || !row) {
+                return;
+            }
+
+            if (columnMeta.type !== "checkbox") {
                 return;
             }
 
@@ -1077,16 +1470,49 @@ function MasterDataGridApp(props: RootDataset) {
         return true;
     };
 
-    const handleCellClicked = (cell: Item) => {
+    const handleCellClicked = (cell: Item, event: CellClickedEventArgs) => {
         const [col, rowIndex] = cell;
-        const actionColumnIndex = meta?.columns.length ?? -1;
+        setSelectedCell(cell);
         const isActionColumn = col === actionColumnIndex;
 
-        if (!isActionColumn) {
+        if (isActionColumn) {
+            closePopoverEditor();
+            void handleDeleteRow(rowIndex);
             return;
         }
 
-        void handleDeleteRow(rowIndex);
+        const columnMeta = getColumnMeta(col);
+        if (!isPopoverEditableColumn(columnMeta)) {
+            return;
+        }
+
+        if (!event.isDoubleClick) {
+            return;
+        }
+
+        event.preventDefault();
+        openPopoverEditor(cell, {
+            x: event.bounds.x,
+            y: event.bounds.y,
+            width: event.bounds.width,
+            height: event.bounds.height,
+        });
+    };
+
+    const handleCellActivated = (cell: Item) => {
+        const [col] = cell;
+        setSelectedCell(cell);
+
+        if (col === actionColumnIndex) {
+            return;
+        }
+
+        const columnMeta = getColumnMeta(col);
+        if (!isPopoverEditableColumn(columnMeta)) {
+            return;
+        }
+
+        openPopoverEditor(cell);
     };
 
     const gridStatus =
@@ -1105,6 +1531,42 @@ function MasterDataGridApp(props: RootDataset) {
         "h-11 w-full appearance-none rounded-2xl border border-white/10 bg-black/25 px-3 text-sm text-white/90 outline-none transition placeholder:text-emerald-50/35 focus:border-emerald-300/30 focus:bg-black/30";
     const buttonClass =
         "inline-flex h-11 shrink-0 appearance-none items-center justify-center rounded-full border border-emerald-300/20 bg-black/25 px-4 text-sm font-medium text-emerald-50/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-emerald-300/30 hover:bg-emerald-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50";
+    const popoverColumnMeta = popoverEditor ? getColumnMeta(popoverEditor.colIndex) : null;
+    const popoverChangeKey =
+        popoverEditor != null ? cellChangeKey(popoverEditor.rowId, popoverEditor.field) : null;
+    const popoverPhase = popoverChangeKey ? cellPhase(popoverChangeKey) : "default";
+    const popoverStatus =
+        popoverError !== ""
+            ? popoverError
+            : popoverPhase === "saving"
+                ? "Saving…"
+                : popoverPhase === "saved"
+                    ? "Saved"
+                    : "";
+    const popoverStatusTone =
+        popoverError !== ""
+            ? "text-rose-100/95"
+            : popoverPhase === "saving"
+                ? "text-sky-100/95"
+                : "text-emerald-100/95";
+    const popoverPosition = (() => {
+        if (!popoverEditor) {
+            return null;
+        }
+
+        const desiredWidth = clamp(popoverEditor.bounds.width + 24, 240, 460);
+        const maxWidth = Math.max(220, gridBounds.width - 16);
+        const width = Math.min(desiredWidth, maxWidth);
+        const left = clamp(popoverEditor.bounds.x, 8, Math.max(8, gridBounds.width - width - 8));
+        const estimatedHeight = 156;
+        const spaceBelow = gridViewportHeight - (popoverEditor.bounds.y + popoverEditor.bounds.height);
+        const top =
+            spaceBelow > estimatedHeight
+                ? popoverEditor.bounds.y + popoverEditor.bounds.height + 6
+                : Math.max(8, popoverEditor.bounds.y - estimatedHeight - 6);
+
+        return { left, top, width };
+    })();
 
     return (
         <div className="flex h-full min-h-0 flex-col gap-5">
@@ -1220,15 +1682,6 @@ function MasterDataGridApp(props: RootDataset) {
 
                         <button
                             type="button"
-                            onClick={() => void handleSaveChanges()}
-                            disabled={dirtyCount === 0 || saveState === "saving"}
-                            className={buttonClass}
-                        >
-                            Save {dirtyCount > 0 ? `${dirtyCount} ` : ""}Change{dirtyCount === 1 ? "" : "s"}
-                        </button>
-
-                        <button
-                            type="button"
                             onClick={() => setReloadToken((current) => current + 1)}
                             className={buttonClass}
                         >
@@ -1250,6 +1703,14 @@ function MasterDataGridApp(props: RootDataset) {
                 </div>
             ) : null}
 
+            <div
+                className="sr-only"
+                data-testid="md-diagnostics"
+                data-popover-visible={diagnostics.popoverVisible ? "true" : "false"}
+                data-focus-inside-editor={diagnostics.focusInsideEditor ? "true" : "false"}
+                data-last-failed-save={diagnostics.lastFailedSave}
+            />
+
             <div className="flex min-h-0 flex-1 flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                     <div className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-100/60">
@@ -1265,12 +1726,13 @@ function MasterDataGridApp(props: RootDataset) {
                 <div className="flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:min-h-[24rem]">
                     <div
                         ref={gridWrapRef}
-                        className="flex-1 min-h-[16rem] w-full sm:min-h-[22rem]"
+                        className="relative flex-1 min-h-[16rem] w-full sm:min-h-[22rem]"
                         style={gridCssVars}
                     >
                         {canRenderGrid ? (
                             <DataEditor
                                 key={activeResource}
+                                ref={dataEditorRef}
                                 columns={gridColumns}
                                 rows={rows.length}
                                 getCellContent={getCellContent}
@@ -1279,12 +1741,13 @@ function MasterDataGridApp(props: RootDataset) {
                                 }
                                 onCellsEdited={handleCellsEdited}
                                 onCellClicked={handleCellClicked}
+                                onCellActivated={handleCellActivated}
                                 onPaste={true}
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
                                 cellActivationBehavior="second-click"
-                                editOnType={true}
+                                editOnType={false}
                                 smoothScrollX={true}
                                 smoothScrollY={true}
                                 preventDiagonalScrolling={true}
@@ -1299,6 +1762,122 @@ function MasterDataGridApp(props: RootDataset) {
                                 Loading grid…
                             </div>
                         )}
+                        {popoverEditor && popoverColumnMeta && popoverPosition ? (
+                            <div
+                                ref={popoverRef}
+                                data-testid="md-popover-editor"
+                                className="absolute z-40 rounded-xl border border-emerald-300/25 bg-[#11231d]/96 p-3 shadow-[0_16px_40px_-24px_rgba(0,0,0,0.85)] backdrop-blur"
+                                style={{
+                                    left: popoverPosition.left,
+                                    top: popoverPosition.top,
+                                    width: popoverPosition.width,
+                                }}
+                            >
+                                <div className="mb-1 text-[10px] uppercase tracking-[0.22em] text-emerald-100/60">
+                                    {popoverColumnMeta.label}
+                                </div>
+                                {popoverColumnMeta.type === "select" ? (
+                                    <>
+                                        <input
+                                            ref={(element) => {
+                                                popoverInputRef.current = element;
+                                            }}
+                                            data-testid="md-popover-input"
+                                            type="text"
+                                            list={`md-options-${popoverColumnMeta.key}`}
+                                            value={popoverEditor.draftValue}
+                                            onChange={(event) => {
+                                                const nextDraft = event.target.value;
+                                                setPopoverEditor((current) =>
+                                                    current
+                                                        ? {
+                                                            ...current,
+                                                            draftValue: nextDraft,
+                                                        }
+                                                        : current
+                                                );
+                                                setPopoverError("");
+                                            }}
+                                            onKeyDown={(event) => {
+                                                if (event.key === "Escape") {
+                                                    event.preventDefault();
+                                                    cancelPopoverEditor();
+                                                    return;
+                                                }
+
+                                                if (event.key === "Tab") {
+                                                    event.preventDefault();
+                                                    void commitPopoverEditor(event.shiftKey ? "prev" : "next");
+                                                    return;
+                                                }
+
+                                                if (event.key === "Enter") {
+                                                    event.preventDefault();
+                                                    void commitPopoverEditor("close");
+                                                }
+                                            }}
+                                            className="h-10 w-full rounded-lg border border-white/12 bg-black/30 px-3 text-sm text-emerald-50/95 outline-none transition placeholder:text-emerald-100/40 focus:border-emerald-300/40"
+                                            placeholder="Type to search options…"
+                                        />
+                                        <datalist id={`md-options-${popoverColumnMeta.key}`}>
+                                            {(popoverColumnMeta.options ?? []).map((option) => (
+                                                <option key={`${option.value}`} value={option.label}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </datalist>
+                                    </>
+                                ) : (
+                                    <input
+                                        ref={(element) => {
+                                            popoverInputRef.current = element;
+                                        }}
+                                        data-testid="md-popover-input"
+                                        type={popoverColumnMeta.type === "number" ? "number" : "text"}
+                                        value={popoverEditor.draftValue}
+                                        onChange={(event) => {
+                                            const nextDraft = event.target.value;
+                                            setPopoverEditor((current) =>
+                                                current
+                                                    ? {
+                                                        ...current,
+                                                        draftValue: nextDraft,
+                                                    }
+                                                    : current
+                                            );
+                                            setPopoverError("");
+                                        }}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Escape") {
+                                                event.preventDefault();
+                                                cancelPopoverEditor();
+                                                return;
+                                            }
+
+                                            if (event.key === "Tab") {
+                                                event.preventDefault();
+                                                void commitPopoverEditor(event.shiftKey ? "prev" : "next");
+                                                return;
+                                            }
+
+                                            if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                void commitPopoverEditor("close");
+                                            }
+                                        }}
+                                        className="h-10 w-full rounded-lg border border-white/12 bg-black/30 px-3 text-sm text-emerald-50/95 outline-none transition placeholder:text-emerald-100/40 focus:border-emerald-300/40"
+                                    />
+                                )}
+                                {popoverStatus !== "" ? (
+                                    <div
+                                        data-testid={popoverError !== "" ? "md-popover-error" : "md-popover-status"}
+                                        className={`mt-2 text-xs ${popoverStatusTone}`}
+                                    >
+                                        {popoverStatus}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
