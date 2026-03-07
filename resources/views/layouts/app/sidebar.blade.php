@@ -42,23 +42,40 @@
     }
     .mf-nav-item:hover { transform: translateX(2px); }
     .mf-nav-item .mf-nav-label{
-      display: inline-block;
+      display: -webkit-box;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      line-height: 1.15;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .mf-admin-subnav{
+      margin-left: 2.2rem;
+      margin-top: .3rem;
+      display: grid;
+      gap: .14rem;
+      border-left: 1px solid rgba(var(--mf-accent), .18);
+      padding-left: .58rem;
+      padding-top: .12rem;
+      padding-bottom: .12rem;
     }
     .mf-admin-subnav-link{
       display: flex;
-      min-height: 1.9rem;
+      min-height: 1.82rem;
       align-items: center;
       border-radius: .6rem;
       border: 1px solid transparent;
-      padding: .28rem .6rem;
-      font-size: .72rem;
-      line-height: 1.05rem;
+      padding: .24rem .56rem;
+      font-size: .7rem;
+      line-height: 1.04rem;
       color: var(--mf-sidebar-muted);
       transition: all 180ms ease;
+    }
+    .mf-admin-subnav-link span{
+      white-space: normal;
+      line-height: 1.05rem;
     }
     .mf-admin-subnav-link:hover{
       border-color: rgba(var(--mf-accent), .18);
@@ -76,6 +93,41 @@
     .mf-sidebar-ghost { opacity: .45; }
     .mf-sidebar-drag { opacity: .8; }
     .mf-sidebar-sort-item + .mf-sidebar-sort-item { margin-top: .18rem; }
+    .mf-sidebar-collapse-panel{
+      margin-top: .42rem;
+      border-radius: .78rem;
+      border: 1px solid rgba(var(--mf-accent), .15);
+      background: color-mix(in srgb, var(--mf-panel-bg-2) 72%, transparent);
+      overflow: hidden;
+    }
+    .mf-sidebar-collapse-summary{
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .55rem;
+      padding: .45rem .62rem;
+      font-size: .7rem;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+      color: var(--mf-sidebar-heading);
+      font-weight: 600;
+    }
+    .mf-sidebar-collapse-summary::-webkit-details-marker{ display:none; }
+    .mf-sidebar-collapse-chevron{
+      font-size: .64rem;
+      line-height: 1;
+      transition: transform 180ms ease;
+      opacity: .85;
+    }
+    .mf-sidebar-collapse-panel[open] .mf-sidebar-collapse-chevron{ transform: rotate(90deg); }
+    .mf-sidebar-collapse-body{
+      display: grid;
+      gap: .15rem;
+      padding: .1rem .36rem .34rem;
+      border-top: 1px solid rgba(var(--mf-accent), .12);
+    }
     #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-subnav{ display:none; }
 
     .mf-active-pill { position: relative; }
@@ -125,9 +177,9 @@
 
     /* Theme tokens */
     body[data-mf-theme]{
-      --mf-sidebar-item-pad-x: .62rem;
+      --mf-sidebar-item-pad-x: .52rem;
       --mf-sidebar-item-pad-y: .45rem;
-      --mf-active-indicator-offset: 4px;
+      --mf-active-indicator-offset: 2.5px;
       --mf-active-indicator-width: 4px;
       --mf-active-indicator-height: 24px;
       --mf-font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
@@ -1299,6 +1351,13 @@
       ->map(fn ($key) => $sidebarItemsByKey->get($key))
       ->filter()
       ->values();
+  $collapsedTailItems = collect();
+  $primarySidebarItems = $orderedSidebarItems;
+  if ($orderedSidebarItems->count() > 4) {
+      $collapsedTailItems = $orderedSidebarItems->slice(-4)->values();
+      $primarySidebarItems = $orderedSidebarItems->slice(0, max($orderedSidebarItems->count() - 4, 0))->values();
+  }
+  $collapsedTailOpen = $collapsedTailItems->contains(fn ($item) => (bool) ($item['current'] ?? false));
 
   $adminSubItems = [];
   if ($isAdmin || $isManager) {
@@ -1437,8 +1496,8 @@
 
       <flux:sidebar.nav class="mf-sidebar-nav">
         <flux:sidebar.group heading="Navigation" class="grid mf-sidebar-group-balanced">
-          <div class="space-y-1" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
-            @foreach($orderedSidebarItems as $item)
+          <div class="space-y-1 mf-sidebar-main-list" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
+            @foreach($primarySidebarItems as $item)
               <div
                 class="mf-sidebar-sort-item {{ $item['current'] ? 'mf-active-pill' : '' }}"
                 data-sidebar-item
@@ -1448,20 +1507,54 @@
                   <span class="mf-nav-label">{{ $item['label'] }}</span>
                 </flux:sidebar.item>
                 @if($item['key'] === 'administration' && count($adminSubItems) > 0)
-                  <div class="mf-admin-subnav ml-8 mt-1 space-y-1">
+                  <div class="mf-admin-subnav">
                     @foreach($adminSubItems as $subItem)
                       <a
                         href="{{ $subItem['href'] }}"
                         wire:navigate
                         class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
                       >
-                        <span class="truncate">{{ $subItem['label'] }}</span>
+                        <span>{{ $subItem['label'] }}</span>
                       </a>
                     @endforeach
                   </div>
                 @endif
               </div>
             @endforeach
+            @if($collapsedTailItems->count() > 0)
+              <details class="mf-sidebar-collapse-panel" {{ $collapsedTailOpen ? 'open' : '' }}>
+                <summary class="mf-sidebar-collapse-summary">
+                  <span>More Sections</span>
+                  <span class="mf-sidebar-collapse-chevron">▸</span>
+                </summary>
+                <div class="mf-sidebar-collapse-body">
+                  @foreach($collapsedTailItems as $item)
+                    <div
+                      class="mf-sidebar-sort-item {{ $item['current'] ? 'mf-active-pill' : '' }}"
+                      data-sidebar-item
+                      data-sidebar-key="{{ $item['key'] }}"
+                    >
+                      <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
+                        <span class="mf-nav-label">{{ $item['label'] }}</span>
+                      </flux:sidebar.item>
+                      @if($item['key'] === 'administration' && count($adminSubItems) > 0)
+                        <div class="mf-admin-subnav">
+                          @foreach($adminSubItems as $subItem)
+                            <a
+                              href="{{ $subItem['href'] }}"
+                              wire:navigate
+                              class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                            >
+                              <span>{{ $subItem['label'] }}</span>
+                            </a>
+                          @endforeach
+                        </div>
+                      @endif
+                    </div>
+                  @endforeach
+                </div>
+              </details>
+            @endif
             <details class="ml-3 rounded-xl border px-2 py-1 mf-sidebar-panel" {{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') || (request()->routeIs('wiki.article') && request()->route('slug') === 'market-room') ? 'open' : '' }}>
               <summary class="cursor-pointer list-none text-xs text-emerald-100/70 flex items-center justify-between px-2 py-1 group">
                 <span>Wiki Sections</span>
