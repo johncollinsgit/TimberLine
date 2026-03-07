@@ -6,57 +6,202 @@
     </div>
     <div class="flex items-center gap-2">
       <button wire:click="openCreate" class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white">
-        Add new scent
+        {{ $showCreate ? 'Close form' : 'Add new scent' }}
       </button>
     </div>
   </div>
 
   @if($showCreate)
-    <div class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-6">
-      <div class="md:col-span-2">
-        <flux:input wire:model.defer="create.name" label="Name" />
-        @error('create.name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-      </div>
-      <div class="md:col-span-2">
-        <flux:input wire:model.defer="create.display_name" label="Display Name" />
-      </div>
-      <div>
-        <flux:input wire:model.defer="create.abbreviation" label="Abbrev" />
-      </div>
-      <div>
-        <flux:input wire:model.defer="create.oil_reference_name" label="Oil Ref" />
-      </div>
-      <div>
-        <label class="text-xs text-white/70">Blend?</label>
-        <div class="mt-1 flex h-10 items-center">
-          <input type="checkbox" wire:model.defer="create.is_blend" class="rounded border-white/20 bg-white/10" />
-        </div>
-      </div>
-      @if($create['is_blend'] ?? false)
-        <div class="md:col-span-2">
-          <label class="text-xs text-white/70">Blend Recipe</label>
-          <select wire:model.defer="create.oil_blend_id" class="mt-1 w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
-            <option value="">None</option>
-            @foreach($blends as $blend)
-              <option value="{{ $blend->id }}">{{ $blend->name }}</option>
-            @endforeach
-          </select>
-          @error('create.oil_blend_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-        </div>
-        <div>
-          <flux:input wire:model.defer="create.blend_oil_count" label="Oil count" type="number" min="1" />
-          @error('create.blend_oil_count') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+    <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+      @if($createErrorBanner)
+        <div class="mb-4 rounded-xl border border-red-300/35 bg-red-950/30 px-3 py-2 text-xs text-red-100">
+          {{ $createErrorBanner }}
         </div>
       @endif
-      <div class="flex items-center gap-2">
-        <input type="checkbox" wire:model.defer="create.is_active" class="rounded border-white/20 bg-white/10" />
-        <span class="text-sm text-white/80">Active</span>
+
+      <div class="grid gap-3 md:grid-cols-6">
+        <div class="md:col-span-2">
+          <flux:input wire:model.defer="create.name" label="Name" />
+          @error('create.name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="md:col-span-2">
+          <flux:input wire:model.defer="create.display_name" label="Display Name" />
+          @error('create.display_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div>
+          <flux:input wire:model.defer="create.abbreviation" label="Abbrev" />
+          @error('create.abbreviation') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div>
+          <label class="text-xs text-white/70">Oil Ref</label>
+          <input
+            wire:model.defer="create.oil_reference_name"
+            list="catalog-create-oil-ref-list"
+            class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90"
+            placeholder="Search/select primary oil or type custom"
+          />
+          <datalist id="catalog-create-oil-ref-list">
+            @foreach($baseOils as $oil)
+              <option value="{{ $oil->name }}">{{ $oil->name }}</option>
+            @endforeach
+          </datalist>
+          @error('create.oil_reference_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-xs text-white/70">Map to canonical scent (optional)</label>
+          <div class="mt-1">
+            <livewire:components.scent-combobox
+              wire:model.live="create.canonical_scent_id"
+              :emit-key="'catalog-scent-create-canonical'"
+              :allow-wholesale-custom="true"
+              :include-inactive="true"
+              wire:key="catalog-scent-create-canonical"
+            />
+          </div>
+          @if($createCanonicalSuggestionId && $createCanonicalSuggestionLabel)
+            <button type="button" wire:click="applyCanonicalSuggestion('create')" class="mt-2 rounded-full border border-emerald-300/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-50">
+              Suggested: map to {{ $createCanonicalSuggestionLabel }}
+            </button>
+          @endif
+          @error('create.canonical_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-xs text-white/70">Wholesale custom source (optional)</label>
+          <div class="mt-1 flex items-center gap-2">
+            <select wire:model.defer="create.source_wholesale_custom_scent_id" class="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
+              <option value="">None</option>
+              @foreach($wholesaleSources as $source)
+                @php
+                  $slotCount = collect([$source->oil_1, $source->oil_2, $source->oil_3])->filter(fn ($slot) => !blank($slot))->count();
+                  $topLevelCount = is_array(data_get($source, 'top_level_recipe_json.components'))
+                    ? count(data_get($source, 'top_level_recipe_json.components'))
+                    : 0;
+                  $isBlendLike = $slotCount > 1 || $topLevelCount > 1;
+                @endphp
+                <option value="{{ $source->id }}">
+                  {{ $source->custom_scent_name }} · {{ $source->account_name }} · {{ $isBlendLike ? 'Wholesale custom blend' : 'Wholesale custom scent' }}
+                </option>
+              @endforeach
+            </select>
+            <button type="button" wire:click="applySelectedWholesaleSource('create')" class="shrink-0 rounded-full border border-emerald-300/35 bg-emerald-500/20 px-3 py-2 text-[11px] font-semibold text-white">
+              Apply
+            </button>
+          </div>
+          @error('create.source_wholesale_custom_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div>
+          <label class="text-xs text-white/70">Recipe-backed scent?</label>
+          <div class="mt-2 flex h-10 items-center gap-2">
+            <input type="checkbox" wire:model.defer="create.is_blend" class="rounded border-white/20 bg-white/10" />
+            <span class="text-sm text-white/80">Blend / multi-source recipe</span>
+          </div>
+          @error('create.is_blend') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input type="checkbox" wire:model.defer="create.is_active" class="rounded border-white/20 bg-white/10" />
+          <span class="text-sm text-white/80">Active</span>
+        </div>
       </div>
-      <div class="md:col-span-6 flex items-center gap-2">
-        <button wire:click="create" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white">
-          Save
+
+      @if($create['is_blend'] ?? false)
+        <div class="mt-4 rounded-2xl border border-emerald-200/20 bg-black/20 p-4">
+          <div class="text-xs uppercase tracking-[0.24em] text-emerald-100/70">Blend Mapping</div>
+
+          <div class="mt-3 grid gap-3 md:grid-cols-6">
+            <div class="md:col-span-3">
+              <label class="text-xs text-white/70">Existing blend</label>
+              <select wire:model.defer="create.oil_blend_id" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
+                <option value="">None</option>
+                @foreach($blends as $blend)
+                  <option value="{{ $blend->id }}">{{ $blend->name }}</option>
+                @endforeach
+              </select>
+              @error('create.oil_blend_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+
+            <div>
+              <flux:input wire:model.defer="create.blend_oil_count" label="Oil count" type="number" min="1" />
+              @error('create.blend_oil_count') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="text-xs text-white/70">Create new blend from sources</label>
+              <div class="mt-2 flex h-10 items-center gap-2">
+                <input type="checkbox" wire:model.defer="create.create_inline_blend" class="rounded border-white/20 bg-white/10" />
+                <span class="text-sm text-white/80">Create inline</span>
+              </div>
+              @error('create.create_inline_blend') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+
+            @if($create['create_inline_blend'] ?? false)
+              <div class="md:col-span-3">
+                <flux:input wire:model.defer="create.inline_blend_name" label="New blend name" />
+                @error('create.inline_blend_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+              </div>
+            @endif
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <div class="text-xs uppercase tracking-[0.2em] text-white/60">Recipe Sources</div>
+            @foreach($create['recipe_components'] ?? [] as $index => $row)
+              @php $rowType = $row['type'] ?? 'base_oil'; @endphp
+              <div class="grid gap-2 md:grid-cols-8" wire:key="create-recipe-row-{{ $index }}">
+                <div class="md:col-span-2">
+                  <label class="mb-1 block text-[11px] text-white/60">Source type</label>
+                  <select wire:model.defer="create.recipe_components.{{ $index }}.type" class="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90">
+                    <option value="base_oil">Oil</option>
+                    <option value="blend">Blend</option>
+                  </select>
+                </div>
+                <div class="md:col-span-4">
+                  <label class="mb-1 block text-[11px] text-white/60">Source</label>
+                  <select wire:model.defer="create.recipe_components.{{ $index }}.id" class="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90">
+                    <option value="">Select {{ $rowType === 'blend' ? 'blend' : 'oil' }}</option>
+                    @if($rowType === 'blend')
+                      @foreach($blends as $blend)
+                        <option value="{{ $blend->id }}">{{ $blend->name }}</option>
+                      @endforeach
+                    @else
+                      @foreach($baseOils as $oil)
+                        <option value="{{ $oil->id }}">{{ $oil->name }}</option>
+                      @endforeach
+                    @endif
+                  </select>
+                  @error("create.recipe_components.$index.id") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                </div>
+                <div>
+                  <flux:input wire:model.defer="create.recipe_components.{{ $index }}.ratio_weight" label="Weight" type="number" min="1" />
+                  @error("create.recipe_components.$index.ratio_weight") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                </div>
+                <div class="flex items-end">
+                  <button type="button" wire:click="removeRecipeComponent('create', {{ $index }})" class="h-10 w-full rounded-xl border border-red-400/30 bg-red-500/10 px-3 text-[11px] font-semibold text-red-100">
+                    Remove
+                  </button>
+                </div>
+              </div>
+            @endforeach
+
+            <button type="button" wire:click="addRecipeComponent('create')" class="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-50">
+              Add oil/blend source
+            </button>
+            @error('create.recipe_components') <div class="text-xs text-red-300">{{ $message }}</div> @enderror
+          </div>
+        </div>
+      @endif
+
+      <div class="mt-4 flex items-center gap-2">
+        <button wire:click="create" wire:loading.attr="disabled" wire:target="create" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+          <span wire:loading.remove wire:target="create">Save</span>
+          <span wire:loading wire:target="create">Saving...</span>
         </button>
-        <button wire:click="openCreate" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">
+        <button wire:click="closeCreate" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">
           Cancel
         </button>
       </div>
@@ -79,9 +224,12 @@
     <table class="min-w-full text-sm">
       <thead class="bg-white/5 text-white/70">
         <tr>
-          <th class="px-4 py-3 text-left cursor-pointer" wire:click="setSort('name')">Name</th>
+          <th class="cursor-pointer px-4 py-3 text-left" wire:click="setSort('name')">Name</th>
           <th class="px-4 py-3 text-left">Abbrev</th>
           <th class="px-4 py-3 text-left">Oil Ref</th>
+          <th class="px-4 py-3 text-left">Canonical</th>
+          <th class="px-4 py-3 text-left">Wholesale Source</th>
+          <th class="px-4 py-3 text-left">Blend</th>
           <th class="px-4 py-3 text-left">Active</th>
           <th class="px-4 py-3 text-right">Actions</th>
         </tr>
@@ -97,12 +245,37 @@
             </td>
             <td class="px-4 py-3 text-white/80">{{ $scent->abbreviation ?: '—' }}</td>
             <td class="px-4 py-3 text-white/80">{{ $scent->oil_reference_name ?: '—' }}</td>
+            <td class="px-4 py-3 text-white/80">
+              @if($scent->canonicalScent)
+                {{ $scent->canonicalScent->display_name ?: $scent->canonicalScent->name }}
+              @else
+                —
+              @endif
+            </td>
+            <td class="px-4 py-3 text-white/80">
+              @if($scent->sourceWholesaleCustomScent)
+                {{ $scent->sourceWholesaleCustomScent->custom_scent_name }} · {{ $scent->sourceWholesaleCustomScent->account_name }}
+              @else
+                —
+              @endif
+            </td>
+            <td class="px-4 py-3">
+              @if($scent->is_blend)
+                <span class="inline-flex rounded-full bg-amber-500/20 px-2 py-1 text-xs text-amber-100">
+                  Blend
+                </span>
+              @else
+                <span class="inline-flex rounded-full bg-white/10 px-2 py-1 text-xs text-white/70">
+                  Single
+                </span>
+              @endif
+            </td>
             <td class="px-4 py-3">
               <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $scent->is_active ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                 {{ $scent->is_active ? 'Active' : 'Inactive' }}
               </span>
             </td>
-            <td class="px-4 py-3 text-right space-x-2">
+            <td class="space-x-2 px-4 py-3 text-right">
               <button type="button" wire:click="openEdit({{ $scent->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100">Edit</button>
               <button type="button" wire:click="openDelete({{ $scent->id }})" class="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] text-red-100">Delete</button>
             </td>
@@ -113,28 +286,113 @@
   </div>
 
   <div class="mt-4">{{ $scents->links() }}</div>
-
 </section>
 
-  @if($showEdit)
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
-      <div class="w-full max-w-2xl rounded-2xl border border-white/10 bg-zinc-950 p-6">
-        <div class="text-lg font-semibold text-white">Edit Scent</div>
-        <div class="mt-4 grid gap-3 md:grid-cols-2">
+@if($showEdit)
+  <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
+    <div class="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-6">
+      <div class="text-lg font-semibold text-white">Edit Scent</div>
+
+      @if($editErrorBanner)
+        <div class="mt-3 rounded-xl border border-red-300/35 bg-red-950/30 px-3 py-2 text-xs text-red-100">
+          {{ $editErrorBanner }}
+        </div>
+      @endif
+
+      <div class="mt-4 grid gap-3 md:grid-cols-6">
+        <div class="md:col-span-2">
           <flux:input wire:model.defer="edit.name" label="Name" />
+          @error('edit.name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+        <div class="md:col-span-2">
           <flux:input wire:model.defer="edit.display_name" label="Display Name" />
+          @error('edit.display_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+        <div>
           <flux:input wire:model.defer="edit.abbreviation" label="Abbrev" />
-          <flux:input wire:model.defer="edit.oil_reference_name" label="Oil Ref" />
-          <div>
-            <label class="text-xs text-white/70">Blend?</label>
-            <div class="mt-1 flex h-10 items-center">
-              <input type="checkbox" wire:model.defer="edit.is_blend" class="rounded border-white/20 bg-white/10" />
-            </div>
+          @error('edit.abbreviation') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+        <div>
+          <label class="text-xs text-white/70">Oil Ref</label>
+          <input
+            wire:model.defer="edit.oil_reference_name"
+            list="catalog-edit-oil-ref-list"
+            class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90"
+            placeholder="Search/select primary oil or type custom"
+          />
+          <datalist id="catalog-edit-oil-ref-list">
+            @foreach($baseOils as $oil)
+              <option value="{{ $oil->name }}">{{ $oil->name }}</option>
+            @endforeach
+          </datalist>
+          @error('edit.oil_reference_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-xs text-white/70">Map to canonical scent (optional)</label>
+          <div class="mt-1">
+            <livewire:components.scent-combobox
+              wire:model.live="edit.canonical_scent_id"
+              :emit-key="'catalog-scent-edit-canonical'"
+              :allow-wholesale-custom="true"
+              :include-inactive="true"
+              wire:key="catalog-scent-edit-canonical-{{ $editingId }}"
+            />
           </div>
-          @if($edit['is_blend'] ?? false)
-            <div class="md:col-span-2">
-              <label class="text-xs text-white/70">Blend Recipe</label>
-              <select wire:model.defer="edit.oil_blend_id" class="mt-1 w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
+          @if($editCanonicalSuggestionId && $editCanonicalSuggestionLabel)
+            <button type="button" wire:click="applyCanonicalSuggestion('edit')" class="mt-2 rounded-full border border-emerald-300/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-50">
+              Suggested: map to {{ $editCanonicalSuggestionLabel }}
+            </button>
+          @endif
+          @error('edit.canonical_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-xs text-white/70">Wholesale custom source (optional)</label>
+          <div class="mt-1 flex items-center gap-2">
+            <select wire:model.defer="edit.source_wholesale_custom_scent_id" class="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
+              <option value="">None</option>
+              @foreach($wholesaleSources as $source)
+                @php
+                  $slotCount = collect([$source->oil_1, $source->oil_2, $source->oil_3])->filter(fn ($slot) => !blank($slot))->count();
+                  $topLevelCount = is_array(data_get($source, 'top_level_recipe_json.components'))
+                    ? count(data_get($source, 'top_level_recipe_json.components'))
+                    : 0;
+                  $isBlendLike = $slotCount > 1 || $topLevelCount > 1;
+                @endphp
+                <option value="{{ $source->id }}">
+                  {{ $source->custom_scent_name }} · {{ $source->account_name }} · {{ $isBlendLike ? 'Wholesale custom blend' : 'Wholesale custom scent' }}
+                </option>
+              @endforeach
+            </select>
+            <button type="button" wire:click="applySelectedWholesaleSource('edit')" class="shrink-0 rounded-full border border-emerald-300/35 bg-emerald-500/20 px-3 py-2 text-[11px] font-semibold text-white">
+              Apply
+            </button>
+          </div>
+          @error('edit.source_wholesale_custom_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div>
+          <label class="text-xs text-white/70">Recipe-backed scent?</label>
+          <div class="mt-2 flex h-10 items-center gap-2">
+            <input type="checkbox" wire:model.defer="edit.is_blend" class="rounded border-white/20 bg-white/10" />
+            <span class="text-sm text-white/80">Blend / multi-source recipe</span>
+          </div>
+          @error('edit.is_blend') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" wire:model.defer="edit.is_active" class="rounded border-white/20 bg-white/10" />
+          <span class="text-sm text-white/80">Active</span>
+        </div>
+      </div>
+
+      @if($edit['is_blend'] ?? false)
+        <div class="mt-4 rounded-2xl border border-emerald-200/20 bg-black/20 p-4">
+          <div class="text-xs uppercase tracking-[0.24em] text-emerald-100/70">Blend Mapping</div>
+          <div class="mt-3 grid gap-3 md:grid-cols-6">
+            <div class="md:col-span-3">
+              <label class="text-xs text-white/70">Existing blend</label>
+              <select wire:model.defer="edit.oil_blend_id" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
                 <option value="">None</option>
                 @foreach($blends as $blend)
                   <option value="{{ $blend->id }}">{{ $blend->name }}</option>
@@ -146,29 +404,114 @@
               <flux:input wire:model.defer="edit.blend_oil_count" label="Oil count" type="number" min="1" />
               @error('edit.blend_oil_count') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
             </div>
-          @endif
-          <div class="flex items-center gap-2">
-            <input type="checkbox" wire:model.defer="edit.is_active" class="rounded border-white/20 bg-white/10" />
-            <span class="text-sm text-white/80">Active</span>
+            <div class="md:col-span-2">
+              <label class="text-xs text-white/70">Create new blend from sources</label>
+              <div class="mt-2 flex h-10 items-center gap-2">
+                <input type="checkbox" wire:model.defer="edit.create_inline_blend" class="rounded border-white/20 bg-white/10" />
+                <span class="text-sm text-white/80">Create inline</span>
+              </div>
+              @error('edit.create_inline_blend') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+            @if($edit['create_inline_blend'] ?? false)
+              <div class="md:col-span-3">
+                <flux:input wire:model.defer="edit.inline_blend_name" label="New blend name" />
+                @error('edit.inline_blend_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+              </div>
+            @endif
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <div class="text-xs uppercase tracking-[0.2em] text-white/60">Recipe Sources</div>
+            @foreach($edit['recipe_components'] ?? [] as $index => $row)
+              @php $rowType = $row['type'] ?? 'base_oil'; @endphp
+              <div class="grid gap-2 md:grid-cols-8" wire:key="edit-recipe-row-{{ $index }}">
+                <div class="md:col-span-2">
+                  <label class="mb-1 block text-[11px] text-white/60">Source type</label>
+                  <select wire:model.defer="edit.recipe_components.{{ $index }}.type" class="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90">
+                    <option value="base_oil">Oil</option>
+                    <option value="blend">Blend</option>
+                  </select>
+                </div>
+                <div class="md:col-span-4">
+                  <label class="mb-1 block text-[11px] text-white/60">Source</label>
+                  <select wire:model.defer="edit.recipe_components.{{ $index }}.id" class="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90">
+                    <option value="">Select {{ $rowType === 'blend' ? 'blend' : 'oil' }}</option>
+                    @if($rowType === 'blend')
+                      @foreach($blends as $blend)
+                        <option value="{{ $blend->id }}">{{ $blend->name }}</option>
+                      @endforeach
+                    @else
+                      @foreach($baseOils as $oil)
+                        <option value="{{ $oil->id }}">{{ $oil->name }}</option>
+                      @endforeach
+                    @endif
+                  </select>
+                  @error("edit.recipe_components.$index.id") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                </div>
+                <div>
+                  <flux:input wire:model.defer="edit.recipe_components.{{ $index }}.ratio_weight" label="Weight" type="number" min="1" />
+                  @error("edit.recipe_components.$index.ratio_weight") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                </div>
+                <div class="flex items-end">
+                  <button type="button" wire:click="removeRecipeComponent('edit', {{ $index }})" class="h-10 w-full rounded-xl border border-red-400/30 bg-red-500/10 px-3 text-[11px] font-semibold text-red-100">
+                    Remove
+                  </button>
+                </div>
+              </div>
+            @endforeach
+            <button type="button" wire:click="addRecipeComponent('edit')" class="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-50">
+              Add oil/blend source
+            </button>
+            @error('edit.recipe_components') <div class="text-xs text-red-300">{{ $message }}</div> @enderror
           </div>
         </div>
-        <div class="mt-4 flex items-center gap-2">
-          <button type="button" wire:click="save" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white">Save</button>
-          <button type="button" wire:click="$set('showEdit', false)" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
-        </div>
-      </div>
-    </div>
-  @endif
+      @endif
 
-  @if($showDelete)
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
-      <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6">
-        <div class="text-lg font-semibold text-white">Delete Scent</div>
-        <div class="mt-2 text-sm text-white/70">Are you sure? This cannot be undone.</div>
-        <div class="mt-4 flex items-center gap-2">
-          <button type="button" wire:click="destroy" class="rounded-full border border-red-400/40 bg-red-500/30 px-4 py-2 text-xs font-semibold text-white">Delete</button>
-          <button type="button" wire:click="$set('showDelete', false)" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
-        </div>
+      <div class="mt-4 flex items-center gap-2">
+        <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+          <span wire:loading.remove wire:target="save">Save</span>
+          <span wire:loading wire:target="save">Saving...</span>
+        </button>
+        <button type="button" wire:click="closeEdit" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
       </div>
     </div>
-  @endif
+  </div>
+@endif
+
+@if($showDelete)
+  <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
+    <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6">
+      <div class="text-lg font-semibold text-white">Delete Scent</div>
+      <div class="mt-2 text-sm text-white/70">Are you sure? This cannot be undone.</div>
+      <div class="mt-4 flex items-center gap-2">
+        <button type="button" wire:click="destroy" class="rounded-full border border-red-400/40 bg-red-500/30 px-4 py-2 text-xs font-semibold text-white">Delete</button>
+        <button type="button" wire:click="$set('showDelete', false)" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
+      </div>
+    </div>
+  </div>
+@endif
+
+@once
+  <script>
+    window.addEventListener('catalog-scent-focus-invalid', (event) => {
+      const payload = event?.detail?.[0] && typeof event.detail[0] === 'object' ? event.detail[0] : event.detail;
+      const field = payload?.field;
+      if (!field || typeof field !== 'string') return;
+
+      const selectors = [
+        `[wire\\:model\\.defer="${field}"]`,
+        `[wire\\:model\\.live="${field}"]`,
+        `[wire\\:model="${field}"]`,
+      ];
+
+      const target = document.querySelector(selectors.join(','));
+      if (!target) return;
+
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (typeof target.focus === 'function') {
+        target.focus();
+      }
+    });
+  </script>
+@endonce
+

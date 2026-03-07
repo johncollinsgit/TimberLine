@@ -2,13 +2,23 @@
 
 namespace App\Livewire\Admin\Catalog;
 
+use App\Models\BaseOil;
+use App\Models\Blend;
+use App\Models\BlendComponent;
 use App\Models\OrderLine;
 use App\Models\Scent;
-use App\Models\Blend;
+use App\Models\ScentAlias;
+use App\Models\WholesaleCustomScent;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Throwable;
 
 class ScentsCrud extends Component
 {
@@ -28,6 +38,11 @@ class ScentsCrud extends Component
         'is_blend' => false,
         'oil_blend_id' => null,
         'blend_oil_count' => null,
+        'canonical_scent_id' => null,
+        'source_wholesale_custom_scent_id' => null,
+        'recipe_components' => [],
+        'create_inline_blend' => false,
+        'inline_blend_name' => '',
         'is_active' => true,
     ];
 
@@ -37,6 +52,14 @@ class ScentsCrud extends Component
 
     public bool $showDelete = false;
     public ?int $deletingId = null;
+
+    public ?string $createErrorBanner = null;
+    public ?string $editErrorBanner = null;
+
+    public ?int $createCanonicalSuggestionId = null;
+    public ?string $createCanonicalSuggestionLabel = null;
+    public ?int $editCanonicalSuggestionId = null;
+    public ?string $editCanonicalSuggestionLabel = null;
 
     protected $queryString = [
         'search' => ['except' => ''],
@@ -60,37 +83,105 @@ class ScentsCrud extends Component
         }
     }
 
+    #[On('scentSelected')]
+    public function handleScentSelected(string $key, ?int $scentId = null): void
+    {
+        if ($key === 'catalog-scent-create-canonical') {
+            $this->create['canonical_scent_id'] = $scentId;
+            return;
+        }
+
+        if ($key === 'catalog-scent-edit-canonical') {
+            $this->edit['canonical_scent_id'] = $scentId;
+        }
+    }
+
     public function openCreate(): void
     {
-        $this->showCreate = !$this->showCreate;
+        if ($this->showCreate) {
+            $this->closeCreate();
+            return;
+        }
+
+        $this->createErrorBanner = null;
+        $this->resetValidation();
+        $this->showCreate = true;
+        $this->ensureRecipeSeed('create');
+    }
+
+    public function closeCreate(): void
+    {
+        $this->showCreate = false;
+        $this->createErrorBanner = null;
+        $this->createCanonicalSuggestionId = null;
+        $this->createCanonicalSuggestionLabel = null;
+        $this->resetCreateState();
+        $this->resetValidation();
     }
 
     public function create(): void
     {
-        $data = $this->validateCreate();
-        $data['name'] = $this->normalizeScentName($data['name']);
-        $this->assertUniqueName($data['name']);
+        $this->createErrorBanner = null;
+        $this->resetValidation();
 
-        Scent::query()->create([
-            'name' => trim($data['name']),
-            'display_name' => blank($data['display_name'] ?? null) ? null : trim($data['display_name']),
-            'abbreviation' => blank($data['abbreviation'] ?? null) ? null : trim($data['abbreviation']),
-            'oil_reference_name' => blank($data['oil_reference_name'] ?? null) ? null : trim($data['oil_reference_name']),
-            'is_blend' => (bool) ($data['is_blend'] ?? false),
-            'oil_blend_id' => $data['oil_blend_id'] ?? null,
-            'blend_oil_count' => $data['is_blend'] ? ($data['blend_oil_count'] ?? null) : null,
-            'is_active' => (bool) ($data['is_active'] ?? true),
+        Log::info('admin.catalog.scents.create.request', [
+            'name' => $this->create['name'] ?? null,
+            'display_name' => $this->create['display_name'] ?? null,
+            'abbreviation' => $this->create['abbreviation'] ?? null,
+            'is_blend' => (bool) ($this->create['is_blend'] ?? false),
+            'canonical_scent_id' => $this->create['canonical_scent_id'] ?? null,
+            'source_wholesale_custom_scent_id' => $this->create['source_wholesale_custom_scent_id'] ?? null,
         ]);
 
-        $this->reset('create');
-        $this->create['is_active'] = true;
-        $this->dispatch('toast', ['message' => 'Scent created.', 'style' => 'success']);
+        try {
+            $data = $this->validateCreate();
+            $this->assertUniqueFields($data, 'create');
+
+            DB::transaction(function () use ($data): void {
+                $this->persistScent(null, $data, 'create');
+            });
+
+            $this->closeCreate();
+            $this->dispatch('toast', ['message' => 'Scent created.', 'style' => 'success']);
+        } catch (ValidationException $e) {
+            Log::warning('admin.catalog.scents.create.validation_failed', [
+                'errors' => $e->errors(),
+                'name' => $this->create['name'] ?? null,
+                'abbreviation' => $this->create['abbreviation'] ?? null,
+            ]);
+
+            $this->createErrorBanner = 'Could not save scent. Fix the highlighted fields and try again.';
+            $this->focusFirstInvalidField($e);
+            throw $e;
+        } catch (QueryException $e) {
+            Log::error('admin.catalog.scents.create.query_failed', [
+                'error' => $e->getMessage(),
+                'name' => $this->create['name'] ?? null,
+                'abbreviation' => $this->create['abbreviation'] ?? null,
+            ]);
+
+            $this->applyDatabaseExceptionAsFieldError($e, 'create');
+            $this->createErrorBanner = 'Could not save scent due to a database conflict. Review the fields and try again.';
+        } catch (Throwable $e) {
+            Log::error('admin.catalog.scents.create.failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $this->createErrorBanner = 'Save failed due to a server error. Please try again.';
+            $this->dispatch('toast', ['message' => $this->createErrorBanner, 'style' => 'error']);
+        }
     }
 
     public function openEdit(int $id): void
     {
         $scent = Scent::query()->findOrFail($id);
         $this->editingId = $id;
+        $this->editErrorBanner = null;
+        $this->editCanonicalSuggestionId = null;
+        $this->editCanonicalSuggestionLabel = null;
+        $this->resetValidation();
+
         $this->edit = [
             'name' => $scent->name,
             'display_name' => $scent->display_name,
@@ -99,34 +190,88 @@ class ScentsCrud extends Component
             'is_blend' => (bool) $scent->is_blend,
             'oil_blend_id' => $scent->oil_blend_id,
             'blend_oil_count' => $scent->blend_oil_count,
+            'canonical_scent_id' => $scent->canonical_scent_id,
+            'source_wholesale_custom_scent_id' => $scent->source_wholesale_custom_scent_id,
+            'recipe_components' => $this->recipeComponentsForForm($scent),
+            'create_inline_blend' => false,
+            'inline_blend_name' => '',
             'is_active' => (bool) $scent->is_active,
         ];
+
+        $this->ensureRecipeSeed('edit');
         $this->showEdit = true;
+    }
+
+    public function closeEdit(): void
+    {
+        $this->showEdit = false;
+        $this->editingId = null;
+        $this->edit = [];
+        $this->editErrorBanner = null;
+        $this->editCanonicalSuggestionId = null;
+        $this->editCanonicalSuggestionLabel = null;
+        $this->resetValidation();
     }
 
     public function save(): void
     {
-        if (!$this->editingId) {
+        if (! $this->editingId) {
             return;
         }
-        $data = $this->validateEdit();
-        $data['name'] = $this->normalizeScentName($data['name']);
-        $this->assertUniqueName($data['name'], $this->editingId);
 
-        Scent::query()->whereKey($this->editingId)->update([
-            'name' => trim($data['name']),
-            'display_name' => blank($data['display_name'] ?? null) ? null : trim($data['display_name']),
-            'abbreviation' => blank($data['abbreviation'] ?? null) ? null : trim($data['abbreviation']),
-            'oil_reference_name' => blank($data['oil_reference_name'] ?? null) ? null : trim($data['oil_reference_name']),
-            'is_blend' => (bool) ($data['is_blend'] ?? false),
-            'oil_blend_id' => $data['oil_blend_id'] ?? null,
-            'blend_oil_count' => $data['is_blend'] ? ($data['blend_oil_count'] ?? null) : null,
-            'is_active' => (bool) ($data['is_active'] ?? false),
+        $this->editErrorBanner = null;
+        $this->resetValidation();
+
+        Log::info('admin.catalog.scents.update.request', [
+            'scent_id' => $this->editingId,
+            'name' => $this->edit['name'] ?? null,
+            'display_name' => $this->edit['display_name'] ?? null,
+            'abbreviation' => $this->edit['abbreviation'] ?? null,
+            'is_blend' => (bool) ($this->edit['is_blend'] ?? false),
+            'canonical_scent_id' => $this->edit['canonical_scent_id'] ?? null,
+            'source_wholesale_custom_scent_id' => $this->edit['source_wholesale_custom_scent_id'] ?? null,
         ]);
 
-        $this->showEdit = false;
-        $this->editingId = null;
-        $this->dispatch('toast', ['message' => 'Scent updated.', 'style' => 'success']);
+        try {
+            $data = $this->validateEdit();
+            $this->assertUniqueFields($data, 'edit', $this->editingId);
+
+            DB::transaction(function () use ($data): void {
+                $scent = Scent::query()->findOrFail($this->editingId);
+                $this->persistScent($scent, $data, 'edit');
+            });
+
+            $this->closeEdit();
+            $this->dispatch('toast', ['message' => 'Scent updated.', 'style' => 'success']);
+        } catch (ValidationException $e) {
+            Log::warning('admin.catalog.scents.update.validation_failed', [
+                'scent_id' => $this->editingId,
+                'errors' => $e->errors(),
+                'name' => $this->edit['name'] ?? null,
+                'abbreviation' => $this->edit['abbreviation'] ?? null,
+            ]);
+
+            $this->editErrorBanner = 'Could not save scent. Fix the highlighted fields and try again.';
+            $this->focusFirstInvalidField($e);
+            throw $e;
+        } catch (QueryException $e) {
+            Log::error('admin.catalog.scents.update.query_failed', [
+                'scent_id' => $this->editingId,
+                'error' => $e->getMessage(),
+            ]);
+
+            $this->applyDatabaseExceptionAsFieldError($e, 'edit');
+            $this->editErrorBanner = 'Could not save scent due to a database conflict. Review the fields and try again.';
+        } catch (Throwable $e) {
+            Log::error('admin.catalog.scents.update.failed', [
+                'scent_id' => $this->editingId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $this->editErrorBanner = 'Save failed due to a server error. Please try again.';
+            $this->dispatch('toast', ['message' => $this->editErrorBanner, 'style' => 'error']);
+        }
     }
 
     public function openDelete(int $id): void
@@ -137,7 +282,7 @@ class ScentsCrud extends Component
 
     public function destroy(): void
     {
-        if (!$this->deletingId) {
+        if (! $this->deletingId) {
             return;
         }
 
@@ -156,125 +301,821 @@ class ScentsCrud extends Component
         $this->dispatch('toast', ['message' => 'Scent deleted.', 'style' => 'success']);
     }
 
-    protected function validateCreate(): array
+    public function addRecipeComponent(string $target): void
     {
-        $payload = $this->normalizedPayload($this->create);
+        if ($target === 'create') {
+            $this->create['recipe_components'][] = $this->blankRecipeComponent();
+            return;
+        }
 
-        return validator($payload, [
-            'name' => ['required', 'string', 'max:255'],
-            'display_name' => ['nullable', 'string', 'max:255'],
-            'abbreviation' => ['nullable', 'string', 'max:64'],
-            'oil_reference_name' => ['nullable', 'string', 'max:255'],
-            'is_blend' => ['boolean'],
-            'oil_blend_id' => [
-                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
-                'nullable',
-                'exists:blends,id',
-            ],
-            'blend_oil_count' => [
-                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
-                'nullable',
-                'integer',
-                'min:1',
-            ],
-            'is_active' => ['boolean'],
-        ])->validate();
+        if ($target === 'edit') {
+            $this->edit['recipe_components'][] = $this->blankRecipeComponent();
+        }
     }
 
-    protected function validateEdit(): array
+    public function removeRecipeComponent(string $target, int $index): void
     {
-        $payload = $this->normalizedPayload($this->edit);
+        if ($target === 'create') {
+            unset($this->create['recipe_components'][$index]);
+            $this->create['recipe_components'] = array_values($this->create['recipe_components']);
+            return;
+        }
 
-        return validator($payload, [
-            'name' => ['required', 'string', 'max:255'],
-            'display_name' => ['nullable', 'string', 'max:255'],
-            'abbreviation' => ['nullable', 'string', 'max:64'],
-            'oil_reference_name' => ['nullable', 'string', 'max:255'],
-            'is_blend' => ['boolean'],
-            'oil_blend_id' => [
-                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
-                'nullable',
-                'exists:blends,id',
-            ],
-            'blend_oil_count' => [
-                Rule::excludeIf(! (bool) ($payload['is_blend'] ?? false)),
-                'nullable',
-                'integer',
-                'min:1',
-            ],
-            'is_active' => ['boolean'],
-        ])->validate();
+        if ($target === 'edit') {
+            unset($this->edit['recipe_components'][$index]);
+            $this->edit['recipe_components'] = array_values($this->edit['recipe_components']);
+        }
+    }
+
+    public function applySelectedWholesaleSource(string $target): void
+    {
+        $payload = $target === 'edit' ? $this->edit : $this->create;
+        $sourceId = $payload['source_wholesale_custom_scent_id'] ?? null;
+        $sourceId = blank($sourceId) ? null : (int) $sourceId;
+        if (! $sourceId) {
+            return;
+        }
+
+        $source = WholesaleCustomScent::query()->find($sourceId);
+        if (! $source) {
+            return;
+        }
+
+        $mapped = $this->hydrateFromWholesaleSource($payload, $source);
+        if ($target === 'edit') {
+            $this->edit = array_merge($this->edit, $mapped);
+            $this->ensureRecipeSeed('edit');
+        } else {
+            $this->create = array_merge($this->create, $mapped);
+            $this->ensureRecipeSeed('create');
+        }
+    }
+
+    public function applyCanonicalSuggestion(string $target): void
+    {
+        if ($target === 'create' && $this->createCanonicalSuggestionId) {
+            $this->create['canonical_scent_id'] = $this->createCanonicalSuggestionId;
+            return;
+        }
+
+        if ($target === 'edit' && $this->editCanonicalSuggestionId) {
+            $this->edit['canonical_scent_id'] = $this->editCanonicalSuggestionId;
+        }
+    }
+
+    public function updatedCreateName($value): void
+    {
+        [$id, $label] = $this->canonicalSuggestionForName((string) $value);
+        $this->createCanonicalSuggestionId = $id;
+        $this->createCanonicalSuggestionLabel = $label;
+    }
+
+    public function updatedEditName($value): void
+    {
+        [$id, $label] = $this->canonicalSuggestionForName((string) $value, $this->editingId);
+        $this->editCanonicalSuggestionId = $id;
+        $this->editCanonicalSuggestionLabel = $label;
     }
 
     public function updatedCreateIsBlend($value): void
     {
         if (! filter_var($value, FILTER_VALIDATE_BOOL)) {
-            $this->create['oil_blend_id'] = null;
-            $this->create['blend_oil_count'] = null;
+            $this->clearBlendFields('create');
+            return;
         }
+
+        $this->ensureRecipeSeed('create');
     }
 
     public function updatedEditIsBlend($value): void
     {
         if (! filter_var($value, FILTER_VALIDATE_BOOL)) {
-            $this->edit['oil_blend_id'] = null;
-            $this->edit['blend_oil_count'] = null;
+            $this->clearBlendFields('edit');
+            return;
+        }
+
+        $this->ensureRecipeSeed('edit');
+    }
+
+    protected function validateCreate(): array
+    {
+        $payload = $this->normalizedPayload($this->create);
+        $validator = validator(['create' => $payload], $this->rulesFor('create'));
+        $this->validateRecipeRules($validator, $payload, 'create');
+        $validated = $validator->validate();
+
+        return $validated['create'];
+    }
+
+    protected function validateEdit(): array
+    {
+        $payload = $this->normalizedPayload($this->edit);
+        $validator = validator(['edit' => $payload], $this->rulesFor('edit'));
+        $this->validateRecipeRules($validator, $payload, 'edit', $this->editingId);
+        $validated = $validator->validate();
+
+        return $validated['edit'];
+    }
+
+    protected function rulesFor(string $prefix): array
+    {
+        return [
+            "{$prefix}.name" => ['required', 'string', 'max:255'],
+            "{$prefix}.display_name" => ['nullable', 'string', 'max:255'],
+            "{$prefix}.abbreviation" => ['nullable', 'string', 'max:64'],
+            "{$prefix}.oil_reference_name" => ['nullable', 'string', 'max:255'],
+            "{$prefix}.is_blend" => ['boolean'],
+            "{$prefix}.oil_blend_id" => [
+                Rule::excludeIf(! (bool) data_get($this->{$prefix}, 'is_blend', false)),
+                'nullable',
+                'exists:blends,id',
+            ],
+            "{$prefix}.blend_oil_count" => [
+                Rule::excludeIf(! (bool) data_get($this->{$prefix}, 'is_blend', false)),
+                'nullable',
+                'integer',
+                'min:1',
+            ],
+            "{$prefix}.canonical_scent_id" => ['nullable', 'exists:scents,id'],
+            "{$prefix}.source_wholesale_custom_scent_id" => ['nullable', 'exists:wholesale_custom_scents,id'],
+            "{$prefix}.recipe_components" => ['array'],
+            "{$prefix}.recipe_components.*.type" => ['nullable', Rule::in(['base_oil', 'blend'])],
+            "{$prefix}.recipe_components.*.id" => ['nullable', 'integer'],
+            "{$prefix}.recipe_components.*.ratio_weight" => ['nullable', 'integer', 'min:1'],
+            "{$prefix}.create_inline_blend" => ['boolean'],
+            "{$prefix}.inline_blend_name" => ['nullable', 'string', 'max:255'],
+            "{$prefix}.is_active" => ['boolean'],
+        ];
+    }
+
+    protected function validateRecipeRules($validator, array $payload, string $prefix, ?int $ignoreScentId = null): void
+    {
+        $validator->after(function ($validator) use ($payload, $prefix, $ignoreScentId): void {
+            $isBlend = (bool) ($payload['is_blend'] ?? false);
+            $rows = collect($payload['recipe_components'] ?? [])
+                ->filter(fn (array $row): bool => ($row['id'] ?? null) !== null);
+
+            foreach ($rows as $index => $row) {
+                $type = $row['type'] ?? null;
+                $id = $row['id'] ?? null;
+                if ($type === 'base_oil' && $id && ! BaseOil::query()->whereKey($id)->exists()) {
+                    $validator->errors()->add("{$prefix}.recipe_components.{$index}.id", 'Selected oil no longer exists.');
+                }
+                if ($type === 'blend' && $id && ! Blend::query()->whereKey($id)->exists()) {
+                    $validator->errors()->add("{$prefix}.recipe_components.{$index}.id", 'Selected blend no longer exists.');
+                }
+            }
+
+            if (! $isBlend) {
+                return;
+            }
+
+            $hasBlendLink = ! blank($payload['oil_blend_id'] ?? null);
+            $inlineBlend = (bool) ($payload['create_inline_blend'] ?? false);
+            if (! $hasBlendLink && ! $inlineBlend) {
+                $validator->errors()->add(
+                    "{$prefix}.oil_blend_id",
+                    'Blend scents must link to an existing blend or create one from recipe sources.'
+                );
+            }
+
+            if ($inlineBlend && trim((string) ($payload['inline_blend_name'] ?? '')) === '') {
+                $validator->errors()->add("{$prefix}.inline_blend_name", 'Blend name is required when creating a new blend.');
+            }
+
+            if ($inlineBlend && $rows->isEmpty()) {
+                $validator->errors()->add(
+                    "{$prefix}.recipe_components",
+                    'Add at least one oil or blend source before creating a new blend.'
+                );
+            }
+
+            if ($ignoreScentId && (int) ($payload['canonical_scent_id'] ?? 0) === (int) $ignoreScentId) {
+                $validator->errors()->add("{$prefix}.canonical_scent_id", 'A scent cannot map to itself as canonical.');
+            }
+        });
+    }
+
+    protected function assertUniqueFields(array $payload, string $prefix, ?int $ignoreId = null): void
+    {
+        $name = trim((string) ($payload['name'] ?? ''));
+        if ($name === '') {
+            return;
+        }
+
+        $normalizedName = Scent::normalizeName($name);
+        $nameQuery = Scent::query()->whereRaw('lower(name) = ?', [$normalizedName]);
+        if ($ignoreId) {
+            $nameQuery->where('id', '!=', $ignoreId);
+        }
+        if ($nameQuery->exists()) {
+            throw ValidationException::withMessages([
+                "{$prefix}.name" => 'A scent with this name already exists.',
+            ]);
+        }
+
+        $displayName = trim((string) ($payload['display_name'] ?? ''));
+        if ($displayName !== '') {
+            $displayQuery = Scent::query()->whereRaw('lower(display_name) = ?', [mb_strtolower($displayName)]);
+            if ($ignoreId) {
+                $displayQuery->where('id', '!=', $ignoreId);
+            }
+            if ($displayQuery->exists()) {
+                throw ValidationException::withMessages([
+                    "{$prefix}.display_name" => 'This display name is already used by another scent.',
+                ]);
+            }
+        }
+
+        $abbreviation = trim((string) ($payload['abbreviation'] ?? ''));
+        if ($abbreviation !== '') {
+            $abbreviationQuery = Scent::query()->whereRaw('lower(abbreviation) = ?', [mb_strtolower($abbreviation)]);
+            if ($ignoreId) {
+                $abbreviationQuery->where('id', '!=', $ignoreId);
+            }
+            if ($abbreviationQuery->exists()) {
+                throw ValidationException::withMessages([
+                    "{$prefix}.abbreviation" => 'This abbreviation is already used by another scent.',
+                ]);
+            }
         }
     }
 
-    protected function assertUniqueName(string $name, ?int $ignoreId = null): void
+    protected function persistScent(?Scent $scent, array $payload, string $prefix): Scent
     {
-        $normalized = Scent::normalizeName($name);
-        $query = Scent::query()->whereRaw('lower(name) = ?', [$normalized]);
-        if ($ignoreId) {
-            $query->where('id', '!=', $ignoreId);
+        $payload = $this->applyWholesaleSourceToPayload($payload);
+        $resolvedRows = $this->resolveRecipeRows($payload['recipe_components'] ?? [], $prefix);
+
+        $oilBlendId = $payload['oil_blend_id'] ?? null;
+        $blendOilCount = $payload['blend_oil_count'] ?? null;
+
+        if ((bool) ($payload['is_blend'] ?? false) && (bool) ($payload['create_inline_blend'] ?? false)) {
+            $inlineBlendName = trim((string) ($payload['inline_blend_name'] ?? ''));
+            $blend = $this->createInlineBlendFromResolvedRows($inlineBlendName, $resolvedRows, $prefix);
+            $oilBlendId = $blend->id;
+            $blendOilCount = $blend->components()->count();
         }
-        if ($query->exists()) {
+
+        if ((bool) ($payload['is_blend'] ?? false) && $oilBlendId && ! $blendOilCount) {
+            $blendOilCount = BlendComponent::query()->where('blend_id', $oilBlendId)->count() ?: null;
+        }
+
+        if (! (bool) ($payload['is_blend'] ?? false)) {
+            $oilBlendId = null;
+            $blendOilCount = null;
+            $resolvedRows = [];
+        }
+
+        $oilReference = trim((string) ($payload['oil_reference_name'] ?? ''));
+        if ($oilReference === '' && $resolvedRows !== []) {
+            $oilReference = $this->recipeSummary($resolvedRows);
+        }
+
+        $canonicalId = blank($payload['canonical_scent_id'] ?? null) ? null : (int) $payload['canonical_scent_id'];
+        if ($scent && $canonicalId === (int) $scent->id) {
+            $canonicalId = null;
+        }
+
+        if (! $scent) {
+            $scent = new Scent();
+        }
+
+        $scent->fill([
+            'name' => Scent::normalizeName((string) ($payload['name'] ?? '')),
+            'display_name' => blank($payload['display_name'] ?? null) ? null : trim((string) $payload['display_name']),
+            'abbreviation' => blank($payload['abbreviation'] ?? null) ? null : trim((string) $payload['abbreviation']),
+            'oil_reference_name' => $oilReference === '' ? null : $oilReference,
+            'is_blend' => (bool) ($payload['is_blend'] ?? false),
+            'oil_blend_id' => $oilBlendId,
+            'blend_oil_count' => $blendOilCount,
+            'canonical_scent_id' => $canonicalId,
+            'source_wholesale_custom_scent_id' => blank($payload['source_wholesale_custom_scent_id'] ?? null)
+                ? null
+                : (int) $payload['source_wholesale_custom_scent_id'],
+            'recipe_components_json' => $resolvedRows === [] ? null : $resolvedRows,
+            'is_active' => (bool) ($payload['is_active'] ?? true),
+        ]);
+        $scent->save();
+
+        $this->syncCanonicalAlias($scent, $canonicalId);
+
+        return $scent;
+    }
+
+    protected function createInlineBlendFromResolvedRows(string $blendName, array $resolvedRows, string $prefix): Blend
+    {
+        $existing = Blend::query()->whereRaw('lower(name) = ?', [mb_strtolower($blendName)])->exists();
+        if ($existing) {
             throw ValidationException::withMessages([
-                'name' => 'A scent with this name already exists (case-insensitive).',
+                "{$prefix}.inline_blend_name" => 'A blend with this name already exists.',
             ]);
         }
+
+        $baseOilWeights = $this->expandToBaseOilWeights($resolvedRows, $prefix);
+        if ($baseOilWeights === []) {
+            throw ValidationException::withMessages([
+                "{$prefix}.recipe_components" => 'Could not resolve this recipe into base oils.',
+            ]);
+        }
+
+        $blend = Blend::query()->create([
+            'name' => $blendName,
+            'is_blend' => true,
+        ]);
+
+        foreach ($baseOilWeights as $baseOilId => $weight) {
+            $ratio = max(1, (int) round($weight * 100));
+            BlendComponent::query()->create([
+                'blend_id' => $blend->id,
+                'base_oil_id' => (int) $baseOilId,
+                'ratio_weight' => $ratio,
+            ]);
+        }
+
+        return $blend;
+    }
+
+    protected function expandToBaseOilWeights(array $rows, string $prefix): array
+    {
+        $weights = [];
+        foreach ($rows as $row) {
+            $type = (string) ($row['type'] ?? '');
+            $weight = (float) ($row['ratio_weight'] ?? 0.0);
+            if ($weight <= 0) {
+                continue;
+            }
+
+            if ($type === 'base_oil') {
+                $baseOilId = (int) ($row['id'] ?? 0);
+                if ($baseOilId <= 0) {
+                    continue;
+                }
+                $weights[$baseOilId] = ($weights[$baseOilId] ?? 0.0) + $weight;
+                continue;
+            }
+
+            if ($type === 'blend') {
+                $blend = Blend::query()->with('components')->find((int) ($row['id'] ?? 0));
+                if (! $blend || $blend->components->isEmpty()) {
+                    throw ValidationException::withMessages([
+                        "{$prefix}.recipe_components" => 'A selected blend has no base-oil components configured.',
+                    ]);
+                }
+
+                $total = (float) $blend->components->sum('ratio_weight');
+                if ($total <= 0) {
+                    throw ValidationException::withMessages([
+                        "{$prefix}.recipe_components" => 'A selected blend has invalid component weights.',
+                    ]);
+                }
+
+                foreach ($blend->components as $component) {
+                    $componentWeight = $weight * ((float) $component->ratio_weight / $total);
+                    $weights[$component->base_oil_id] = ($weights[$component->base_oil_id] ?? 0.0) + $componentWeight;
+                }
+            }
+        }
+
+        return $weights;
+    }
+
+    protected function resolveRecipeRows(array $rows, string $prefix): array
+    {
+        $resolved = [];
+        foreach ($rows as $row) {
+            $type = (string) ($row['type'] ?? '');
+            $id = (int) ($row['id'] ?? 0);
+            $weight = (int) ($row['ratio_weight'] ?? 0);
+            if ($id <= 0 || $weight <= 0 || ! in_array($type, ['base_oil', 'blend'], true)) {
+                continue;
+            }
+
+            if ($type === 'base_oil') {
+                $oil = BaseOil::query()->find($id);
+                if (! $oil) {
+                    throw ValidationException::withMessages([
+                        "{$prefix}.recipe_components" => 'One or more selected oils no longer exist.',
+                    ]);
+                }
+
+                $resolved[] = [
+                    'type' => 'base_oil',
+                    'id' => $oil->id,
+                    'name' => (string) $oil->name,
+                    'ratio_weight' => $weight,
+                ];
+                continue;
+            }
+
+            $blend = Blend::query()->find($id);
+            if (! $blend) {
+                throw ValidationException::withMessages([
+                    "{$prefix}.recipe_components" => 'One or more selected blends no longer exist.',
+                ]);
+            }
+
+            $resolved[] = [
+                'type' => 'blend',
+                'id' => $blend->id,
+                'name' => (string) $blend->name,
+                'ratio_weight' => $weight,
+            ];
+        }
+
+        return $resolved;
+    }
+
+    protected function applyWholesaleSourceToPayload(array $payload): array
+    {
+        $sourceId = blank($payload['source_wholesale_custom_scent_id'] ?? null)
+            ? null
+            : (int) $payload['source_wholesale_custom_scent_id'];
+
+        if (! $sourceId) {
+            return $payload;
+        }
+
+        $source = WholesaleCustomScent::query()->find($sourceId);
+        if (! $source) {
+            return $payload;
+        }
+
+        return $this->hydrateFromWholesaleSource($payload, $source);
+    }
+
+    protected function hydrateFromWholesaleSource(array $payload, WholesaleCustomScent $source): array
+    {
+        if (blank($payload['canonical_scent_id'] ?? null) && $source->canonical_scent_id) {
+            $payload['canonical_scent_id'] = (int) $source->canonical_scent_id;
+        }
+
+        if (trim((string) ($payload['oil_reference_name'] ?? '')) === '') {
+            $oilSummary = collect([$source->oil_1, $source->oil_2, $source->oil_3])
+                ->filter(fn ($value) => ! blank($value))
+                ->map(fn ($value) => trim((string) $value))
+                ->values()
+                ->implode(' + ');
+            if ($oilSummary !== '') {
+                $payload['oil_reference_name'] = $oilSummary;
+            }
+        }
+
+        $rows = collect($payload['recipe_components'] ?? [])
+            ->filter(fn (array $row): bool => ! blank($row['id'] ?? null))
+            ->values()
+            ->all();
+
+        if (($payload['is_blend'] ?? false) && $rows === [] && blank($payload['oil_blend_id'] ?? null)) {
+            $payload['recipe_components'] = $this->deriveRecipeComponentsFromWholesale($source);
+            if ($payload['recipe_components'] !== []) {
+                $payload['is_blend'] = true;
+            }
+        }
+
+        return $payload;
+    }
+
+    protected function deriveRecipeComponentsFromWholesale(WholesaleCustomScent $source): array
+    {
+        $candidates = [];
+        $components = $source->top_level_recipe_json['components'] ?? null;
+        if (is_array($components) && $components !== []) {
+            foreach ($components as $component) {
+                if (! is_array($component)) {
+                    continue;
+                }
+                $name = trim((string) ($component['name'] ?? ''));
+                $weight = (int) max(1, (float) ($component['weight'] ?? 1));
+                if ($name !== '') {
+                    $candidates[] = ['name' => $name, 'weight' => $weight];
+                }
+            }
+        }
+
+        if ($candidates === []) {
+            foreach ([$source->oil_1, $source->oil_2, $source->oil_3] as $slot) {
+                $name = trim((string) $slot);
+                if ($name !== '') {
+                    $candidates[] = ['name' => $name, 'weight' => 1];
+                }
+            }
+        }
+
+        if ($candidates === []) {
+            return [];
+        }
+
+        $blendMap = Blend::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->keyBy(fn (Blend $blend): string => mb_strtolower(trim($blend->name)));
+
+        $oilMap = BaseOil::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->keyBy(fn (BaseOil $oil): string => mb_strtolower(trim($oil->name)));
+
+        $rows = [];
+        foreach ($candidates as $candidate) {
+            $key = mb_strtolower(trim((string) ($candidate['name'] ?? '')));
+            if ($key === '') {
+                continue;
+            }
+
+            $weight = (int) max(1, (int) ($candidate['weight'] ?? 1));
+            if ($blendMap->has($key)) {
+                $rows[] = [
+                    'type' => 'blend',
+                    'id' => (int) $blendMap[$key]->id,
+                    'ratio_weight' => $weight,
+                ];
+                continue;
+            }
+
+            if ($oilMap->has($key)) {
+                $rows[] = [
+                    'type' => 'base_oil',
+                    'id' => (int) $oilMap[$key]->id,
+                    'ratio_weight' => $weight,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    protected function recipeSummary(array $rows): string
+    {
+        return collect($rows)
+            ->take(4)
+            ->map(fn (array $row): string => (string) ($row['name'] ?? ''))
+            ->filter(fn (string $name): bool => $name !== '')
+            ->implode(' + ');
+    }
+
+    protected function syncCanonicalAlias(Scent $scent, ?int $canonicalId): void
+    {
+        if (! Schema::hasTable('scent_aliases')) {
+            return;
+        }
+
+        $aliasValue = ScentAlias::normalizeLabel((string) $scent->name);
+        if ($aliasValue === '') {
+            return;
+        }
+
+        ScentAlias::query()
+            ->where('alias', $aliasValue)
+            ->where('scope', 'catalog')
+            ->delete();
+
+        if (! $canonicalId) {
+            return;
+        }
+
+        ScentAlias::query()->updateOrCreate(
+            ['alias' => $aliasValue, 'scope' => 'catalog'],
+            ['scent_id' => $canonicalId]
+        );
+    }
+
+    protected function recipeComponentsForForm(Scent $scent): array
+    {
+        $fromJson = is_array($scent->recipe_components_json) ? $scent->recipe_components_json : [];
+        $rows = collect($fromJson)
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row): array {
+                return [
+                    'type' => (string) ($row['type'] ?? ''),
+                    'id' => blank($row['id'] ?? null) ? null : (int) $row['id'],
+                    'ratio_weight' => blank($row['ratio_weight'] ?? null) ? 1 : (int) $row['ratio_weight'],
+                ];
+            })
+            ->filter(fn (array $row): bool => in_array($row['type'], ['base_oil', 'blend'], true))
+            ->values()
+            ->all();
+
+        if ($rows !== []) {
+            return $rows;
+        }
+
+        if ($scent->oil_blend_id) {
+            return [[
+                'type' => 'blend',
+                'id' => (int) $scent->oil_blend_id,
+                'ratio_weight' => 1,
+            ]];
+        }
+
+        return [];
+    }
+
+    protected function canonicalSuggestionForName(string $value, ?int $ignoreId = null): array
+    {
+        $normalized = trim(Scent::normalizeName($value));
+        if ($normalized === '' || mb_strlen($normalized) < 3) {
+            return [null, null];
+        }
+
+        $candidate = Scent::query()
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->where(function ($query) use ($normalized): void {
+                $like = '%' . $normalized . '%';
+                $query->whereRaw('lower(name) like ?', [$like])
+                    ->orWhereRaw('lower(coalesce(display_name, \'\')) like ?', [$like]);
+            })
+            ->orderByRaw('case when lower(name) = ? then 0 else 1 end', [$normalized])
+            ->orderByRaw('coalesce(display_name, name)')
+            ->first(['id', 'name', 'display_name']);
+
+        if (! $candidate) {
+            return [null, null];
+        }
+
+        $label = (string) ($candidate->display_name ?: $candidate->name);
+        if (mb_strtolower($label) === mb_strtolower(trim($value))) {
+            return [null, null];
+        }
+
+        return [(int) $candidate->id, $label];
+    }
+
+    protected function applyDatabaseExceptionAsFieldError(QueryException $exception, string $prefix): void
+    {
+        $message = mb_strtolower($exception->getMessage());
+
+        if (str_contains($message, 'scents.name') || str_contains($message, 'scents_name_unique')) {
+            $this->addError("{$prefix}.name", 'A scent with this name already exists.');
+            return;
+        }
+
+        if (str_contains($message, 'scents.abbreviation')) {
+            $this->addError("{$prefix}.abbreviation", 'This abbreviation is already used by another scent.');
+            return;
+        }
+
+        if (str_contains($message, 'scents.display_name')) {
+            $this->addError("{$prefix}.display_name", 'This display name is already used by another scent.');
+            return;
+        }
+
+        $this->addError("{$prefix}.name", 'Save failed. Please review your entries and try again.');
+    }
+
+    protected function focusFirstInvalidField(ValidationException $exception): void
+    {
+        $firstError = array_key_first($exception->errors());
+        if (! $firstError) {
+            return;
+        }
+
+        $this->dispatch('catalog-scent-focus-invalid', ['field' => $firstError]);
+    }
+
+    protected function clearBlendFields(string $target): void
+    {
+        if ($target === 'create') {
+            $this->create['oil_blend_id'] = null;
+            $this->create['blend_oil_count'] = null;
+            $this->create['recipe_components'] = [];
+            $this->create['create_inline_blend'] = false;
+            $this->create['inline_blend_name'] = '';
+            return;
+        }
+
+        if ($target === 'edit') {
+            $this->edit['oil_blend_id'] = null;
+            $this->edit['blend_oil_count'] = null;
+            $this->edit['recipe_components'] = [];
+            $this->edit['create_inline_blend'] = false;
+            $this->edit['inline_blend_name'] = '';
+        }
+    }
+
+    protected function ensureRecipeSeed(string $target): void
+    {
+        if ($target === 'create' && (bool) ($this->create['is_blend'] ?? false) && empty($this->create['recipe_components'])) {
+            $this->create['recipe_components'][] = $this->blankRecipeComponent();
+            return;
+        }
+
+        if ($target === 'edit' && (bool) ($this->edit['is_blend'] ?? false) && empty($this->edit['recipe_components'])) {
+            $this->edit['recipe_components'][] = $this->blankRecipeComponent();
+        }
+    }
+
+    protected function blankRecipeComponent(): array
+    {
+        return [
+            'type' => 'base_oil',
+            'id' => null,
+            'ratio_weight' => 1,
+        ];
+    }
+
+    protected function resetCreateState(): void
+    {
+        $this->create = [
+            'name' => '',
+            'display_name' => '',
+            'abbreviation' => '',
+            'oil_reference_name' => '',
+            'is_blend' => false,
+            'oil_blend_id' => null,
+            'blend_oil_count' => null,
+            'canonical_scent_id' => null,
+            'source_wholesale_custom_scent_id' => null,
+            'recipe_components' => [],
+            'create_inline_blend' => false,
+            'inline_blend_name' => '',
+            'is_active' => true,
+        ];
+    }
+
+    protected function normalizedPayload(array $payload): array
+    {
+        $normalized = [
+            'name' => trim((string) ($payload['name'] ?? '')),
+            'display_name' => blank($payload['display_name'] ?? null) ? null : trim((string) $payload['display_name']),
+            'abbreviation' => blank($payload['abbreviation'] ?? null) ? null : trim((string) $payload['abbreviation']),
+            'oil_reference_name' => blank($payload['oil_reference_name'] ?? null) ? null : trim((string) $payload['oil_reference_name']),
+            'is_blend' => (bool) ($payload['is_blend'] ?? false),
+            'oil_blend_id' => blank($payload['oil_blend_id'] ?? null) ? null : (int) $payload['oil_blend_id'],
+            'blend_oil_count' => blank($payload['blend_oil_count'] ?? null) ? null : (int) $payload['blend_oil_count'],
+            'canonical_scent_id' => blank($payload['canonical_scent_id'] ?? null) ? null : (int) $payload['canonical_scent_id'],
+            'source_wholesale_custom_scent_id' => blank($payload['source_wholesale_custom_scent_id'] ?? null)
+                ? null
+                : (int) $payload['source_wholesale_custom_scent_id'],
+            'recipe_components' => $this->normalizeRecipeComponents($payload['recipe_components'] ?? []),
+            'create_inline_blend' => (bool) ($payload['create_inline_blend'] ?? false),
+            'inline_blend_name' => trim((string) ($payload['inline_blend_name'] ?? '')),
+            'is_active' => (bool) ($payload['is_active'] ?? true),
+        ];
+
+        if (! $normalized['is_blend']) {
+            $normalized['oil_blend_id'] = null;
+            $normalized['blend_oil_count'] = null;
+            $normalized['recipe_components'] = [];
+            $normalized['create_inline_blend'] = false;
+            $normalized['inline_blend_name'] = '';
+        }
+
+        return $normalized;
+    }
+
+    protected function normalizeRecipeComponents(array $rows): array
+    {
+        return array_values(array_map(function ($row): array {
+            return [
+                'type' => in_array(($row['type'] ?? null), ['base_oil', 'blend'], true)
+                    ? (string) $row['type']
+                    : 'base_oil',
+                'id' => blank($row['id'] ?? null) ? null : (int) $row['id'],
+                'ratio_weight' => blank($row['ratio_weight'] ?? null) ? 1 : max(1, (int) $row['ratio_weight']),
+            ];
+        }, $rows));
     }
 
     public function render()
     {
         $scents = Scent::query()
+            ->with([
+                'canonicalScent:id,name,display_name',
+                'sourceWholesaleCustomScent:id,account_name,custom_scent_name',
+            ])
             ->when($this->search !== '', function ($query) {
-                $query->where('name', 'like', '%' . $this->search . '%')
-                    ->orWhere('display_name', 'like', '%' . $this->search . '%')
-                    ->orWhere('abbreviation', 'like', '%' . $this->search . '%');
+                $s = '%' . $this->search . '%';
+                $query->where(function ($inner) use ($s): void {
+                    $inner->where('name', 'like', $s)
+                        ->orWhere('display_name', 'like', $s)
+                        ->orWhere('abbreviation', 'like', $s)
+                        ->orWhere('oil_reference_name', 'like', $s);
+                });
             })
             ->orderBy($this->sort, $this->dir)
             ->paginate($this->perPage);
 
+        $wholesaleSources = WholesaleCustomScent::query()
+            ->orderBy('account_name')
+            ->orderBy('custom_scent_name')
+            ->get([
+                'id',
+                'account_name',
+                'custom_scent_name',
+                'canonical_scent_id',
+                'oil_1',
+                'oil_2',
+                'oil_3',
+                'total_oils',
+                'top_level_recipe_json',
+            ]);
+
         return view('livewire.admin.catalog.scents', [
             'scents' => $scents,
             'blends' => Blend::query()->orderBy('name')->get(['id', 'name']),
+            'baseOils' => BaseOil::query()->orderBy('name')->get(['id', 'name']),
+            'wholesaleSources' => $wholesaleSources,
         ])->layout('layouts.app');
     }
-
-    protected function normalizeScentName(string $name): string
-    {
-        return Scent::normalizeName($name);
-    }
-
-    protected function normalizedPayload(array $payload): array
-    {
-        $normalized = $payload;
-        $normalized['is_blend'] = (bool) ($payload['is_blend'] ?? false);
-        $normalized['is_active'] = (bool) ($payload['is_active'] ?? true);
-
-        $oilBlendId = $payload['oil_blend_id'] ?? null;
-        $normalized['oil_blend_id'] = blank($oilBlendId) ? null : (int) $oilBlendId;
-
-        $blendOilCount = $payload['blend_oil_count'] ?? null;
-        $normalized['blend_oil_count'] = blank($blendOilCount) ? null : (int) $blendOilCount;
-
-        if (! $normalized['is_blend']) {
-            $normalized['oil_blend_id'] = null;
-            $normalized['blend_oil_count'] = null;
-        }
-
-        return $normalized;
-    }
 }
+

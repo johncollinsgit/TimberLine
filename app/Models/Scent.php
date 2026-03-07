@@ -15,6 +15,9 @@ class Scent extends Model
         'is_blend',
         'oil_blend_id',
         'blend_oil_count',
+        'canonical_scent_id',
+        'source_wholesale_custom_scent_id',
+        'recipe_components_json',
         'is_wholesale_custom',
         'is_candle_club',
         'is_active',
@@ -24,6 +27,9 @@ class Scent extends Model
     protected $casts = [
         'is_blend' => 'boolean',
         'blend_oil_count' => 'integer',
+        'canonical_scent_id' => 'integer',
+        'source_wholesale_custom_scent_id' => 'integer',
+        'recipe_components_json' => 'array',
         'is_wholesale_custom' => 'boolean',
         'is_candle_club' => 'boolean',
         'is_active' => 'boolean',
@@ -33,6 +39,16 @@ class Scent extends Model
     public function oilBlend(): BelongsTo
     {
         return $this->belongsTo(Blend::class, 'oil_blend_id');
+    }
+
+    public function canonicalScent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'canonical_scent_id');
+    }
+
+    public function sourceWholesaleCustomScent(): BelongsTo
+    {
+        return $this->belongsTo(WholesaleCustomScent::class, 'source_wholesale_custom_scent_id');
     }
 
     public static function normalizeName(string $name): string
