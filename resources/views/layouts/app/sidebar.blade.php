@@ -52,26 +52,27 @@
       -webkit-line-clamp: 2;
     }
     .mf-admin-subnav{
-      margin-left: 2.2rem;
-      margin-top: .3rem;
+      margin-left: 1.7rem;
+      margin-top: .22rem;
       display: grid;
-      gap: .14rem;
+      gap: .1rem;
       border-left: 1px solid rgba(var(--mf-accent), .18);
-      padding-left: .58rem;
-      padding-top: .12rem;
-      padding-bottom: .12rem;
+      padding-left: .52rem;
+      padding-top: .08rem;
+      padding-bottom: .08rem;
     }
     .mf-admin-subnav-link{
       display: flex;
-      min-height: 1.82rem;
+      min-height: 1.75rem;
       align-items: center;
       border-radius: .6rem;
       border: 1px solid transparent;
-      padding: .24rem .56rem;
-      font-size: .7rem;
+      padding: .22rem .52rem;
+      font-size: .69rem;
       line-height: 1.04rem;
       color: var(--mf-sidebar-muted);
       transition: all 180ms ease;
+      opacity: .94;
     }
     .mf-admin-subnav-link span{
       white-space: normal;
@@ -87,47 +88,53 @@
       background: rgba(var(--mf-accent), .14);
       color: var(--mf-sidebar-text);
       font-weight: 600;
+      opacity: 1;
     }
-    .mf-sidebar-sort-item { cursor: grab; touch-action: manipulation; }
-    .mf-sidebar-sort-item:active { cursor: grabbing; }
-    .mf-sidebar-ghost { opacity: .45; }
-    .mf-sidebar-drag { opacity: .8; }
-    .mf-sidebar-sort-item + .mf-sidebar-sort-item { margin-top: .18rem; }
-    .mf-sidebar-collapse-panel{
-      margin-top: .42rem;
-      border-radius: .78rem;
-      border: 1px solid rgba(var(--mf-accent), .15);
-      background: color-mix(in srgb, var(--mf-panel-bg-2) 72%, transparent);
-      overflow: hidden;
+    .mf-admin-group{
+      display: grid;
+      gap: .05rem;
     }
-    .mf-sidebar-collapse-summary{
+    .mf-admin-group-summary{
       list-style: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: .55rem;
-      padding: .45rem .62rem;
-      font-size: .7rem;
-      letter-spacing: .11em;
-      text-transform: uppercase;
-      color: var(--mf-sidebar-heading);
-      font-weight: 600;
+      border-radius: .95rem;
+      padding: var(--mf-sidebar-item-pad-y) var(--mf-sidebar-item-pad-x);
+      color: var(--mf-sidebar-text);
+      transition: all 180ms ease;
     }
-    .mf-sidebar-collapse-summary::-webkit-details-marker{ display:none; }
-    .mf-sidebar-collapse-chevron{
-      font-size: .64rem;
-      line-height: 1;
-      transition: transform 180ms ease;
-      opacity: .85;
+    .mf-admin-group-summary::-webkit-details-marker{ display:none; }
+    .mf-admin-group-summary:hover{
+      background: var(--mf-nav-bg-hover);
     }
-    .mf-sidebar-collapse-panel[open] .mf-sidebar-collapse-chevron{ transform: rotate(90deg); }
-    .mf-sidebar-collapse-body{
-      display: grid;
-      gap: .15rem;
-      padding: .1rem .36rem .34rem;
-      border-top: 1px solid rgba(var(--mf-accent), .12);
+    .mf-admin-group-main{
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      min-width: 0;
+      flex: 1 1 auto;
     }
+    .mf-admin-group-main svg{
+      color: rgba(var(--mf-accent), .92);
+      flex: 0 0 auto;
+    }
+    .mf-admin-group-chevron{
+      color: var(--mf-sidebar-muted);
+      transition: transform 180ms ease, color 180ms ease;
+      flex: 0 0 auto;
+    }
+    .mf-admin-group[open] .mf-admin-group-chevron{
+      transform: rotate(90deg);
+      color: var(--mf-sidebar-text);
+    }
+    .mf-sidebar-sort-item { cursor: grab; touch-action: manipulation; }
+    .mf-sidebar-sort-item:active { cursor: grabbing; }
+    .mf-sidebar-ghost { opacity: .45; }
+    .mf-sidebar-drag { opacity: .8; }
+    .mf-sidebar-sort-item + .mf-sidebar-sort-item { margin-top: .18rem; }
     #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-subnav{ display:none; }
 
     .mf-active-pill { position: relative; }
@@ -1085,6 +1092,21 @@
       display: flex;
       justify-content: center;
     }
+    #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-group{
+      width: 100%;
+    }
+    #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-group-summary{
+      justify-content: center;
+      padding-inline: .3rem;
+    }
+    #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-group-main{
+      justify-content: center;
+      gap: 0;
+    }
+    #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-group-main .mf-nav-label,
+    #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-group-chevron{
+      display: none;
+    }
     #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-nav-item:hover{
       transform: none;
     }
@@ -1318,21 +1340,25 @@
   $sidebarItems = [];
   if (!$isPouring) {
       $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => $hrefRetailPlan, 'label' => 'All Pour Lists', 'current' => $retailPlanActive];
-      $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
-      $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
   }
   if ($isAdmin || $isManager) {
       $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
   }
+  if (!$isPouring) {
+      $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
+  }
   $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
+  if (!$isPouring) {
+      $sidebarItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => $hrefAnalytics, 'label' => 'Analytics', 'current' => $analyticsActive];
+  }
   $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
   if ($isAdmin || $isManager) {
       $sidebarItems[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
   }
-  if (!$isPouring) {
-      $sidebarItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => $hrefAnalytics, 'label' => 'Analytics', 'current' => $analyticsActive];
-  }
   $sidebarItems[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Backstage Wiki', 'current' => $wikiActive];
+  if (!$isPouring) {
+      $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
+  }
 
   $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
   $sidebarItemsByKey = collect($sidebarItems)->keyBy('key');
@@ -1351,14 +1377,6 @@
       ->map(fn ($key) => $sidebarItemsByKey->get($key))
       ->filter()
       ->values();
-  $collapsedTailItems = collect();
-  $primarySidebarItems = $orderedSidebarItems;
-  if ($orderedSidebarItems->count() > 4) {
-      $collapsedTailItems = $orderedSidebarItems->slice(-4)->values();
-      $primarySidebarItems = $orderedSidebarItems->slice(0, max($orderedSidebarItems->count() - 4, 0))->values();
-  }
-  $collapsedTailOpen = $collapsedTailItems->contains(fn ($item) => (bool) ($item['current'] ?? false));
-
   $adminSubItems = [];
   if ($isAdmin || $isManager) {
       $adminSubItems = [
@@ -1497,64 +1515,40 @@
       <flux:sidebar.nav class="mf-sidebar-nav">
         <flux:sidebar.group heading="Navigation" class="grid mf-sidebar-group-balanced">
           <div class="space-y-1 mf-sidebar-main-list" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
-            @foreach($primarySidebarItems as $item)
+            @foreach($orderedSidebarItems as $item)
               <div
                 class="mf-sidebar-sort-item {{ $item['current'] ? 'mf-active-pill' : '' }}"
                 data-sidebar-item
                 data-sidebar-key="{{ $item['key'] }}"
               >
-                <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
-                  <span class="mf-nav-label">{{ $item['label'] }}</span>
-                </flux:sidebar.item>
                 @if($item['key'] === 'administration' && count($adminSubItems) > 0)
-                  <div class="mf-admin-subnav">
-                    @foreach($adminSubItems as $subItem)
-                      <a
-                        href="{{ $subItem['href'] }}"
-                        wire:navigate
-                        class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                      >
-                        <span>{{ $subItem['label'] }}</span>
-                      </a>
-                    @endforeach
-                  </div>
+                  <details class="mf-admin-group" {{ $adminActive ? 'open' : '' }}>
+                    <summary class="mf-admin-group-summary">
+                      <span class="mf-admin-group-main">
+                        <flux:icon.wrench-screwdriver class="size-4" />
+                        <span class="mf-nav-label">Administration</span>
+                      </span>
+                      <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                    </summary>
+                    <div class="mf-admin-subnav">
+                      @foreach($adminSubItems as $subItem)
+                        <a
+                          href="{{ $subItem['href'] }}"
+                          wire:navigate
+                          class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                        >
+                          <span>{{ $subItem['label'] }}</span>
+                        </a>
+                      @endforeach
+                    </div>
+                  </details>
+                @else
+                  <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
+                    <span class="mf-nav-label">{{ $item['label'] }}</span>
+                  </flux:sidebar.item>
                 @endif
               </div>
             @endforeach
-            @if($collapsedTailItems->count() > 0)
-              <details class="mf-sidebar-collapse-panel" {{ $collapsedTailOpen ? 'open' : '' }}>
-                <summary class="mf-sidebar-collapse-summary">
-                  <span>More Sections</span>
-                  <span class="mf-sidebar-collapse-chevron">▸</span>
-                </summary>
-                <div class="mf-sidebar-collapse-body">
-                  @foreach($collapsedTailItems as $item)
-                    <div
-                      class="mf-sidebar-sort-item {{ $item['current'] ? 'mf-active-pill' : '' }}"
-                      data-sidebar-item
-                      data-sidebar-key="{{ $item['key'] }}"
-                    >
-                      <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
-                        <span class="mf-nav-label">{{ $item['label'] }}</span>
-                      </flux:sidebar.item>
-                      @if($item['key'] === 'administration' && count($adminSubItems) > 0)
-                        <div class="mf-admin-subnav">
-                          @foreach($adminSubItems as $subItem)
-                            <a
-                              href="{{ $subItem['href'] }}"
-                              wire:navigate
-                              class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                            >
-                              <span>{{ $subItem['label'] }}</span>
-                            </a>
-                          @endforeach
-                        </div>
-                      @endif
-                    </div>
-                  @endforeach
-                </div>
-              </details>
-            @endif
             <details class="ml-3 rounded-xl border px-2 py-1 mf-sidebar-panel" {{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') || (request()->routeIs('wiki.article') && request()->route('slug') === 'market-room') ? 'open' : '' }}>
               <summary class="cursor-pointer list-none text-xs text-emerald-100/70 flex items-center justify-between px-2 py-1 group">
                 <span>Wiki Sections</span>
