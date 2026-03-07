@@ -1105,7 +1105,9 @@ function MasterDataGridApp(props: RootDataset) {
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
-                                cellActivationBehavior="double-click"
+                                cellActivationBehavior="second-click"
+                                editOnType={true}
+                                trapFocus={true}
                                 smoothScrollX={true}
                                 smoothScrollY={true}
                                 preventDiagonalScrolling={true}
