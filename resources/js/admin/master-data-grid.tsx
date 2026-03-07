@@ -8,7 +8,6 @@ import {
     GridColumn,
     Item,
     EditableGridCell,
-    type GridSelection,
     type EditListItem,
     type Theme,
 } from "@glideapps/glide-data-grid";
@@ -76,7 +75,7 @@ type RootDataset = {
 };
 
 type SaveState = "idle" | "saving" | "saved";
-type CellPhase = "default" | "focused" | "editing" | "saving" | "saved" | "error";
+type CellPhase = "default" | "saving" | "saved" | "error";
 
 type PendingChange = {
     id: number;
@@ -452,8 +451,6 @@ function MasterDataGridApp(props: RootDataset) {
     const [saveState, setSaveState] = useState<SaveState>("idle");
     const [pendingChanges, setPendingChanges] = useState<Record<string, PendingChange>>({});
     const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
-    const [focusedCellKey, setFocusedCellKey] = useState<string | null>(null);
-    const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
     const [savingCellKeys, setSavingCellKeys] = useState<Record<string, true>>({});
     const [savedCellKeys, setSavedCellKeys] = useState<Record<string, true>>({});
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
@@ -898,12 +895,6 @@ function MasterDataGridApp(props: RootDataset) {
                 });
                 return next;
             });
-            setFocusedCellKey((current) =>
-                current && current.startsWith(`${row.id}:`) ? null : current
-            );
-            setEditingCellKey((current) =>
-                current && current.startsWith(`${row.id}:`) ? null : current
-            );
             setSaveState("saved");
             setNotice("Row deleted");
             setReloadToken((current) => current + 1);
@@ -931,23 +922,6 @@ function MasterDataGridApp(props: RootDataset) {
         return meta.columns[index] ?? null;
     };
 
-    const getEditableCellContext = (cell: Item) => {
-        const [col, rowIndex] = cell;
-        const columnMeta = getColumnMeta(col);
-        const row = rows[rowIndex];
-
-        if (!columnMeta || !row) {
-            return null;
-        }
-
-        return {
-            rowIndex,
-            rowId: row.id,
-            field: columnMeta.key,
-            changeKey: cellChangeKey(row.id, columnMeta.key),
-        };
-    };
-
     const cellPhase = (changeKey: string): CellPhase => {
         if (cellErrors[changeKey]) {
             return "error";
@@ -955,14 +929,6 @@ function MasterDataGridApp(props: RootDataset) {
 
         if (savingCellKeys[changeKey]) {
             return "saving";
-        }
-
-        if (editingCellKey === changeKey) {
-            return "editing";
-        }
-
-        if (focusedCellKey === changeKey) {
-            return "focused";
         }
 
         if (savedCellKeys[changeKey]) {
@@ -1012,19 +978,7 @@ function MasterDataGridApp(props: RootDataset) {
                         borderColor: "#38bdf8",
                         textDark: "#e0f2fe",
                     }
-                    : phase === "editing"
-                        ? {
-                            bgCell: "rgba(20, 46, 36, 0.92)",
-                            borderColor: "#34d399",
-                            textDark: "#ecfdf5",
-                        }
-                        : phase === "focused"
-                            ? {
-                                bgCell: "rgba(14, 35, 29, 0.88)",
-                                borderColor: "rgba(110, 231, 183, 0.42)",
-                                textDark: "#ecfdf5",
-                            }
-                            : phase === "saved"
+                    : phase === "saved"
                                 ? {
                                     bgCell: "rgba(6, 48, 37, 0.9)",
                                     borderColor: "#10b981",
@@ -1084,7 +1038,7 @@ function MasterDataGridApp(props: RootDataset) {
         };
     };
 
-    const handleCellsEdited = (edits: readonly EditListItem[]) => {
+    const applyEdits = (edits: readonly EditListItem[]) => {
         const changed: PendingChange[] = [];
 
         edits.forEach((edit) => {
@@ -1116,39 +1070,17 @@ function MasterDataGridApp(props: RootDataset) {
         if (changed.length > 0) {
             queueBatchSave(changed, "auto");
         }
+    };
 
+    const handleCellsEdited = (edits: readonly EditListItem[]) => {
+        applyEdits(edits);
         return true;
-    };
-
-    const handleGridSelectionChange = (selection: GridSelection) => {
-        const selectedCell = selection.current?.cell;
-
-        if (!selectedCell) {
-            setFocusedCellKey(null);
-            return;
-        }
-
-        const context = getEditableCellContext(selectedCell);
-        setFocusedCellKey(context?.changeKey ?? null);
-    };
-
-    const handleCellActivated = (cell: Item) => {
-        const context = getEditableCellContext(cell);
-        if (!context) {
-            return;
-        }
-
-        setFocusedCellKey(context.changeKey);
-        setEditingCellKey(context.changeKey);
-    };
-
-    const handleFinishedEditing = () => {
-        setEditingCellKey(null);
     };
 
     const handleCellClicked = (cell: Item) => {
         const [col, rowIndex] = cell;
-        const isActionColumn = col === gridColumns.length - 1;
+        const actionColumnIndex = meta?.columns.length ?? -1;
+        const isActionColumn = col === actionColumnIndex;
 
         if (!isActionColumn) {
             return;
@@ -1200,8 +1132,6 @@ function MasterDataGridApp(props: RootDataset) {
                                                 setNotice("");
                                                 setPendingChanges({});
                                                 setCellErrors({});
-                                                setFocusedCellKey(null);
-                                                setEditingCellKey(null);
                                                 setSavingCellKeys({});
                                                 setSavedCellKeys({});
                                                 setSaveState("idle");
@@ -1344,16 +1274,16 @@ function MasterDataGridApp(props: RootDataset) {
                                 columns={gridColumns}
                                 rows={rows.length}
                                 getCellContent={getCellContent}
+                                onCellEdited={(cell, newValue) =>
+                                    applyEdits([{ location: cell, value: newValue }])
+                                }
                                 onCellsEdited={handleCellsEdited}
                                 onCellClicked={handleCellClicked}
-                                onGridSelectionChange={handleGridSelectionChange}
-                                onCellActivated={handleCellActivated}
-                                onFinishedEditing={handleFinishedEditing}
                                 onPaste={true}
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
-                                cellActivationBehavior="double-click"
+                                cellActivationBehavior="second-click"
                                 editOnType={true}
                                 trapFocus={true}
                                 smoothScrollX={true}
