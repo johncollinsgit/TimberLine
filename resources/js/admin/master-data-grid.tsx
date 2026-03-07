@@ -1076,18 +1076,34 @@ function MasterDataGridApp(props: RootDataset) {
 
     const actionColumnIndex = meta?.columns.length ?? -1;
 
+    const toGridLocalBounds = (bounds: CellBounds): CellBounds => {
+        const gridWrap = gridWrapRef.current;
+        if (!gridWrap) {
+            return bounds;
+        }
+
+        const wrapRect = gridWrap.getBoundingClientRect();
+
+        return {
+            x: bounds.x - wrapRect.left,
+            y: bounds.y - wrapRect.top,
+            width: bounds.width,
+            height: bounds.height,
+        };
+    };
+
     const getCellBounds = (cell: Item): CellBounds | null => {
         const bounds = dataEditorRef.current?.getBounds(cell);
         if (!bounds) {
             return null;
         }
 
-        return {
+        return toGridLocalBounds({
             x: bounds.x,
             y: bounds.y,
             width: bounds.width,
             height: bounds.height,
-        };
+        });
     };
 
     const isPopoverEditableColumn = (column: ColumnMeta | null): column is ColumnMeta => {
@@ -1103,7 +1119,7 @@ function MasterDataGridApp(props: RootDataset) {
             return;
         }
 
-        const bounds = fallbackBounds ?? getCellBounds(cell);
+        const bounds = fallbackBounds ? toGridLocalBounds(fallbackBounds) : getCellBounds(cell);
         if (!bounds) {
             return;
         }
@@ -1560,10 +1576,12 @@ function MasterDataGridApp(props: RootDataset) {
         const left = clamp(popoverEditor.bounds.x, 8, Math.max(8, gridBounds.width - width - 8));
         const estimatedHeight = 156;
         const spaceBelow = gridViewportHeight - (popoverEditor.bounds.y + popoverEditor.bounds.height);
-        const top =
+        const topCandidate =
             spaceBelow > estimatedHeight
                 ? popoverEditor.bounds.y + popoverEditor.bounds.height + 6
                 : Math.max(8, popoverEditor.bounds.y - estimatedHeight - 6);
+        const maxTop = Math.max(8, gridViewportHeight - estimatedHeight - 8);
+        const top = clamp(topCandidate, 8, maxTop);
 
         return { left, top, width };
     })();
@@ -1742,6 +1760,9 @@ function MasterDataGridApp(props: RootDataset) {
                                 onCellsEdited={handleCellsEdited}
                                 onCellClicked={handleCellClicked}
                                 onCellActivated={handleCellActivated}
+                                onVisibleRegionChanged={() => {
+                                    refreshPopoverBounds();
+                                }}
                                 onPaste={true}
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
