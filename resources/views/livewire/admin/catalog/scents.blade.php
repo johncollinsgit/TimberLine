@@ -220,69 +220,95 @@
     </div>
   </div>
 
-  <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
-    <table class="min-w-full text-sm">
-      <thead class="bg-white/5 text-white/70">
+  <div class="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0c1210]/55">
+    <div class="overflow-x-auto">
+      <table class="min-w-[74rem] w-full table-fixed text-sm">
+        <colgroup>
+          <col class="w-[18rem]">
+          <col class="w-[6rem]">
+          <col class="w-[17rem]">
+          <col class="w-[13rem]">
+          <col class="w-[15rem]">
+          <col class="w-[6rem]">
+          <col class="w-[7rem]">
+          <col class="w-[9.5rem]">
+        </colgroup>
+      <thead class="bg-white/10 text-white/75">
         <tr>
-          <th class="cursor-pointer px-4 py-3 text-left" wire:click="setSort('name')">Name</th>
-          <th class="px-4 py-3 text-left">Abbrev</th>
-          <th class="px-4 py-3 text-left">Oil Ref</th>
-          <th class="px-4 py-3 text-left">Canonical</th>
-          <th class="px-4 py-3 text-left">Wholesale Source</th>
-          <th class="px-4 py-3 text-left">Blend</th>
-          <th class="px-4 py-3 text-left">Active</th>
-          <th class="px-4 py-3 text-right">Actions</th>
+          <th class="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]" wire:click="setSort('name')">Name</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]" title="Abbreviation">Abbrev</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]" title="Oil Reference">Oil Ref</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]">Canonical</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]" title="Wholesale Source">Wholesale</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]">Blend</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.2em]">Active</th>
+          <th class="whitespace-nowrap px-3 py-2.5 text-right text-[11px] uppercase tracking-[0.2em]">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-white/5">
         @foreach($scents as $scent)
           <tr class="hover:bg-white/5">
-            <td class="px-4 py-3">
-              <div class="text-white">{{ $scent->name }}</div>
-              @if($scent->display_name)
-                <div class="text-xs text-white/60">{{ $scent->display_name }}</div>
+            <td class="px-3 py-2.5 align-middle">
+              <div class="truncate text-[14px] font-medium text-white" title="{{ $scent->name }}">{{ $scent->name }}</div>
+              @if($scent->display_name && strtolower($scent->display_name) !== strtolower($scent->name))
+                <div class="truncate text-xs text-white/60" title="{{ $scent->display_name }}">{{ $scent->display_name }}</div>
               @endif
             </td>
-            <td class="px-4 py-3 text-white/80">{{ $scent->abbreviation ?: '—' }}</td>
-            <td class="px-4 py-3 text-white/80">{{ $scent->oil_reference_name ?: '—' }}</td>
-            <td class="px-4 py-3 text-white/80">
+            <td class="px-3 py-2.5 align-middle text-sm text-white/80">
+              <span class="whitespace-nowrap">{{ $scent->abbreviation ?: '—' }}</span>
+            </td>
+            <td class="px-3 py-2.5 align-middle text-sm text-white/80">
+              @if($scent->oil_reference_name)
+                <span class="block truncate" title="{{ $scent->oil_reference_name }}">{{ $scent->oil_reference_name }}</span>
+              @else
+                —
+              @endif
+            </td>
+            <td class="px-3 py-2.5 align-middle text-sm text-white/80">
               @if($scent->canonicalScent)
-                {{ $scent->canonicalScent->display_name ?: $scent->canonicalScent->name }}
+                @php $canonicalLabel = $scent->canonicalScent->display_name ?: $scent->canonicalScent->name; @endphp
+                <span class="block truncate" title="{{ $canonicalLabel }}">{{ $canonicalLabel }}</span>
               @else
                 —
               @endif
             </td>
-            <td class="px-4 py-3 text-white/80">
+            <td class="px-3 py-2.5 align-middle text-sm text-white/80">
               @if($scent->sourceWholesaleCustomScent)
-                {{ $scent->sourceWholesaleCustomScent->custom_scent_name }} · {{ $scent->sourceWholesaleCustomScent->account_name }}
+                @php
+                  $wholesaleLabel = $scent->sourceWholesaleCustomScent->custom_scent_name.' · '.$scent->sourceWholesaleCustomScent->account_name;
+                @endphp
+                <span class="block truncate" title="{{ $wholesaleLabel }}">{{ $wholesaleLabel }}</span>
               @else
                 —
               @endif
             </td>
-            <td class="px-4 py-3">
+            <td class="px-3 py-2.5 align-middle">
               @if($scent->is_blend)
-                <span class="inline-flex rounded-full bg-amber-500/20 px-2 py-1 text-xs text-amber-100">
+                <span class="inline-flex h-6 items-center whitespace-nowrap rounded-md border border-amber-300/35 bg-amber-500/15 px-2 text-[11px] font-medium text-amber-100">
                   Blend
                 </span>
               @else
-                <span class="inline-flex rounded-full bg-white/10 px-2 py-1 text-xs text-white/70">
+                <span class="inline-flex h-6 items-center whitespace-nowrap rounded-md border border-white/15 bg-white/5 px-2 text-[11px] font-medium text-white/75">
                   Single
                 </span>
               @endif
             </td>
-            <td class="px-4 py-3">
-              <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $scent->is_active ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+            <td class="px-3 py-2.5 align-middle">
+              <span class="inline-flex h-6 items-center whitespace-nowrap rounded-md border px-2 text-[11px] font-medium {{ $scent->is_active ? 'border-emerald-300/35 bg-emerald-500/18 text-emerald-100' : 'border-white/15 bg-white/5 text-white/65' }}">
                 {{ $scent->is_active ? 'Active' : 'Inactive' }}
               </span>
             </td>
-            <td class="space-x-2 px-4 py-3 text-right">
-              <button type="button" wire:click="openEdit({{ $scent->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100">Edit</button>
-              <button type="button" wire:click="openDelete({{ $scent->id }})" class="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] text-red-100">Delete</button>
+            <td class="px-3 py-2.5 align-middle text-right">
+              <div class="flex items-center justify-end gap-2 whitespace-nowrap">
+                <button type="button" wire:click="openEdit({{ $scent->id }})" class="inline-flex h-7 items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 text-[11px] text-emerald-100">Edit</button>
+                <button type="button" wire:click="openDelete({{ $scent->id }})" class="inline-flex h-7 items-center rounded-full border border-red-400/30 bg-red-500/10 px-3 text-[11px] text-red-100">Delete</button>
+              </div>
             </td>
           </tr>
         @endforeach
       </tbody>
     </table>
+    </div>
   </div>
 
   <div class="mt-4">{{ $scents->links() }}</div>
@@ -514,4 +540,3 @@
     });
   </script>
 @endonce
-
