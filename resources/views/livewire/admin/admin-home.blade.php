@@ -1,7 +1,6 @@
 @php
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
-  $tabLinkClass = 'inline-flex min-h-[2.25rem] max-w-[9.5rem] items-center justify-center rounded-xl border px-2 py-1 text-center text-[11px] font-semibold leading-tight whitespace-normal transition sm:min-h-[2.5rem] sm:max-w-[11rem] sm:px-3 sm:text-xs';
 @endphp
 
 <div class="space-y-4 sm:space-y-6">
@@ -12,72 +11,7 @@
   </section>
 
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-3 sm:p-4 md:p-6">
-    <div class="flex flex-wrap items-stretch gap-2 border-b border-white/10 pb-2 sm:pb-3">
-      @if($isAdmin)
-        <a
-          href="{{ route('admin.index', ['tab' => 'users']) }}"
-          wire:navigate
-          class="{{ $tabLinkClass }} {{ $tab === 'users' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-          Manage Users
-        </a>
-      @endif
-      <a
-        href="{{ route('admin.index', ['tab' => 'imports']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'imports' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Fix Imports
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'scent-intake']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'scent-intake' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Scent Intake
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'catalog']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'catalog' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Scent Catalog
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'sizes-wicks']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'sizes-wicks' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Sizes & Wicks
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'wholesale-custom']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'wholesale-custom' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Wholesale Custom Scents
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'blends']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'blends' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Oil Blends
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'candle-club']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'candle-club' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Candle Club
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'oils']) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'oils' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Scent Oil Abbreviations
-      </a>
-      <a
-        href="{{ route('admin.index', ['tab' => 'master-data', 'resource' => $masterDataActiveResource]) }}"
-        wire:navigate
-        class="{{ $tabLinkClass }} {{ $tab === 'master-data' ? 'border-emerald-400/35 bg-emerald-500/15 text-emerald-50' : 'border-white/10 bg-black/20 text-white/70 hover:border-emerald-300/20 hover:text-white' }}">
-        Master Data
-      </a>
-    </div>
-
-    <div class="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
+    <div class="space-y-4 sm:space-y-6">
       @if($tab === 'users' && $isAdmin)
         <livewire:admin.users.users-index />
       @elseif($tab === 'imports')

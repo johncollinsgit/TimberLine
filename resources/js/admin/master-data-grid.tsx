@@ -8,6 +8,7 @@ import {
     GridColumn,
     Item,
     EditableGridCell,
+    type GridSelection,
     type EditListItem,
     type Theme,
 } from "@glideapps/glide-data-grid";
@@ -75,6 +76,7 @@ type RootDataset = {
 };
 
 type SaveState = "idle" | "saving" | "saved";
+type CellPhase = "default" | "focused" | "editing" | "saving" | "saved" | "error";
 
 type PendingChange = {
     id: number;
@@ -88,6 +90,8 @@ type BulkSaveError = {
     field: string;
     message: string;
 };
+
+type SaveMode = "auto" | "manual";
 
 type ElementSize = {
     width: number;
@@ -448,10 +452,16 @@ function MasterDataGridApp(props: RootDataset) {
     const [saveState, setSaveState] = useState<SaveState>("idle");
     const [pendingChanges, setPendingChanges] = useState<Record<string, PendingChange>>({});
     const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
+    const [focusedCellKey, setFocusedCellKey] = useState<string | null>(null);
+    const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
+    const [savingCellKeys, setSavingCellKeys] = useState<Record<string, true>>({});
+    const [savedCellKeys, setSavedCellKeys] = useState<Record<string, true>>({});
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
     const [gridTheme] = useState<Theme>(() => resolveGridTheme());
     const pendingChangesRef = useRef<Record<string, PendingChange>>({});
     const saveFlashTimerRef = useRef<number | null>(null);
+    const savedCellTimerRef = useRef<Record<string, number>>({});
+    const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
     const gridColumns = buildGridColumns(meta);
     const activeResourceMeta =
@@ -467,6 +477,15 @@ function MasterDataGridApp(props: RootDataset) {
     useEffect(() => {
         pendingChangesRef.current = pendingChanges;
     }, [pendingChanges]);
+
+    useEffect(() => {
+        return () => {
+            Object.values(savedCellTimerRef.current).forEach((timer) => {
+                window.clearTimeout(timer);
+            });
+            savedCellTimerRef.current = {};
+        };
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -602,24 +621,81 @@ function MasterDataGridApp(props: RootDataset) {
             return next;
         });
         setSaveState("idle");
-        setNotice("Unsaved changes");
+        setNotice("");
         setError("");
     };
 
-    const handleSaveChanges = async () => {
-        const batch = Object.values(pendingChangesRef.current);
-
-        if (batch.length === 0) {
+    const markCellsSaved = (keys: string[]) => {
+        if (keys.length === 0) {
             return;
         }
 
+        setSavedCellKeys((current) => {
+            const next = { ...current };
+            keys.forEach((key) => {
+                next[key] = true;
+            });
+
+            return next;
+        });
+
+        keys.forEach((key) => {
+            const existingTimer = savedCellTimerRef.current[key];
+            if (existingTimer != null) {
+                window.clearTimeout(existingTimer);
+            }
+
+            savedCellTimerRef.current[key] = window.setTimeout(() => {
+                setSavedCellKeys((current) => {
+                    if (!current[key]) {
+                        return current;
+                    }
+
+                    const next = { ...current };
+                    delete next[key];
+                    return next;
+                });
+                delete savedCellTimerRef.current[key];
+            }, 1000);
+        });
+    };
+
+    const saveChangesBatch = async (incomingBatch: PendingChange[], mode: SaveMode) => {
+        const batchMap = new Map<string, PendingChange>();
+
+        incomingBatch.forEach((change) => {
+            batchMap.set(cellChangeKey(change.id, change.field), change);
+        });
+
+        const batch = Array.from(batchMap.values());
+
+        if (batch.length === 0) {
+            if (mode === "manual") {
+                setNotice("No changes to save.");
+            }
+            return;
+        }
+
+        const batchKeys = Array.from(batchMap.keys());
         const batchValueMap = new Map(
             batch.map((change) => [cellChangeKey(change.id, change.field), change.value])
         );
 
+        setSavingCellKeys((current) => {
+            const next = { ...current };
+            batchKeys.forEach((key) => {
+                next[key] = true;
+            });
+            return next;
+        });
+
         try {
             setSaveState("saving");
-            setNotice(`Saving ${batch.length} change${batch.length === 1 ? "" : "s"}…`);
+            setNotice(
+                mode === "manual"
+                    ? `Saving ${batch.length} change${batch.length === 1 ? "" : "s"}…`
+                    : "Saving…"
+            );
             setError("");
 
             const response = await axios.post(
@@ -639,6 +715,7 @@ function MasterDataGridApp(props: RootDataset) {
             const failedKeys = new Set(
                 responseErrors.map((item) => cellChangeKey(item.id, item.field))
             );
+            const succeededKeys = batchKeys.filter((key) => !failedKeys.has(key));
 
             setPendingChanges((current) => {
                 const next = { ...current };
@@ -666,8 +743,7 @@ function MasterDataGridApp(props: RootDataset) {
                 const next = { ...current };
 
                 batch.forEach((change) => {
-                    const changeKey = cellChangeKey(change.id, change.field);
-                    delete next[changeKey];
+                    delete next[cellChangeKey(change.id, change.field)];
                 });
 
                 responseErrors.forEach((item) => {
@@ -677,29 +753,64 @@ function MasterDataGridApp(props: RootDataset) {
                 return next;
             });
 
-            setReloadToken((current) => current + 1);
+            markCellsSaved(succeededKeys);
 
             if (responseErrors.length === 0) {
                 setSaveState("saved");
-                setNotice("Changes saved");
+                setNotice(
+                    mode === "manual"
+                        ? "Changes saved."
+                        : "Saved."
+                );
                 return;
             }
 
             setSaveState("idle");
             setNotice(
                 response.data?.updated > 0
-                    ? `Saved ${response.data.updated} change${response.data.updated === 1 ? "" : "s"}; fix the highlighted cells.`
-                    : "Fix the highlighted cells and save again."
+                    ? `Saved ${response.data.updated} change${response.data.updated === 1 ? "" : "s"}; fix highlighted cells.`
+                    : "Fix highlighted cells and save again."
             );
         } catch (requestError) {
             const message = axios.isAxiosError(requestError)
                 ? requestError.response?.data?.message || "Could not save changes."
                 : "Could not save changes.";
 
+            setCellErrors((current) => {
+                const next = { ...current };
+                batchKeys.forEach((key) => {
+                    if (!next[key]) {
+                        next[key] = message;
+                    }
+                });
+                return next;
+            });
+
             setSaveState("idle");
             setNotice("");
             setError(message);
+        } finally {
+            setSavingCellKeys((current) => {
+                const next = { ...current };
+                batchKeys.forEach((key) => {
+                    delete next[key];
+                });
+                return next;
+            });
         }
+    };
+
+    const queueBatchSave = (batch: PendingChange[], mode: SaveMode) => {
+        saveQueueRef.current = saveQueueRef.current
+            .catch(() => undefined)
+            .then(async () => {
+                await saveChangesBatch(batch, mode);
+            });
+    };
+
+    const handleSaveChanges = () => {
+        const batch = Object.values(pendingChangesRef.current);
+        queueBatchSave(batch, "manual");
     };
 
     const handleAddRow = async () => {
@@ -769,6 +880,30 @@ function MasterDataGridApp(props: RootDataset) {
 
                 return next;
             });
+            setSavingCellKeys((current) => {
+                const next = { ...current };
+                Object.keys(next).forEach((key) => {
+                    if (key.startsWith(`${row.id}:`)) {
+                        delete next[key];
+                    }
+                });
+                return next;
+            });
+            setSavedCellKeys((current) => {
+                const next = { ...current };
+                Object.keys(next).forEach((key) => {
+                    if (key.startsWith(`${row.id}:`)) {
+                        delete next[key];
+                    }
+                });
+                return next;
+            });
+            setFocusedCellKey((current) =>
+                current && current.startsWith(`${row.id}:`) ? null : current
+            );
+            setEditingCellKey((current) =>
+                current && current.startsWith(`${row.id}:`) ? null : current
+            );
             setSaveState("saved");
             setNotice("Row deleted");
             setReloadToken((current) => current + 1);
@@ -796,6 +931,47 @@ function MasterDataGridApp(props: RootDataset) {
         return meta.columns[index] ?? null;
     };
 
+    const getEditableCellContext = (cell: Item) => {
+        const [col, rowIndex] = cell;
+        const columnMeta = getColumnMeta(col);
+        const row = rows[rowIndex];
+
+        if (!columnMeta || !row) {
+            return null;
+        }
+
+        return {
+            rowIndex,
+            rowId: row.id,
+            field: columnMeta.key,
+            changeKey: cellChangeKey(row.id, columnMeta.key),
+        };
+    };
+
+    const cellPhase = (changeKey: string): CellPhase => {
+        if (cellErrors[changeKey]) {
+            return "error";
+        }
+
+        if (savingCellKeys[changeKey]) {
+            return "saving";
+        }
+
+        if (editingCellKey === changeKey) {
+            return "editing";
+        }
+
+        if (focusedCellKey === changeKey) {
+            return "focused";
+        }
+
+        if (savedCellKeys[changeKey]) {
+            return "saved";
+        }
+
+        return "default";
+    };
+
     const getCellContent = ([col, row]: Item): GridCell => {
         const rowData = rows[row];
         const columnMeta = getColumnMeta(col);
@@ -821,19 +997,46 @@ function MasterDataGridApp(props: RootDataset) {
         }
 
         const changeKey = cellChangeKey(rowData.id, columnMeta.key);
-        const themeOverride = cellErrors[changeKey]
-            ? {
-                bgCell: "rgba(76, 5, 25, 0.92)",
-                borderColor: "#fb7185",
-                textDark: "#ffe4e6",
-            }
-            : pendingChanges[changeKey]
+        const hasPendingChange = Boolean(pendingChanges[changeKey]);
+        const phase = cellPhase(changeKey);
+        const themeOverride =
+            phase === "error"
                 ? {
-                    bgCell: "rgba(15, 23, 42, 0.94)",
-                    borderColor: "#34d399",
-                    textDark: "#ecfdf5",
+                    bgCell: "rgba(76, 5, 25, 0.92)",
+                    borderColor: "#fb7185",
+                    textDark: "#ffe4e6",
                 }
-                : undefined;
+                : phase === "saving"
+                    ? {
+                        bgCell: "rgba(12, 32, 51, 0.92)",
+                        borderColor: "#38bdf8",
+                        textDark: "#e0f2fe",
+                    }
+                    : phase === "editing"
+                        ? {
+                            bgCell: "rgba(20, 46, 36, 0.92)",
+                            borderColor: "#34d399",
+                            textDark: "#ecfdf5",
+                        }
+                        : phase === "focused"
+                            ? {
+                                bgCell: "rgba(14, 35, 29, 0.88)",
+                                borderColor: "rgba(110, 231, 183, 0.42)",
+                                textDark: "#ecfdf5",
+                            }
+                            : phase === "saved"
+                                ? {
+                                    bgCell: "rgba(6, 48, 37, 0.9)",
+                                    borderColor: "#10b981",
+                                    textDark: "#ecfdf5",
+                                }
+                                : hasPendingChange
+                                    ? {
+                                        bgCell: "rgba(59, 35, 6, 0.9)",
+                                        borderColor: "#f59e0b",
+                                        textDark: "#fef3c7",
+                                    }
+                                    : undefined;
 
         const rawValue = rowData[columnMeta.key];
 
@@ -882,6 +1085,8 @@ function MasterDataGridApp(props: RootDataset) {
     };
 
     const handleCellsEdited = (edits: readonly EditListItem[]) => {
+        const changed: PendingChange[] = [];
+
         edits.forEach((edit) => {
             const [col, rowIndex] = edit.location;
             const columnMeta = getColumnMeta(col);
@@ -900,9 +1105,45 @@ function MasterDataGridApp(props: RootDataset) {
 
             updateRowValue(rowIndex, columnMeta.key, nextValue);
             trackPendingChange(row.id, columnMeta.key, previousValue, nextValue);
+            changed.push({
+                id: row.id,
+                field: columnMeta.key,
+                value: nextValue,
+                previousValue,
+            });
         });
 
+        if (changed.length > 0) {
+            queueBatchSave(changed, "auto");
+        }
+
         return true;
+    };
+
+    const handleGridSelectionChange = (selection: GridSelection) => {
+        const selectedCell = selection.current?.cell;
+
+        if (!selectedCell) {
+            setFocusedCellKey(null);
+            return;
+        }
+
+        const context = getEditableCellContext(selectedCell);
+        setFocusedCellKey(context?.changeKey ?? null);
+    };
+
+    const handleCellActivated = (cell: Item) => {
+        const context = getEditableCellContext(cell);
+        if (!context) {
+            return;
+        }
+
+        setFocusedCellKey(context.changeKey);
+        setEditingCellKey(context.changeKey);
+    };
+
+    const handleFinishedEditing = () => {
+        setEditingCellKey(null);
     };
 
     const handleCellClicked = (cell: Item) => {
@@ -959,6 +1200,10 @@ function MasterDataGridApp(props: RootDataset) {
                                                 setNotice("");
                                                 setPendingChanges({});
                                                 setCellErrors({});
+                                                setFocusedCellKey(null);
+                                                setEditingCellKey(null);
+                                                setSavingCellKeys({});
+                                                setSavedCellKeys({});
                                                 setSaveState("idle");
                                             });
                                         }}
@@ -1101,11 +1346,14 @@ function MasterDataGridApp(props: RootDataset) {
                                 getCellContent={getCellContent}
                                 onCellsEdited={handleCellsEdited}
                                 onCellClicked={handleCellClicked}
+                                onGridSelectionChange={handleGridSelectionChange}
+                                onCellActivated={handleCellActivated}
+                                onFinishedEditing={handleFinishedEditing}
                                 onPaste={true}
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
-                                cellActivationBehavior="second-click"
+                                cellActivationBehavior="double-click"
                                 editOnType={true}
                                 trapFocus={true}
                                 smoothScrollX={true}

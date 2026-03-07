@@ -677,6 +677,14 @@ class AdminMasterDataController extends Controller
                 $fieldRules[] = Rule::unique($table, 'name')->ignore($recordId);
             }
 
+            if ($resource === 'scents' && $key === 'abbreviation') {
+                $fieldRules[] = Rule::unique('scents', 'abbreviation')->ignore($recordId);
+            }
+
+            if ($resource === 'oil-abbreviations' && $key === 'abbreviation') {
+                $fieldRules[] = Rule::unique('oil_abbreviations', 'abbreviation')->ignore($recordId);
+            }
+
             if ($resource === 'sizes' && $key === 'code') {
                 $fieldRules[] = Rule::unique('sizes', 'code')->ignore($recordId);
             }

@@ -48,11 +48,35 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .mf-admin-subnav-link{
+      display: flex;
+      min-height: 1.9rem;
+      align-items: center;
+      border-radius: .6rem;
+      border: 1px solid transparent;
+      padding: .28rem .6rem;
+      font-size: .72rem;
+      line-height: 1.05rem;
+      color: var(--mf-sidebar-muted);
+      transition: all 180ms ease;
+    }
+    .mf-admin-subnav-link:hover{
+      border-color: rgba(var(--mf-accent), .18);
+      background: rgba(var(--mf-accent), .07);
+      color: var(--mf-sidebar-text);
+    }
+    .mf-admin-subnav-link.mf-admin-subnav-link-active{
+      border-color: rgba(var(--mf-accent), .30);
+      background: rgba(var(--mf-accent), .14);
+      color: var(--mf-sidebar-text);
+      font-weight: 600;
+    }
     .mf-sidebar-sort-item { cursor: grab; touch-action: manipulation; }
     .mf-sidebar-sort-item:active { cursor: grabbing; }
     .mf-sidebar-ghost { opacity: .45; }
     .mf-sidebar-drag { opacity: .8; }
     .mf-sidebar-sort-item + .mf-sidebar-sort-item { margin-top: .18rem; }
+    #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-admin-subnav{ display:none; }
 
     .mf-active-pill { position: relative; }
     .mf-active-pill::after{
@@ -1237,6 +1261,7 @@
   $eventsActive = request()->routeIs('events.*');
   $marketListsActive = request()->routeIs('markets.lists.*');
   $marketsActive = request()->routeIs('markets.browser.*');
+  $adminTab = is_string(request()->query('tab')) ? (string) request()->query('tab') : '';
 
   $sidebarItems = [];
   if (!$isPouring) {
@@ -1274,6 +1299,72 @@
       ->map(fn ($key) => $sidebarItemsByKey->get($key))
       ->filter()
       ->values();
+
+  $adminSubItems = [];
+  if ($isAdmin || $isManager) {
+      $adminSubItems = [
+          [
+              'key' => 'master-data',
+              'label' => 'Master Data',
+              'href' => route('admin.index', ['tab' => 'master-data', 'resource' => (string) request()->query('resource', 'scents') ?: 'scents']),
+              'current' => $adminActive && $adminTab === 'master-data',
+          ],
+          ...($isAdmin ? [[
+              'key' => 'users',
+              'label' => 'Manage Users',
+              'href' => route('admin.index', ['tab' => 'users']),
+              'current' => $adminActive && $adminTab === 'users',
+          ]] : []),
+          [
+              'key' => 'imports',
+              'label' => 'Fix Imports',
+              'href' => route('admin.index', ['tab' => 'imports']),
+              'current' => $adminActive && $adminTab === 'imports',
+          ],
+          [
+              'key' => 'scent-intake',
+              'label' => 'Scent Intake',
+              'href' => route('admin.index', ['tab' => 'scent-intake']),
+              'current' => $adminActive && $adminTab === 'scent-intake',
+          ],
+          [
+              'key' => 'catalog',
+              'label' => 'Scent Catalog',
+              'href' => route('admin.index', ['tab' => 'catalog']),
+              'current' => $adminActive && $adminTab === 'catalog',
+          ],
+          [
+              'key' => 'sizes-wicks',
+              'label' => 'Sizes & Wicks',
+              'href' => route('admin.index', ['tab' => 'sizes-wicks']),
+              'current' => $adminActive && $adminTab === 'sizes-wicks',
+          ],
+          [
+              'key' => 'wholesale-custom',
+              'label' => 'Wholesale Custom Scents',
+              'href' => route('admin.index', ['tab' => 'wholesale-custom']),
+              'current' => $adminActive && $adminTab === 'wholesale-custom',
+          ],
+          [
+              'key' => 'blends',
+              'label' => 'Oil Blends',
+              'href' => route('admin.index', ['tab' => 'blends']),
+              'current' => $adminActive && $adminTab === 'blends',
+          ],
+          [
+              'key' => 'candle-club',
+              'label' => 'Candle Club',
+              'href' => route('admin.index', ['tab' => 'candle-club']),
+              'current' => $adminActive && $adminTab === 'candle-club',
+          ],
+          [
+              'key' => 'oils',
+              'label' => 'Scent Oil Abbreviations',
+              'href' => route('admin.index', ['tab' => 'oils']),
+              'current' => $adminActive && $adminTab === 'oils',
+          ],
+      ];
+  }
 
   $unresolvedExceptions = 0;
   $latestRun = null;
@@ -1356,6 +1447,19 @@
                 <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
                   <span class="mf-nav-label">{{ $item['label'] }}</span>
                 </flux:sidebar.item>
+                @if($item['key'] === 'administration' && count($adminSubItems) > 0)
+                  <div class="mf-admin-subnav ml-8 mt-1 space-y-1">
+                    @foreach($adminSubItems as $subItem)
+                      <a
+                        href="{{ $subItem['href'] }}"
+                        wire:navigate
+                        class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                      >
+                        <span class="truncate">{{ $subItem['label'] }}</span>
+                      </a>
+                    @endforeach
+                  </div>
+                @endif
               </div>
             @endforeach
             <details class="ml-3 rounded-xl border px-2 py-1 mf-sidebar-panel" {{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') || (request()->routeIs('wiki.article') && request()->route('slug') === 'market-room') ? 'open' : '' }}>

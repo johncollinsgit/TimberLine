@@ -208,6 +208,45 @@ test('admin master data bulk update saves valid cells and returns cell-level err
     expect((string) $alpha->fresh()->name)->toBe('Alpha');
 });
 
+test('admin master data bulk update enforces scent abbreviation uniqueness', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    Scent::query()->create([
+        'name' => 'First scent',
+        'display_name' => 'First Scent',
+        'abbreviation' => 'HS',
+        'is_active' => true,
+    ]);
+
+    $second = Scent::query()->create([
+        'name' => 'Second scent',
+        'display_name' => 'Second Scent',
+        'abbreviation' => 'SN',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->postJson('/admin/master-data/scents/bulk-update', [
+            'changes' => [
+                [
+                    'id' => $second->id,
+                    'field' => 'abbreviation',
+                    'value' => 'HS',
+                ],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('updated', 0)
+        ->assertJsonCount(1, 'errors')
+        ->assertJsonPath('errors.0.id', $second->id)
+        ->assertJsonPath('errors.0.field', 'abbreviation');
+
+    expect((string) ($second->fresh()->abbreviation ?? ''))->toBe('SN');
+});
+
 test('blend components enforce a unique blend and base oil pair at the database layer', function () {
     $blend = Blend::query()->create([
         'name' => 'Morning Blend',
