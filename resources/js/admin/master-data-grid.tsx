@@ -1283,7 +1283,6 @@ function MasterDataGridApp(props: RootDataset) {
                                 width={gridBounds.width}
                                 height={gridViewportHeight}
                                 rowMarkers={{ kind: "number", theme: gridTheme }}
-                                cellActivationBehavior="second-click"
                                 editOnType={true}
                                 trapFocus={true}
                                 smoothScrollX={true}
@@ -1294,6 +1293,7 @@ function MasterDataGridApp(props: RootDataset) {
                                 rowHeight={40}
                                 headerHeight={42}
                                 theme={gridTheme}
+                                cellActivationBehavior="double-click"
                             />
                         ) : (
                             <div className="flex h-full items-center justify-center text-sm text-emerald-50/60">

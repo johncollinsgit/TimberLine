@@ -998,11 +998,14 @@
     /* Interaction guardrails: decorative layers must not block controls. */
     #app-main :where(a, button, input, select, textarea, summary, [role="button"], [role="tab"]){
       pointer-events: auto;
-      position: relative;
-      z-index: 1;
     }
     #app-main :where(.pointer-events-none){
       z-index: 0;
+    }
+    /* Glide Data Grid editors use absolute overlays; don't override their positioning. */
+    #master-data-grid :where(input.gdg-input, textarea.gdg-input){
+      position: static !important;
+      z-index: auto !important;
     }
     .mf-app-card :where(a:hover, button:hover){
       border-color: var(--mf-nav-border-active);
