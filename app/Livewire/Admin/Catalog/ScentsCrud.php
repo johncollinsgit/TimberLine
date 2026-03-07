@@ -53,6 +53,18 @@ class ScentsCrud extends Component
     public bool $showDelete = false;
     public ?int $deletingId = null;
 
+    public ?int $inlineRowId = null;
+    public ?string $inlineField = null;
+    public mixed $inlineValue = null;
+    public ?int $focusedRowId = null;
+    public ?string $focusedField = null;
+    /** @var array<string,string> */
+    public array $inlineErrors = [];
+    /** @var array<string,bool> */
+    public array $inlineSaving = [];
+    /** @var array<string,bool> */
+    public array $inlineSaved = [];
+
     public ?string $createErrorBanner = null;
     public ?string $editErrorBanner = null;
 
@@ -71,6 +83,121 @@ class ScentsCrud extends Component
     public function updatedSearch(): void
     {
         $this->resetPage();
+    }
+
+    public function startInlineEdit(int $scentId, string $field): void
+    {
+        if (! in_array($field, $this->inlineEditableFields(), true)) {
+            return;
+        }
+
+        $scent = Scent::query()
+            ->with(['canonicalScent:id,name,display_name', 'sourceWholesaleCustomScent:id,account_name,custom_scent_name', 'oilBlend:id,name'])
+            ->find($scentId);
+
+        if (! $scent) {
+            return;
+        }
+
+        $this->inlineRowId = $scentId;
+        $this->inlineField = $field;
+        $this->inlineValue = $this->inlineDisplayValue($scent, $field);
+        $this->focusedRowId = $scentId;
+        $this->focusedField = $field;
+        unset($this->inlineErrors[$this->inlineCellKey($scentId, $field)]);
+    }
+
+    public function cancelInlineEdit(): void
+    {
+        $this->inlineRowId = null;
+        $this->inlineField = null;
+        $this->inlineValue = null;
+    }
+
+    public function focusInlineCell(int $scentId, string $field): void
+    {
+        if (! in_array($field, $this->inlineEditableFields(), true)) {
+            return;
+        }
+
+        $this->focusedRowId = $scentId;
+        $this->focusedField = $field;
+    }
+
+    public function commitInlineEdit(string $direction = 'stay'): void
+    {
+        if (! $this->inlineRowId || ! $this->inlineField) {
+            return;
+        }
+
+        $scentId = (int) $this->inlineRowId;
+        $field = (string) $this->inlineField;
+        $cellKey = $this->inlineCellKey($scentId, $field);
+        $this->inlineSaving[$cellKey] = true;
+        unset($this->inlineErrors[$cellKey], $this->inlineSaved[$cellKey]);
+
+        try {
+            $scent = Scent::query()->findOrFail($scentId);
+            $payload = $this->normalizedPayload($this->payloadFromScent($scent));
+            $currentValue = $payload[$field] ?? null;
+            $payload[$field] = $this->normalizeInlineFieldValue($field, $this->inlineValue);
+
+            if ($field === 'oil_blend_id' && ! blank($payload['oil_blend_id'] ?? null)) {
+                $payload['is_blend'] = true;
+            }
+
+            if ($field === 'blend_oil_count' && ! blank($payload['blend_oil_count'] ?? null)) {
+                $payload['is_blend'] = true;
+            }
+
+            if (! (bool) ($payload['is_blend'] ?? false)) {
+                $payload['oil_blend_id'] = null;
+                $payload['blend_oil_count'] = null;
+            }
+
+            if ($this->inlineValueUnchanged($field, $currentValue, $payload[$field] ?? null)) {
+                $this->inlineSaved[$cellKey] = true;
+                if ($direction === 'next' || $direction === 'prev') {
+                    $this->moveInlineCursor($direction === 'next' ? 1 : -1);
+                } else {
+                    $this->cancelInlineEdit();
+                }
+
+                return;
+            }
+
+            $validator = validator(['edit' => $payload], $this->rulesFor('edit'));
+            $this->validateRecipeRules($validator, $payload, 'edit', $scentId);
+            $data = $validator->validate()['edit'];
+            $this->assertUniqueFields($data, 'edit', $scentId);
+
+            DB::transaction(function () use ($scent, $data): void {
+                $this->persistScent($scent, $data, 'edit');
+            });
+
+            $this->inlineSaved[$cellKey] = true;
+            if ($direction === 'next' || $direction === 'prev') {
+                $this->moveInlineCursor($direction === 'next' ? 1 : -1);
+            } else {
+                $this->cancelInlineEdit();
+            }
+        } catch (ValidationException $e) {
+            $this->inlineErrors[$cellKey] = $this->inlineValidationErrorMessage($e, $field);
+            $this->dispatch('toast', ['message' => $this->inlineErrors[$cellKey], 'style' => 'error']);
+        } catch (QueryException $e) {
+            $this->inlineErrors[$cellKey] = $this->databaseErrorMessageForException($e, $field);
+            $this->dispatch('toast', ['message' => $this->inlineErrors[$cellKey], 'style' => 'error']);
+        } catch (Throwable $e) {
+            Log::error('admin.catalog.scents.inline.failed', [
+                'scent_id' => $scentId,
+                'field' => $field,
+                'error' => $e->getMessage(),
+            ]);
+            $this->inlineErrors[$cellKey] = 'Save failed due to a server error.';
+            $this->dispatch('toast', ['message' => $this->inlineErrors[$cellKey], 'style' => 'error']);
+        } finally {
+            unset($this->inlineSaving[$cellKey]);
+        }
     }
 
     public function setSort(string $field): void
@@ -1076,6 +1203,231 @@ class ScentsCrud extends Component
         }, $rows));
     }
 
+    protected function inlineEditableFields(): array
+    {
+        return [
+            'name',
+            'display_name',
+            'abbreviation',
+            'oil_reference_name',
+            'canonical_scent_id',
+            'source_wholesale_custom_scent_id',
+            'is_blend',
+            'oil_blend_id',
+            'blend_oil_count',
+            'is_active',
+        ];
+    }
+
+    protected function inlineCellKey(int $id, string $field): string
+    {
+        return $id . ':' . $field;
+    }
+
+    protected function payloadFromScent(Scent $scent): array
+    {
+        return [
+            'name' => $scent->name,
+            'display_name' => $scent->display_name,
+            'abbreviation' => $scent->abbreviation,
+            'oil_reference_name' => $scent->oil_reference_name,
+            'is_blend' => (bool) $scent->is_blend,
+            'oil_blend_id' => $scent->oil_blend_id,
+            'blend_oil_count' => $scent->blend_oil_count,
+            'canonical_scent_id' => $scent->canonical_scent_id,
+            'source_wholesale_custom_scent_id' => $scent->source_wholesale_custom_scent_id,
+            'recipe_components' => $this->recipeComponentsForForm($scent),
+            'create_inline_blend' => false,
+            'inline_blend_name' => '',
+            'is_active' => (bool) $scent->is_active,
+        ];
+    }
+
+    protected function inlineDisplayValue(Scent $scent, string $field): mixed
+    {
+        return match ($field) {
+            'canonical_scent_id' => $scent->canonicalScent
+                ? ($scent->canonicalScent->display_name ?: $scent->canonicalScent->name)
+                : '',
+            'source_wholesale_custom_scent_id' => $scent->sourceWholesaleCustomScent
+                ? ($scent->sourceWholesaleCustomScent->custom_scent_name . ' · ' . $scent->sourceWholesaleCustomScent->account_name)
+                : '',
+            'oil_blend_id' => $scent->oilBlend?->name ?? '',
+            default => $scent->getAttribute($field),
+        };
+    }
+
+    protected function normalizeInlineFieldValue(string $field, mixed $value): mixed
+    {
+        if (in_array($field, ['is_blend', 'is_active'], true)) {
+            if (is_bool($value)) {
+                return $value;
+            }
+            $normalized = mb_strtolower(trim((string) $value));
+            return in_array($normalized, ['1', 'true', 'yes', 'y', 'on', 'blend', 'active'], true);
+        }
+
+        if ($field === 'blend_oil_count') {
+            if (blank($value)) {
+                return null;
+            }
+            return max(1, (int) $value);
+        }
+
+        if ($field === 'oil_blend_id') {
+            if (blank($value)) {
+                return null;
+            }
+            $fromToken = $this->extractTokenId($value);
+            if ($fromToken && Blend::query()->whereKey($fromToken)->exists()) {
+                return $fromToken;
+            }
+            if (is_numeric($value) && Blend::query()->whereKey((int) $value)->exists()) {
+                return (int) $value;
+            }
+            $normalized = mb_strtolower(trim((string) $value));
+            $match = Blend::query()
+                ->whereRaw('lower(name) = ?', [$normalized])
+                ->orWhereRaw('lower(name) like ?', ['%' . $normalized . '%'])
+                ->value('id');
+            return $match ? (int) $match : null;
+        }
+
+        if ($field === 'canonical_scent_id') {
+            if (blank($value)) {
+                return null;
+            }
+            $fromToken = $this->extractTokenId($value);
+            if ($fromToken && Scent::query()->whereKey($fromToken)->exists()) {
+                return $fromToken;
+            }
+            $normalized = mb_strtolower(trim((string) $value));
+            $match = Scent::query()
+                ->where(function ($query) use ($normalized): void {
+                    $query->whereRaw('lower(name) = ?', [$normalized])
+                        ->orWhereRaw('lower(display_name) = ?', [$normalized])
+                        ->orWhereRaw('lower(name) like ?', ['%' . $normalized . '%'])
+                        ->orWhereRaw('lower(coalesce(display_name, \'\')) like ?', ['%' . $normalized . '%']);
+                })
+                ->orderByRaw('case when lower(name) = ? then 0 when lower(display_name) = ? then 0 else 1 end', [$normalized, $normalized])
+                ->value('id');
+            return $match ? (int) $match : null;
+        }
+
+        if ($field === 'source_wholesale_custom_scent_id') {
+            if (blank($value)) {
+                return null;
+            }
+            $fromToken = $this->extractTokenId($value);
+            if ($fromToken && WholesaleCustomScent::query()->whereKey($fromToken)->exists()) {
+                return $fromToken;
+            }
+            if (is_numeric($value) && WholesaleCustomScent::query()->whereKey((int) $value)->exists()) {
+                return (int) $value;
+            }
+            $normalized = mb_strtolower(trim((string) $value));
+            $match = WholesaleCustomScent::query()
+                ->whereRaw("lower(concat(custom_scent_name, ' · ', account_name)) = ?", [$normalized])
+                ->orWhereRaw('lower(custom_scent_name) = ?', [$normalized])
+                ->orWhereRaw('lower(custom_scent_name) like ?', ['%' . $normalized . '%'])
+                ->orWhereRaw('lower(account_name) like ?', ['%' . $normalized . '%'])
+                ->value('id');
+            return $match ? (int) $match : null;
+        }
+
+        return is_string($value) ? trim($value) : $value;
+    }
+
+    protected function extractTokenId(mixed $value): ?int
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        if (! preg_match('/^\s*(\d+)\s*::/', $value, $matches)) {
+            return null;
+        }
+
+        $id = (int) ($matches[1] ?? 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    protected function inlineValueUnchanged(string $field, mixed $before, mixed $after): bool
+    {
+        if (in_array($field, ['is_blend', 'is_active'], true)) {
+            return (bool) $before === (bool) $after;
+        }
+
+        if ($field === 'blend_oil_count') {
+            if (blank($before) && blank($after)) {
+                return true;
+            }
+
+            return (int) $before === (int) $after;
+        }
+
+        if (in_array($field, ['oil_blend_id', 'canonical_scent_id', 'source_wholesale_custom_scent_id'], true)) {
+            if (blank($before) && blank($after)) {
+                return true;
+            }
+
+            return (int) $before === (int) $after;
+        }
+
+        return trim((string) ($before ?? '')) === trim((string) ($after ?? ''));
+    }
+
+    protected function inlineValidationErrorMessage(ValidationException $exception, string $field): string
+    {
+        $errors = $exception->errors();
+        $preferredKey = 'edit.' . $field;
+
+        if (! empty($errors[$preferredKey])) {
+            return (string) $errors[$preferredKey][0];
+        }
+
+        return (string) collect($errors)->flatten()->first() ?: 'Could not save this field.';
+    }
+
+    protected function moveInlineCursor(int $direction): void
+    {
+        if (! $this->inlineRowId || ! $this->inlineField) {
+            return;
+        }
+
+        $fields = $this->inlineEditableFields();
+        $index = array_search($this->inlineField, $fields, true);
+        if ($index === false) {
+            $this->cancelInlineEdit();
+            return;
+        }
+
+        $next = $index + $direction;
+        if (! isset($fields[$next])) {
+            $this->cancelInlineEdit();
+            return;
+        }
+
+        $this->startInlineEdit((int) $this->inlineRowId, $fields[$next]);
+    }
+
+    protected function databaseErrorMessageForException(QueryException $e, string $field): string
+    {
+        $message = mb_strtolower($e->getMessage());
+        if (str_contains($message, 'abbreviation')) {
+            return 'Abbrev already exists.';
+        }
+        if (str_contains($message, 'display_name')) {
+            return 'Display Name already exists.';
+        }
+        if (str_contains($message, 'name')) {
+            return 'Name already exists.';
+        }
+
+        return 'Could not save this field.';
+    }
+
     public function render()
     {
         $scents = Scent::query()
@@ -1114,8 +1466,8 @@ class ScentsCrud extends Component
             'scents' => $scents,
             'blends' => Blend::query()->orderBy('name')->get(['id', 'name']),
             'baseOils' => BaseOil::query()->orderBy('name')->get(['id', 'name']),
+            'canonicalScents' => Scent::query()->orderByRaw('coalesce(display_name, name)')->get(['id', 'name', 'display_name']),
             'wholesaleSources' => $wholesaleSources,
         ])->layout('layouts.app');
     }
 }
-

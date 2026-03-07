@@ -175,3 +175,48 @@ test('apply selected wholesale source hydrates canonical and recipe sources', fu
         ->assertSet('create.canonical_scent_id', $canonical->id)
         ->assertSet('create.recipe_components.0.type', 'blend');
 });
+
+test('can update a scent field with inline editing', function () {
+    $seed = (string) random_int(1000, 9999);
+    $scent = Scent::query()->create([
+        'name' => 'inline honeysuckle ' . $seed,
+        'display_name' => 'Inline Honeysuckle ' . $seed,
+        'abbreviation' => 'IH' . $seed,
+        'is_active' => true,
+    ]);
+
+    $component = Livewire::test(ScentsCrud::class)
+        ->call('startInlineEdit', $scent->id, 'display_name')
+        ->set('inlineValue', 'Honeysuckle Updated')
+        ->call('commitInlineEdit');
+
+    $inlineErrors = $component->get('inlineErrors');
+    expect($inlineErrors)->not->toHaveKey($scent->id . ':display_name');
+    expect((string) $scent->fresh()->display_name)->toBe('Honeysuckle Updated');
+});
+
+test('inline editing shows duplicate errors instead of silently failing', function () {
+    Scent::query()->create([
+        'name' => 'mint tea',
+        'display_name' => 'Mint Tea',
+        'abbreviation' => 'MT',
+        'is_active' => true,
+    ]);
+
+    $target = Scent::query()->create([
+        'name' => 'vanilla mint',
+        'display_name' => 'Vanilla Mint',
+        'abbreviation' => 'VM',
+        'is_active' => true,
+    ]);
+
+    $component = Livewire::test(ScentsCrud::class)
+        ->call('startInlineEdit', $target->id, 'abbreviation')
+        ->set('inlineValue', 'MT')
+        ->call('commitInlineEdit');
+
+    $inlineErrors = $component->get('inlineErrors');
+    expect($inlineErrors)->toHaveKey($target->id . ':abbreviation');
+    expect($inlineErrors[$target->id . ':abbreviation'])->toContain('abbreviation');
+    expect((string) $target->fresh()->abbreviation)->toBe('VM');
+});
