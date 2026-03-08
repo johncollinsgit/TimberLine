@@ -28,23 +28,6 @@ class ScentsCrud extends Component
     public string $sort = 'name';
     public string $dir = 'asc';
     public int $perPage = 25;
-    public bool $showCreate = false;
-
-    public array $create = [
-        'name' => '',
-        'display_name' => '',
-        'abbreviation' => '',
-        'oil_reference_name' => '',
-        'is_blend' => false,
-        'oil_blend_id' => null,
-        'blend_oil_count' => null,
-        'canonical_scent_id' => null,
-        'source_wholesale_custom_scent_id' => null,
-        'recipe_components' => [],
-        'create_inline_blend' => false,
-        'inline_blend_name' => '',
-        'is_active' => true,
-    ];
 
     public bool $showEdit = false;
     public ?int $editingId = null;
@@ -65,11 +48,8 @@ class ScentsCrud extends Component
     /** @var array<string,bool> */
     public array $inlineSaved = [];
 
-    public ?string $createErrorBanner = null;
     public ?string $editErrorBanner = null;
 
-    public ?int $createCanonicalSuggestionId = null;
-    public ?string $createCanonicalSuggestionLabel = null;
     public ?int $editCanonicalSuggestionId = null;
     public ?string $editCanonicalSuggestionLabel = null;
 
@@ -213,11 +193,6 @@ class ScentsCrud extends Component
     #[On('scentSelected')]
     public function handleScentSelected(string $key, ?int $scentId = null): void
     {
-        if ($key === 'catalog-scent-create-canonical') {
-            $this->create['canonical_scent_id'] = $scentId;
-            return;
-        }
-
         if ($key === 'catalog-scent-edit-canonical') {
             $this->edit['canonical_scent_id'] = $scentId;
         }
@@ -228,19 +203,9 @@ class ScentsCrud extends Component
         $this->redirect($this->wizardUrl(), navigate: true);
     }
 
-    public function closeCreate(): void
-    {
-        $this->showCreate = false;
-        $this->createErrorBanner = null;
-        $this->createCanonicalSuggestionId = null;
-        $this->createCanonicalSuggestionLabel = null;
-        $this->resetCreateState();
-        $this->resetValidation();
-    }
-
     public function create(): void
     {
-        $this->redirect($this->wizardUrl($this->wizardPrefillFromCreateState()), navigate: true);
+        $this->redirect($this->wizardUrl(), navigate: true);
     }
 
     public function openEdit(int $id): void
@@ -373,11 +338,6 @@ class ScentsCrud extends Component
 
     public function addRecipeComponent(string $target): void
     {
-        if ($target === 'create') {
-            $this->create['recipe_components'][] = $this->blankRecipeComponent();
-            return;
-        }
-
         if ($target === 'edit') {
             $this->edit['recipe_components'][] = $this->blankRecipeComponent();
         }
@@ -385,12 +345,6 @@ class ScentsCrud extends Component
 
     public function removeRecipeComponent(string $target, int $index): void
     {
-        if ($target === 'create') {
-            unset($this->create['recipe_components'][$index]);
-            $this->create['recipe_components'] = array_values($this->create['recipe_components']);
-            return;
-        }
-
         if ($target === 'edit') {
             unset($this->edit['recipe_components'][$index]);
             $this->edit['recipe_components'] = array_values($this->edit['recipe_components']);
@@ -399,7 +353,7 @@ class ScentsCrud extends Component
 
     public function applySelectedWholesaleSource(string $target): void
     {
-        $payload = $target === 'edit' ? $this->edit : $this->create;
+        $payload = $this->edit;
         $sourceId = $payload['source_wholesale_custom_scent_id'] ?? null;
         $sourceId = blank($sourceId) ? null : (int) $sourceId;
         if (! $sourceId) {
@@ -412,32 +366,15 @@ class ScentsCrud extends Component
         }
 
         $mapped = $this->hydrateFromWholesaleSource($payload, $source);
-        if ($target === 'edit') {
-            $this->edit = array_merge($this->edit, $mapped);
-            $this->ensureRecipeSeed('edit');
-        } else {
-            $this->create = array_merge($this->create, $mapped);
-            $this->ensureRecipeSeed('create');
-        }
+        $this->edit = array_merge($this->edit, $mapped);
+        $this->ensureRecipeSeed('edit');
     }
 
     public function applyCanonicalSuggestion(string $target): void
     {
-        if ($target === 'create' && $this->createCanonicalSuggestionId) {
-            $this->create['canonical_scent_id'] = $this->createCanonicalSuggestionId;
-            return;
-        }
-
         if ($target === 'edit' && $this->editCanonicalSuggestionId) {
             $this->edit['canonical_scent_id'] = $this->editCanonicalSuggestionId;
         }
-    }
-
-    public function updatedCreateName($value): void
-    {
-        [$id, $label] = $this->canonicalSuggestionForName((string) $value);
-        $this->createCanonicalSuggestionId = $id;
-        $this->createCanonicalSuggestionLabel = $label;
     }
 
     public function updatedEditName($value): void
@@ -445,16 +382,6 @@ class ScentsCrud extends Component
         [$id, $label] = $this->canonicalSuggestionForName((string) $value, $this->editingId);
         $this->editCanonicalSuggestionId = $id;
         $this->editCanonicalSuggestionLabel = $label;
-    }
-
-    public function updatedCreateIsBlend($value): void
-    {
-        if (! filter_var($value, FILTER_VALIDATE_BOOL)) {
-            $this->clearBlendFields('create');
-            return;
-        }
-
-        $this->ensureRecipeSeed('create');
     }
 
     public function updatedEditIsBlend($value): void
@@ -465,16 +392,6 @@ class ScentsCrud extends Component
         }
 
         $this->ensureRecipeSeed('edit');
-    }
-
-    protected function validateCreate(): array
-    {
-        $payload = $this->normalizedPayload($this->create);
-        $validator = validator(['create' => $payload], $this->rulesFor('create'));
-        $this->validateRecipeRules($validator, $payload, 'create');
-        $validated = $validator->validate();
-
-        return $validated['create'];
     }
 
     protected function validateEdit(): array
@@ -1044,15 +961,6 @@ class ScentsCrud extends Component
 
     protected function clearBlendFields(string $target): void
     {
-        if ($target === 'create') {
-            $this->create['oil_blend_id'] = null;
-            $this->create['blend_oil_count'] = null;
-            $this->create['recipe_components'] = [];
-            $this->create['create_inline_blend'] = false;
-            $this->create['inline_blend_name'] = '';
-            return;
-        }
-
         if ($target === 'edit') {
             $this->edit['oil_blend_id'] = null;
             $this->edit['blend_oil_count'] = null;
@@ -1064,11 +972,6 @@ class ScentsCrud extends Component
 
     protected function ensureRecipeSeed(string $target): void
     {
-        if ($target === 'create' && (bool) ($this->create['is_blend'] ?? false) && empty($this->create['recipe_components'])) {
-            $this->create['recipe_components'][] = $this->blankRecipeComponent();
-            return;
-        }
-
         if ($target === 'edit' && (bool) ($this->edit['is_blend'] ?? false) && empty($this->edit['recipe_components'])) {
             $this->edit['recipe_components'][] = $this->blankRecipeComponent();
         }
@@ -1080,25 +983,6 @@ class ScentsCrud extends Component
             'type' => 'base_oil',
             'id' => null,
             'ratio_weight' => 1,
-        ];
-    }
-
-    protected function resetCreateState(): void
-    {
-        $this->create = [
-            'name' => '',
-            'display_name' => '',
-            'abbreviation' => '',
-            'oil_reference_name' => '',
-            'is_blend' => false,
-            'oil_blend_id' => null,
-            'blend_oil_count' => null,
-            'canonical_scent_id' => null,
-            'source_wholesale_custom_scent_id' => null,
-            'recipe_components' => [],
-            'create_inline_blend' => false,
-            'inline_blend_name' => '',
-            'is_active' => true,
         ];
     }
 
@@ -1425,17 +1309,5 @@ class ScentsCrud extends Component
         ], $overrides), fn ($value) => $value !== null && $value !== '');
 
         return route('admin.scent-wizard', $query);
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    protected function wizardPrefillFromCreateState(): array
-    {
-        return [
-            'raw' => trim((string) ($this->create['name'] ?? '')),
-            'account' => '',
-            'store' => (bool) ($this->create['is_wholesale_custom'] ?? false) ? 'wholesale' : '',
-        ];
     }
 }

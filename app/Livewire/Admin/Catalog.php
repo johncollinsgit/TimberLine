@@ -8,6 +8,10 @@ use Livewire\Component;
 
 class Catalog extends Component
 {
+    /**
+     * @deprecated Legacy component kept for backward compatibility only.
+     *             Active admin catalog routes use App\Livewire\Admin\Catalog\ScentsCrud.
+     */
     public string $tab = 'scents'; // scents | sizes
 
     // Create forms
@@ -52,18 +56,9 @@ class Catalog extends Component
     // --- SCENTS ---
     public function createScent(): void
     {
-        $validated = validator(
-            ['name' => $this->newScentName],
-            ['name' => ['required', 'string', 'max:255', 'unique:scents,name']]
-        )->validate();
-
-        Scent::query()->create([
-            'name' => trim($validated['name']),
-            'is_active' => true,
-        ]);
-
-        $this->newScentName = '';
-        $this->rehydrateEdits();
+        $this->redirectRoute('admin.scent-wizard', [
+            'return_to' => route('admin.index', ['tab' => 'catalog']),
+        ], navigate: true);
     }
 
     public function saveScent(int $id): void

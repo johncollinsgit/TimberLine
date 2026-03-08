@@ -46,6 +46,10 @@ Phase 1 applies soft-governance restrictions to reduce duplicate scent creation 
 - Command summary now reports `rows_without_canonical_match`.
 - UI-triggered CSV sync now stays in governed mode (no canonical auto-create by default).
 
+### 7) Migration import intent clarified
+- `master-data:import` description now explicitly states it is a controlled back-office migration tool.
+- Command output now warns operators that this is not a steady-state scent authoring path.
+
 ## UI Role Copy Added
 - Master Data: “Power-user maintenance… use wizard to create new scents.”
 - Catalog: “New scents should be created through the wizard.”
@@ -80,4 +84,3 @@ Phase 1 applies soft-governance restrictions to reduce duplicate scent creation 
 - Add stricter DB-level uniqueness/index alignment for abbreviated fields/aliases where needed.
 - Expand wizard to support richer nested blend authoring in one flow (if desired).
 - Add policy/permissions layer explicitly enforcing “mapping-only” vs “authoring” capabilities per surface.
-

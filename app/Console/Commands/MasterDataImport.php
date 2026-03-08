@@ -25,7 +25,7 @@ class MasterDataImport extends Command
         {--dir= : Path to the extracted normalized export directory}
         {--upsert : Update existing rows instead of skipping them}';
 
-    protected $description = 'Import normalized master data CSVs from a zip export or extracted directory.';
+    protected $description = 'Controlled back-office migration import for master data CSVs (not a steady-state authoring workflow).';
 
     /** @var array<int,string> */
     protected array $warnings = [];
@@ -33,6 +33,7 @@ class MasterDataImport extends Command
     public function handle(): int
     {
         $this->warnings = [];
+        $this->warn('Migration-only tool: use for controlled back-office imports, not day-to-day scent authoring.');
 
         $zipPath = trim((string) $this->option('zip'));
         $directoryPath = trim((string) $this->option('dir'));
