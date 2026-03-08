@@ -222,6 +222,47 @@ class ProgressiveMapper extends Component
         $this->dispatch('intake-done');
     }
 
+    public function markAsNonCandleItem(): void
+    {
+        if ($this->exceptionIds === []) {
+            return;
+        }
+
+        $targetIds = $this->exceptionIds;
+        if ($this->applySameName && $this->sameNameExceptionIds !== []) {
+            $targetIds = array_values(array_unique(array_merge($targetIds, $this->sameNameExceptionIds)));
+        }
+
+        $exceptions = MappingException::query()
+            ->whereIn('id', $targetIds)
+            ->whereNull('excluded_at')
+            ->get(['id']);
+
+        if ($exceptions->isEmpty()) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'No unresolved exceptions found for non-candle exclusion.',
+            ]);
+
+            return;
+        }
+
+        MappingException::query()
+            ->whereIn('id', $exceptions->pluck('id')->all())
+            ->update([
+                'excluded_at' => now(),
+                'excluded_by' => auth()->user()?->email ?? 'system',
+                'excluded_reason' => 'non_candle_item',
+            ]);
+
+        $count = $exceptions->count();
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Marked {$count} item".($count === 1 ? '' : 's').' as non-candle and removed from scent mapping queue.',
+        ]);
+        $this->dispatch('intake-done');
+    }
+
     protected function applyMappingToExceptions(Collection $exceptions, int $scentId): void
     {
         $hasOrderLineScentId = Schema::hasColumn('order_lines', 'scent_id');

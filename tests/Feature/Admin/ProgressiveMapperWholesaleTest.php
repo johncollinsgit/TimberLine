@@ -291,6 +291,42 @@ test('save maps selected scent and applies to same-name unresolved wholesale ite
         ->exists())->toBeTrue();
 });
 
+test('revenue-only action excludes exception without requiring scent mapping', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $first = makeWholesaleException(
+        'Candle Club 6 month prepaid Gift option (Shipping included)',
+        'No variant',
+        'Candle Club 6 month prepaid Gift option (Shipping included)',
+        'Gift Account'
+    );
+    $second = makeWholesaleException(
+        'Candle Club 6 month prepaid Gift option (Shipping included)',
+        'No variant',
+        'Candle Club 6 month prepaid Gift option (Shipping included)',
+        'Gift Account'
+    );
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$first->id]])
+        ->set('applySameName', true)
+        ->call('markAsNonCandleItem')
+        ->assertDispatched('intake-done');
+
+    $first->refresh();
+    $second->refresh();
+
+    expect($first->excluded_at)->not->toBeNull();
+    expect($first->excluded_reason)->toBe('non_candle_item');
+    expect($second->excluded_at)->not->toBeNull();
+    expect($second->excluded_reason)->toBe('non_candle_item');
+    expect($first->resolved_at)->toBeNull();
+    expect($second->resolved_at)->toBeNull();
+});
+
 test('save only maps current exception when same-name apply toggle is off', function () {
     $user = User::factory()->create([
         'role' => 'admin',

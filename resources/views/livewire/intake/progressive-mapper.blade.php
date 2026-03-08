@@ -153,6 +153,13 @@
   @endif
 
   <div class="flex flex-wrap justify-end gap-2">
+    <button
+      type="button"
+      wire:click="markAsNonCandleItem"
+      class="rounded-full border border-sky-300/45 bg-sky-500/20 px-5 py-2 text-sm font-semibold text-sky-50 hover:bg-sky-500/30"
+    >
+      Revenue Only · No Material Usage
+    </button>
     <a
       href="{{ $wizardUrl }}"
       wire:navigate
@@ -167,5 +174,9 @@
     >
       Map Selected Scent
     </button>
+  </div>
+
+  <div class="text-[11px] text-emerald-100/70 text-right">
+    Use revenue-only when the order made money but does not consume candle/room-spray/wax-melt materials.
   </div>
 </div>
