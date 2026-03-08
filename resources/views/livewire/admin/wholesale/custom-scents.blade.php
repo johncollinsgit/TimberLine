@@ -3,6 +3,7 @@
     <div>
       <div class="text-lg font-semibold text-white">Wholesale Custom Scents</div>
       <div class="text-sm text-emerald-50/70">Account-specific scent names mapped to canonical scents.</div>
+      <div class="mt-1 text-xs text-emerald-100/70">Customer-specific naming and mapping. New scents still go through the wizard.</div>
     </div>
     <div class="flex items-center gap-2">
       <label class="relative inline-flex h-10 cursor-pointer items-center rounded-full border border-amber-300/40 bg-amber-500/20 px-4 text-xs font-semibold text-amber-50 hover:bg-amber-500/30">
@@ -18,6 +19,13 @@
       <button wire:click="openCreate" class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white">
         Add custom scent
       </button>
+      <a
+        href="{{ route('admin.scent-wizard', ['return_to' => route('admin.index', ['tab' => 'wholesale-custom'])]) }}"
+        wire:navigate
+        class="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-50"
+      >
+        New Scent Wizard
+      </a>
     </div>
   </div>
   @error('masterCsvUpload')

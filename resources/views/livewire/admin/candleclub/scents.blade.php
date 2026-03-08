@@ -3,8 +3,16 @@
     <div>
       <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Candle Club</div>
       <div class="mt-1 text-2xl font-['Fraunces'] font-semibold text-white">Monthly Scents</div>
-      <div class="mt-2 text-sm text-emerald-50/70">Manage Candle Club scents (month/year + oil reference).</div>
+      <div class="mt-2 text-sm text-emerald-50/70">Assign existing scents to Candle Club month/year slots.</div>
+      <div class="mt-1 text-xs text-emerald-100/70">Create new scents through the New Scent Wizard.</div>
     </div>
+    <a
+      href="{{ route('admin.scent-wizard', ['return_to' => route('admin.index', ['tab' => 'candle-club'])]) }}"
+      wire:navigate
+      class="inline-flex h-9 items-center rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 text-xs font-semibold text-white hover:bg-emerald-500/25"
+    >
+      New Scent Wizard
+    </a>
   </div>
 
   <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -23,22 +31,25 @@
       <input type="number" wire:model.defer="year" class="mt-1 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90" />
       @error('year') <div class="text-xs text-red-400 mt-1">{{ $message }}</div> @enderror
     </div>
-    <div>
-      <label class="text-xs text-emerald-100/60">Scent Name</label>
-      <input type="text" wire:model.defer="scentName" class="mt-1 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90" />
-      @error('scentName') <div class="text-xs text-red-400 mt-1">{{ $message }}</div> @enderror
-    </div>
-    <div>
-      <label class="text-xs text-emerald-100/60">Oil Reference Name</label>
-      <input type="text" wire:model.defer="oilName" class="mt-1 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90" />
-      @error('oilName') <div class="text-xs text-red-400 mt-1">{{ $message }}</div> @enderror
+    <div class="md:col-span-2">
+      <label class="text-xs text-emerald-100/60">Select existing scent</label>
+      <div class="mt-1">
+        <livewire:components.scent-combobox
+          wire:model.live="scentId"
+          :emit-key="'candle-club-scent'"
+          :allow-wholesale-custom="true"
+          :include-inactive="true"
+          wire:key="candle-club-scent-picker"
+        />
+      </div>
+      @error('scentId') <div class="text-xs text-red-400 mt-1">{{ $message }}</div> @enderror
     </div>
   </div>
 
   <div class="mt-4">
     <button type="button" wire:click="save"
       class="rounded-full border border-emerald-400/40 bg-emerald-500/25 px-4 py-2 text-xs font-semibold text-white">
-      Save Candle Club Scent
+      Save Candle Club Assignment
     </button>
   </div>
 

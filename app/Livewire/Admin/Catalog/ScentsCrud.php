@@ -225,15 +225,7 @@ class ScentsCrud extends Component
 
     public function openCreate(): void
     {
-        if ($this->showCreate) {
-            $this->closeCreate();
-            return;
-        }
-
-        $this->createErrorBanner = null;
-        $this->resetValidation();
-        $this->showCreate = true;
-        $this->ensureRecipeSeed('create');
+        $this->redirect($this->wizardUrl(), navigate: true);
     }
 
     public function closeCreate(): void
@@ -248,56 +240,7 @@ class ScentsCrud extends Component
 
     public function create(): void
     {
-        $this->createErrorBanner = null;
-        $this->resetValidation();
-
-        Log::info('admin.catalog.scents.create.request', [
-            'name' => $this->create['name'] ?? null,
-            'display_name' => $this->create['display_name'] ?? null,
-            'abbreviation' => $this->create['abbreviation'] ?? null,
-            'is_blend' => (bool) ($this->create['is_blend'] ?? false),
-            'canonical_scent_id' => $this->create['canonical_scent_id'] ?? null,
-            'source_wholesale_custom_scent_id' => $this->create['source_wholesale_custom_scent_id'] ?? null,
-        ]);
-
-        try {
-            $data = $this->validateCreate();
-            $this->assertUniqueFields($data, 'create');
-
-            DB::transaction(function () use ($data): void {
-                $this->persistScent(null, $data, 'create');
-            });
-
-            $this->closeCreate();
-            $this->dispatch('toast', ['message' => 'Scent created.', 'style' => 'success']);
-        } catch (ValidationException $e) {
-            Log::warning('admin.catalog.scents.create.validation_failed', [
-                'errors' => $e->errors(),
-                'name' => $this->create['name'] ?? null,
-                'abbreviation' => $this->create['abbreviation'] ?? null,
-            ]);
-
-            $this->createErrorBanner = 'Could not save scent. Fix the highlighted fields and try again.';
-            $this->focusFirstInvalidField($e);
-            throw $e;
-        } catch (QueryException $e) {
-            Log::error('admin.catalog.scents.create.query_failed', [
-                'error' => $e->getMessage(),
-                'name' => $this->create['name'] ?? null,
-                'abbreviation' => $this->create['abbreviation'] ?? null,
-            ]);
-
-            $this->applyDatabaseExceptionAsFieldError($e, 'create');
-            $this->createErrorBanner = 'Could not save scent due to a database conflict. Review the fields and try again.';
-        } catch (Throwable $e) {
-            Log::error('admin.catalog.scents.create.failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            $this->createErrorBanner = 'Save failed due to a server error. Please try again.';
-            $this->dispatch('toast', ['message' => $this->createErrorBanner, 'style' => 'error']);
-        }
+        $this->redirect($this->wizardUrl($this->wizardPrefillFromCreateState()), navigate: true);
     }
 
     public function openEdit(int $id): void
@@ -1468,6 +1411,31 @@ class ScentsCrud extends Component
             'baseOils' => BaseOil::query()->orderBy('name')->get(['id', 'name']),
             'canonicalScents' => Scent::query()->orderByRaw('coalesce(display_name, name)')->get(['id', 'name', 'display_name']),
             'wholesaleSources' => $wholesaleSources,
+            'wizardUrl' => $this->wizardUrl(),
         ])->layout('layouts.app');
+    }
+
+    /**
+     * @param  array<string,mixed>  $overrides
+     */
+    protected function wizardUrl(array $overrides = []): string
+    {
+        $query = array_filter(array_merge([
+            'return_to' => route('admin.index', ['tab' => 'catalog']),
+        ], $overrides), fn ($value) => $value !== null && $value !== '');
+
+        return route('admin.scent-wizard', $query);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function wizardPrefillFromCreateState(): array
+    {
+        return [
+            'raw' => trim((string) ($this->create['name'] ?? '')),
+            'account' => '',
+            'store' => (bool) ($this->create['is_wholesale_custom'] ?? false) ? 'wholesale' : '',
+        ];
     }
 }

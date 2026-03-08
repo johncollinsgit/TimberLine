@@ -9,6 +9,10 @@
 @endphp
 
 <div class="space-y-4">
+  <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-50/85">
+    Resolve incoming names by mapping to existing scents. If it does not exist yet, launch the New Scent Wizard.
+  </div>
+
   <div class="rounded-2xl border border-emerald-300/20 bg-emerald-950/35 p-4">
     <div class="text-xs uppercase tracking-[0.28em] text-emerald-100/70">Resolve Mapping</div>
     <div class="mt-2 text-lg font-semibold text-white">{{ $rawLabel !== '' ? $rawLabel : 'Unnamed incoming scent' }}</div>
@@ -100,7 +104,14 @@
     </div>
   @endif
 
-  <div class="flex justify-end">
+  <div class="flex flex-wrap justify-end gap-2">
+    <a
+      href="{{ $wizardUrl }}"
+      wire:navigate
+      class="rounded-full border border-amber-300/45 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-50 hover:bg-amber-500/30"
+    >
+      Launch New Scent Wizard
+    </a>
     <button
       type="button"
       wire:click="save"

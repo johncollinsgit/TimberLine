@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
       <div class="text-lg font-semibold text-white">Oil Blend Recipes</div>
-      <div class="text-sm text-emerald-50/70">Define global blend recipes and component weights.</div>
+      <div class="text-sm text-emerald-50/70">Maintain reusable blend templates used inside scent recipes.</div>
     </div>
     <div class="flex items-center gap-2">
       <button wire:click="openCreate" class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white">

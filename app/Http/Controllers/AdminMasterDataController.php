@@ -91,6 +91,12 @@ class AdminMasterDataController extends Controller
 
     public function store(Request $request, string $resource): JsonResponse
     {
+        if ($resource === 'scents') {
+            return response()->json([
+                'message' => 'New scents must be created through the New Scent Wizard.',
+            ], 422);
+        }
+
         $definition = $this->resourceDefinition($resource);
         /** @var Model $model */
         $model = new $definition['model']();
@@ -292,7 +298,7 @@ class AdminMasterDataController extends Controller
         return [
             'scents' => [
                 'label' => 'Scents',
-                'description' => 'Canonical candle catalog and blend links.',
+                'description' => 'Canonical scent maintenance. Create new scents through the New Scent Wizard.',
                 'model' => Scent::class,
                 'search' => ['name', 'display_name', 'abbreviation'],
                 'sort' => ['name', 'display_name', 'sort_order', 'updated_at'],

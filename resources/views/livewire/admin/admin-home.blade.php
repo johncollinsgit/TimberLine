@@ -43,16 +43,25 @@
                 <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Canonical Tables</div>
                 <h2 class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">Normalized Catalog</h2>
                 <p class="mt-2 max-w-3xl text-sm text-emerald-50/70">
-                  This grid edits the same canonical tables that Scent Intake and the retail planners read from.
+                  Power-user maintenance for existing canonical data. Use the New Scent Wizard to create new scents.
                 </p>
               </div>
-              <a
-                href="{{ route('admin.index', ['tab' => 'scent-intake']) }}"
-                wire:navigate
-                class="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10"
-              >
-                Open Scent Intake
-              </a>
+              <div class="flex flex-wrap gap-2">
+                <a
+                  href="{{ route('admin.scent-wizard', ['return_to' => request()->fullUrl()]) }}"
+                  wire:navigate
+                  class="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25"
+                >
+                  New Scent Wizard
+                </a>
+                <a
+                  href="{{ route('admin.index', ['tab' => 'scent-intake']) }}"
+                  wire:navigate
+                  class="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10"
+                >
+                  Open Scent Intake
+                </a>
+              </div>
             </div>
           </section>
 
@@ -63,6 +72,7 @@
               data-active-resource="{{ $masterDataActiveResource }}"
               data-base-endpoint="{{ $masterDataBaseEndpoint }}"
               data-bulk-endpoint-base="{{ url('/admin/master-data') }}"
+              data-scent-wizard-url="{{ route('admin.scent-wizard') }}"
               class="h-full min-h-0"
             >
               <div class="flex h-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-emerald-50/65">

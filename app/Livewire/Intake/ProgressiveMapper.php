@@ -408,7 +408,24 @@ class ProgressiveMapper extends Component
             'mappingContext' => $context,
             'matchingScents' => $this->matchingScents($context),
             'sameNameExceptionPreview' => $this->sameNameExceptionPreview,
+            'wizardUrl' => $this->wizardUrl($context),
         ]);
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     */
+    protected function wizardUrl(array $context): string
+    {
+        $query = array_filter([
+            'raw' => (string) ($context['raw_label'] ?? ''),
+            'variant' => (string) ($context['raw_variant'] ?? ''),
+            'account' => (string) ($context['account_name'] ?? ''),
+            'store' => (string) ($context['store_key'] ?? ''),
+            'return_to' => route('admin.index', ['tab' => 'scent-intake']),
+        ], fn ($value) => $value !== '');
+
+        return route('admin.scent-wizard', $query);
     }
 
     protected function currentExceptionSample(): ?MappingException

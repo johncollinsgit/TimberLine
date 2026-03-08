@@ -296,20 +296,14 @@ class MappingExceptions extends Component
                 ]);
                 return;
             }
-            $monthName = \Carbon\Carbon::create()->month((int) $this->candleClubMonth)->format('F');
-            $display = $monthName . ' ' . $this->candleClubYear . ' Candle Club — ' . $name;
-            $normalized = Scent::normalizeName($display);
-            $existing = Scent::query()->get()->first(function ($scent) use ($normalized) {
-                return Scent::normalizeName($scent->name) === $normalized;
-            });
-            $scent = $existing ?? Scent::query()->create([
-                'name' => $display,
-                'display_name' => $display,
-                'oil_reference_name' => $this->candleClubOil,
-                'is_candle_club' => true,
-                'is_active' => true,
-            ]);
-            $scentId = $scent->id;
+            if (! $scentId) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'Pick an existing scent or launch the New Scent Wizard first.',
+                ]);
+                $this->redirect($this->wizardUrlForModal($name, true), navigate: true);
+                return;
+            }
 
             \App\Models\CandleClubScent::query()->updateOrCreate(
                 ['month' => (int) $this->candleClubMonth, 'year' => (int) $this->candleClubYear],
@@ -317,57 +311,14 @@ class MappingExceptions extends Component
             );
         }
 
-        if (!$scentId) {
-            $name = trim($this->newScentName);
-            if ($name === '') {
-                $this->dispatch('toast', [
-                    'type' => 'warning',
-                    'message' => 'Enter a scent name or pick an existing scent.',
-                ]);
-                return;
-            }
-
-            $normalized = Scent::normalizeName($name);
-            $existing = Scent::query()->get()->first(function ($scent) use ($normalized) {
-                return Scent::normalizeName($scent->name) === $normalized;
-            });
-            $displayName = $this->newScentDisplay !== '' ? $this->newScentDisplay : $normalized;
-            $isWholesaleCustom = !empty($this->modalExceptionIds)
-                ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->whereNotNull('account_name')->exists()
-                : false;
-
-            $scent = $existing ?? Scent::query()->firstOrCreate(
-                ['name' => $normalized],
-                [
-                    'display_name' => $displayName,
-                    'abbreviation' => $this->newScentAbbr ?: null,
-                    'oil_reference_name' => $this->newScentOil ?: null,
-                    'is_blend' => $this->newScentIsBlend,
-                    'blend_oil_count' => $this->newScentIsBlend ? ($this->newScentBlendCount ?: null) : null,
-                    'is_active' => true,
-                    'is_wholesale_custom' => $isWholesaleCustom,
-                ]
-            );
-
-            if ($existing) {
-                $scent->fill(array_filter([
-                    'display_name' => $scent->display_name ?: $displayName,
-                    'abbreviation' => $scent->abbreviation ?: ($this->newScentAbbr ?: null),
-                    'oil_reference_name' => $scent->oil_reference_name ?: ($this->newScentOil ?: null),
-                    'blend_oil_count' => $scent->blend_oil_count ?: ($this->newScentIsBlend ? ($this->newScentBlendCount ?: null) : null),
-                ], fn ($value) => $value !== null && $value !== ''));
-                if ($this->newScentIsBlend) {
-                    $scent->is_blend = true;
-                }
-                if ($isWholesaleCustom) {
-                    $scent->is_wholesale_custom = true;
-                }
-                $scent->is_active = true;
-                if ($scent->isDirty()) {
-                    $scent->save();
-                }
-            }
-            $scentId = $scent->id;
+        if (! $scentId) {
+            $name = trim($this->newScentName) !== '' ? trim($this->newScentName) : trim($this->modalRawTitle);
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'No canonical scent selected. Launching the New Scent Wizard.',
+            ]);
+            $this->redirect($this->wizardUrlForModal($name, false), navigate: true);
+            return;
         }
 
         $exceptions = MappingException::query()->whereIn('id', $this->modalExceptionIds)->get();
@@ -899,6 +850,27 @@ class MappingExceptions extends Component
         }
 
         return null;
+    }
+
+    protected function wizardUrlForModal(string $rawName, bool $isCandleClub): string
+    {
+        $exception = ! empty($this->modalExceptionIds)
+            ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
+            : null;
+
+        $query = [
+            'raw' => $rawName !== '' ? $rawName : $this->modalRawTitle,
+            'variant' => (string) ($exception?->raw_variant ?? ''),
+            'account' => (string) ($exception?->account_name ?? ''),
+            'store' => (string) ($exception?->store_key ?? ''),
+            'return_to' => route('admin.index', ['tab' => 'scent-intake']),
+        ];
+
+        if ($isCandleClub) {
+            $query['store'] = 'retail';
+        }
+
+        return route('admin.scent-wizard', array_filter($query, fn ($value) => $value !== ''));
     }
 
     public function render()

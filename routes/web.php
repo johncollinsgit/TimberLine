@@ -14,6 +14,7 @@ use App\Livewire\PouringRoom\Timeline as PouringTimeline;
 use App\Livewire\Dashboard\Launchpad as DashboardLaunchpad;
 use App\Livewire\Retail\Plan as RetailPlan;
 use App\Livewire\Admin\AdminHome;
+use App\Livewire\Admin\ScentWizard as AdminScentWizard;
 use App\Livewire\Admin\ImportRuns as AdminImportRuns;
 use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
 use App\Livewire\Admin\Catalog\SizesCrud as AdminSizesCrud;
@@ -126,6 +127,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/oils/blends', AdminOilBlendsCrud::class)->name('admin.oils.blends');
         Route::get('/admin/oils/abbreviations', AdminOilAbbreviationsCrud::class)->name('admin.oils.abbreviations');
         Route::get('/admin/master-data', [AdminMasterDataController::class, 'index'])->name('admin.master.ui');
+        Route::get('/admin/scent-wizard', AdminScentWizard::class)->name('admin.scent-wizard');
         Route::post('/admin/master-data/{resource}/bulk-update', [AdminMasterDataController::class, 'bulkUpdate'])->name('admin.master.bulk-update');
         Route::get('/admin/master/{resource}', [AdminMasterDataController::class, 'list'])->name('admin.master.index-data');
         Route::post('/admin/master/{resource}', [AdminMasterDataController::class, 'store'])->name('admin.master.store');

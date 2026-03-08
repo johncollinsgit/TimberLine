@@ -202,7 +202,7 @@ class CustomScentsCrud extends Component
             $this->resetPage();
             $this->dispatch('toast', [
                 'type' => 'success',
-                'message' => 'Wholesale custom master CSV synced. Existing mappings replaced.',
+                'message' => 'Wholesale custom master CSV synced. Canonical scents were not auto-created (wizard-governed).',
             ]);
         } catch (Throwable $e) {
             $this->dispatch('toast', [

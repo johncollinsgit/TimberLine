@@ -3,7 +3,6 @@
 namespace App\Livewire\Admin\CandleClub;
 
 use App\Models\CandleClubScent;
-use App\Models\Scent;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -11,13 +10,16 @@ class CandleClubScentsCrud extends Component
 {
     use WithPagination;
 
+    protected $listeners = [
+        'scentSelected' => 'handleScentSelected',
+    ];
+
     public string $search = '';
     public int $perPage = 25;
 
     public ?int $month = null;
     public ?int $year = null;
-    public string $scentName = '';
-    public string $oilName = '';
+    public ?int $scentId = null;
 
     public function updatingSearch(): void
     {
@@ -29,37 +31,29 @@ class CandleClubScentsCrud extends Component
         $this->validate([
             'month' => 'required|integer|min:1|max:12',
             'year' => 'required|integer|min:2000|max:2100',
-            'scentName' => 'required|string|max:255',
-            'oilName' => 'required|string|max:255',
-        ]);
-
-        $monthName = \Carbon\Carbon::create()->month((int) $this->month)->format('F');
-        $display = $monthName . ' ' . $this->year . ' Candle Club — ' . trim($this->scentName);
-
-        $normalized = Scent::normalizeName($display);
-        $existing = Scent::query()->get()->first(function ($scent) use ($normalized) {
-            return Scent::normalizeName($scent->name) === $normalized;
-        });
-
-        $scent = $existing ?? Scent::query()->create([
-            'name' => $display,
-            'display_name' => $display,
-            'oil_reference_name' => $this->oilName,
-            'is_candle_club' => true,
-            'is_active' => true,
+            'scentId' => 'required|integer|exists:scents,id',
         ]);
 
         CandleClubScent::query()->updateOrCreate(
             ['month' => (int) $this->month, 'year' => (int) $this->year],
-            ['scent_id' => $scent->id]
+            ['scent_id' => (int) $this->scentId]
         );
 
         $this->dispatch('toast', [
             'type' => 'success',
-            'message' => 'Candle Club scent saved.',
+            'message' => 'Candle Club assignment saved.',
         ]);
 
-        $this->reset(['month','year','scentName','oilName']);
+        $this->reset(['month','year','scentId']);
+    }
+
+    public function handleScentSelected(string $key, ?int $scentId = null): void
+    {
+        if ($key !== 'candle-club-scent') {
+            return;
+        }
+
+        $this->scentId = $scentId;
     }
 
     public function render()

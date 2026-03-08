@@ -16,6 +16,7 @@ class SyncWholesaleCustomMaster extends Command
     protected $signature = 'wholesale-custom:sync-master
         {csv : Absolute path to the wholesale custom master CSV}
         {--replace : Replace wholesale_custom_scents with CSV rows before importing}
+        {--allow-create-canonical : Allow creating/updating canonical scent rows during sync}
         {--dry-run : Parse and summarize only; do not write changes}';
 
     protected $description = 'Sync wholesale custom scent mappings and blend recipes from the master CSV.';
@@ -36,11 +37,13 @@ class SyncWholesaleCustomMaster extends Command
 
         $replace = (bool) $this->option('replace');
         $dryRun = (bool) $this->option('dry-run');
+        $allowCreateCanonical = (bool) $this->option('allow-create-canonical');
 
         $summary = [
             'rows_read' => count($rows),
             'rows_skipped' => 0,
             'rows_with_recipe_warnings' => 0,
+            'rows_without_canonical_match' => 0,
             'wholesale_inserted' => 0,
             'wholesale_updated' => 0,
             'wholesale_deleted' => 0,
@@ -68,7 +71,7 @@ class SyncWholesaleCustomMaster extends Command
             $recipeDefinitions[$lookupKey] = $preparedRow['top_level_components'] ?? [];
         }
 
-        $runner = function () use ($preparedRows, $recipeDefinitions, $resolver, $replace, $dryRun, &$summary): void {
+        $runner = function () use ($preparedRows, $recipeDefinitions, $resolver, $replace, $dryRun, $allowCreateCanonical, &$summary): void {
             if ($replace) {
                 $summary['wholesale_deleted'] = WholesaleCustomScent::query()->count();
                 if (! $dryRun) {
@@ -137,46 +140,50 @@ class SyncWholesaleCustomMaster extends Command
                 }
 
                 $canonicalScent = $this->findMatchingScent($scents, $customScentName, $abbreviation);
-                if (! $canonicalScent) {
-                    $canonicalScent = new Scent();
-                    $canonicalScent->name = Scent::normalizeName($customScentName);
-                    $canonicalScent->display_name = $customScentName;
-                    $canonicalScent->abbreviation = $abbreviation !== '' ? $abbreviation : null;
-                    $canonicalScent->oil_reference_name = $customScentName;
-                    $canonicalScent->is_blend = true;
-                    $canonicalScent->oil_blend_id = $dryRun ? null : $blend->id;
-                    $canonicalScent->blend_oil_count = count($resolvedComponents);
-                    $canonicalScent->is_wholesale_custom = true;
-                    $canonicalScent->is_active = true;
+                if ($allowCreateCanonical) {
+                    if (! $canonicalScent) {
+                        $canonicalScent = new Scent();
+                        $canonicalScent->name = Scent::normalizeName($customScentName);
+                        $canonicalScent->display_name = $customScentName;
+                        $canonicalScent->abbreviation = $abbreviation !== '' ? $abbreviation : null;
+                        $canonicalScent->oil_reference_name = $customScentName;
+                        $canonicalScent->is_blend = true;
+                        $canonicalScent->oil_blend_id = $dryRun ? null : $blend->id;
+                        $canonicalScent->blend_oil_count = count($resolvedComponents);
+                        $canonicalScent->is_wholesale_custom = true;
+                        $canonicalScent->is_active = true;
 
-                    if (! $dryRun) {
-                        $canonicalScent->save();
-                        $canonicalScent->oil_blend_id = $blend->id;
-                        $canonicalScent->save();
-                    }
+                        if (! $dryRun) {
+                            $canonicalScent->save();
+                            $canonicalScent->oil_blend_id = $blend->id;
+                            $canonicalScent->save();
+                        }
 
-                    $scents[] = $canonicalScent;
-                    $summary['scents_inserted']++;
-                } else {
-                    $canonicalScent->display_name = $customScentName;
-                    if ($abbreviation !== '') {
-                        $canonicalScent->abbreviation = $abbreviation;
-                    }
-                    $canonicalScent->oil_reference_name = $customScentName;
-                    $canonicalScent->is_blend = true;
-                    $canonicalScent->blend_oil_count = count($resolvedComponents);
-                    $canonicalScent->is_wholesale_custom = true;
-                    $canonicalScent->is_active = true;
-                    if (! $dryRun) {
-                        $canonicalScent->oil_blend_id = $blend->id;
-                    }
+                        $scents[] = $canonicalScent;
+                        $summary['scents_inserted']++;
+                    } else {
+                        $canonicalScent->display_name = $customScentName;
+                        if ($abbreviation !== '') {
+                            $canonicalScent->abbreviation = $abbreviation;
+                        }
+                        $canonicalScent->oil_reference_name = $customScentName;
+                        $canonicalScent->is_blend = true;
+                        $canonicalScent->blend_oil_count = count($resolvedComponents);
+                        $canonicalScent->is_wholesale_custom = true;
+                        $canonicalScent->is_active = true;
+                        if (! $dryRun) {
+                            $canonicalScent->oil_blend_id = $blend->id;
+                        }
 
-                    if (! $dryRun && $canonicalScent->isDirty()) {
-                        $canonicalScent->save();
-                        $summary['scents_updated']++;
-                    } elseif ($dryRun) {
-                        $summary['scents_updated']++;
+                        if (! $dryRun && $canonicalScent->isDirty()) {
+                            $canonicalScent->save();
+                            $summary['scents_updated']++;
+                        } elseif ($dryRun) {
+                            $summary['scents_updated']++;
+                        }
                     }
+                } elseif (! $canonicalScent) {
+                    $summary['rows_without_canonical_match']++;
                 }
 
                 $mapping = WholesaleCustomScent::query()->firstOrNew([
@@ -185,7 +192,7 @@ class SyncWholesaleCustomMaster extends Command
                 ]);
 
                 $isNewMapping = ! $mapping->exists;
-                $mapping->canonical_scent_id = $canonicalScent->id;
+                $mapping->canonical_scent_id = $canonicalScent?->id;
                 $mapping->oil_1 = $row['oil_1'] ?: null;
                 $mapping->oil_2 = $row['oil_2'] ?: null;
                 $mapping->oil_3 = $row['oil_3'] ?: null;
@@ -211,7 +218,10 @@ class SyncWholesaleCustomMaster extends Command
                         'weight' => (float) ($component['weight'] ?? 0.0),
                         'percent' => (float) ($component['percent'] ?? 0.0),
                     ], $resolved['components'] ?? []),
-                    'warnings' => array_values(array_unique(array_map('strval', $resolved['errors'] ?? []))),
+                    'warnings' => array_values(array_unique(array_filter(array_map('strval', array_merge(
+                        $resolved['errors'] ?? [],
+                        (! $allowCreateCanonical && ! $canonicalScent) ? ['No canonical scent match found. Use New Scent Wizard.'] : []
+                    ))))),
                 ];
                 $mapping->active = true;
 
@@ -231,6 +241,7 @@ class SyncWholesaleCustomMaster extends Command
 
         $this->line('Wholesale custom master sync summary:');
         $this->line("rows_read={$summary['rows_read']} rows_skipped={$summary['rows_skipped']} rows_with_recipe_warnings={$summary['rows_with_recipe_warnings']}");
+        $this->line("rows_without_canonical_match={$summary['rows_without_canonical_match']} allow_create_canonical=".($allowCreateCanonical ? 'yes' : 'no'));
         $this->line("wholesale_custom_scents: inserted={$summary['wholesale_inserted']} updated={$summary['wholesale_updated']} deleted={$summary['wholesale_deleted']}");
         $this->line("scents: inserted={$summary['scents_inserted']} updated={$summary['scents_updated']}");
         $this->line("blends: inserted={$summary['blends_inserted']} updated={$summary['blends_updated']} components_written={$summary['components_written']}");

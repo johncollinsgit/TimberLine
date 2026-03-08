@@ -14,6 +14,9 @@
         <div class="mt-2 text-sm text-emerald-50/70">
           This screen shows import exceptions that need human review. Fix the mapping once and future imports will be clean.
         </div>
+        <div class="mt-2 text-xs text-emerald-100/70">
+          Mapping-only surface: map to existing scents or launch the New Scent Wizard.
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
         @foreach($queueTabs as $key => $label)

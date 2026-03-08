@@ -74,6 +74,7 @@ type RootDataset = {
     activeResource: string;
     baseEndpoint: string;
     bulkEndpointBase: string;
+    scentWizardUrl: string;
 };
 
 type SaveState = "idle" | "saving" | "saved";
@@ -327,6 +328,7 @@ function parseRootDataset(root: HTMLElement): RootDataset {
         activeResource: root.dataset.activeResource || resources[0]?.key || "scents",
         baseEndpoint: root.dataset.baseEndpoint || "/admin/master",
         bulkEndpointBase: root.dataset.bulkEndpointBase || "/admin/master-data",
+        scentWizardUrl: root.dataset.scentWizardUrl || "/admin/scent-wizard",
     };
 }
 
@@ -530,7 +532,7 @@ function applyPendingChanges(
 }
 
 function MasterDataGridApp(props: RootDataset) {
-    const { resources, baseEndpoint, bulkEndpointBase } = props;
+    const { resources, baseEndpoint, bulkEndpointBase, scentWizardUrl } = props;
     const [activeResource, setActiveResource] = useState(props.activeResource);
     const [rows, setRows] = useState<RowData[]>([]);
     const [meta, setMeta] = useState<ResponseMeta | null>(null);
@@ -963,6 +965,15 @@ function MasterDataGridApp(props: RootDataset) {
     };
 
     const handleAddRow = async () => {
+        if (activeResource === "scents") {
+            const returnTo = `${window.location.pathname}${window.location.search}`;
+            const separator = scentWizardUrl.includes("?") ? "&" : "?";
+            window.location.assign(
+                `${scentWizardUrl}${separator}return_to=${encodeURIComponent(returnTo)}`
+            );
+            return;
+        }
+
         try {
             setError("");
             setNotice("Creating row…");
@@ -1695,7 +1706,7 @@ function MasterDataGridApp(props: RootDataset) {
                             onClick={() => void handleAddRow()}
                             className={buttonClass}
                         >
-                            Add Row
+                            {activeResource === "scents" ? "New Scent Wizard" : "Add Row"}
                         </button>
 
                         <button
