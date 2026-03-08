@@ -208,6 +208,15 @@
                     <div>
                       <div>{{ $line['size'] ?? '—' }}</div>
                       <div class="text-white/50">{{ $line['wick'] ?? '—' }}</div>
+                      @if(($line['product_form'] ?? '') === 'room_spray')
+                        <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-cyan-300/35 bg-cyan-500/18 text-cyan-50">
+                          Room Spray
+                        </div>
+                      @elseif(($line['product_form'] ?? '') === 'wax_melt')
+                        <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-fuchsia-300/35 bg-fuchsia-500/18 text-fuchsia-50">
+                          Wax Melt
+                        </div>
+                      @endif
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                       @php
@@ -308,6 +317,15 @@
                     <div>
                       <div>{{ $line['size'] ?? '—' }}</div>
                       <div class="text-white/50">{{ $line['wick'] ?? '—' }}</div>
+                      @if(($line['product_form'] ?? '') === 'room_spray')
+                        <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-cyan-300/35 bg-cyan-500/18 text-cyan-50">
+                          Room Spray
+                        </div>
+                      @elseif(($line['product_form'] ?? '') === 'wax_melt')
+                        <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-fuchsia-300/35 bg-fuchsia-500/18 text-fuchsia-50">
+                          Wax Melt
+                        </div>
+                      @endif
                     </div>
                     <div class="flex flex-wrap gap-1">
                       @foreach($line['status'] as $badge)

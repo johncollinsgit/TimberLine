@@ -33,6 +33,7 @@ class ProgressiveMapper extends Component
 
     public ?int $sizeId = null;
     public ?string $wickType = null;
+    public string $productForm = '';
 
     /** @var array<int,int> */
     public array $sameNameExceptionIds = [];
@@ -91,9 +92,27 @@ class ProgressiveMapper extends Component
             return;
         }
 
+        $context = $this->mappingContext();
+        $productForm = (string) ($context['product_form_hint'] ?? '');
+        if (in_array($productForm, ['room_spray', 'wax_melt'], true)) {
+            $productFormSizeId = $this->resolveSizeIdForProductForm($productForm);
+            if (! $this->sizeId && ! $productFormSizeId) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'No active '.str_replace('_', ' ', $productForm).' size is configured in Master Data > Sizes.',
+                ]);
+
+                return;
+            }
+
+            if ($productFormSizeId) {
+                $this->sizeId = $productFormSizeId;
+            }
+            $this->wickType = null;
+        }
+
         $scentId = $this->selectedScentId;
         if (! $scentId && trim($this->existingScentSearch) !== '') {
-            $context = $this->mappingContext();
             $candidates = $this->matchingScents($context);
             $searchNeedle = $this->normalizeSearchText($this->existingScentSearch);
 
@@ -333,6 +352,10 @@ class ProgressiveMapper extends Component
             $rawText = (string) ($exception->raw_variant ?? '').' '.(string) ($exception->raw_title ?? '');
             $this->wickType = $this->detectWick($rawText);
         }
+
+        if ($this->productForm === '') {
+            $this->productForm = (string) ($this->mappingContext($exception)['detected_product_form'] ?? '');
+        }
     }
 
     protected function loadSameNameCandidates(): void
@@ -419,7 +442,7 @@ class ProgressiveMapper extends Component
     protected function wizardUrl(array $context): string
     {
         $channelHint = (bool) ($context['is_wholesale'] ?? false) ? 'wholesale' : 'retail';
-        $productFormHint = $this->productFormHint((string) ($context['raw_variant'] ?? ''), (string) ($context['raw_label'] ?? ''));
+        $productFormHint = (string) ($context['product_form_hint'] ?? '');
 
         $query = array_filter([
             'raw' => (string) ($context['raw_label'] ?? ''),
@@ -461,6 +484,12 @@ class ProgressiveMapper extends Component
         $rawVariant = trim((string) ($exception?->raw_variant ?? ''));
         $rawScentName = trim((string) ($exception?->raw_scent_name ?? ''));
         $rawLabel = $exception ? $this->exceptionLookupLabel($exception) : ($rawScentName !== '' ? $rawScentName : $rawTitle);
+        $detectedProductForm = $this->productFormHint($rawVariant, trim($rawTitle.' '.$rawLabel));
+        $selectedProductForm = trim($this->productForm);
+        if (! in_array($selectedProductForm, ['candle', 'room_spray', 'wax_melt'], true)) {
+            $selectedProductForm = '';
+        }
+        $effectiveProductForm = $selectedProductForm !== '' ? $selectedProductForm : $detectedProductForm;
 
         return [
             'store_key' => $storeKey,
@@ -472,6 +501,8 @@ class ProgressiveMapper extends Component
             'raw_label' => $rawLabel,
             'channel_hint' => ($storeKey === 'wholesale' || $orderType === 'wholesale' || $accountName !== '') ? 'wholesale' : 'retail',
             'is_wholesale' => $storeKey === 'wholesale' || $orderType === 'wholesale' || $accountName !== '',
+            'detected_product_form' => $detectedProductForm,
+            'product_form_hint' => $effectiveProductForm,
         ];
     }
 
@@ -491,6 +522,25 @@ class ProgressiveMapper extends Component
         }
 
         return '';
+    }
+
+    protected function resolveSizeIdForProductForm(string $productForm): ?int
+    {
+        if (! Schema::hasTable('sizes')) {
+            return null;
+        }
+
+        if ($productForm === 'room_spray') {
+            return $this->detectSizeId('room sprays')
+                ?? $this->detectSizeId('room spray');
+        }
+
+        if ($productForm === 'wax_melt') {
+            return $this->detectSizeId('wax melts')
+                ?? $this->detectSizeId('wax melt');
+        }
+
+        return null;
     }
 
     /**

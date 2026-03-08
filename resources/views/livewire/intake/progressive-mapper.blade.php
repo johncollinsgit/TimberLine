@@ -5,12 +5,29 @@
   $rawVariant = trim((string) ($context['raw_variant'] ?? ''));
   $accountName = trim((string) ($context['account_name'] ?? ''));
   $isWholesale = (bool) ($context['is_wholesale'] ?? false);
+  $detectedProductForm = trim((string) ($context['detected_product_form'] ?? ''));
+  $effectiveProductForm = trim((string) ($context['product_form_hint'] ?? ''));
+  $productFormLabel = match($effectiveProductForm) {
+    'room_spray' => 'Room Spray',
+    'wax_melt' => 'Wax Melt',
+    'candle' => 'Candle',
+    default => 'Unspecified',
+  };
+  $detectedProductFormLabel = match($detectedProductForm) {
+    'room_spray' => 'Room Spray',
+    'wax_melt' => 'Wax Melt',
+    'candle' => 'Candle',
+    default => 'Not detected',
+  };
   $sameCount = count($sameNameExceptionIds ?? []);
 @endphp
 
 <div class="space-y-4">
   <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-50/85">
     Resolve incoming names by mapping to existing scents. If it does not exist yet, launch the New Scent Wizard.
+    <div class="mt-1 text-emerald-100/75">
+      Scent identity and product form are separate. Room spray mappings keep the same scent identity but use room-spray material usage (oil + alcohol + water, no wax).
+    </div>
   </div>
 
   <div class="rounded-2xl border border-emerald-300/20 bg-emerald-950/35 p-4">
@@ -20,6 +37,37 @@
     @if($isWholesale)
       <div class="mt-2 inline-flex items-center rounded-full border border-emerald-200/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-50">
         Wholesale context{{ $accountName !== '' ? ' · '.$accountName : '' }}
+      </div>
+    @endif
+    @if($effectiveProductForm !== '')
+      <div class="mt-2 inline-flex items-center rounded-full border border-cyan-200/30 bg-cyan-500/15 px-2 py-0.5 text-[11px] text-cyan-50">
+        Product form · {{ $productFormLabel }}
+      </div>
+    @endif
+  </div>
+
+  <div class="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 p-4">
+    <div class="text-xs uppercase tracking-[0.24em] text-cyan-100/70">Product Form Context</div>
+    <div class="mt-2 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+      <div>
+        <label class="text-xs text-cyan-100/70">Map this exception as</label>
+        <select
+          wire:model.live="productForm"
+          class="mt-1 w-full rounded-xl border border-cyan-200/20 bg-black/25 px-3 py-2 text-sm text-white/90"
+        >
+          <option value="">Auto-detect ({{ $detectedProductFormLabel }})</option>
+          <option value="candle">Candle</option>
+          <option value="room_spray">Room Spray</option>
+          <option value="wax_melt">Wax Melt</option>
+        </select>
+      </div>
+      <div class="text-[11px] text-cyan-100/75">
+        Governs downstream material math.
+      </div>
+    </div>
+    @if($effectiveProductForm === 'room_spray')
+      <div class="mt-2 text-xs text-cyan-50/90">
+        Room spray context confirmed: this mapping will preserve room-spray form usage and avoid wax-based assumptions.
       </div>
     @endif
   </div>

@@ -249,6 +249,11 @@ class MappingExceptions extends Component
                     }
                 }
             }
+            $inferredForm = $this->inferProductForm($sample, $this->modalSizeId);
+            if (in_array($inferredForm, ['room_spray', 'wax_melt'], true)) {
+                $this->modalNeedsWick = false;
+                $this->modalWickType = null;
+            }
             if (($sample?->reason ?? '') === 'candle_club') {
                 $this->modalCandleClub = true;
                 $this->modalNeedsScent = true;
@@ -329,6 +334,9 @@ class MappingExceptions extends Component
         $sizeId = $this->modalSizeId ? (int) $this->modalSizeId : null;
         $scentId = $this->matchScentId ? (int) $this->matchScentId : null;
         $wickType = $this->modalWickType ? strtolower($this->modalWickType) : null;
+        $sample = ! empty($this->modalExceptionIds)
+            ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
+            : null;
 
         if (! empty($this->overrideSizeLabel)) {
             $needle = $this->normalizeSize($this->overrideSizeLabel);
@@ -341,11 +349,17 @@ class MappingExceptions extends Component
             $scentId = null;
         }
 
-        if (! $scentId && $this->matchScentSearch !== '') {
-            $sample = ! empty($this->modalExceptionIds)
-                ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
-                : null;
+        $productForm = $this->inferProductForm($sample, $sizeId);
+        $isNonCandleForm = in_array($productForm, ['room_spray', 'wax_melt'], true);
+        if ($isNonCandleForm) {
+            $nonCandleSizeId = $this->sizeIdForProductForm($productForm);
+            if ($nonCandleSizeId) {
+                $sizeId = $nonCandleSizeId;
+            }
+            $wickType = null;
+        }
 
+        if (! $scentId && $this->matchScentSearch !== '') {
             $context = [
                 'store_key' => (string) ($sample?->store_key ?? ''),
                 'account_name' => (string) ($sample?->account_name ?? ''),
@@ -395,7 +409,7 @@ class MappingExceptions extends Component
         }
 
         $exceptions = MappingException::query()->whereIn('id', $this->modalExceptionIds)->get();
-        DB::transaction(function () use ($exceptions, $scentId, $sizeId, $wickType) {
+        DB::transaction(function () use ($exceptions, $scentId, $sizeId, $wickType, $isNonCandleForm) {
             foreach ($exceptions as $exception) {
                 $line = $exception->order_line_id
                     ? OrderLine::query()->find($exception->order_line_id)
@@ -410,7 +424,9 @@ class MappingExceptions extends Component
                     $line->size_id = $sizeId;
                 }
 
-                if ($wickType) {
+                if ($isNonCandleForm && Schema::hasColumn('order_lines', 'wick_type')) {
+                    $line->wick_type = null;
+                } elseif ($wickType) {
                     $line->wick_type = $wickType;
                 } elseif (Schema::hasColumn('order_lines', 'wick_type') && empty($line->wick_type)) {
                     $wick = $this->detectWickFromPayload($exception->payload_json ?? []);
@@ -795,6 +811,8 @@ class MappingExceptions extends Component
                 }
             }
 
+            $productForm = $this->inferProductForm($exception, $line?->size_id ? (int) $line->size_id : null);
+
             $bundleSelections = [];
             $payload = $exception->payload_json ?? [];
             if (! empty($payload['bundle_properties'])) {
@@ -822,6 +840,7 @@ class MappingExceptions extends Component
                 'qty' => $qty,
                 'wick' => $line?->wick_type,
                 'size' => $sizeLabel,
+                'product_form' => $productForm,
                 'status' => $status ?: ['unmapped scent'],
                 'payload' => $exception->payload_json ?? [],
                 'bundle_selections' => $bundleSelections,
@@ -903,8 +922,80 @@ class MappingExceptions extends Component
         $lower = str_replace([' ', '-', '_'], '', $lower);
         $lower = str_replace(['ounces', 'ounce'], 'oz', $lower);
         $lower = str_replace('o z', 'oz', $lower);
+        if ($lower === 'waxmelt') {
+            $lower = 'waxmelts';
+        }
+        if ($lower === 'roomspray') {
+            $lower = 'roomsprays';
+        }
 
         return preg_replace('/[^a-z0-9]+/i', '', $lower) ?? '';
+    }
+
+    protected function sizeIdForProductForm(string $productForm): ?int
+    {
+        if (! Schema::hasTable('sizes')) {
+            return null;
+        }
+
+        $sizeIndex = $this->buildSizeIndex();
+
+        if ($productForm === 'room_spray') {
+            return $sizeIndex[$this->normalizeSize('room sprays')] ?? $sizeIndex[$this->normalizeSize('room spray')] ?? null;
+        }
+
+        if ($productForm === 'wax_melt') {
+            return $sizeIndex[$this->normalizeSize('wax melts')] ?? $sizeIndex[$this->normalizeSize('wax melt')] ?? null;
+        }
+
+        return null;
+    }
+
+    protected function inferProductForm(?MappingException $exception, ?int $sizeId = null): string
+    {
+        if ($sizeId) {
+            $size = Size::query()->find($sizeId, ['code', 'label']);
+            if ($size) {
+                $fromSize = $this->productFormFromText((string) $size->code.' '.(string) $size->label);
+                if ($fromSize !== '') {
+                    return $fromSize;
+                }
+            }
+        }
+
+        if (! $exception) {
+            return '';
+        }
+
+        $fromRawText = $this->productFormFromText(
+            trim((string) ($exception->raw_variant ?? '').' '.(string) ($exception->raw_title ?? '').' '.(string) ($exception->raw_scent_name ?? ''))
+        );
+        if ($fromRawText !== '') {
+            return $fromRawText;
+        }
+
+        $rawVariant = (string) ($exception->raw_variant ?? '');
+        $rawName = trim((string) ($exception->raw_scent_name ?: $exception->raw_title ?: ''));
+
+        return $this->wizardProductFormHint($rawVariant, $rawName);
+    }
+
+    protected function productFormFromText(string $text): string
+    {
+        $haystack = mb_strtolower(trim($text));
+        if ($haystack === '') {
+            return '';
+        }
+
+        if (str_contains($haystack, 'room spray') || str_contains($haystack, 'roomspray')) {
+            return 'room_spray';
+        }
+
+        if (str_contains($haystack, 'wax melt') || str_contains($haystack, 'waxmelt') || str_contains($haystack, 'wm')) {
+            return 'wax_melt';
+        }
+
+        return '';
     }
 
     protected function cleanScentName(string $value): string

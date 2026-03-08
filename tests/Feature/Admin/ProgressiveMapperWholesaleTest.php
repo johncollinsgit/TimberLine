@@ -103,6 +103,114 @@ test('search can find scents by partial phrase inside longer names', function ()
         ->assertSee('Subscription Drop');
 });
 
+test('room spray context is detected and wizard handoff preserves product_form_hint', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $order = Order::query()->create([
+        'order_type' => 'retail',
+        'source' => 'shopify',
+        'order_number' => 'RT-1001',
+        'status' => 'new',
+    ]);
+
+    $line = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Room Sprays',
+        'raw_variant' => 'Lavender',
+        'scent_id' => null,
+        'size_id' => null,
+        'ordered_qty' => 1,
+        'quantity' => 1,
+        'extra_qty' => 0,
+    ]);
+
+    $exception = MappingException::query()->create([
+        'store_key' => 'retail',
+        'order_id' => $order->id,
+        'order_line_id' => $line->id,
+        'account_name' => null,
+        'raw_title' => 'Room Sprays',
+        'raw_variant' => 'Lavender',
+        'raw_scent_name' => 'Lavender',
+        'reason' => null,
+        'payload_json' => [],
+    ]);
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->assertSet('productForm', 'room_spray')
+        ->assertSee('Product form · Room Spray')
+        ->assertSee('product_form_hint=room_spray', false);
+});
+
+test('room spray mapping sets room spray size context for downstream material usage', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $target = Scent::query()->create([
+        'name' => 'lavender',
+        'display_name' => 'Lavender',
+        'is_active' => true,
+    ]);
+
+    $roomSpraySize = Size::query()->firstOrCreate(
+        ['code' => 'room-sprays'],
+        ['label' => 'Room Sprays', 'is_active' => true]
+    );
+
+    $order = Order::query()->create([
+        'order_type' => 'retail',
+        'source' => 'shopify',
+        'order_number' => 'RT-1002',
+        'status' => 'new',
+    ]);
+
+    $line = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Room Sprays',
+        'raw_variant' => 'Lavender',
+        'scent_id' => null,
+        'size_id' => null,
+        'size_code' => null,
+        'ordered_qty' => 2,
+        'quantity' => 2,
+        'extra_qty' => 0,
+    ]);
+
+    $exception = MappingException::query()->create([
+        'store_key' => 'retail',
+        'order_id' => $order->id,
+        'order_line_id' => $line->id,
+        'account_name' => null,
+        'raw_title' => 'Room Sprays',
+        'raw_variant' => 'Lavender',
+        'raw_scent_name' => 'Lavender',
+        'reason' => null,
+        'payload_json' => [],
+    ]);
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('selectedScentId', $target->id)
+        ->set('productForm', 'room_spray')
+        ->call('save')
+        ->assertDispatched('intake-done');
+
+    $line->refresh();
+    $exception->refresh();
+
+    expect((int) $line->scent_id)->toBe((int) $target->id);
+    expect((int) $line->size_id)->toBe((int) $roomSpraySize->id);
+    expect((string) $line->size_code)->toBe('room-sprays');
+    expect($exception->resolved_at)->not->toBeNull();
+    expect((int) $exception->canonical_scent_id)->toBe((int) $target->id);
+});
+
 test('save maps selected scent and applies to same-name unresolved wholesale items when enabled', function () {
     $user = User::factory()->create([
         'role' => 'admin',
