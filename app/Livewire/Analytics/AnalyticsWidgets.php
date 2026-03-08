@@ -2,39 +2,70 @@
 
 namespace App\Livewire\Analytics;
 
-use App\Models\MappingException;
-use App\Models\Order;
+use App\Services\Inventory\InventoryService;
+use App\Services\Reporting\DemandReportingService;
+use App\Services\Reporting\InventoryReportingService;
+use App\Services\Reporting\ScentAnalyticsService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class AnalyticsWidgets extends Component
 {
     public array $layout = [];
+
     public bool $showLibrary = true;
-    public array $expandedNextShip = [];
+
+    public int $windowWeeks = 4;
+
+    public string $channel = 'all';
 
     private array $library = [
-        ['id' => 'orders_by_type', 'title' => 'Orders by Type', 'size' => '1', 'description' => 'Retail vs wholesale vs market mix.'],
-        ['id' => 'orders_by_status', 'title' => 'Orders by Status', 'size' => '1', 'description' => 'Production status breakdown.'],
-        ['id' => 'exceptions', 'title' => 'Mapping Exceptions', 'size' => '1', 'description' => 'Unresolved item mappings.'],
-        ['id' => 'upcoming_ship', 'title' => 'Upcoming Shipping Deadlines', 'size' => '2', 'description' => 'Next ship-by dates.'],
-        ['id' => 'recent_orders', 'title' => 'Recent Orders', 'size' => '2', 'description' => 'Latest activity.'],
+        ['id' => 'unmapped_exceptions', 'title' => 'Unmapped Exceptions Summary', 'size' => '1', 'description' => 'Open unresolved mappings by source/channel.'],
+        ['id' => 'inventory_snapshot', 'title' => 'Inventory Snapshot', 'size' => '1', 'description' => 'Current low/reorder counts and wax coverage.'],
+        ['id' => 'demand_state_overview', 'title' => 'Demand State Overview', 'size' => '1', 'description' => 'Forecast vs current vs actual totals.'],
+        ['id' => 'top_scents_forecast', 'title' => 'Top Scents by Forecast Demand', 'size' => '2', 'description' => 'Upcoming scent demand (forecast state).'],
+        ['id' => 'top_scents_current', 'title' => 'Top Scents by Current/Open Demand', 'size' => '2', 'description' => 'Committed queue scent demand (current state).'],
+        ['id' => 'top_scents_actual', 'title' => 'Top Scents by Actual Usage', 'size' => '2', 'description' => 'Completed usage scent demand (actual state).'],
+        ['id' => 'top_oils_forecast', 'title' => 'Top Oils by Forecast Demand', 'size' => '2', 'description' => 'Flattened oil demand for forecast window.'],
+        ['id' => 'oil_reorder_risk', 'title' => 'Current Oil Reorder Risk', 'size' => '2', 'description' => 'Projected oil risk after current demand.'],
+        ['id' => 'wax_reorder_risk', 'title' => 'Wax Reorder Risk', 'size' => '1', 'description' => 'Projected wax risk after current demand.'],
     ];
 
     private array $defaultLayout = [
-        'orders_by_type',
-        'orders_by_status',
-        'exceptions',
-        'upcoming_ship',
-        'recent_orders',
+        'unmapped_exceptions',
+        'inventory_snapshot',
+        'demand_state_overview',
+        'top_scents_forecast',
+        'top_scents_current',
+        'top_scents_actual',
+        'top_oils_forecast',
+        'oil_reorder_risk',
+        'wax_reorder_risk',
     ];
 
     public function mount(): void
     {
         $user = Auth::user();
         $prefs = is_array($user?->ui_preferences) ? $user->ui_preferences : [];
-        $saved = $prefs['analytics_layout'] ?? null;
-        $this->layout = $this->normalizeLayout($saved, $this->defaultLayout);
+
+        $savedLayout = $prefs['analytics_layout'] ?? null;
+        $this->layout = $this->normalizeLayout($savedLayout, $this->defaultLayout);
+
+        $filters = is_array($prefs['analytics_filters'] ?? null) ? $prefs['analytics_filters'] : [];
+        $this->windowWeeks = $this->normalizeWeeks($filters['window_weeks'] ?? $this->windowWeeks);
+        $this->channel = $this->normalizeChannel($filters['channel'] ?? $this->channel);
+    }
+
+    public function updatedWindowWeeks(mixed $value): void
+    {
+        $this->windowWeeks = $this->normalizeWeeks($value);
+        $this->persist();
+    }
+
+    public function updatedChannel(mixed $value): void
+    {
+        $this->channel = $this->normalizeChannel($value);
+        $this->persist();
     }
 
     public function saveOrder(array $orderedIds): void
@@ -51,7 +82,7 @@ class AnalyticsWidgets extends Component
 
     public function addWidget(string $id): void
     {
-        if (!collect($this->layout)->contains(fn ($item) => ($item['id'] ?? null) === $id)) {
+        if (! collect($this->layout)->contains(fn ($item) => ($item['id'] ?? null) === $id)) {
             $this->layout[] = ['id' => $id, 'size' => $this->defaultSizeFor($id)];
             $this->persist();
         }
@@ -67,6 +98,7 @@ class AnalyticsWidgets extends Component
     {
         $size = $this->normalizeSize($size);
         $updated = false;
+
         foreach ($this->layout as &$item) {
             if (($item['id'] ?? null) === $id) {
                 $item['size'] = $size;
@@ -93,28 +125,30 @@ class AnalyticsWidgets extends Component
 
     public function toggleLibrary(): void
     {
-        $this->showLibrary = !$this->showLibrary;
-    }
-
-    public function toggleNextShip(int $orderId): void
-    {
-        $this->expandedNextShip[$orderId] = !($this->expandedNextShip[$orderId] ?? false);
+        $this->showLibrary = ! $this->showLibrary;
     }
 
     protected function persist(): void
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return;
         }
+
         $prefs = is_array($user->ui_preferences) ? $user->ui_preferences : [];
         $prefs['analytics_layout'] = $this->layout;
+        $prefs['analytics_filters'] = [
+            'window_weeks' => $this->windowWeeks,
+            'channel' => $this->channel,
+        ];
+
         $user->forceFill(['ui_preferences' => $prefs])->save();
     }
 
     protected function normalizeLayout($saved, array $defaults): array
     {
         $items = [];
+
         if (is_array($saved)) {
             foreach ($saved as $item) {
                 if (is_array($item)) {
@@ -122,21 +156,25 @@ class AnalyticsWidgets extends Component
                     if ($id) {
                         $items[] = ['id' => $id, 'size' => $this->normalizeSize($item['size'] ?? null, $id)];
                     }
-                } else if (is_string($item)) {
+                } elseif (is_string($item)) {
                     $items[] = ['id' => $item, 'size' => $this->defaultSizeFor($item)];
                 }
             }
         }
+
         if (empty($items)) {
             $items = array_map(fn ($id) => ['id' => $id, 'size' => $this->defaultSizeFor($id)], $defaults);
         }
+
         $known = collect($this->library)->pluck('id')->all();
+
         return array_values(array_filter($items, fn ($item) => in_array($item['id'] ?? null, $known, true)));
     }
 
     protected function filterKnownIds(array $ids): array
     {
         $known = collect($this->library)->pluck('id')->all();
+
         return array_values(array_filter($ids, fn ($id) => in_array($id, $known, true)));
     }
 
@@ -157,26 +195,34 @@ class AnalyticsWidgets extends Component
                 $merged[] = ['id' => $id, 'size' => $sizes[$id]];
             }
         }
+
         foreach ($sizes as $id => $size) {
-            if (!collect($merged)->contains(fn ($item) => ($item['id'] ?? null) === $id)) {
+            if (! collect($merged)->contains(fn ($item) => ($item['id'] ?? null) === $id)) {
                 $merged[] = ['id' => $id, 'size' => $size];
             }
         }
+
         return $merged;
     }
 
     public function getVisibleWidgetsProperty(): array
     {
         $map = collect($this->library)->keyBy('id');
+
         return collect($this->layout)
             ->map(function ($item) use ($map) {
                 if (is_string($item)) {
                     $base = $map->get($item);
+
                     return $base ? array_merge($base, ['size' => $this->defaultSizeFor($item)]) : null;
                 }
+
                 $id = $item['id'] ?? null;
                 $base = $id ? $map->get($id) : null;
-                if (!$base) return null;
+                if (! $base) {
+                    return null;
+                }
+
                 return array_merge($base, [
                     'size' => $this->normalizeSize($item['size'] ?? null, $id),
                 ]);
@@ -191,123 +237,67 @@ class AnalyticsWidgets extends Component
         return $this->library;
     }
 
-    private function defaultSizeFor(string $id): string
-    {
-        $size = collect($this->library)->firstWhere('id', $id)['size'] ?? '2';
-        return $this->normalizeSize($size, $id);
-    }
-
-    private function normalizeSize(?string $size, ?string $id = null): string
-    {
-        if ($size === 'full') return '3';
-        if ($size === 'half') return '2';
-        if ($size === 'third') return '1';
-
-        if (in_array($size, ['1', '2', '3'], true)) {
-            return $size;
-        }
-
-        if ($id) {
-            $fallback = collect($this->library)->firstWhere('id', $id)['size'] ?? '2';
-            return $this->normalizeSize($fallback);
-        }
-
-        return '2';
-    }
-
     public function getAnalyticsDataProperty(): array
     {
-        $statusCounts = Order::query()
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status')
-            ->all();
+        $channel = $this->channel === 'all' ? null : $this->channel;
 
-        $typeCounts = Order::query()
-            ->selectRaw('order_type, COUNT(*) as count')
-            ->groupBy('order_type')
-            ->pluck('count', 'order_type')
-            ->all();
+        $demand = app(DemandReportingService::class);
+        $inventoryReporting = app(InventoryReportingService::class);
+        $scentAnalytics = app(ScentAnalyticsService::class);
+        $inventory = app(InventoryService::class);
 
-        $recentOrders = Order::query()
-            ->orderByDesc('id')
-            ->limit(6)
-            ->get([
-                'order_number',
-                'order_label',
-                'customer_name',
-                'shipping_name',
-                'billing_name',
-                'shipping_company',
-                'shipping_address1',
-                'billing_company',
-                'billing_address1',
-                'order_type',
-                'status',
-                'ship_by_at',
-                'created_at',
-                'shopify_name',
-            ]);
+        $forecast = $demand->forecastedScentDemand($this->windowWeeks, $channel);
+        $current = $demand->currentScentDemand($this->windowWeeks, $channel);
+        $actual = $demand->actualScentDemand($this->windowWeeks, $channel);
 
-        $nextShip = Order::query()
-            ->whereNotNull('ship_by_at')
-            ->orderBy('ship_by_at')
-            ->limit(5)
-            ->get([
-                'id',
-                'order_number',
-                'order_label',
-                'customer_name',
-                'shipping_name',
-                'billing_name',
-                'shipping_company',
-                'shipping_address1',
-                'billing_company',
-                'billing_address1',
-                'order_type',
-                'status',
-                'ship_by_at',
-                'shopify_name',
-            ]);
+        $oilForecast = $demand->explodedOilDemand('forecast', $this->windowWeeks, $channel);
+        $reorderRisk = $inventoryReporting->reorderRiskInputs('current', $this->windowWeeks, $channel);
+        $exceptions = $scentAnalytics->unmappedExceptionSummary(8, $channel);
 
-        $lineSummaries = $this->lineSummaryForOrders($nextShip->pluck('id')->all());
+        $oilInventoryRows = $inventory->oilRows(limit: 500)->all();
+        $waxInventoryRows = $inventory->waxRows(limit: 50)->all();
 
-        $exceptions = MappingException::query()
-            ->whereNull('resolved_at')
-            ->count();
+        $inventorySnapshot = [
+            'oil_total_items' => count($oilInventoryRows),
+            'oil_low_count' => collect($oilInventoryRows)->filter(fn (array $row) => data_get($row, 'state.status') === 'low')->count(),
+            'oil_reorder_count' => collect($oilInventoryRows)->filter(fn (array $row) => data_get($row, 'state.status') === 'reorder')->count(),
+            'wax_total_items' => count($waxInventoryRows),
+            'wax_low_count' => collect($waxInventoryRows)->filter(fn (array $row) => data_get($row, 'state.status') === 'low')->count(),
+            'wax_reorder_count' => collect($waxInventoryRows)->filter(fn (array $row) => data_get($row, 'state.status') === 'reorder')->count(),
+            'wax_on_hand_grams' => round((float) collect($waxInventoryRows)->sum('on_hand_grams'), 2),
+            'wax_on_hand_boxes' => round((float) collect($waxInventoryRows)->sum('on_hand_boxes'), 3),
+        ];
 
         return [
-            'statusCounts' => $statusCounts,
-            'typeCounts' => $typeCounts,
-            'recentOrders' => $recentOrders->map(function ($o) {
-                $o->display_name = $o->order_label
-                    ?: $o->customer_name
-                    ?: $o->shipping_name
-                    ?: $o->billing_name
-                    ?: $o->shipping_company
-                    ?: $o->shipping_address1
-                    ?: $o->billing_company
-                    ?: $o->billing_address1
-                    ?: $o->shopify_name;
-                return $o;
-            }),
-            'nextShip' => $nextShip->map(function ($o) use ($lineSummaries) {
-                $lines = $lineSummaries[$o->id] ?? [];
-                $o->display_name = $o->order_label
-                    ?: $o->customer_name
-                    ?: $o->shipping_name
-                    ?: $o->billing_name
-                    ?: $o->shipping_company
-                    ?: $o->shipping_address1
-                    ?: $o->billing_company
-                    ?: $o->billing_address1
-                    ?: $o->shopify_name;
-                $o->lines = $lines;
-                $o->lines_preview = array_slice($lines, 0, 4);
-                $o->lines_more = max(0, count($lines) - 4);
-                return $o;
-            }),
+            'window_weeks' => $this->windowWeeks,
+            'channel' => $this->channel,
+            'urls' => [
+                'mapping_exceptions' => route('admin.scent-intake'),
+                'inventory' => route('inventory.index'),
+            ],
+            'forecast' => [
+                'snapshot' => $forecast,
+                'top_scents' => $this->topScentRows($forecast),
+            ],
+            'current' => [
+                'snapshot' => $current,
+                'top_scents' => $this->topScentRows($current),
+            ],
+            'actual' => [
+                'snapshot' => $actual,
+                'top_scents' => $this->topScentRows($actual),
+            ],
+            'state_totals' => [
+                $this->stateOverviewRow('forecast', $forecast),
+                $this->stateOverviewRow('current', $current),
+                $this->stateOverviewRow('actual', $actual),
+            ],
+            'top_oils_forecast' => collect($oilForecast['rows'] ?? [])->take(10)->values()->all(),
+            'top_oils_forecast_totals' => $oilForecast['totals'] ?? [],
+            'top_oils_forecast_unresolved' => $oilForecast['unresolved'] ?? [],
+            'reorder_risk' => $reorderRisk,
             'exceptions' => $exceptions,
+            'inventory_snapshot' => $inventorySnapshot,
         ];
     }
 
@@ -316,28 +306,77 @@ class AnalyticsWidgets extends Component
         return view('livewire.analytics.widgets');
     }
 
-    protected function lineSummaryForOrders(array $orderIds): array
+    private function defaultSizeFor(string $id): string
     {
-        if (empty($orderIds)) {
-            return [];
+        $size = collect($this->library)->firstWhere('id', $id)['size'] ?? '2';
+
+        return $this->normalizeSize($size, $id);
+    }
+
+    private function normalizeSize(?string $size, ?string $id = null): string
+    {
+        if ($size === 'full') {
+            return '3';
+        }
+        if ($size === 'half') {
+            return '2';
+        }
+        if ($size === 'third') {
+            return '1';
         }
 
-        $lines = \App\Models\OrderLine::query()
-            ->with(['scent', 'size'])
-            ->whereIn('order_id', $orderIds)
-            ->get();
+        if (in_array($size, ['1', '2', '3'], true)) {
+            return $size;
+        }
 
-        return $lines->groupBy('order_id')->map(function ($group) {
-            return $group->map(function ($line) {
-                $qty = (int) ($line->ordered_qty ?? 0) + (int) ($line->extra_qty ?? 0);
-                if ($qty <= 0) {
-                    $qty = (int) ($line->quantity ?? 0);
-                }
-                $scent = $line->scent?->name ?: $line->scent_name ?: $line->raw_title ?: 'Unknown';
-                $size = $line->size?->display ?: $line->size_code ?: null;
-                $label = $size ? "{$scent} · {$size}" : $scent;
-                return trim($label).' ×'.$qty;
-            })->filter()->values()->all();
-        })->all();
+        if ($id) {
+            $fallback = collect($this->library)->firstWhere('id', $id)['size'] ?? '2';
+
+            return $this->normalizeSize($fallback);
+        }
+
+        return '2';
+    }
+
+    private function normalizeWeeks(mixed $value): int
+    {
+        $weeks = (int) $value;
+
+        return in_array($weeks, [2, 4, 8], true) ? $weeks : 4;
+    }
+
+    private function normalizeChannel(mixed $value): string
+    {
+        $channel = strtolower(trim((string) $value));
+
+        return in_array($channel, ['all', 'retail', 'wholesale', 'event'], true) ? $channel : 'all';
+    }
+
+    /**
+     * @param  array<string,mixed>  $snapshot
+     * @return array<int,array<string,mixed>>
+     */
+    private function topScentRows(array $snapshot, int $limit = 8): array
+    {
+        return collect($snapshot['rows'] ?? [])
+            ->sortByDesc('units')
+            ->take($limit)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string,mixed>  $snapshot
+     * @return array<string,mixed>
+     */
+    private function stateOverviewRow(string $state, array $snapshot): array
+    {
+        return [
+            'state' => $state,
+            'units' => (int) data_get($snapshot, 'totals.units', 0),
+            'wax_grams' => round((float) data_get($snapshot, 'totals.wax_grams', 0), 2),
+            'oil_grams' => round((float) data_get($snapshot, 'totals.oil_grams', 0), 2),
+            'row_count' => (int) data_get($snapshot, 'totals.row_count', 0),
+        ];
     }
 }
