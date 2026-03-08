@@ -125,7 +125,7 @@ test('scent wizard save delegates canonical creation to create scent action', fu
         ->set('form.base_oil_id', $baseOil->id)
         ->set('form.lifecycle_status', 'draft')
         ->call('complete')
-        ->assertSet('step', 5)
+        ->assertSet('step', 4)
         ->assertSet('completion.mode', 'created')
         ->call('finish')
         ->assertRedirect(route('admin.index', ['tab' => 'master-data', 'resource' => 'scents']));
@@ -195,9 +195,8 @@ test('scent wizard can map to existing scent without creating a duplicate', func
     ])->test(ScentWizard::class)
         ->set('intent', ScentWizard::INTENT_MAP)
         ->set('selectedExistingScentId', $existing->id)
-        ->set('alias.save_raw_as_alias', false)
         ->call('complete')
-        ->assertSet('step', 5)
+        ->assertSet('step', 4)
         ->assertSet('completion.mode', 'mapped')
         ->call('finish')
         ->assertRedirect(route('admin.index', ['tab' => 'scent-intake']));

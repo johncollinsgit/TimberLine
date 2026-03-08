@@ -17,8 +17,8 @@
       </a>
     </div>
 
-    <div class="mt-5 grid gap-2 sm:grid-cols-5">
-      @foreach([1 => 'Identify', 2 => 'Identity', 3 => 'Aliases', 4 => 'Review', 5 => 'Complete'] as $i => $label)
+    <div class="mt-5 grid gap-2 sm:grid-cols-4">
+      @foreach([1 => 'Identify', 2 => 'Identity', 3 => 'Review', 4 => 'Complete'] as $i => $label)
         <button
           type="button"
           wire:click="jumpToStep({{ $i }})"
@@ -341,57 +341,7 @@
 
   @if($step === 3)
     <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-      <div class="text-sm font-semibold text-white">Step 3: Alias / mapping setup</div>
-      <p class="mt-1 text-sm text-emerald-50/75">Add global and/or customer-scoped aliases. Save incoming unresolved names as aliases when appropriate.</p>
-
-      <div class="mt-4 space-y-3">
-        <div class="rounded-xl border border-white/10 bg-black/20 p-3">
-          <label class="flex items-start gap-2">
-            <input type="checkbox" wire:model.defer="alias.create_global_alias" class="mt-1 rounded border-white/20 bg-white/10" />
-            <span class="text-sm text-white/85">Create global alias</span>
-          </label>
-          @if($alias['create_global_alias'] ?? false)
-            <div class="mt-2">
-              <flux:input wire:model.defer="alias.global_alias" label="Global alias" />
-              @error('alias.global_alias') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-            </div>
-          @endif
-        </div>
-
-        <div class="rounded-xl border border-white/10 bg-black/20 p-3">
-          <label class="flex items-start gap-2">
-            <input type="checkbox" wire:model.defer="alias.create_customer_alias" class="mt-1 rounded border-white/20 bg-white/10" />
-            <span class="text-sm text-white/85">Create customer-scoped alias</span>
-          </label>
-          <div class="mt-1 text-xs text-emerald-100/65">Account context: {{ $context['account_name'] ?: 'none' }}</div>
-          @if($alias['create_customer_alias'] ?? false)
-            <div class="mt-2">
-              <flux:input wire:model.defer="alias.customer_alias" label="Customer alias" />
-              @error('alias.customer_alias') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-            </div>
-          @endif
-          @error('alias.create_customer_alias') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-        </div>
-
-        <div class="rounded-xl border border-white/10 bg-black/20 p-3">
-          <label class="flex items-start gap-2">
-            <input type="checkbox" wire:model.defer="alias.save_raw_as_alias" class="mt-1 rounded border-white/20 bg-white/10" />
-            <span class="text-sm text-white/85">Save unresolved incoming name as alias</span>
-          </label>
-          <div class="mt-1 text-xs text-emerald-100/65">Incoming: {{ $context['raw_name'] ?: 'none' }}</div>
-        </div>
-      </div>
-
-      <div class="mt-5 flex items-center justify-between gap-2">
-        <button type="button" wire:click="previousStep" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/80 hover:bg-white/10">Back</button>
-        <button type="button" wire:click="nextStep" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-5 py-2 text-xs font-semibold text-white">Continue</button>
-      </div>
-    </section>
-  @endif
-
-  @if($step === 4)
-    <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-      <div class="text-sm font-semibold text-white">Step 4: Review</div>
+      <div class="text-sm font-semibold text-white">Step 3: Review</div>
       <p class="mt-1 text-sm text-emerald-50/75">Confirm whether this run maps to an existing scent or creates a new canonical scent.</p>
 
       <div class="mt-4 grid gap-3 md:grid-cols-2">
@@ -466,10 +416,14 @@
       @endif
 
       <div class="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/85 space-y-1">
-        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/60">Aliases to create</div>
-        <div>Global alias: {{ ($alias['create_global_alias'] ?? false) ? ($alias['global_alias'] ?: '—') : 'No' }}</div>
-        <div>Customer alias: {{ ($alias['create_customer_alias'] ?? false) ? ($alias['customer_alias'] ?: '—') : 'No' }}</div>
-        <div>Save incoming raw alias: {{ ($alias['save_raw_as_alias'] ?? false) ? (($context['raw_name'] ?: '—')) : 'No' }}</div>
+        <div class="text-[11px] uppercase tracking-[0.22em] text-emerald-100/60">Alias behavior</div>
+        @if($intent === 'new_scent')
+          <div>No alias will be created during new scent creation.</div>
+        @elseif($intent === 'customer_alias')
+          <div>Incoming name <span class="text-white">{{ $context['raw_name'] ?: '—' }}</span> will be saved as a customer-scoped alias for account <span class="text-white">{{ $context['account_name'] ?: '—' }}</span>.</div>
+        @else
+          <div>Incoming name <span class="text-white">{{ $context['raw_name'] ?: '—' }}</span> will be saved as alias in scopes: <span class="text-white">{{ implode(', ', $plannedAliasScopes ?? []) ?: 'global' }}</span>.</div>
+        @endif
       </div>
 
       @if(!empty($reviewWarnings))
@@ -489,9 +443,9 @@
     </section>
   @endif
 
-  @if($step === 5)
+  @if($step === 4)
     <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-      <div class="text-sm font-semibold text-white">Step 5: Complete</div>
+      <div class="text-sm font-semibold text-white">Step 4: Complete</div>
       <p class="mt-1 text-sm text-emerald-50/75">{{ $completion['message'] ?? 'Wizard completed.' }}</p>
 
       <div class="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/85 space-y-1">

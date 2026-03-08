@@ -234,15 +234,6 @@ class ScentWizard extends Component
             }
             return;
         }
-
-        if ($this->step === 3) {
-            $this->validateStepThree();
-            if ($this->getErrorBag()->isEmpty()) {
-                $this->reviewWarnings = $this->buildReviewWarnings();
-                $this->step = 4;
-            }
-            return;
-        }
     }
 
     public function previousStep(): void
@@ -261,7 +252,7 @@ class ScentWizard extends Component
 
     public function jumpToStep(int $target): void
     {
-        if ($target < 1 || $target > 5) {
+        if ($target < 1 || $target > 4) {
             return;
         }
 
@@ -285,7 +276,6 @@ class ScentWizard extends Component
         if ($this->intent === self::INTENT_NEW) {
             $this->validateStepTwo();
         }
-        $this->validateStepThree();
         if ($this->getErrorBag()->isNotEmpty()) {
             $this->step = $this->intent === self::INTENT_NEW ? 2 : 1;
             return;
@@ -344,7 +334,7 @@ class ScentWizard extends Component
             'message' => $this->completion['message'],
         ]);
 
-        $this->step = 5;
+        $this->step = 4;
     }
 
     public function finish(): void
@@ -459,30 +449,6 @@ class ScentWizard extends Component
         }
     }
 
-    protected function validateStepThree(): void
-    {
-        $rules = [
-            'alias.create_global_alias' => ['boolean'],
-            'alias.global_alias' => ['nullable', 'string', 'max:255'],
-            'alias.create_customer_alias' => ['boolean'],
-            'alias.customer_alias' => ['nullable', 'string', 'max:255'],
-            'alias.save_raw_as_alias' => ['boolean'],
-        ];
-        validator(['alias' => $this->alias], $rules)->validate();
-
-        if (($this->alias['create_global_alias'] ?? false) && trim((string) ($this->alias['global_alias'] ?? '')) === '') {
-            $this->addError('alias.global_alias', 'Enter a global alias or disable this option.');
-        }
-
-        if (($this->alias['create_customer_alias'] ?? false) && trim((string) ($this->context['account_name'] ?? '')) === '') {
-            $this->addError('alias.create_customer_alias', 'Customer-scoped alias requires an account context.');
-        }
-
-        if (($this->alias['create_customer_alias'] ?? false) && trim((string) ($this->alias['customer_alias'] ?? '')) === '') {
-            $this->addError('alias.customer_alias', 'Enter a customer alias or disable this option.');
-        }
-    }
-
     /**
      * @return array<string,mixed>
      */
@@ -532,6 +498,10 @@ class ScentWizard extends Component
             return [];
         }
 
+        if ($this->intent === self::INTENT_NEW) {
+            return [];
+        }
+
         $canonicalValues = [
             trim((string) ($scent->name ?? '')),
             trim((string) ($scent->display_name ?? '')),
@@ -540,46 +510,34 @@ class ScentWizard extends Component
         $action = app(CreateScentAliasAction::class);
         $saved = [];
 
-        if ((bool) ($this->alias['create_global_alias'] ?? false)) {
-            $alias = trim((string) ($this->alias['global_alias'] ?? ''));
-            if ($alias !== '') {
-                $record = $action->execute($scent, $alias, 'global', $canonicalValues);
-                if ($record) {
-                    $saved[] = ['alias' => $record->alias, 'scope' => $record->scope];
-                }
-            }
+        $rawAlias = trim((string) ($this->context['raw_name'] ?? ''));
+        if ($rawAlias === '') {
+            return $saved;
         }
 
-        if ((bool) ($this->alias['create_customer_alias'] ?? false)) {
-            $alias = trim((string) ($this->alias['customer_alias'] ?? ''));
+        if ($this->intent === self::INTENT_CUSTOMER_ALIAS) {
             $account = trim((string) ($this->context['account_name'] ?? ''));
-            if ($alias !== '' && $account !== '') {
-                $scope = 'account:'.WholesaleCustomScent::normalizeAccountName($account);
-                $record = $action->execute($scent, $alias, $scope, $canonicalValues);
-                if ($record) {
-                    $saved[] = ['alias' => $record->alias, 'scope' => $record->scope];
-                }
+            if ($account === '') {
+                return $saved;
             }
+
+            $scope = 'account:'.WholesaleCustomScent::normalizeAccountName($account);
+            $record = $action->execute($scent, $rawAlias, $scope, $canonicalValues);
+            if ($record) {
+                $saved[] = ['alias' => $record->alias, 'scope' => $record->scope];
+            }
+
+            return $saved;
         }
 
-        if ((bool) ($this->alias['save_raw_as_alias'] ?? false)) {
-            $rawAlias = trim((string) ($this->context['raw_name'] ?? ''));
-            if ($rawAlias !== '') {
-                $recordsAdded = $action->syncAcrossScopes(
-                    $scent,
-                    [$rawAlias],
-                    $this->rawAliasScopes(),
-                    $canonicalValues
-                );
-
-                if ($recordsAdded > 0) {
-                    foreach ($this->rawAliasScopes() as $scope) {
-                        $saved[] = [
-                            'alias' => Scent::normalizeName($rawAlias),
-                            'scope' => $scope,
-                        ];
-                    }
-                }
+        $scopes = $this->rawAliasScopes();
+        $recordsAdded = $action->syncAcrossScopes($scent, [$rawAlias], $scopes, $canonicalValues);
+        if ($recordsAdded > 0) {
+            foreach ($scopes as $scope) {
+                $saved[] = [
+                    'alias' => Scent::normalizeName($rawAlias),
+                    'scope' => $scope,
+                ];
             }
         }
 
@@ -711,13 +669,6 @@ class ScentWizard extends Component
             }
         }
 
-        if (($this->alias['create_customer_alias'] ?? false) && trim((string) ($this->context['account_name'] ?? '')) === '') {
-            $warnings[] = [
-                'type' => 'warning',
-                'message' => 'Customer alias selected without account context. It will not be created.',
-            ];
-        }
-
         return $warnings;
     }
 
@@ -818,6 +769,7 @@ class ScentWizard extends Component
                 ->when(Schema::hasColumn('base_oils', 'active'), fn ($q) => $q->where('active', true))
                 ->orderBy('name')
                 ->get(['id', 'name']),
+            'plannedAliasScopes' => $this->rawAliasScopes(),
         ])->layout('layouts.app');
     }
 
