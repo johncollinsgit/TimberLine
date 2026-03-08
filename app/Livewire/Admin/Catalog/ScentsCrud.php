@@ -2,6 +2,9 @@
 
 namespace App\Livewire\Admin\Catalog;
 
+use App\Actions\ScentGovernance\CreateScentAction;
+use App\Actions\ScentGovernance\CreateScentAliasAction;
+use App\Actions\ScentGovernance\UpdateScentAction;
 use App\Models\BaseOil;
 use App\Models\Blend;
 use App\Models\BlendComponent;
@@ -564,24 +567,37 @@ class ScentsCrud extends Component
         }
 
         if (! $scent) {
-            $scent = new Scent();
+            $scent = app(CreateScentAction::class)->execute([
+                'name' => (string) ($payload['name'] ?? ''),
+                'display_name' => blank($payload['display_name'] ?? null) ? null : trim((string) $payload['display_name']),
+                'abbreviation' => blank($payload['abbreviation'] ?? null) ? null : trim((string) $payload['abbreviation']),
+                'oil_reference_name' => $oilReference === '' ? null : $oilReference,
+                'is_blend' => (bool) ($payload['is_blend'] ?? false),
+                'oil_blend_id' => $oilBlendId,
+                'blend_oil_count' => $blendOilCount,
+                'canonical_scent_id' => $canonicalId,
+                'source_wholesale_custom_scent_id' => blank($payload['source_wholesale_custom_scent_id'] ?? null)
+                    ? null
+                    : (int) $payload['source_wholesale_custom_scent_id'],
+                'is_active' => (bool) ($payload['is_active'] ?? true),
+            ], $prefix.'.');
+        } else {
+            $scent = app(UpdateScentAction::class)->execute($scent, [
+                'name' => (string) ($payload['name'] ?? ''),
+                'display_name' => blank($payload['display_name'] ?? null) ? null : trim((string) $payload['display_name']),
+                'abbreviation' => blank($payload['abbreviation'] ?? null) ? null : trim((string) $payload['abbreviation']),
+                'oil_reference_name' => $oilReference === '' ? null : $oilReference,
+                'is_blend' => (bool) ($payload['is_blend'] ?? false),
+                'oil_blend_id' => $oilBlendId,
+                'blend_oil_count' => $blendOilCount,
+                'canonical_scent_id' => $canonicalId,
+                'source_wholesale_custom_scent_id' => blank($payload['source_wholesale_custom_scent_id'] ?? null)
+                    ? null
+                    : (int) $payload['source_wholesale_custom_scent_id'],
+                'is_active' => (bool) ($payload['is_active'] ?? true),
+            ], $prefix.'.');
         }
-
-        $scent->fill([
-            'name' => Scent::normalizeName((string) ($payload['name'] ?? '')),
-            'display_name' => blank($payload['display_name'] ?? null) ? null : trim((string) $payload['display_name']),
-            'abbreviation' => blank($payload['abbreviation'] ?? null) ? null : trim((string) $payload['abbreviation']),
-            'oil_reference_name' => $oilReference === '' ? null : $oilReference,
-            'is_blend' => (bool) ($payload['is_blend'] ?? false),
-            'oil_blend_id' => $oilBlendId,
-            'blend_oil_count' => $blendOilCount,
-            'canonical_scent_id' => $canonicalId,
-            'source_wholesale_custom_scent_id' => blank($payload['source_wholesale_custom_scent_id'] ?? null)
-                ? null
-                : (int) $payload['source_wholesale_custom_scent_id'],
-            'recipe_components_json' => $resolvedRows === [] ? null : $resolvedRows,
-            'is_active' => (bool) ($payload['is_active'] ?? true),
-        ]);
+        $scent->recipe_components_json = $resolvedRows === [] ? null : $resolvedRows;
         $scent->save();
 
         $this->syncCanonicalAlias($scent, $canonicalId);
@@ -860,9 +876,10 @@ class ScentsCrud extends Component
             return;
         }
 
-        ScentAlias::query()->updateOrCreate(
-            ['alias' => $aliasValue, 'scope' => 'catalog'],
-            ['scent_id' => $canonicalId]
+        app(CreateScentAliasAction::class)->syncAcrossScopes(
+            $canonicalId,
+            [$aliasValue],
+            ['catalog']
         );
     }
 

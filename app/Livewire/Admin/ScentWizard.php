@@ -2,9 +2,10 @@
 
 namespace App\Livewire\Admin;
 
+use App\Actions\ScentGovernance\CreateScentAction;
+use App\Actions\ScentGovernance\CreateScentAliasAction;
 use App\Models\Blend;
 use App\Models\Scent;
-use App\Models\ScentAlias;
 use App\Models\WholesaleCustomScent;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -65,50 +66,18 @@ class ScentWizard extends Component
     public function save(): void
     {
         $payload = $this->validatedPayload();
-        $normalizedName = Scent::normalizeName((string) $payload['name']);
-
-        $existingByName = Scent::query()
-            ->whereRaw('lower(name) = ?', [mb_strtolower($normalizedName)])
-            ->first();
-
-        if ($existingByName) {
-            throw ValidationException::withMessages([
-                'form.name' => 'A scent with this name already exists. Open it in Master Data instead.',
-            ]);
-        }
-
-        $abbreviation = trim((string) ($payload['abbreviation'] ?? ''));
-        if ($abbreviation !== '') {
-            $duplicateAbbrev = Scent::query()
-                ->whereRaw('lower(abbreviation) = ?', [mb_strtolower($abbreviation)])
-                ->exists();
-            if ($duplicateAbbrev) {
-                throw ValidationException::withMessages([
-                    'form.abbreviation' => "Abbrev '{$abbreviation}' is already used by another scent.",
-                ]);
-            }
-        }
-
-        $blendOilCount = null;
-        if ((bool) ($payload['is_blend'] ?? false)) {
-            if (! empty($payload['oil_blend_id'])) {
-                $blendOilCount = Blend::query()->find((int) $payload['oil_blend_id'])?->components()->count();
-            }
-            $blendOilCount ??= blank($payload['blend_oil_count'] ?? null) ? null : (int) $payload['blend_oil_count'];
-        }
-
-        $scent = Scent::query()->create([
-            'name' => $normalizedName,
-            'display_name' => blank($payload['display_name'] ?? null) ? null : trim((string) $payload['display_name']),
-            'abbreviation' => $abbreviation !== '' ? $abbreviation : null,
-            'oil_reference_name' => blank($payload['oil_reference_name'] ?? null) ? null : trim((string) $payload['oil_reference_name']),
+        $scent = app(CreateScentAction::class)->execute([
+            'name' => $payload['name'],
+            'display_name' => $payload['display_name'] ?? null,
+            'abbreviation' => $payload['abbreviation'] ?? null,
+            'oil_reference_name' => $payload['oil_reference_name'] ?? null,
             'is_blend' => (bool) ($payload['is_blend'] ?? false),
-            'oil_blend_id' => blank($payload['oil_blend_id'] ?? null) ? null : (int) $payload['oil_blend_id'],
-            'blend_oil_count' => $blendOilCount,
+            'oil_blend_id' => $payload['oil_blend_id'] ?? null,
+            'blend_oil_count' => $payload['blend_oil_count'] ?? null,
             'is_wholesale_custom' => (bool) ($payload['is_wholesale_custom'] ?? false),
             'is_candle_club' => (bool) ($payload['is_candle_club'] ?? false),
             'is_active' => (bool) ($payload['is_active'] ?? true),
-        ]);
+        ], 'form.');
 
         $this->syncOptionalAlias($scent);
         $this->syncOptionalWholesaleMapping($scent);
@@ -184,12 +153,12 @@ class ScentWizard extends Component
             }
         }
 
-        foreach (array_values(array_unique($scopes)) as $scope) {
-            ScentAlias::query()->updateOrCreate(
-                ['alias' => $alias, 'scope' => $scope],
-                ['scent_id' => $scent->id]
-            );
-        }
+        app(CreateScentAliasAction::class)->syncAcrossScopes(
+            $scent,
+            [$alias],
+            array_values(array_unique($scopes)),
+            $canonicalValues
+        );
     }
 
     protected function syncOptionalWholesaleMapping(Scent $scent): void
@@ -236,4 +205,3 @@ class ScentWizard extends Component
         ])->layout('layouts.app');
     }
 }
-

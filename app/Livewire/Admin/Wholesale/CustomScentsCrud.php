@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Wholesale;
 
 use App\Models\WholesaleCustomScent;
 use App\Models\Scent;
+use App\Services\ScentGovernance\ResolveScentMatchService;
 use App\Services\Recipes\NestedOilRecipeResolver;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\ValidationException;
@@ -86,6 +87,7 @@ class CustomScentsCrud extends Component
     public function create(): void
     {
         $data = $this->validateCreate();
+        $data['canonical_scent_id'] = $this->resolveCanonicalScentId($data);
         $this->assertUnique($data['account_name'], $data['custom_scent_name']);
 
         WholesaleCustomScent::query()->create($this->withRecipePayload($data));
@@ -134,6 +136,7 @@ class CustomScentsCrud extends Component
         }
 
         $data = $this->validateEdit();
+        $data['canonical_scent_id'] = $this->resolveCanonicalScentId($data);
         $this->assertUnique($data['account_name'], $data['custom_scent_name'], $this->editingId);
 
         WholesaleCustomScent::query()->whereKey($this->editingId)->update(
@@ -358,6 +361,35 @@ class CustomScentsCrud extends Component
         }
 
         return $payload;
+    }
+
+    /**
+     * Prefer matching existing canonical scents before leaving this unmapped.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    protected function resolveCanonicalScentId(array $data): ?int
+    {
+        $explicit = blank($data['canonical_scent_id'] ?? null) ? null : (int) $data['canonical_scent_id'];
+        if ($explicit) {
+            return $explicit;
+        }
+
+        $name = trim((string) ($data['custom_scent_name'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $context = [
+            'store_key' => 'wholesale',
+            'is_wholesale' => true,
+            'account_name' => trim((string) ($data['account_name'] ?? '')),
+        ];
+
+        $resolver = app(ResolveScentMatchService::class);
+
+        return $resolver->resolveSingleCandidateId($name, $context, 96)
+            ?? $resolver->findExistingScent($name, $context)?->id;
     }
 
     /**

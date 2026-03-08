@@ -2,13 +2,14 @@
 
 namespace App\Livewire\Admin;
 
+use App\Actions\ScentGovernance\CreateScentAliasAction;
 use App\Models\MappingException;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Scent;
-use App\Models\ScentAlias;
 use App\Models\ShopifyImportRun;
 use App\Models\Size;
+use App\Services\ScentGovernance\ResolveScentMatchService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
@@ -280,11 +281,19 @@ class MappingExceptions extends Component
         }
 
         if (!$scentId && $this->matchScentSearch !== '') {
-            $needle = Scent::normalizeName($this->matchScentSearch);
-            $matched = Scent::query()->get()->first(function ($scent) use ($needle) {
-                return Scent::normalizeName($scent->name) === $needle;
-            });
-            $scentId = $matched?->id;
+            $sample = ! empty($this->modalExceptionIds)
+                ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
+                : null;
+
+            $context = [
+                'store_key' => (string) ($sample?->store_key ?? ''),
+                'account_name' => (string) ($sample?->account_name ?? ''),
+                'is_wholesale' => (string) ($sample?->store_key ?? '') === 'wholesale' || filled($sample?->account_name),
+            ];
+
+            $resolver = app(ResolveScentMatchService::class);
+            $scentId = $resolver->resolveSingleCandidateId($this->matchScentSearch, $context, 90)
+                ?? $resolver->findExistingScent($this->matchScentSearch, $context)?->id;
         }
 
         if ($this->modalCandleClub) {
@@ -416,23 +425,20 @@ class MappingExceptions extends Component
                 trim((string) ($scent?->display_name ?? '')),
             ])->filter()->all();
 
-            $exceptions
+            $aliases = $exceptions
                 ->flatMap(fn (MappingException $exception): array => [
                     trim((string) ($exception->raw_scent_name ?? '')),
                     trim((string) ($exception->raw_title ?? '')),
                 ])
                 ->filter()
-                ->unique()
-                ->each(function (string $alias) use ($canonicalValues, $scentId): void {
-                    if (in_array($alias, $canonicalValues, true)) {
-                        return;
-                    }
+                ->unique();
 
-                    ScentAlias::query()->updateOrCreate(
-                        ['alias' => $alias, 'scope' => 'markets'],
-                        ['scent_id' => $scentId]
-                    );
-                });
+            app(CreateScentAliasAction::class)->syncAcrossScopes(
+                $scentId,
+                $aliases->all(),
+                ['markets'],
+                $canonicalValues
+            );
         }
 
         $this->showModal = false;
