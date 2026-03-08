@@ -3,6 +3,7 @@
 use App\Actions\ScentGovernance\CreateScentAction;
 use App\Actions\ScentGovernance\CreateScentAliasAction;
 use App\Livewire\Admin\ScentWizard;
+use App\Models\BaseOil;
 use App\Models\Scent;
 use App\Models\ScentAlias;
 use App\Models\User;
@@ -96,6 +97,12 @@ test('scent wizard save delegates canonical creation to create scent action', fu
         'display_name' => 'Delegated Scent Target',
         'is_active' => true,
     ]);
+    $baseOil = BaseOil::query()->create([
+        'name' => 'Lavender',
+        'grams_on_hand' => 0,
+        'reorder_threshold' => 200,
+        'active' => true,
+    ]);
 
     $mock = \Mockery::mock(CreateScentAction::class);
     $mock->shouldReceive('execute')
@@ -103,7 +110,9 @@ test('scent wizard save delegates canonical creation to create scent action', fu
         ->withArgs(function (array $payload, string $prefix): bool {
             return $prefix === 'form.'
                 && (string) ($payload['name'] ?? '') === 'Delegated New Scent'
-                && (string) ($payload['lifecycle_status'] ?? '') === 'draft';
+                && (string) ($payload['lifecycle_status'] ?? '') === 'draft'
+                && (bool) ($payload['is_blend'] ?? true) === false
+                && (int) data_get($payload, 'recipe_components.0.base_oil_id', 0) > 0;
         })
         ->andReturn($created);
     app()->instance(CreateScentAction::class, $mock);
@@ -112,12 +121,55 @@ test('scent wizard save delegates canonical creation to create scent action', fu
         ->set('intent', ScentWizard::INTENT_NEW)
         ->set('form.name', 'Delegated New Scent')
         ->set('form.display_name', 'Delegated New Scent')
+        ->set('form.recipe_type', ScentWizard::RECIPE_TYPE_SINGLE_OIL)
+        ->set('form.base_oil_id', $baseOil->id)
         ->set('form.lifecycle_status', 'draft')
         ->call('complete')
         ->assertSet('step', 5)
         ->assertSet('completion.mode', 'created')
         ->call('finish')
         ->assertRedirect(route('admin.index', ['tab' => 'master-data', 'resource' => 'scents']));
+});
+
+test('scent wizard blocks freeform oil reference when no governed oil is selected', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    Livewire::test(ScentWizard::class)
+        ->set('intent', ScentWizard::INTENT_NEW)
+        ->set('form.name', 'Loose Oil Scent')
+        ->set('form.display_name', 'Loose Oil Scent')
+        ->set('form.recipe_type', ScentWizard::RECIPE_TYPE_SINGLE_OIL)
+        ->set('form.oil_reference_name', 'Typo Oil Name')
+        ->call('complete')
+        ->assertHasErrors(['form.base_oil_id'])
+        ->assertSet('step', 2);
+});
+
+test('scent wizard requires governed blend-backed components', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    Livewire::test(ScentWizard::class)
+        ->set('intent', ScentWizard::INTENT_NEW)
+        ->set('form.name', 'Lavender Snap')
+        ->set('form.display_name', 'Lavender Snap')
+        ->set('form.recipe_type', ScentWizard::RECIPE_TYPE_BLEND_BACKED)
+        ->set('form.recipe_components', [[
+            'component_type' => 'oil',
+            'base_oil_id' => null,
+            'parts' => 1,
+            'percentage' => null,
+        ]])
+        ->call('complete')
+        ->assertHasErrors(['form.recipe_components.0.base_oil_id'])
+        ->assertSet('step', 2);
 });
 
 test('scent wizard can map to existing scent without creating a duplicate', function () {

@@ -4,9 +4,11 @@ namespace App\Livewire\Admin;
 
 use App\Actions\ScentGovernance\CreateScentAction;
 use App\Actions\ScentGovernance\CreateScentAliasAction;
+use App\Models\BaseOil;
 use App\Models\MappingException;
 use App\Models\Blend;
 use App\Models\Scent;
+use App\Models\ScentRecipeComponent;
 use App\Models\WholesaleCustomScent;
 use App\Services\ScentGovernance\ResolveScentMatchService;
 use App\Services\ScentGovernance\ScentLifecycleService;
@@ -20,6 +22,8 @@ class ScentWizard extends Component
     public const INTENT_MAP = 'map_existing';
     public const INTENT_CUSTOMER_ALIAS = 'customer_alias';
     public const INTENT_BLEND_PLACEHOLDER = 'blend_template_placeholder';
+    public const RECIPE_TYPE_SINGLE_OIL = 'single_oil';
+    public const RECIPE_TYPE_BLEND_BACKED = 'blend_backed';
 
     public int $step = 1;
     public string $intent = self::INTENT_NEW;
@@ -31,6 +35,9 @@ class ScentWizard extends Component
         'display_name' => '',
         'abbreviation' => '',
         'oil_reference_name' => '',
+        'base_oil_id' => null,
+        'recipe_type' => self::RECIPE_TYPE_SINGLE_OIL,
+        'recipe_components' => [],
         'notes' => '',
         'lifecycle_status' => 'draft',
         'is_blend' => false,
@@ -137,6 +144,71 @@ class ScentWizard extends Component
     {
         if (! in_array($value, $this->intentOptions(), true)) {
             $this->intent = self::INTENT_NEW;
+        }
+    }
+
+    public function updatedFormRecipeType(string $value): void
+    {
+        if (! in_array($value, [self::RECIPE_TYPE_SINGLE_OIL, self::RECIPE_TYPE_BLEND_BACKED], true)) {
+            $this->form['recipe_type'] = self::RECIPE_TYPE_SINGLE_OIL;
+        }
+
+        if (($this->form['recipe_type'] ?? self::RECIPE_TYPE_SINGLE_OIL) === self::RECIPE_TYPE_SINGLE_OIL) {
+            $this->form['is_blend'] = false;
+            $this->form['recipe_components'] = [];
+            $this->form['oil_blend_id'] = null;
+            $this->form['blend_oil_count'] = null;
+            return;
+        }
+
+        $this->form['is_blend'] = true;
+        $this->form['base_oil_id'] = null;
+        $this->form['oil_reference_name'] = '';
+
+        if (! is_array($this->form['recipe_components'] ?? null) || $this->form['recipe_components'] === []) {
+            $this->form['recipe_components'] = [$this->blankRecipeComponent()];
+        }
+    }
+
+    public function updatedFormBaseOilId($value): void
+    {
+        $id = blank($value) ? null : (int) $value;
+        $this->form['base_oil_id'] = $id;
+
+        if (! $id) {
+            $this->form['oil_reference_name'] = '';
+            return;
+        }
+
+        $name = BaseOil::query()->whereKey($id)->value('name');
+        $this->form['oil_reference_name'] = $name ? (string) $name : '';
+    }
+
+    public function addRecipeComponent(): void
+    {
+        if (($this->form['recipe_type'] ?? self::RECIPE_TYPE_SINGLE_OIL) !== self::RECIPE_TYPE_BLEND_BACKED) {
+            $this->form['recipe_type'] = self::RECIPE_TYPE_BLEND_BACKED;
+        }
+
+        $rows = is_array($this->form['recipe_components'] ?? null) ? $this->form['recipe_components'] : [];
+        $rows[] = $this->blankRecipeComponent();
+        $this->form['recipe_components'] = array_values($rows);
+        $this->form['is_blend'] = true;
+    }
+
+    public function removeRecipeComponent(int $index): void
+    {
+        $rows = is_array($this->form['recipe_components'] ?? null) ? $this->form['recipe_components'] : [];
+        if (! array_key_exists($index, $rows)) {
+            return;
+        }
+
+        unset($rows[$index]);
+        $rows = array_values($rows);
+        $this->form['recipe_components'] = $rows;
+
+        if ($rows === []) {
+            $this->form['recipe_components'] = [$this->blankRecipeComponent()];
         }
     }
 
@@ -310,6 +382,14 @@ class ScentWizard extends Component
             'form.display_name' => ['nullable', 'string', 'max:255'],
             'form.abbreviation' => ['nullable', 'string', 'max:64'],
             'form.oil_reference_name' => ['nullable', 'string', 'max:255'],
+            'form.base_oil_id' => ['nullable', 'integer', 'exists:base_oils,id'],
+            'form.recipe_type' => ['required', 'string', 'in:single_oil,blend_backed'],
+            'form.recipe_components' => ['array'],
+            'form.recipe_components.*.component_type' => ['nullable', 'string', 'in:oil,blend_template'],
+            'form.recipe_components.*.base_oil_id' => ['nullable', 'integer', 'exists:base_oils,id'],
+            'form.recipe_components.*.blend_template_id' => ['nullable', 'integer', 'exists:blends,id'],
+            'form.recipe_components.*.parts' => ['nullable', 'numeric', 'gt:0'],
+            'form.recipe_components.*.percentage' => ['nullable', 'numeric', 'gt:0', 'max:100'],
             'form.notes' => ['nullable', 'string', 'max:1000'],
             'form.lifecycle_status' => ['required', 'string', 'in:draft,active,inactive,archived'],
             'form.is_blend' => ['boolean'],
@@ -324,6 +404,46 @@ class ScentWizard extends Component
             'form.availability.wax_melt' => ['boolean'],
         ];
         validator(['form' => $this->form], $rules)->validate();
+
+        $recipeType = (string) ($this->form['recipe_type'] ?? self::RECIPE_TYPE_SINGLE_OIL);
+        if ($recipeType === self::RECIPE_TYPE_SINGLE_OIL) {
+            if (! (int) ($this->form['base_oil_id'] ?? 0)) {
+                $this->addError('form.base_oil_id', 'Select an existing base oil for single-oil scents.');
+            }
+
+            $selectedOilName = BaseOil::query()
+                ->whereKey((int) ($this->form['base_oil_id'] ?? 0))
+                ->value('name');
+            $this->form['oil_reference_name'] = $selectedOilName ? (string) $selectedOilName : '';
+            $this->form['is_blend'] = false;
+            $this->form['recipe_components'] = [];
+            $this->form['oil_blend_id'] = null;
+            $this->form['blend_oil_count'] = null;
+        }
+
+        if ($recipeType === self::RECIPE_TYPE_BLEND_BACKED) {
+            $normalizedComponents = $this->normalizeRecipeComponents();
+            if ($normalizedComponents === []) {
+                $this->addError('form.recipe_components', 'Add at least one governed recipe component.');
+            }
+
+            foreach ($normalizedComponents as $index => $row) {
+                $type = (string) ($row['component_type'] ?? '');
+                if ($type === ScentRecipeComponent::TYPE_OIL && ! (int) ($row['base_oil_id'] ?? 0)) {
+                    $this->addError("form.recipe_components.{$index}.base_oil_id", 'Select an existing oil.');
+                }
+                if ($type === ScentRecipeComponent::TYPE_BLEND_TEMPLATE && ! (int) ($row['blend_template_id'] ?? 0)) {
+                    $this->addError("form.recipe_components.{$index}.blend_template_id", 'Select an existing blend template.');
+                }
+            }
+
+            $this->form['is_blend'] = true;
+            $this->form['base_oil_id'] = null;
+            $this->form['oil_reference_name'] = '';
+            $this->form['oil_blend_id'] = null;
+            $this->form['blend_oil_count'] = count($normalizedComponents) > 0 ? count($normalizedComponents) : null;
+            $this->form['recipe_components'] = $normalizedComponents;
+        }
 
         $candidateName = trim((string) ($this->form['name'] ?? ''));
         if ($candidateName === '') {
@@ -365,15 +485,33 @@ class ScentWizard extends Component
      */
     protected function validatedPayload(): array
     {
+        $recipeType = (string) ($this->form['recipe_type'] ?? self::RECIPE_TYPE_SINGLE_OIL);
+        $baseOilId = blank($this->form['base_oil_id'] ?? null) ? null : (int) $this->form['base_oil_id'];
+        $baseOilName = $baseOilId
+            ? (string) (BaseOil::query()->whereKey($baseOilId)->value('name') ?? '')
+            : '';
+
+        $recipeComponents = $recipeType === self::RECIPE_TYPE_BLEND_BACKED
+            ? $this->normalizeRecipeComponents()
+            : ($baseOilId
+                ? [[
+                    'component_type' => ScentRecipeComponent::TYPE_OIL,
+                    'base_oil_id' => $baseOilId,
+                    'parts' => 1,
+                    'percentage' => 100,
+                ]]
+                : []);
+
         return [
             'name' => (string) ($this->form['name'] ?? ''),
             'display_name' => (string) ($this->form['display_name'] ?? ''),
             'abbreviation' => (string) ($this->form['abbreviation'] ?? ''),
-            'oil_reference_name' => (string) ($this->form['oil_reference_name'] ?? ''),
+            'oil_reference_name' => $baseOilName !== '' ? $baseOilName : (string) ($this->form['oil_reference_name'] ?? ''),
             'notes' => (string) ($this->form['notes'] ?? ''),
-            'is_blend' => (bool) ($this->form['is_blend'] ?? false),
-            'oil_blend_id' => $this->form['oil_blend_id'] ?? null,
-            'blend_oil_count' => $this->form['blend_oil_count'] ?? null,
+            'is_blend' => $recipeType === self::RECIPE_TYPE_BLEND_BACKED,
+            'oil_blend_id' => null,
+            'blend_oil_count' => $recipeType === self::RECIPE_TYPE_BLEND_BACKED ? count($recipeComponents) : null,
+            'recipe_components' => $recipeComponents,
             'is_wholesale_custom' => (bool) ($this->form['is_wholesale_custom'] ?? false),
             'is_candle_club' => (bool) ($this->form['is_candle_club'] ?? false),
             'lifecycle_status' => (string) ($this->form['lifecycle_status'] ?? ScentLifecycleService::STATUS_DRAFT),
@@ -494,6 +632,63 @@ class ScentWizard extends Component
         }
 
         return array_values(array_unique($scopes));
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function blankRecipeComponent(): array
+    {
+        return [
+            'component_type' => ScentRecipeComponent::TYPE_OIL,
+            'base_oil_id' => null,
+            'blend_template_id' => null,
+            'parts' => 1,
+            'percentage' => null,
+        ];
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function normalizeRecipeComponents(): array
+    {
+        $rows = $this->form['recipe_components'] ?? [];
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $type = (string) ($row['component_type'] ?? '');
+            if (! in_array($type, [ScentRecipeComponent::TYPE_OIL, ScentRecipeComponent::TYPE_BLEND_TEMPLATE], true)) {
+                continue;
+            }
+
+            $component = [
+                'component_type' => $type,
+                'base_oil_id' => null,
+                'blend_template_id' => null,
+                'parts' => blank($row['parts'] ?? null) ? null : (float) $row['parts'],
+                'percentage' => blank($row['percentage'] ?? null) ? null : (float) $row['percentage'],
+            ];
+
+            if ($type === ScentRecipeComponent::TYPE_OIL) {
+                $component['base_oil_id'] = blank($row['base_oil_id'] ?? null) ? null : (int) $row['base_oil_id'];
+            }
+
+            if ($type === ScentRecipeComponent::TYPE_BLEND_TEMPLATE) {
+                $component['blend_template_id'] = blank($row['blend_template_id'] ?? null) ? null : (int) $row['blend_template_id'];
+            }
+
+            $normalized[] = $component;
+        }
+
+        return $normalized;
     }
 
     /**
@@ -624,6 +819,10 @@ class ScentWizard extends Component
             'lifecycleStatuses' => $lifecycle->statuses(),
             'contextExceptionPreview' => $this->contextExceptionPreview(),
             'blends' => Blend::query()->orderBy('name')->get(['id', 'name']),
+            'baseOils' => BaseOil::query()
+                ->when(Schema::hasColumn('base_oils', 'active'), fn ($q) => $q->where('active', true))
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ])->layout('layouts.app');
     }
 

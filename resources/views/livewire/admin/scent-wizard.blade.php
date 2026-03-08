@@ -185,9 +185,20 @@
           <flux:input wire:model.defer="form.abbreviation" label="Abbrev" />
           @error('form.abbreviation') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
-        <div>
-          <flux:input wire:model.defer="form.oil_reference_name" label="Oil Ref" />
-          @error('form.oil_reference_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        <div class="md:col-span-1 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div class="text-xs text-emerald-100/70">Recipe type</div>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <label class="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/85">
+              <input type="radio" wire:model.live="form.recipe_type" value="single_oil" class="mt-1 rounded border-white/20 bg-white/10" />
+              <span>Single oil</span>
+            </label>
+            <label class="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/85">
+              <input type="radio" wire:model.live="form.recipe_type" value="blend_backed" class="mt-1 rounded border-white/20 bg-white/10" />
+              <span>Blend-backed</span>
+            </label>
+          </div>
+          <div class="mt-2 text-[11px] text-emerald-100/65">Recipe components must use existing oils or blend templates.</div>
+          @error('form.recipe_type') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
 
         <div class="md:col-span-3">
@@ -205,28 +216,100 @@
           @error('form.lifecycle_status') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
 
-        <div class="md:col-span-2">
-          <label class="text-xs text-emerald-100/70">Blend-backed scent?</label>
-          <div class="mt-2 flex h-10 items-center gap-2">
-            <input type="checkbox" wire:model.defer="form.is_blend" class="rounded border-white/20 bg-white/10" />
-            <span class="text-sm text-white/80">Uses existing blend template</span>
+        @if(($form['recipe_type'] ?? 'single_oil') === 'single_oil')
+          <div class="md:col-span-3 rounded-xl border border-white/10 bg-black/20 p-3">
+            <label class="text-xs text-emerald-100/70">Primary oil</label>
+            <div class="mt-2">
+              <livewire:components.base-oil-combobox
+                wire:model.live="form.base_oil_id"
+                placeholder="Search and select existing oil..."
+                :limit="25"
+                :include-inactive="false"
+                wire:key="wizard-single-oil-selector"
+              />
+            </div>
+            <div class="mt-2 text-[11px] text-white/65">
+              No oil match?
+              <a href="{{ route('admin.index', ['tab' => 'master-data', 'resource' => 'base-oils']) }}" wire:navigate class="text-emerald-200 hover:text-emerald-100 underline decoration-dotted">Create missing oil in Master Data</a>.
+            </div>
+            @error('form.base_oil_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            @error('form.oil_reference_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
           </div>
-        </div>
+        @else
+          <div class="md:col-span-6 rounded-xl border border-white/10 bg-black/20 p-3">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="text-xs text-emerald-100/70">Blend-backed recipe components</div>
+                <div class="text-[11px] text-white/65">Add oils and blend templates using governed selectors only.</div>
+              </div>
+              <button type="button" wire:click="addRecipeComponent" class="rounded-full border border-emerald-300/35 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100 hover:bg-emerald-500/25">Add Component</button>
+            </div>
 
-        @if($form['is_blend'] ?? false)
-          <div class="md:col-span-2">
-            <label class="text-xs text-white/70">Blend template</label>
-            <select wire:model.defer="form.oil_blend_id" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
-              <option value="">None selected</option>
-              @foreach($blends as $blend)
-                <option value="{{ $blend->id }}">{{ $blend->name }}</option>
+            <div class="mt-3 space-y-3">
+              @foreach($form['recipe_components'] ?? [] as $index => $row)
+                <div class="grid gap-2 rounded-xl border border-white/10 bg-white/5 p-3 md:grid-cols-12">
+                  <div class="md:col-span-3">
+                    <label class="text-[11px] text-emerald-100/70">Component type</label>
+                    <select wire:model.live="form.recipe_components.{{ $index }}.component_type" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90">
+                      <option value="oil">Oil</option>
+                      <option value="blend_template">Blend template</option>
+                    </select>
+                  </div>
+
+                  <div class="md:col-span-5">
+                    @if(($row['component_type'] ?? 'oil') === 'blend_template')
+                      <label class="text-[11px] text-emerald-100/70">Blend template</label>
+                      <div class="mt-1">
+                        <livewire:components.blend-template-combobox
+                          wire:model.live="form.recipe_components.{{ $index }}.blend_template_id"
+                          placeholder="Search blend templates..."
+                          :limit="25"
+                          :include-inactive="false"
+                          wire:key="wizard-blend-template-selector-{{ $index }}"
+                        />
+                      </div>
+                      @error("form.recipe_components.$index.blend_template_id") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                    @else
+                      <label class="text-[11px] text-emerald-100/70">Oil</label>
+                      <div class="mt-1">
+                        <livewire:components.base-oil-combobox
+                          wire:model.live="form.recipe_components.{{ $index }}.base_oil_id"
+                          placeholder="Search oils..."
+                          :limit="25"
+                          :include-inactive="false"
+                          wire:key="wizard-recipe-oil-selector-{{ $index }}"
+                        />
+                      </div>
+                      @error("form.recipe_components.$index.base_oil_id") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                    @endif
+                  </div>
+
+                  <div class="md:col-span-2">
+                    <label class="text-[11px] text-emerald-100/70">Parts</label>
+                    <input type="number" min="0.01" step="0.01" wire:model.defer="form.recipe_components.{{ $index }}.parts" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90" />
+                    @error("form.recipe_components.$index.parts") <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+                  </div>
+
+                  <div class="md:col-span-2">
+                    <label class="text-[11px] text-emerald-100/70">% (optional)</label>
+                    <input type="number" min="0.01" max="100" step="0.01" wire:model.defer="form.recipe_components.{{ $index }}.percentage" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/90" />
+                    <div class="mt-2 flex items-center justify-between">
+                      @error("form.recipe_components.$index.percentage") <div class="text-xs text-red-300">{{ $message }}</div> @enderror
+                      <button type="button" wire:click="removeRecipeComponent({{ $index }})" class="ml-auto rounded-full border border-red-300/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-red-100 hover:bg-red-500/20">Remove</button>
+                    </div>
+                  </div>
+                </div>
               @endforeach
-            </select>
-            @error('form.oil_blend_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-          </div>
-          <div>
-            <flux:input wire:model.defer="form.blend_oil_count" type="number" min="1" label="Blend oils" />
-            @error('form.blend_oil_count') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+            </div>
+
+            @error('form.recipe_components') <div class="mt-2 text-xs text-red-300">{{ $message }}</div> @enderror
+
+            <div class="mt-2 text-[11px] text-white/65">
+              Missing a source record?
+              <a href="{{ route('admin.index', ['tab' => 'master-data', 'resource' => 'base-oils']) }}" wire:navigate class="text-emerald-200 hover:text-emerald-100 underline decoration-dotted">Create oils in Master Data</a>
+              or
+              <a href="{{ route('admin.index', ['tab' => 'blends']) }}" wire:navigate class="text-emerald-200 hover:text-emerald-100 underline decoration-dotted">maintain blend templates</a>.
+            </div>
           </div>
         @endif
 
@@ -340,10 +423,42 @@
 
       @if($intent === 'new_scent')
         <div class="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/85 space-y-1">
+          @php($recipeType = (string) ($form['recipe_type'] ?? 'single_oil'))
+          @php($baseOilLookup = collect($baseOils ?? [])->keyBy('id'))
+          @php($blendLookup = collect($blends ?? [])->keyBy('id'))
           <div><span class="text-emerald-100/70">Name:</span> {{ $form['name'] ?: '—' }}</div>
           <div><span class="text-emerald-100/70">Display:</span> {{ $form['display_name'] ?: '—' }}</div>
           <div><span class="text-emerald-100/70">Abbrev:</span> {{ $form['abbreviation'] ?: '—' }}</div>
-          <div><span class="text-emerald-100/70">Oil Ref:</span> {{ $form['oil_reference_name'] ?: '—' }}</div>
+          <div><span class="text-emerald-100/70">Recipe type:</span> {{ $recipeType === 'blend_backed' ? 'Blend-backed' : 'Single oil' }}</div>
+          @if($recipeType === 'single_oil')
+            @php($selectedOil = $baseOilLookup->get((int) ($form['base_oil_id'] ?? 0)))
+            <div><span class="text-emerald-100/70">Primary oil:</span> {{ $selectedOil->name ?? '—' }}</div>
+          @else
+            <div>
+              <span class="text-emerald-100/70">Recipe components:</span>
+              @php($rows = $form['recipe_components'] ?? [])
+              @if(empty($rows))
+                —
+              @else
+                <ul class="mt-1 list-disc pl-5 space-y-1">
+                  @foreach($rows as $row)
+                    @php($type = (string) ($row['component_type'] ?? 'oil'))
+                    @php($parts = $row['parts'] ?? null)
+                    @php($percentage = $row['percentage'] ?? null)
+                    <li class="text-xs">
+                      @if($type === 'blend_template')
+                        {{ $blendLookup->get((int) ($row['blend_template_id'] ?? 0))->name ?? 'Unknown blend template' }}
+                      @else
+                        {{ $baseOilLookup->get((int) ($row['base_oil_id'] ?? 0))->name ?? 'Unknown oil' }}
+                      @endif
+                      @if($parts) · {{ $parts }} parts @endif
+                      @if($percentage) · {{ $percentage }}% @endif
+                    </li>
+                  @endforeach
+                </ul>
+              @endif
+            </div>
+          @endif
           <div><span class="text-emerald-100/70">Lifecycle:</span> {{ ucfirst((string) ($form['lifecycle_status'] ?? 'draft')) }}</div>
           <div><span class="text-emerald-100/70">Availability:</span>
             @php
