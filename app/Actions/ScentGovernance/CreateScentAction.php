@@ -5,13 +5,15 @@ namespace App\Actions\ScentGovernance;
 use App\Models\Blend;
 use App\Models\Scent;
 use App\Services\ScentGovernance\ScentLifecycleService;
+use App\Services\ScentGovernance\ScentRecipeService;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class CreateScentAction
 {
     public function __construct(
-        protected ScentLifecycleService $lifecycle
+        protected ScentLifecycleService $lifecycle,
+        protected ScentRecipeService $recipes
     ) {}
 
     /**
@@ -51,7 +53,14 @@ class CreateScentAction
             $payload['availability_json'] = $attributes['availability_json'] ?: null;
         }
 
-        return Scent::query()->create($payload);
+        if (Schema::hasColumn('scents', 'lifecycle_status')) {
+            $payload['lifecycle_status'] = $attributes['lifecycle_status'] ?? null;
+        }
+
+        $scent = Scent::query()->create($payload);
+        $this->recipes->syncActiveRecipeForScent($scent, $attributes, true);
+
+        return $scent->fresh() ?? $scent;
     }
 
     /**
@@ -78,6 +87,7 @@ class CreateScentAction
             'is_active' => (bool) ($attributes['is_active'] ?? true),
             'lifecycle_status' => $attributes['lifecycle_status'] ?? null,
             'availability_json' => $this->normalizeAvailability($attributes['availability_json'] ?? null),
+            'source_context' => trim((string) ($attributes['source_context'] ?? '')),
         ];
 
         if (! $normalized['is_blend']) {

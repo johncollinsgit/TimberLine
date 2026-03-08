@@ -378,6 +378,7 @@ class ScentWizard extends Component
             'is_candle_club' => (bool) ($this->form['is_candle_club'] ?? false),
             'lifecycle_status' => (string) ($this->form['lifecycle_status'] ?? ScentLifecycleService::STATUS_DRAFT),
             'availability_json' => $this->form['availability'] ?? null,
+            'source_context' => (string) ($this->context['source_context'] ?? 'wizard'),
         ];
     }
 

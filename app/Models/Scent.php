@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Scent extends Model
 {
@@ -18,8 +20,10 @@ class Scent extends Model
         'blend_oil_count',
         'canonical_scent_id',
         'source_wholesale_custom_scent_id',
+        'current_scent_recipe_id',
         'recipe_components_json',
         'availability_json',
+        'lifecycle_status',
         'is_wholesale_custom',
         'is_candle_club',
         'is_active',
@@ -31,8 +35,10 @@ class Scent extends Model
         'blend_oil_count' => 'integer',
         'canonical_scent_id' => 'integer',
         'source_wholesale_custom_scent_id' => 'integer',
+        'current_scent_recipe_id' => 'integer',
         'recipe_components_json' => 'array',
         'availability_json' => 'array',
+        'lifecycle_status' => 'string',
         'is_wholesale_custom' => 'boolean',
         'is_candle_club' => 'boolean',
         'is_active' => 'boolean',
@@ -52,6 +58,21 @@ class Scent extends Model
     public function sourceWholesaleCustomScent(): BelongsTo
     {
         return $this->belongsTo(WholesaleCustomScent::class, 'source_wholesale_custom_scent_id');
+    }
+
+    public function currentRecipe(): BelongsTo
+    {
+        return $this->belongsTo(ScentRecipe::class, 'current_scent_recipe_id');
+    }
+
+    public function recipes(): HasMany
+    {
+        return $this->hasMany(ScentRecipe::class);
+    }
+
+    public function activeRecipe(): HasOne
+    {
+        return $this->hasOne(ScentRecipe::class)->where('is_active', true);
     }
 
     public static function normalizeName(string $name): string

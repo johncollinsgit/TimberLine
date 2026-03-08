@@ -5,13 +5,15 @@ namespace App\Actions\ScentGovernance;
 use App\Models\Blend;
 use App\Models\Scent;
 use App\Services\ScentGovernance\ScentLifecycleService;
+use App\Services\ScentGovernance\ScentRecipeService;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class UpdateScentAction
 {
     public function __construct(
-        protected ScentLifecycleService $lifecycle
+        protected ScentLifecycleService $lifecycle,
+        protected ScentRecipeService $recipes
     ) {}
 
     /**
@@ -56,8 +58,14 @@ class UpdateScentAction
             $payload['availability_json'] = $attributes['availability_json'] ?: null;
         }
 
+        if (Schema::hasColumn('scents', 'lifecycle_status')) {
+            $payload['lifecycle_status'] = $attributes['lifecycle_status'] ?? null;
+        }
+
         $scent->fill($payload);
         $scent->save();
+
+        $this->recipes->syncActiveRecipeForScent($scent, $attributes);
 
         return $scent->fresh() ?? $scent;
     }
@@ -85,6 +93,7 @@ class UpdateScentAction
             'is_candle_club' => (bool) ($attributes['is_candle_club'] ?? $scent->is_candle_club),
             'is_active' => (bool) ($attributes['is_active'] ?? $scent->is_active),
             'lifecycle_status' => $attributes['lifecycle_status'] ?? null,
+            'source_context' => trim((string) ($attributes['source_context'] ?? '')),
             'availability_json' => $this->normalizeAvailability(
                 $attributes['availability_json'] ?? $scent->availability_json ?? null
             ),

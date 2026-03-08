@@ -55,6 +55,7 @@ CSV);
         $exit = Artisan::call('wholesale-custom:sync-master', [
             'csv' => $csvPath,
             '--replace' => true,
+            '--allow-create-canonical' => true,
         ]);
 
         $output = Artisan::output();

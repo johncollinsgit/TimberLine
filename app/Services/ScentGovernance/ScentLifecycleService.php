@@ -35,6 +35,12 @@ class ScentLifecycleService
     {
         $status = trim((string) ($attributes['lifecycle_status'] ?? ''));
         if ($status === '') {
+            if (array_key_exists('is_active', $attributes)) {
+                $attributes['lifecycle_status'] = (bool) $attributes['is_active']
+                    ? self::STATUS_ACTIVE
+                    : self::STATUS_INACTIVE;
+            }
+
             return $attributes;
         }
 
@@ -44,6 +50,7 @@ class ScentLifecycleService
             ]);
         }
 
+        $attributes['lifecycle_status'] = $status;
         $attributes['is_active'] = $status === self::STATUS_ACTIVE;
 
         return $attributes;
@@ -53,6 +60,11 @@ class ScentLifecycleService
     {
         if (! $scent) {
             return self::STATUS_DRAFT;
+        }
+
+        $status = trim((string) ($scent->lifecycle_status ?? ''));
+        if ($status !== '' && in_array($status, $this->statuses(), true)) {
+            return $status;
         }
 
         return (bool) ($scent->is_active ?? false)
@@ -65,4 +77,3 @@ class ScentLifecycleService
         return $prefix !== '' ? $prefix.$name : $name;
     }
 }
-

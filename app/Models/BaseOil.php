@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BaseOil extends Model
 {
@@ -28,4 +29,14 @@ class BaseOil extends Model
         'cost_per_jug' => 'decimal:2',
         'active' => 'boolean',
     ];
+
+    public function recipeComponents(): HasMany
+    {
+        return $this->hasMany(ScentRecipeComponent::class);
+    }
+
+    public function blendTemplateComponents(): HasMany
+    {
+        return $this->hasMany(BlendTemplateComponent::class);
+    }
 }
