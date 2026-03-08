@@ -150,7 +150,7 @@
           <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="pointer-events-none">
               <div class="text-white/90 font-semibold">
-                #{{ $order->order_number ?? '—' }} — {{ $order->display_name ?? $order->order_label ?? $order->customer_name ?? 'Unknown' }}
+                #{{ ltrim((string) ($order->order_number ?? '—'), '#') }} — {{ $order->display_name ?? $order->order_label ?? $order->customer_name ?? 'Unknown' }}
               </div>
               <div class="mt-1 text-xs text-emerald-100/60">
                 {{ ucfirst($order->order_type ?? 'retail') }} · {{ $group->lines_count }} exceptions ·
@@ -196,7 +196,7 @@
               <div class="divide-y divide-emerald-200/10">
                 @foreach($lines as $line)
                   <div class="grid grid-cols-6 gap-0 px-3 py-2 text-xs text-white/80">
-                    <div>#{{ $line['order_number'] ?? '—' }}</div>
+                    <div>#{{ ltrim((string) ($line['order_number'] ?? '—'), '#') }}</div>
                     <div class="truncate">{{ $line['order_customer'] ?? '—' }}</div>
                     <div class="col-span-2">
                       <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
@@ -287,7 +287,7 @@
                     <div class="text-white/60">
                       {{ ucfirst($line['store_key'] ?? 'store') }}
                     </div>
-                    <div>#{{ $line['order_number'] ?? '—' }}</div>
+                    <div>#{{ ltrim((string) ($line['order_number'] ?? '—'), '#') }}</div>
                     <div class="truncate">{{ $line['order_customer'] ?? '—' }}</div>
                     <div>
                       <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
@@ -382,7 +382,7 @@
           <div>
             <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Order Context</div>
             <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white">
-              #{{ $orderModal->order_number ?? '—' }} — {{ $orderModal->display_name ?? $orderModal->order_label ?? $orderModal->customer_name ?? 'Unknown' }}
+              #{{ ltrim((string) ($orderModal->order_number ?? '—'), '#') }} — {{ $orderModal->display_name ?? $orderModal->order_label ?? $orderModal->customer_name ?? 'Unknown' }}
             </div>
             <div class="mt-1 text-sm text-emerald-50/70">
               Created: {{ optional($orderModal->created_at)->toDateTimeString() ?? '—' }} ·

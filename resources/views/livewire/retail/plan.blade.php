@@ -87,7 +87,7 @@
                 <div class="min-w-0">
                   <div class="truncate text-sm font-semibold text-white" title="{{ $orderRow['display_name'] }}">{{ $orderRow['display_name'] }}</div>
                   <div class="mt-1 text-xs text-emerald-100/65">
-                    #{{ $orderRow['order_number'] }} · {{ ucfirst($orderRow['status']) }}
+                    #{{ ltrim((string) $orderRow['order_number'], '#') }} · {{ ucfirst($orderRow['status']) }}
                     @if($orderRow['due_at'])
                       · Due {{ \Illuminate\Support\Carbon::parse($orderRow['due_at'])->format('M j') }}
                     @endif
@@ -108,7 +108,7 @@
           <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/65">Selected Order Overview</div>
           <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
             <span class="font-semibold">{{ $selectedWholesaleOrder['display_name'] }}</span>
-            <span class="text-emerald-100/65">#{{ $selectedWholesaleOrder['order_number'] }}</span>
+            <span class="text-emerald-100/65">#{{ ltrim((string) $selectedWholesaleOrder['order_number'], '#') }}</span>
             <span class="text-emerald-100/65">{{ ucfirst($selectedWholesaleOrder['status']) }}</span>
             @if($selectedWholesaleOrder['due_at'])
               <span class="text-emerald-100/65">Due {{ \Illuminate\Support\Carbon::parse($selectedWholesaleOrder['due_at'])->format('M j, Y') }}</span>

@@ -81,7 +81,7 @@
                   <div class="min-w-0 truncate text-white/90 font-semibold">{{ $label }}</div>
                 </div>
                 <div class="mt-1 text-xs text-emerald-100/60">
-                  Order #{{ $order->order_number ?? '—' }}
+                  Order #{{ ltrim((string) ($order->order_number ?? '—'), '#') }}
                   <span class="mx-1 text-emerald-100/40">•</span>
                   <span class="text-emerald-50/70">{{ $statusLabel }}</span>
                   @if(($order->open_mapping_exceptions_count ?? 0) > 0)

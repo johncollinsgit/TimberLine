@@ -91,7 +91,7 @@
                   · {{ $row['account_name'] }}
                 @endif
                 @if($row['order_number'] !== '')
-                  · #{{ $row['order_number'] }}
+                  · #{{ ltrim((string) $row['order_number'], '#') }}
                 @endif
               </div>
             @endforeach
