@@ -378,7 +378,7 @@
           <div><span class="text-emerald-100/70">Recipe type:</span> {{ $recipeType === 'blend_backed' ? 'Blend-backed' : 'Single oil' }}</div>
           @if($recipeType === 'single_oil')
             @php($selectedOil = $baseOilLookup->get((int) ($form['base_oil_id'] ?? 0)))
-            <div><span class="text-emerald-100/70">Primary oil:</span> {{ $selectedOil->name ?? '—' }}</div>
+            <div><span class="text-emerald-100/70">Primary oil:</span> {{ $selectedOil?->name ?? '—' }}</div>
           @else
             <div>
               <span class="text-emerald-100/70">Recipe components:</span>
@@ -393,9 +393,9 @@
                     @php($percentage = $row['percentage'] ?? null)
                     <li class="text-xs">
                       @if($type === 'blend_template')
-                        {{ $blendLookup->get((int) ($row['blend_template_id'] ?? 0))->name ?? 'Unknown blend template' }}
+                        {{ $blendLookup->get((int) ($row['blend_template_id'] ?? 0))?->name ?? 'Unknown blend template' }}
                       @else
-                        {{ $baseOilLookup->get((int) ($row['base_oil_id'] ?? 0))->name ?? 'Unknown oil' }}
+                        {{ $baseOilLookup->get((int) ($row['base_oil_id'] ?? 0))?->name ?? 'Unknown oil' }}
                       @endif
                       @if($parts) · {{ $parts }} parts @endif
                       @if($percentage) · {{ $percentage }}% @endif
@@ -407,10 +407,8 @@
           @endif
           <div><span class="text-emerald-100/70">Lifecycle:</span> {{ ucfirst((string) ($form['lifecycle_status'] ?? 'draft')) }}</div>
           <div><span class="text-emerald-100/70">Availability:</span>
-            @php
-              $enabled = collect($form['availability'] ?? [])->filter()->keys()->map(fn ($k) => str_replace('_', ' ', $k))->all();
-            @endphp
-            {{ $enabled ? implode(', ', $enabled) : 'none selected' }}
+            @php($enabledAvailability = collect($form['availability'] ?? [])->filter()->keys()->map(fn ($k) => str_replace('_', ' ', $k))->all())
+            {{ $enabledAvailability ? implode(', ', $enabledAvailability) : 'none selected' }}
           </div>
         </div>
       @endif

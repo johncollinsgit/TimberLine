@@ -172,6 +172,36 @@ test('scent wizard requires governed blend-backed components', function () {
         ->assertSet('step', 2);
 });
 
+test('scent wizard review handles blend components that reference non-active oils', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $inactiveOil = BaseOil::query()->create([
+        'name' => 'Inactive Lavender',
+        'grams_on_hand' => 0,
+        'reorder_threshold' => 200,
+        'active' => false,
+    ]);
+
+    Livewire::test(ScentWizard::class)
+        ->set('intent', ScentWizard::INTENT_NEW)
+        ->set('step', 2)
+        ->set('form.name', 'Review Safe Blend')
+        ->set('form.display_name', 'Review Safe Blend')
+        ->set('form.recipe_type', ScentWizard::RECIPE_TYPE_BLEND_BACKED)
+        ->set('form.recipe_components', [[
+            'component_type' => 'oil',
+            'base_oil_id' => $inactiveOil->id,
+            'parts' => 1,
+            'percentage' => null,
+        ]])
+        ->call('nextStep')
+        ->assertSet('step', 3);
+});
+
 test('scent wizard can map to existing scent without creating a duplicate', function () {
     $user = User::factory()->create([
         'role' => 'admin',

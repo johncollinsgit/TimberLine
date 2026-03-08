@@ -766,7 +766,6 @@ class ScentWizard extends Component
             'contextExceptionPreview' => $this->contextExceptionPreview(),
             'blends' => Blend::query()->orderBy('name')->get(['id', 'name']),
             'baseOils' => BaseOil::query()
-                ->when(Schema::hasColumn('base_oils', 'active'), fn ($q) => $q->where('active', true))
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'plannedAliasScopes' => $this->rawAliasScopes(),
