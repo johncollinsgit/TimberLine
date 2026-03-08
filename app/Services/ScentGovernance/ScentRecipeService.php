@@ -6,11 +6,16 @@ use App\Models\BaseOil;
 use App\Models\Scent;
 use App\Models\ScentRecipe;
 use App\Models\ScentRecipeComponent;
+use App\Services\Recipes\FlattenFormulaService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class ScentRecipeService
 {
+    public function __construct(
+        protected FlattenFormulaService $flattenFormula,
+    ) {}
+
     /**
      * @param  array<string,mixed>  $attributes
      */
@@ -214,5 +219,25 @@ class ScentRecipeService
             ->all();
 
         return $left !== $right;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function flattenForScent(
+        Scent|int $scent,
+        ?float $totalGrams = null,
+        bool $allowLegacyFallback = false,
+        bool $includeTree = true
+    ): array {
+        return $this->flattenFormula->flattenScent($scent, $totalGrams, $allowLegacyFallback, $includeTree);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function flattenForRecipe(ScentRecipe|int $recipe, ?float $totalGrams = null, bool $includeTree = true): array
+    {
+        return $this->flattenFormula->flattenRecipe($recipe, $totalGrams, $includeTree);
     }
 }
