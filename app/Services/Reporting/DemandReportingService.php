@@ -258,6 +258,129 @@ class DemandReportingService
     /**
      * @return array<string,mixed>
      */
+    public function explodedOilDemandByWindow(
+        string $state,
+        CarbonImmutable $from,
+        CarbonImmutable $to,
+        ?string $channel = null,
+        array $windowMeta = []
+    ): array {
+        $state = $this->normalizeState($state);
+        $channelFilter = $this->normalizeChannel($channel);
+        $snapshot = $this->buildScentSnapshot($state, $from, $to, $channelFilter, $windowMeta);
+
+        return $this->explodeOilFromSnapshot($snapshot, $state);
+    }
+
+    /**
+     * @param  array<string,mixed>  $timeframe
+     * @return array<int,array<string,mixed>>
+     */
+    public function trendSeries(
+        string $state,
+        array $timeframe,
+        ?string $channel = null,
+        string $metric = 'units',
+        int $points = 8
+    ): array {
+        $state = $this->normalizeState($state);
+        $metric = in_array($metric, ['units', 'wax_grams', 'oil_grams'], true) ? $metric : 'units';
+        $channelFilter = $this->normalizeChannel($channel);
+        $points = max(2, min(24, $points));
+
+        /** @var CarbonImmutable $from */
+        $from = data_get($timeframe, 'primary.from', CarbonImmutable::now()->startOfDay());
+        /** @var CarbonImmutable $to */
+        $to = data_get($timeframe, 'primary.to', CarbonImmutable::now()->endOfDay());
+
+        $totalDays = max(1, $to->diffInDays($from) + 1);
+        $bucketDays = max(1, (int) ceil($totalDays / $points));
+
+        $series = [];
+        $cursor = $from->startOfDay();
+        while ($cursor->lte($to)) {
+            $bucketEnd = $cursor->addDays($bucketDays - 1)->endOfDay();
+            if ($bucketEnd->gt($to)) {
+                $bucketEnd = $to->copy();
+            }
+
+            $snapshot = $this->buildScentSnapshot(
+                $state,
+                $cursor,
+                $bucketEnd,
+                $channelFilter,
+                ['label' => $cursor->format('M j').' - '.$bucketEnd->format('M j')]
+            );
+
+            $series[] = [
+                'label' => (string) data_get($snapshot, 'window.label', $cursor->format('M j').' - '.$bucketEnd->format('M j')),
+                'from' => $cursor->toDateString(),
+                'to' => $bucketEnd->toDateString(),
+                'value' => round((float) data_get($snapshot, 'totals.'.$metric, 0), 2),
+            ];
+
+            $cursor = $bucketEnd->addDay()->startOfDay();
+        }
+
+        return $series;
+    }
+
+    /**
+     * @param  array<string,mixed>  $timeframe
+     * @return array<string,mixed>
+     */
+    public function oilContributorsWithComparison(
+        string $state,
+        array $timeframe,
+        ?string $channel = null,
+        ?int $focusOilId = null,
+        int $limit = 5
+    ): array {
+        $state = $this->normalizeState($state);
+        $channelFilter = $this->normalizeChannel($channel);
+
+        /** @var CarbonImmutable $primaryFrom */
+        $primaryFrom = data_get($timeframe, 'primary.from', CarbonImmutable::now()->startOfDay());
+        /** @var CarbonImmutable $primaryTo */
+        $primaryTo = data_get($timeframe, 'primary.to', CarbonImmutable::now()->endOfDay());
+
+        $primarySnapshot = $this->buildScentSnapshot(
+            $state,
+            $primaryFrom,
+            $primaryTo,
+            $channelFilter,
+            ['label' => data_get($timeframe, 'labels.primary')]
+        );
+        $primary = $this->buildOilContributorsFromSnapshot($primarySnapshot, $state, $focusOilId, $limit);
+
+        $comparison = null;
+        if (data_get($timeframe, 'comparison.from') instanceof CarbonImmutable && data_get($timeframe, 'comparison.to') instanceof CarbonImmutable) {
+            /** @var CarbonImmutable $comparisonFrom */
+            $comparisonFrom = data_get($timeframe, 'comparison.from');
+            /** @var CarbonImmutable $comparisonTo */
+            $comparisonTo = data_get($timeframe, 'comparison.to');
+            $comparisonSnapshot = $this->buildScentSnapshot(
+                $state,
+                $comparisonFrom,
+                $comparisonTo,
+                $channelFilter,
+                ['label' => data_get($timeframe, 'labels.comparison')]
+            );
+            $comparison = $this->buildOilContributorsFromSnapshot($comparisonSnapshot, $state, $focusOilId, $limit);
+        }
+
+        return [
+            'state' => $state,
+            'channel' => $channelFilter,
+            'timeframe' => $this->serializeTimeframe($timeframe),
+            'primary' => $primary,
+            'comparison' => $comparison,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
     public function blendTemplateDemand(string $state, int $weeks = 4, ?string $channel = null): array
     {
         $snapshot = $this->scentDemandByState($state, $weeks, $channel);
@@ -475,6 +598,95 @@ class DemandReportingService
             'rows' => $rows,
             'totals' => [
                 'wax_grams' => round((float) collect($rows)->sum('wax_grams'), 2),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $snapshot
+     * @return array<string,mixed>
+     */
+    protected function buildOilContributorsFromSnapshot(
+        array $snapshot,
+        string $state,
+        ?int $focusOilId = null,
+        int $limit = 5
+    ): array {
+        $rows = collect($snapshot['rows'] ?? []);
+        $limit = max(1, $limit);
+
+        /** @var array<int,array<string,mixed>> $buckets */
+        $buckets = [];
+
+        foreach ($rows as $row) {
+            $scentId = (int) ($row['scent_id'] ?? 0);
+            $scentName = (string) ($row['scent_name'] ?? 'Unknown');
+            $oilDemandGrams = (float) ($row['oil_grams'] ?? 0);
+            if ($scentId <= 0 || $oilDemandGrams <= 0) {
+                continue;
+            }
+
+            $flattened = $this->scentRecipeService->flattenForScent(
+                scent: $scentId,
+                totalGrams: $oilDemandGrams,
+                allowLegacyFallback: true,
+                includeTree: false
+            );
+
+            foreach (collect($flattened['components'] ?? []) as $component) {
+                $oilId = (int) ($component['base_oil_id'] ?? 0);
+                if ($oilId <= 0) {
+                    continue;
+                }
+                if ($focusOilId !== null && $focusOilId > 0 && $oilId !== $focusOilId) {
+                    continue;
+                }
+
+                $bucket = $buckets[$oilId] ?? [
+                    'base_oil_id' => $oilId,
+                    'base_oil_name' => (string) ($component['base_oil_name'] ?? 'Oil #'.$oilId),
+                    'total_grams' => 0.0,
+                    'contributors' => [],
+                ];
+
+                $grams = round((float) ($component['grams'] ?? 0), 4);
+                $bucket['total_grams'] = round((float) $bucket['total_grams'] + $grams, 4);
+                $bucket['contributors'][$scentId] = [
+                    'scent_id' => $scentId,
+                    'scent_name' => $scentName,
+                    'grams' => round((float) (($bucket['contributors'][$scentId]['grams'] ?? 0) + $grams), 4),
+                ];
+                $buckets[$oilId] = $bucket;
+            }
+        }
+
+        $oilRows = collect(array_values($buckets))
+            ->map(function (array $row) use ($limit): array {
+                $contributors = collect(array_values($row['contributors'] ?? []))
+                    ->sortByDesc('grams')
+                    ->take($limit)
+                    ->values()
+                    ->all();
+
+                return [
+                    'base_oil_id' => (int) ($row['base_oil_id'] ?? 0),
+                    'base_oil_name' => (string) ($row['base_oil_name'] ?? ''),
+                    'total_grams' => round((float) ($row['total_grams'] ?? 0), 4),
+                    'contributors' => $contributors,
+                ];
+            })
+            ->sortByDesc('total_grams')
+            ->values()
+            ->all();
+
+        return [
+            'state' => (string) ($snapshot['state'] ?? $state),
+            'window' => $snapshot['window'] ?? [],
+            'channel' => (string) ($snapshot['channel'] ?? 'all'),
+            'rows' => $oilRows,
+            'totals' => [
+                'oil_count' => count($oilRows),
+                'oil_grams' => round((float) collect($oilRows)->sum('total_grams'), 4),
             ],
         ];
     }

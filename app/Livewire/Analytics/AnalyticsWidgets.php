@@ -3,6 +3,7 @@
 namespace App\Livewire\Analytics;
 
 use App\Services\Inventory\InventoryService;
+use App\Services\Reporting\AnalyticsDrilldownService;
 use App\Services\Reporting\AnalyticsTimeframeService;
 use App\Services\Reporting\DemandReportingService;
 use App\Services\Reporting\InventoryReportingService;
@@ -27,6 +28,14 @@ class AnalyticsWidgets extends Component
     public string $comparisonMode = 'none';
 
     public string $channel = 'all';
+
+    public bool $showDrilldown = false;
+
+    public ?string $drilldownWidget = null;
+
+    public ?string $drilldownState = null;
+
+    public ?int $drilldownFocusId = null;
 
     private array $library = [
         ['id' => 'unmapped_exceptions', 'title' => 'Unmapped Exceptions Summary', 'size' => '1', 'description' => 'Open unresolved mappings by source/channel.'],
@@ -146,6 +155,22 @@ class AnalyticsWidgets extends Component
     public function toggleLibrary(): void
     {
         $this->showLibrary = ! $this->showLibrary;
+    }
+
+    public function openDrilldown(string $widgetId, ?string $state = null, ?int $focusId = null): void
+    {
+        $this->drilldownWidget = trim($widgetId) !== '' ? $widgetId : null;
+        $this->drilldownState = $state ? strtolower(trim($state)) : null;
+        $this->drilldownFocusId = $focusId && $focusId > 0 ? $focusId : null;
+        $this->showDrilldown = $this->drilldownWidget !== null;
+    }
+
+    public function closeDrilldown(): void
+    {
+        $this->showDrilldown = false;
+        $this->drilldownWidget = null;
+        $this->drilldownState = null;
+        $this->drilldownFocusId = null;
     }
 
     protected function persist(): void
@@ -369,6 +394,33 @@ class AnalyticsWidgets extends Component
             'exceptions' => $exceptions,
             'inventory_snapshot' => $inventorySnapshot,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function getDrilldownDataProperty(): array
+    {
+        if (! $this->showDrilldown || ! $this->drilldownWidget) {
+            return [];
+        }
+
+        $channelFilter = $this->channel === 'all' ? null : $this->channel;
+        $timeframe = app(AnalyticsTimeframeService::class)->resolve([
+            'time_mode' => $this->timeMode,
+            'preset' => $this->preset,
+            'custom_start_date' => $this->customStartDate,
+            'custom_end_date' => $this->customEndDate,
+            'comparison_mode' => $this->comparisonMode,
+        ]);
+
+        return app(AnalyticsDrilldownService::class)->build(
+            widgetId: $this->drilldownWidget,
+            timeframe: $timeframe,
+            channel: $channelFilter,
+            state: $this->drilldownState,
+            focusId: $this->drilldownFocusId
+        );
     }
 
     public function render()

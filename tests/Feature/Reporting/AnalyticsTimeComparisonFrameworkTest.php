@@ -2,12 +2,14 @@
 
 use App\Actions\ScentGovernance\CreateScentAction;
 use App\Models\BaseOil;
+use App\Models\MappingException;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Size;
 use App\Services\Reporting\AnalyticsComparisonService;
 use App\Services\Reporting\AnalyticsTimeframeService;
 use App\Services\Reporting\DemandReportingService;
+use App\Services\Reporting\ScentAnalyticsService;
 use Carbon\CarbonImmutable;
 
 it('resolves rolling presets with previous-period comparison windows', function () {
@@ -164,6 +166,74 @@ it('returns demand bundle deltas for primary vs comparison windows', function ()
         ->and(data_get($bundle, 'delta.metrics.units.delta'))->toBe(2.0)
         ->and(data_get($bundle, 'delta.metrics.units.trend'))->toBe('up')
         ->and(data_get($bundle, 'delta.has_comparison'))->toBeTrue();
+
+    CarbonImmutable::setTestNow();
+});
+
+it('returns deterministic trend series for demand and unmapped exceptions', function () {
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-03-08 12:00:00'));
+
+    $oil = BaseOil::query()->create(['name' => 'Trend Oil']);
+    $size = Size::query()->create([
+        'code' => '8oz Cotton Wick',
+        'label' => '8oz Cotton Wick',
+        'is_active' => true,
+    ]);
+    $scent = app(CreateScentAction::class)->execute([
+        'name' => 'trend series scent',
+        'display_name' => 'Trend Series Scent',
+        'lifecycle_status' => 'active',
+        'recipe_components' => [
+            ['component_type' => 'oil', 'base_oil_id' => $oil->id, 'parts' => 1],
+        ],
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'manual',
+        'order_number' => 'TR-100',
+        'order_type' => 'retail',
+        'status' => 'submitted_to_pouring',
+        'published_at' => CarbonImmutable::parse('2026-03-05 09:00:00'),
+        'due_at' => CarbonImmutable::parse('2026-03-05 09:00:00'),
+    ]);
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'scent_id' => $scent->id,
+        'size_id' => $size->id,
+        'scent_name' => $scent->name,
+        'size_code' => $size->code,
+        'quantity' => 4,
+        'ordered_qty' => 4,
+        'extra_qty' => 0,
+        'pour_status' => 'queued',
+    ]);
+
+    MappingException::query()->create([
+        'store_key' => 'retail-main',
+        'raw_title' => 'Trend Mystery',
+        'raw_scent_name' => 'Trend Mystery',
+        'resolved_at' => null,
+        'created_at' => CarbonImmutable::parse('2026-03-06 10:00:00'),
+        'updated_at' => CarbonImmutable::parse('2026-03-06 10:00:00'),
+    ]);
+
+    $timeframe = app(AnalyticsTimeframeService::class)->resolve([
+        'time_mode' => 'fixed',
+        'preset' => 'custom',
+        'custom_start_date' => '2026-03-01',
+        'custom_end_date' => '2026-03-08',
+        'comparison_mode' => 'none',
+    ]);
+
+    $demandTrend = app(DemandReportingService::class)->trendSeries('current', $timeframe, 'retail', 'units', 4);
+    $exceptionTrend = app(ScentAnalyticsService::class)->unmappedExceptionTrend($timeframe, 4, 'retail');
+
+    expect(count($demandTrend))->toBeGreaterThan(1)
+        ->and(count($demandTrend))->toBeLessThanOrEqual(8)
+        ->and(count($exceptionTrend))->toBeGreaterThan(1)
+        ->and(count($exceptionTrend))->toBeLessThanOrEqual(8)
+        ->and(collect($demandTrend)->sum('value'))->toBeGreaterThan(0)
+        ->and(collect($exceptionTrend)->sum('value'))->toBeGreaterThan(0);
 
     CarbonImmutable::setTestNow();
 });
