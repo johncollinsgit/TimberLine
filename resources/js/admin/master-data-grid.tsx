@@ -608,8 +608,8 @@ function MasterDataGridApp(props: RootDataset) {
                         per_page: 50,
                         search,
                         active: activeFilter,
-                        sort: sortField,
-                        dir: sortDir,
+                        sort: sortField || undefined,
+                        dir: sortField ? sortDir : undefined,
                     },
                 });
 
@@ -758,6 +758,47 @@ function MasterDataGridApp(props: RootDataset) {
         setSaveState("idle");
         setNotice("");
         setError("");
+    };
+
+    const discardCellPendingState = (rowId: number, field: string) => {
+        const changeKey = cellChangeKey(rowId, field);
+
+        setPendingChanges((current) => {
+            if (!current[changeKey]) {
+                return current;
+            }
+
+            const next = { ...current };
+            delete next[changeKey];
+            return next;
+        });
+        setCellErrors((current) => {
+            if (!current[changeKey]) {
+                return current;
+            }
+
+            const next = { ...current };
+            delete next[changeKey];
+            return next;
+        });
+        setSavingCellKeys((current) => {
+            if (!current[changeKey]) {
+                return current;
+            }
+
+            const next = { ...current };
+            delete next[changeKey];
+            return next;
+        });
+        setSavedCellKeys((current) => {
+            if (!current[changeKey]) {
+                return current;
+            }
+
+            const next = { ...current };
+            delete next[changeKey];
+            return next;
+        });
     };
 
     const markCellsSaved = (keys: string[]) => {
@@ -1253,6 +1294,7 @@ function MasterDataGridApp(props: RootDataset) {
                 popoverEditor.field,
                 popoverEditor.originalValue
             );
+            discardCellPendingState(popoverEditor.rowId, popoverEditor.field);
             setPopoverError(failure);
             setDiagnostics((current) => ({
                 ...current,
@@ -1286,6 +1328,7 @@ function MasterDataGridApp(props: RootDataset) {
             popoverEditor.field,
             popoverEditor.originalValue
         );
+        discardCellPendingState(popoverEditor.rowId, popoverEditor.field);
         closePopoverEditor();
     };
 
@@ -1618,6 +1661,8 @@ function MasterDataGridApp(props: RootDataset) {
                                                 setActiveResource(resource.key);
                                                 setSearchInput("");
                                                 setActiveFilter("");
+                                                setSortField("");
+                                                setSortDir("asc");
                                                 setPage(1);
                                                 setError("");
                                                 setNotice("");
@@ -1908,6 +1953,23 @@ function MasterDataGridApp(props: RootDataset) {
                                         {popoverStatus}
                                     </div>
                                 ) : null}
+                                <div className="mt-3 flex items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={cancelPopoverEditor}
+                                        className="inline-flex h-8 items-center justify-center rounded-full border border-white/15 bg-black/35 px-3 text-xs font-medium text-emerald-50/80 transition hover:border-emerald-300/30 hover:text-white"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void commitPopoverEditor("close")}
+                                        disabled={popoverPhase === "saving"}
+                                        className="inline-flex h-8 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 text-xs font-medium text-emerald-50 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {popoverPhase === "saving" ? "Saving…" : "Apply"}
+                                    </button>
+                                </div>
                             </div>
                         ) : null}
                     </div>

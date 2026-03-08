@@ -38,8 +38,10 @@ class AdminMasterDataController extends Controller
         $perPage = max(10, min(100, (int) $request->integer('perPage', $request->integer('per_page', 25))));
         $search = $this->normalizeText((string) $request->query('search', ''));
         $active = $request->query('active');
-        $sort = (string) $request->query('sortField', $request->query('sort', (string) ($definition['default_sort'] ?? 'id')));
-        $dir = strtolower((string) $request->query('sortDir', $request->query('dir', 'asc'))) === 'desc' ? 'desc' : 'asc';
+        $defaultSort = (string) ($definition['default_sort'] ?? 'id');
+        $defaultDir = strtolower((string) ($definition['default_dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+        $sort = (string) $request->query('sortField', $request->query('sort', $defaultSort));
+        $dir = strtolower((string) $request->query('sortDir', $request->query('dir', $defaultDir))) === 'desc' ? 'desc' : 'asc';
         $sortable = array_map('strval', (array) ($definition['sort'] ?? ['id']));
 
         if (! in_array($sort, $sortable, true)) {
@@ -324,7 +326,8 @@ class AdminMasterDataController extends Controller
                 'model' => BaseOil::class,
                 'search' => ['name', 'supplier'],
                 'sort' => ['name', 'grams_on_hand', 'updated_at'],
-                'default_sort' => 'name',
+                'default_sort' => 'updated_at',
+                'default_dir' => 'desc',
                 'active_field' => 'active',
                 'fields' => [
                     ['key' => 'name', 'label' => 'Name', 'type' => 'text', 'default' => '', 'rules' => ['required', 'string', 'max:255']],
