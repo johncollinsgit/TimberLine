@@ -146,6 +146,53 @@ test('room spray context is detected and wizard handoff preserves product_form_h
         ->assertSee('product_form_hint=room_spray', false);
 });
 
+test('auto-detect treats wick properties as candle context', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $order = Order::query()->create([
+        'order_type' => 'retail',
+        'source' => 'shopify',
+        'order_number' => 'RT-1001B',
+        'status' => 'new',
+    ]);
+
+    $line = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Lavender',
+        'raw_variant' => 'Lavender',
+        'scent_id' => null,
+        'size_id' => null,
+        'ordered_qty' => 1,
+        'quantity' => 1,
+        'extra_qty' => 0,
+    ]);
+
+    $exception = MappingException::query()->create([
+        'store_key' => 'retail',
+        'order_id' => $order->id,
+        'order_line_id' => $line->id,
+        'account_name' => null,
+        'raw_title' => 'Lavender',
+        'raw_variant' => 'Lavender',
+        'raw_scent_name' => 'Lavender',
+        'reason' => null,
+        'payload_json' => [
+            'properties' => [
+                ['name' => 'Wick Size', 'value' => 'CD 10'],
+            ],
+        ],
+    ]);
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->assertSet('productForm', 'candle')
+        ->assertSee('Auto-detect (Candle)')
+        ->assertSee('Product form · Candle');
+});
+
 test('room spray mapping sets room spray size context for downstream material usage', function () {
     $user = User::factory()->create([
         'role' => 'admin',

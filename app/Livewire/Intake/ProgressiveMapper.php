@@ -484,7 +484,12 @@ class ProgressiveMapper extends Component
         $rawVariant = trim((string) ($exception?->raw_variant ?? ''));
         $rawScentName = trim((string) ($exception?->raw_scent_name ?? ''));
         $rawLabel = $exception ? $this->exceptionLookupLabel($exception) : ($rawScentName !== '' ? $rawScentName : $rawTitle);
-        $detectedProductForm = $this->productFormHint($rawVariant, trim($rawTitle.' '.$rawLabel));
+        $payload = $exception?->payload_json;
+        $detectedProductForm = $this->productFormHint(
+            $rawVariant,
+            trim($rawTitle.' '.$rawLabel),
+            is_array($payload) ? $payload : []
+        );
         $selectedProductForm = trim($this->productForm);
         if (! in_array($selectedProductForm, ['candle', 'room_spray', 'wax_melt'], true)) {
             $selectedProductForm = '';
@@ -506,8 +511,12 @@ class ProgressiveMapper extends Component
         ];
     }
 
-    protected function productFormHint(string $variant, string $label): string
+    protected function productFormHint(string $variant, string $label, array $payload = []): string
     {
+        if ($this->hasWickPropertyInPayload($payload)) {
+            return 'candle';
+        }
+
         $haystack = mb_strtolower(trim($variant.' '.$label));
         if ($haystack === '') {
             return '';
@@ -522,6 +531,27 @@ class ProgressiveMapper extends Component
         }
 
         return '';
+    }
+
+    protected function hasWickPropertyInPayload(array $payload): bool
+    {
+        if (filled($payload['properties_wick'] ?? null)) {
+            return true;
+        }
+
+        $properties = $payload['properties'] ?? null;
+        if (! is_array($properties)) {
+            return false;
+        }
+
+        foreach ($properties as $property) {
+            $name = mb_strtolower(trim((string) ($property['name'] ?? '')));
+            if ($name !== '' && str_contains($name, 'wick')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function resolveSizeIdForProductForm(string $productForm): ?int

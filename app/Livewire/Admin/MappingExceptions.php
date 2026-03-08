@@ -967,6 +967,11 @@ class MappingExceptions extends Component
             return '';
         }
 
+        $payload = $exception->payload_json;
+        if ($this->hasWickPropertyInPayload(is_array($payload) ? $payload : [])) {
+            return 'candle';
+        }
+
         $fromRawText = $this->productFormFromText(
             trim((string) ($exception->raw_variant ?? '').' '.(string) ($exception->raw_title ?? '').' '.(string) ($exception->raw_scent_name ?? ''))
         );
@@ -1057,7 +1062,11 @@ class MappingExceptions extends Component
             'store' => (string) ($exception?->store_key ?? ''),
             'source_context' => 'scent-intake',
             'channel_hint' => $channelHint,
-            'product_form_hint' => $this->wizardProductFormHint((string) ($exception?->raw_variant ?? ''), $rawName),
+            'product_form_hint' => $this->wizardProductFormHint(
+                (string) ($exception?->raw_variant ?? ''),
+                $rawName,
+                is_array($exception?->payload_json) ? $exception->payload_json : []
+            ),
             'return_to' => route('admin.index', ['tab' => 'scent-intake']),
         ];
 
@@ -1069,8 +1078,12 @@ class MappingExceptions extends Component
         return route('admin.scent-wizard', array_filter($query, fn ($value) => $value !== ''));
     }
 
-    protected function wizardProductFormHint(string $variant, string $rawName): string
+    protected function wizardProductFormHint(string $variant, string $rawName, array $payload = []): string
     {
+        if ($this->hasWickPropertyInPayload($payload)) {
+            return 'candle';
+        }
+
         $haystack = mb_strtolower(trim($variant.' '.$rawName));
         if ($haystack === '') {
             return '';
@@ -1085,6 +1098,27 @@ class MappingExceptions extends Component
         }
 
         return '';
+    }
+
+    protected function hasWickPropertyInPayload(array $payload): bool
+    {
+        if (filled($payload['properties_wick'] ?? null)) {
+            return true;
+        }
+
+        $properties = $payload['properties'] ?? null;
+        if (! is_array($properties)) {
+            return false;
+        }
+
+        foreach ($properties as $property) {
+            $name = mb_strtolower(trim((string) ($property['name'] ?? '')));
+            if ($name !== '' && str_contains($name, 'wick')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function render()
