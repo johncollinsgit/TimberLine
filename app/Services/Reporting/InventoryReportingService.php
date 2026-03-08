@@ -10,6 +10,7 @@ class InventoryReportingService
     public function __construct(
         protected DemandReportingService $demandReporting,
         protected InventoryService $inventoryService,
+        protected AnalyticsComparisonService $comparisonService,
     ) {}
 
     /**
@@ -18,7 +19,69 @@ class InventoryReportingService
     public function reorderRiskInputs(string $state = 'current', int $weeks = 4, ?string $channel = null): array
     {
         $oilDemand = $this->demandReporting->explodedOilDemand($state, $weeks, $channel);
+        $waxDemand = $this->demandReporting->waxDemand($state, $weeks, $channel);
 
+        $snapshot = $this->buildRiskSnapshotFromDemand($oilDemand, $waxDemand);
+
+        return [
+            'state' => (string) ($oilDemand['state'] ?? $state),
+            'window' => $oilDemand['window'] ?? [],
+            'channel' => $oilDemand['channel'] ?? $channel,
+            'oil' => $snapshot['oil'],
+            'wax' => $snapshot['wax'],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $timeframe
+     * @return array<string,mixed>
+     */
+    public function reorderRiskWithComparison(array $timeframe, string $state = 'current', ?string $channel = null): array
+    {
+        $oilDemandBundle = $this->demandReporting->explodedOilDemandWithComparison($state, $timeframe, $channel);
+        $waxDemandBundle = $this->demandReporting->waxDemandWithComparison($state, $timeframe, $channel);
+
+        $primary = $this->buildRiskSnapshotFromDemand(
+            (array) ($oilDemandBundle['primary'] ?? []),
+            (array) ($waxDemandBundle['primary'] ?? [])
+        );
+
+        $comparison = null;
+        if (is_array($oilDemandBundle['comparison'] ?? null) && is_array($waxDemandBundle['comparison'] ?? null)) {
+            $comparison = $this->buildRiskSnapshotFromDemand(
+                (array) ($oilDemandBundle['comparison'] ?? []),
+                (array) ($waxDemandBundle['comparison'] ?? [])
+            );
+        }
+
+        return [
+            'state' => (string) ($oilDemandBundle['state'] ?? $state),
+            'channel' => $oilDemandBundle['channel'] ?? $channel,
+            'timeframe' => $oilDemandBundle['timeframe'] ?? [],
+            'primary' => $primary,
+            'comparison' => $comparison,
+            'delta' => $this->comparisonService->compareTotals(
+                primaryTotals: $this->totalsForRiskSnapshot($primary),
+                comparisonTotals: is_array($comparison) ? $this->totalsForRiskSnapshot($comparison) : null,
+                keys: [
+                    'oil_demand_grams',
+                    'wax_demand_grams',
+                    'oil_reorder_count',
+                    'oil_low_count',
+                    'wax_reorder_count',
+                    'wax_low_count',
+                ]
+            ),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $oilDemand
+     * @param  array<string,mixed>  $waxDemand
+     * @return array<string,mixed>
+     */
+    protected function buildRiskSnapshotFromDemand(array $oilDemand, array $waxDemand): array
+    {
         $demandByOilId = collect($oilDemand['rows'] ?? [])
             ->mapWithKeys(fn (array $row): array => [
                 (int) ($row['base_oil_id'] ?? 0) => (float) ($row['grams'] ?? 0),
@@ -40,9 +103,7 @@ class InventoryReportingService
             ])
             ->values();
 
-        $waxDemand = $this->demandReporting->waxDemand($state, $weeks, $channel);
         $totalWaxDemand = (float) data_get($waxDemand, 'totals.wax_grams', 0);
-
         $waxRows = $this->inventoryService->waxRows()
             ->map(function (array $row) use ($totalWaxDemand): array {
                 $onHand = (float) ($row['on_hand_grams'] ?? 0);
@@ -70,9 +131,6 @@ class InventoryReportingService
             ->values();
 
         return [
-            'state' => (string) ($oilDemand['state'] ?? $state),
-            'window' => $oilDemand['window'] ?? [],
-            'channel' => $oilDemand['channel'] ?? $channel,
             'oil' => [
                 'rows' => $oilRows->all(),
                 'summary' => $this->summarizeRiskRows($oilRows),
@@ -83,6 +141,22 @@ class InventoryReportingService
                 'summary' => $this->summarizeRiskRows($waxRows),
                 'demand_totals' => $waxDemand['totals'] ?? [],
             ],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $snapshot
+     * @return array<string,float>
+     */
+    protected function totalsForRiskSnapshot(array $snapshot): array
+    {
+        return [
+            'oil_demand_grams' => (float) data_get($snapshot, 'oil.demand_totals.oil_grams', 0),
+            'wax_demand_grams' => (float) data_get($snapshot, 'wax.demand_totals.wax_grams', 0),
+            'oil_reorder_count' => (float) data_get($snapshot, 'oil.summary.reorder_count', 0),
+            'oil_low_count' => (float) data_get($snapshot, 'oil.summary.low_count', 0),
+            'wax_reorder_count' => (float) data_get($snapshot, 'wax.summary.reorder_count', 0),
+            'wax_low_count' => (float) data_get($snapshot, 'wax.summary.low_count', 0),
         ];
     }
 

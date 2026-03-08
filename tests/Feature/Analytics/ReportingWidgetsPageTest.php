@@ -1,12 +1,14 @@
 <?php
 
 use App\Actions\ScentGovernance\CreateScentAction;
+use App\Livewire\Analytics\AnalyticsWidgets;
 use App\Models\BaseOil;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Size;
 use App\Models\User;
 use App\Services\ScentGovernance\ScentRecipeService;
+use Livewire\Livewire;
 
 it('renders analytics widgets page with block-9 reporting widgets and explicit state labels', function () {
     $user = User::factory()->create([
@@ -63,7 +65,7 @@ it('shows reporting data signals from service-backed widgets', function () {
         'order_type' => 'retail',
         'status' => 'submitted_to_pouring',
         'published_at' => now(),
-        'due_at' => now()->addDays(2),
+        'due_at' => now()->subDay(),
     ]);
 
     OrderLine::query()->create([
@@ -95,4 +97,40 @@ it('shows reporting data signals from service-backed widgets', function () {
         ->assertSee('Widget Oil')
         ->assertSee('Widget Mystery')
         ->assertSee('Open Mapping Resolution');
+});
+
+it('persists analytics timeframe and comparison filters through apply action', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+        'ui_preferences' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(AnalyticsWidgets::class)
+        ->set('timeMode', 'fixed')
+        ->set('preset', 'custom')
+        ->set('customStartDate', '2026-02-01')
+        ->set('customEndDate', '2026-02-28')
+        ->set('comparisonMode', 'same_period_last_year')
+        ->set('channel', 'wholesale')
+        ->call('applyFilters')
+        ->assertSet('timeMode', 'fixed')
+        ->assertSet('preset', 'custom')
+        ->assertSet('comparisonMode', 'same_period_last_year')
+        ->assertSet('channel', 'wholesale')
+        ->assertSee('Compare:');
+
+    $savedFilters = $user->fresh()?->ui_preferences['analytics_filters'] ?? [];
+
+    expect($savedFilters)
+        ->toMatchArray([
+            'time_mode' => 'fixed',
+            'preset' => 'custom',
+            'custom_start_date' => '2026-02-01',
+            'custom_end_date' => '2026-02-28',
+            'comparison_mode' => 'same_period_last_year',
+            'channel' => 'wholesale',
+        ]);
 });

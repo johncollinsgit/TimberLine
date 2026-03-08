@@ -3,6 +3,7 @@
 namespace App\Livewire\Analytics;
 
 use App\Services\Inventory\InventoryService;
+use App\Services\Reporting\AnalyticsTimeframeService;
 use App\Services\Reporting\DemandReportingService;
 use App\Services\Reporting\InventoryReportingService;
 use App\Services\Reporting\ScentAnalyticsService;
@@ -15,7 +16,15 @@ class AnalyticsWidgets extends Component
 
     public bool $showLibrary = true;
 
-    public int $windowWeeks = 4;
+    public string $timeMode = 'rolling';
+
+    public string $preset = 'last_30_days';
+
+    public ?string $customStartDate = null;
+
+    public ?string $customEndDate = null;
+
+    public string $comparisonMode = 'none';
 
     public string $channel = 'all';
 
@@ -52,19 +61,30 @@ class AnalyticsWidgets extends Component
         $this->layout = $this->normalizeLayout($savedLayout, $this->defaultLayout);
 
         $filters = is_array($prefs['analytics_filters'] ?? null) ? $prefs['analytics_filters'] : [];
-        $this->windowWeeks = $this->normalizeWeeks($filters['window_weeks'] ?? $this->windowWeeks);
-        $this->channel = $this->normalizeChannel($filters['channel'] ?? $this->channel);
+        $legacyWeeks = (int) ($filters['window_weeks'] ?? 0);
+
+        $this->timeMode = $this->normalizeTimeMode($filters['time_mode'] ?? 'rolling');
+        $this->preset = $this->normalizePreset($filters['preset'] ?? ($legacyWeeks >= 8 ? 'last_90_days' : 'last_30_days'));
+        $this->customStartDate = $this->normalizeDateString($filters['custom_start_date'] ?? null);
+        $this->customEndDate = $this->normalizeDateString($filters['custom_end_date'] ?? null);
+        $this->comparisonMode = $this->normalizeComparisonMode($filters['comparison_mode'] ?? 'none');
+        $this->channel = $this->normalizeChannel($filters['channel'] ?? 'all');
     }
 
-    public function updatedWindowWeeks(mixed $value): void
+    public function applyFilters(): void
     {
-        $this->windowWeeks = $this->normalizeWeeks($value);
-        $this->persist();
-    }
+        $this->timeMode = $this->normalizeTimeMode($this->timeMode);
+        $this->preset = $this->normalizePreset($this->preset);
+        $this->comparisonMode = $this->normalizeComparisonMode($this->comparisonMode);
+        $this->channel = $this->normalizeChannel($this->channel);
+        $this->customStartDate = $this->normalizeDateString($this->customStartDate);
+        $this->customEndDate = $this->normalizeDateString($this->customEndDate);
 
-    public function updatedChannel(mixed $value): void
-    {
-        $this->channel = $this->normalizeChannel($value);
+        if ($this->preset !== 'custom') {
+            $this->customStartDate = null;
+            $this->customEndDate = null;
+        }
+
         $this->persist();
     }
 
@@ -138,7 +158,11 @@ class AnalyticsWidgets extends Component
         $prefs = is_array($user->ui_preferences) ? $user->ui_preferences : [];
         $prefs['analytics_layout'] = $this->layout;
         $prefs['analytics_filters'] = [
-            'window_weeks' => $this->windowWeeks,
+            'time_mode' => $this->timeMode,
+            'preset' => $this->preset,
+            'custom_start_date' => $this->customStartDate,
+            'custom_end_date' => $this->customEndDate,
+            'comparison_mode' => $this->comparisonMode,
             'channel' => $this->channel,
         ];
 
@@ -148,7 +172,6 @@ class AnalyticsWidgets extends Component
     protected function normalizeLayout($saved, array $defaults): array
     {
         $items = [];
-
         if (is_array($saved)) {
             foreach ($saved as $item) {
                 if (is_array($item)) {
@@ -161,11 +184,9 @@ class AnalyticsWidgets extends Component
                 }
             }
         }
-
         if (empty($items)) {
             $items = array_map(fn ($id) => ['id' => $id, 'size' => $this->defaultSizeFor($id)], $defaults);
         }
-
         $known = collect($this->library)->pluck('id')->all();
 
         return array_values(array_filter($items, fn ($item) => in_array($item['id'] ?? null, $known, true)));
@@ -195,7 +216,6 @@ class AnalyticsWidgets extends Component
                 $merged[] = ['id' => $id, 'size' => $sizes[$id]];
             }
         }
-
         foreach ($sizes as $id => $size) {
             if (! collect($merged)->contains(fn ($item) => ($item['id'] ?? null) === $id)) {
                 $merged[] = ['id' => $id, 'size' => $size];
@@ -216,7 +236,6 @@ class AnalyticsWidgets extends Component
 
                     return $base ? array_merge($base, ['size' => $this->defaultSizeFor($item)]) : null;
                 }
-
                 $id = $item['id'] ?? null;
                 $base = $id ? $map->get($id) : null;
                 if (! $base) {
@@ -237,22 +256,67 @@ class AnalyticsWidgets extends Component
         return $this->library;
     }
 
+    /**
+     * @return array<int,array<string,string>>
+     */
+    public function getTimeModeOptionsProperty(): array
+    {
+        return app(AnalyticsTimeframeService::class)->modeOptions();
+    }
+
+    /**
+     * @return array<int,array<string,string>>
+     */
+    public function getPresetOptionsProperty(): array
+    {
+        return app(AnalyticsTimeframeService::class)->presetOptions();
+    }
+
+    /**
+     * @return array<int,array<string,string>>
+     */
+    public function getComparisonOptionsProperty(): array
+    {
+        return app(AnalyticsTimeframeService::class)->comparisonOptions();
+    }
+
+    /**
+     * @return array<int,array<string,string>>
+     */
+    public function getChannelOptionsProperty(): array
+    {
+        return [
+            ['value' => 'all', 'label' => 'All channels'],
+            ['value' => 'retail', 'label' => 'Retail'],
+            ['value' => 'wholesale', 'label' => 'Wholesale'],
+            ['value' => 'event', 'label' => 'Markets'],
+        ];
+    }
+
     public function getAnalyticsDataProperty(): array
     {
-        $channel = $this->channel === 'all' ? null : $this->channel;
+        $channelFilter = $this->channel === 'all' ? null : $this->channel;
+
+        $timeframe = app(AnalyticsTimeframeService::class)->resolve([
+            'time_mode' => $this->timeMode,
+            'preset' => $this->preset,
+            'custom_start_date' => $this->customStartDate,
+            'custom_end_date' => $this->customEndDate,
+            'comparison_mode' => $this->comparisonMode,
+        ]);
 
         $demand = app(DemandReportingService::class);
         $inventoryReporting = app(InventoryReportingService::class);
         $scentAnalytics = app(ScentAnalyticsService::class);
         $inventory = app(InventoryService::class);
 
-        $forecast = $demand->forecastedScentDemand($this->windowWeeks, $channel);
-        $current = $demand->currentScentDemand($this->windowWeeks, $channel);
-        $actual = $demand->actualScentDemand($this->windowWeeks, $channel);
+        $forecastBundle = $demand->scentDemandWithComparison('forecast', $timeframe, $channelFilter);
+        $currentBundle = $demand->scentDemandWithComparison('current', $timeframe, $channelFilter);
+        $actualBundle = $demand->scentDemandWithComparison('actual', $timeframe, $channelFilter);
 
-        $oilForecast = $demand->explodedOilDemand('forecast', $this->windowWeeks, $channel);
-        $reorderRisk = $inventoryReporting->reorderRiskInputs('current', $this->windowWeeks, $channel);
-        $exceptions = $scentAnalytics->unmappedExceptionSummary(8, $channel);
+        $oilForecastBundle = $demand->explodedOilDemandWithComparison('forecast', $timeframe, $channelFilter);
+        $reorderRiskBundle = $inventoryReporting->reorderRiskWithComparison($timeframe, 'current', $channelFilter);
+        $exceptions = $scentAnalytics->unmappedExceptionSummary(8, $channelFilter);
 
         $oilInventoryRows = $inventory->oilRows(limit: 500)->all();
         $waxInventoryRows = $inventory->waxRows(limit: 50)->all();
@@ -269,33 +333,39 @@ class AnalyticsWidgets extends Component
         ];
 
         return [
-            'window_weeks' => $this->windowWeeks,
-            'channel' => $this->channel,
+            'filters' => [
+                'time_mode' => $this->timeMode,
+                'preset' => $this->preset,
+                'custom_start_date' => $this->customStartDate,
+                'custom_end_date' => $this->customEndDate,
+                'comparison_mode' => $this->comparisonMode,
+                'channel' => $this->channel,
+            ],
+            'timeframe' => $timeframe,
             'urls' => [
                 'mapping_exceptions' => route('admin.scent-intake'),
                 'inventory' => route('inventory.index'),
             ],
             'forecast' => [
-                'snapshot' => $forecast,
-                'top_scents' => $this->topScentRows($forecast),
+                'bundle' => $forecastBundle,
+                'top_scents' => $this->topScentRows($forecastBundle),
             ],
             'current' => [
-                'snapshot' => $current,
-                'top_scents' => $this->topScentRows($current),
+                'bundle' => $currentBundle,
+                'top_scents' => $this->topScentRows($currentBundle),
             ],
             'actual' => [
-                'snapshot' => $actual,
-                'top_scents' => $this->topScentRows($actual),
+                'bundle' => $actualBundle,
+                'top_scents' => $this->topScentRows($actualBundle),
             ],
             'state_totals' => [
-                $this->stateOverviewRow('forecast', $forecast),
-                $this->stateOverviewRow('current', $current),
-                $this->stateOverviewRow('actual', $actual),
+                $this->stateOverviewRow('forecast', $forecastBundle),
+                $this->stateOverviewRow('current', $currentBundle),
+                $this->stateOverviewRow('actual', $actualBundle),
             ],
-            'top_oils_forecast' => collect($oilForecast['rows'] ?? [])->take(10)->values()->all(),
-            'top_oils_forecast_totals' => $oilForecast['totals'] ?? [],
-            'top_oils_forecast_unresolved' => $oilForecast['unresolved'] ?? [],
-            'reorder_risk' => $reorderRisk,
+            'top_oils_forecast' => collect(data_get($oilForecastBundle, 'primary.rows', []))->take(10)->values()->all(),
+            'top_oils_forecast_bundle' => $oilForecastBundle,
+            'reorder_risk_bundle' => $reorderRiskBundle,
             'exceptions' => $exceptions,
             'inventory_snapshot' => $inventorySnapshot,
         ];
@@ -338,27 +408,52 @@ class AnalyticsWidgets extends Component
         return '2';
     }
 
-    private function normalizeWeeks(mixed $value): int
+    private function normalizeTimeMode(mixed $mode): string
     {
-        $weeks = (int) $value;
+        $mode = strtolower(trim((string) $mode));
 
-        return in_array($weeks, [2, 4, 8], true) ? $weeks : 4;
+        return in_array($mode, ['rolling', 'fixed'], true) ? $mode : 'rolling';
     }
 
-    private function normalizeChannel(mixed $value): string
+    private function normalizePreset(mixed $preset): string
     {
-        $channel = strtolower(trim((string) $value));
+        $preset = strtolower(trim((string) $preset));
+
+        $allowed = collect($this->presetOptions)->pluck('value')->all();
+
+        return in_array($preset, $allowed, true) ? $preset : 'last_30_days';
+    }
+
+    private function normalizeComparisonMode(mixed $mode): string
+    {
+        $mode = strtolower(trim((string) $mode));
+
+        $allowed = collect($this->comparisonOptions)->pluck('value')->all();
+
+        return in_array($mode, $allowed, true) ? $mode : 'none';
+    }
+
+    private function normalizeChannel(mixed $channel): string
+    {
+        $channel = strtolower(trim((string) $channel));
 
         return in_array($channel, ['all', 'retail', 'wholesale', 'event'], true) ? $channel : 'all';
     }
 
+    private function normalizeDateString(mixed $date): ?string
+    {
+        $value = trim((string) $date);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : null;
+    }
+
     /**
-     * @param  array<string,mixed>  $snapshot
+     * @param  array<string,mixed>  $bundle
      * @return array<int,array<string,mixed>>
      */
-    private function topScentRows(array $snapshot, int $limit = 8): array
+    private function topScentRows(array $bundle, int $limit = 8): array
     {
-        return collect($snapshot['rows'] ?? [])
+        return collect(data_get($bundle, 'primary.rows', []))
             ->sortByDesc('units')
             ->take($limit)
             ->values()
@@ -366,17 +461,18 @@ class AnalyticsWidgets extends Component
     }
 
     /**
-     * @param  array<string,mixed>  $snapshot
+     * @param  array<string,mixed>  $bundle
      * @return array<string,mixed>
      */
-    private function stateOverviewRow(string $state, array $snapshot): array
+    private function stateOverviewRow(string $state, array $bundle): array
     {
         return [
             'state' => $state,
-            'units' => (int) data_get($snapshot, 'totals.units', 0),
-            'wax_grams' => round((float) data_get($snapshot, 'totals.wax_grams', 0), 2),
-            'oil_grams' => round((float) data_get($snapshot, 'totals.oil_grams', 0), 2),
-            'row_count' => (int) data_get($snapshot, 'totals.row_count', 0),
+            'units' => (int) data_get($bundle, 'primary.totals.units', 0),
+            'wax_grams' => round((float) data_get($bundle, 'primary.totals.wax_grams', 0), 2),
+            'oil_grams' => round((float) data_get($bundle, 'primary.totals.oil_grams', 0), 2),
+            'row_count' => (int) data_get($bundle, 'primary.totals.row_count', 0),
+            'delta' => data_get($bundle, 'delta.metrics.units'),
         ];
     }
 }

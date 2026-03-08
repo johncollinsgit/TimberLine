@@ -19,41 +19,95 @@
     };
 })
 @php($fmt = fn ($n, $d = 0) => number_format((float) $n, $d))
+@php($deltaLabel = function ($metric) use ($fmt) {
+    if (!is_array($metric)) return '—';
+    $delta = (float) ($metric['delta'] ?? 0);
+    $pct = $metric['delta_pct'] ?? null;
+    $arrow = $delta > 0 ? '↑' : ($delta < 0 ? '↓' : '→');
+    $prefix = $delta > 0 ? '+' : '';
+    if ($pct === null) {
+        return $arrow.' '.$prefix.$fmt($delta, 1);
+    }
+    return $arrow.' '.$prefix.$fmt($delta, 1).' ('.$prefix.$fmt($pct, 1).'%)';
+})
 
 <div class="space-y-6" data-widget-root wire:ignore.self>
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div class="flex flex-col gap-4">
       <div>
         <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Reporting Widgets</div>
         <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Operational Analytics Overview</div>
-        <div class="mt-2 text-sm text-emerald-50/70">
-          Forecast, current, and actual are intentionally separated. Widgets consume service-layer reporting contracts.
-        </div>
+        <div class="mt-2 text-sm text-emerald-50/70">Forecast, current, and actual are separated and can be compared against explicit prior windows.</div>
       </div>
-      <div class="flex flex-wrap items-end gap-3">
+
+      <div class="grid grid-cols-1 gap-3 lg:grid-cols-6">
         <label class="flex flex-col gap-1 text-xs text-emerald-100/70">
-          <span class="uppercase tracking-[0.22em]">Window</span>
-          <select wire:model.live="windowWeeks" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white">
-            <option value="2">Next 2 weeks</option>
-            <option value="4">Next 4 weeks</option>
-            <option value="8">Next 8 weeks</option>
+          <span class="uppercase tracking-[0.22em]">Mode</span>
+          <select wire:model.defer="timeMode" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white">
+            @foreach($this->timeModeOptions as $option)
+              <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+            @endforeach
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1 text-xs text-emerald-100/70 lg:col-span-2">
+          <span class="uppercase tracking-[0.22em]">Preset</span>
+          <select wire:model.defer="preset" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white">
+            @foreach($this->presetOptions as $option)
+              <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+            @endforeach
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1 text-xs text-emerald-100/70">
+          <span class="uppercase tracking-[0.22em]">Compare</span>
+          <select wire:model.defer="comparisonMode" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white">
+            @foreach($this->comparisonOptions as $option)
+              <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+            @endforeach
           </select>
         </label>
 
         <label class="flex flex-col gap-1 text-xs text-emerald-100/70">
           <span class="uppercase tracking-[0.22em]">Channel</span>
-          <select wire:model.live="channel" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white">
-            <option value="all">All</option>
-            <option value="retail">Retail</option>
-            <option value="wholesale">Wholesale</option>
-            <option value="event">Event/Markets</option>
+          <select wire:model.defer="channel" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white">
+            @foreach($this->channelOptions as $option)
+              <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+            @endforeach
           </select>
         </label>
 
-        <button type="button" wire:click="toggleLibrary"
-          class="inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition {{ $showLibrary ? 'border-emerald-300/60 bg-emerald-500/35 text-white' : 'border-emerald-200/25 bg-emerald-500/10 text-emerald-100/90 hover:bg-emerald-500/20' }}">
-          Widgets Tray
-        </button>
+        <div class="flex items-end justify-start gap-2 lg:justify-end">
+          <button type="button" wire:click="applyFilters"
+            class="inline-flex items-center rounded-full border border-emerald-300/45 bg-emerald-500/30 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500/40">
+            Apply
+          </button>
+          <button type="button" wire:click="toggleLibrary"
+            class="inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition {{ $showLibrary ? 'border-emerald-300/60 bg-emerald-500/35 text-white' : 'border-emerald-200/25 bg-emerald-500/10 text-emerald-100/90 hover:bg-emerald-500/20' }}">
+            Widgets Tray
+          </button>
+        </div>
+      </div>
+
+      @if($preset === 'custom')
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label class="flex flex-col gap-1 text-xs text-emerald-100/70">
+            <span class="uppercase tracking-[0.22em]">Start</span>
+            <input type="date" wire:model.defer="customStartDate" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white" />
+          </label>
+          <label class="flex flex-col gap-1 text-xs text-emerald-100/70">
+            <span class="uppercase tracking-[0.22em]">End</span>
+            <input type="date" wire:model.defer="customEndDate" class="rounded-xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm text-white" />
+          </label>
+        </div>
+      @endif
+
+      <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 text-xs text-emerald-100/75">
+        Primary: {{ data_get($data, 'timeframe.labels.primary') }}
+        @if(data_get($data, 'timeframe.labels.comparison'))
+          <span class="mx-2 text-white/35">|</span>
+          Compare: {{ data_get($data, 'timeframe.labels.comparison') }}
+        @endif
       </div>
     </div>
   </section>
@@ -66,15 +120,12 @@
         @foreach($library as $widget)
           @php($enabled = in_array($widget['id'], array_column($widgets, 'id'), true))
           <button type="button" wire:click="addWidget('{{ $widget['id'] }}')"
-            class="rounded-2xl border px-4 py-3 text-left transition
-            {{ $enabled ? 'border-emerald-400/30 bg-emerald-500/15 text-white' : 'border-emerald-200/10 bg-emerald-500/5 text-white/70 hover:bg-emerald-500/10' }}"
+            class="rounded-2xl border px-4 py-3 text-left transition {{ $enabled ? 'border-emerald-400/30 bg-emerald-500/15 text-white' : 'border-emerald-200/10 bg-emerald-500/5 text-white/70 hover:bg-emerald-500/10' }}"
             data-widget-id="{{ $widget['id'] }}"
             @if($enabled) disabled @endif>
             <div class="text-sm font-semibold">{{ $widget['title'] }}</div>
             <div class="mt-1 text-xs text-emerald-100/60">{{ $widget['description'] }}</div>
-            <div class="mt-2 text-[11px] uppercase tracking-[0.2em] text-emerald-100/50">
-              {{ $enabled ? 'Added' : 'Add Widget' }}
-            </div>
+            <div class="mt-2 text-[11px] uppercase tracking-[0.2em] text-emerald-100/50">{{ $enabled ? 'Added' : 'Add Widget' }}</div>
           </button>
         @endforeach
       </div>
@@ -102,9 +153,7 @@
               @endforeach
             </div>
             <button type="button" wire:click="removeWidget('{{ $id }}')"
-              class="mf-no-drag text-[10px] uppercase tracking-[0.2em] text-emerald-100/50 hover:text-emerald-100/80">
-              remove
-            </button>
+              class="mf-no-drag text-[10px] uppercase tracking-[0.2em] text-emerald-100/50 hover:text-emerald-100/80">remove</button>
           </div>
         </div>
 
@@ -142,20 +191,25 @@
             @endif
 
             <a href="{{ $data['urls']['mapping_exceptions'] ?? '#' }}" wire:navigate
-              class="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20">
-              Open Mapping Resolution
-            </a>
+              class="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/20">Open Mapping Resolution</a>
           </div>
 
         @elseif(in_array($id, ['top_scents_forecast', 'top_scents_current', 'top_scents_actual'], true))
           @php($state = str_replace('top_scents_', '', $id))
-          @php($slice = $data[$state] ?? ['top_scents' => [], 'snapshot' => ['totals' => []]])
-          <div class="mb-3 flex items-center justify-between gap-3">
+          @php($slice = $data[$state] ?? ['top_scents' => [], 'bundle' => []])
+          @php($bundle = $slice['bundle'] ?? [])
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $stateBadge($state) }}">{{ $state }}</span>
-            <div class="text-xs text-emerald-100/70">
-              Units {{ $fmt(data_get($slice, 'snapshot.totals.units', 0)) }} · Wax {{ $fmt(data_get($slice, 'snapshot.totals.wax_grams', 0), 1) }}g
-            </div>
+            <div class="text-xs text-emerald-100/70">Δ Units {{ $deltaLabel(data_get($bundle, 'delta.metrics.units')) }}</div>
           </div>
+
+          <div class="mb-3 text-xs text-white/60">
+            {{ data_get($bundle, 'timeframe.labels.primary') }}
+            @if(data_get($bundle, 'timeframe.labels.comparison'))
+              <span class="mx-1">vs</span>{{ data_get($bundle, 'timeframe.labels.comparison') }}
+            @endif
+          </div>
+
           <div class="overflow-x-auto rounded-xl border border-emerald-200/10">
             <table class="min-w-full text-sm">
               <thead class="bg-white/5 text-white/70">
@@ -184,12 +238,12 @@
           </div>
 
         @elseif($id === 'top_oils_forecast')
-          <div class="mb-3 flex items-center justify-between gap-3">
-            <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $stateBadge('forecast') }}">Forecast</span>
-            <div class="text-xs text-emerald-100/70">
-              Total {{ $fmt(data_get($data, 'top_oils_forecast_totals.oil_grams', 0), 1) }}g
-            </div>
+          @php($bundle = $data['top_oils_forecast_bundle'] ?? [])
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $stateBadge('forecast') }}">forecast</span>
+            <div class="text-xs text-emerald-100/70">Δ Oil {{ $deltaLabel(data_get($bundle, 'delta.metrics.oil_grams')) }}g</div>
           </div>
+          <div class="mb-3 text-xs text-white/60">{{ data_get($bundle, 'timeframe.labels.primary') }} @if(data_get($bundle, 'timeframe.labels.comparison')) <span class="mx-1">vs</span>{{ data_get($bundle, 'timeframe.labels.comparison') }} @endif</div>
           <div class="overflow-x-auto rounded-xl border border-emerald-200/10">
             <table class="min-w-full text-sm">
               <thead class="bg-white/5 text-white/70">
@@ -214,19 +268,17 @@
               </tbody>
             </table>
           </div>
-          @if(!empty($data['top_oils_forecast_unresolved']))
-            <div class="mt-2 text-xs text-amber-100/80">
-              {{ count($data['top_oils_forecast_unresolved']) }} unresolved recipe mapping path(s) in forecast flattening.
-            </div>
-          @endif
 
         @elseif($id === 'oil_reorder_risk')
-          @php($riskRows = data_get($data, 'reorder_risk.oil.rows', []))
-          @php($summary = data_get($data, 'reorder_risk.oil.summary', []))
+          @php($bundle = $data['reorder_risk_bundle'] ?? [])
+          @php($primary = $bundle['primary'] ?? [])
+          @php($riskRows = data_get($primary, 'oil.rows', []))
+          @php($summary = data_get($primary, 'oil.summary', []))
           <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
             <span class="rounded-full border border-rose-300/35 bg-rose-400/20 px-2 py-0.5 text-rose-50">Reorder: {{ (int) ($summary['reorder_count'] ?? 0) }}</span>
             <span class="rounded-full border border-amber-300/35 bg-amber-400/20 px-2 py-0.5 text-amber-50">Low: {{ (int) ($summary['low_count'] ?? 0) }}</span>
             <span class="rounded-full border border-emerald-300/35 bg-emerald-400/20 px-2 py-0.5 text-emerald-50">OK: {{ (int) ($summary['ok_count'] ?? 0) }}</span>
+            <span class="ml-auto text-emerald-100/70">Δ Reorder {{ $deltaLabel(data_get($bundle, 'delta.metrics.oil_reorder_count')) }}</span>
           </div>
           <div class="overflow-x-auto rounded-xl border border-emerald-200/10">
             <table class="min-w-full text-sm">
@@ -245,9 +297,7 @@
                     <td class="px-3 py-2 text-white/90">{{ $row['name'] ?? 'Unknown' }}</td>
                     <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['on_hand_grams'] ?? 0, 1) }}g</td>
                     <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['projected_on_hand_grams'] ?? 0, 1) }}g</td>
-                    <td class="px-3 py-2 text-right">
-                      <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] {{ $riskBadge($status) }}">{{ $status }}</span>
-                    </td>
+                    <td class="px-3 py-2 text-right"><span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] {{ $riskBadge($status) }}">{{ $status }}</span></td>
                   </tr>
                 @empty
                   <tr>
@@ -259,7 +309,10 @@
           </div>
 
         @elseif($id === 'wax_reorder_risk')
-          @php($riskRows = data_get($data, 'reorder_risk.wax.rows', []))
+          @php($bundle = $data['reorder_risk_bundle'] ?? [])
+          @php($primary = $bundle['primary'] ?? [])
+          @php($riskRows = data_get($primary, 'wax.rows', []))
+          <div class="mb-2 text-xs text-emerald-100/70">Δ Reorder {{ $deltaLabel(data_get($bundle, 'delta.metrics.wax_reorder_count')) }}</div>
           <div class="space-y-2">
             @forelse($riskRows as $row)
               @php($status = data_get($row, 'state_after_demand.status', 'ok'))
@@ -267,9 +320,7 @@
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <div class="text-sm font-semibold text-white/90">{{ $row['name'] ?? 'Wax' }}</div>
-                    <div class="mt-1 text-xs text-white/70">
-                      On hand {{ $fmt($row['on_hand_grams'] ?? 0, 1) }}g · Projected {{ $fmt($row['projected_on_hand_grams'] ?? 0, 1) }}g
-                    </div>
+                    <div class="mt-1 text-xs text-white/70">On hand {{ $fmt($row['on_hand_grams'] ?? 0, 1) }}g · Projected {{ $fmt($row['projected_on_hand_grams'] ?? 0, 1) }}g</div>
                   </div>
                   <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] {{ $riskBadge($status) }}">{{ $status }}</span>
                 </div>
@@ -282,36 +333,14 @@
         @elseif($id === 'inventory_snapshot')
           @php($snap = $data['inventory_snapshot'] ?? [])
           <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-            <div class="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div class="uppercase tracking-[0.16em] text-white/55">Oils Tracked</div>
-              <div class="mt-1 text-lg font-semibold text-white">{{ (int) ($snap['oil_total_items'] ?? 0) }}</div>
-            </div>
-            <div class="rounded-xl border border-amber-300/25 bg-amber-500/10 p-3">
-              <div class="uppercase tracking-[0.16em] text-amber-100/70">Oil Low</div>
-              <div class="mt-1 text-lg font-semibold text-amber-50">{{ (int) ($snap['oil_low_count'] ?? 0) }}</div>
-            </div>
-            <div class="rounded-xl border border-rose-300/25 bg-rose-500/10 p-3">
-              <div class="uppercase tracking-[0.16em] text-rose-100/70">Oil Reorder</div>
-              <div class="mt-1 text-lg font-semibold text-rose-50">{{ (int) ($snap['oil_reorder_count'] ?? 0) }}</div>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div class="uppercase tracking-[0.16em] text-white/55">Wax On Hand</div>
-              <div class="mt-1 text-lg font-semibold text-white">{{ $fmt($snap['wax_on_hand_grams'] ?? 0, 1) }}g</div>
-              <div class="text-[11px] text-white/55">{{ $fmt($snap['wax_on_hand_boxes'] ?? 0, 2) }} × 45lb</div>
-            </div>
-            <div class="rounded-xl border border-amber-300/25 bg-amber-500/10 p-3">
-              <div class="uppercase tracking-[0.16em] text-amber-100/70">Wax Low</div>
-              <div class="mt-1 text-lg font-semibold text-amber-50">{{ (int) ($snap['wax_low_count'] ?? 0) }}</div>
-            </div>
-            <div class="rounded-xl border border-rose-300/25 bg-rose-500/10 p-3">
-              <div class="uppercase tracking-[0.16em] text-rose-100/70">Wax Reorder</div>
-              <div class="mt-1 text-lg font-semibold text-rose-50">{{ (int) ($snap['wax_reorder_count'] ?? 0) }}</div>
-            </div>
+            <div class="rounded-xl border border-white/10 bg-white/5 p-3"><div class="uppercase tracking-[0.16em] text-white/55">Oils Tracked</div><div class="mt-1 text-lg font-semibold text-white">{{ (int) ($snap['oil_total_items'] ?? 0) }}</div></div>
+            <div class="rounded-xl border border-amber-300/25 bg-amber-500/10 p-3"><div class="uppercase tracking-[0.16em] text-amber-100/70">Oil Low</div><div class="mt-1 text-lg font-semibold text-amber-50">{{ (int) ($snap['oil_low_count'] ?? 0) }}</div></div>
+            <div class="rounded-xl border border-rose-300/25 bg-rose-500/10 p-3"><div class="uppercase tracking-[0.16em] text-rose-100/70">Oil Reorder</div><div class="mt-1 text-lg font-semibold text-rose-50">{{ (int) ($snap['oil_reorder_count'] ?? 0) }}</div></div>
+            <div class="rounded-xl border border-white/10 bg-white/5 p-3"><div class="uppercase tracking-[0.16em] text-white/55">Wax On Hand</div><div class="mt-1 text-lg font-semibold text-white">{{ $fmt($snap['wax_on_hand_grams'] ?? 0, 1) }}g</div><div class="text-[11px] text-white/55">{{ $fmt($snap['wax_on_hand_boxes'] ?? 0, 2) }} × 45lb</div></div>
+            <div class="rounded-xl border border-amber-300/25 bg-amber-500/10 p-3"><div class="uppercase tracking-[0.16em] text-amber-100/70">Wax Low</div><div class="mt-1 text-lg font-semibold text-amber-50">{{ (int) ($snap['wax_low_count'] ?? 0) }}</div></div>
+            <div class="rounded-xl border border-rose-300/25 bg-rose-500/10 p-3"><div class="uppercase tracking-[0.16em] text-rose-100/70">Wax Reorder</div><div class="mt-1 text-lg font-semibold text-rose-50">{{ (int) ($snap['wax_reorder_count'] ?? 0) }}</div></div>
           </div>
-          <a href="{{ $data['urls']['inventory'] ?? '#' }}" wire:navigate
-             class="mt-3 inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20">
-            Open Inventory Maintenance
-          </a>
+          <a href="{{ $data['urls']['inventory'] ?? '#' }}" wire:navigate class="mt-3 inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20">Open Inventory Maintenance</a>
 
         @elseif($id === 'demand_state_overview')
           <div class="overflow-x-auto rounded-xl border border-emerald-200/10">
@@ -322,19 +351,17 @@
                   <th class="px-3 py-2 text-right font-medium">Units</th>
                   <th class="px-3 py-2 text-right font-medium">Wax g</th>
                   <th class="px-3 py-2 text-right font-medium">Oil g</th>
+                  <th class="px-3 py-2 text-right font-medium">Δ Units</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-white/10">
                 @foreach(($data['state_totals'] ?? []) as $row)
                   <tr class="hover:bg-white/5">
-                    <td class="px-3 py-2">
-                      <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $stateBadge($row['state'] ?? '') }}">
-                        {{ $row['state'] ?? 'unknown' }}
-                      </span>
-                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $stateBadge($row['state'] ?? '') }}">{{ $row['state'] ?? 'unknown' }}</span></td>
                     <td class="px-3 py-2 text-right text-white/85">{{ $fmt($row['units'] ?? 0) }}</td>
                     <td class="px-3 py-2 text-right text-white/85">{{ $fmt($row['wax_grams'] ?? 0, 1) }}</td>
                     <td class="px-3 py-2 text-right text-white/85">{{ $fmt($row['oil_grams'] ?? 0, 1) }}</td>
+                    <td class="px-3 py-2 text-right text-white/75">{{ $deltaLabel($row['delta'] ?? null) }}</td>
                   </tr>
                 @endforeach
               </tbody>

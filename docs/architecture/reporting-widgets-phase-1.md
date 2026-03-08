@@ -45,7 +45,7 @@ No widget blends those states into a single unlabeled metric.
 
 ## Filters and Persistence
 Analytics widgets now support:
-- Time window filter: 2/4/8 weeks
+- Time mode and preset filters (expanded in Block 10)
 - Channel filter: all/retail/wholesale/event
 
 Persisted in user `ui_preferences` under:
@@ -57,4 +57,3 @@ Persisted in user `ui_preferences` under:
 - Drill-down navigation from each widget row
 - More advanced trend windows and variance deltas
 - Alerting thresholds tuned per business policy
-
