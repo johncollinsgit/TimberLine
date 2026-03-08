@@ -57,6 +57,7 @@ class Catalog extends Component
     public function createScent(): void
     {
         $this->redirectRoute('admin.scent-wizard', [
+            'source_context' => 'catalog-legacy',
             'return_to' => route('admin.index', ['tab' => 'catalog']),
         ], navigate: true);
     }

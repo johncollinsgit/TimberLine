@@ -1698,6 +1698,13 @@
       timeoutId = setTimeout(() => el.classList.add('hidden'), 6000);
     }
     window.addEventListener('toast', (e) => showToast(e.detail));
+    @if(session()->has('toast'))
+      window.addEventListener('DOMContentLoaded', () => {
+        window.dispatchEvent(new CustomEvent('toast', {
+          detail: @json(session('toast'))
+        }));
+      });
+    @endif
   })();
 </script>
 <script>

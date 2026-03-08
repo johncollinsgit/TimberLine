@@ -48,7 +48,7 @@
               </div>
               <div class="flex flex-wrap gap-2">
                 <a
-                  href="{{ route('admin.scent-wizard', ['return_to' => request()->fullUrl()]) }}"
+                  href="{{ route('admin.scent-wizard', ['source_context' => 'master-data', 'return_to' => request()->fullUrl()]) }}"
                   wire:navigate
                   class="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25"
                 >
@@ -72,7 +72,7 @@
               data-active-resource="{{ $masterDataActiveResource }}"
               data-base-endpoint="{{ $masterDataBaseEndpoint }}"
               data-bulk-endpoint-base="{{ url('/admin/master-data') }}"
-              data-scent-wizard-url="{{ route('admin.scent-wizard') }}"
+              data-scent-wizard-url="{{ route('admin.scent-wizard', ['source_context' => 'master-data']) }}"
               class="h-full min-h-0"
             >
               <div class="flex h-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-emerald-50/65">

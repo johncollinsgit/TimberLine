@@ -864,19 +864,45 @@ class MappingExceptions extends Component
             ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
             : null;
 
+        $channelHint = ($exception?->store_key === 'wholesale' || ! empty($exception?->account_name))
+            ? 'wholesale'
+            : ($isCandleClub ? 'candle_club' : 'retail');
+
         $query = [
             'raw' => $rawName !== '' ? $rawName : $this->modalRawTitle,
             'variant' => (string) ($exception?->raw_variant ?? ''),
             'account' => (string) ($exception?->account_name ?? ''),
             'store' => (string) ($exception?->store_key ?? ''),
+            'source_context' => 'scent-intake',
+            'channel_hint' => $channelHint,
+            'product_form_hint' => $this->wizardProductFormHint((string) ($exception?->raw_variant ?? ''), $rawName),
             'return_to' => route('admin.index', ['tab' => 'scent-intake']),
         ];
 
         if ($isCandleClub) {
             $query['store'] = 'retail';
+            $query['channel_hint'] = 'candle_club';
         }
 
         return route('admin.scent-wizard', array_filter($query, fn ($value) => $value !== ''));
+    }
+
+    protected function wizardProductFormHint(string $variant, string $rawName): string
+    {
+        $haystack = mb_strtolower(trim($variant.' '.$rawName));
+        if ($haystack === '') {
+            return '';
+        }
+
+        if (str_contains($haystack, 'wax melt') || str_contains($haystack, 'wm')) {
+            return 'wax_melt';
+        }
+
+        if (str_contains($haystack, 'room spray')) {
+            return 'room_spray';
+        }
+
+        return '';
     }
 
     public function render()

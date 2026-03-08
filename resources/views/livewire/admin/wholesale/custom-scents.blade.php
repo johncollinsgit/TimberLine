@@ -20,7 +20,7 @@
         Add custom scent
       </button>
       <a
-        href="{{ route('admin.scent-wizard', ['return_to' => route('admin.index', ['tab' => 'wholesale-custom'])]) }}"
+        href="{{ route('admin.scent-wizard', ['source_context' => 'wholesale-custom', 'channel_hint' => 'wholesale', 'store' => 'wholesale', 'return_to' => route('admin.index', ['tab' => 'wholesale-custom'])]) }}"
         wire:navigate
         class="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-50"
       >

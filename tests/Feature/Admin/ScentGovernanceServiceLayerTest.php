@@ -92,8 +92,8 @@ test('scent wizard save delegates canonical creation to create scent action', fu
     $this->actingAs($user);
 
     $created = Scent::query()->create([
-        'name' => 'delegated scent',
-        'display_name' => 'Delegated Scent',
+        'name' => 'delegated scent target',
+        'display_name' => 'Delegated Scent Target',
         'is_active' => true,
     ]);
 
@@ -102,14 +102,51 @@ test('scent wizard save delegates canonical creation to create scent action', fu
         ->once()
         ->withArgs(function (array $payload, string $prefix): bool {
             return $prefix === 'form.'
-                && (string) ($payload['name'] ?? '') === 'Delegated Scent';
+                && (string) ($payload['name'] ?? '') === 'Delegated New Scent'
+                && (string) ($payload['lifecycle_status'] ?? '') === 'draft';
         })
         ->andReturn($created);
     app()->instance(CreateScentAction::class, $mock);
 
     Livewire::test(ScentWizard::class)
-        ->set('form.name', 'Delegated Scent')
-        ->set('form.display_name', 'Delegated Scent')
-        ->call('save')
+        ->set('intent', ScentWizard::INTENT_NEW)
+        ->set('form.name', 'Delegated New Scent')
+        ->set('form.display_name', 'Delegated New Scent')
+        ->set('form.lifecycle_status', 'draft')
+        ->call('complete')
+        ->assertSet('step', 5)
+        ->assertSet('completion.mode', 'created')
+        ->call('finish')
         ->assertRedirect(route('admin.index', ['tab' => 'master-data', 'resource' => 'scents']));
+});
+
+test('scent wizard can map to existing scent without creating a duplicate', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $existing = Scent::query()->create([
+        'name' => 'vintage amber',
+        'display_name' => 'Vintage Amber',
+        'is_active' => true,
+    ]);
+
+    $mock = \Mockery::mock(CreateScentAction::class);
+    $mock->shouldNotReceive('execute');
+    app()->instance(CreateScentAction::class, $mock);
+
+    Livewire::withQueryParams([
+        'raw' => 'Vintage Amber',
+        'return_to' => route('admin.index', ['tab' => 'scent-intake']),
+    ])->test(ScentWizard::class)
+        ->set('intent', ScentWizard::INTENT_MAP)
+        ->set('selectedExistingScentId', $existing->id)
+        ->set('alias.save_raw_as_alias', false)
+        ->call('complete')
+        ->assertSet('step', 5)
+        ->assertSet('completion.mode', 'mapped')
+        ->call('finish')
+        ->assertRedirect(route('admin.index', ['tab' => 'scent-intake']));
 });

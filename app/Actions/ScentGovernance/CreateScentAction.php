@@ -5,6 +5,7 @@ namespace App\Actions\ScentGovernance;
 use App\Models\Blend;
 use App\Models\Scent;
 use App\Services\ScentGovernance\ScentLifecycleService;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class CreateScentAction
@@ -27,7 +28,7 @@ class CreateScentAction
 
         $blendOilCount = $this->resolveBlendOilCount($attributes);
 
-        return Scent::query()->create([
+        $payload = [
             'name' => (string) $attributes['name'],
             'display_name' => $attributes['display_name'] ?: null,
             'abbreviation' => $attributes['abbreviation'] ?: null,
@@ -40,7 +41,17 @@ class CreateScentAction
             'is_wholesale_custom' => (bool) ($attributes['is_wholesale_custom'] ?? false),
             'is_candle_club' => (bool) ($attributes['is_candle_club'] ?? false),
             'is_active' => (bool) ($attributes['is_active'] ?? true),
-        ]);
+        ];
+
+        if (Schema::hasColumn('scents', 'notes')) {
+            $payload['notes'] = $attributes['notes'] ?: null;
+        }
+
+        if (Schema::hasColumn('scents', 'availability_json')) {
+            $payload['availability_json'] = $attributes['availability_json'] ?: null;
+        }
+
+        return Scent::query()->create($payload);
     }
 
     /**
@@ -54,6 +65,7 @@ class CreateScentAction
             'display_name' => trim((string) ($attributes['display_name'] ?? '')),
             'abbreviation' => trim((string) ($attributes['abbreviation'] ?? '')),
             'oil_reference_name' => trim((string) ($attributes['oil_reference_name'] ?? '')),
+            'notes' => trim((string) ($attributes['notes'] ?? '')),
             'is_blend' => (bool) ($attributes['is_blend'] ?? false),
             'oil_blend_id' => blank($attributes['oil_blend_id'] ?? null) ? null : (int) $attributes['oil_blend_id'],
             'blend_oil_count' => blank($attributes['blend_oil_count'] ?? null) ? null : (int) $attributes['blend_oil_count'],
@@ -65,11 +77,31 @@ class CreateScentAction
             'is_candle_club' => (bool) ($attributes['is_candle_club'] ?? false),
             'is_active' => (bool) ($attributes['is_active'] ?? true),
             'lifecycle_status' => $attributes['lifecycle_status'] ?? null,
+            'availability_json' => $this->normalizeAvailability($attributes['availability_json'] ?? null),
         ];
 
         if (! $normalized['is_blend']) {
             $normalized['oil_blend_id'] = null;
             $normalized['blend_oil_count'] = null;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  mixed  $value
+     * @return array<string,bool>|null
+     */
+    protected function normalizeAvailability(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $allowed = ['retail', 'wholesale', 'candle_club', 'room_spray', 'wax_melt'];
+        $normalized = [];
+        foreach ($allowed as $key) {
+            $normalized[$key] = (bool) ($value[$key] ?? false);
         }
 
         return $normalized;
@@ -142,4 +174,3 @@ class CreateScentAction
         return $prefix !== '' ? $prefix.$name : $name;
     }
 }
-

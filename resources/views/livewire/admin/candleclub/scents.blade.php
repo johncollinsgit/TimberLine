@@ -7,7 +7,7 @@
       <div class="mt-1 text-xs text-emerald-100/70">Create new scents through the New Scent Wizard.</div>
     </div>
     <a
-      href="{{ route('admin.scent-wizard', ['return_to' => route('admin.index', ['tab' => 'candle-club'])]) }}"
+      href="{{ route('admin.scent-wizard', ['source_context' => 'candle-club', 'channel_hint' => 'candle_club', 'return_to' => route('admin.index', ['tab' => 'candle-club'])]) }}"
       wire:navigate
       class="inline-flex h-9 items-center rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 text-xs font-semibold text-white hover:bg-emerald-500/25"
     >

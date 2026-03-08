@@ -1322,6 +1322,7 @@ class ScentsCrud extends Component
     protected function wizardUrl(array $overrides = []): string
     {
         $query = array_filter(array_merge([
+            'source_context' => 'catalog',
             'return_to' => route('admin.index', ['tab' => 'catalog']),
         ], $overrides), fn ($value) => $value !== null && $value !== '');
 

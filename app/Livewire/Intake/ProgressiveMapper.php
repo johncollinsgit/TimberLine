@@ -418,11 +418,17 @@ class ProgressiveMapper extends Component
      */
     protected function wizardUrl(array $context): string
     {
+        $channelHint = (bool) ($context['is_wholesale'] ?? false) ? 'wholesale' : 'retail';
+        $productFormHint = $this->productFormHint((string) ($context['raw_variant'] ?? ''), (string) ($context['raw_label'] ?? ''));
+
         $query = array_filter([
             'raw' => (string) ($context['raw_label'] ?? ''),
             'variant' => (string) ($context['raw_variant'] ?? ''),
             'account' => (string) ($context['account_name'] ?? ''),
             'store' => (string) ($context['store_key'] ?? ''),
+            'source_context' => 'scent-intake',
+            'channel_hint' => $channelHint,
+            'product_form_hint' => $productFormHint,
             'return_to' => route('admin.index', ['tab' => 'scent-intake']),
         ], fn ($value) => $value !== '');
 
@@ -464,8 +470,27 @@ class ProgressiveMapper extends Component
             'raw_variant' => $rawVariant,
             'raw_scent_name' => $rawScentName,
             'raw_label' => $rawLabel,
+            'channel_hint' => ($storeKey === 'wholesale' || $orderType === 'wholesale' || $accountName !== '') ? 'wholesale' : 'retail',
             'is_wholesale' => $storeKey === 'wholesale' || $orderType === 'wholesale' || $accountName !== '',
         ];
+    }
+
+    protected function productFormHint(string $variant, string $label): string
+    {
+        $haystack = mb_strtolower(trim($variant.' '.$label));
+        if ($haystack === '') {
+            return '';
+        }
+
+        if (str_contains($haystack, 'wax melt') || str_contains($haystack, 'wm')) {
+            return 'wax_melt';
+        }
+
+        if (str_contains($haystack, 'room spray')) {
+            return 'room_spray';
+        }
+
+        return '';
     }
 
     /**
