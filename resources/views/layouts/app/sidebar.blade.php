@@ -1446,6 +1446,22 @@
       ];
   }
 
+  $wikiSectionItems = [
+      [
+          'key' => 'wholesale-processes',
+          'label' => 'Wholesale Processes',
+          'href' => route('wiki.wholesale-processes'),
+          'current' => request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*'),
+      ],
+      [
+          'key' => 'market-room-process',
+          'label' => 'Market Room Process',
+          'href' => route('wiki.article', ['slug' => 'market-room']),
+          'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'market-room',
+      ],
+  ];
+  $wikiSectionsActive = collect($wikiSectionItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
+
   $unresolvedExceptions = 0;
   $latestRun = null;
 
@@ -1552,24 +1568,28 @@
                 @endif
               </div>
             @endforeach
-            <details class="ml-3 rounded-xl border px-2 py-1 mf-sidebar-panel" {{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') || (request()->routeIs('wiki.article') && request()->route('slug') === 'market-room') ? 'open' : '' }}>
-              <summary class="cursor-pointer list-none text-xs text-emerald-100/70 flex items-center justify-between px-2 py-1 group">
-                <span>Wiki Sections</span>
-                <span class="text-[10px] transition-transform group-open:rotate-90">▸</span>
-              </summary>
-              <div class="mt-2 rounded-xl p-2 space-y-1">
-                <div class="{{ request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*') ? 'mf-active-pill' : '' }}">
-                  <flux:sidebar.item icon="folder-open" href="{{ route('wiki.wholesale-processes') }}" class="mf-transition mf-nav-item">
-                    <span class="mf-nav-label">Wholesale Processes</span>
-                  </flux:sidebar.item>
+            <div class="mf-sidebar-sort-item {{ $wikiSectionsActive ? 'mf-active-pill' : '' }}">
+              <details class="mf-admin-group" {{ $wikiSectionsActive ? 'open' : '' }}>
+                <summary class="mf-admin-group-summary">
+                  <span class="mf-admin-group-main">
+                    <flux:icon.book-open class="size-4" />
+                    <span class="mf-nav-label">Wiki Sections</span>
+                  </span>
+                  <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                </summary>
+                <div class="mf-admin-subnav">
+                  @foreach($wikiSectionItems as $wikiSection)
+                    <a
+                      href="{{ $wikiSection['href'] }}"
+                      wire:navigate
+                      class="mf-admin-subnav-link {{ $wikiSection['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                    >
+                      <span>{{ $wikiSection['label'] }}</span>
+                    </a>
+                  @endforeach
                 </div>
-                <div class="{{ request()->routeIs('wiki.article') && request()->route('slug') === 'market-room' ? 'mf-active-pill' : '' }}">
-                  <flux:sidebar.item icon="sparkles" href="{{ route('wiki.article', ['slug' => 'market-room']) }}" class="mf-transition mf-nav-item">
-                    <span class="mf-nav-label">Market Room Process</span>
-                  </flux:sidebar.item>
-                </div>
-              </div>
-            </details>
+              </details>
+            </div>
           </div>
         </flux:sidebar.group>
 
