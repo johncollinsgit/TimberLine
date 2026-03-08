@@ -163,41 +163,20 @@
       <div class="text-sm font-semibold text-white">Step 2: Scent identity</div>
       <p class="mt-1 text-sm text-emerald-50/75">Define canonical scent metadata, lifecycle defaults, and channel/form availability.</p>
 
-      <div class="mt-4 grid gap-3 md:grid-cols-6">
-        <div class="md:col-span-2">
+      <div class="mt-4 grid gap-4 lg:grid-cols-12">
+        <div class="lg:col-span-4">
           <flux:input wire:model.defer="form.name" label="Name" />
           @error('form.name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
-        <div class="md:col-span-2">
+        <div class="lg:col-span-4">
           <flux:input wire:model.defer="form.display_name" label="Display Name" />
           @error('form.display_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
-        <div>
+        <div class="lg:col-span-2">
           <flux:input wire:model.defer="form.abbreviation" label="Abbrev" />
           @error('form.abbreviation') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
-        <div class="md:col-span-1 rounded-xl border border-white/10 bg-black/20 p-3">
-          <div class="text-xs text-emerald-100/70">Recipe type</div>
-          <div class="mt-2 grid gap-2 sm:grid-cols-2">
-            <label class="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/85">
-              <input type="radio" wire:model.live="form.recipe_type" value="single_oil" class="mt-1 rounded border-white/20 bg-white/10" />
-              <span>Single oil</span>
-            </label>
-            <label class="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/85">
-              <input type="radio" wire:model.live="form.recipe_type" value="blend_backed" class="mt-1 rounded border-white/20 bg-white/10" />
-              <span>Blend-backed</span>
-            </label>
-          </div>
-          <div class="mt-2 text-[11px] text-emerald-100/65">Recipe components must use existing oils or blend templates.</div>
-          @error('form.recipe_type') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-        </div>
-
-        <div class="md:col-span-3">
-          <label class="text-xs text-emerald-100/70">Notes</label>
-          <textarea wire:model.defer="form.notes" rows="3" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90"></textarea>
-          @error('form.notes') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
-        </div>
-        <div class="md:col-span-3">
+        <div class="lg:col-span-2">
           <label class="text-xs text-emerald-100/70">Lifecycle default</label>
           <select wire:model.defer="form.lifecycle_status" class="mt-1 h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-white/90">
             @foreach($lifecycleStatuses as $status)
@@ -207,8 +186,30 @@
           @error('form.lifecycle_status') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
 
+        <div class="lg:col-span-6 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div class="text-xs text-emerald-100/70">Recipe type</div>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <label class="flex min-h-[56px] items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-tight text-white/85">
+              <input type="radio" wire:model.live="form.recipe_type" value="single_oil" class="mt-0.5 rounded border-white/20 bg-white/10" />
+              <span>Single oil</span>
+            </label>
+            <label class="flex min-h-[56px] items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm leading-tight text-white/85">
+              <input type="radio" wire:model.live="form.recipe_type" value="blend_backed" class="mt-0.5 rounded border-white/20 bg-white/10" />
+              <span>Blend-backed</span>
+            </label>
+          </div>
+          <div class="mt-2 text-[11px] leading-relaxed text-emerald-100/65">Recipe components must use existing oils or blend templates.</div>
+          @error('form.recipe_type') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="lg:col-span-6">
+          <label class="text-xs text-emerald-100/70">Notes</label>
+          <textarea wire:model.defer="form.notes" rows="3" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90"></textarea>
+          @error('form.notes') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
+        </div>
+
         @if(($form['recipe_type'] ?? 'single_oil') === 'single_oil')
-          <div class="md:col-span-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div class="lg:col-span-8 rounded-xl border border-white/10 bg-black/20 p-3">
             <label class="text-xs text-emerald-100/70">Primary oil</label>
             <div class="mt-2">
               <livewire:components.base-oil-combobox
@@ -227,7 +228,7 @@
             @error('form.oil_reference_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
           </div>
         @else
-          <div class="md:col-span-6 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div class="lg:col-span-12 rounded-xl border border-white/10 bg-black/20 p-3">
             <div class="flex items-center justify-between gap-2">
               <div>
                 <div class="text-xs text-emerald-100/70">Blend-backed recipe components</div>
@@ -304,7 +305,21 @@
           </div>
         @endif
 
-        <div class="md:col-span-6 rounded-xl border border-white/10 bg-black/20 p-3">
+        <div class="lg:col-span-4 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/60">Classification</div>
+          <div class="mt-2 space-y-2">
+            <label class="flex items-center gap-2 text-sm text-white/85">
+              <input type="checkbox" wire:model.defer="form.is_wholesale_custom" class="rounded border-white/20 bg-white/10" />
+              <span>Wholesale custom scent</span>
+            </label>
+            <label class="flex items-center gap-2 text-sm text-white/85">
+              <input type="checkbox" wire:model.defer="form.is_candle_club" class="rounded border-white/20 bg-white/10" />
+              <span>Candle Club scent</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="lg:col-span-8 rounded-xl border border-white/10 bg-black/20 p-3">
           <div class="text-xs uppercase tracking-[0.22em] text-emerald-100/60">Availability</div>
           <div class="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             @foreach(['retail' => 'Retail', 'wholesale' => 'Wholesale', 'candle_club' => 'Candle Club', 'room_spray' => 'Room Spray', 'wax_melt' => 'Wax Melt'] as $key => $label)
@@ -314,15 +329,6 @@
               </label>
             @endforeach
           </div>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <input type="checkbox" wire:model.defer="form.is_wholesale_custom" class="rounded border-white/20 bg-white/10" />
-          <span class="text-sm text-white/80">Wholesale custom scent</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <input type="checkbox" wire:model.defer="form.is_candle_club" class="rounded border-white/20 bg-white/10" />
-          <span class="text-sm text-white/80">Candle Club scent</span>
         </div>
       </div>
 
