@@ -2,7 +2,9 @@
 
 namespace App\Services\Pouring;
 
+use App\Actions\Inventory\AdjustInventoryAction;
 use App\Models\BaseOil;
+use App\Models\InventoryAdjustment;
 use App\Models\OilMovement;
 use App\Models\OrderLine;
 use App\Models\Scent;
@@ -10,9 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 class OilConsumptionService
 {
-    public function __construct(protected BlendResolver $blendResolver)
-    {
-    }
+    public function __construct(
+        protected BlendResolver $blendResolver,
+        protected AdjustInventoryAction $adjustInventory,
+    ) {}
 
     public function consumeForLine(OrderLine $line, float $oilGrams, string $reason, ?int $userId = null): void
     {
@@ -49,12 +52,23 @@ class OilConsumptionService
             return;
         }
 
-        $oil->grams_on_hand = max(0, (float) $oil->grams_on_hand - $grams);
-        $oil->save();
+        $adjustment = $this->adjustInventory->adjustOil(
+            oil: $oil,
+            gramsDelta: -abs($grams),
+            reason: InventoryAdjustment::REASON_CONSUMED,
+            notes: $reason,
+            performedBy: $userId,
+            sourceType: 'order_lines',
+            sourceId: $line->id
+        );
+
+        if (! $adjustment) {
+            return;
+        }
 
         OilMovement::create([
             'base_oil_id' => $baseOilId,
-            'grams' => -abs($grams),
+            'grams' => (float) $adjustment->grams_delta,
             'reason' => $reason,
             'source_type' => 'order_lines',
             'source_id' => $line->id,

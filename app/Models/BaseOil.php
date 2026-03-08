@@ -39,4 +39,9 @@ class BaseOil extends Model
     {
         return $this->hasMany(BlendTemplateComponent::class);
     }
+
+    public function inventoryAdjustments(): HasMany
+    {
+        return $this->hasMany(InventoryAdjustment::class);
+    }
 }
