@@ -21,7 +21,6 @@ class ScentWizard extends Component
     public const INTENT_NEW = 'new_scent';
     public const INTENT_MAP = 'map_existing';
     public const INTENT_CUSTOMER_ALIAS = 'customer_alias';
-    public const INTENT_BLEND_PLACEHOLDER = 'blend_template_placeholder';
     public const RECIPE_TYPE_SINGLE_OIL = 'single_oil';
     public const RECIPE_TYPE_BLEND_BACKED = 'blend_backed';
 
@@ -128,6 +127,10 @@ class ScentWizard extends Component
             $this->intent = self::INTENT_CUSTOMER_ALIAS;
         } elseif ($raw !== '') {
             $this->intent = self::INTENT_MAP;
+        }
+
+        if (! in_array($this->intent, $this->intentOptions(), true)) {
+            $this->intent = self::INTENT_NEW;
         }
 
         $this->seedExistingSelection();
@@ -715,13 +718,6 @@ class ScentWizard extends Component
             ];
         }
 
-        if ($this->intent === self::INTENT_BLEND_PLACEHOLDER) {
-            $warnings[] = [
-                'type' => 'info',
-                'message' => 'Blend-template authoring is still a future block. Use existing blend template references for now.',
-            ];
-        }
-
         return $warnings;
     }
 
@@ -756,7 +752,6 @@ class ScentWizard extends Component
             self::INTENT_NEW,
             self::INTENT_MAP,
             self::INTENT_CUSTOMER_ALIAS,
-            self::INTENT_BLEND_PLACEHOLDER,
         ];
     }
 

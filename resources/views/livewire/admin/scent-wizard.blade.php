@@ -97,15 +97,6 @@
             </div>
           </div>
         </label>
-        <label class="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div class="flex items-start gap-2">
-            <input type="radio" wire:model.live="intent" value="blend_template_placeholder" class="mt-1 rounded border-white/20 bg-white/10" />
-            <div>
-              <div class="text-sm font-medium text-white">Blend-template path (placeholder)</div>
-              <div class="text-xs text-white/70">Future governed blend-template workflow. Not fully implemented in this block.</div>
-            </div>
-          </div>
-        </label>
       </div>
       @error('intent') <div class="mt-2 text-xs text-red-300">{{ $message }}</div> @enderror
 
@@ -403,7 +394,6 @@
           <div class="mt-1 text-sm text-white">
             @if($intent === 'new_scent') Create new canonical scent
             @elseif($intent === 'customer_alias') Map to existing scent + customer alias
-            @elseif($intent === 'blend_template_placeholder') Blend-template placeholder path
             @else Map to existing scent
             @endif
           </div>
