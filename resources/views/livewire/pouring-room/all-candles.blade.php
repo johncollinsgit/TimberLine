@@ -13,6 +13,11 @@
     'brought_down' => 'border-emerald-300/35 bg-emerald-500/20 text-emerald-50',
     'mixed' => 'border-fuchsia-300/35 bg-fuchsia-500/20 text-fuchsia-50',
   ];
+  $stateLabels = [
+    'all' => 'All states',
+    'current' => 'Current',
+    'actual' => 'Actual',
+  ];
 @endphp
 
 <div class="space-y-5">
@@ -69,6 +74,9 @@
     <div class="mt-3 flex flex-wrap items-center gap-2">
       @foreach(['all' => 'All', 'retail' => 'Retail', 'wholesale' => 'Wholesale', 'event' => 'Market'] as $key => $label)
         <button wire:click="$set('channel','{{ $key }}')" class="rounded-full border px-3 py-1.5 text-xs {{ $channel===$key ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">{{ $label }}</button>
+      @endforeach
+      @foreach($stateLabels as $key => $label)
+        <button wire:click="$set('state','{{ $key }}')" class="rounded-full border px-3 py-1.5 text-xs {{ $state===$key ? 'border-sky-300/35 bg-sky-500/25 text-sky-50' : 'border-sky-400/15 bg-sky-500/5 text-white/80' }}">{{ $label }}</button>
       @endforeach
       @foreach(['3' => 'Next 3 days', '7' => 'Next 7 days', '14' => 'Next 14 days', 'all' => 'All Due'] as $key => $label)
         <button wire:click="$set('dueWindow','{{ $key }}')" class="rounded-full border px-3 py-1.5 text-xs {{ $dueWindow===$key ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">{{ $label }}</button>

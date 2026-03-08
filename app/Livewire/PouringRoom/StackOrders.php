@@ -10,10 +10,15 @@ use Livewire\Component;
 class StackOrders extends Component
 {
     public string $channel = 'retail';
+
+    public string $state = 'current'; // current|actual
+
     public string $sort = 'due'; // due|largest|recent
+
     public array $selected = [];
 
     protected $queryString = [
+        'state' => ['except' => 'current'],
         'sort' => ['except' => 'due'],
     ];
 
@@ -36,7 +41,7 @@ class StackOrders extends Component
 
     public function toggleSelect(int $orderId): void
     {
-        $this->selected[$orderId] = !($this->selected[$orderId] ?? false);
+        $this->selected[$orderId] = ! ($this->selected[$orderId] ?? false);
     }
 
     public function submitSelected(): void
@@ -55,9 +60,16 @@ class StackOrders extends Component
         $service = app(PouringQueueService::class);
         $orders = $service->stackOrders($this->channel);
 
+        if ($this->state === 'actual') {
+            $orders = $orders->filter(fn ($order) => in_array((string) ($order->status ?? ''), ['brought_down', 'verified'], true))->values();
+        } else {
+            $orders = $orders->filter(fn ($order) => in_array((string) ($order->status ?? ''), ['submitted_to_pouring', 'pouring'], true))->values();
+        }
+
         $orders = $orders->map(function ($o) {
             $units = $o->lines->sum(fn ($l) => (int) (($l->ordered_qty ?? $l->quantity ?? 0) + ($l->extra_qty ?? 0)));
             $o->units = $units;
+
             return $o;
         });
 
@@ -68,6 +80,7 @@ class StackOrders extends Component
         } else {
             $orders = $orders->sortBy(function ($o) {
                 $due = $o->due_at ? CarbonImmutable::parse($o->due_at) : CarbonImmutable::now()->addYears(5);
+
                 return $due->timestamp;
             });
         }

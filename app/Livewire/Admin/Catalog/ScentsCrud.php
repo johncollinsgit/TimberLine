@@ -27,41 +27,70 @@ class ScentsCrud extends Component
 {
     use WithPagination;
 
+    public string $scent = '';
+
     public string $search = '';
+
     public string $sort = 'name';
+
     public string $dir = 'asc';
+
     public int $perPage = 25;
 
     public bool $showEdit = false;
+
     public ?int $editingId = null;
+
     public array $edit = [];
 
     public bool $showDelete = false;
+
     public ?int $deletingId = null;
 
     public ?int $inlineRowId = null;
+
     public ?string $inlineField = null;
+
     public mixed $inlineValue = null;
+
     public ?int $focusedRowId = null;
+
     public ?string $focusedField = null;
+
     /** @var array<string,string> */
     public array $inlineErrors = [];
+
     /** @var array<string,bool> */
     public array $inlineSaving = [];
+
     /** @var array<string,bool> */
     public array $inlineSaved = [];
 
     public ?string $editErrorBanner = null;
 
     public ?int $editCanonicalSuggestionId = null;
+
     public ?string $editCanonicalSuggestionLabel = null;
 
     protected $queryString = [
+        'scent' => ['except' => ''],
         'search' => ['except' => ''],
         'sort' => ['except' => 'name'],
         'dir' => ['except' => 'asc'],
         'perPage' => ['except' => 25],
     ];
+
+    public function mount(): void
+    {
+        $incoming = trim((string) request()->query('scent', $this->scent));
+        if ($incoming !== '') {
+            $this->scent = $incoming;
+        }
+
+        if ($this->search === '' && $this->scent !== '') {
+            $this->search = $this->scent;
+        }
+    }
 
     public function updatedSearch(): void
     {
@@ -331,6 +360,7 @@ class ScentsCrud extends Component
                 'style' => 'warning',
             ]);
             $this->showDelete = false;
+
             return;
         }
 
@@ -391,6 +421,7 @@ class ScentsCrud extends Component
     {
         if (! filter_var($value, FILTER_VALIDATE_BOOL)) {
             $this->clearBlendFields('edit');
+
             return;
         }
 
@@ -654,6 +685,7 @@ class ScentsCrud extends Component
                     continue;
                 }
                 $weights[$baseOilId] = ($weights[$baseOilId] ?? 0.0) + $weight;
+
                 continue;
             }
 
@@ -707,6 +739,7 @@ class ScentsCrud extends Component
                     'name' => (string) $oil->name,
                     'ratio_weight' => $weight,
                 ];
+
                 continue;
             }
 
@@ -832,6 +865,7 @@ class ScentsCrud extends Component
                     'id' => (int) $blendMap[$key]->id,
                     'ratio_weight' => $weight,
                 ];
+
                 continue;
             }
 
@@ -924,7 +958,7 @@ class ScentsCrud extends Component
         $candidate = Scent::query()
             ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
             ->where(function ($query) use ($normalized): void {
-                $like = '%' . $normalized . '%';
+                $like = '%'.$normalized.'%';
                 $query->whereRaw('lower(name) like ?', [$like])
                     ->orWhereRaw('lower(coalesce(display_name, \'\')) like ?', [$like]);
             })
@@ -950,16 +984,19 @@ class ScentsCrud extends Component
 
         if (str_contains($message, 'scents.name') || str_contains($message, 'scents_name_unique')) {
             $this->addError("{$prefix}.name", 'A scent with this name already exists.');
+
             return;
         }
 
         if (str_contains($message, 'scents.abbreviation')) {
             $this->addError("{$prefix}.abbreviation", 'This abbreviation is already used by another scent.');
+
             return;
         }
 
         if (str_contains($message, 'scents.display_name')) {
             $this->addError("{$prefix}.display_name", 'This display name is already used by another scent.');
+
             return;
         }
 
@@ -1065,7 +1102,7 @@ class ScentsCrud extends Component
 
     protected function inlineCellKey(int $id, string $field): string
     {
-        return $id . ':' . $field;
+        return $id.':'.$field;
     }
 
     protected function payloadFromScent(Scent $scent): array
@@ -1094,7 +1131,7 @@ class ScentsCrud extends Component
                 ? ($scent->canonicalScent->display_name ?: $scent->canonicalScent->name)
                 : '',
             'source_wholesale_custom_scent_id' => $scent->sourceWholesaleCustomScent
-                ? ($scent->sourceWholesaleCustomScent->custom_scent_name . ' · ' . $scent->sourceWholesaleCustomScent->account_name)
+                ? ($scent->sourceWholesaleCustomScent->custom_scent_name.' · '.$scent->sourceWholesaleCustomScent->account_name)
                 : '',
             'oil_blend_id' => $scent->oilBlend?->name ?? '',
             default => $scent->getAttribute($field),
@@ -1108,6 +1145,7 @@ class ScentsCrud extends Component
                 return $value;
             }
             $normalized = mb_strtolower(trim((string) $value));
+
             return in_array($normalized, ['1', 'true', 'yes', 'y', 'on', 'blend', 'active'], true);
         }
 
@@ -1115,6 +1153,7 @@ class ScentsCrud extends Component
             if (blank($value)) {
                 return null;
             }
+
             return max(1, (int) $value);
         }
 
@@ -1132,8 +1171,9 @@ class ScentsCrud extends Component
             $normalized = mb_strtolower(trim((string) $value));
             $match = Blend::query()
                 ->whereRaw('lower(name) = ?', [$normalized])
-                ->orWhereRaw('lower(name) like ?', ['%' . $normalized . '%'])
+                ->orWhereRaw('lower(name) like ?', ['%'.$normalized.'%'])
                 ->value('id');
+
             return $match ? (int) $match : null;
         }
 
@@ -1150,11 +1190,12 @@ class ScentsCrud extends Component
                 ->where(function ($query) use ($normalized): void {
                     $query->whereRaw('lower(name) = ?', [$normalized])
                         ->orWhereRaw('lower(display_name) = ?', [$normalized])
-                        ->orWhereRaw('lower(name) like ?', ['%' . $normalized . '%'])
-                        ->orWhereRaw('lower(coalesce(display_name, \'\')) like ?', ['%' . $normalized . '%']);
+                        ->orWhereRaw('lower(name) like ?', ['%'.$normalized.'%'])
+                        ->orWhereRaw('lower(coalesce(display_name, \'\')) like ?', ['%'.$normalized.'%']);
                 })
                 ->orderByRaw('case when lower(name) = ? then 0 when lower(display_name) = ? then 0 else 1 end', [$normalized, $normalized])
                 ->value('id');
+
             return $match ? (int) $match : null;
         }
 
@@ -1173,9 +1214,10 @@ class ScentsCrud extends Component
             $match = WholesaleCustomScent::query()
                 ->whereRaw("lower(concat(custom_scent_name, ' · ', account_name)) = ?", [$normalized])
                 ->orWhereRaw('lower(custom_scent_name) = ?', [$normalized])
-                ->orWhereRaw('lower(custom_scent_name) like ?', ['%' . $normalized . '%'])
-                ->orWhereRaw('lower(account_name) like ?', ['%' . $normalized . '%'])
+                ->orWhereRaw('lower(custom_scent_name) like ?', ['%'.$normalized.'%'])
+                ->orWhereRaw('lower(account_name) like ?', ['%'.$normalized.'%'])
                 ->value('id');
+
             return $match ? (int) $match : null;
         }
 
@@ -1225,7 +1267,7 @@ class ScentsCrud extends Component
     protected function inlineValidationErrorMessage(ValidationException $exception, string $field): string
     {
         $errors = $exception->errors();
-        $preferredKey = 'edit.' . $field;
+        $preferredKey = 'edit.'.$field;
 
         if (! empty($errors[$preferredKey])) {
             return (string) $errors[$preferredKey][0];
@@ -1244,12 +1286,14 @@ class ScentsCrud extends Component
         $index = array_search($this->inlineField, $fields, true);
         if ($index === false) {
             $this->cancelInlineEdit();
+
             return;
         }
 
         $next = $index + $direction;
         if (! isset($fields[$next])) {
             $this->cancelInlineEdit();
+
             return;
         }
 
@@ -1280,7 +1324,7 @@ class ScentsCrud extends Component
                 'sourceWholesaleCustomScent:id,account_name,custom_scent_name',
             ])
             ->when($this->search !== '', function ($query) {
-                $s = '%' . $this->search . '%';
+                $s = '%'.$this->search.'%';
                 $query->where(function ($inner) use ($s): void {
                     $inner->where('name', 'like', $s)
                         ->orWhere('display_name', 'like', $s)

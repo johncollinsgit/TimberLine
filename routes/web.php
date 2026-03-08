@@ -1,58 +1,58 @@
 <?php
 
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
-use App\Livewire\Shipping\Orders as ShippingOrders;
-use App\Livewire\Pouring\Queue as PouringQueue;
-use App\Livewire\PouringRoom\Stacks as PouringStacks;
-use App\Livewire\PouringRoom\StackOrders as PouringStackOrders;
-use App\Livewire\PouringRoom\OrderDetail as PouringOrderDetail;
-use App\Livewire\PouringRoom\AllCandles as PouringAllCandles;
-use App\Livewire\PouringRoom\Calendar as PouringCalendar;
-use App\Livewire\PouringRoom\Timeline as PouringTimeline;
-use App\Livewire\Dashboard\Launchpad as DashboardLaunchpad;
-use App\Livewire\Retail\Plan as RetailPlan;
+use App\Http\Controllers\AdminMasterDataController;
+use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\ShopifyAuthController;
+use App\Http\Controllers\ShopifyWebhookController;
+use App\Http\Controllers\UiPreferencesController;
+use App\Http\Controllers\WikiAdminController;
+use App\Http\Controllers\WikiController;
 use App\Livewire\Admin\AdminHome;
-use App\Livewire\Admin\ScentWizard as AdminScentWizard;
-use App\Livewire\Admin\ImportRuns as AdminImportRuns;
 use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
 use App\Livewire\Admin\Catalog\SizesCrud as AdminSizesCrud;
 use App\Livewire\Admin\Catalog\WicksCrud as AdminWicksCrud;
+use App\Livewire\Admin\ImportRuns as AdminImportRuns;
 use App\Livewire\Admin\Oils\OilAbbreviationsCrud as AdminOilAbbreviationsCrud;
 use App\Livewire\Admin\Oils\OilBlendsCrud as AdminOilBlendsCrud;
+use App\Livewire\Admin\ScentWizard as AdminScentWizard;
 use App\Livewire\Admin\Users\UsersIndex as AdminUsersIndex;
 use App\Livewire\Admin\Wholesale\CustomScentsCrud as AdminWholesaleCustomScentsCrud;
-use App\Livewire\Inventory\Index as InventoryIndex;
-use App\Livewire\Events\Index as EventsIndex;
-use App\Livewire\Events\Show as EventsShow;
+use App\Livewire\Dashboard\Launchpad as DashboardLaunchpad;
+use App\Livewire\Events\Browse as EventsBrowse;
+use App\Livewire\Events\BrowseShow as EventsBrowseShow;
 use App\Livewire\Events\Create as EventsCreate;
 use App\Livewire\Events\Import as EventsImport;
 use App\Livewire\Events\ImportMarketBoxPlans as EventsImportMarketBoxPlans;
-use App\Livewire\Events\Browse as EventsBrowse;
-use App\Livewire\Events\BrowseShow as EventsBrowseShow;
-use App\Livewire\Markets\MarketPourLists;
-use App\Livewire\Markets\MarketPourListBuilder;
-use App\Livewire\Markets\MarketPourListShow;
+use App\Livewire\Events\Index as EventsIndex;
+use App\Livewire\Events\Show as EventsShow;
+use App\Livewire\Inventory\Index as InventoryIndex;
 use App\Livewire\Markets\DirectoryIndex as MarketsDirectoryIndex;
-use App\Livewire\Markets\MarketHistoryShow as MarketsMarketHistoryShow;
-use App\Livewire\Markets\YearOverview as MarketsYearOverview;
 use App\Livewire\Markets\EventBrowserShow as MarketsEventBrowserShow;
+use App\Livewire\Markets\MarketHistoryShow as MarketsMarketHistoryShow;
+use App\Livewire\Markets\MarketPourListBuilder;
+use App\Livewire\Markets\MarketPourLists;
+use App\Livewire\Markets\MarketPourListShow;
+use App\Livewire\Markets\YearOverview as MarketsYearOverview;
 use App\Livewire\Pouring\Requests as PourRequests;
-use App\Http\Controllers\ShopifyAuthController;
-use App\Http\Controllers\GoogleAuthController;
-use App\Http\Controllers\AdminMasterDataController;
-use App\Http\Controllers\ShopifyWebhookController;
-use App\Http\Controllers\UiPreferencesController;
-use App\Http\Controllers\WikiController;
-use App\Http\Controllers\WikiAdminController;
-use App\Services\Shopify\ShopifyClient;
-use App\Services\Shopify\ShopifyStores;
-use App\Support\Auth\HomeRedirect;
+use App\Livewire\PouringRoom\AllCandles as PouringAllCandles;
+use App\Livewire\PouringRoom\Calendar as PouringCalendar;
+use App\Livewire\PouringRoom\OrderDetail as PouringOrderDetail;
+use App\Livewire\PouringRoom\StackOrders as PouringStackOrders;
+use App\Livewire\PouringRoom\Stacks as PouringStacks;
+use App\Livewire\PouringRoom\Timeline as PouringTimeline;
+use App\Livewire\Retail\Plan as RetailPlan;
+use App\Livewire\Shipping\Orders as ShippingOrders;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
+use App\Services\Shopify\ShopifyClient;
+use App\Services\Shopify\ShopifyStores;
+use App\Support\Auth\HomeRedirect;
 use App\Support\Wiki\WikiRepository;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -107,12 +107,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/system-controls', function () {
             return redirect()->route('admin.index');
         });
-        Route::get('/admin/scent-intake', function () {
-            return redirect()->route('admin.index', ['tab' => 'scent-intake']);
+        Route::get('/admin/scent-intake', function (Request $request) {
+            return redirect()->route('admin.index', array_merge(
+                ['tab' => 'scent-intake'],
+                $request->query()
+            ));
         })->name('admin.scent-intake');
 
-        Route::get('/admin/mapping-exceptions', function () {
-            return redirect()->route('admin.index', ['tab' => 'scent-intake']);
+        Route::get('/admin/mapping-exceptions', function (Request $request) {
+            return redirect()->route('admin.index', array_merge(
+                ['tab' => 'scent-intake'],
+                $request->query()
+            ));
         })->name('admin.mapping-exceptions');
 
         Route::get('/admin/import-runs', AdminImportRuns::class)
@@ -145,21 +151,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     \App\Models\ShopifyImportRun::query()->delete();
                 }
             });
+
             return back()->with('status', 'Orders cleared.');
         })->name('admin.tools.clear-orders');
 
         Route::post('/admin/tools/import/retail', function () {
             Artisan::call('shopify:import-orders', ['store' => 'retail', '--days' => 200]);
+
             return back()->with('status', 'Retail import started.');
         })->name('admin.tools.import-retail');
 
         Route::post('/admin/tools/import/wholesale', function () {
             Artisan::call('shopify:import-orders', ['store' => 'wholesale', '--days' => 200]);
+
             return back()->with('status', 'Wholesale import started.');
         })->name('admin.tools.import-wholesale');
 
         Route::post('/admin/tools/import-market-boxes', function () {
             Artisan::call('markets:import-boxes');
+
             return back()->with('status', trim(Artisan::output()) ?: 'Market box import started.');
         })->name('admin.tools.import-market-boxes');
     });
@@ -218,32 +228,35 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::get('/wiki/oil-blends', function () {
-        abort_if(!app(WikiRepository::class)->article('oil-blends'), 404);
+        abort_if(! app(WikiRepository::class)->article('oil-blends'), 404);
         $blends = Blend::query()
             ->with(['components.baseOil'])
             ->orderBy('name')
             ->get();
+
         return view('wiki.oil-blends', ['blends' => $blends]);
     })->name('wiki.oil-blends');
 
     Route::get('/wiki/wholesale-custom-scents', function () {
-        abort_if(!app(WikiRepository::class)->article('wholesale-custom-scents'), 404);
+        abort_if(! app(WikiRepository::class)->article('wholesale-custom-scents'), 404);
         $records = WholesaleCustomScent::query()
             ->with('canonicalScent')
             ->orderBy('account_name')
             ->orderBy('custom_scent_name')
             ->get()
             ->groupBy('account_name');
+
         return view('wiki.wholesale-custom-scents', ['records' => $records]);
     })->name('wiki.wholesale-custom-scents');
 
     Route::get('/wiki/candle-club', function () {
-        abort_if(!app(WikiRepository::class)->article('candle-club'), 404);
+        abort_if(! app(WikiRepository::class)->article('candle-club'), 404);
         $records = CandleClubScent::query()
             ->with('scent')
             ->orderByDesc('year')
             ->orderByDesc('month')
             ->get();
+
         return view('wiki.candle-club', ['records' => $records]);
     })->name('wiki.candle-club');
 });
@@ -252,16 +265,18 @@ if (app()->environment('local') && config('app.debug')) {
     Route::middleware(['auth', 'verified'])->prefix('debug/shopify')->group(function () {
         Route::get('/ping/{store}', function (string $store) {
             $config = ShopifyStores::find($store);
-            if (!$config) {
+            if (! $config) {
                 abort(404);
             }
 
             $client = new ShopifyClient($config['shop'], $config['token']);
+
             return response()->json($client->get('shop.json'));
         });
 
         Route::get('/import/{store}', function (string $store) {
             Artisan::call('shopify:import-orders', ['store' => $store]);
+
             return response()->json([
                 'status' => 'ok',
                 'output' => Artisan::output(),

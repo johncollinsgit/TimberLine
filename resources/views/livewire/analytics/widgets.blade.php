@@ -448,6 +448,7 @@
                     <th class="px-3 py-2 text-left font-medium">Variant</th>
                     <th class="px-3 py-2 text-left font-medium">Account/Store</th>
                     <th class="px-3 py-2 text-left font-medium">First Seen</th>
+                    <th class="px-3 py-2 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/10">
@@ -457,9 +458,16 @@
                       <td class="px-3 py-2 text-white/70">{{ $row['raw_variant'] ?: '—' }}</td>
                       <td class="px-3 py-2 text-white/70">{{ $row['account_name'] ?: ($row['store_key'] ?? '—') }}</td>
                       <td class="px-3 py-2 text-white/70">{{ $row['created_at'] ?? '—' }}</td>
+                      <td class="px-3 py-2 text-right">
+                        @if(!empty($row['handoff_url']))
+                          <a href="{{ $row['handoff_url'] }}" wire:navigate class="inline-flex items-center rounded-full border border-amber-300/30 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100 hover:bg-amber-500/20">Resolve</a>
+                        @else
+                          <span class="text-white/40">—</span>
+                        @endif
+                      </td>
                     </tr>
                   @empty
-                    <tr><td class="px-3 py-4 text-white/55" colspan="4">No unresolved rows.</td></tr>
+                    <tr><td class="px-3 py-4 text-white/55" colspan="5">No unresolved rows.</td></tr>
                   @endforelse
                 </tbody>
               </table>
@@ -495,6 +503,7 @@
                     <th class="px-3 py-2 text-right font-medium">Projected g</th>
                     <th class="px-3 py-2 text-right font-medium">Threshold g</th>
                     <th class="px-3 py-2 text-right font-medium">Risk</th>
+                    <th class="px-3 py-2 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/10">
@@ -515,9 +524,16 @@
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['projected_on_hand_grams'] ?? 0, 1) }}</td>
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['reorder_threshold_grams'] ?? 0, 1) }}</td>
                       <td class="px-3 py-2 text-right"><span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] {{ $riskBadge($status) }}">{{ $status }}</span></td>
+                      <td class="px-3 py-2 text-right">
+                        @if(!empty($row['handoff_url']))
+                          <a href="{{ $row['handoff_url'] }}" wire:navigate class="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 hover:bg-emerald-500/20">Open</a>
+                        @else
+                          <span class="text-white/40">—</span>
+                        @endif
+                      </td>
                     </tr>
                   @empty
-                    <tr><td class="px-3 py-4 text-white/55" colspan="6">No oil risk rows.</td></tr>
+                    <tr><td class="px-3 py-4 text-white/55" colspan="7">No oil risk rows.</td></tr>
                   @endforelse
                 </tbody>
               </table>
@@ -558,6 +574,9 @@
                         Threshold {{ $fmt($row['reorder_threshold_grams'] ?? 0, 1) }}g ({{ $fmt(((float)($row['reorder_threshold_grams'] ?? 0)) / $gramsPerBox, 2) }} boxes)
                         · Demand {{ $fmt($row['demand_grams'] ?? 0, 1) }}g
                       </div>
+                      @if(!empty($row['handoff_url']))
+                        <a href="{{ $row['handoff_url'] }}" wire:navigate class="mt-2 inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 hover:bg-emerald-500/20">Open Inventory</a>
+                      @endif
                     </div>
                     <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] {{ $riskBadge($status) }}">{{ $status }}</span>
                   </div>
@@ -597,6 +616,7 @@
                     <th class="px-3 py-2 text-right font-medium">Wax g</th>
                     <th class="px-3 py-2 text-right font-medium">Oil g</th>
                     <th class="px-3 py-2 text-right font-medium">Rows</th>
+                    <th class="px-3 py-2 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/10">
@@ -608,9 +628,16 @@
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['wax_grams'] ?? 0, 1) }}</td>
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['oil_grams'] ?? 0, 1) }}</td>
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['order_count'] ?? 0) }}</td>
+                      <td class="px-3 py-2 text-right">
+                        @if(!empty($row['handoff_url']))
+                          <a href="{{ $row['handoff_url'] }}" wire:navigate class="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100 hover:bg-cyan-500/20">Open</a>
+                        @else
+                          <span class="text-white/40">—</span>
+                        @endif
+                      </td>
                     </tr>
                   @empty
-                    <tr><td class="px-3 py-4 text-white/55" colspan="6">No scent rows.</td></tr>
+                    <tr><td class="px-3 py-4 text-white/55" colspan="7">No scent rows.</td></tr>
                   @endforelse
                 </tbody>
               </table>
@@ -644,7 +671,7 @@
                     <th class="px-3 py-2 text-left font-medium">Oil</th>
                     <th class="px-3 py-2 text-right font-medium">Grams</th>
                     <th class="px-3 py-2 text-right font-medium">% of Total</th>
-                    <th class="px-3 py-2 text-right font-medium">Action</th>
+                    <th class="px-3 py-2 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/10">
@@ -654,7 +681,12 @@
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['grams'] ?? 0, 1) }}</td>
                       <td class="px-3 py-2 text-right text-white/80">{{ $fmt($row['percent_of_total'] ?? 0, 2) }}%</td>
                       <td class="px-3 py-2 text-right">
-                        <button type="button" wire:click="openDrilldown('top_oils_forecast','forecast',{{ (int) ($row['base_oil_id'] ?? 0) }})" class="rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 hover:bg-emerald-500/20">Focus</button>
+                        <div class="inline-flex items-center gap-1">
+                          @if(!empty($row['handoff_url']))
+                            <a href="{{ $row['handoff_url'] }}" wire:navigate class="rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 hover:bg-emerald-500/20">Open</a>
+                          @endif
+                          <button type="button" wire:click="openDrilldown('top_oils_forecast','forecast',{{ (int) ($row['base_oil_id'] ?? 0) }})" class="rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 hover:bg-emerald-500/20">Focus</button>
+                        </div>
                       </td>
                     </tr>
                   @empty
@@ -705,6 +737,7 @@
                     <th class="px-3 py-2 text-right font-medium">Wax g</th>
                     <th class="px-3 py-2 text-right font-medium">Oil g</th>
                     <th class="px-3 py-2 text-right font-medium">Δ Units</th>
+                    <th class="px-3 py-2 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/10">
@@ -716,6 +749,14 @@
                       <td class="px-3 py-2 text-right text-white/85">{{ $fmt(data_get($bundle, 'primary.totals.wax_grams', 0), 1) }}</td>
                       <td class="px-3 py-2 text-right text-white/85">{{ $fmt(data_get($bundle, 'primary.totals.oil_grams', 0), 1) }}</td>
                       <td class="px-3 py-2 text-right text-white/75">{{ $deltaLabel(data_get($bundle, 'delta.metrics.units')) }}</td>
+                      <td class="px-3 py-2 text-right">
+                        @php($handoff = data_get($drilldown, 'state_handoffs.'.$stateKey))
+                        @if($handoff)
+                          <a href="{{ $handoff }}" wire:navigate class="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100 hover:bg-emerald-500/20">Open</a>
+                        @else
+                          <span class="text-white/40">—</span>
+                        @endif
+                      </td>
                     </tr>
                   @endforeach
                 </tbody>

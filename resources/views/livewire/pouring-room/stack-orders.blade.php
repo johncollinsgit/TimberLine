@@ -1,6 +1,7 @@
 @php
   $labels = ['retail' => 'Retail', 'wholesale' => 'Wholesale', 'event' => 'Events/Markets'];
   $title = $labels[$channel] ?? ucfirst($channel);
+  $stateLabel = ($state ?? 'current') === 'actual' ? 'Actual (Brought Down / Verified)' : 'Current (Submitted / Pouring)';
   $celebrate = request()->boolean('celebrate');
 @endphp
 
@@ -66,6 +67,9 @@
     <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Stack</div>
     <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">{{ $title }}</div>
     <div class="mt-2 text-sm text-emerald-50/70">Orders sorted by what must be poured next.</div>
+    <div class="mt-2 inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-emerald-100/80">
+      {{ $stateLabel }}
+    </div>
     <div class="mt-4 flex flex-wrap items-center gap-2">
       <button wire:click="$set('sort','due')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='due' ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">Due soon</button>
       <button wire:click="$set('sort','largest')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='largest' ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">Largest first</button>

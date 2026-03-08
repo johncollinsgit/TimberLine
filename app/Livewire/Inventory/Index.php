@@ -5,10 +5,10 @@ namespace App\Livewire\Inventory;
 use App\Actions\Inventory\AdjustInventoryAction;
 use App\Models\BaseOil;
 use App\Models\InventoryAdjustment;
+use App\Models\InventoryCount;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Scent;
-use App\Models\InventoryCount;
 use App\Models\Size;
 use App\Models\WaxInventory;
 use App\Services\Inventory\InventoryService;
@@ -18,27 +18,54 @@ use Livewire\Component;
 class Index extends Component
 {
     public string $search = '';
+
     public string $materialSearch = '';
+
+    public string $oil = '';
+
+    public ?int $focusOilId = null;
+
     public array $onHand = [];
+
     public array $targetOnHandOil = [];
+
     public array $targetOnHandWax = [];
+
     public array $adjustDeltaOil = [];
+
     public array $adjustDeltaWax = [];
+
     public array $adjustReasonOil = [];
+
     public array $adjustReasonWax = [];
+
     public array $adjustNotesOil = [];
+
     public array $adjustNotesWax = [];
+
     public array $thresholdOil = [];
+
     public array $thresholdWax = [];
+
     public ?string $statusMessage = null;
+
     public string $statusLevel = 'info';
+
+    protected $queryString = [
+        'search' => ['except' => ''],
+        'materialSearch' => ['except' => ''],
+        'oil' => ['except' => ''],
+    ];
 
     public function mount(): void
     {
+        $this->hydrateAnalyticsPrefilters();
+
         $this->onHand = InventoryCount::query()
             ->get()
             ->mapWithKeys(function (InventoryCount $row) {
-                $key = $row->scent_id . ':' . ($row->size_id ?? 'null');
+                $key = $row->scent_id.':'.($row->size_id ?? 'null');
+
                 return [$key => $row->on_hand_qty];
             })
             ->all();
@@ -53,7 +80,7 @@ class Index extends Component
             ['scent_id' => $scentId, 'size_id' => $sizeId],
             ['on_hand_qty' => $qty]
         );
-        $key = $scentId . ':' . ($sizeId ?? 'null');
+        $key = $scentId.':'.($sizeId ?? 'null');
         $this->onHand[$key] = $qty;
     }
 
@@ -72,6 +99,7 @@ class Index extends Component
 
         if (! $adjustment) {
             $this->flashStatus('No oil inventory change was needed.', 'info');
+
             return;
         }
 
@@ -94,6 +122,7 @@ class Index extends Component
 
         if (! $adjustment) {
             $this->flashStatus('No wax inventory change was needed.', 'info');
+
             return;
         }
 
@@ -117,6 +146,7 @@ class Index extends Component
 
         if (! $adjustment) {
             $this->flashStatus('No oil adjustment was applied.', 'info');
+
             return;
         }
 
@@ -142,6 +172,7 @@ class Index extends Component
 
         if (! $adjustment) {
             $this->flashStatus('No wax adjustment was applied.', 'info');
+
             return;
         }
 
@@ -210,14 +241,14 @@ class Index extends Component
             ->selectRaw('scent_id, size_id, SUM(ordered_qty) as qty')
             ->groupBy('scent_id', 'size_id')
             ->get()
-            ->keyBy(fn ($row) => $row->scent_id . ':' . ($row->size_id ?? 'null'));
+            ->keyBy(fn ($row) => $row->scent_id.':'.($row->size_id ?? 'null'));
 
         $sizes = Size::query()->select(['id', 'label', 'code'])->get()->keyBy('id');
 
         $scents = Scent::query()
             ->when($this->search !== '', function ($q) {
                 $q->where('name', 'like', '%'.$this->search.'%')
-                  ->orWhere('display_name', 'like', '%'.$this->search.'%');
+                    ->orWhere('display_name', 'like', '%'.$this->search.'%');
             })
             ->orderBy('name')
             ->get()
@@ -239,16 +270,17 @@ class Index extends Component
                         'on_hand' => (int) ($this->onHand[$key] ?? 0),
                     ];
                 }
-                if (!$matched) {
+                if (! $matched) {
                     $rows[] = [
                         'id' => $scent->id,
                         'size_id' => null,
                         'name' => $scent->display_name ?? $scent->name,
                         'size' => '—',
                         'qty' => 0,
-                        'on_hand' => (int) ($this->onHand[$scent->id . ':null'] ?? 0),
+                        'on_hand' => (int) ($this->onHand[$scent->id.':null'] ?? 0),
                     ];
                 }
+
                 return $rows;
             });
 
@@ -256,6 +288,7 @@ class Index extends Component
             'scents' => $scents,
             'oilRows' => $oilRows,
             'waxRows' => $waxRows,
+            'focusOilId' => $this->focusOilId,
             'recentAdjustments' => $recentAdjustments,
             'adjustmentReasons' => InventoryAdjustment::reasons(),
             'waxDefaultThreshold' => $waxConversion->defaultWaxReorderThresholdGrams(),
@@ -291,5 +324,45 @@ class Index extends Component
     {
         $this->statusMessage = $message;
         $this->statusLevel = $level;
+    }
+
+    protected function hydrateAnalyticsPrefilters(): void
+    {
+        $incomingOil = trim((string) request()->query('oil', $this->oil));
+        if ($incomingOil !== '') {
+            $this->oil = $incomingOil;
+        }
+
+        $incomingMaterialSearch = trim((string) request()->query('materialSearch', $this->materialSearch));
+        if ($incomingMaterialSearch !== '' && $this->materialSearch === '') {
+            $this->materialSearch = $incomingMaterialSearch;
+        }
+
+        if ($this->oil === '') {
+            return;
+        }
+
+        if (ctype_digit($this->oil)) {
+            $oil = BaseOil::query()->find((int) $this->oil);
+            if ($oil) {
+                $this->focusOilId = (int) $oil->id;
+                if ($this->materialSearch === '') {
+                    $this->materialSearch = (string) $oil->name;
+                }
+            }
+
+            return;
+        }
+
+        $byName = BaseOil::query()
+            ->whereRaw('lower(name) = ?', [strtolower($this->oil)])
+            ->first();
+        if ($byName) {
+            $this->focusOilId = (int) $byName->id;
+        }
+
+        if ($this->materialSearch === '') {
+            $this->materialSearch = $this->oil;
+        }
     }
 }

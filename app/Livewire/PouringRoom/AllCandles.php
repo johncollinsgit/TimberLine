@@ -10,13 +10,20 @@ use Livewire\Component;
 class AllCandles extends Component
 {
     public string $channel = 'all';
+
+    public string $state = 'all'; // all|current|actual
+
     public string $dueWindow = '7'; // 3|7|14|all
+
     public string $sortBy = 'earliest_due'; // earliest_due|most_wax|most_pitchers|most_units|markets_first|retail_first|wholesale_first
+
     public string $batchMode = 'by_market'; // by_market|all_markets_combined
+
     public ?string $selectedRowKey = null;
 
     protected $queryString = [
         'channel' => ['except' => 'all'],
+        'state' => ['except' => 'all'],
         'dueWindow' => ['except' => '7'],
         'sortBy' => ['except' => 'earliest_due'],
         'batchMode' => ['except' => 'by_market'],
@@ -34,6 +41,16 @@ class AllCandles extends Component
             'due_window' => $this->dueWindow,
             'batch_mode' => $this->batchMode,
         ]);
+
+        if ($this->state === 'current') {
+            $rows = $rows->filter(function (array $row): bool {
+                return in_array((string) ($row['status'] ?? ''), ['queued', 'pouring', 'mixed'], true);
+            })->values();
+        } elseif ($this->state === 'actual') {
+            $rows = $rows->filter(function (array $row): bool {
+                return in_array((string) ($row['status'] ?? ''), ['brought_down', 'verified'], true);
+            })->values();
+        }
 
         $nextQueue = $rows
             ->filter(fn (array $row): bool => (string) ($row['status'] ?? '') !== 'brought_down')
@@ -128,6 +145,7 @@ class AllCandles extends Component
                 if ($waxA !== $waxB) {
                     return $waxB <=> $waxA;
                 }
+
                 return $nameA <=> $nameB;
             }
 

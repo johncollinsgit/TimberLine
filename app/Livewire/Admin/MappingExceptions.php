@@ -24,57 +24,118 @@ class MappingExceptions extends Component
     ];
 
     public int $page = 1;
+
     public string $search = '';
+
     public string $filter = 'all'; // all | retail | wholesale
+
+    public string $store = '';
+
+    public string $account = '';
+
+    public string $raw = '';
+
     public bool $onlyNeedsReview = true;
+
     public string $queueTab = 'needs'; // needs | excluded | normalized
+
     public string $groupBy = 'order'; // order | scent
+
     public string $sort = 'most'; // most | recent | alpha
 
     public array $expanded = [];
+
     public array $details = [];
 
     // Mapping modal
     public bool $showModal = false;
+
     public string $modalKey = '';
+
     public string $modalRawTitle = '';
+
     public array $modalExceptionIds = [];
+
     public ?int $modalSizeId = null;
+
     public ?string $modalWickType = null;
+
     public ?int $matchScentId = null;
+
     public string $matchScentSearch = '';
+
     public ?string $overrideScentName = null;
+
     public ?string $overrideSizeLabel = null;
+
     public bool $modalNeedsScent = false;
+
     public bool $modalNeedsSize = false;
+
     public bool $modalNeedsWick = false;
+
     public bool $modalCandleClub = false;
+
     public ?int $candleClubMonth = null;
+
     public ?int $candleClubYear = null;
+
     public string $candleClubScentName = '';
+
     public string $candleClubOil = '';
+
     public string $newScentName = '';
+
     public string $newScentDisplay = '';
+
     public string $newScentAbbr = '';
+
     public string $newScentOil = '';
+
     public bool $newScentIsBlend = false;
+
     public ?int $newScentBlendCount = null;
 
     // Order modal
     public bool $showOrderModal = false;
+
     public ?int $orderModalId = null;
+
     public array $orderModalExceptionIds = [];
+
     public array $orderModalLineExceptionIds = [];
 
     protected $queryString = [
         'search' => ['except' => ''],
         'filter' => ['except' => 'all'],
+        'store' => ['except' => ''],
+        'account' => ['except' => ''],
+        'raw' => ['except' => ''],
         'onlyNeedsReview' => ['except' => true],
         'queueTab' => ['except' => 'needs'],
         'groupBy' => ['except' => 'order'],
         'sort' => ['except' => 'most'],
         'page' => ['except' => 1],
     ];
+
+    public function mount(): void
+    {
+        $incomingChannel = strtolower(trim((string) request()->query('channel', '')));
+        if ($this->filter === 'all' && in_array($incomingChannel, ['retail', 'wholesale'], true)) {
+            $this->filter = $incomingChannel;
+        }
+
+        $this->store = trim((string) request()->query('store', $this->store));
+        $this->account = trim((string) request()->query('account', $this->account));
+        $this->raw = trim((string) request()->query('raw', $this->raw));
+
+        if ($this->search === '') {
+            $prefill = trim(implode(' ', array_filter([$this->raw, $this->account, $this->store])));
+            if ($prefill !== '') {
+                $this->search = $prefill;
+            }
+        }
+    }
 
     public function updatingSearch(): void
     {
@@ -118,12 +179,12 @@ class MappingExceptions extends Component
 
     public function toggleExpand(string $key, string $type, string $value): void
     {
-        $this->expanded[$key] = !($this->expanded[$key] ?? false);
-        if (!($this->expanded[$key] ?? false)) {
+        $this->expanded[$key] = ! ($this->expanded[$key] ?? false);
+        if (! ($this->expanded[$key] ?? false)) {
             return;
         }
 
-        if (!isset($this->details[$key])) {
+        if (! isset($this->details[$key])) {
             $this->details[$key] = $this->loadDetails($type, $value);
         }
     }
@@ -133,7 +194,7 @@ class MappingExceptions extends Component
         $exceptions = $this->exceptionsQuery()
             ->where(function ($q) use ($rawTitle) {
                 $q->where('raw_scent_name', $rawTitle)
-                  ->orWhere('raw_title', $rawTitle);
+                    ->orWhere('raw_title', $rawTitle);
             })
             ->pluck('id')
             ->all();
@@ -144,7 +205,7 @@ class MappingExceptions extends Component
     public function openModalForLine(string $key, int $exceptionId): void
     {
         $exception = MappingException::query()->find($exceptionId);
-        if (!$exception) {
+        if (! $exception) {
             return;
         }
 
@@ -172,7 +233,7 @@ class MappingExceptions extends Component
         $this->candleClubYear = (int) now()->year;
         $this->candleClubScentName = '';
         $this->candleClubOil = '';
-        if (!empty($exceptionIds)) {
+        if (! empty($exceptionIds)) {
             $sample = MappingException::query()->whereIn('id', $exceptionIds)->first();
             if ($sample?->order_line_id) {
                 $line = OrderLine::query()->find($sample->order_line_id);
@@ -180,10 +241,10 @@ class MappingExceptions extends Component
                     $this->modalNeedsScent = empty($line->scent_id);
                     $this->modalNeedsSize = empty($line->size_id);
                     $this->modalNeedsWick = Schema::hasColumn('order_lines', 'wick_type') && empty($line->wick_type);
-                    if ($this->modalNeedsSize && !$this->modalSizeId) {
+                    if ($this->modalNeedsSize && ! $this->modalSizeId) {
                         $this->modalSizeId = $this->inferSizeIdFromRaw($sample);
                     }
-                    if ($this->modalNeedsWick && !$this->modalWickType) {
+                    if ($this->modalNeedsWick && ! $this->modalWickType) {
                         $this->modalWickType = $this->inferWickFromRaw($sample);
                     }
                 }
@@ -233,12 +294,12 @@ class MappingExceptions extends Component
             ->orderByDesc('id')
             ->first();
 
-        if (!$exception) {
+        if (! $exception) {
             return;
         }
 
         $rawTitle = (string) ($exception->raw_scent_name ?? $exception->raw_title ?? '');
-        $this->openModal('order-' . $orderId, $rawTitle, [$exception->id]);
+        $this->openModal('order-'.$orderId, $rawTitle, [$exception->id]);
     }
 
     public function closeOrderModal(): void
@@ -269,18 +330,18 @@ class MappingExceptions extends Component
         $scentId = $this->matchScentId ? (int) $this->matchScentId : null;
         $wickType = $this->modalWickType ? strtolower($this->modalWickType) : null;
 
-        if (!empty($this->overrideSizeLabel)) {
+        if (! empty($this->overrideSizeLabel)) {
             $needle = $this->normalizeSize($this->overrideSizeLabel);
             $sizeIndex = $this->buildSizeIndex();
             $sizeId = $sizeIndex[$needle] ?? $sizeId;
         }
 
-        if (!empty($this->overrideScentName)) {
+        if (! empty($this->overrideScentName)) {
             $this->matchScentSearch = $this->overrideScentName;
             $scentId = null;
         }
 
-        if (!$scentId && $this->matchScentSearch !== '') {
+        if (! $scentId && $this->matchScentSearch !== '') {
             $sample = ! empty($this->modalExceptionIds)
                 ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
                 : null;
@@ -298,11 +359,12 @@ class MappingExceptions extends Component
 
         if ($this->modalCandleClub) {
             $name = trim($this->candleClubScentName);
-            if ($name === '' || !$this->candleClubMonth || !$this->candleClubYear || trim($this->candleClubOil) === '') {
+            if ($name === '' || ! $this->candleClubMonth || ! $this->candleClubYear || trim($this->candleClubOil) === '') {
                 $this->dispatch('toast', [
                     'type' => 'warning',
                     'message' => 'Candle Club needs Month, Year, Scent name, and Oil.',
                 ]);
+
                 return;
             }
             if (! $scentId) {
@@ -311,6 +373,7 @@ class MappingExceptions extends Component
                     'message' => 'Pick an existing scent or launch the New Scent Wizard first.',
                 ]);
                 $this->redirect($this->wizardUrlForModal($name, true), navigate: true);
+
                 return;
             }
 
@@ -327,6 +390,7 @@ class MappingExceptions extends Component
                 'message' => 'No canonical scent selected. Launching the New Scent Wizard.',
             ]);
             $this->redirect($this->wizardUrlForModal($name, false), navigate: true);
+
             return;
         }
 
@@ -337,7 +401,7 @@ class MappingExceptions extends Component
                     ? OrderLine::query()->find($exception->order_line_id)
                     : null;
 
-                if (!$line) {
+                if (! $line) {
                     continue;
                 }
 
@@ -376,7 +440,7 @@ class MappingExceptions extends Component
                             ->where('order_id', $exception->order_id)
                             ->whereNull('resolved_at')
                             ->exists();
-                        if (!$hasOpen) {
+                        if (! $hasOpen) {
                             \App\Models\Order::query()
                                 ->whereKey($exception->order_id)
                                 ->update(['requires_shipping_review' => false]);
@@ -452,7 +516,7 @@ class MappingExceptions extends Component
 
     protected function canResolveException(OrderLine $line): bool
     {
-        return !empty($line->scent_id) && !empty($line->size_id);
+        return ! empty($line->scent_id) && ! empty($line->size_id);
     }
 
     protected function exceptionsQuery()
@@ -474,18 +538,34 @@ class MappingExceptions extends Component
         }
 
         if ($this->search !== '') {
-            $s = '%' . $this->search . '%';
+            $s = '%'.$this->search.'%';
             $query->where(function ($q) use ($s) {
                 $q->where('raw_title', 'like', $s)
-                  ->orWhere('raw_scent_name', 'like', $s)
-                  ->orWhere('raw_variant', 'like', $s)
-                  ->orWhere('sku', 'like', $s)
-                  ->orWhere('account_name', 'like', $s)
-                  ->orWhereHas('order', function ($oq) use ($s) {
-                      $oq->where('order_number', 'like', $s)
-                         ->orWhere('order_label', 'like', $s)
-                         ->orWhere('customer_name', 'like', $s);
-                  });
+                    ->orWhere('raw_scent_name', 'like', $s)
+                    ->orWhere('raw_variant', 'like', $s)
+                    ->orWhere('sku', 'like', $s)
+                    ->orWhere('account_name', 'like', $s)
+                    ->orWhereHas('order', function ($oq) use ($s) {
+                        $oq->where('order_number', 'like', $s)
+                            ->orWhere('order_label', 'like', $s)
+                            ->orWhere('customer_name', 'like', $s);
+                    });
+            });
+        }
+
+        if ($this->store !== '') {
+            $query->where('store_key', 'like', '%'.$this->store.'%');
+        }
+
+        if ($this->account !== '') {
+            $query->where('account_name', 'like', '%'.$this->account.'%');
+        }
+
+        if ($this->raw !== '') {
+            $raw = '%'.$this->raw.'%';
+            $query->where(function ($q) use ($raw) {
+                $q->where('raw_scent_name', 'like', $raw)
+                    ->orWhere('raw_title', 'like', $raw);
             });
         }
 
@@ -501,11 +581,11 @@ class MappingExceptions extends Component
         }
 
         if ($this->search !== '') {
-            $s = '%' . $this->search . '%';
+            $s = '%'.$this->search.'%';
             $query->where(function ($q) use ($s) {
                 $q->where('raw_value', 'like', $s)
-                  ->orWhere('normalized_value', 'like', $s)
-                  ->orWhere('field', 'like', $s);
+                    ->orWhere('normalized_value', 'like', $s)
+                    ->orWhere('field', 'like', $s);
             });
         }
 
@@ -517,7 +597,7 @@ class MappingExceptions extends Component
         $ids = $this->exceptionsQuery()
             ->where(function ($q) use ($rawTitle) {
                 $q->where('raw_scent_name', $rawTitle)
-                  ->orWhere('raw_title', $rawTitle);
+                    ->orWhere('raw_title', $rawTitle);
             })
             ->pluck('id')
             ->all();
@@ -546,7 +626,7 @@ class MappingExceptions extends Component
             ->whereNotNull('excluded_at')
             ->where(function ($q) use ($rawTitle) {
                 $q->where('raw_scent_name', $rawTitle)
-                  ->orWhere('raw_title', $rawTitle);
+                    ->orWhere('raw_title', $rawTitle);
             })
             ->pluck('id')
             ->all();
@@ -653,6 +733,7 @@ class MappingExceptions extends Component
     protected function summaryCounts(): array
     {
         $base = $this->exceptionsQuery();
+
         return [
             'total' => (clone $base)->count(),
             'scents' => (clone $base)->selectRaw('COUNT(DISTINCT COALESCE(raw_scent_name, raw_title)) as count')->value('count') ?? 0,
@@ -676,7 +757,7 @@ class MappingExceptions extends Component
         } else {
             $query->where(function ($q) use ($value) {
                 $q->where('raw_scent_name', $value)
-                  ->orWhere('raw_title', $value);
+                    ->orWhere('raw_title', $value);
             });
         }
 
@@ -685,7 +766,7 @@ class MappingExceptions extends Component
         $sizes = Size::query()->get()->keyBy('id');
         $sizeIndex = $this->buildSizeIndex();
 
-        $parser = new \App\Support\Shopify\InfiniteOptionsParser();
+        $parser = new \App\Support\Shopify\InfiniteOptionsParser;
 
         return $exceptions->map(function (MappingException $exception) use ($sizes, $sizeIndex, $parser) {
             $line = $exception->orderLine;
@@ -693,14 +774,20 @@ class MappingExceptions extends Component
             $qty = $line?->ordered_qty ?? $line?->quantity ?? null;
 
             $status = [];
-            if (!$line?->scent_id) $status[] = 'unmapped scent';
-            if (!$line?->size_id) $status[] = 'unmapped size';
-            if (Schema::hasColumn('order_lines', 'wick_type') && empty($line?->wick_type)) $status[] = 'unmapped wick';
+            if (! $line?->scent_id) {
+                $status[] = 'unmapped scent';
+            }
+            if (! $line?->size_id) {
+                $status[] = 'unmapped size';
+            }
+            if (Schema::hasColumn('order_lines', 'wick_type') && empty($line?->wick_type)) {
+                $status[] = 'unmapped wick';
+            }
 
             $sizeLabel = null;
             if ($line?->size_id) {
                 $sizeLabel = $sizes[$line->size_id]->label ?? $sizes[$line->size_id]->code ?? null;
-            } elseif (!empty($exception->raw_variant)) {
+            } elseif (! empty($exception->raw_variant)) {
                 $normalized = $this->normalizeSize((string) $exception->raw_variant);
                 $guessId = $sizeIndex[$normalized] ?? null;
                 if ($guessId && isset($sizes[$guessId])) {
@@ -710,11 +797,11 @@ class MappingExceptions extends Component
 
             $bundleSelections = [];
             $payload = $exception->payload_json ?? [];
-            if (!empty($payload['bundle_properties'])) {
+            if (! empty($payload['bundle_properties'])) {
                 $bundleSelections = $parser->parseBundleSelections([
                     'properties' => $payload['bundle_properties'],
                 ]);
-            } elseif (!empty($payload['properties'])) {
+            } elseif (! empty($payload['properties'])) {
                 $bundleSelections = $parser->parseBundleSelections([
                     'properties' => $payload['properties'],
                 ]);
@@ -774,6 +861,7 @@ class MappingExceptions extends Component
             return null;
         }
         $sizeIndex = $this->buildSizeIndex();
+
         return $sizeIndex[$needle] ?? null;
     }
 
@@ -781,13 +869,14 @@ class MappingExceptions extends Component
     {
         $rawVariant = (string) ($exception->raw_variant ?? '');
         $rawTitle = (string) ($exception->raw_title ?? '');
-        $text = strtolower($rawVariant . ' ' . $rawTitle);
+        $text = strtolower($rawVariant.' '.$rawTitle);
         if (str_contains($text, 'cedar') || str_contains($text, 'wood')) {
             return 'cedar';
         }
         if (str_contains($text, 'cotton')) {
             return 'cotton';
         }
+
         return null;
     }
 
@@ -814,6 +903,7 @@ class MappingExceptions extends Component
         $lower = str_replace([' ', '-', '_'], '', $lower);
         $lower = str_replace(['ounces', 'ounce'], 'oz', $lower);
         $lower = str_replace('o z', 'oz', $lower);
+
         return preg_replace('/[^a-z0-9]+/i', '', $lower) ?? '';
     }
 
@@ -824,15 +914,16 @@ class MappingExceptions extends Component
         $clean = preg_replace('/\b(wholesale|retail|market|event)\b\s*/i', '', $clean) ?? $clean;
         $clean = preg_replace('/\b(\d+\s?oz|ounce|ounces|wax\s?melt|wax\s?melts|melt|melts|room\s?spray|spray|top\s?off)\b/i', '', $clean) ?? $clean;
         $clean = trim(preg_replace('/\s+/', ' ', $clean) ?? $clean);
+
         return $clean;
     }
 
     protected function detectWickFromPayload(array $payload): ?string
     {
         $text = '';
-        if (!empty($payload['properties_wick'])) {
+        if (! empty($payload['properties_wick'])) {
             $text = (string) $payload['properties_wick'];
-        } elseif (!empty($payload['properties']) && is_array($payload['properties'])) {
+        } elseif (! empty($payload['properties']) && is_array($payload['properties'])) {
             foreach ($payload['properties'] as $prop) {
                 $name = strtolower((string) ($prop['name'] ?? ''));
                 if (str_contains($name, 'wick')) {

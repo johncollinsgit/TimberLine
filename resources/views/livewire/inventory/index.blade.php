@@ -48,7 +48,7 @@
       <div class="divide-y divide-emerald-200/10">
         @forelse($oilRows as $row)
           @php($id = (int) $row['id'])
-          <div class="grid grid-cols-12 items-center gap-2 px-3 py-3 text-xs text-white/85">
+          <div class="grid grid-cols-12 items-center gap-2 px-3 py-3 text-xs text-white/85 {{ (int) ($focusOilId ?? 0) === $id ? 'bg-emerald-500/15 ring-1 ring-emerald-300/45' : '' }}">
             <div class="col-span-3">
               <div class="font-semibold">{{ $row['name'] }}</div>
               <div class="text-[11px] text-white/50">{{ $row['supplier'] ?: 'No supplier' }}</div>
