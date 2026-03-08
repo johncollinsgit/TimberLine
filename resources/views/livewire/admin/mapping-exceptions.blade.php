@@ -5,7 +5,15 @@
   $queueTabs = ['needs' => 'Needs Review', 'excluded' => 'Excluded', 'normalized' => 'Normalized'];
 @endphp
 
-<div class="space-y-6">
+<div
+  class="space-y-6"
+  x-data="{ mapOpen: @entangle('showModal').live, orderOpen: @entangle('showOrderModal').live }"
+  x-effect="
+    const isOpen = mapOpen || orderOpen;
+    document.documentElement.classList.toggle('overflow-hidden', isOpen);
+    document.body.classList.toggle('overflow-hidden', isOpen);
+  "
+>
   <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
@@ -374,8 +382,9 @@
 
   {{-- Mapping modal --}}
   @if($showModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
-      <div class="w-full max-w-3xl rounded-3xl border border-emerald-300/25 bg-[#0f1412] p-6 shadow-[0_28px_90px_-45px_rgba(0,0,0,0.95)]">
+    <div class="fixed inset-0 z-50 bg-black/80 p-4 sm:p-6">
+      <div class="flex h-full items-start justify-center sm:items-center">
+        <div class="w-full max-w-3xl max-h-full overflow-y-auto overscroll-contain rounded-3xl border border-emerald-300/25 bg-[#0f1412] p-6 shadow-[0_28px_90px_-45px_rgba(0,0,0,0.95)]">
         <div class="flex items-start justify-between">
           <div>
             <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/70">Resolve Mapping</div>
@@ -389,13 +398,15 @@
           <livewire:intake.progressive-mapper :exception-ids="$modalExceptionIds" wire:key="progressive-{{ $modalKey }}" />
         </div>
       </div>
+      </div>
     </div>
   @endif
 
   {{-- Order modal --}}
   @if($showOrderModal && $orderModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-      <div class="w-full max-w-4xl rounded-3xl border border-emerald-200/10 bg-[#0f1412] p-6">
+    <div class="fixed inset-0 z-50 bg-black/70 p-4 sm:p-6">
+      <div class="flex h-full items-start justify-center sm:items-center">
+      <div class="w-full max-w-4xl max-h-full overflow-y-auto overscroll-contain rounded-3xl border border-emerald-200/10 bg-[#0f1412] p-6">
         <div class="flex items-start justify-between">
           <div>
             <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Order Context</div>
@@ -447,6 +458,7 @@
 @json($orderModalPayloads ?? [])
           </pre>
         </details>
+      </div>
       </div>
     </div>
   @endif
