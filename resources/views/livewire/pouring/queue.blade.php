@@ -135,6 +135,11 @@
                       <span class="text-emerald-100/60">· {{ ucfirst($wick) }} wick</span>
                     @endif
                     <span class="text-emerald-100/60">· ×{{ $qty }}</span>
+                    @if($splitRows->isNotEmpty())
+                      <span class="ml-2 inline-flex items-center rounded-full border border-cyan-300/35 bg-cyan-500/18 px-2 py-0.5 text-[10px] text-cyan-50">
+                        Split line · {{ $splitRows->count() }} scent {{ $splitRows->count() === 1 ? 'allocation' : 'allocations' }}
+                      </span>
+                    @endif
                     @unless($isMapped)
                       <span class="ml-2 text-[11px] uppercase tracking-[0.2em] text-amber-200/80">Unmapped</span>
                     @endunless

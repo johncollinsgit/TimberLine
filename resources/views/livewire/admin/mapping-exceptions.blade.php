@@ -207,7 +207,14 @@
                     <div>#{{ ltrim((string) ($line['order_number'] ?? '—'), '#') }}</div>
                     <div class="truncate">{{ $line['order_customer'] ?? '—' }}</div>
                     <div class="col-span-2">
-                      <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
+                        @if((int) ($line['split_count'] ?? 0) > 0)
+                          <span class="inline-flex items-center rounded-full border border-cyan-300/35 bg-cyan-500/18 px-2 py-0.5 text-[10px] text-cyan-50">
+                            Split line · {{ (int) $line['split_count'] }} scent {{ (int) $line['split_count'] === 1 ? 'allocation' : 'allocations' }}
+                          </span>
+                        @endif
+                      </div>
                       <div class="text-white/50">{{ $line['raw_variant'] ?? '—' }}</div>
                       @if(!empty($line['has_notes']))
                         <div class="mt-1 text-[10px] text-amber-100/80">
@@ -315,7 +322,14 @@
                     <div>#{{ ltrim((string) ($line['order_number'] ?? '—'), '#') }}</div>
                     <div class="truncate">{{ $line['order_customer'] ?? '—' }}</div>
                     <div>
-                      <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
+                        @if((int) ($line['split_count'] ?? 0) > 0)
+                          <span class="inline-flex items-center rounded-full border border-cyan-300/35 bg-cyan-500/18 px-2 py-0.5 text-[10px] text-cyan-50">
+                            Split line · {{ (int) $line['split_count'] }} scent {{ (int) $line['split_count'] === 1 ? 'allocation' : 'allocations' }}
+                          </span>
+                        @endif
+                      </div>
                       <div class="text-white/50">{{ $line['raw_variant'] ?? '—' }}</div>
                       @if(!empty($line['has_notes']))
                         <div class="mt-1 text-[10px] text-amber-100/80">
@@ -457,6 +471,11 @@
                 <div class="text-white/50">{{ $line->raw_variant ?? '—' }}</div>
                 <div>{{ $line->ordered_qty ?? $line->quantity ?? 0 }}</div>
                 <div>
+                  @if((int) ($line->split_count ?? 0) > 0)
+                    <span class="mr-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-cyan-300/35 bg-cyan-500/18 text-cyan-50">
+                      Split line · {{ (int) $line->split_count }}
+                    </span>
+                  @endif
                   @if($isException)
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/30 bg-amber-400/20 text-amber-50">Exception</span>
                   @else

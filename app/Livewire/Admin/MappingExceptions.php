@@ -764,7 +764,8 @@ class MappingExceptions extends Component
                 $q->select(['id', 'order_number', 'order_label', 'customer_name', 'created_at', 'ordered_at', 'due_at', 'ship_by_at', 'order_type']);
             },
             'orderLine' => function ($q) {
-                $q->select(['id', 'order_id', 'ordered_qty', 'quantity', 'raw_title', 'raw_variant', 'sku', 'wick_type', 'size_id', 'scent_id']);
+                $q->select(['id', 'order_id', 'ordered_qty', 'quantity', 'raw_title', 'raw_variant', 'sku', 'wick_type', 'size_id', 'scent_id'])
+                    ->withCount(['scentSplits as split_count']);
             },
         ])->select(['id', 'store_key', 'order_id', 'order_line_id', 'raw_title', 'raw_variant', 'raw_scent_name', 'account_name', 'sku', 'reason', 'payload_json', 'created_at', 'excluded_reason']);
 
@@ -847,6 +848,7 @@ class MappingExceptions extends Component
                 'status' => $status ?: ['unmapped scent'],
                 'payload' => $exception->payload_json ?? [],
                 'bundle_selections' => $bundleSelections,
+                'split_count' => max(0, (int) ($line?->split_count ?? 0)),
                 'has_notes' => $noteLines !== [],
                 'notes_preview' => $notesPreview,
                 'label_text' => $labelText,
@@ -1237,6 +1239,7 @@ class MappingExceptions extends Component
                 $orderModalLines = OrderLine::query()
                     ->where('order_id', $orderModal->id)
                     ->orderBy('id')
+                    ->withCount(['scentSplits as split_count'])
                     ->get();
 
                 $orderModalPayloads = MappingException::query()
