@@ -6,6 +6,7 @@ use App\Models\Blend;
 use App\Models\BlendTemplateComponent;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\OrderLineScentSplit;
 use App\Models\PourBatch;
 use App\Models\PourBatchLine;
 use App\Models\Scent;
@@ -368,6 +369,90 @@ it('provides reorder-risk inputs from exploded oil demand and wax demand', funct
         ->and((int) data_get($risk, 'oil.summary.reorder_count'))->toBeGreaterThan(0)
         ->and((float) data_get($risk, 'wax.demand_totals.wax_grams'))->toBeGreaterThan(0)
         ->and((int) data_get($risk, 'wax.summary.row_count'))->toBeGreaterThan(0);
+
+    CarbonImmutable::setTestNow();
+});
+
+it('uses scent splits for current demand and ignores unsplit parent scent quantity when splits exist', function () {
+    $now = CarbonImmutable::parse('2026-03-07 10:00:00');
+    CarbonImmutable::setTestNow($now);
+
+    $oilA = BaseOil::query()->create(['name' => 'Split Oil A']);
+    $oilB = BaseOil::query()->create(['name' => 'Split Oil B']);
+    $size = Size::query()->create(['code' => '8oz split', 'label' => '8oz split', 'is_active' => true]);
+
+    /** @var Scent $home */
+    $home = app(CreateScentAction::class)->execute([
+        'name' => 'split-home',
+        'display_name' => 'Split Home',
+        'lifecycle_status' => 'active',
+        'recipe_components' => [
+            ['component_type' => 'oil', 'base_oil_id' => $oilA->id, 'parts' => 1],
+        ],
+    ]);
+
+    /** @var Scent $roads */
+    $roads = app(CreateScentAction::class)->execute([
+        'name' => 'split-roads',
+        'display_name' => 'Split Roads',
+        'lifecycle_status' => 'active',
+        'recipe_components' => [
+            ['component_type' => 'oil', 'base_oil_id' => $oilB->id, 'parts' => 1],
+        ],
+    ]);
+
+    /** @var Scent $legacyLineScent */
+    $legacyLineScent = app(CreateScentAction::class)->execute([
+        'name' => 'legacy-line-scent',
+        'display_name' => 'Legacy Line Scent',
+        'lifecycle_status' => 'active',
+        'recipe_components' => [
+            ['component_type' => 'oil', 'base_oil_id' => $oilA->id, 'parts' => 1],
+        ],
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'manual',
+        'order_number' => 'SPLIT-100',
+        'order_type' => 'retail',
+        'status' => 'submitted_to_pouring',
+        'due_at' => $now->addDay(),
+        'published_at' => $now,
+    ]);
+
+    $line = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'scent_id' => $legacyLineScent->id,
+        'size_id' => $size->id,
+        'scent_name' => $legacyLineScent->name,
+        'size_code' => $size->code,
+        'quantity' => 3,
+        'ordered_qty' => 3,
+        'extra_qty' => 0,
+        'pour_status' => 'queued',
+    ]);
+
+    OrderLineScentSplit::query()->create([
+        'order_line_id' => $line->id,
+        'scent_id' => $home->id,
+        'quantity' => 1,
+        'allocation_type' => 'manual_split',
+    ]);
+    OrderLineScentSplit::query()->create([
+        'order_line_id' => $line->id,
+        'scent_id' => $roads->id,
+        'quantity' => 2,
+        'allocation_type' => 'manual_split',
+    ]);
+
+    $snapshot = app(DemandReportingService::class)->currentScentDemand(2);
+    $rows = collect($snapshot['rows'])->keyBy('scent_id');
+
+    expect((int) $snapshot['totals']['units'])->toBe(3)
+        ->and($rows)->toHaveKeys([$home->id, $roads->id])
+        ->and($rows->has($legacyLineScent->id))->toBeFalse()
+        ->and((int) ($rows[$home->id]['units'] ?? 0))->toBe(1)
+        ->and((int) ($rows[$roads->id]['units'] ?? 0))->toBe(2);
 
     CarbonImmutable::setTestNow();
 });

@@ -3,6 +3,7 @@
 namespace App\Services\Reporting;
 
 use App\Models\OrderLine;
+use App\Models\OrderLineScentSplit;
 use App\Models\PourBatchLine;
 use App\Models\Scent;
 use App\Models\ScentRecipeComponent;
@@ -11,6 +12,7 @@ use App\Services\Pouring\MeasurementResolver;
 use App\Services\ScentGovernance\ScentRecipeService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class DemandReportingService
 {
@@ -729,6 +731,10 @@ class DemandReportingService
             ->whereNotNull('order_lines.size_id')
             ->whereBetween('orders.due_at', [$from->toDateTimeString(), $to->toDateTimeString()]);
 
+        if (Schema::hasTable('order_line_scent_splits')) {
+            $aggregate->whereDoesntHave('scentSplits');
+        }
+
         if ($channel !== null) {
             $aggregate->where('orders.order_type', $channel);
         }
@@ -748,6 +754,38 @@ class DemandReportingService
             ->groupBy('order_lines.scent_id', 'orders.order_type', 'order_lines.size_id')
             ->get();
 
+        if (Schema::hasTable('order_line_scent_splits')) {
+            $splitAggregate = OrderLineScentSplit::query()
+                ->join('order_lines', 'order_lines.id', '=', 'order_line_scent_splits.order_line_id')
+                ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+                ->whereNotNull('order_line_scent_splits.scent_id')
+                ->whereNotNull('order_lines.size_id')
+                ->whereBetween('orders.due_at', [$from->toDateTimeString(), $to->toDateTimeString()]);
+
+            if ($channel !== null) {
+                $splitAggregate->where('orders.order_type', $channel);
+            }
+
+            if ($state === 'forecast') {
+                $splitAggregate
+                    ->whereNull('orders.published_at')
+                    ->whereNotIn('orders.status', ['cancelled', 'completed', 'brought_down', 'verified']);
+            } else {
+                $splitAggregate
+                    ->whereNotNull('orders.published_at')
+                    ->whereIn('orders.status', $this->currentStatuses);
+            }
+
+            $splitSized = $splitAggregate
+                ->selectRaw('order_line_scent_splits.scent_id as scent_id, coalesce(orders.order_type, "retail") as channel_key, order_lines.size_id as size_id, SUM(coalesce(order_line_scent_splits.quantity, 0)) as qty')
+                ->groupBy('order_line_scent_splits.scent_id', 'orders.order_type', 'order_lines.size_id')
+                ->get();
+
+            if ($splitSized->isNotEmpty()) {
+                $sized = $sized->concat($splitSized)->values();
+            }
+        }
+
         if ($sized->isEmpty()) {
             return collect();
         }
@@ -757,6 +795,10 @@ class DemandReportingService
             ->whereNotNull('order_lines.scent_id')
             ->whereNotNull('order_lines.size_id')
             ->whereBetween('orders.due_at', [$from->toDateTimeString(), $to->toDateTimeString()]);
+
+        if (Schema::hasTable('order_line_scent_splits')) {
+            $countQuery->whereDoesntHave('scentSplits');
+        }
 
         if ($channel !== null) {
             $countQuery->where('orders.order_type', $channel);
@@ -776,7 +818,49 @@ class DemandReportingService
             ->selectRaw('order_lines.scent_id as scent_id, coalesce(orders.order_type, "retail") as channel_key, COUNT(DISTINCT orders.id) as order_count')
             ->groupBy('order_lines.scent_id', 'orders.order_type')
             ->get()
-            ->keyBy(fn ($row): string => ((int) $row->scent_id).'|'.((string) $row->channel_key));
+            ->keyBy(fn ($row): string => ((int) $row->scent_id).'|'.((string) $row->channel_key))
+            ->all();
+
+        if (Schema::hasTable('order_line_scent_splits')) {
+            $splitCountQuery = OrderLineScentSplit::query()
+                ->join('order_lines', 'order_lines.id', '=', 'order_line_scent_splits.order_line_id')
+                ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+                ->whereNotNull('order_line_scent_splits.scent_id')
+                ->whereNotNull('order_lines.size_id')
+                ->whereBetween('orders.due_at', [$from->toDateTimeString(), $to->toDateTimeString()]);
+
+            if ($channel !== null) {
+                $splitCountQuery->where('orders.order_type', $channel);
+            }
+
+            if ($state === 'forecast') {
+                $splitCountQuery
+                    ->whereNull('orders.published_at')
+                    ->whereNotIn('orders.status', ['cancelled', 'completed', 'brought_down', 'verified']);
+            } else {
+                $splitCountQuery
+                    ->whereNotNull('orders.published_at')
+                    ->whereIn('orders.status', $this->currentStatuses);
+            }
+
+            $splitCounts = $splitCountQuery
+                ->selectRaw('order_line_scent_splits.scent_id as scent_id, coalesce(orders.order_type, "retail") as channel_key, COUNT(DISTINCT orders.id) as order_count')
+                ->groupBy('order_line_scent_splits.scent_id', 'orders.order_type')
+                ->get();
+
+            foreach ($splitCounts as $row) {
+                $key = ((int) ($row->scent_id ?? 0)).'|'.((string) ($row->channel_key ?? 'retail'));
+                if (! isset($orderCounts[$key])) {
+                    $orderCounts[$key] = $row;
+                    continue;
+                }
+
+                $orderCounts[$key]->order_count = max(
+                    (int) ($orderCounts[$key]->order_count ?? 0),
+                    (int) ($row->order_count ?? 0)
+                );
+            }
+        }
 
         $sizeMap = Size::query()->whereIn('id', $sized->pluck('size_id')->unique()->values())->get()->keyBy('id');
         $scentMap = Scent::query()->whereIn('id', $sized->pluck('scent_id')->unique()->values())->get()->keyBy('id');
@@ -807,7 +891,7 @@ class DemandReportingService
                 'units' => 0,
                 'wax_grams' => 0.0,
                 'oil_grams' => 0.0,
-                'order_count' => (int) ($orderCounts->get($key)->order_count ?? 0),
+                'order_count' => (int) (($orderCounts[$key]->order_count ?? 0)),
             ];
 
             $rows[$key]['units'] += $qty;

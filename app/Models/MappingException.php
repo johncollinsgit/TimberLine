@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MappingException extends Model
 {
@@ -46,5 +47,10 @@ class MappingException extends Model
     public function canonicalScent(): BelongsTo
     {
         return $this->belongsTo(Scent::class, 'canonical_scent_id');
+    }
+
+    public function scentSplits(): HasMany
+    {
+        return $this->hasMany(OrderLineScentSplit::class);
     }
 }

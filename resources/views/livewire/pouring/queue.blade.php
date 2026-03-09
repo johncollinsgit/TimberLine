@@ -42,10 +42,11 @@
         <div class="rounded-2xl border border-emerald-200/10 bg-[#101513]/80 p-4 min-w-0">
           <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Bulk by Scent</div>
           <div class="mt-3 space-y-3">
-            @foreach($byScent as $scentId => $lines)
+            @foreach($byScent as $row)
               @php
-                $scentName = $lines->first()?->scent?->display_name ?? $lines->first()?->scent?->name ?? 'Unknown';
-                $qty = $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) + ($l->extra_qty ?? 0)));
+                $scentId = (int) ($row['scent_id'] ?? 0);
+                $scentName = (string) ($row['scent_name'] ?? 'Unknown');
+                $qty = (int) ($row['qty'] ?? 0);
               @endphp
               <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4">
                 <div class="min-w-0">
@@ -109,8 +110,12 @@
             <div class="mt-4 space-y-2">
               @foreach($lines as $line)
                 @php
+                  $splitRows = collect($line->scentSplits ?? [])
+                    ->filter(fn ($split) => (int) ($split->scent_id ?? 0) > 0 && (int) ($split->quantity ?? 0) > 0)
+                    ->values();
                   $name = $line->scent?->display_name
                     ?? $line->scent?->name
+                    ?? ($splitRows->first()?->scent?->display_name ?: $splitRows->first()?->scent?->name)
                     ?? $line->raw_title
                     ?? 'Item';
                   $size = $line->size?->label
@@ -120,7 +125,7 @@
                     ?? '';
                   $qty = (int)(($line->ordered_qty ?? $line->quantity) + ($line->extra_qty ?? 0));
                   $wick = $line->wick_type ?? null;
-                  $isMapped = !empty($line->scent_id) && !empty($line->size_id);
+                  $isMapped = ((!empty($line->scent_id) && !empty($line->size_id)) || ($splitRows->isNotEmpty() && !empty($line->size_id)));
                   $blend = $line->scent?->oilBlend;
                 @endphp
                 <div class="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:justify-between rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-2">
@@ -133,6 +138,16 @@
                     @unless($isMapped)
                       <span class="ml-2 text-[11px] uppercase tracking-[0.2em] text-amber-200/80">Unmapped</span>
                     @endunless
+                    @if($splitRows->isNotEmpty())
+                      <div class="mt-2 text-[11px] text-cyan-100/80">
+                        Split production allocations:
+                        @foreach($splitRows as $split)
+                          <span class="mr-1 mb-1 inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-500/15 px-2 py-0.5 text-cyan-50">
+                            {{ $split->scent?->display_name ?: $split->scent?->name ?: 'Scent #'.$split->scent_id }} ×{{ (int) $split->quantity }}
+                          </span>
+                        @endforeach
+                      </div>
+                    @endif
                     @if($blend && ($order->order_type ?? null) === 'wholesale')
                       <div class="mt-1 text-[11px] text-emerald-100/70">
                         Recipe: {{ $blend->name }} ·

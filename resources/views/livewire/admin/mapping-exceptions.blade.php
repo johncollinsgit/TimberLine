@@ -209,6 +209,14 @@
                     <div class="col-span-2">
                       <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
                       <div class="text-white/50">{{ $line['raw_variant'] ?? '—' }}</div>
+                      @if(!empty($line['has_notes']))
+                        <div class="mt-1 text-[10px] text-amber-100/80">
+                          Notes: {{ $line['notes_preview'] !== '' ? $line['notes_preview'] : 'present' }}
+                        </div>
+                      @endif
+                      @if(!empty($line['label_text']))
+                        <div class="mt-1 text-[10px] text-cyan-100/80">Label: {{ $line['label_text'] }}</div>
+                      @endif
                       @if(!empty($line['account_name']))
                         <div class="text-[10px] text-emerald-100/70">Account: {{ $line['account_name'] }}</div>
                       @endif
@@ -309,6 +317,14 @@
                     <div>
                       <div class="font-semibold">{{ $line['raw_scent_name'] ?? $line['raw_title'] ?? '—' }}</div>
                       <div class="text-white/50">{{ $line['raw_variant'] ?? '—' }}</div>
+                      @if(!empty($line['has_notes']))
+                        <div class="mt-1 text-[10px] text-amber-100/80">
+                          Notes: {{ $line['notes_preview'] !== '' ? $line['notes_preview'] : 'present' }}
+                        </div>
+                      @endif
+                      @if(!empty($line['label_text']))
+                        <div class="mt-1 text-[10px] text-cyan-100/80">Label: {{ $line['label_text'] }}</div>
+                      @endif
                       @if(!empty($line['account_name']))
                         <div class="text-[10px] text-emerald-100/70">Account: {{ $line['account_name'] }}</div>
                       @endif

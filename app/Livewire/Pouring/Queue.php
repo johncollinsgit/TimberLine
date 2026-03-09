@@ -126,7 +126,16 @@ class Queue extends Component
 
         if (!empty($this->selectedScents)) {
             $scentIds = array_keys(array_filter($this->selectedScents));
-            $lines = $lines->merge($this->baseLineQuery()->whereIn('scent_id', $scentIds)->get());
+            $lines = $lines->merge(
+                $this->baseLineQuery()
+                    ->where(function (Builder $query) use ($scentIds): void {
+                        $query->whereIn('scent_id', $scentIds)
+                            ->orWhereHas('scentSplits', function (Builder $splitQuery) use ($scentIds): void {
+                                $splitQuery->whereIn('scent_id', $scentIds);
+                            });
+                    })
+                    ->get()
+            );
         }
 
         return $lines->unique('id')->all();
@@ -135,8 +144,14 @@ class Queue extends Component
     protected function baseLineQuery(): Builder
     {
         return OrderLine::query()
-            ->whereNotNull('scent_id')
+            ->with(['size:id,code,label', 'scentSplits.scent:id,name,display_name'])
             ->whereNotNull('size_id')
+            ->where(function (Builder $query): void {
+                $query->whereNotNull('scent_id')
+                    ->orWhereHas('scentSplits', function (Builder $splitQuery): void {
+                        $splitQuery->whereNotNull('scent_id');
+                    });
+            })
             ->whereHas('order', function (Builder $q) {
                 $q->whereNotNull('published_at')
                     ->whereIn('status', ['submitted_to_pouring', 'pouring', 'brought_down', 'verified']);
@@ -154,7 +169,7 @@ class Queue extends Component
                 },
             ])
             ->with(['lines' => function ($q) {
-                $q->with(['scent.oilBlend.components.baseOil', 'size'])
+                $q->with(['scent.oilBlend.components.baseOil', 'size', 'scentSplits.scent'])
                     ->orderBy('scent_id')
                     ->orderBy('size_id');
             }]);
@@ -269,15 +284,63 @@ class Queue extends Component
             $orders = $orders->sortBy(fn (Order $o) => $o->ship_by_at ?? now()->addYears(5));
         }
 
-        $byScent = $this->baseLineQuery()
-            ->with(['scent:id,name,display_name', 'size:id,code,label'])
-            ->get()
-            ->groupBy('scent_id');
+        $byScent = $this->buildByScentBuckets();
 
         return view('livewire.pouring.queue', [
             'orders' => $orders,
             'byScent' => $byScent,
             'reminder' => $this->reminders[array_rand($this->reminders)],
         ]);
+    }
+
+    protected function buildByScentBuckets(): Collection
+    {
+        $lines = $this->baseLineQuery()
+            ->with(['scent:id,name,display_name', 'scentSplits.scent:id,name,display_name'])
+            ->get();
+
+        $buckets = [];
+        foreach ($lines as $line) {
+            $baseQty = (int) (($line->ordered_qty ?? $line->quantity) ?? 0);
+            $extra = (int) ($line->extra_qty ?? 0);
+            $lineQty = max(0, $baseQty + $extra);
+
+            $splits = collect($line->scentSplits ?? [])
+                ->filter(fn ($split): bool => (int) ($split->scent_id ?? 0) > 0 && (int) ($split->quantity ?? 0) > 0);
+
+            if ($splits->isNotEmpty()) {
+                foreach ($splits as $split) {
+                    $scentId = (int) ($split->scent_id ?? 0);
+                    if ($scentId <= 0) {
+                        continue;
+                    }
+                    $bucket = $buckets[$scentId] ?? [
+                        'scent_id' => $scentId,
+                        'scent_name' => (string) ($split->scent?->display_name ?: $split->scent?->name ?: 'Scent #'.$scentId),
+                        'qty' => 0,
+                    ];
+                    $bucket['qty'] += max(0, (int) ($split->quantity ?? 0));
+                    $buckets[$scentId] = $bucket;
+                }
+                continue;
+            }
+
+            $scentId = (int) ($line->scent_id ?? 0);
+            if ($scentId <= 0 || $lineQty <= 0) {
+                continue;
+            }
+
+            $bucket = $buckets[$scentId] ?? [
+                'scent_id' => $scentId,
+                'scent_name' => (string) ($line->scent?->display_name ?: $line->scent?->name ?: 'Scent #'.$scentId),
+                'qty' => 0,
+            ];
+            $bucket['qty'] += $lineQty;
+            $buckets[$scentId] = $bucket;
+        }
+
+        return collect(array_values($buckets))
+            ->sortByDesc('qty')
+            ->values();
     }
 }

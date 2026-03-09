@@ -33,6 +33,58 @@ class PourBatchCalculator
                 continue;
             }
 
+            $splitRows = collect($line->relationLoaded('scentSplits') ? ($line->scentSplits ?? []) : $line->scentSplits()->get())
+                ->filter(fn ($split): bool => (int) ($split->scent_id ?? 0) > 0 && (int) ($split->quantity ?? 0) > 0)
+                ->values();
+
+            if ($splitRows->isNotEmpty()) {
+                foreach ($splitRows as $split) {
+                    $qty = (int) ($split->quantity ?? 0);
+                    if ($qty <= 0) {
+                        continue;
+                    }
+
+                    $ingredients = $this->measurements->resolveLineIngredients($sizeCode, $qty);
+                    if (!$ingredients) {
+                        continue;
+                    }
+
+                    $wax = (float) $ingredients['wax_grams'];
+                    $oil = (float) $ingredients['oil_grams'];
+                    $alcohol = (float) $ingredients['alcohol_grams'];
+                    $water = (float) $ingredients['water_grams'];
+                    $total = (float) $ingredients['total_grams'];
+                    $pitcherGrams = (float) $ingredients['pitcher_grams'];
+
+                    $waxTotal += $wax;
+                    $oilTotal += $oil;
+                    $alcoholTotal += $alcohol;
+                    $waterTotal += $water;
+
+                    if ($pitcherGrams > 0) {
+                        $mixWaxTotal += $wax;
+                        $mixOilTotal += $oil;
+                        $mixTotal += $pitcherGrams;
+                    }
+
+                    $lineRows[] = [
+                        'order_line_id' => $line->id,
+                        'order_id' => $line->order_id,
+                        'scent_id' => (int) ($split->scent_id ?? 0),
+                        'size_id' => $line->size_id,
+                        'sku' => $line->sku,
+                        'quantity' => $qty,
+                        'wax_grams' => round($wax, 2),
+                        'oil_grams' => round($oil, 2),
+                        'alcohol_grams' => round($alcohol, 2),
+                        'water_grams' => round($water, 2),
+                        'total_grams' => round($total, 2),
+                    ];
+                }
+
+                continue;
+            }
+
             $baseQty = (int) (($line->ordered_qty ?? $line->quantity) ?? 0);
             $extra = (int) ($line->extra_qty ?? 0);
             $qty = $baseQty + $extra;

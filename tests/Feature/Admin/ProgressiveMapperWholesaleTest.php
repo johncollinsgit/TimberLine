@@ -4,6 +4,7 @@ use App\Livewire\Intake\ProgressiveMapper;
 use App\Models\MappingException;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\OrderLineScentSplit;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Models\User;
@@ -668,4 +669,141 @@ test('custom scent uses variant scent label for same-name batching and wholesale
         ->where('custom_scent_name', 'Vintage Amber')
         ->where('canonical_scent_id', $target->id)
         ->exists())->toBeTrue();
+});
+
+test('split mapping creates internal scent allocations without rewriting imported order line', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $size = Size::query()->firstOrCreate(
+        ['code' => '16oz-cotton'],
+        ['label' => '16oz Cotton Wick', 'is_active' => true]
+    );
+
+    $home = Scent::query()->create(['name' => 'home', 'display_name' => 'HOME', 'is_active' => true]);
+    $walking = Scent::query()->create(['name' => 'walking on sunshine', 'display_name' => 'WALKING ON SUNSHINE', 'is_active' => true]);
+    $roads = Scent::query()->create(['name' => 'country roads', 'display_name' => 'COUNTRY ROADS', 'is_active' => true]);
+
+    $order = Order::query()->create([
+        'order_type' => 'wholesale',
+        'source' => 'shopify',
+        'order_number' => 'WH-SPLIT-100',
+        'status' => 'new',
+    ]);
+
+    $line = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Custom Scent',
+        'raw_variant' => '16oz Cotton Wick',
+        'scent_id' => null,
+        'size_id' => $size->id,
+        'ordered_qty' => 3,
+        'quantity' => 3,
+        'extra_qty' => 0,
+    ]);
+
+    $exception = MappingException::query()->create([
+        'store_key' => 'wholesale',
+        'order_id' => $order->id,
+        'order_line_id' => $line->id,
+        'account_name' => 'Monroe 816',
+        'raw_title' => 'Custom Scent',
+        'raw_variant' => '16oz Cotton Wick',
+        'raw_scent_name' => 'Custom Scent',
+        'reason' => null,
+        'payload_json' => [
+            'note' => "Divide custom scent between HOME / WALKING ON SUNSHINE / COUNTRY ROADS",
+        ],
+    ]);
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('splitEnabled', true)
+        ->set('splitRows', [
+            ['scent_id' => $home->id, 'quantity' => 1, 'raw_scent_name' => 'HOME', 'notes' => 'Signature Scent'],
+            ['scent_id' => $walking->id, 'quantity' => 1, 'raw_scent_name' => 'WALKING ON SUNSHINE', 'notes' => 'Signature Scent'],
+            ['scent_id' => $roads->id, 'quantity' => 1, 'raw_scent_name' => 'COUNTRY ROADS', 'notes' => 'Signature Scent'],
+        ])
+        ->call('save')
+        ->assertDispatched('intake-done');
+
+    $line->refresh();
+    $exception->refresh();
+
+    expect(OrderLine::query()->count())->toBe(1)
+        ->and((int) ($line->scent_id ?? 0))->toBe(0)
+        ->and($exception->resolved_at)->not->toBeNull()
+        ->and((int) ($exception->canonical_scent_id ?? 0))->toBe((int) $home->id);
+
+    $splits = OrderLineScentSplit::query()
+        ->where('order_line_id', $line->id)
+        ->orderBy('id')
+        ->get();
+
+    expect($splits)->toHaveCount(3)
+        ->and($splits->sum('quantity'))->toBe(3)
+        ->and($splits->pluck('scent_id')->all())->toEqual([$home->id, $walking->id, $roads->id]);
+});
+
+test('split mapping warns when split quantities do not match imported line quantity', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $this->actingAs($user);
+
+    $size = Size::query()->firstOrCreate(
+        ['code' => '16oz-cotton'],
+        ['label' => '16oz Cotton Wick', 'is_active' => true]
+    );
+
+    $target = Scent::query()->create([
+        'name' => 'home',
+        'display_name' => 'HOME',
+        'is_active' => true,
+    ]);
+
+    $order = Order::query()->create([
+        'order_type' => 'wholesale',
+        'source' => 'shopify',
+        'order_number' => 'WH-SPLIT-101',
+        'status' => 'new',
+    ]);
+
+    $line = OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Custom Scent',
+        'raw_variant' => '16oz Cotton Wick',
+        'scent_id' => null,
+        'size_id' => $size->id,
+        'ordered_qty' => 3,
+        'quantity' => 3,
+        'extra_qty' => 0,
+    ]);
+
+    $exception = MappingException::query()->create([
+        'store_key' => 'wholesale',
+        'order_id' => $order->id,
+        'order_line_id' => $line->id,
+        'account_name' => 'Monroe 816',
+        'raw_title' => 'Custom Scent',
+        'raw_variant' => '16oz Cotton Wick',
+        'raw_scent_name' => 'Custom Scent',
+        'reason' => null,
+        'payload_json' => [],
+    ]);
+
+    Livewire::test(ProgressiveMapper::class, ['exceptionIds' => [$exception->id]])
+        ->set('splitEnabled', true)
+        ->set('splitRows', [
+            ['scent_id' => $target->id, 'quantity' => 2, 'raw_scent_name' => 'HOME', 'notes' => null],
+        ])
+        ->call('save')
+        ->assertDispatched('toast')
+        ->assertNotDispatched('intake-done');
+
+    expect(OrderLineScentSplit::query()->count())->toBe(0);
+    expect(MappingException::query()->find($exception->id)?->resolved_at)->toBeNull();
 });

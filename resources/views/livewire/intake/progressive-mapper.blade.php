@@ -2,9 +2,18 @@
   $context = $mappingContext ?? [];
   $searchInput = trim((string) ($existingScentSearch ?? ''));
   $rawLabel = trim((string) ($context['raw_label'] ?? ''));
+  $rawTitle = trim((string) ($context['raw_title'] ?? ''));
   $rawVariant = trim((string) ($context['raw_variant'] ?? ''));
   $accountName = trim((string) ($context['account_name'] ?? ''));
   $isWholesale = (bool) ($context['is_wholesale'] ?? false);
+  $orderNumber = trim((string) ($context['order_number'] ?? ''));
+  $customerName = trim((string) ($context['customer_name'] ?? ''));
+  $channelLabel = trim((string) ($context['channel_label'] ?? ''));
+  $sourceStore = trim((string) ($context['source_store'] ?? ''));
+  $lineQuantity = (int) ($context['line_quantity'] ?? 0);
+  $notesLines = is_array($context['notes_lines'] ?? null) ? $context['notes_lines'] : [];
+  $notesPreview = trim((string) ($context['notes_preview'] ?? ''));
+  $labelText = trim((string) ($context['label_text'] ?? ''));
   $detectedProductForm = trim((string) ($context['detected_product_form'] ?? ''));
   $effectiveProductForm = trim((string) ($context['product_form_hint'] ?? ''));
   $productFormLabel = match($effectiveProductForm) {
@@ -42,6 +51,30 @@
     @if($effectiveProductForm !== '')
       <div class="mt-2 inline-flex items-center rounded-full border border-cyan-200/30 bg-cyan-500/15 px-2 py-0.5 text-[11px] text-cyan-50">
         Product form · {{ $productFormLabel }}
+      </div>
+    @endif
+
+    <div class="mt-3 grid gap-2 text-xs text-emerald-100/80 md:grid-cols-2">
+      <div>Order: {{ $orderNumber !== '' ? '#'.ltrim($orderNumber, '#') : '—' }}</div>
+      <div>Customer: {{ $customerName !== '' ? $customerName : '—' }}</div>
+      <div>Channel: {{ $channelLabel !== '' ? $channelLabel : '—' }}</div>
+      <div>Store: {{ $sourceStore !== '' ? $sourceStore : '—' }}</div>
+      <div>Line Qty: {{ $lineQuantity > 0 ? $lineQuantity : '—' }}</div>
+      <div>Raw Product: {{ $rawTitle !== '' ? $rawTitle : '—' }}</div>
+      <div class="md:col-span-2">Raw Variant: {{ $rawVariant !== '' ? $rawVariant : '—' }}</div>
+      @if($labelText !== '')
+        <div class="md:col-span-2">Label / personalization: {{ $labelText }}</div>
+      @endif
+    </div>
+
+    @if($notesPreview !== '')
+      <div class="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/10 p-3">
+        <div class="text-[11px] uppercase tracking-[0.24em] text-amber-100/75">Notes</div>
+        <div class="mt-2 space-y-1 text-xs text-amber-50/90">
+          @foreach($notesLines as $line)
+            <div>{{ $line }}</div>
+          @endforeach
+        </div>
       </div>
     @endif
   </div>
@@ -113,6 +146,62 @@
     @endif
   </div>
 
+  <div x-data="{ open: @entangle('splitEnabled').live }" class="rounded-2xl border border-indigo-300/20 bg-indigo-500/10 p-4">
+    <label class="flex items-center gap-2 text-sm text-indigo-50/90">
+      <input type="checkbox" x-model="open" class="rounded border-indigo-300/35 bg-black/25">
+      <span>Split this line into multiple scents</span>
+    </label>
+    <div class="mt-1 text-[11px] text-indigo-100/75">
+      Edge case: keep imported line as commercial truth and add internal production scent allocations.
+    </div>
+
+    <div x-show="open" x-cloak class="mt-3 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-[11px] text-indigo-100/75">
+          Total split qty must equal line qty ({{ $lineQuantity > 0 ? $lineQuantity : '—' }}).
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" wire:click="splitEvenly" class="rounded-full border border-indigo-300/35 bg-indigo-500/20 px-3 py-1 text-[11px] font-semibold text-indigo-50">
+            Split evenly
+          </button>
+          <button type="button" wire:click="addSplitRow" class="rounded-full border border-indigo-300/35 bg-indigo-500/20 px-3 py-1 text-[11px] font-semibold text-indigo-50">
+            Add row
+          </button>
+        </div>
+      </div>
+
+      @foreach($splitRows as $index => $row)
+        <div class="grid gap-2 rounded-xl border border-indigo-200/20 bg-black/20 p-3 md:grid-cols-[1.8fr_90px_1fr_auto]">
+          <div class="space-y-1">
+            <div class="text-[11px] text-indigo-100/70">Scent</div>
+            <livewire:components.scent-combobox
+              :wire:key="'split-scent-'.$index.'-'.($modalKey ?? 'ctx')"
+              wire:model.live="splitRows.{{ $index }}.scent_id"
+              placeholder="Search scent for split..."
+              :allowWholesaleCustom="true"
+            />
+          </div>
+          <div class="space-y-1">
+            <div class="text-[11px] text-indigo-100/70">Qty</div>
+            <input type="number" min="1" step="1" wire:model.live="splitRows.{{ $index }}.quantity"
+              class="w-full rounded-xl border border-indigo-200/20 bg-black/25 px-3 py-2 text-sm text-white/90">
+          </div>
+          <div class="space-y-1">
+            <div class="text-[11px] text-indigo-100/70">Notes (optional)</div>
+            <input type="text" wire:model.live="splitRows.{{ $index }}.notes" placeholder="Label note / allocation note"
+              class="w-full rounded-xl border border-indigo-200/20 bg-black/25 px-3 py-2 text-sm text-white/90">
+          </div>
+          <div class="flex items-end">
+            <button type="button" wire:click="removeSplitRow({{ $index }})"
+              class="rounded-full border border-rose-300/40 bg-rose-500/20 px-3 py-1.5 text-[11px] font-semibold text-rose-50">
+              Remove
+            </button>
+          </div>
+        </div>
+      @endforeach
+    </div>
+  </div>
+
   @if($sameCount > 0)
     <div class="rounded-2xl border border-amber-300/30 bg-amber-950/25 p-4">
       <label class="flex items-start gap-2 text-sm text-amber-50/90">
@@ -172,7 +261,7 @@
       wire:click="save"
       class="rounded-full border border-emerald-300/50 bg-emerald-500/30 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_28px_-12px_rgba(16,185,129,.55)] hover:bg-emerald-500/40"
     >
-      Map Selected Scent
+      <span x-data="{ split: @entangle('splitEnabled').live }" x-text="split ? 'Save Scent Split' : 'Map Selected Scent'"></span>
     </button>
   </div>
 

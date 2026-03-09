@@ -53,4 +53,9 @@ class OrderLine extends Model
     {
         return $this->belongsTo(Size::class);
     }
+
+    public function scentSplits()
+    {
+        return $this->hasMany(OrderLineScentSplit::class)->orderBy('id');
+    }
 }

@@ -825,6 +825,9 @@ class MappingExceptions extends Component
                 ]);
             }
 
+            [$noteLines, $labelText] = $this->extractPayloadNotesAndLabel($payload);
+            $notesPreview = collect($noteLines)->take(2)->implode(' · ');
+
             return [
                 'id' => $exception->id,
                 'store_key' => $exception->store_key,
@@ -844,6 +847,9 @@ class MappingExceptions extends Component
                 'status' => $status ?: ['unmapped scent'],
                 'payload' => $exception->payload_json ?? [],
                 'bundle_selections' => $bundleSelections,
+                'has_notes' => $noteLines !== [],
+                'notes_preview' => $notesPreview,
+                'label_text' => $labelText,
                 'excluded_reason' => $exception->excluded_reason,
             ];
         })->all();
@@ -1001,6 +1007,75 @@ class MappingExceptions extends Component
         }
 
         return '';
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array{0:array<int,string>,1:string}
+     */
+    protected function extractPayloadNotesAndLabel(array $payload): array
+    {
+        $notes = [];
+        $label = '';
+
+        $pushLines = function (?string $value) use (&$notes): void {
+            $value = trim((string) $value);
+            if ($value === '') {
+                return;
+            }
+
+            $lines = preg_split('/\r\n|\r|\n/u', $value) ?: [];
+            foreach ($lines as $line) {
+                $line = trim((string) $line);
+                if ($line !== '') {
+                    $notes[] = $line;
+                }
+            }
+        };
+
+        $pushLines((string) ($payload['note'] ?? ''));
+        $lineItem = $payload['line_item'] ?? null;
+        if (is_array($lineItem)) {
+            $pushLines((string) ($lineItem['note'] ?? ''));
+        }
+
+        $properties = $payload['properties'] ?? (is_array($lineItem) ? ($lineItem['properties'] ?? null) : null);
+        if (is_array($properties)) {
+            foreach ($properties as $property) {
+                $name = trim((string) ($property['name'] ?? ''));
+                $value = trim((string) ($property['value'] ?? ''));
+                if ($name === '' || $value === '') {
+                    continue;
+                }
+
+                $nameLower = mb_strtolower($name);
+                if ($label === '' && str_contains($nameLower, 'label')) {
+                    $label = $value;
+                }
+
+                if (
+                    str_contains($nameLower, 'note')
+                    || str_contains($nameLower, 'instruction')
+                    || str_contains($nameLower, 'message')
+                    || str_contains($nameLower, 'personal')
+                    || str_contains($nameLower, 'label')
+                    || str_contains($nameLower, 'custom')
+                    || str_contains($nameLower, 'text')
+                    || str_contains($nameLower, 'split')
+                ) {
+                    $notes[] = $name.': '.$value;
+                }
+            }
+        }
+
+        $notes = collect($notes)
+            ->map(fn (string $line): string => trim($line))
+            ->filter(fn (string $line): bool => $line !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        return [$notes, $label];
     }
 
     protected function cleanScentName(string $value): string

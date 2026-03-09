@@ -5,6 +5,7 @@ namespace App\Livewire\Intake;
 use App\Actions\ScentGovernance\CreateScentAliasAction;
 use App\Models\MappingException;
 use App\Models\OrderLine;
+use App\Models\OrderLineScentSplit;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Models\WholesaleCustomScent;
@@ -40,11 +41,17 @@ class ProgressiveMapper extends Component
     public bool $applySameName = false;
     /** @var array<int,array<string,mixed>> */
     public array $sameNameExceptionPreview = [];
+    public bool $splitEnabled = false;
+    /** @var array<int,array<string,mixed>> */
+    public array $splitRows = [];
 
     public function mount(array $exceptionIds = []): void
     {
         $this->exceptionIds = $exceptionIds;
         $this->prefillFromException();
+        if ($this->splitRows === []) {
+            $this->splitRows = [$this->blankSplitRow()];
+        }
         $this->loadSameNameCandidates();
     }
 
@@ -89,6 +96,11 @@ class ProgressiveMapper extends Component
     public function save(): void
     {
         if ($this->exceptionIds === []) {
+            return;
+        }
+
+        if ($this->splitEnabled) {
+            $this->saveSplitMapping();
             return;
         }
 
@@ -141,10 +153,7 @@ class ProgressiveMapper extends Component
             return;
         }
 
-        $targetIds = $this->exceptionIds;
-        if ($this->applySameName && $this->sameNameExceptionIds !== []) {
-            $targetIds = array_values(array_unique(array_merge($targetIds, $this->sameNameExceptionIds)));
-        }
+        $targetIds = $this->targetExceptionIds();
 
         $exceptions = MappingException::query()
             ->whereIn('id', $targetIds)
@@ -222,16 +231,44 @@ class ProgressiveMapper extends Component
         $this->dispatch('intake-done');
     }
 
+    public function addSplitRow(): void
+    {
+        $this->splitRows[] = $this->blankSplitRow();
+    }
+
+    public function removeSplitRow(int $index): void
+    {
+        if (! isset($this->splitRows[$index])) {
+            return;
+        }
+
+        unset($this->splitRows[$index]);
+        $this->splitRows = array_values($this->splitRows);
+    }
+
+    public function splitEvenly(): void
+    {
+        $lineQty = $this->currentLineQuantity();
+        if ($lineQty <= 0 || $this->splitRows === []) {
+            return;
+        }
+
+        $rowCount = count($this->splitRows);
+        $baseQty = intdiv($lineQty, $rowCount);
+        $remainder = $lineQty % $rowCount;
+
+        foreach ($this->splitRows as $index => $row) {
+            $this->splitRows[$index]['quantity'] = $baseQty + ($index < $remainder ? 1 : 0);
+        }
+    }
+
     public function markAsNonCandleItem(): void
     {
         if ($this->exceptionIds === []) {
             return;
         }
 
-        $targetIds = $this->exceptionIds;
-        if ($this->applySameName && $this->sameNameExceptionIds !== []) {
-            $targetIds = array_values(array_unique(array_merge($targetIds, $this->sameNameExceptionIds)));
-        }
+        $targetIds = $this->targetExceptionIds();
 
         $exceptions = MappingException::query()
             ->whereIn('id', $targetIds)
@@ -259,6 +296,171 @@ class ProgressiveMapper extends Component
         $this->dispatch('toast', [
             'type' => 'success',
             'message' => "Marked {$count} item".($count === 1 ? '' : 's').' as non-candle and removed from scent mapping queue.',
+        ]);
+        $this->dispatch('intake-done');
+    }
+
+    protected function saveSplitMapping(): void
+    {
+        $targetIds = $this->targetExceptionIds();
+        $exceptions = MappingException::query()
+            ->whereIn('id', $targetIds)
+            ->get();
+
+        if ($exceptions->isEmpty()) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'No unresolved exceptions found for split mapping.',
+            ]);
+
+            return;
+        }
+
+        $normalizedRows = $this->normalizedSplitRows();
+        if ($normalizedRows === []) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => 'Add at least one split row with a mapped scent.',
+            ]);
+
+            return;
+        }
+
+        $lineQty = $this->currentLineQuantity();
+        $splitQty = array_sum(array_map(static fn (array $row): int => (int) ($row['quantity'] ?? 0), $normalizedRows));
+        if ($lineQty > 0 && $splitQty !== $lineQty) {
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => "Split quantities must equal line quantity ({$lineQty}). Current total: {$splitQty}.",
+            ]);
+
+            return;
+        }
+
+        $context = $this->mappingContext();
+        $productForm = (string) ($context['product_form_hint'] ?? '');
+        if (in_array($productForm, ['room_spray', 'wax_melt'], true)) {
+            $productFormSizeId = $this->resolveSizeIdForProductForm($productForm);
+            if (! $this->sizeId && ! $productFormSizeId) {
+                $this->dispatch('toast', [
+                    'type' => 'warning',
+                    'message' => 'No active '.str_replace('_', ' ', $productForm).' size is configured in Master Data > Sizes.',
+                ]);
+
+                return;
+            }
+
+            if ($productFormSizeId) {
+                $this->sizeId = $productFormSizeId;
+            }
+            $this->wickType = null;
+        }
+
+        $firstScentId = (int) ($normalizedRows[0]['scent_id'] ?? 0);
+
+        try {
+            DB::transaction(function () use ($exceptions, $normalizedRows, $firstScentId): void {
+                $hasOrderLineSizeId = Schema::hasColumn('order_lines', 'size_id');
+                $hasOrderLineSizeCode = Schema::hasColumn('order_lines', 'size_code');
+                $hasOrderLineWickType = Schema::hasColumn('order_lines', 'wick_type');
+                $hasMappingExceptionResolvedAt = Schema::hasColumn('mapping_exceptions', 'resolved_at');
+                $hasMappingExceptionResolvedBy = Schema::hasColumn('mapping_exceptions', 'resolved_by');
+                $hasMappingExceptionCanonicalScentId = Schema::hasColumn('mapping_exceptions', 'canonical_scent_id');
+                $hasOrderRequiresShippingReview = Schema::hasColumn('orders', 'requires_shipping_review');
+
+                $sizeCode = ($this->sizeId && $hasOrderLineSizeCode)
+                    ? (Size::query()->find($this->sizeId)?->code)
+                    : null;
+
+                foreach ($exceptions as $exception) {
+                    $line = $exception->order_line_id
+                        ? OrderLine::query()->find($exception->order_line_id)
+                        : null;
+
+                    if (! $line) {
+                        continue;
+                    }
+
+                    if ($this->sizeId && $hasOrderLineSizeId) {
+                        $line->size_id = $this->sizeId;
+                    }
+                    if ($this->sizeId && $hasOrderLineSizeCode) {
+                        $line->size_code = $sizeCode;
+                    }
+                    if ($hasOrderLineWickType && $this->wickType === null) {
+                        $line->wick_type = null;
+                    } elseif ($hasOrderLineWickType && filled($this->wickType)) {
+                        $line->wick_type = (string) $this->wickType;
+                    }
+                    $line->save();
+
+                    OrderLineScentSplit::query()
+                        ->where('order_line_id', $line->id)
+                        ->delete();
+
+                    foreach ($normalizedRows as $row) {
+                        OrderLineScentSplit::query()->create([
+                            'order_line_id' => $line->id,
+                            'mapping_exception_id' => $exception->id,
+                            'scent_id' => (int) ($row['scent_id'] ?? 0) ?: null,
+                            'raw_scent_name' => mb_substr((string) ($row['raw_scent_name'] ?? ''), 0, 255) ?: null,
+                            'quantity' => max(1, (int) ($row['quantity'] ?? 1)),
+                            'allocation_type' => 'manual_split',
+                            'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                            'created_by' => auth()->id(),
+                        ]);
+                    }
+
+                    if ($hasMappingExceptionResolvedAt) {
+                        $exception->resolved_at = now();
+                    }
+                    if ($hasMappingExceptionResolvedBy) {
+                        $exception->resolved_by = auth()->id();
+                    }
+                    if ($hasMappingExceptionCanonicalScentId && $firstScentId > 0) {
+                        $exception->canonical_scent_id = $firstScentId;
+                    }
+                    if ($exception->isDirty()) {
+                        $exception->save();
+                    }
+
+                    if ($exception->order_id && $hasOrderRequiresShippingReview && $hasMappingExceptionResolvedAt) {
+                        $hasOpen = MappingException::query()
+                            ->where('order_id', $exception->order_id)
+                            ->whereNull('resolved_at')
+                            ->exists();
+
+                        if (! $hasOpen) {
+                            \App\Models\Order::query()
+                                ->whereKey($exception->order_id)
+                                ->update(['requires_shipping_review' => false]);
+                        }
+                    }
+                }
+            });
+        } catch (Throwable $e) {
+            Log::error('ProgressiveMapperSplitSaveFailed', [
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+                'exception_ids' => $this->exceptionIds,
+                'split_rows' => $this->splitRows,
+                'size_id' => $this->sizeId,
+                'wick_type' => $this->wickType,
+            ]);
+
+            $this->dispatch('toast', [
+                'type' => 'error',
+                'message' => 'Split mapping failed due to a server error. Please try again.',
+            ]);
+
+            return;
+        }
+
+        $mappedCount = $exceptions->count();
+        $splitCount = count($normalizedRows);
+        $this->dispatch('toast', [
+            'type' => 'success',
+            'message' => "Saved {$splitCount} scent split".($splitCount === 1 ? '' : 's')." across {$mappedCount} exception".($mappedCount === 1 ? '' : 's').'.',
         ]);
         $this->dispatch('intake-done');
     }
@@ -307,6 +509,9 @@ class ProgressiveMapper extends Component
             if ($this->sizeId && $hasOrderLineSizeCode) {
                 $line->size_code = $sizeCode;
             }
+            if (Schema::hasTable('order_line_scent_splits')) {
+                OrderLineScentSplit::query()->where('order_line_id', $line->id)->delete();
+            }
             try {
                 $line->save();
             } catch (QueryException $e) {
@@ -354,6 +559,77 @@ class ProgressiveMapper extends Component
         }
     }
 
+    /**
+     * @return array<int,int>
+     */
+    protected function targetExceptionIds(): array
+    {
+        $targetIds = $this->exceptionIds;
+        if ($this->applySameName && $this->sameNameExceptionIds !== []) {
+            $targetIds = array_values(array_unique(array_merge($targetIds, $this->sameNameExceptionIds)));
+        }
+
+        return $targetIds;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function normalizedSplitRows(): array
+    {
+        $rows = [];
+        foreach ($this->splitRows as $row) {
+            $scentId = (int) ($row['scent_id'] ?? 0);
+            $qty = max(0, (int) ($row['quantity'] ?? 0));
+            $rawName = trim((string) ($row['raw_scent_name'] ?? ''));
+            $notes = trim((string) ($row['notes'] ?? ''));
+
+            if ($scentId <= 0 || $qty <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'scent_id' => $scentId,
+                'quantity' => $qty,
+                'raw_scent_name' => $rawName,
+                'notes' => $notes,
+            ];
+        }
+
+        return $rows;
+    }
+
+    protected function currentLineQuantity(): int
+    {
+        $sample = $this->currentExceptionSample();
+        if (! $sample?->order_line_id) {
+            return 0;
+        }
+
+        $line = OrderLine::query()->find($sample->order_line_id);
+        if (! $line) {
+            return 0;
+        }
+
+        $baseQty = (int) (($line->ordered_qty ?? $line->quantity) ?? 0);
+        $extra = (int) ($line->extra_qty ?? 0);
+
+        return max(0, $baseQty + $extra);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function blankSplitRow(): array
+    {
+        return [
+            'scent_id' => null,
+            'quantity' => 1,
+            'raw_scent_name' => '',
+            'notes' => '',
+        ];
+    }
+
     protected function prefillFromException(): void
     {
         $exception = $this->currentExceptionSample();
@@ -396,6 +672,22 @@ class ProgressiveMapper extends Component
 
         if ($this->productForm === '') {
             $this->productForm = (string) ($this->mappingContext($exception)['detected_product_form'] ?? '');
+        }
+
+        $existingSplits = $line->scentSplits()->orderBy('id')->get(['scent_id', 'quantity', 'raw_scent_name', 'notes']);
+        if ($existingSplits->isNotEmpty()) {
+            $this->splitEnabled = true;
+            $this->splitRows = $existingSplits
+                ->map(fn (OrderLineScentSplit $split): array => [
+                    'scent_id' => $split->scent_id ? (int) $split->scent_id : null,
+                    'quantity' => max(1, (int) ($split->quantity ?? 1)),
+                    'raw_scent_name' => (string) ($split->raw_scent_name ?? ''),
+                    'notes' => (string) ($split->notes ?? ''),
+                ])
+                ->values()
+                ->all();
+        } else {
+            $this->splitRows = [$this->blankSplitRow()];
         }
     }
 
@@ -506,7 +798,7 @@ class ProgressiveMapper extends Component
         }
 
         return MappingException::query()
-            ->with(['order:id,order_type'])
+            ->with(['order:id,order_type,order_number,order_label,customer_name,shipping_name,billing_name'])
             ->whereIn('id', $this->exceptionIds)
             ->first();
     }
@@ -517,6 +809,9 @@ class ProgressiveMapper extends Component
     protected function mappingContext(?MappingException $exception = null): array
     {
         $exception ??= $this->currentExceptionSample();
+        $line = $exception?->order_line_id
+            ? OrderLine::query()->find($exception->order_line_id)
+            : null;
 
         $storeKey = (string) ($exception?->store_key ?? '');
         $orderType = (string) ($exception?->order?->order_type ?? '');
@@ -525,11 +820,17 @@ class ProgressiveMapper extends Component
         $rawVariant = trim((string) ($exception?->raw_variant ?? ''));
         $rawScentName = trim((string) ($exception?->raw_scent_name ?? ''));
         $rawLabel = $exception ? $this->exceptionLookupLabel($exception) : ($rawScentName !== '' ? $rawScentName : $rawTitle);
+        $orderNumber = trim((string) ($exception?->order?->order_number ?? ''));
+        $customerName = trim((string) ($exception?->order?->display_name ?? $exception?->order?->customer_name ?? $exception?->order?->shipping_name ?? ''));
+        $lineQuantity = $line ? max(0, (int) (($line->ordered_qty ?? $line->quantity ?? 0) + ($line->extra_qty ?? 0))) : 0;
         $payload = $exception?->payload_json;
+        $payloadArray = is_array($payload) ? $payload : [];
+        [$noteLines, $labelText] = $this->extractExceptionNotesAndLabel($payloadArray);
+        $notesPreview = $noteLines !== [] ? implode("\n", array_slice($noteLines, 0, 5)) : '';
         $detectedProductForm = $this->productFormHint(
             $rawVariant,
             trim($rawTitle.' '.$rawLabel),
-            is_array($payload) ? $payload : []
+            $payloadArray
         );
         $selectedProductForm = trim($this->productForm);
         if (! in_array($selectedProductForm, ['candle', 'room_spray', 'wax_melt'], true)) {
@@ -545,6 +846,14 @@ class ProgressiveMapper extends Component
             'raw_variant' => $rawVariant,
             'raw_scent_name' => $rawScentName,
             'raw_label' => $rawLabel,
+            'order_number' => $orderNumber,
+            'customer_name' => $customerName,
+            'line_quantity' => $lineQuantity,
+            'channel_label' => ucfirst($orderType !== '' ? $orderType : ($storeKey !== '' ? $storeKey : 'retail')),
+            'source_store' => $storeKey,
+            'notes_lines' => $noteLines,
+            'notes_preview' => $notesPreview,
+            'label_text' => $labelText,
             'channel_hint' => ($storeKey === 'wholesale' || $orderType === 'wholesale' || $accountName !== '') ? 'wholesale' : 'retail',
             'is_wholesale' => $storeKey === 'wholesale' || $orderType === 'wholesale' || $accountName !== '',
             'detected_product_form' => $detectedProductForm,
@@ -572,6 +881,75 @@ class ProgressiveMapper extends Component
         }
 
         return '';
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array{0:array<int,string>,1:string}
+     */
+    protected function extractExceptionNotesAndLabel(array $payload): array
+    {
+        $notes = [];
+        $labelText = '';
+
+        $pushLines = function (?string $value) use (&$notes): void {
+            $value = trim((string) $value);
+            if ($value === '') {
+                return;
+            }
+
+            $lines = preg_split('/\r\n|\r|\n/u', $value) ?: [];
+            foreach ($lines as $line) {
+                $line = trim((string) $line);
+                if ($line !== '') {
+                    $notes[] = $line;
+                }
+            }
+        };
+
+        $pushLines((string) ($payload['note'] ?? ''));
+        $lineItem = $payload['line_item'] ?? null;
+        if (is_array($lineItem)) {
+            $pushLines((string) ($lineItem['note'] ?? ''));
+        }
+
+        $properties = $payload['properties'] ?? (is_array($lineItem) ? ($lineItem['properties'] ?? null) : null);
+        if (is_array($properties)) {
+            foreach ($properties as $property) {
+                $name = trim((string) ($property['name'] ?? ''));
+                $value = trim((string) ($property['value'] ?? ''));
+                if ($name === '' || $value === '') {
+                    continue;
+                }
+
+                $nameLower = mb_strtolower($name);
+                if (str_contains($nameLower, 'label')) {
+                    $labelText = $labelText !== '' ? $labelText : $value;
+                }
+
+                if (
+                    str_contains($nameLower, 'note')
+                    || str_contains($nameLower, 'instruction')
+                    || str_contains($nameLower, 'message')
+                    || str_contains($nameLower, 'personal')
+                    || str_contains($nameLower, 'label')
+                    || str_contains($nameLower, 'custom')
+                    || str_contains($nameLower, 'text')
+                    || str_contains($nameLower, 'split')
+                ) {
+                    $notes[] = $name.': '.$value;
+                }
+            }
+        }
+
+        $notes = collect($notes)
+            ->map(fn (string $line): string => trim($line))
+            ->filter(fn (string $line): bool => $line !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        return [$notes, $labelText];
     }
 
     protected function hasWickPropertyInPayload(array $payload): bool
