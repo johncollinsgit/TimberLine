@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Marketing\MarketingCustomersController;
+use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
@@ -189,12 +191,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'overview')
                 ->name('overview');
-            Route::get('/customers', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'customers')
-                ->name('customers');
-            Route::get('/identity-review', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'identity-review')
-                ->name('identity-review');
+            Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
+            Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
+            Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
+            Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
+            Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');
+            Route::post('/identity-review/{review}/resolve-new', [MarketingIdentityReviewController::class, 'resolveNew'])->name('identity-review.resolve-new');
+            Route::post('/identity-review/{review}/ignore', [MarketingIdentityReviewController::class, 'ignore'])->name('identity-review.ignore');
             Route::get('/orders', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'orders')
                 ->name('orders');

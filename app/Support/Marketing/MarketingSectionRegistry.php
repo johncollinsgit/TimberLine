@@ -25,24 +25,24 @@ class MarketingSectionRegistry
             'customers' => [
                 'label' => 'Customers',
                 'route' => 'marketing.customers',
-                'description' => 'Future unified marketing customer index spanning identity, orders, events, and messaging.',
+                'description' => 'Unified marketing customer index spanning identity, linked sources, and operational order context.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'This is the future home for cross-source customer records. Stage 1 only establishes structure and discovery context.',
+                'hint_text' => 'Profiles are derived from source order/shopify data and linked conservatively through exact normalized email/phone rules.',
                 'coming_next' => [
-                    'Search + filtering across identity and source-link records.',
-                    'Customer CRUD and profile drill-down views.',
-                    'Integrated send-message shortcuts and campaign history timeline.',
+                    'Campaign/message history population from outbound systems.',
+                    'Customer-level enrichment from additional source adapters (Square, reviews).',
+                    'Scoring and recommendation signals once identity coverage increases.',
                 ],
             ],
             'identity-review' => [
                 'label' => 'Identity Review',
                 'route' => 'marketing.identity-review',
-                'description' => 'Queue management for profile-link conflicts and manual identity resolutions.',
+                'description' => 'Queue management for profile-link conflicts and explicit manual identity resolutions.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Identity conflicts are captured in a dedicated review queue so operational order/customer tables remain untouched.',
+                'hint_text' => 'Conflicts are intentionally blocked from auto-merge and must be resolved to existing/new profiles or dismissed with notes.',
                 'coming_next' => [
-                    'Conflict triage workflow with approve/merge/reject actions.',
-                    'Confidence scoring and suggested match methods.',
+                    'Bulk review tools and reviewer assignment workflow.',
+                    'Richer conflict diagnostics and confidence explainability.',
                 ],
             ],
             'orders' => [

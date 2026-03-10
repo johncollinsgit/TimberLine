@@ -1464,7 +1464,7 @@
                   'key' => $key,
                   'label' => $section['label'],
                   'href' => route($section['route']),
-                  'current' => request()->routeIs($section['route']),
+                  'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
               ];
           })
           ->values()

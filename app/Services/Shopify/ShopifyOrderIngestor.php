@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Jobs\SyncMarketingProfileFromOrder;
 use App\Models\MappingException;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -41,7 +42,10 @@ class ShopifyOrderIngestor
             return $summary;
         }
 
-        DB::transaction(function () use ($store, $orderData, $mergedLines, $shopifyOrderId, &$summary): void {
+        $syncedOrderId = null;
+        $identityContext = [];
+
+        DB::transaction(function () use ($store, $orderData, $mergedLines, $shopifyOrderId, &$summary, &$syncedOrderId, &$identityContext): void {
             $order = Order::query()
                 ->where('shopify_store_key', $store['key'])
                 ->where('shopify_order_id', $shopifyOrderId)
@@ -99,6 +103,8 @@ class ShopifyOrderIngestor
             }
 
             $order->save();
+            $syncedOrderId = (int) $order->id;
+            $identityContext = $this->buildMarketingIdentityContext($orderData, (string) ($store['key'] ?? ''));
 
             foreach ($mergedLines as $line) {
                 $lineModel = $this->upsertLine($order->id, $line);
@@ -143,6 +149,13 @@ class ShopifyOrderIngestor
                 }
             }
         });
+
+        if ($syncedOrderId) {
+            SyncMarketingProfileFromOrder::dispatch(
+                $syncedOrderId,
+                $identityContext
+            )->afterCommit();
+        }
 
         return $summary;
     }
@@ -1065,5 +1078,51 @@ class ShopifyOrderIngestor
         }
 
         return $needle;
+    }
+
+    /**
+     * @param array<string,mixed> $orderData
+     * @return array<string,mixed>
+     */
+    protected function buildMarketingIdentityContext(array $orderData, ?string $storeKey = null): array
+    {
+        $email = trim((string) ($orderData['email'] ?? $orderData['customer']['email'] ?? ''));
+        $phone = trim((string) (
+            $orderData['phone']
+            ?? $orderData['shipping_address']['phone']
+            ?? $orderData['billing_address']['phone']
+            ?? $orderData['customer']['phone']
+            ?? $orderData['customer']['default_address']['phone']
+            ?? ''
+        ));
+
+        $fullName = trim((string) (
+            $orderData['shipping_address']['name']
+            ?? $orderData['billing_address']['name']
+            ?? $orderData['customer']['default_address']['name']
+            ?? ''
+        ));
+
+        $firstName = trim((string) ($orderData['customer']['first_name'] ?? ''));
+        $lastName = trim((string) ($orderData['customer']['last_name'] ?? ''));
+
+        $channels = ['shopify'];
+        if ($storeKey !== '') {
+            $channels[] = strtolower($storeKey) === 'wholesale' ? 'wholesale' : 'online';
+        }
+
+        $tags = strtolower((string) ($orderData['tags'] ?? ''));
+        if (str_contains($tags, 'market') || str_contains($tags, 'event')) {
+            $channels[] = 'event';
+        }
+
+        return [
+            'email' => $email !== '' ? $email : null,
+            'phone' => $phone !== '' ? $phone : null,
+            'full_name' => $fullName !== '' ? $fullName : null,
+            'first_name' => $firstName !== '' ? $firstName : null,
+            'last_name' => $lastName !== '' ? $lastName : null,
+            'source_channels' => array_values(array_unique($channels)),
+        ];
     }
 }

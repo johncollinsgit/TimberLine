@@ -32,7 +32,7 @@ test('admin and marketing manager can access marketing pages', function () {
     $this->actingAs($marketingManager)
         ->get(route('marketing.customers'))
         ->assertOk()
-        ->assertSeeText('Discovery Summary');
+        ->assertSeeText('Marketing Customers');
 });
 
 test('non marketing roles cannot access marketing pages', function () {
