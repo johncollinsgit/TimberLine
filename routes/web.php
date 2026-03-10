@@ -2,10 +2,14 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
+use App\Http\Controllers\Marketing\MarketingMessageTemplatesController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
+use App\Http\Controllers\Marketing\MarketingRecommendationsController;
+use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
@@ -202,21 +206,45 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/orders', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'orders')
                 ->name('orders');
-            Route::get('/segments', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'segments')
-                ->name('segments');
-            Route::get('/campaigns', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'campaigns')
-                ->name('campaigns');
+            Route::get('/segments', [MarketingSegmentsController::class, 'index'])->name('segments');
+            Route::get('/segments/create', [MarketingSegmentsController::class, 'create'])->name('segments.create');
+            Route::post('/segments', [MarketingSegmentsController::class, 'store'])->name('segments.store');
+            Route::get('/segments/{segment}/edit', [MarketingSegmentsController::class, 'edit'])->name('segments.edit');
+            Route::patch('/segments/{segment}', [MarketingSegmentsController::class, 'update'])->name('segments.update');
+            Route::get('/segments/{segment}/preview', [MarketingSegmentsController::class, 'preview'])->name('segments.preview');
+            Route::post('/segments/{segment}/duplicate', [MarketingSegmentsController::class, 'duplicate'])->name('segments.duplicate');
+            Route::post('/segments/{segment}/archive', [MarketingSegmentsController::class, 'archive'])->name('segments.archive');
+
+            Route::get('/campaigns', [MarketingCampaignsController::class, 'index'])->name('campaigns');
+            Route::get('/campaigns/create', [MarketingCampaignsController::class, 'create'])->name('campaigns.create');
+            Route::post('/campaigns', [MarketingCampaignsController::class, 'store'])->name('campaigns.store');
+            Route::get('/campaigns/{campaign}', [MarketingCampaignsController::class, 'show'])->name('campaigns.show');
+            Route::get('/campaigns/{campaign}/edit', [MarketingCampaignsController::class, 'edit'])->name('campaigns.edit');
+            Route::patch('/campaigns/{campaign}', [MarketingCampaignsController::class, 'update'])->name('campaigns.update');
+            Route::post('/campaigns/{campaign}/prepare-recipients', [MarketingCampaignsController::class, 'prepareRecipients'])->name('campaigns.prepare-recipients');
+            Route::post('/campaigns/{campaign}/variants', [MarketingCampaignsController::class, 'addVariant'])->name('campaigns.variants.store');
+            Route::patch('/campaigns/{campaign}/variants/{variant}', [MarketingCampaignsController::class, 'updateVariant'])->name('campaigns.variants.update');
+            Route::post('/campaigns/{campaign}/recipients/{recipient}/approve', [MarketingCampaignsController::class, 'approveRecipient'])->name('campaigns.recipients.approve');
+            Route::post('/campaigns/{campaign}/recipients/{recipient}/reject', [MarketingCampaignsController::class, 'rejectRecipient'])->name('campaigns.recipients.reject');
+            Route::post('/campaigns/{campaign}/recommendations/generate', [MarketingCampaignsController::class, 'generateRecommendations'])->name('campaigns.recommendations.generate');
+            Route::post('/campaigns/{campaign}/add-profile', [MarketingCampaignsController::class, 'addProfileRecipient'])->name('campaigns.add-profile');
+
             Route::get('/automations', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'automations')
                 ->name('automations');
-            Route::get('/message-templates', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'message-templates')
-                ->name('message-templates');
-            Route::get('/recommendations', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'recommendations')
-                ->name('recommendations');
+            Route::get('/message-templates', [MarketingMessageTemplatesController::class, 'index'])->name('message-templates');
+            Route::get('/message-templates/create', [MarketingMessageTemplatesController::class, 'create'])->name('message-templates.create');
+            Route::post('/message-templates', [MarketingMessageTemplatesController::class, 'store'])->name('message-templates.store');
+            Route::get('/message-templates/{template}/edit', [MarketingMessageTemplatesController::class, 'edit'])->name('message-templates.edit');
+            Route::patch('/message-templates/{template}', [MarketingMessageTemplatesController::class, 'update'])->name('message-templates.update');
+            Route::get('/message-templates/{template}/preview', [MarketingMessageTemplatesController::class, 'preview'])->name('message-templates.preview');
+
+            Route::get('/recommendations', [MarketingRecommendationsController::class, 'index'])->name('recommendations');
+            Route::post('/recommendations/generate-global', [MarketingRecommendationsController::class, 'generateGlobal'])->name('recommendations.generate-global');
+            Route::post('/recommendations/profile/{profile}', [MarketingRecommendationsController::class, 'createForProfile'])->name('recommendations.create-for-profile');
+            Route::post('/recommendations/{recommendation}/approve', [MarketingRecommendationsController::class, 'approve'])->name('recommendations.approve');
+            Route::post('/recommendations/{recommendation}/reject', [MarketingRecommendationsController::class, 'reject'])->name('recommendations.reject');
+            Route::post('/recommendations/{recommendation}/dismiss', [MarketingRecommendationsController::class, 'dismiss'])->name('recommendations.dismiss');
             Route::get('/candle-cash', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'candle-cash')
                 ->name('candle-cash');

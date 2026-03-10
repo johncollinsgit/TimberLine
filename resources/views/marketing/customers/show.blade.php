@@ -23,7 +23,7 @@
                 </a>
             </div>
 
-            <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Email</div>
                     <div class="mt-2 text-sm text-white">{{ $profile->email ?: '—' }}</div>
@@ -54,6 +54,11 @@
                             <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">{{ $channel }}</span>
                         @endforeach
                     </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Marketing Likelihood</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ $profile->marketing_score !== null ? number_format((float) $profile->marketing_score, 0) . '%' : 'Pending' }}</div>
+                    <div class="mt-1 text-xs text-white/55">Updated: {{ optional($profile->last_marketing_score_at)->format('Y-m-d H:i') ?: '—' }}</div>
                 </article>
             </div>
         </section>
@@ -254,7 +259,7 @@
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Campaign / Message History</h3>
-                <p class="mt-2 text-xs text-white/65">Sending history will expand in later stages when campaign execution is introduced.</p>
+                <p class="mt-2 text-xs text-white/65">Recipient and approval history is now tracked in campaigns. Delivery/sending telemetry is added in later stages.</p>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Candle Cash</h3>
@@ -262,8 +267,113 @@
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Marketing Likelihood</h3>
-                <p class="mt-2 text-xs text-white/65">Scoring remains deferred. Stage 3 does not fabricate synthetic propensity numbers.</p>
+                <x-admin.help-hint tone="neutral" title="Score explainability">
+                    Score is a transparent 0–100 weighted sum using recency, order frequency, spend signals, consent, source diversity, event activity, and legacy engagement.
+                </x-admin.help-hint>
+                <div class="mt-3 text-sm text-white/80">
+                    Current score: <span class="font-semibold text-white">{{ $profile->marketing_score !== null ? number_format((float) $profile->marketing_score, 0) . '%' : 'Pending' }}</span>
+                </div>
+                @php
+                    $scoreComponents = (array) data_get($latestScore?->reasons_json, 'components', []);
+                @endphp
+                @if($scoreComponents !== [])
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2 text-xs text-white/70">
+                        @foreach($scoreComponents as $component => $value)
+                            <div class="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5">
+                                {{ str_replace('_', ' ', $component) }}: {{ $value }}
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="mt-2 text-xs text-white/65">Score breakdown is not available yet.</p>
+                @endif
             </article>
         </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h3 class="text-sm font-semibold text-white">Quick Actions</h3>
+            <x-admin.help-hint tone="neutral" title="Action safety">
+                Quick actions create recommendations or queue campaign recipients. No direct provider send is triggered from this page.
+            </x-admin.help-hint>
+
+            <div class="grid gap-4 lg:grid-cols-2">
+                <div class="space-y-3">
+                    <form method="POST" action="{{ route('marketing.recommendations.create-for-profile', $profile) }}">
+                        @csrf
+                        <input type="hidden" name="redirect_to" value="profile" />
+                        <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
+                            Create One-Off Recommendation
+                        </button>
+                    </form>
+                    <a href="{{ route('marketing.message-templates.create', ['channel' => 'sms', 'profile_id' => $profile->id]) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">
+                        Open Prefilled SMS Draft
+                    </a>
+                    <a href="{{ route('marketing.message-templates.create', ['channel' => 'email', 'profile_id' => $profile->id]) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">
+                        Open Prefilled Email Draft
+                    </a>
+                </div>
+
+                <div class="space-y-3">
+                    <form method="POST" action="{{ route('marketing.campaigns.add-profile', ['campaign' => ($campaignOptions->first()?->id ?? 0)]) }}" class="grid gap-2">
+                        @csrf
+                        <input type="hidden" name="marketing_profile_id" value="{{ $profile->id }}" />
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Add To Campaign</label>
+                        <select name="campaign_id" id="campaign_select" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                            @forelse($campaignOptions as $campaignOption)
+                                <option value="{{ $campaignOption->id }}">{{ $campaignOption->name }} ({{ $campaignOption->status }})</option>
+                            @empty
+                                <option value="">No campaign options</option>
+                            @endforelse
+                        </select>
+                        <input type="text" name="notes" placeholder="Optional note" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
+                        <button type="submit" @disabled($campaignOptions->isEmpty()) class="inline-flex w-fit rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 disabled:opacity-40">
+                            Add Profile To Selected Campaign
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-2">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <h4 class="text-sm font-semibold text-white">Matching Segments</h4>
+                    <div class="mt-2 space-y-2 text-sm text-white/80">
+                        @forelse($matchingSegments as $segment)
+                            <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                                <div class="font-semibold">{{ $segment['name'] }}</div>
+                                <div class="mt-1 text-xs text-white/60">{{ implode(', ', $segment['reasons']) }}</div>
+                            </div>
+                        @empty
+                            <div class="text-xs text-white/60">No active segments matched under current rules.</div>
+                        @endforelse
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <h4 class="text-sm font-semibold text-white">Score Breakdown</h4>
+                    <div class="mt-2 text-xs text-white/70">
+                        @if($latestScore)
+                            Calculated at {{ optional($latestScore->calculated_at)->format('Y-m-d H:i') }}.
+                        @else
+                            Score breakdown not stored yet.
+                        @endif
+                    </div>
+                    <pre class="mt-3 whitespace-pre-wrap text-xs text-white/75">{{ json_encode(($latestScore?->reasons_json ?? $scoreResult['reasons'] ?? []), JSON_PRETTY_PRINT) }}</pre>
+                </article>
+            </div>
+        </section>
+
+        <script>
+            (() => {
+                const form = document.querySelector('form[action*="/marketing/campaigns/"][action*="/add-profile"]');
+                const select = document.getElementById('campaign_select');
+                if (!form || !select) return;
+                const updateAction = () => {
+                    const campaignId = select.value;
+                    if (!campaignId) return;
+                    form.action = "{{ route('marketing.campaigns.add-profile', ['campaign' => '__campaign__']) }}".replace('__campaign__', campaignId);
+                };
+                select.addEventListener('change', updateAction);
+                updateAction();
+            })();
+        </script>
     </div>
 </x-layouts::app>

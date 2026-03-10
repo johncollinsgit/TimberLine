@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingSegment;
 use App\Models\MarketingOrderEventAttribution;
+use App\Models\MarketingCampaign;
 use App\Models\Order;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Services\Marketing\MarketingEventAttributionService;
+use App\Services\Marketing\MarketingProfileScoreService;
+use App\Services\Marketing\MarketingSegmentEvaluator;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -18,7 +22,9 @@ use Illuminate\Support\Collection;
 class MarketingCustomersController extends Controller
 {
     public function __construct(
-        protected MarketingEventAttributionService $attributionService
+        protected MarketingEventAttributionService $attributionService,
+        protected MarketingProfileScoreService $scoreService,
+        protected MarketingSegmentEvaluator $segmentEvaluator
     ) {
     }
 
@@ -121,6 +127,26 @@ class MarketingCustomersController extends Controller
         $eventSummary = $this->attributionService->eventSummaryForProfile($marketingProfile);
         $unresolvedAttributionValues = $this->attributionService->unresolvedValuesForProfile($marketingProfile);
         $campaignStats = $marketingProfile->externalCampaignStats()->orderByDesc('updated_at')->get();
+        $scoreResult = $this->scoreService->refreshForProfile($marketingProfile);
+        $latestScore = $this->scoreService->latestScoreForProfile($marketingProfile);
+
+        $matchingSegments = [];
+        $segmentCandidates = MarketingSegment::query()->where('status', 'active')->orderBy('name')->limit(50)->get();
+        foreach ($segmentCandidates as $segment) {
+            $evaluation = $this->segmentEvaluator->evaluateProfile($segment, $marketingProfile);
+            if ($evaluation['matched']) {
+                $matchingSegments[] = [
+                    'id' => (int) $segment->id,
+                    'name' => (string) $segment->name,
+                    'reasons' => $evaluation['reasons'],
+                ];
+            }
+        }
+        $campaignOptions = MarketingCampaign::query()
+            ->whereIn('status', ['draft', 'ready_for_review', 'active'])
+            ->orderByDesc('updated_at')
+            ->limit(12)
+            ->get(['id', 'name', 'status']);
 
         return view('marketing.customers.show', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -134,6 +160,10 @@ class MarketingCustomersController extends Controller
             'eventSummary' => $eventSummary,
             'unresolvedAttributionValues' => $unresolvedAttributionValues,
             'campaignStats' => $campaignStats,
+            'latestScore' => $latestScore,
+            'scoreResult' => $scoreResult,
+            'matchingSegments' => $matchingSegments,
+            'campaignOptions' => $campaignOptions,
         ]);
     }
 

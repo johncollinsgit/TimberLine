@@ -48,4 +48,24 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MarketingExternalCampaignStat::class);
     }
+
+    public function campaignRecipients(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignRecipient::class);
+    }
+
+    public function recommendations(): HasMany
+    {
+        return $this->hasMany(MarketingRecommendation::class, 'marketing_profile_id');
+    }
+
+    public function scoreHistory(): HasMany
+    {
+        return $this->hasMany(MarketingProfileScore::class, 'marketing_profile_id');
+    }
+
+    public function campaignConversions(): HasMany
+    {
+        return $this->hasMany(MarketingCampaignConversion::class, 'marketing_profile_id');
+    }
 }

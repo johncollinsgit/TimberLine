@@ -59,23 +59,23 @@ class MarketingSectionRegistry
             'segments' => [
                 'label' => 'Segments',
                 'route' => 'marketing.segments',
-                'description' => 'Audience segmentation workspace built on marketing profiles and behavior.',
+                'description' => 'Rule-based audience segmentation workspace built on profile behavior, source channels, event signals, and consent.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Segment logic will be introduced in future stages after identity links and consent rails stabilize.',
+                'hint_text' => 'Segments are explainable JSON-backed rules with live previews. Keep rules conservative and use previews before campaign recipient preparation.',
                 'coming_next' => [
-                    'Rule builder for lifecycle and behavior segments.',
-                    'Saved segment governance and activation controls.',
+                    'Expanded operators and nested group editing UX.',
+                    'Scheduled segment snapshots for campaign audit trails.',
                 ],
             ],
             'campaigns' => [
                 'label' => 'Campaigns',
                 'route' => 'marketing.campaigns',
-                'description' => 'Campaign orchestration hub for email/SMS and follow-up journeys.',
+                'description' => 'Campaign orchestration hub for SMS/email targeting, variants, recipient preparation, and approval workflow.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Campaign sending is intentionally deferred. Stage 1 only prepares secure nav, access, and data foundations.',
+                'hint_text' => 'Campaigns prepare recipients and approvals only in this stage. Provider sending remains disabled until later execution stages.',
                 'coming_next' => [
-                    'Campaign drafts, approvals, and launch status tracking.',
-                    'Cross-channel delivery metrics and audience outcomes.',
+                    'Provider send execution wiring after approval states.',
+                    'Conversion attribution rollups from campaign-linked purchases.',
                 ],
             ],
             'automations' => [
@@ -83,7 +83,7 @@ class MarketingSectionRegistry
                 'route' => 'marketing.automations',
                 'description' => 'Lifecycle automation definitions driven by events, orders, and profile state.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Automation execution is out of scope for Stage 1. Future stages will use this screen as the orchestration control room.',
+                'hint_text' => 'Automation execution is still deferred. Use Campaigns + Recommendations approval queues for controlled, human-reviewed workflows.',
                 'coming_next' => [
                     'Trigger/action automation builder and run logs.',
                     'Safety controls for pause/resume and eligibility checks.',
@@ -92,23 +92,23 @@ class MarketingSectionRegistry
             'message-templates' => [
                 'label' => 'Message Templates',
                 'route' => 'marketing.message-templates',
-                'description' => 'Template library for reusable campaign and automation content.',
+                'description' => 'Template library for reusable campaign copy with variable rendering previews.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Template editing and approval workflows are staged for later; this page reserves the canonical location.',
+                'hint_text' => 'Templates are reusable copy blocks for variants. Validate variable rendering before queueing recipients for approval.',
                 'coming_next' => [
-                    'Reusable template catalog with channel variants.',
-                    'Variable previewing and compliance safeguards.',
+                    'Template compliance checks and approval lifecycle.',
+                    'Channel-specific formatting helpers and preview states.',
                 ],
             ],
             'recommendations' => [
                 'label' => 'Recommendations',
                 'route' => 'marketing.recommendations',
-                'description' => 'Optimization and recommendation workspace for next-best-action logic.',
+                'description' => 'Rule-based recommendation center with recipient approvals and explainable next-best-action suggestions.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'AI recommendations are explicitly not enabled in Stage 1. This page exists to anchor future optimization work.',
+                'hint_text' => 'Recommendations are transparent rule outcomes, not autonomous sends. Review and approve/reject before any future execution stage.',
                 'coming_next' => [
-                    'Recommendation scoring inputs and transparency panels.',
-                    'Experiment tracking for message and segment strategies.',
+                    'Recommendation impact tracking tied to conversion outcomes.',
+                    'Model-assisted scoring inputs layered on top of rule rails.',
                 ],
             ],
             'candle-cash' => [
