@@ -89,4 +89,14 @@ class User extends Authenticatable
     {
         return ($this->role ?? '') === 'pouring';
     }
+
+    public function isMarketingManager(): bool
+    {
+        return ($this->role ?? '') === 'marketing_manager';
+    }
+
+    public function canAccessMarketing(): bool
+    {
+        return $this->isAdmin() || $this->isMarketingManager();
+    }
 }

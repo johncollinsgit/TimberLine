@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
@@ -179,6 +180,55 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::view('/analytics', 'analytics.index')
             ->name('analytics.index');
     });
+
+    // Marketing
+    Route::middleware(['role:admin,marketing_manager'])
+        ->prefix('marketing')
+        ->name('marketing.')
+        ->group(function () {
+            Route::get('/', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'overview')
+                ->name('overview');
+            Route::get('/customers', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'customers')
+                ->name('customers');
+            Route::get('/identity-review', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'identity-review')
+                ->name('identity-review');
+            Route::get('/orders', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'orders')
+                ->name('orders');
+            Route::get('/segments', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'segments')
+                ->name('segments');
+            Route::get('/campaigns', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'campaigns')
+                ->name('campaigns');
+            Route::get('/automations', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'automations')
+                ->name('automations');
+            Route::get('/message-templates', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'message-templates')
+                ->name('message-templates');
+            Route::get('/recommendations', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'recommendations')
+                ->name('recommendations');
+            Route::get('/candle-cash', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'candle-cash')
+                ->name('candle-cash');
+            Route::get('/reviews', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'reviews')
+                ->name('reviews');
+            Route::get('/settings', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'settings')
+                ->name('settings');
+            Route::get('/providers-integrations', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'providers-integrations')
+                ->name('providers-integrations');
+            Route::get('/suppression-consent', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'suppression-consent')
+                ->name('suppression-consent');
+        });
 
     // Inventory
     Route::middleware(['role:admin,manager'])->group(function () {

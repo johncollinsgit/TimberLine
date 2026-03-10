@@ -13,7 +13,7 @@ class UsersEnsureApproved extends Command
         {email : User email}
         {password : Plaintext password to set}
         {--name= : Display name}
-        {--role=admin : Role (admin|manager|pouring)}';
+        {--role=admin : Role (admin|manager|pouring|marketing_manager)}';
 
     protected $description = 'Create or update an approved active user account.';
 
@@ -24,8 +24,8 @@ class UsersEnsureApproved extends Command
         $role = strtolower(trim((string) $this->option('role')));
         $name = trim((string) ($this->option('name') ?: $email));
 
-        if (!in_array($role, ['admin', 'manager', 'pouring'], true)) {
-            $this->error('Invalid role. Use admin, manager, or pouring.');
+        if (!in_array($role, ['admin', 'manager', 'pouring', 'marketing_manager'], true)) {
+            $this->error('Invalid role. Use admin, manager, pouring, or marketing_manager.');
             return self::FAILURE;
         }
 

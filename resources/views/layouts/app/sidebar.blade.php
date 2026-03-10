@@ -1315,6 +1315,8 @@
   $isAdmin = $user?->isAdmin() ?? true;
   $isManager = $user?->isManager() ?? false;
   $isPouring = $user?->isPouring() ?? false;
+  $canAccessOps = $isAdmin || $isManager;
+  $canAccessMarketing = $user?->canAccessMarketing() ?? false;
 
   $hrefDashboard = Route::has('dashboard')        ? route('dashboard')        : '/dashboard';
   $hrefShipping  = Route::has('shipping.orders')  ? route('shipping.orders')  : '/shipping/orders';
@@ -1333,6 +1335,7 @@
   $retailPlanActive = request()->routeIs('retail.plan') || request()->is('retail/plan');
   $adminActive     = request()->routeIs('admin.*')     || request()->is('admin*');
   $analyticsActive = request()->routeIs('analytics.*') || request()->is('analytics*');
+  $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
   $wikiActive = request()->routeIs('wiki.index') || request()->is('wiki');
   $inventoryActive = request()->routeIs('inventory.index');
   $eventsActive = request()->routeIs('events.*');
@@ -1341,25 +1344,32 @@
   $adminTab = is_string(request()->query('tab')) ? (string) request()->query('tab') : '';
 
   $sidebarItems = [];
-  if (!$isPouring) {
+  if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => $hrefRetailPlan, 'label' => 'All Pour Lists', 'current' => $retailPlanActive];
   }
-  if ($isAdmin || $isManager) {
+  if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
   }
-  if (!$isPouring) {
+  if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
   }
-  $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
-  if (!$isPouring) {
+  if ($canAccessOps || $isPouring) {
+      $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
+  }
+  if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => $hrefAnalytics, 'label' => 'Analytics', 'current' => $analyticsActive];
   }
-  $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
-  if ($isAdmin || $isManager) {
+  if ($canAccessMarketing) {
+      $sidebarItems[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Marketing', 'current' => $marketingActive];
+  }
+  if ($canAccessOps) {
+      $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
+  }
+  if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
   }
   $sidebarItems[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Backstage Wiki', 'current' => $wikiActive];
-  if (!$isPouring) {
+  if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
   }
 
@@ -1381,7 +1391,7 @@
       ->filter()
       ->values();
   $adminSubItems = [];
-  if ($isAdmin || $isManager) {
+  if ($canAccessOps) {
       $adminSubItems = [
           [
               'key' => 'master-data',
@@ -1444,6 +1454,21 @@
               'current' => $adminActive && $adminTab === 'oils',
           ],
       ];
+  }
+
+  $marketingSubItems = [];
+  if ($canAccessMarketing) {
+      $marketingSubItems = collect(\App\Support\Marketing\MarketingSectionRegistry::sections())
+          ->map(function (array $section, string $key): array {
+              return [
+                  'key' => $key,
+                  'label' => $section['label'],
+                  'href' => route($section['route']),
+                  'current' => request()->routeIs($section['route']),
+              ];
+          })
+          ->values()
+          ->all();
   }
 
   $wikiSectionItems = [
@@ -1561,6 +1586,27 @@
                       @endforeach
                     </div>
                   </details>
+                @elseif($item['key'] === 'marketing' && count($marketingSubItems) > 0)
+                  <details class="mf-admin-group" {{ $marketingActive ? 'open' : '' }}>
+                    <summary class="mf-admin-group-summary">
+                      <span class="mf-admin-group-main">
+                        <flux:icon.megaphone class="size-4" />
+                        <span class="mf-nav-label">Marketing</span>
+                      </span>
+                      <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                    </summary>
+                    <div class="mf-admin-subnav">
+                      @foreach($marketingSubItems as $subItem)
+                        <a
+                          href="{{ $subItem['href'] }}"
+                          wire:navigate
+                          class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                        >
+                          <span>{{ $subItem['label'] }}</span>
+                        </a>
+                      @endforeach
+                    </div>
+                  </details>
                 @else
                   <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
                     <span class="mf-nav-label">{{ $item['label'] }}</span>
@@ -1593,13 +1639,13 @@
           </div>
         </flux:sidebar.group>
 
-        @if(!$isPouring)
+        @if($canAccessOps)
         <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
           <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
             <span class="mf-nav-label">Due soon</span>
           </flux:sidebar.item>
 
-          @if($isAdmin || $isManager)
+          @if($canAccessOps)
             <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
               <summary class="cursor-pointer list-none text-[10px] uppercase tracking-[0.3em] text-emerald-100/50 flex items-center justify-between">
                 <span>Import Tools</span>
@@ -1659,7 +1705,7 @@
 
     {{-- Main content --}}
     <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
-      @if($unresolvedExceptions > 0)
+      @if($canAccessOps && $unresolvedExceptions > 0)
         <div class="mf-announcement mb-4 rounded-2xl border px-4 py-3 text-sm">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>

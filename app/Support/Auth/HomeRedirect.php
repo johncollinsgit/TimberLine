@@ -12,8 +12,16 @@ class HomeRedirect
             return route('login', absolute: false);
         }
 
-        return ($user->role ?? null) === 'pouring'
-            ? route('pouring.index', absolute: false)
-            : route('dashboard', absolute: false);
+        $role = (string) ($user->role ?? '');
+
+        if ($role === 'pouring') {
+            return route('pouring.index', absolute: false);
+        }
+
+        if ($role === 'marketing_manager') {
+            return route('marketing.overview', absolute: false);
+        }
+
+        return route('dashboard', absolute: false);
     }
 }

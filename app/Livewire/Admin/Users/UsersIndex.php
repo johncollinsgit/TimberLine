@@ -69,7 +69,7 @@ class UsersIndex extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', 'in:admin,manager,pouring'],
+            'role' => ['required', 'in:admin,manager,pouring,marketing_manager'],
             'is_active' => ['boolean'],
         ])->validate();
 
@@ -117,7 +117,7 @@ class UsersIndex extends Component
         $data = validator($this->edit, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $this->editingId],
-            'role' => ['required', 'in:admin,manager,pouring'],
+            'role' => ['required', 'in:admin,manager,pouring,marketing_manager'],
             'is_active' => ['boolean'],
         ])->validate();
 
