@@ -43,4 +43,9 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MarketingIdentityReview::class, 'proposed_marketing_profile_id');
     }
+
+    public function externalCampaignStats(): HasMany
+    {
+        return $this->hasMany(MarketingExternalCampaignStat::class);
+    }
 }

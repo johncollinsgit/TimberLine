@@ -147,12 +147,12 @@ class MarketingSectionRegistry
             'providers-integrations' => [
                 'label' => 'Providers / Integrations',
                 'route' => 'marketing.providers-integrations',
-                'description' => 'Integration readiness map for Shopify, Square, review providers, and messaging systems.',
+                'description' => 'Square sync controls, legacy import tooling, and event attribution source mapping.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Use this page to track current connected systems and pending provider work before activation stages.',
+                'hint_text' => 'Run additive sync/import operations here, then clean unmapped values so attribution and identity stay reliable.',
                 'coming_next' => [
-                    'Provider health checks and sync status dashboards.',
-                    'Credential/config validation and onboarding steps.',
+                    'Provider health checks and scheduled sync jobs.',
+                    'Expanded source adapters for review and messaging providers.',
                 ],
             ],
             'suppression-consent' => [

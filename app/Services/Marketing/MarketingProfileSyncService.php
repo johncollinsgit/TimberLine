@@ -38,15 +38,74 @@ class MarketingProfileSyncService
         $context = is_array($options['identity_context'] ?? null) ? $options['identity_context'] : [];
 
         $identity = $this->extractor->extractFromOrder($order, $context);
+        $reviewContext = [
+            'source_label' => 'order_sync',
+            'order_id' => (int) $order->id,
+            'order_number' => (string) ($order->order_number ?? ''),
+            'order_type' => (string) ($order->order_type ?? ''),
+            'source' => (string) ($order->source ?? ''),
+        ];
+
+        return $this->syncIdentity(
+            identity: $identity,
+            reviewContext: $reviewContext,
+            dryRun: $dryRun
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     * @param array<string,mixed> $options
+     * @return array{
+     *   status:string,
+     *   reason:string,
+     *   profile_id:?int,
+     *   profiles_created:int,
+     *   profiles_updated:int,
+     *   links_created:int,
+     *   links_reused:int,
+     *   reviews_created:int,
+     *   records_skipped:int
+     * }
+     */
+    public function syncExternalIdentity(array $identity, array $options = []): array
+    {
+        $dryRun = (bool) ($options['dry_run'] ?? false);
+        $reviewContext = is_array($options['review_context'] ?? null) ? $options['review_context'] : [];
+
+        return $this->syncIdentity(
+            identity: $this->normalizeIdentityPayload($identity),
+            reviewContext: $reviewContext,
+            dryRun: $dryRun
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     * @param array<string,mixed> $reviewContext
+     * @return array{
+     *   status:string,
+     *   reason:string,
+     *   profile_id:?int,
+     *   profiles_created:int,
+     *   profiles_updated:int,
+     *   links_created:int,
+     *   links_reused:int,
+     *   reviews_created:int,
+     *   records_skipped:int
+     * }
+     */
+    protected function syncIdentity(array $identity, array $reviewContext, bool $dryRun): array
+    {
         $sourceLinkProfiles = $this->profilesFromSourceLinks($identity['source_links']);
         $sourceLinkedProfile = $sourceLinkProfiles->count() === 1 ? $sourceLinkProfiles->first() : null;
 
         if ($sourceLinkProfiles->count() > 1) {
             $reviewCreated = $this->createOrUpdateReview(
-                $order,
                 $identity,
                 'source_link_conflict',
                 ['source_link_profile_ids' => $sourceLinkProfiles->pluck('id')->values()->all()],
+                $reviewContext,
                 $dryRun
             );
 
@@ -59,12 +118,12 @@ class MarketingProfileSyncService
             }
 
             return $this->persistProfileAndLinks(
-                order: $order,
                 identity: $identity,
                 profile: $sourceLinkedProfile,
                 matchMethod: 'existing_source_link',
                 confidence: null,
                 createProfile: false,
+                reviewContext: $reviewContext,
                 dryRun: $dryRun
             );
         }
@@ -73,7 +132,6 @@ class MarketingProfileSyncService
 
         if ($sourceLinkedProfile && $match['outcome'] === 'matched' && (int) $match['profile']?->id !== (int) $sourceLinkedProfile->id) {
             $reviewCreated = $this->createOrUpdateReview(
-                $order,
                 $identity,
                 'source_link_vs_match_conflict',
                 [
@@ -81,6 +139,7 @@ class MarketingProfileSyncService
                     'matched_profile_id' => (int) $match['profile']?->id,
                     'match_reason' => $match['reason'],
                 ],
+                $reviewContext,
                 $dryRun
             );
 
@@ -89,13 +148,13 @@ class MarketingProfileSyncService
 
         if ($match['outcome'] === 'review') {
             $reviewCreated = $this->createOrUpdateReview(
-                $order,
                 $identity,
                 $match['reason'],
                 [
                     'email_match_profile_ids' => $match['email_matches']->pluck('id')->values()->all(),
                     'phone_match_profile_ids' => $match['phone_matches']->pluck('id')->values()->all(),
                 ],
+                $reviewContext,
                 $dryRun
             );
 
@@ -104,12 +163,12 @@ class MarketingProfileSyncService
 
         if ($sourceLinkedProfile && $match['outcome'] === 'create') {
             return $this->persistProfileAndLinks(
-                order: $order,
                 identity: $identity,
                 profile: $sourceLinkedProfile,
                 matchMethod: 'existing_source_link',
                 confidence: null,
                 createProfile: false,
+                reviewContext: $reviewContext,
                 dryRun: $dryRun
             );
         }
@@ -118,12 +177,12 @@ class MarketingProfileSyncService
             $confidence = in_array($match['reason'], ['exact_email_phone', 'exact_email', 'exact_phone'], true) ? 1.00 : null;
 
             return $this->persistProfileAndLinks(
-                order: $order,
                 identity: $identity,
                 profile: $match['profile'],
                 matchMethod: $match['reason'],
                 confidence: $confidence,
                 createProfile: false,
+                reviewContext: $reviewContext,
                 dryRun: $dryRun
             );
         }
@@ -132,12 +191,12 @@ class MarketingProfileSyncService
             $profile = new MarketingProfile();
 
             return $this->persistProfileAndLinks(
-                order: $order,
                 identity: $identity,
                 profile: $profile,
                 matchMethod: 'created_from_source',
                 confidence: null,
                 createProfile: true,
+                reviewContext: $reviewContext,
                 dryRun: $dryRun
             );
         }
@@ -250,12 +309,12 @@ class MarketingProfileSyncService
      * }
      */
     protected function persistProfileAndLinks(
-        Order $order,
         array $identity,
         MarketingProfile $profile,
         string $matchMethod,
         ?float $confidence,
         bool $createProfile,
+        array $reviewContext,
         bool $dryRun
     ): array {
         $profileCreated = 0;
@@ -266,7 +325,6 @@ class MarketingProfileSyncService
         $conflictingLink = $this->firstConflictingSourceLink($profile, $identity['source_links']);
         if ($conflictingLink) {
             $reviewCreated = $this->createOrUpdateReview(
-                $order,
                 $identity,
                 'source_link_owned_by_other_profile',
                 [
@@ -275,6 +333,7 @@ class MarketingProfileSyncService
                     'conflict_source_id' => $conflictingLink->source_id,
                     'conflict_profile_id' => (int) $conflictingLink->marketing_profile_id,
                 ],
+                $reviewContext,
                 $dryRun
             );
 
@@ -523,17 +582,98 @@ class MarketingProfileSyncService
 
     /**
      * @param array<string,mixed> $identity
+     * @return array{
+     *   first_name:?string,
+     *   last_name:?string,
+     *   full_name:?string,
+     *   raw_email:?string,
+     *   normalized_email:?string,
+     *   raw_phone:?string,
+     *   normalized_phone:?string,
+     *   source_channels:array<int,string>,
+     *   source_links:array<int,array{source_type:string,source_id:string,source_meta:array<string,mixed>}>,
+     *   primary_source:array{source_type:string,source_id:string},
+     *   has_identity:bool
+     * }
+     */
+    protected function normalizeIdentityPayload(array $identity): array
+    {
+        $rawEmail = $this->nullableString($identity['raw_email'] ?? $identity['email'] ?? null);
+        $rawPhone = $this->nullableString($identity['raw_phone'] ?? $identity['phone'] ?? null);
+
+        $normalizedEmail = $this->normalizer->normalizeEmail($this->nullableString($identity['normalized_email'] ?? null) ?: $rawEmail);
+        $normalizedPhone = $this->normalizer->normalizePhone($this->nullableString($identity['normalized_phone'] ?? null) ?: $rawPhone);
+
+        $sourceLinks = [];
+        foreach ((array) ($identity['source_links'] ?? []) as $link) {
+            if (! is_array($link)) {
+                continue;
+            }
+            $sourceType = $this->nullableString($link['source_type'] ?? null);
+            $sourceId = $this->nullableString($link['source_id'] ?? null);
+            if (! $sourceType || ! $sourceId) {
+                continue;
+            }
+            $sourceLinks[] = [
+                'source_type' => $sourceType,
+                'source_id' => $sourceId,
+                'source_meta' => is_array($link['source_meta'] ?? null) ? $link['source_meta'] : [],
+            ];
+        }
+
+        if ($sourceLinks === []) {
+            $sourceLinks[] = [
+                'source_type' => 'external',
+                'source_id' => 'external:' . sha1(json_encode($identity)),
+                'source_meta' => [],
+            ];
+        }
+
+        $channels = collect((array) ($identity['source_channels'] ?? []))
+            ->map(fn ($value) => strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'first_name' => $this->nullableString($identity['first_name'] ?? null),
+            'last_name' => $this->nullableString($identity['last_name'] ?? null),
+            'full_name' => $this->nullableString($identity['full_name'] ?? null),
+            'raw_email' => $rawEmail,
+            'normalized_email' => $normalizedEmail,
+            'raw_phone' => $rawPhone,
+            'normalized_phone' => $normalizedPhone,
+            'source_channels' => $channels,
+            'source_links' => $sourceLinks,
+            'primary_source' => [
+                'source_type' => $this->nullableString($identity['primary_source']['source_type'] ?? null) ?: $sourceLinks[0]['source_type'],
+                'source_id' => $this->nullableString($identity['primary_source']['source_id'] ?? null) ?: $sourceLinks[0]['source_id'],
+            ],
+            'has_identity' => $normalizedEmail !== null || $normalizedPhone !== null,
+        ];
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
      * @param array<string,mixed> $extra
      */
     protected function createOrUpdateReview(
-        Order $order,
         array $identity,
         string $reason,
         array $extra,
+        array $reviewContext,
         bool $dryRun
     ): bool {
         $sourceType = (string) ($identity['primary_source']['source_type'] ?? 'order');
-        $sourceId = (string) ($identity['primary_source']['source_id'] ?? (string) $order->id);
+        $sourceId = (string) ($identity['primary_source']['source_id'] ?? ($reviewContext['source_id'] ?? 'unknown'));
 
         if ($dryRun) {
             $exists = MarketingIdentityReview::query()
@@ -552,10 +692,7 @@ class MarketingProfileSyncService
             ->first();
 
         $payload = [
-            'order_id' => (int) $order->id,
-            'order_number' => (string) ($order->order_number ?? ''),
-            'order_type' => (string) ($order->order_type ?? ''),
-            'source' => (string) ($order->source ?? ''),
+            'source_context' => $reviewContext,
             'source_links' => $identity['source_links'],
             'normalized_email' => $identity['normalized_email'],
             'normalized_phone' => $identity['normalized_phone'],

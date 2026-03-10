@@ -140,7 +140,23 @@
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-white">Events Purchased At</h2>
-            @if($eventOrders->isNotEmpty())
+            <x-admin.help-hint tone="neutral" title="Event attribution notes">
+                Event attribution uses explicit source mappings from Square tax/source values. Unresolved values stay visible until mapped by admin.
+            </x-admin.help-hint>
+
+            @if($eventSummary !== [])
+                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    @foreach($eventSummary as $row)
+                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="text-sm font-semibold text-white">{{ $row['event_title'] }}</div>
+                            <div class="mt-1 text-xs text-white/65">Date: {{ $row['event_date'] ?: '—' }}</div>
+                            <div class="mt-1 text-xs text-white/65">Linked source orders: {{ $row['source_count'] }}</div>
+                            <div class="mt-1 text-xs text-white/65">Confidence: {{ $row['confidence'] !== null ? number_format((float) $row['confidence'], 2) : '—' }}</div>
+                            <div class="mt-1 text-xs text-white/65">Method: {{ implode(', ', $row['attribution_methods']) }}</div>
+                        </article>
+                    @endforeach
+                </div>
+            @elseif($eventOrders->isNotEmpty())
                 <div class="mt-3 space-y-2">
                     @foreach($eventOrders as $order)
                         <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75">
@@ -148,32 +164,105 @@
                             @if($order->event)
                                 · Event: {{ $order->event->display_name ?: $order->event->name }}
                             @elseif($order->order_type === 'event')
-                                · Event attribution pending explicit event mapping
+                                · Event attribution pending explicit mapping
                             @endif
                         </div>
                     @endforeach
                 </div>
             @else
-                <p class="mt-2 text-sm text-white/65">No event-attributed orders are safely derivable for this profile yet.</p>
+                <p class="mt-2 text-sm text-white/65">No event-attributed records available yet for this profile.</p>
+            @endif
+
+            @if($unresolvedAttributionValues !== [])
+                <div class="mt-4">
+                    <h3 class="text-sm font-semibold text-white">Unresolved Event Source Values</h3>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach($unresolvedAttributionValues as $value)
+                            <span class="inline-flex rounded-full border border-amber-300/25 bg-amber-500/15 px-2.5 py-1 text-xs text-amber-100">
+                                {{ $value['source_system'] }}: {{ $value['raw_value'] }}
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
             @endif
         </section>
 
-        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section class="grid gap-4 lg:grid-cols-2">
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Square Linked Records</h3>
+                <p class="mt-1 text-xs text-white/65">Square orders and payments linked through marketing profile links.</p>
+                <div class="mt-3 space-y-2 text-sm text-white/75">
+                    @if($squareOrders->isEmpty() && $squarePayments->isEmpty())
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/60">No Square-linked records yet.</div>
+                    @endif
+                    @foreach($squareOrders as $row)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            Order {{ $row->square_order_id }} · {{ optional($row->closed_at)->toDateString() ?: 'open' }} · {{ $row->source_name ?: '—' }}
+                        </div>
+                    @endforeach
+                    @foreach($squarePayments as $row)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            Payment {{ $row->square_payment_id }} · {{ $row->status ?: '—' }} · {{ $row->amount_money !== null ? '$' . number_format(((int) $row->amount_money) / 100, 2) : '—' }}
+                        </div>
+                    @endforeach
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Imported Legacy Contact Links</h3>
+                <div class="mt-3 space-y-2 text-sm text-white/75">
+                    @forelse($legacyLinks as $link)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            {{ $link->source_type }} · {{ $link->source_id }}
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/60">No legacy contact imports linked yet.</div>
+                    @endforelse
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Consent Summary</h3>
+                <x-admin.help-hint tone="neutral" title="Consent precedence">
+                    Explicit opt-outs override opt-ins. Email and SMS are processed independently.
+                </x-admin.help-hint>
+                <div class="mt-3 text-sm text-white/75 space-y-1">
+                    <div>Email: {{ $profile->accepts_email_marketing ? 'Opt-In' : 'Opt-Out' }}</div>
+                    <div>SMS: {{ $profile->accepts_sms_marketing ? 'Opt-In' : 'Opt-Out' }}</div>
+                    <div>Email opted out at: {{ optional($profile->email_opted_out_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                    <div>SMS opted out at: {{ optional($profile->sms_opted_out_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Legacy Campaign Activity Summary</h3>
+                @if($campaignStats->isNotEmpty())
+                    <div class="mt-3 space-y-2 text-sm text-white/75">
+                        @foreach($campaignStats as $stat)
+                            <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                                {{ $stat->source_type }} · sends {{ $stat->sends_count }} · opens {{ $stat->opens_count }} · clicks {{ $stat->clicks_count }}
+                                <div class="text-xs text-white/55">Last engaged: {{ optional($stat->last_engaged_at)->format('Y-m-d') ?: '—' }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="mt-2 text-xs text-white/65">No legacy campaign summaries linked yet.</p>
+                @endif
+            </article>
+        </section>
+
+        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Campaign / Message History</h3>
-                <p class="mt-2 text-xs text-white/65">Coming in later stages once campaign sending and tracking are enabled.</p>
+                <p class="mt-2 text-xs text-white/65">Sending history will expand in later stages when campaign execution is introduced.</p>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Candle Cash</h3>
-                <p class="mt-2 text-xs text-white/65">Rewards balances and activity will appear here in a later stage.</p>
+                <p class="mt-2 text-xs text-white/65">Rewards balances and activity are intentionally deferred to later stages.</p>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Marketing Likelihood</h3>
-                <p class="mt-2 text-xs text-white/65">Scoring is intentionally deferred. No synthetic score is shown in Stage 2.</p>
-            </article>
-            <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
-                <h3 class="text-sm font-semibold text-white">Reviews</h3>
-                <p class="mt-2 text-xs text-white/65">Review provider history and outreach state will be added in a future stage.</p>
+                <p class="mt-2 text-xs text-white/65">Scoring remains deferred. Stage 3 does not fabricate synthetic propensity numbers.</p>
             </article>
         </section>
     </div>

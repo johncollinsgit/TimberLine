@@ -4,9 +4,9 @@
             :section="$section"
             :sections="$sections"
             title="Marketing Customers"
-            description="Unified marketing customer index derived from operational order/shopify sources through the additive marketing identity layer."
+            description="Unified marketing customer index derived from operational orders, Shopify ingest, Square sync, and legacy imports through the additive identity layer."
             hint-title="How this index works"
-            hint-text="Profiles are derived from source records and linked by exact normalized email/phone matches. Ambiguous matches are held in Identity Review."
+            hint-text="Profiles are derived from source records and linked by exact normalized email/phone matches. Ambiguous matches are held in Identity Review instead of auto-merged."
         />
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
@@ -67,6 +67,7 @@
                             <th class="px-4 py-3 text-left">Linked Sources</th>
                             <th class="px-4 py-3 text-left">Order Count</th>
                             <th class="px-4 py-3 text-left">Last Order</th>
+                            <th class="px-4 py-3 text-left">Last Activity</th>
                             <th class="px-4 py-3 text-left">Marketing Score</th>
                             <th class="px-4 py-3 text-left">Consent</th>
                             <th class="px-4 py-3 text-left">Updated</th>
@@ -104,7 +105,17 @@
                                 </td>
                                 <td class="px-4 py-3 text-white/75">{{ (int) $profile->links_count }}</td>
                                 <td class="px-4 py-3 text-white/75">{{ (int) ($stats['order_count'] ?? 0) }}</td>
-                                <td class="px-4 py-3 text-white/75">{{ $stats['last_order_at'] ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">
+                                    {{ $stats['last_order_at'] ?: '—' }}
+                                    @if(!empty($stats['source_badges']))
+                                        <div class="mt-1 flex flex-wrap gap-1">
+                                            @foreach($stats['source_badges'] as $badge)
+                                                <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-white/65">{{ $badge }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 text-white/75">{{ $stats['last_activity_at'] ?: '—' }}</td>
                                 <td class="px-4 py-3 text-white/65">{{ $profile->marketing_score !== null ? number_format((float) $profile->marketing_score, 2) : 'Pending' }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-col gap-1">
@@ -125,7 +136,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="11" class="px-4 py-8 text-center text-white/55">
+                                <td colspan="12" class="px-4 py-8 text-center text-white/55">
                                     No marketing profiles found for the current filters.
                                 </td>
                             </tr>

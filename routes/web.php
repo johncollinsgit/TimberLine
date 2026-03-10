@@ -5,6 +5,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
+use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
@@ -225,9 +226,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/settings', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'settings')
                 ->name('settings');
-            Route::get('/providers-integrations', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'providers-integrations')
+            Route::get('/providers-integrations', [MarketingProvidersIntegrationsController::class, 'index'])
                 ->name('providers-integrations');
+            Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
+                ->name('providers-integrations.sync-square');
+            Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
+                ->name('providers-integrations.import-legacy');
+            Route::get('/providers-integrations/event-mappings/create', [MarketingProvidersIntegrationsController::class, 'createMapping'])
+                ->name('providers-integrations.mappings.create');
+            Route::post('/providers-integrations/event-mappings', [MarketingProvidersIntegrationsController::class, 'storeMapping'])
+                ->name('providers-integrations.mappings.store');
+            Route::get('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'editMapping'])
+                ->name('providers-integrations.mappings.edit');
+            Route::patch('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'updateMapping'])
+                ->name('providers-integrations.mappings.update');
             Route::get('/suppression-consent', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'suppression-consent')
                 ->name('suppression-consent');
