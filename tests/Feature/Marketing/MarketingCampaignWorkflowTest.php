@@ -42,7 +42,9 @@ test('campaign can be created and edited with linked segment', function () {
         ])
         ->assertRedirect();
 
-    $campaign = MarketingCampaign::query()->firstOrFail();
+    $campaign = MarketingCampaign::query()
+        ->where('name', 'Winback A')
+        ->firstOrFail();
 
     expect((int) $campaign->segment_id)->toBe((int) $segment->id)
         ->and($campaign->name)->toBe('Winback A');

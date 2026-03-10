@@ -4,9 +4,9 @@
             :section="$section"
             :sections="$sections"
             title="Customer Detail"
-            description="Detailed marketing identity view with linked source records and related operational order context."
+            description="Detailed marketing identity view with linked source records, campaign touches, consent history, and conversion context."
             hint-title="How to use this detail page"
-            hint-text="This profile is a marketing-layer identity record. Linked source rows show how operational data is connected without replacing operational tables."
+            hint-text="This profile is a marketing-layer identity record. Source links and communication history are additive overlays on operational data, not replacements."
         />
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
@@ -229,13 +229,28 @@
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
                 <h3 class="text-sm font-semibold text-white">Consent Summary</h3>
                 <x-admin.help-hint tone="neutral" title="Consent precedence">
-                    Explicit opt-outs override opt-ins. Email and SMS are processed independently.
+                    Consent is checked again at send time. Explicit opt-outs block outbound sends even if a recipient was previously approved.
                 </x-admin.help-hint>
                 <div class="mt-3 text-sm text-white/75 space-y-1">
                     <div>Email: {{ $profile->accepts_email_marketing ? 'Opt-In' : 'Opt-Out' }}</div>
                     <div>SMS: {{ $profile->accepts_sms_marketing ? 'Opt-In' : 'Opt-Out' }}</div>
                     <div>Email opted out at: {{ optional($profile->email_opted_out_at)->format('Y-m-d H:i') ?: '—' }}</div>
                     <div>SMS opted out at: {{ optional($profile->sms_opted_out_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                </div>
+
+                <div class="mt-4 space-y-2">
+                    <form method="POST" action="{{ route('marketing.customers.update-consent', $profile) }}" class="grid gap-2 sm:grid-cols-2">
+                        @csrf
+                        <input type="hidden" name="channel" value="sms" />
+                        <input type="hidden" name="consented" value="1" />
+                        <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-100">Mark SMS Consented</button>
+                    </form>
+                    <form method="POST" action="{{ route('marketing.customers.update-consent', $profile) }}" class="grid gap-2 sm:grid-cols-2">
+                        @csrf
+                        <input type="hidden" name="channel" value="sms" />
+                        <input type="hidden" name="consented" value="0" />
+                        <button type="submit" class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-100">Revoke SMS Consent</button>
+                    </form>
                 </div>
             </article>
 
@@ -256,16 +271,90 @@
             </article>
         </section>
 
-        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
-                <h3 class="text-sm font-semibold text-white">Campaign / Message History</h3>
-                <p class="mt-2 text-xs text-white/65">Recipient and approval history is now tracked in campaigns. Delivery/sending telemetry is added in later stages.</p>
+        <section class="grid gap-4 lg:grid-cols-2">
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Customer Communication Timeline</h3>
+                <x-admin.help-hint tone="neutral" title="Timeline behavior">
+                    Delivery statuses may change after initial send as Twilio callbacks arrive. Each retry creates a separate attempt in this timeline.
+                </x-admin.help-hint>
+                <div class="mt-3 space-y-2">
+                    @forelse($deliveries as $delivery)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            <div class="text-sm text-white">
+                                {{ $delivery->campaign?->name ?: ('Campaign #' . $delivery->campaign_id) }} · {{ strtoupper($delivery->channel) }} · {{ $delivery->send_status }}
+                            </div>
+                            <div class="mt-1 text-xs text-white/60">
+                                Attempt #{{ (int) $delivery->attempt_number }} · Sent {{ optional($delivery->sent_at)->format('Y-m-d H:i') ?: '—' }} · Delivered {{ optional($delivery->delivered_at)->format('Y-m-d H:i') ?: '—' }}
+                            </div>
+                            <div class="mt-1 text-xs text-white/50">SID: {{ $delivery->provider_message_id ?: '—' }}</div>
+                            <div class="mt-1 text-xs text-white/55">{{ \Illuminate\Support\Str::limit((string) $delivery->rendered_message, 120) }}</div>
+                            @if($delivery->error_code || $delivery->error_message)
+                                <div class="mt-1 text-xs text-rose-200">{{ $delivery->error_code ?: 'error' }} · {{ \Illuminate\Support\Str::limit((string) $delivery->error_message, 90) }}</div>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60">No SMS touches logged yet.</div>
+                    @endforelse
+                </div>
             </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Campaign Conversion History</h3>
+                <x-admin.help-hint tone="neutral" title="Attribution summary">
+                    Conversion rows can be `code_based`, `last_touch`, or `assisted`. Attribution is conservative and may be partial when source order data is incomplete.
+                </x-admin.help-hint>
+                <div class="mt-3 space-y-2">
+                    @forelse($conversions as $conversion)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
+                            <div>{{ $conversion->campaign?->name ?: ('Campaign #' . $conversion->campaign_id) }} · {{ $conversion->attribution_type }}</div>
+                            <div class="mt-1 text-xs text-white/60">{{ $conversion->source_type }}:{{ $conversion->source_id }} · {{ optional($conversion->converted_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                            <div class="mt-1 text-xs text-white/60">Order total: {{ $conversion->order_total !== null ? '$' . number_format((float) $conversion->order_total, 2) : '—' }}</div>
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60">No attributed conversions linked yet.</div>
+                    @endforelse
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 lg:col-span-2">
+                <h3 class="text-sm font-semibold text-white">Consent Event History</h3>
+                <div class="mt-3 overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-white/5 text-white/65">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Occurred</th>
+                                <th class="px-4 py-3 text-left">Channel</th>
+                                <th class="px-4 py-3 text-left">Event</th>
+                                <th class="px-4 py-3 text-left">Source</th>
+                                <th class="px-4 py-3 text-left">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse($consentEvents as $event)
+                                <tr>
+                                    <td class="px-4 py-3 text-white/75">{{ optional($event->occurred_at)->format('Y-m-d H:i') ?: optional($event->created_at)->format('Y-m-d H:i') }}</td>
+                                    <td class="px-4 py-3 text-white/75">{{ strtoupper($event->channel) }}</td>
+                                    <td class="px-4 py-3 text-white/75">{{ $event->event_type }}</td>
+                                    <td class="px-4 py-3 text-white/60">{{ $event->source_type ?: '—' }}{{ $event->source_id ? (':' . $event->source_id) : '' }}</td>
+                                    <td class="px-4 py-3 text-white/60">{{ \Illuminate\Support\Str::limit(json_encode($event->details), 100) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="px-4 py-6 text-center text-white/55">No consent events recorded yet.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
                 <h3 class="text-sm font-semibold text-white">Candle Cash</h3>
                 <p class="mt-2 text-xs text-white/65">Rewards balances and activity are intentionally deferred to later stages.</p>
             </article>
-            <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 xl:col-span-2">
                 <h3 class="text-sm font-semibold text-white">Marketing Likelihood</h3>
                 <x-admin.help-hint tone="neutral" title="Score explainability">
                     Score is a transparent 0–100 weighted sum using recency, order frequency, spend signals, consent, source diversity, event activity, and legacy engagement.
@@ -293,7 +382,7 @@
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
             <h3 class="text-sm font-semibold text-white">Quick Actions</h3>
             <x-admin.help-hint tone="neutral" title="Action safety">
-                Quick actions create recommendations or queue campaign recipients. No direct provider send is triggered from this page.
+                Quick actions create recommendations or queue campaign recipients. They do not directly send provider messages.
             </x-admin.help-hint>
 
             <div class="grid gap-4 lg:grid-cols-2">

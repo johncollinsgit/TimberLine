@@ -10,6 +10,7 @@ use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
+use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
@@ -198,6 +199,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('overview');
             Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
             Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
+            Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
             Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
             Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
             Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');
@@ -226,6 +228,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('/campaigns/{campaign}/variants/{variant}', [MarketingCampaignsController::class, 'updateVariant'])->name('campaigns.variants.update');
             Route::post('/campaigns/{campaign}/recipients/{recipient}/approve', [MarketingCampaignsController::class, 'approveRecipient'])->name('campaigns.recipients.approve');
             Route::post('/campaigns/{campaign}/recipients/{recipient}/reject', [MarketingCampaignsController::class, 'rejectRecipient'])->name('campaigns.recipients.reject');
+            Route::post('/campaigns/{campaign}/send-approved-sms', [MarketingCampaignsController::class, 'sendApprovedSms'])->name('campaigns.send-approved-sms');
+            Route::post('/campaigns/{campaign}/send-selected-sms', [MarketingCampaignsController::class, 'sendSelectedSms'])->name('campaigns.send-selected-sms');
+            Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-sms', [MarketingCampaignsController::class, 'retryRecipientSms'])->name('campaigns.recipients.retry-sms');
             Route::post('/campaigns/{campaign}/recommendations/generate', [MarketingCampaignsController::class, 'generateRecommendations'])->name('campaigns.recommendations.generate');
             Route::post('/campaigns/{campaign}/add-profile', [MarketingCampaignsController::class, 'addProfileRecipient'])->name('campaigns.add-profile');
 
@@ -387,6 +392,12 @@ Route::prefix('webhooks/shopify')->group(function () {
         ->withoutMiddleware([VerifyCsrfToken::class]);
     Route::post('/refunds/create', [ShopifyWebhookController::class, 'refundsCreate'])
         ->withoutMiddleware([VerifyCsrfToken::class]);
+});
+
+Route::prefix('webhooks/twilio')->group(function () {
+    Route::post('/status', [TwilioWebhookController::class, 'status'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('marketing.webhooks.twilio-status');
 });
 
 Route::prefix('shopify')->group(function () {

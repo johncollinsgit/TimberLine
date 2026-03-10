@@ -12,6 +12,7 @@ use App\Models\MarketingSegment;
 use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingCampaignAudienceBuilder;
 use App\Services\Marketing\MarketingRecommendationEngine;
+use App\Services\Marketing\MarketingSmsExecutionService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -111,12 +112,28 @@ class MarketingCampaignsController extends Controller
             ->all();
 
         $approvalQueue = $campaign->recipients()
-            ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name'])
-            ->whereIn('status', ['queued_for_approval', 'approved', 'rejected'])
-            ->orderByRaw("case when status = 'queued_for_approval' then 0 when status='approved' then 1 else 2 end")
+            ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name', 'latestDelivery'])
+            ->whereIn('status', ['queued_for_approval', 'approved', 'rejected', 'sending', 'sent', 'delivered', 'failed', 'undelivered', 'converted'])
+            ->orderByRaw("case when status = 'queued_for_approval' then 0 when status='approved' then 1 when status='sending' then 2 when status='failed' then 3 else 4 end")
             ->orderByDesc('updated_at')
             ->limit(200)
             ->get();
+
+        $deliveryLog = $campaign->deliveries()
+            ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name'])
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get();
+
+        $conversionSummary = [
+            'count' => (int) $campaign->conversions()->count(),
+            'revenue' => (float) $campaign->conversions()->sum('order_total'),
+            'types' => $campaign->conversions()
+                ->selectRaw('attribution_type, count(*) as aggregate')
+                ->groupBy('attribution_type')
+                ->pluck('aggregate', 'attribution_type')
+                ->all(),
+        ];
 
         return view('marketing/campaigns/show', [
             'section' => MarketingSectionRegistry::section('campaigns'),
@@ -124,12 +141,105 @@ class MarketingCampaignsController extends Controller
             'campaign' => $campaign,
             'recipientSummary' => $recipientSummary,
             'approvalQueue' => $approvalQueue,
+            'deliveryLog' => $deliveryLog,
+            'conversionSummary' => $conversionSummary,
             'templates' => MarketingMessageTemplate::query()
                 ->where('is_active', true)
                 ->where('channel', $campaign->channel)
                 ->orderBy('name')
                 ->get(['id', 'name']),
         ]);
+    }
+
+    public function sendApprovedSms(
+        MarketingCampaign $campaign,
+        Request $request,
+        MarketingSmsExecutionService $executionService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:2000'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $summary = $executionService->sendApprovedForCampaign($campaign, [
+            'limit' => (int) ($data['limit'] ?? 500),
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => sprintf(
+                    'Send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    (int) $summary['processed'],
+                    (int) $summary['sent'],
+                    (int) $summary['failed'],
+                    (int) $summary['skipped']
+                ),
+            ]);
+    }
+
+    public function sendSelectedSms(
+        MarketingCampaign $campaign,
+        Request $request,
+        MarketingSmsExecutionService $executionService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'recipient_ids' => ['required', 'array', 'min:1'],
+            'recipient_ids.*' => ['integer', 'exists:marketing_campaign_recipients,id'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $summary = $executionService->sendApprovedForCampaign($campaign, [
+            'recipient_ids' => array_map('intval', (array) $data['recipient_ids']),
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'limit' => count((array) $data['recipient_ids']),
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => sprintf(
+                    'Selected send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    (int) $summary['processed'],
+                    (int) $summary['sent'],
+                    (int) $summary['failed'],
+                    (int) $summary['skipped']
+                ),
+            ]);
+    }
+
+    public function retryRecipientSms(
+        MarketingCampaign $campaign,
+        MarketingCampaignRecipient $recipient,
+        Request $request,
+        MarketingSmsExecutionService $executionService
+    ): RedirectResponse {
+        abort_unless((int) $recipient->campaign_id === (int) $campaign->id, 404);
+
+        $data = $request->validate([
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $result = $executionService->retryRecipient($recipient, [
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => ($result['outcome'] ?? 'skipped') === 'sent' ? 'success' : 'warning',
+                'message' => sprintf(
+                    'Retry result: outcome=%s reason=%s',
+                    (string) ($result['outcome'] ?? 'unknown'),
+                    (string) ($result['reason'] ?? 'n/a')
+                ),
+            ]);
     }
 
     public function prepareRecipients(

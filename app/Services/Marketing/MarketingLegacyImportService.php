@@ -175,7 +175,7 @@ class MarketingLegacyImportService
             /** @var MarketingProfile|null $profile */
             $profile = MarketingProfile::query()->find($profileId);
             if ($profile) {
-                $this->applyConsent($profile, $row);
+                $this->applyConsent($profile, $row, $type, $externalKey);
                 $this->upsertCampaignStats($profile, $type, $row, $externalKey);
             }
         } elseif ($dryRun && $profileId > 0) {
@@ -199,7 +199,7 @@ class MarketingLegacyImportService
         ];
     }
 
-    protected function applyConsent(MarketingProfile $profile, array $row): void
+    protected function applyConsent(MarketingProfile $profile, array $row, string $type, string $externalKey): void
     {
         $this->consentService->applyToProfile($profile, [
             'accepts_email_marketing' => $this->firstNonNull([
@@ -216,6 +216,9 @@ class MarketingLegacyImportService
             ]),
             'email_opted_out_at' => $this->nullableString($row['email_unsubscribed_at'] ?? $row['unsubscribed_at'] ?? null),
             'sms_opted_out_at' => $this->nullableString($row['sms_unsubscribed_at'] ?? null),
+        ], [
+            'source_type' => $type,
+            'source_id' => $externalKey,
         ]);
     }
 

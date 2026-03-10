@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Order;
+use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,7 +27,10 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
     ) {
     }
 
-    public function handle(MarketingProfileSyncService $syncService): void
+    public function handle(
+        MarketingProfileSyncService $syncService,
+        MarketingConversionAttributionService $conversionAttributionService
+    ): void
     {
         $order = Order::query()->find($this->orderId);
         if (!$order) {
@@ -36,5 +40,7 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
         $syncService->syncOrder($order, [
             'identity_context' => $this->identityContext,
         ]);
+
+        $conversionAttributionService->attributeForOrder($order);
     }
 }

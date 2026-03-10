@@ -16,7 +16,8 @@ class SquareMarketingSyncService
         protected SquareClient $client,
         protected MarketingProfileSyncService $profileSyncService,
         protected MarketingEventAttributionService $attributionService,
-        protected MarketingConsentService $consentService
+        protected MarketingConsentService $consentService,
+        protected MarketingConversionAttributionService $conversionAttributionService
     ) {
     }
 
@@ -52,7 +53,14 @@ class SquareMarketingSyncService
                 if (! $dryRun && (int) ($result['profile_id'] ?? 0) > 0) {
                     $profile = \App\Models\MarketingProfile::query()->find((int) $result['profile_id']);
                     if ($profile) {
-                        $this->consentService->applyToProfile($profile, $this->consentFromSquareCustomerPayload($payload));
+                        $this->consentService->applyToProfile(
+                            $profile,
+                            $this->consentFromSquareCustomerPayload($payload),
+                            [
+                                'source_type' => 'square_customer_sync',
+                                'source_id' => (string) ($payload['id'] ?? ''),
+                            ]
+                        );
                     }
                 }
             }
@@ -93,6 +101,9 @@ class SquareMarketingSyncService
 
                 if (! $dryRun) {
                     $this->attributionService->refreshForSquareOrder($orderResult['model']);
+                    if ($orderResult['model']) {
+                        $this->conversionAttributionService->attributeForSquareOrder($orderResult['model']);
+                    }
                 }
 
                 $customer = null;

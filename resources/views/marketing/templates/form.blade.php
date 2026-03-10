@@ -78,6 +78,9 @@
                 <x-admin.help-hint tone="neutral" title="Template variables">
                     Supported defaults include `first_name`, `event_name`, `coupon_code`, `days_since_last_order`, `total_orders`, and `total_spent`.
                 </x-admin.help-hint>
+                <x-admin.help-hint tone="neutral" title="Consent-capture copy guardrail">
+                    Consent-capture templates should describe opt-in clearly and avoid promising rewards/features that are not yet live.
+                </x-admin.help-hint>
 
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Preview Profile</div>

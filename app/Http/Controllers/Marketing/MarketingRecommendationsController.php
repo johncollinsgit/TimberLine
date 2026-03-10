@@ -60,10 +60,13 @@ class MarketingRecommendationsController extends Controller
         Request $request,
         MarketingRecommendationEngine $engine
     ): RedirectResponse {
-        $result = $engine->generateSendSuggestionForProfile($profile);
-        $message = $result['created'] > 0
-            ? 'Prefilled send suggestion created.'
-            : 'No send suggestion was generated for this profile under current rules.';
+        $sendResult = $engine->generateSendSuggestionForProfile($profile);
+        $consentResult = $engine->generateConsentCaptureSuggestionForProfile($profile);
+
+        $created = (int) ($sendResult['created'] ?? 0) + (int) ($consentResult['created'] ?? 0);
+        $message = $created > 0
+            ? "Generated {$created} recommendation(s) for this profile."
+            : 'No recommendations were generated for this profile under current rules.';
 
         $redirectTo = trim((string) $request->input('redirect_to', ''));
         if ($redirectTo === 'profile') {

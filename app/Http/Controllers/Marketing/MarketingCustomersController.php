@@ -11,10 +11,12 @@ use App\Models\MarketingCampaign;
 use App\Models\Order;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingEventAttributionService;
 use App\Services\Marketing\MarketingProfileScoreService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
 use App\Support\Marketing\MarketingSectionRegistry;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -24,7 +26,8 @@ class MarketingCustomersController extends Controller
     public function __construct(
         protected MarketingEventAttributionService $attributionService,
         protected MarketingProfileScoreService $scoreService,
-        protected MarketingSegmentEvaluator $segmentEvaluator
+        protected MarketingSegmentEvaluator $segmentEvaluator,
+        protected MarketingConsentService $consentService
     ) {
     }
 
@@ -148,6 +151,25 @@ class MarketingCustomersController extends Controller
             ->limit(12)
             ->get(['id', 'name', 'status']);
 
+        $deliveries = $marketingProfile->messageDeliveries()
+            ->with(['campaign:id,name', 'variant:id,name', 'recipient:id,status'])
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+
+        $conversions = $marketingProfile->campaignConversions()
+            ->with(['campaign:id,name', 'recipient:id,status'])
+            ->orderByDesc('converted_at')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+
+        $consentEvents = $marketingProfile->consentEvents()
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+
         return view('marketing.customers.show', [
             'section' => MarketingSectionRegistry::section('customers'),
             'sections' => $this->navigationItems(),
@@ -164,7 +186,48 @@ class MarketingCustomersController extends Controller
             'scoreResult' => $scoreResult,
             'matchingSegments' => $matchingSegments,
             'campaignOptions' => $campaignOptions,
+            'deliveries' => $deliveries,
+            'conversions' => $conversions,
+            'consentEvents' => $consentEvents,
         ]);
+    }
+
+    public function updateConsent(MarketingProfile $marketingProfile, Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'channel' => ['required', 'in:sms,email,both'],
+            'consented' => ['required', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $consented = (bool) $data['consented'];
+        $channel = (string) $data['channel'];
+        $notes = trim((string) ($data['notes'] ?? '')) ?: null;
+
+        $context = [
+            'source_type' => 'admin_manual',
+            'source_id' => (string) (auth()->id() ?? ''),
+            'details' => [
+                'notes' => $notes,
+            ],
+        ];
+
+        $changed = false;
+        if ($channel === 'sms' || $channel === 'both') {
+            $changed = $this->consentService->setSmsConsent($marketingProfile, $consented, $context) || $changed;
+        }
+        if ($channel === 'email' || $channel === 'both') {
+            $changed = $this->consentService->setEmailConsent($marketingProfile, $consented, $context) || $changed;
+        }
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', [
+                'style' => $changed ? 'success' : 'warning',
+                'message' => $changed
+                    ? 'Consent state updated.'
+                    : 'Consent state was already set to that value.',
+            ]);
     }
 
     /**

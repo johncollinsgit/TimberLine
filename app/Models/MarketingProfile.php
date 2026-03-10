@@ -68,4 +68,14 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MarketingCampaignConversion::class, 'marketing_profile_id');
     }
+
+    public function messageDeliveries(): HasMany
+    {
+        return $this->hasMany(MarketingMessageDelivery::class, 'marketing_profile_id');
+    }
+
+    public function consentEvents(): HasMany
+    {
+        return $this->hasMany(MarketingConsentEvent::class, 'marketing_profile_id');
+    }
 }

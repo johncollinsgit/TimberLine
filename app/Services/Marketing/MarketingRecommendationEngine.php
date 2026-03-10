@@ -87,6 +87,20 @@ class MarketingRecommendationEngine
             }
         }
 
+        if ($campaign->objective === 'consent_capture') {
+            $profiles = MarketingProfile::query()
+                ->where('accepts_email_marketing', true)
+                ->where('accepts_sms_marketing', false)
+                ->orderByDesc('updated_at')
+                ->limit(100)
+                ->get();
+
+            foreach ($profiles as $profile) {
+                $result = $this->generateConsentCaptureSuggestionForProfile($profile, $campaign);
+                $created += (int) ($result['created'] ?? 0);
+            }
+        }
+
         return ['created' => $created];
     }
 
@@ -113,6 +127,19 @@ class MarketingRecommendationEngine
                 'confidence' => 0.66,
             ]);
             $created++;
+        }
+
+        $consentCaptureProfiles = MarketingProfile::query()
+            ->where('accepts_email_marketing', true)
+            ->where('accepts_sms_marketing', false)
+            ->whereNotNull('normalized_email')
+            ->orderByDesc('updated_at')
+            ->limit(100)
+            ->get();
+
+        foreach ($consentCaptureProfiles as $profile) {
+            $result = $this->generateConsentCaptureSuggestionForProfile($profile);
+            $created += (int) ($result['created'] ?? 0);
         }
 
         return ['created' => $created];
@@ -147,6 +174,56 @@ class MarketingRecommendationEngine
                 'suggested_message' => 'Hi {{first_name}}, we miss you. Ready for your next pour?',
             ],
             'confidence' => 0.81,
+        ]);
+
+        return ['created' => 1, 'recommendation_id' => $recommendation->id];
+    }
+
+    /**
+     * @return array{created:int,recommendation_id:?int}
+     */
+    public function generateConsentCaptureSuggestionForProfile(MarketingProfile $profile, ?MarketingCampaign $campaign = null): array
+    {
+        if (! (bool) $profile->accepts_email_marketing || (bool) $profile->accepts_sms_marketing) {
+            return ['created' => 0, 'recommendation_id' => null];
+        }
+
+        $metrics = $this->analyticsService->metricsForProfile($profile);
+        $daysSinceOrder = (int) ($metrics['days_since_last_order'] ?? 9999);
+        $totalOrders = (int) ($metrics['total_orders'] ?? 0);
+        if ($totalOrders < 1 || $daysSinceOrder > 180) {
+            return ['created' => 0, 'recommendation_id' => null];
+        }
+
+        if (! $profile->normalized_email && ! $profile->normalized_phone) {
+            return ['created' => 0, 'recommendation_id' => null];
+        }
+
+        $existing = MarketingRecommendation::query()
+            ->where('type', 'send_suggestion')
+            ->where('marketing_profile_id', $profile->id)
+            ->where('status', 'pending')
+            ->where('summary', 'Consent-capture outreach: profile has email consent but no SMS consent.')
+            ->first();
+
+        if ($existing) {
+            return ['created' => 0, 'recommendation_id' => (int) $existing->id];
+        }
+
+        $recommendation = $this->createRecommendation([
+            'type' => 'send_suggestion',
+            'campaign_id' => $campaign?->id,
+            'marketing_profile_id' => $profile->id,
+            'title' => 'Invite profile to SMS consent flow',
+            'summary' => 'Consent-capture outreach: profile has email consent but no SMS consent.',
+            'details_json' => [
+                'objective' => 'consent_capture',
+                'days_since_last_order' => $metrics['days_since_last_order'],
+                'total_orders' => $metrics['total_orders'],
+                'suggested_channel' => $profile->normalized_email ? 'email' : 'sms',
+                'suggested_message' => 'Want early access alerts and future rewards perks? Reply YES to opt into SMS updates.',
+            ],
+            'confidence' => 0.78,
         ]);
 
         return ['created' => 1, 'recommendation_id' => $recommendation->id];

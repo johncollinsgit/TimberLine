@@ -70,12 +70,12 @@ class MarketingSectionRegistry
             'campaigns' => [
                 'label' => 'Campaigns',
                 'route' => 'marketing.campaigns',
-                'description' => 'Campaign orchestration hub for SMS/email targeting, variants, recipient preparation, and approval workflow.',
+                'description' => 'Campaign orchestration hub for SMS/email targeting, approval workflow, Twilio send execution, and delivery/conversion visibility.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Campaigns prepare recipients and approvals only in this stage. Provider sending remains disabled until later execution stages.',
+                'hint_text' => 'Campaigns prepare recipients, route approvals, and execute approved SMS sends through Twilio with delivery tracking and retry controls.',
                 'coming_next' => [
-                    'Provider send execution wiring after approval states.',
-                    'Conversion attribution rollups from campaign-linked purchases.',
+                    'Automated scheduling and throttled send orchestration.',
+                    'Richer conversion attribution diagnostics and revenue drill-downs.',
                 ],
             ],
             'automations' => [
@@ -160,10 +160,10 @@ class MarketingSectionRegistry
                 'route' => 'marketing.suppression-consent',
                 'description' => 'Consent guardrail area for opt-outs, quiet hours, and suppression governance.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Consent management logic starts with profile flags in Stage 1; enforcement workflows come in later stages.',
+                'hint_text' => 'Consent is enforced again at SMS send time. Manual profile-level consent updates and consent event history are available from customer detail.',
                 'coming_next' => [
-                    'Consent state timeline and suppression list management.',
-                    'Channel-specific compliance checks prior to sends.',
+                    'Storefront consent-capture flows with auditable confirmation events.',
+                    'Suppression list management and compliance-specific audit exports.',
                 ],
             ],
         ];

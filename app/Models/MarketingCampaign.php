@@ -58,6 +58,11 @@ class MarketingCampaign extends Model
         return $this->hasMany(MarketingCampaignConversion::class, 'campaign_id');
     }
 
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(MarketingMessageDelivery::class, 'campaign_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
