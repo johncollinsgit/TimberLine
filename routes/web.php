@@ -204,6 +204,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->defaults('section', 'overview')
                 ->name('overview');
             Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
+            Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
+            Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
             Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
             Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
             Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');

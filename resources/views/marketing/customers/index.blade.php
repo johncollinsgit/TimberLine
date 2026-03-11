@@ -1,43 +1,44 @@
-<x-layouts::app :title="'Marketing Customers'">
+<x-layouts::app :title="'Customers'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Marketing Customers"
-            description="Unified marketing customer index derived from operational orders, Shopify ingest, Square sync, and legacy imports through the additive identity layer."
+            title="Customers"
+            description="Manage canonical customer profiles linked across Shopify, Growave enrichment, Square, wholesale, event, and manual sources."
             hint-title="How this index works"
-            hint-text="Profiles are derived from source records and linked by exact normalized email/phone matches. Ambiguous matches are held in Identity Review instead of auto-merged."
+            hint-text="Canonical profiles are source-of-truth. External provider records enrich customer context without replacing identity ownership."
         />
 
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthday Capture</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((float) ($birthdayReporting['capture_rate'] ?? 0), 1) }}%</div>
-                <div class="text-xs text-white/60">{{ number_format((int) ($birthdayReporting['with_birthday'] ?? 0)) }} / {{ number_format((int) ($birthdayReporting['total_profiles'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Total Customers</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Birthdays</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['missing_birthday'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Linked</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthdays Today</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['birthdays_today'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Shopify / Order Linked</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['shopify_or_order_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthdays This Week</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['birthdays_this_week'] ?? 0)) }}</div>
-            </article>
-            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Rewards Issued (Year)</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['rewards_issued_this_year'] ?? 0)) }}</div>
-            </article>
-            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Rewards Claimed (Year)</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['rewards_claimed_this_year'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Contact</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_contact'] ?? 0)) }}</div>
             </article>
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Manage Customers</h2>
+                    <div class="mt-1 text-sm text-white/65">{{ number_format((int) ($profiles->total() ?? 0)) }} result{{ (int) ($profiles->total() ?? 0) === 1 ? '' : 's' }}</div>
+                </div>
+                <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
+                    Add Customer
+                </a>
+            </div>
+
             <form method="GET" action="{{ route('marketing.customers') }}" class="grid gap-3 md:grid-cols-12">
                 <div class="md:col-span-4">
                     <label for="search" class="text-xs uppercase tracking-[0.2em] text-white/55">Search</label>
@@ -46,38 +47,56 @@
                         type="text"
                         name="search"
                         value="{{ $search }}"
-                        placeholder="Name, email, or phone"
+                        placeholder="Name, email, phone, source ID"
                         class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35"
                     />
                 </div>
                 <div class="md:col-span-2">
+                    <label for="source" class="text-xs uppercase tracking-[0.2em] text-white/55">Source</label>
+                    <select id="source" name="source" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        <option value="all" @selected(($sourceFilter ?? 'all') === 'all')>All</option>
+                        <option value="shopify" @selected(($sourceFilter ?? 'all') === 'shopify')>Shopify</option>
+                        <option value="growave" @selected(($sourceFilter ?? 'all') === 'growave')>Growave</option>
+                        <option value="square" @selected(($sourceFilter ?? 'all') === 'square')>Square</option>
+                        <option value="wholesale" @selected(($sourceFilter ?? 'all') === 'wholesale')>Wholesale</option>
+                        <option value="event" @selected(($sourceFilter ?? 'all') === 'event')>Event</option>
+                        <option value="manual" @selected(($sourceFilter ?? 'all') === 'manual')>Manual</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="has_points" class="text-xs uppercase tracking-[0.2em] text-white/55">Has Points</label>
+                    <select id="has_points" name="has_points" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        <option value="all" @selected(($hasPointsFilter ?? 'all') === 'all')>All</option>
+                        <option value="yes" @selected(($hasPointsFilter ?? 'all') === 'yes')>Yes</option>
+                        <option value="no" @selected(($hasPointsFilter ?? 'all') === 'no')>No</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="has_phone" class="text-xs uppercase tracking-[0.2em] text-white/55">Has Phone</label>
+                    <select id="has_phone" name="has_phone" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        <option value="all" @selected(($hasPhoneFilter ?? 'all') === 'all')>All</option>
+                        <option value="yes" @selected(($hasPhoneFilter ?? 'all') === 'yes')>Yes</option>
+                        <option value="no" @selected(($hasPhoneFilter ?? 'all') === 'no')>No</option>
+                    </select>
+                </div>
+                <div class="md:col-span-1">
                     <label for="sort" class="text-xs uppercase tracking-[0.2em] text-white/55">Sort</label>
                     <select id="sort" name="sort" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                         <option value="updated_at" @selected($sort === 'updated_at')>Updated</option>
                         <option value="created_at" @selected($sort === 'created_at')>Created</option>
                         <option value="email" @selected($sort === 'email')>Email</option>
-                        <option value="first_name" @selected($sort === 'first_name')>First Name</option>
-                        <option value="last_name" @selected($sort === 'last_name')>Last Name</option>
+                        <option value="first_name" @selected($sort === 'first_name')>First</option>
+                        <option value="last_name" @selected($sort === 'last_name')>Last</option>
                     </select>
                 </div>
-                <div class="md:col-span-2">
-                    <label for="dir" class="text-xs uppercase tracking-[0.2em] text-white/55">Direction</label>
+                <div class="md:col-span-1">
+                    <label for="dir" class="text-xs uppercase tracking-[0.2em] text-white/55">Dir</label>
                     <select id="dir" name="dir" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                         <option value="desc" @selected($dir === 'desc')>Desc</option>
                         <option value="asc" @selected($dir === 'asc')>Asc</option>
                     </select>
                 </div>
-                <div class="md:col-span-2">
-                    <label for="birthday_filter" class="text-xs uppercase tracking-[0.2em] text-white/55">Birthday Filter</label>
-                    <select id="birthday_filter" name="birthday_filter" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                        <option value="all" @selected(($birthdayFilter ?? 'all') === 'all')>All</option>
-                        <option value="today" @selected(($birthdayFilter ?? 'all') === 'today')>Birthdays Today</option>
-                        <option value="week" @selected(($birthdayFilter ?? 'all') === 'week')>This Week</option>
-                        <option value="month" @selected(($birthdayFilter ?? 'all') === 'month')>This Month</option>
-                        <option value="missing" @selected(($birthdayFilter ?? 'all') === 'missing')>Missing</option>
-                    </select>
-                </div>
-                <div class="md:col-span-2">
+                <div class="md:col-span-1">
                     <label for="per_page" class="text-xs uppercase tracking-[0.2em] text-white/55">Rows</label>
                     <select id="per_page" name="per_page" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                         @foreach([25, 50, 100] as $rowCount)
@@ -136,19 +155,19 @@
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-2 sm:p-3">
             <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-[1450px] text-sm">
+                <table class="min-w-[1650px] text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[190px]">Customer</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[190px]">Email</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[140px]">Phone</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[180px]">Source Channels</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[220px]">Customer</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[180px]">Email</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[150px]">Phone</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Points</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Tier</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[100px]">Referrals</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[220px]">Source Channels</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Linked Sources</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Orders</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Last Order</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Last Activity</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Marketing Score</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[150px]">Consent</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Updated</th>
                             <th class="px-4 py-3 text-right whitespace-nowrap min-w-[95px]">Actions</th>
                         </tr>
@@ -157,22 +176,32 @@
                         @forelse($profiles as $profile)
                             @php
                                 $name = trim((string) ($profile->first_name . ' ' . $profile->last_name));
-                                $displayName = $name !== '' ? $name : 'Unnamed profile';
+                                $displayName = $name !== '' ? $name : ($profile->email ?: ($profile->phone ?: 'Unnamed profile'));
                                 $channels = is_array($profile->source_channels) ? $profile->source_channels : [];
-                                $stats = $derivedStats[(int) $profile->id] ?? ['order_count' => 0, 'last_order_at' => null];
+                                $stats = $derivedStats[(int) $profile->id] ?? ['order_count' => 0, 'last_order_at' => null, 'source_badges' => []];
+                                $loyalty = $loyaltyStats[(int) $profile->id] ?? ['points' => 0, 'tier' => null, 'referrals' => 0, 'has_growave' => false];
                             @endphp
-                            <tr
-                                class="cursor-pointer hover:bg-white/5"
-                                onclick="window.location='{{ route('marketing.customers.show', $profile) }}'"
-                            >
+                            <tr class="cursor-pointer hover:bg-white/5" onclick="window.location='{{ route('marketing.customers.show', $profile) }}'">
                                 <td class="px-4 py-3">
                                     <a href="{{ route('marketing.customers.show', $profile) }}" wire:navigate class="font-semibold text-emerald-100 hover:text-white">
                                         {{ $displayName }}
                                     </a>
                                     <div class="text-xs text-white/45">ID #{{ $profile->id }}</div>
+                                    <div class="mt-1 text-xs text-white/50">
+                                        @if($profile->email)
+                                            {{ $profile->email }}
+                                        @elseif($profile->phone)
+                                            {{ $profile->phone }}
+                                        @else
+                                            No direct contact info
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 text-white/80">{{ $profile->email ?: '—' }}</td>
                                 <td class="px-4 py-3 text-white/80">{{ $profile->phone ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['points'] ?? 0)) }}</td>
+                                <td class="px-4 py-3 text-white/80">{{ $loyalty['tier'] ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['referrals'] ?? 0)) }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-1.5">
                                         @forelse($channels as $channel)
@@ -180,32 +209,17 @@
                                         @empty
                                             <span class="text-white/40">—</span>
                                         @endforelse
+                                        @if(($loyalty['has_growave'] ?? false) === true)
+                                            <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">growave</span>
+                                        @endif
+                                        @foreach($stats['source_badges'] ?? [] as $badge)
+                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/60">{{ $badge }}</span>
+                                        @endforeach
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-white/75">{{ (int) $profile->links_count }}</td>
                                 <td class="px-4 py-3 text-white/75">{{ (int) ($stats['order_count'] ?? 0) }}</td>
-                                <td class="px-4 py-3 text-white/75">
-                                    {{ $stats['last_order_at'] ?: '—' }}
-                                    @if(!empty($stats['source_badges']))
-                                        <div class="mt-1 flex flex-wrap gap-1">
-                                            @foreach($stats['source_badges'] as $badge)
-                                                <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] text-white/65">{{ $badge }}</span>
-                                            @endforeach
-                                        </div>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-white/75">{{ $stats['last_activity_at'] ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ $profile->marketing_score !== null ? number_format((float) $profile->marketing_score, 2) : 'Pending' }}</td>
-                                <td class="px-4 py-3">
-                                    <div class="flex flex-col gap-1">
-                                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
-                                            Email {{ $profile->accepts_email_marketing ? 'Opt-In' : 'Opt-Out' }}
-                                        </span>
-                                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
-                                            SMS {{ $profile->accepts_sms_marketing ? 'Opt-In' : 'Opt-Out' }}
-                                        </span>
-                                    </div>
-                                </td>
+                                <td class="px-4 py-3 text-white/75">{{ $stats['last_order_at'] ?: '—' }}</td>
                                 <td class="px-4 py-3 text-white/60">{{ optional($profile->updated_at)->format('Y-m-d') }}</td>
                                 <td class="px-4 py-3 text-right">
                                     <a href="{{ route('marketing.customers.show', $profile) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/10">

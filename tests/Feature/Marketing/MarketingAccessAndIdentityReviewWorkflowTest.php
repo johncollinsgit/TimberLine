@@ -6,6 +6,11 @@ use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+
+beforeEach(function () {
+    $this->withoutMiddleware(ValidateCsrfToken::class);
+});
 
 test('admin and marketing manager can access customers and identity review pages', function () {
     $profile = MarketingProfile::query()->create([
@@ -38,7 +43,7 @@ test('admin and marketing manager can access customers and identity review pages
         $this->actingAs($user)
             ->get(route('marketing.customers'))
             ->assertOk()
-            ->assertSeeText('Marketing Customers');
+            ->assertSeeText('Customers');
 
         $this->actingAs($user)
             ->get(route('marketing.customers.show', $profile))
@@ -241,6 +246,6 @@ test('customers empty state surfaces upstream sync diagnostics and readable head
         ->assertSeeText('Orders')
         ->assertSeeText('Actions')
         ->assertSee('whitespace-nowrap', false)
-        ->assertSee('min-w-[1450px]', false)
+        ->assertSee('min-w-[1650px]', false)
         ->assertSee('php artisan marketing:sync-profiles --source=all --chunk=500', false);
 });
