@@ -4,12 +4,18 @@ use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
+use App\Http\Controllers\Marketing\MarketingGroupsController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
 use App\Http\Controllers\Marketing\MarketingMessageTemplatesController;
+use App\Http\Controllers\Marketing\MarketingOperationsController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
+use App\Http\Controllers\Marketing\MarketingPublicEventController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
+use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
+use App\Http\Controllers\Marketing\MarketingConsentCaptureController;
+use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
@@ -199,7 +205,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('overview');
             Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
             Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
+            Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
+            Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
             Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
+            Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');
+            Route::post('/customers/{marketingProfile}/candle-cash/redeem', [MarketingCustomersController::class, 'redeemCandleCash'])->name('customers.candle-cash.redeem');
+            Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/mark-redeemed', [MarketingCustomersController::class, 'markCandleCashRedemptionRedeemed'])
+                ->name('customers.candle-cash.redemptions.mark-redeemed');
+            Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/cancel', [MarketingCustomersController::class, 'cancelCandleCashRedemption'])
+                ->name('customers.candle-cash.redemptions.cancel');
             Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
             Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
             Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');
@@ -208,6 +222,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/orders', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'orders')
                 ->name('orders');
+            Route::get('/groups', [MarketingGroupsController::class, 'index'])->name('groups');
+            Route::get('/groups/create', [MarketingGroupsController::class, 'create'])->name('groups.create');
+            Route::post('/groups', [MarketingGroupsController::class, 'store'])->name('groups.store');
+            Route::get('/groups/{group}', [MarketingGroupsController::class, 'show'])->name('groups.show');
+            Route::get('/groups/{group}/edit', [MarketingGroupsController::class, 'edit'])->name('groups.edit');
+            Route::patch('/groups/{group}', [MarketingGroupsController::class, 'update'])->name('groups.update');
+            Route::post('/groups/{group}/members', [MarketingGroupsController::class, 'addMember'])->name('groups.members.add');
+            Route::delete('/groups/{group}/members/{marketingProfile}', [MarketingGroupsController::class, 'removeMember'])->name('groups.members.remove');
+            Route::post('/groups/{group}/import-csv', [MarketingGroupsController::class, 'importCsv'])->name('groups.import-csv');
+            Route::get('/groups/{group}/send', [MarketingGroupsController::class, 'sendForm'])->name('groups.send');
+            Route::post('/groups/{group}/send', [MarketingGroupsController::class, 'send'])->name('groups.send.execute');
             Route::get('/segments', [MarketingSegmentsController::class, 'index'])->name('segments');
             Route::get('/segments/create', [MarketingSegmentsController::class, 'create'])->name('segments.create');
             Route::post('/segments', [MarketingSegmentsController::class, 'store'])->name('segments.store');
@@ -231,6 +256,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/campaigns/{campaign}/send-approved-sms', [MarketingCampaignsController::class, 'sendApprovedSms'])->name('campaigns.send-approved-sms');
             Route::post('/campaigns/{campaign}/send-selected-sms', [MarketingCampaignsController::class, 'sendSelectedSms'])->name('campaigns.send-selected-sms');
             Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-sms', [MarketingCampaignsController::class, 'retryRecipientSms'])->name('campaigns.recipients.retry-sms');
+            Route::post('/campaigns/{campaign}/send-approved-email', [MarketingCampaignsController::class, 'sendApprovedEmail'])->name('campaigns.send-approved-email');
+            Route::post('/campaigns/{campaign}/send-selected-email', [MarketingCampaignsController::class, 'sendSelectedEmail'])->name('campaigns.send-selected-email');
+            Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-email', [MarketingCampaignsController::class, 'retryRecipientEmail'])->name('campaigns.recipients.retry-email');
             Route::post('/campaigns/{campaign}/recommendations/generate', [MarketingCampaignsController::class, 'generateRecommendations'])->name('campaigns.recommendations.generate');
             Route::post('/campaigns/{campaign}/add-profile', [MarketingCampaignsController::class, 'addProfileRecipient'])->name('campaigns.add-profile');
 
@@ -253,6 +281,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/candle-cash', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'candle-cash')
                 ->name('candle-cash');
+            Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
+                ->name('operations.reconciliation');
+            Route::post('/operations/reconciliation/issues/{event}/resolve', [MarketingOperationsController::class, 'resolveIssue'])
+                ->name('operations.reconciliation.issues.resolve');
+            Route::post('/operations/reconciliation/retry', [MarketingOperationsController::class, 'retryReconciliation'])
+                ->name('operations.reconciliation.retry');
+            Route::post('/operations/reconciliation/redemptions/{redemption}/mark-redeemed', [MarketingOperationsController::class, 'markRedemptionRedeemed'])
+                ->name('operations.reconciliation.redemptions.mark-redeemed');
             Route::get('/reviews', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'reviews')
                 ->name('reviews');
@@ -398,6 +434,93 @@ Route::prefix('webhooks/twilio')->group(function () {
     Route::post('/status', [TwilioWebhookController::class, 'status'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('marketing.webhooks.twilio-status');
+});
+
+Route::prefix('webhooks/sendgrid')->group(function () {
+    Route::post('/events', [SendGridWebhookController::class, 'events'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('marketing.webhooks.sendgrid-events');
+});
+
+Route::prefix('marketing/consent')->name('marketing.consent.')->middleware('throttle:30,1')->group(function () {
+    Route::get('/optin', [MarketingConsentCaptureController::class, 'showOptin'])->name('optin');
+    Route::post('/optin', [MarketingConsentCaptureController::class, 'storeOptin'])->name('optin.store');
+    Route::get('/verify', [MarketingConsentCaptureController::class, 'showVerify'])->name('verify');
+    Route::post('/verify', [MarketingConsentCaptureController::class, 'storeVerify'])->name('verify.store');
+});
+
+Route::prefix('events/{eventSlug}')->name('marketing.public.events.')->middleware('throttle:30,1')->group(function () {
+    Route::get('/optin', [MarketingPublicEventController::class, 'showOptin'])->name('optin');
+    Route::post('/optin', [MarketingPublicEventController::class, 'storeOptin'])->name('optin.store');
+    Route::get('/rewards', [MarketingPublicEventController::class, 'showEventRewards'])->name('rewards');
+});
+Route::get('/rewards/lookup', [MarketingPublicEventController::class, 'rewardsLookup'])
+    ->middleware('throttle:30,1')
+    ->name('marketing.public.rewards-lookup');
+Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class, 'showConsentConfirm'])
+    ->middleware('throttle:30,1')
+    ->name('marketing.public.consent-confirm');
+
+Route::prefix('shopify/marketing')
+    ->name('marketing.shopify.')
+    ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
+    ->group(function () {
+    Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
+    Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
+    Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
+    Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
+    Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+    Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('rewards.redeem');
+    Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
+    Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('consent.request');
+    Route::post('/consent/optin', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('consent.optin');
+    Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('consent.confirm');
+    Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
+    Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('birthday.capture');
+    Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('birthday.claim');
+});
+
+Route::prefix('shopify/marketing/v1')
+    ->name('marketing.shopify.v1.')
+    ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
+    ->group(function () {
+    Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
+    Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
+    Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
+    Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
+    Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+    Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('rewards.redeem');
+    Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
+    Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('consent.request');
+    Route::post('/consent/optin', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('consent.optin');
+    Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('consent.confirm');
+    Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
+    Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('birthday.capture');
+    Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('birthday.claim');
 });
 
 Route::prefix('shopify')->group(function () {
