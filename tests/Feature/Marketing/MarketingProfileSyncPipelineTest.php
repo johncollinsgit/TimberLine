@@ -131,6 +131,45 @@ test('creates source-linked profile for shopify orders without email or phone', 
         ->and(MarketingProfileLink::query()->where('source_type', 'shopify_order')->exists())->toBeTrue();
 });
 
+test('creates source-linked profile for square customer without email or phone', function () {
+    $service = app(MarketingProfileSyncService::class);
+
+    $result = $service->syncExternalIdentity([
+        'first_name' => 'Square',
+        'last_name' => 'No Identity',
+        'source_channels' => ['square'],
+        'source_links' => [[
+            'source_type' => 'square_customer',
+            'source_id' => 'SQ-CUST-NOID-1',
+            'source_meta' => [
+                'source_system' => 'square',
+                'source_record_type' => 'customer',
+            ],
+        ]],
+        'primary_source' => [
+            'source_type' => 'square_customer',
+            'source_id' => 'SQ-CUST-NOID-1',
+        ],
+    ]);
+
+    expect($result['profiles_created'])->toBe(1)
+        ->and($result['records_skipped'])->toBe(0)
+        ->and($result['reason'])->toBe('created_from_source_without_identity')
+        ->and(MarketingProfile::query()->count())->toBe(1);
+
+    $profile = MarketingProfile::query()->firstOrFail();
+
+    expect($profile->first_name)->toBe('Square')
+        ->and($profile->last_name)->toBe('No Identity')
+        ->and($profile->normalized_email)->toBeNull()
+        ->and($profile->normalized_phone)->toBeNull()
+        ->and(MarketingProfileLink::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('source_type', 'square_customer')
+            ->where('source_id', 'SQ-CUST-NOID-1')
+            ->exists())->toBeTrue();
+});
+
 test('creates source links once and reuses links on rerun', function () {
     $order = Order::factory()->create([
         'source' => 'shopify_retail',

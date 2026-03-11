@@ -34,7 +34,7 @@
 
         @if($currentSectionKey === 'overview')
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-                <div class="text-[11px] uppercase tracking-[0.28em] text-white/55">Stage 1 Status Map</div>
+                <div class="text-[11px] uppercase tracking-[0.28em] text-white/55">Current Rollout Status</div>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     @foreach($overviewCards as $card)
                         <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -63,50 +63,94 @@
             </section>
         @elseif($currentSectionKey === 'customers')
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
-                <x-admin.help-hint tone="neutral" title="Customers roadmap">
-                    This page will become the unified marketing customer index that links identity, commerce behavior, event activity, rewards state, and messaging history.
+                <x-admin.help-hint tone="neutral" title="Customers lives here">
+                    The Customers command center now has a dedicated route with real profile management, search, and add-customer wizard flows.
                 </x-admin.help-hint>
-
-                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    @foreach($customersFocusAreas as $area)
-                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <h2 class="text-sm font-semibold text-white">{{ $area['title'] }}</h2>
-                            <p class="mt-2 text-xs text-white/75">{{ $area['detail'] }}</p>
-                        </article>
-                    @endforeach
+                <div>
+                    <a href="{{ route('marketing.customers') }}" wire:navigate class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
+                        Open Customers Command Center
+                    </a>
+                </div>
+            </section>
+        @elseif($currentSectionKey === 'candle-cash')
+            <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+                <x-admin.help-hint tone="neutral" title="Redemption lifecycle">
+                    `issued` codes are created when points are spent. Shopify code usage is validated in ingestion. Square/event usage can be staff-reconciled and audited.
+                </x-admin.help-hint>
+                <div>
+                    <a href="{{ route('marketing.operations.reconciliation') }}" wire:navigate class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-100">
+                        Open Reconciliation Operations
+                    </a>
+                    <div class="mt-2 text-xs text-white/60">Shopify widget/public events logged in last 24h: {{ number_format((int) ($candleCashDashboard['widget_events_24h'] ?? 0)) }}</div>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/55">Profiles</div>
+                        <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($candleCashDashboard['profiles_count'] ?? 0)) }}</div>
+                    </article>
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/55">Issued Codes</div>
+                        <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($candleCashDashboard['outstanding_issued'] ?? 0)) }}</div>
+                    </article>
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/55">Redeemed</div>
+                        <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) (($candleCashDashboard['status_breakdown']['redeemed'] ?? 0))) }}</div>
+                    </article>
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/55">Canceled / Expired</div>
+                        <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) (($candleCashDashboard['status_breakdown']['canceled'] ?? 0) + ($candleCashDashboard['status_breakdown']['expired'] ?? 0))) }}</div>
+                    </article>
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/55">Open Ops Issues</div>
+                        <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($candleCashDashboard['unresolved_issues_open'] ?? 0)) }}</div>
+                    </article>
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/55">Reward-Assisted Orders</div>
+                        <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($candleCashDashboard['reward_assisted_orders'] ?? 0)) }}</div>
+                    </article>
                 </div>
             </section>
 
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
-                <h2 class="text-lg font-semibold text-white">Planned capabilities (later stages)</h2>
-                <ul class="space-y-2 text-sm text-white/75">
-                    <li class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">Search and filtering across unified customer profiles.</li>
-                    <li class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">Customer CRUD operations and detailed profile drill-down views.</li>
-                    <li class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">Identity conflict review workflow with manual resolution tools.</li>
-                    <li class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">Prefilled send-message actions tied to campaign and template systems.</li>
-                </ul>
-            </section>
-
-            <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 class="text-lg font-semibold text-white">Discovery Summary</h2>
-                    <span class="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/60">Safe read-only snapshot</span>
+                <h2 class="text-lg font-semibold text-white">Recent Redemptions</h2>
+                <div class="overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-white/5 text-white/65">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Code</th>
+                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-left">Platform</th>
+                                <th class="px-4 py-3 text-left">Reward</th>
+                                <th class="px-4 py-3 text-left">Profile</th>
+                                <th class="px-4 py-3 text-left">External Order</th>
+                                <th class="px-4 py-3 text-left">Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse(($candleCashDashboard['recent_redemptions'] ?? collect()) as $redemption)
+                                <tr>
+                                    <td class="px-4 py-3 text-white/75 font-mono">{{ $redemption->redemption_code }}</td>
+                                    <td class="px-4 py-3 text-white/70">{{ strtoupper((string) ($redemption->status ?: 'issued')) }}</td>
+                                    <td class="px-4 py-3 text-white/70">{{ strtoupper((string) ($redemption->platform ?: 'n/a')) }}</td>
+                                    <td class="px-4 py-3 text-white/70">{{ $redemption->reward?->name ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/70">
+                                        @if($redemption->profile)
+                                            <a href="{{ route('marketing.customers.show', $redemption->profile) }}" wire:navigate class="underline decoration-dotted">
+                                                {{ trim(($redemption->profile->first_name ?? '') . ' ' . ($redemption->profile->last_name ?? '')) ?: ($redemption->profile->email ?: ($redemption->profile->phone ?: ('Profile #' . $redemption->marketing_profile_id))) }}
+                                            </a>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3 text-white/60">{{ $redemption->external_order_source ?: '—' }}{{ $redemption->external_order_id ? (' · ' . $redemption->external_order_id) : '' }}</td>
+                                    <td class="px-4 py-3 text-white/55">{{ optional($redemption->updated_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="px-4 py-6 text-center text-white/55">No redemptions recorded yet.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
-                @if($customersDiscoverySummary !== [])
-                    <div class="mt-4 grid gap-3 md:grid-cols-2">
-                        @foreach($customersDiscoverySummary as $item)
-                            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                <div class="text-xs uppercase tracking-[0.2em] text-white/55">{{ $item['label'] }}</div>
-                                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format($item['value']) }}</div>
-                                <p class="mt-2 text-xs text-white/70">{{ $item['note'] }}</p>
-                            </article>
-                        @endforeach
-                    </div>
-                @else
-                    <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-                        Discovery counts are not available in the current runtime context.
-                    </div>
-                @endif
             </section>
         @else
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">

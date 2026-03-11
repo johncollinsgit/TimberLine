@@ -217,9 +217,8 @@ class MarketingProfileSyncService
     }
 
     /**
-     * Allow source-only profile creation for Shopify-linked orders so existing
-     * operational order data can bootstrap the marketing index even when
-     * contact fields were not persisted on the order row.
+     * Allow source-only profile creation for trusted customer source links so
+     * canonical profiles can still be created when email/phone are missing.
      *
      * @param array<string,mixed> $identity
      */
@@ -230,9 +229,22 @@ class MarketingProfileSyncService
             ->filter()
             ->values();
 
-        if ($channels->contains('shopify')) {
+        if ($channels->intersect(['shopify', 'square', 'growave', 'wholesale', 'event', 'manual'])->isNotEmpty()) {
             return true;
         }
+
+        $allowedSourceTypes = [
+            'shopify_order',
+            'shopify_customer',
+            'growave_customer',
+            'square_customer',
+            'square_order',
+            'square_payment',
+            'wholesale_customer',
+            'event_customer',
+            'internal_customer',
+            'manual_customer',
+        ];
 
         foreach ((array) ($identity['source_links'] ?? []) as $link) {
             if (! is_array($link)) {
@@ -240,7 +252,7 @@ class MarketingProfileSyncService
             }
 
             $sourceType = strtolower(trim((string) ($link['source_type'] ?? '')));
-            if (in_array($sourceType, ['shopify_order', 'shopify_customer'], true)) {
+            if (in_array($sourceType, $allowedSourceTypes, true)) {
                 return true;
             }
         }
