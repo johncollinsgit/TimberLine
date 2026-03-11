@@ -49,10 +49,13 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Profile Meta</div>
                     <div class="mt-2 text-xs text-white/70">Created: {{ optional($profile->created_at)->format('Y-m-d H:i') }}</div>
                     <div class="mt-1 text-xs text-white/70">Updated: {{ optional($profile->updated_at)->format('Y-m-d H:i') }}</div>
+                    <div class="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/55">Linked Sources</div>
                     <div class="mt-2 flex flex-wrap gap-1.5">
-                        @foreach((array) $profile->source_channels as $channel)
-                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">{{ $channel }}</span>
-                        @endforeach
+                        @forelse($profileSourceBadges as $badge)
+                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/80">{{ $badge }}</span>
+                        @empty
+                            <span class="text-xs text-white/45">No linked source badges yet.</span>
+                        @endforelse
                     </div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -400,6 +403,39 @@
                     <p class="mt-2 text-xs text-white/65">No legacy campaign summaries linked yet.</p>
                 @endif
             </article>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+            <h3 class="text-sm font-semibold text-white">Unified Customer Timeline Plan</h3>
+            <p class="mt-1 text-sm text-white/65">
+                Architecture preview for merging Shopify orders, Square activity, Growave loyalty, reviews, and marketing activity into a single customer timeline stream.
+            </p>
+            <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Stream</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Current Count</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Data Path</th>
+                            <th class="px-4 py-3 text-left">Planning Note</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @foreach($timelinePlan as $stream)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $stream['label'] }}</td>
+                                <td class="px-4 py-3 text-white/75">
+                                    <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] uppercase tracking-[0.12em]">{{ $stream['status'] }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-white/75">{{ number_format((int) $stream['count']) }}</td>
+                                <td class="px-4 py-3 text-white/65">{{ $stream['data_path'] }}</td>
+                                <td class="px-4 py-3 text-white/65">{{ $stream['note'] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section class="grid gap-4 lg:grid-cols-2">

@@ -9,22 +9,30 @@
             hint-text="Canonical profiles are source-of-truth. External provider records enrich customer context without replacing identity ownership."
         />
 
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div class="text-xs uppercase tracking-[0.2em] text-white/55">Total Customers</div>
                 <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Shopify-Linked</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['shopify_linked'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Square-Linked</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['square_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Linked</div>
                 <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Shopify / Order Linked</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['shopify_or_order_linked'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Email</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_email'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Contact</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_contact'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Phone</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_phone'] ?? 0)) }}</div>
             </article>
         </section>
 
@@ -164,7 +172,7 @@
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Points</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Tier</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[100px]">Referrals</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[220px]">Source Channels</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[220px]">Source Badges</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Linked Sources</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Orders</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Last Order</th>
@@ -177,7 +185,6 @@
                             @php
                                 $name = trim((string) ($profile->first_name . ' ' . $profile->last_name));
                                 $displayName = $name !== '' ? $name : ($profile->email ?: ($profile->phone ?: 'Unnamed profile'));
-                                $channels = is_array($profile->source_channels) ? $profile->source_channels : [];
                                 $stats = $derivedStats[(int) $profile->id] ?? ['order_count' => 0, 'last_order_at' => null, 'source_badges' => []];
                                 $loyalty = $loyaltyStats[(int) $profile->id] ?? ['points' => 0, 'tier' => null, 'referrals' => 0, 'has_growave' => false];
                             @endphp
@@ -204,17 +211,11 @@
                                 <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['referrals'] ?? 0)) }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-1.5">
-                                        @forelse($channels as $channel)
-                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">{{ $channel }}</span>
+                                        @forelse(($stats['source_badges'] ?? []) as $badge)
+                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/80">{{ $badge }}</span>
                                         @empty
                                             <span class="text-white/40">—</span>
                                         @endforelse
-                                        @if(($loyalty['has_growave'] ?? false) === true)
-                                            <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">growave</span>
-                                        @endif
-                                        @foreach($stats['source_badges'] ?? [] as $badge)
-                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/60">{{ $badge }}</span>
-                                        @endforeach
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-white/75">{{ (int) $profile->links_count }}</td>

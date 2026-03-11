@@ -208,8 +208,8 @@ class MarketingCustomersController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $derivedStats = $this->buildDerivedStats($profiles->getCollection());
         $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
+        $derivedStats = $this->buildDerivedStats($profiles->getCollection(), $loyaltyStats);
         $birthdayReporting = ($this->birthdayReportingService && method_exists($this->birthdayReportingService, 'summary'))
             ? (array) $this->birthdayReportingService->summary($today)
             : [
@@ -221,7 +221,7 @@ class MarketingCustomersController extends Controller
                 'upcoming_birthdays' => [],
             ];
         $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics((int) $profiles->total());
-        $quickStats = $this->buildIndexQuickStats((int) $profiles->total());
+        $quickStats = $this->buildIndexQuickStats();
 
         return view('marketing.customers.index', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -458,6 +458,12 @@ class MarketingCustomersController extends Controller
             ->get();
         $latestGrowaveExternal = $externalProfiles
             ->first(fn (CustomerExternalProfile $row): bool => (string) $row->integration === 'growave');
+        $profileSourceBadges = $this->canonicalSourceBadges(
+            $marketingProfile,
+            $marketingProfile->links,
+            $latestGrowaveExternal !== null,
+            false
+        );
 
         $eventSummary = $this->attributionService->eventSummaryForProfile($marketingProfile);
         $unresolvedAttributionValues = $this->attributionService->unresolvedValuesForProfile($marketingProfile);
@@ -507,6 +513,16 @@ class MarketingCustomersController extends Controller
                 ->limit(120)
                 ->get()
             : collect();
+        $timelinePlan = $this->buildTimelinePlan(
+            profile: $marketingProfile,
+            orders: $orders,
+            squareOrders: $squareOrders,
+            squarePayments: $squarePayments,
+            externalProfiles: $externalProfiles,
+            deliveries: $deliveries,
+            conversions: $conversions,
+            consentEvents: $consentEvents
+        );
 
         return view('marketing.customers.show', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -519,6 +535,7 @@ class MarketingCustomersController extends Controller
             'legacyLinks' => $legacyLinks,
             'externalProfiles' => $externalProfiles,
             'latestGrowaveExternal' => $latestGrowaveExternal,
+            'profileSourceBadges' => $profileSourceBadges,
             'eventSummary' => $eventSummary,
             'unresolvedAttributionValues' => $unresolvedAttributionValues,
             'campaignStats' => $campaignStats,
@@ -529,6 +546,7 @@ class MarketingCustomersController extends Controller
             'deliveries' => $deliveries,
             'conversions' => $conversions,
             'consentEvents' => $consentEvents,
+            'timelinePlan' => $timelinePlan,
         ]);
     }
 
@@ -1031,9 +1049,10 @@ class MarketingCustomersController extends Controller
             }
 
             if ($sourceFilter === 'manual') {
-                $sourceQuery->whereHas('links', function ($linkQuery): void {
-                    $linkQuery->where('source_type', 'manual_customer');
-                });
+                $sourceQuery->whereJsonContains('source_channels', 'manual')
+                    ->orWhereHas('links', function ($linkQuery): void {
+                        $linkQuery->whereIn('source_type', ['manual_customer', 'internal_customer']);
+                    });
 
                 return;
             }
@@ -1155,10 +1174,37 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @return array{total_customers:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int}
+     * @return array{
+     *   total_customers:int,
+     *   shopify_linked:int,
+     *   square_linked:int,
+     *   growave_linked:int,
+     *   missing_email:int,
+     *   missing_phone:int
+     * }
      */
-    protected function buildIndexQuickStats(int $totalProfiles): array
+    protected function buildIndexQuickStats(): array
     {
+        $totalCustomers = (int) MarketingProfile::query()->count();
+
+        $shopifyLinked = (int) MarketingProfile::query()
+            ->where(function ($query): void {
+                $query->whereJsonContains('source_channels', 'shopify')
+                    ->orWhereHas('links', function ($linkQuery): void {
+                        $linkQuery->whereIn('source_type', ['shopify_order', 'shopify_customer']);
+                    });
+            })
+            ->count();
+
+        $squareLinked = (int) MarketingProfile::query()
+            ->where(function ($query): void {
+                $query->whereJsonContains('source_channels', 'square')
+                    ->orWhereHas('links', function ($linkQuery): void {
+                        $linkQuery->whereIn('source_type', ['square_customer', 'square_order', 'square_payment']);
+                    });
+            })
+            ->count();
+
         $growaveLinked = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
                 ->where('integration', 'growave')
@@ -1167,33 +1213,34 @@ class MarketingCustomersController extends Controller
                 ->count('marketing_profile_id')
             : 0;
 
-        $shopifyOrOrderLinked = (int) MarketingProfileLink::query()
-            ->whereIn('source_type', ['order', 'shopify_order', 'shopify_customer'])
-            ->distinct('marketing_profile_id')
-            ->count('marketing_profile_id');
-
-        $missingContact = (int) MarketingProfile::query()
+        $missingEmail = (int) MarketingProfile::query()
             ->where(function ($query): void {
                 $query->whereNull('normalized_email')->orWhere('normalized_email', '');
             })
+            ->count();
+
+        $missingPhone = (int) MarketingProfile::query()
             ->where(function ($query): void {
                 $query->whereNull('normalized_phone')->orWhere('normalized_phone', '');
             })
             ->count();
 
         return [
-            'total_customers' => $totalProfiles,
+            'total_customers' => $totalCustomers,
+            'shopify_linked' => $shopifyLinked,
+            'square_linked' => $squareLinked,
             'growave_linked' => $growaveLinked,
-            'shopify_or_order_linked' => $shopifyOrOrderLinked,
-            'missing_contact' => $missingContact,
+            'missing_email' => $missingEmail,
+            'missing_phone' => $missingPhone,
         ];
     }
 
     /**
      * @param Collection<int,MarketingProfile> $profiles
+     * @param array<int,array{points:int,tier:?string,referrals:int,has_growave:bool}> $loyaltyStats
      * @return array<int,array{order_count:int,last_order_at:?string,last_activity_at:?string,source_badges:array<int,string>}>
      */
-    protected function buildDerivedStats(Collection $profiles): array
+    protected function buildDerivedStats(Collection $profiles, array $loyaltyStats = []): array
     {
         if ($profiles->isEmpty()) {
             return [];
@@ -1351,26 +1398,14 @@ class MarketingCustomersController extends Controller
                 ->filter()
                 ->max();
 
-            $channels = is_array($profile->source_channels) ? $profile->source_channels : [];
-            $sourceTypes = $profileLinks->pluck('source_type')->unique()->values()->all();
-            $badges = [];
-            if (in_array('shopify', $channels, true) || in_array('shopify_order', $sourceTypes, true)) {
-                $badges[] = 'Shopify';
-            }
-            if (in_array('square', $channels, true) || collect($sourceTypes)->contains(fn (string $type) => str_starts_with($type, 'square_'))) {
-                $badges[] = 'Square';
-            }
-            if (collect($sourceTypes)->intersect(['yotpo_contact', 'square_marketing_contact'])->isNotEmpty()) {
-                $badges[] = 'Legacy Import';
-            }
             $profileSquareOrderIds = $profileLinks->where('source_type', 'square_order')->pluck('source_id')->values();
             $hasAttributedSquareOrder = $profileSquareOrderIds->intersect($attributedSquareOrderIds)->isNotEmpty();
-            if (in_array('event', $channels, true) || $hasAttributedSquareOrder) {
-                $badges[] = 'Event Buyer';
-            }
-            if (in_array('online', $channels, true) || in_array('Shopify', $badges, true) || in_array('Square', $badges, true)) {
-                $badges[] = 'Online Buyer';
-            }
+            $badges = $this->canonicalSourceBadges(
+                $profile,
+                $profileLinks,
+                (bool) ($loyaltyStats[(int) $profile->id]['has_growave'] ?? false),
+                $hasAttributedSquareOrder
+            );
 
             $stats[(int) $profile->id] = [
                 'order_count' => $allOrders->count() + $squareOrderCount,
@@ -1381,6 +1416,143 @@ class MarketingCustomersController extends Controller
         }
 
         return $stats;
+    }
+
+    /**
+     * @param Collection<int,MarketingProfileLink> $links
+     * @return array<int,string>
+     */
+    protected function canonicalSourceBadges(
+        MarketingProfile $profile,
+        Collection $links,
+        bool $hasGrowaveEnrichment = false,
+        bool $hasAttributedEvent = false
+    ): array {
+        $channelTokens = collect(is_array($profile->source_channels) ? $profile->source_channels : [])
+            ->map(fn ($value): string => strtolower(trim((string) $value)))
+            ->filter()
+            ->values();
+        $sourceTypes = $links
+            ->pluck('source_type')
+            ->map(fn ($value): string => strtolower(trim((string) $value)))
+            ->filter()
+            ->values();
+
+        $badges = [];
+        if (
+            $channelTokens->contains('shopify')
+            || $sourceTypes->intersect(['shopify_order', 'shopify_customer'])->isNotEmpty()
+        ) {
+            $badges[] = 'Shopify';
+        }
+        if (
+            $channelTokens->contains('square')
+            || $sourceTypes->contains(fn (string $type): bool => str_starts_with($type, 'square_'))
+        ) {
+            $badges[] = 'Square';
+        }
+        if ($hasGrowaveEnrichment || $sourceTypes->contains('growave_customer')) {
+            $badges[] = 'Growave';
+        }
+        if (
+            $channelTokens->contains('wholesale')
+            || $sourceTypes->contains(fn (string $type): bool => str_starts_with($type, 'wholesale'))
+        ) {
+            $badges[] = 'Wholesale';
+        }
+        if (
+            $channelTokens->contains('event')
+            || $hasAttributedEvent
+            || $sourceTypes->contains(fn (string $type): bool => str_starts_with($type, 'event'))
+        ) {
+            $badges[] = 'Event';
+        }
+        if (
+            $channelTokens->intersect(['manual', 'manual_import'])->isNotEmpty()
+            || $sourceTypes->intersect(['manual_customer', 'internal_customer'])->isNotEmpty()
+        ) {
+            $badges[] = 'Manual';
+        }
+
+        return array_values(array_unique($badges));
+    }
+
+    /**
+     * @param Collection<int,Order> $orders
+     * @param Collection<int,SquareOrder> $squareOrders
+     * @param Collection<int,SquarePayment> $squarePayments
+     * @param Collection<int,CustomerExternalProfile> $externalProfiles
+     * @param Collection<int,mixed> $deliveries
+     * @param Collection<int,mixed> $conversions
+     * @param Collection<int,mixed> $consentEvents
+     * @return array<int,array{
+     *   key:string,
+     *   label:string,
+     *   status:string,
+     *   count:int,
+     *   data_path:string,
+     *   note:string
+     * }>
+     */
+    protected function buildTimelinePlan(
+        MarketingProfile $profile,
+        Collection $orders,
+        Collection $squareOrders,
+        Collection $squarePayments,
+        Collection $externalProfiles,
+        Collection $deliveries,
+        Collection $conversions,
+        Collection $consentEvents
+    ): array {
+        $links = $profile->links instanceof Collection ? $profile->links : collect();
+        $growaveRows = $externalProfiles->where('integration', 'growave');
+        $reviewSignals = $links
+            ->pluck('source_type')
+            ->filter(fn ($sourceType): bool => str_contains(strtolower((string) $sourceType), 'review'))
+            ->count();
+
+        return [
+            [
+                'key' => 'shopify_orders',
+                'label' => 'Shopify Orders',
+                'status' => $orders->isNotEmpty() ? 'ready' : 'planned',
+                'count' => (int) $orders->count(),
+                'data_path' => 'orders + marketing_profile_links(shopify_order/shopify_customer)',
+                'note' => 'Timeline event rows can be emitted from canonical order links.',
+            ],
+            [
+                'key' => 'square_activity',
+                'label' => 'Square Purchases/Payments',
+                'status' => ($squareOrders->isNotEmpty() || $squarePayments->isNotEmpty()) ? 'ready' : 'planned',
+                'count' => (int) ($squareOrders->count() + $squarePayments->count()),
+                'data_path' => 'square_orders/square_payments + marketing_profile_links(square_*)',
+                'note' => 'Supports POS + event attribution with payment/order reconciliation.',
+            ],
+            [
+                'key' => 'growave_loyalty',
+                'label' => 'Growave Loyalty Activity',
+                'status' => $growaveRows->isNotEmpty() ? 'ready' : 'planned',
+                'count' => (int) $growaveRows->count(),
+                'data_path' => 'customer_external_profiles(integration=growave)',
+                'note' => 'Read-only enrichment; canonical identity remains in marketing_profiles.',
+            ],
+            [
+                'key' => 'reviews',
+                'label' => 'Reviews',
+                'status' => $reviewSignals > 0 ? 'partial' : 'planned',
+                'count' => (int) $reviewSignals,
+                'data_path' => 'future: review provider events + profile links(review_*)',
+                'note' => 'Will attach review submissions/prompts as immutable timeline events.',
+            ],
+            [
+                'key' => 'marketing_activity',
+                'label' => 'Messages/Marketing Activity',
+                'status' => ($deliveries->isNotEmpty() || $conversions->isNotEmpty() || $consentEvents->isNotEmpty()) ? 'ready' : 'planned',
+                'count' => (int) ($deliveries->count() + $conversions->count() + $consentEvents->count()),
+                'data_path' => 'messageDeliveries + campaignConversions + consentEvents',
+                'note' => 'Current detail page already exposes these streams; timeline unification is next.',
+            ],
+        ];
     }
 
     /**
