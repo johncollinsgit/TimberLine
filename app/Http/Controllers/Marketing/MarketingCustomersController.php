@@ -72,7 +72,10 @@ class MarketingCustomersController extends Controller
 
     public function show(MarketingProfile $marketingProfile): View
     {
-        $marketingProfile->load(['links' => fn ($query) => $query->orderByDesc('id')]);
+        $marketingProfile->load([
+            'links' => fn ($query) => $query->orderByDesc('id'),
+            'externalProfiles' => fn ($query) => $query->orderByDesc('synced_at')->orderByDesc('id'),
+        ]);
 
         $orderLinks = $marketingProfile->links
             ->where('source_type', 'order')
@@ -189,6 +192,7 @@ class MarketingCustomersController extends Controller
             'deliveries' => $deliveries,
             'conversions' => $conversions,
             'consentEvents' => $consentEvents,
+            'externalProfiles' => $marketingProfile->externalProfiles,
         ]);
     }
 

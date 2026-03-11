@@ -84,8 +84,8 @@ class MarketingPagesController extends Controller
             [
                 'title' => 'Source Integrations',
                 'what' => 'Connects Shopify/Square/review and messaging systems into marketing workflows.',
-                'status' => 'Square sync + legacy import tools are active; Growave sync is not deployed on main yet.',
-                'next' => 'Provider health monitoring, Shopify customer metafield sync, and expanded adapters.',
+                'status' => 'Square sync + legacy import tools are active; Growave sync is now available via Shopify customer metafield sync.',
+                'next' => 'Provider health monitoring, scheduled sync automation, and expanded adapters.',
             ],
             [
                 'title' => 'Consent / Suppression',

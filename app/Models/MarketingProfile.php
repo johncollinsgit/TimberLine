@@ -78,4 +78,9 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MarketingConsentEvent::class, 'marketing_profile_id');
     }
+
+    public function externalProfiles(): HasMany
+    {
+        return $this->hasMany(CustomerExternalProfile::class, 'marketing_profile_id');
+    }
 }

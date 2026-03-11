@@ -96,6 +96,58 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+            <h2 class="text-lg font-semibold text-white">External Profile Snapshots</h2>
+            <p class="mt-1 text-sm text-white/65">Provider-level profile snapshots (including Growave loyalty metafields) mapped to this marketing profile.</p>
+            <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Provider</th>
+                            <th class="px-4 py-3 text-left">Store</th>
+                            <th class="px-4 py-3 text-left">External Customer</th>
+                            <th class="px-4 py-3 text-left">Email</th>
+                            <th class="px-4 py-3 text-left">Points</th>
+                            <th class="px-4 py-3 text-left">VIP Tier</th>
+                            <th class="px-4 py-3 text-left">Referral</th>
+                            <th class="px-4 py-3 text-left">Synced</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($externalProfiles as $external)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $external->provider }} / {{ $external->integration }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ $external->store_key ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/70">
+                                    {{ $external->external_customer_id }}
+                                    @if($external->external_customer_gid)
+                                        <div class="mt-1 text-xs text-white/45">{{ \Illuminate\Support\Str::limit((string) $external->external_customer_gid, 38) }}</div>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 text-white/70">{{ $external->email ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ $external->points_balance !== null ? number_format((int) $external->points_balance) : '—' }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ $external->vip_tier ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/70">
+                                    @if($external->referral_link)
+                                        <a href="{{ $external->referral_link }}" target="_blank" rel="noopener" class="underline decoration-dotted">
+                                            {{ \Illuminate\Support\Str::limit((string) $external->referral_link, 42) }}
+                                        </a>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($external->synced_at)->format('Y-m-d H:i') ?: optional($external->updated_at)->format('Y-m-d H:i') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" class="px-4 py-6 text-center text-white/50">No external snapshots linked yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-white">Orders</h2>
             <p class="mt-1 text-sm text-white/65">Operational orders linked through marketing profile source links.</p>
             <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
