@@ -59,7 +59,7 @@ class MarketingIdentityExtractor
         [$rawEmail, $normalizedEmail] = $this->resolveEmail($order, $context);
         [$rawPhone, $normalizedPhone] = $this->resolvePhone($order, $context);
 
-        $sourceLinks = $this->buildSourceLinks($order);
+        $sourceLinks = $this->buildSourceLinks($order, $context);
         $sourceChannels = $this->deriveSourceChannels($order, $context);
 
         return [
@@ -133,7 +133,7 @@ class MarketingIdentityExtractor
     /**
      * @return array<int,array{source_type:string,source_id:string,source_meta:array<string,mixed>}>
      */
-    protected function buildSourceLinks(Order $order): array
+    protected function buildSourceLinks(Order $order, array $context = []): array
     {
         $links = [];
 
@@ -141,6 +141,7 @@ class MarketingIdentityExtractor
             'source_type' => 'order',
             'source_id' => (string) $order->id,
             'source_meta' => [
+                'source_system' => 'orders',
                 'order_id' => (int) $order->id,
                 'order_number' => $order->order_number,
                 'order_type' => $order->order_type,
@@ -157,6 +158,7 @@ class MarketingIdentityExtractor
                 'source_type' => 'shopify_order',
                 'source_id' => $storeKey . ':' . $shopifyOrderId,
                 'source_meta' => [
+                    'source_system' => 'shopify',
                     'order_id' => (int) $order->id,
                     'shopify_store_key' => $storeKey,
                     'shopify_order_id' => (string) $shopifyOrderId,
@@ -166,7 +168,56 @@ class MarketingIdentityExtractor
             ];
         }
 
-        return $links;
+        $shopifyCustomerId = trim((string) (
+            $context['shopify_customer_id']
+            ?? $context['customer_id']
+            ?? $this->stringValue($order, 'shopify_customer_id')
+            ?? ''
+        ));
+        if ($shopifyCustomerId !== '') {
+            $storeKey = trim((string) ($order->shopify_store_key ?: $order->shopify_store ?: ($context['store_key'] ?? '')));
+            $sourceId = $storeKey !== '' ? $storeKey . ':' . $shopifyCustomerId : $shopifyCustomerId;
+
+            $links[] = [
+                'source_type' => 'shopify_customer',
+                'source_id' => $sourceId,
+                'source_meta' => [
+                    'source_system' => 'shopify',
+                    'shopify_customer_id' => $shopifyCustomerId,
+                    'shopify_store_key' => $storeKey !== '' ? $storeKey : null,
+                ],
+            ];
+        }
+
+        foreach ((array) ($context['source_links'] ?? []) as $link) {
+            if (! is_array($link)) {
+                continue;
+            }
+
+            $sourceType = trim((string) ($link['source_type'] ?? ''));
+            $sourceId = trim((string) ($link['source_id'] ?? ''));
+            if ($sourceType === '' || $sourceId === '') {
+                continue;
+            }
+
+            $links[] = [
+                'source_type' => $sourceType,
+                'source_id' => $sourceId,
+                'source_meta' => is_array($link['source_meta'] ?? null) ? $link['source_meta'] : [],
+            ];
+        }
+
+        $unique = [];
+        foreach ($links as $link) {
+            $key = $link['source_type'] . '|' . $link['source_id'];
+            if (isset($unique[$key])) {
+                continue;
+            }
+
+            $unique[$key] = $link;
+        }
+
+        return array_values($unique);
     }
 
     /**

@@ -3,10 +3,16 @@
 namespace App\Services\Marketing;
 
 use App\Models\MarketingProfile;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Collection;
 
 class MarketingProfileMatcher
 {
+    public function __construct(
+        protected MarketingIdentityNormalizer $normalizer
+    ) {
+    }
+
     /**
      * @return array{
      *   outcome:string,
@@ -22,9 +28,12 @@ class MarketingProfileMatcher
         $emailMatches = $normalizedEmail
             ? MarketingProfile::query()->where('normalized_email', $normalizedEmail)->get()
             : collect();
+
+        $phoneCandidates = $this->normalizer->phoneMatchCandidates($normalizedPhone);
+
         /** @var Collection<int,MarketingProfile> $phoneMatches */
-        $phoneMatches = $normalizedPhone
-            ? MarketingProfile::query()->where('normalized_phone', $normalizedPhone)->get()
+        $phoneMatches = $phoneCandidates !== []
+            ? MarketingProfile::query()->whereIn('normalized_phone', $phoneCandidates)->get()
             : collect();
 
         $emailCount = $emailMatches->count();

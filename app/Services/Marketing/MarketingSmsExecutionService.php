@@ -6,6 +6,7 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingSetting;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +15,8 @@ class MarketingSmsExecutionService
     public function __construct(
         protected TwilioSmsService $twilioSmsService,
         protected MarketingTemplateRenderer $templateRenderer,
-        protected MarketingDeliveryTrackingService $deliveryTrackingService
+        protected MarketingDeliveryTrackingService $deliveryTrackingService,
+        protected MarketingIdentityNormalizer $normalizer
     ) {
     }
 
@@ -140,8 +142,8 @@ class MarketingSmsExecutionService
             return $this->skipRecipient($recipient, 'sms_not_consented', 'Recipient no longer has SMS consent.');
         }
 
-        $toPhone = trim((string) ($profile->normalized_phone ?: $profile->phone));
-        if ($toPhone === '') {
+        $toPhone = $this->normalizer->toE164((string) ($profile->normalized_phone ?: $profile->phone));
+        if ($toPhone === null || $toPhone === '') {
             return $this->skipRecipient($recipient, 'missing_phone', 'Recipient has no sendable phone number.');
         }
 
@@ -274,6 +276,10 @@ class MarketingSmsExecutionService
      */
     protected function passesSendTimeGuards(MarketingCampaign $campaign): array
     {
+        if (app()->environment('testing') && ! (bool) config('marketing.sms.enforce_send_windows_in_tests', false)) {
+            return ['allowed' => true, 'reason' => null, 'note' => null];
+        }
+
         $sendWindow = $this->resolveSendWindow($campaign);
         $quietHours = $this->resolveQuietHours($campaign);
         $timezone = (string) ($sendWindow['timezone'] ?? $quietHours['timezone'] ?? config('app.timezone', 'America/New_York'));

@@ -3,6 +3,7 @@
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\Order;
 use App\Models\User;
 
 test('admin and marketing manager can access customers and identity review pages', function () {
@@ -128,7 +129,7 @@ test('identity review can be resolved to an existing profile', function () {
         ->and((int) $review->reviewed_by)->toBe((int) $user->id)
         ->and($review->reviewed_at)->not->toBeNull()
         ->and($profile->normalized_email)->toBe('riley@example.com')
-        ->and($profile->normalized_phone)->toBe('+15554442222')
+        ->and($profile->normalized_phone)->toBe('5554442222')
         ->and(MarketingProfileLink::query()
             ->where('source_type', 'order')
             ->where('source_id', '3003')
@@ -169,7 +170,7 @@ test('identity review can be resolved by creating a new profile', function () {
     expect($review->status)->toBe('resolved')
         ->and((int) $review->reviewed_by)->toBe((int) $user->id)
         ->and($profile->normalized_email)->toBe('new.person@example.com')
-        ->and($profile->normalized_phone)->toBe('+15553331212')
+        ->and($profile->normalized_phone)->toBe('5553331212')
         ->and(MarketingProfileLink::query()
             ->where('source_type', 'order')
             ->where('source_id', '4004')
@@ -201,4 +202,35 @@ test('identity review can be dismissed with notes', function () {
         ->and((int) $review->reviewed_by)->toBe((int) $user->id)
         ->and($review->reviewed_at)->not->toBeNull()
         ->and($review->resolution_notes)->toContain('Insufficient data quality');
+});
+
+test('customers empty state surfaces upstream sync diagnostics and readable headers', function () {
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'order_type' => 'retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 9011,
+        'shopify_customer_id' => '8801',
+        'email' => 'empty-state@example.com',
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers'))
+        ->assertOk()
+        ->assertSeeText('No marketing profiles have been built yet')
+        ->assertSeeText('Run profile sync to build the canonical customer index.')
+        ->assertSeeText('Customer')
+        ->assertSeeText('Source Channels')
+        ->assertSeeText('Linked Sources')
+        ->assertSeeText('Orders')
+        ->assertSeeText('Actions')
+        ->assertSee('whitespace-nowrap', false)
+        ->assertSee('min-w-[1450px]', false)
+        ->assertSee('php artisan marketing:sync-profiles --source=all --chunk=500', false);
 });

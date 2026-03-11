@@ -3,23 +3,39 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashRedemption;
+use App\Models\CandleCashReward;
+use App\Models\CustomerBirthdayProfile;
+use App\Models\CustomerExternalProfile;
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingSegment;
 use App\Models\MarketingOrderEventAttribution;
 use App\Models\MarketingCampaign;
+use App\Models\MarketingGroup;
 use App\Models\Order;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Services\Marketing\BirthdayProfileService;
+use App\Services\Marketing\BirthdayReportingService;
+use App\Services\Marketing\BirthdayRewardEngineService;
+use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingEventAttributionService;
+use App\Services\Marketing\MarketingNextBestActionService;
 use App\Services\Marketing\MarketingProfileScoreService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
+use App\Services\Marketing\ShopifyBirthdayMetafieldService;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class MarketingCustomersController extends Controller
 {
@@ -27,7 +43,15 @@ class MarketingCustomersController extends Controller
         protected MarketingEventAttributionService $attributionService,
         protected MarketingProfileScoreService $scoreService,
         protected MarketingSegmentEvaluator $segmentEvaluator,
-        protected MarketingConsentService $consentService
+        protected MarketingConsentService $consentService,
+        protected CandleCashService $candleCashService,
+        protected CandleCashRedemptionReconciliationService $redemptionReconciliationService,
+        protected MarketingNextBestActionService $nextBestActionService,
+        protected MarketingIdentityNormalizer $identityNormalizer,
+        protected BirthdayProfileService $birthdayProfileService,
+        protected BirthdayRewardEngineService $birthdayRewardEngine,
+        protected BirthdayReportingService $birthdayReportingService,
+        protected ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService
     ) {
     }
 
@@ -37,10 +61,17 @@ class MarketingCustomersController extends Controller
         $sort = (string) $request->query('sort', 'updated_at');
         $dir = strtolower((string) $request->query('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
         $perPage = max(10, min(100, (int) $request->query('per_page', 25)));
+        $birthdayFilter = trim((string) $request->query('birthday_filter', 'all'));
+        if (! in_array($birthdayFilter, ['all', 'today', 'week', 'month', 'missing'], true)) {
+            $birthdayFilter = 'all';
+        }
 
         if (!in_array($sort, ['updated_at', 'created_at', 'email', 'first_name', 'last_name'], true)) {
             $sort = 'updated_at';
         }
+
+        $today = now();
+        $weekTuples = $this->birthdayWeekTuples($today);
 
         $profiles = MarketingProfile::query()
             ->when($search !== '', function ($query) use ($search): void {
@@ -51,12 +82,48 @@ class MarketingCustomersController extends Controller
                         ->orWhere('phone', 'like', '%' . $search . '%');
                 });
             })
+            ->when($birthdayFilter === 'today', function ($query) use ($today): void {
+                $query->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
+                    $birthdayQuery
+                        ->where('birth_month', (int) $today->month)
+                        ->where('birth_day', (int) $today->day);
+                });
+            })
+            ->when($birthdayFilter === 'week', function ($query) use ($weekTuples): void {
+                $query->whereHas('birthdayProfile', function ($birthdayQuery) use ($weekTuples): void {
+                    $birthdayQuery->where(function ($tupleQuery) use ($weekTuples): void {
+                        foreach ($weekTuples as [$month, $day]) {
+                            $tupleQuery->orWhere(function ($dayQuery) use ($month, $day): void {
+                                $dayQuery->where('birth_month', $month)->where('birth_day', $day);
+                            });
+                        }
+                    });
+                });
+            })
+            ->when($birthdayFilter === 'month', function ($query) use ($today): void {
+                $query->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
+                    $birthdayQuery->where('birth_month', (int) $today->month);
+                });
+            })
+            ->when($birthdayFilter === 'missing', function ($query): void {
+                $query->where(function ($missingQuery): void {
+                    $missingQuery->whereDoesntHave('birthdayProfile')
+                        ->orWhereHas('birthdayProfile', function ($birthdayQuery): void {
+                            $birthdayQuery
+                                ->whereNull('birth_month')
+                                ->orWhereNull('birth_day');
+                        });
+                });
+            })
+            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
             ->withCount('links')
             ->orderBy($sort, $dir)
             ->paginate($perPage)
             ->withQueryString();
 
         $derivedStats = $this->buildDerivedStats($profiles->getCollection());
+        $birthdayReporting = $this->birthdayReportingService->summary($today);
+        $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics((int) $profiles->total());
 
         return view('marketing.customers.index', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -66,13 +133,29 @@ class MarketingCustomersController extends Controller
             'sort' => $sort,
             'dir' => $dir,
             'perPage' => $perPage,
+            'birthdayFilter' => $birthdayFilter,
             'derivedStats' => $derivedStats,
+            'birthdayReporting' => $birthdayReporting,
+            'emptyStateDiagnostics' => $emptyStateDiagnostics,
         ]);
     }
 
     public function show(MarketingProfile $marketingProfile): View
     {
-        $marketingProfile->load(['links' => fn ($query) => $query->orderByDesc('id')]);
+        $marketingProfile->load([
+            'links' => fn ($query) => $query->orderByDesc('id'),
+            'groups:id,name,is_internal',
+        ]);
+
+        /** @var CustomerBirthdayProfile|null $birthdayProfile */
+        $birthdayProfile = $marketingProfile->birthdayProfile()
+            ->with([
+                'audits' => fn ($query) => $query->orderByDesc('id')->limit(25),
+                'rewardIssuances' => fn ($query) => $query->orderByDesc('id')->limit(25),
+            ])
+            ->first();
+
+        $birthdayRewardStatus = $this->birthdayRewardEngine->statusForProfile($birthdayProfile);
 
         $orderLinks = $marketingProfile->links
             ->where('source_type', 'order')
@@ -170,6 +253,64 @@ class MarketingCustomersController extends Controller
             ->limit(120)
             ->get();
 
+        $emailDeliveries = $marketingProfile->emailDeliveries()
+            ->with(['recipient.campaign:id,name'])
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+
+        $candleBalance = $this->candleCashService->currentBalance($marketingProfile);
+        $candleTransactions = $marketingProfile->candleCashTransactions()
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+        $candleRedemptions = $marketingProfile->candleCashRedemptions()
+            ->with('reward:id,name,reward_type,reward_value')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+        $nextBestAction = $this->nextBestActionService->forProfile($marketingProfile);
+        $activeRewards = CandleCashReward::query()
+            ->where('is_active', true)
+            ->orderBy('points_cost')
+            ->get(['id', 'name', 'points_cost', 'reward_type', 'reward_value']);
+        $allGroups = MarketingGroup::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_internal']);
+        $storefrontTouchpoints = $marketingProfile->links
+            ->whereIn('source_type', [
+                'shopify_widget_contact',
+                'shopify_widget_reward_balance',
+                'shopify_widget_reward_history',
+                'shopify_widget_redeem_request',
+                'shopify_widget_customer_status',
+                'shopify_widget_optin',
+                'shopify_widget_birthday_status',
+                'shopify_widget_birthday_capture',
+                'shopify_widget_birthday_claim',
+                'event_public_optin',
+                'event_reward_lookup',
+                'reward_lookup',
+                'storefront_optin',
+                'storefront_verify',
+            ])
+            ->values();
+        $storefrontEvents = $marketingProfile->storefrontEvents()
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+        $openStorefrontIssues = (int) $storefrontEvents
+            ->where('resolution_status', 'open')
+            ->whereIn('status', ['error', 'verification_required', 'pending'])
+            ->count();
+        $redemptionSummary = [
+            'issued' => (int) $candleRedemptions->where('status', 'issued')->count(),
+            'redeemed' => (int) $candleRedemptions->where('status', 'redeemed')->count(),
+            'canceled' => (int) $candleRedemptions->where('status', 'canceled')->count(),
+            'expired' => (int) $candleRedemptions->where('status', 'expired')->count(),
+        ];
+
         return view('marketing.customers.show', [
             'section' => MarketingSectionRegistry::section('customers'),
             'sections' => $this->navigationItems(),
@@ -187,9 +328,117 @@ class MarketingCustomersController extends Controller
             'matchingSegments' => $matchingSegments,
             'campaignOptions' => $campaignOptions,
             'deliveries' => $deliveries,
+            'emailDeliveries' => $emailDeliveries,
             'conversions' => $conversions,
             'consentEvents' => $consentEvents,
+            'candleBalance' => $candleBalance,
+            'candleTransactions' => $candleTransactions,
+            'candleRedemptions' => $candleRedemptions,
+            'redemptionSummary' => $redemptionSummary,
+            'storefrontTouchpoints' => $storefrontTouchpoints,
+            'storefrontEvents' => $storefrontEvents,
+            'openStorefrontIssues' => $openStorefrontIssues,
+            'nextBestAction' => $nextBestAction,
+            'activeRewards' => $activeRewards,
+            'allGroups' => $allGroups,
+            'birthdayProfile' => $birthdayProfile,
+            'birthdayRewardStatus' => $birthdayRewardStatus,
         ]);
+    }
+
+    public function update(MarketingProfile $marketingProfile, Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'address_line_1' => ['nullable', 'string', 'max:255'],
+            'address_line_2' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'state' => ['nullable', 'string', 'max:120'],
+            'postal_code' => ['nullable', 'string', 'max:40'],
+            'country' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        $email = trim((string) ($data['email'] ?? ''));
+        $phone = trim((string) ($data['phone'] ?? ''));
+
+        $marketingProfile->forceFill([
+            'first_name' => trim((string) ($data['first_name'] ?? '')) ?: null,
+            'last_name' => trim((string) ($data['last_name'] ?? '')) ?: null,
+            'email' => $email !== '' ? $email : null,
+            'normalized_email' => $email !== '' ? $this->identityNormalizer->normalizeEmail($email) : null,
+            'phone' => $phone !== '' ? $phone : null,
+            'normalized_phone' => $phone !== '' ? $this->identityNormalizer->normalizePhone($phone) : null,
+            'address_line_1' => trim((string) ($data['address_line_1'] ?? '')) ?: null,
+            'address_line_2' => trim((string) ($data['address_line_2'] ?? '')) ?: null,
+            'city' => trim((string) ($data['city'] ?? '')) ?: null,
+            'state' => trim((string) ($data['state'] ?? '')) ?: null,
+            'postal_code' => trim((string) ($data['postal_code'] ?? '')) ?: null,
+            'country' => trim((string) ($data['country'] ?? '')) ?: null,
+            'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
+        ])->save();
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', ['style' => 'success', 'message' => 'Customer profile updated.']);
+    }
+
+    public function updateBirthday(MarketingProfile $marketingProfile, Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'birth_month' => ['nullable', 'integer', 'between:1,12'],
+            'birth_day' => ['nullable', 'integer', 'between:1,31'],
+            'birth_year' => ['nullable', 'integer', 'between:1900,2100'],
+            'birthday_full_date' => ['nullable', 'date'],
+            'source' => ['nullable', 'string', 'max:120'],
+            'clear' => ['nullable', 'boolean'],
+            'sync_shopify' => ['nullable', 'boolean'],
+            'issue_reward_now' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            $birthdayProfile = $this->birthdayProfileService->captureForProfile(
+                profile: $marketingProfile,
+                payload: [
+                    'birth_month' => $data['birth_month'] ?? null,
+                    'birth_day' => $data['birth_day'] ?? null,
+                    'birth_year' => $data['birth_year'] ?? null,
+                    'birthday_full_date' => $data['birthday_full_date'] ?? null,
+                    'source' => (string) ($data['source'] ?? 'admin_backstage'),
+                    'clear' => (bool) ($data['clear'] ?? false),
+                ],
+                options: [
+                    'source' => (string) ($data['source'] ?? 'admin_backstage'),
+                    'replace_source' => true,
+                ]
+            );
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('marketing.customers.show', $marketingProfile)
+                ->with('toast', ['style' => 'warning', 'message' => 'Birthday update failed: '.$e->getMessage()]);
+        }
+
+        if (! (bool) ($data['clear'] ?? false) && (bool) ($data['issue_reward_now'] ?? false)) {
+            $this->birthdayRewardEngine->issueAnnualReward($birthdayProfile);
+        }
+
+        $syncErrors = [];
+        if ((bool) ($data['sync_shopify'] ?? true)) {
+            $syncResult = $this->shopifyBirthdayMetafieldService->writeBirthdayForProfile($marketingProfile, $birthdayProfile);
+            $syncErrors = (array) ($syncResult['errors'] ?? []);
+        }
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', [
+                'style' => $syncErrors === [] ? 'success' : 'warning',
+                'message' => $syncErrors === []
+                    ? 'Birthday profile updated.'
+                    : 'Birthday saved locally, but Shopify sync failed: '.implode(' | ', $syncErrors),
+            ]);
     }
 
     public function updateConsent(MarketingProfile $marketingProfile, Request $request): RedirectResponse
@@ -230,6 +479,128 @@ class MarketingCustomersController extends Controller
             ]);
     }
 
+    public function grantCandleCash(MarketingProfile $marketingProfile, Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'in:earn,adjust'],
+            'points' => ['required', 'integer', 'not_in:0', 'min:-100000', 'max:100000'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $points = (int) $data['points'];
+        $type = (string) $data['type'];
+        if ($type === 'earn' && $points < 0) {
+            return redirect()
+                ->route('marketing.customers.show', $marketingProfile)
+                ->with('toast', ['style' => 'warning', 'message' => 'Earn entries must use positive points.']);
+        }
+
+        $result = $this->candleCashService->addPoints(
+            profile: $marketingProfile,
+            points: $points,
+            type: $type,
+            source: 'admin',
+            sourceId: (string) (auth()->id() ?? ''),
+            description: trim((string) ($data['description'] ?? '')) ?: null
+        );
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => 'Candle Cash updated. New balance: ' . (int) ($result['balance'] ?? 0),
+            ]);
+    }
+
+    public function redeemCandleCash(MarketingProfile $marketingProfile, Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'reward_id' => ['required', 'integer', 'exists:candle_cash_rewards,id'],
+            'platform' => ['required', 'in:shopify,square'],
+        ]);
+
+        $reward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
+        $result = $this->candleCashService->redeemReward(
+            profile: $marketingProfile,
+            reward: $reward,
+            platform: (string) $data['platform']
+        );
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            $error = (string) ($result['error'] ?? 'redemption_failed');
+            $message = match ($error) {
+                'insufficient_balance' => 'Not enough Candle Cash balance for that reward.',
+                'inactive_reward' => 'Reward is inactive.',
+                default => 'Reward redemption failed.',
+            };
+
+            return redirect()
+                ->route('marketing.customers.show', $marketingProfile)
+                ->with('toast', ['style' => 'warning', 'message' => $message]);
+        }
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => 'Reward redeemed. Code: ' . (string) ($result['code'] ?? 'n/a'),
+            ]);
+    }
+
+    public function markCandleCashRedemptionRedeemed(
+        MarketingProfile $marketingProfile,
+        CandleCashRedemption $redemption,
+        Request $request
+    ): RedirectResponse {
+        abort_unless((int) $redemption->marketing_profile_id === (int) $marketingProfile->id, 404);
+
+        $data = $request->validate([
+            'platform' => ['nullable', 'in:shopify,square,manual'],
+            'external_order_source' => ['nullable', 'string', 'max:80'],
+            'external_order_id' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:1200'],
+        ]);
+
+        $this->redemptionReconciliationService->markRedeemedManually($redemption, [
+            'platform' => $data['platform'] ?? null,
+            'external_order_source' => $data['external_order_source'] ?? null,
+            'external_order_id' => $data['external_order_id'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'redeemed_by' => auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => 'Redemption marked as redeemed.',
+            ]);
+    }
+
+    public function cancelCandleCashRedemption(
+        MarketingProfile $marketingProfile,
+        CandleCashRedemption $redemption,
+        Request $request
+    ): RedirectResponse {
+        abort_unless((int) $redemption->marketing_profile_id === (int) $marketingProfile->id, 404);
+
+        $data = $request->validate([
+            'notes' => ['nullable', 'string', 'max:1200'],
+        ]);
+
+        $this->redemptionReconciliationService->cancelRedemption($redemption, [
+            'notes' => $data['notes'] ?? null,
+            'actor_id' => auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.customers.show', $marketingProfile)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => 'Redemption canceled.',
+            ]);
+    }
+
     /**
      * @param Collection<int,MarketingProfile> $profiles
      * @return array<int,array{order_count:int,last_order_at:?string,last_activity_at:?string,source_badges:array<int,string>}>
@@ -256,8 +627,40 @@ class MarketingCustomersController extends Controller
             ? collect()
             : Order::query()
                 ->whereIn('id', $orderIds->all())
-                ->get(['id', 'ordered_at'])
+                ->get(['id', 'ordered_at', 'shopify_customer_id', 'shopify_store_key', 'shopify_store'])
                 ->keyBy('id');
+
+        $ordersByShopifyCustomer = collect();
+        if (Schema::hasColumn('orders', 'shopify_customer_id')) {
+            $shopifyCustomerSourceIds = $links
+                ->where('source_type', 'shopify_customer')
+                ->pluck('source_id')
+                ->filter()
+                ->unique()
+                ->values();
+
+            $shopifyCustomerIds = $shopifyCustomerSourceIds
+                ->map(function ($value): ?string {
+                    [$storeKey, $customerId] = $this->parseShopifyCustomerSourceId((string) $value);
+
+                    return $customerId;
+                })
+                ->filter()
+                ->unique()
+                ->values();
+
+            $ordersByShopifyCustomer = $shopifyCustomerIds->isEmpty()
+                ? collect()
+                : Order::query()
+                    ->whereIn('shopify_customer_id', $shopifyCustomerIds->all())
+                    ->get(['id', 'ordered_at', 'shopify_customer_id', 'shopify_store_key', 'shopify_store'])
+                    ->groupBy(function (Order $order): string {
+                        return $this->shopifyCustomerOrderKey(
+                            (string) ($order->shopify_store_key ?: $order->shopify_store ?: ''),
+                            (string) ($order->shopify_customer_id ?? '')
+                        );
+                    });
+        }
 
         $squareOrderIds = $links
             ->where('source_type', 'square_order')
@@ -306,9 +709,37 @@ class MarketingCustomersController extends Controller
                 ->unique()
                 ->values();
 
-            $lastOrder = $ids
+            $linkedOrders = $ids
                 ->map(fn (int $id) => $ordersById->get($id))
                 ->filter()
+                ->values();
+
+            $customerOrders = $profileLinks
+                ->where('source_type', 'shopify_customer')
+                ->flatMap(function (MarketingProfileLink $link) use ($ordersByShopifyCustomer): Collection {
+                    [$storeKey, $customerId] = $this->parseShopifyCustomerSourceId((string) $link->source_id);
+                    if (! $customerId) {
+                        return collect();
+                    }
+
+                    $exactKey = $this->shopifyCustomerOrderKey($storeKey, $customerId);
+                    $fallbackKey = $this->shopifyCustomerOrderKey('', $customerId);
+
+                    if ($ordersByShopifyCustomer->has($exactKey)) {
+                        return $ordersByShopifyCustomer->get($exactKey);
+                    }
+
+                    return $ordersByShopifyCustomer->get($fallbackKey, collect());
+                })
+                ->filter()
+                ->values();
+
+            $allOrders = $linkedOrders
+                ->concat($customerOrders)
+                ->unique('id')
+                ->values();
+
+            $lastOrder = $allOrders
                 ->sortByDesc(fn (Order $order) => optional($order->ordered_at)->timestamp ?? 0)
                 ->first();
 
@@ -345,7 +776,7 @@ class MarketingCustomersController extends Controller
             }
 
             $stats[(int) $profile->id] = [
-                'order_count' => $ids->count(),
+                'order_count' => $allOrders->count(),
                 'last_order_at' => optional($lastOrder?->ordered_at)->toDateString(),
                 'last_activity_at' => $latestTimestamp ? date('Y-m-d', (int) $latestTimestamp) : null,
                 'source_badges' => $badges,
@@ -353,6 +784,100 @@ class MarketingCustomersController extends Controller
         }
 
         return $stats;
+    }
+
+    /**
+     * @return array{0:string,1:?string}
+     */
+    protected function parseShopifyCustomerSourceId(string $value): array
+    {
+        $sourceId = trim($value);
+        if ($sourceId === '') {
+            return ['', null];
+        }
+
+        if (! str_contains($sourceId, ':')) {
+            return ['', $sourceId];
+        }
+
+        [$storeKey, $customerId] = explode(':', $sourceId, 2);
+
+        return [trim((string) $storeKey), trim((string) $customerId) ?: null];
+    }
+
+    protected function shopifyCustomerOrderKey(string $storeKey, string $customerId): string
+    {
+        return strtolower(trim($storeKey)) . ':' . trim($customerId);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function buildEmptyStateDiagnostics(int $profileTotal): ?array
+    {
+        if ($profileTotal > 0) {
+            return null;
+        }
+
+        $shopifyOrderCandidates = Schema::hasTable('orders')
+            ? (int) Order::query()
+                ->where(function ($query): void {
+                    $query->whereNotNull('shopify_order_id')
+                        ->orWhere('source', 'like', 'shopify%');
+                })
+                ->count()
+            : 0;
+
+        $shopifyCustomerCandidates = Schema::hasTable('customer_external_profiles')
+            ? (int) CustomerExternalProfile::query()
+                ->where('integration', 'shopify_customer')
+                ->count()
+            : 0;
+
+        $growaveCandidates = Schema::hasTable('customer_external_profiles')
+            ? (int) CustomerExternalProfile::query()
+                ->where('integration', 'growave')
+                ->count()
+            : 0;
+
+        $upstreamCandidates = $shopifyOrderCandidates + $shopifyCustomerCandidates + $growaveCandidates;
+        if ($upstreamCandidates === 0) {
+            return null;
+        }
+
+        $lastSyncRun = Schema::hasTable('marketing_import_runs')
+            ? MarketingImportRun::query()
+                ->whereIn('type', ['marketing_profiles_sync', 'shopify_customer_metafields_sync'])
+                ->orderByDesc('finished_at')
+                ->orderByDesc('id')
+                ->first()
+            : null;
+
+        return [
+            'shopify_order_candidates' => $shopifyOrderCandidates,
+            'shopify_customer_candidates' => $shopifyCustomerCandidates,
+            'growave_candidates' => $growaveCandidates,
+            'upstream_candidates' => $upstreamCandidates,
+            'last_sync_at' => optional($lastSyncRun?->finished_at ?? $lastSyncRun?->started_at)?->toDateTimeString(),
+            'last_sync_status' => $lastSyncRun?->status,
+            'last_sync_type' => $lastSyncRun?->type,
+        ];
+    }
+
+    /**
+     * @return array<int,array{0:int,1:int}>
+     */
+    protected function birthdayWeekTuples(CarbonInterface $anchor): array
+    {
+        $start = $anchor->copy()->startOfWeek();
+        $end = $anchor->copy()->endOfWeek();
+
+        $tuples = [];
+        for ($cursor = $start->copy(); $cursor->lte($end); $cursor = $cursor->copy()->addDay()) {
+            $tuples[] = [(int) $cursor->month, (int) $cursor->day];
+        }
+
+        return $tuples;
     }
 
     /**

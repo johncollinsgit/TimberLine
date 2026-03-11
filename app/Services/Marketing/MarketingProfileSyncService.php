@@ -72,11 +72,13 @@ class MarketingProfileSyncService
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $reviewContext = is_array($options['review_context'] ?? null) ? $options['review_context'] : [];
+        $allowCreate = (bool) ($options['allow_create'] ?? true);
 
         return $this->syncIdentity(
             identity: $this->normalizeIdentityPayload($identity),
             reviewContext: $reviewContext,
-            dryRun: $dryRun
+            dryRun: $dryRun,
+            allowCreate: $allowCreate
         );
     }
 
@@ -95,7 +97,7 @@ class MarketingProfileSyncService
      *   records_skipped:int
      * }
      */
-    protected function syncIdentity(array $identity, array $reviewContext, bool $dryRun): array
+    protected function syncIdentity(array $identity, array $reviewContext, bool $dryRun, bool $allowCreate = true): array
     {
         $sourceLinkProfiles = $this->profilesFromSourceLinks($identity['source_links']);
         $sourceLinkedProfile = $sourceLinkProfiles->count() === 1 ? $sourceLinkProfiles->first() : null;
@@ -188,6 +190,10 @@ class MarketingProfileSyncService
         }
 
         if ($match['outcome'] === 'create') {
+            if (! $allowCreate) {
+                return $this->result('skipped', 'create_not_allowed', null, 0, 0, 0, 0, 0, 1);
+            }
+
             $profile = new MarketingProfile();
 
             return $this->persistProfileAndLinks(
@@ -462,11 +468,22 @@ class MarketingProfileSyncService
         } elseif (
             $profile->normalized_phone &&
             $identity['normalized_phone'] &&
-            $profile->normalized_phone === $identity['normalized_phone'] &&
+            $this->phonesEquivalent($profile->normalized_phone, $identity['normalized_phone']) &&
             !$profile->phone &&
             $identity['raw_phone']
         ) {
             $profile->phone = $identity['raw_phone'];
+            $changed = true;
+        }
+
+        if (
+            $profile->normalized_phone &&
+            $identity['normalized_phone'] &&
+            $this->phonesEquivalent($profile->normalized_phone, $identity['normalized_phone']) &&
+            $profile->normalized_phone !== $identity['normalized_phone']
+        ) {
+            // Canonicalize to 10-digit identity token while retaining raw phone for display/sending.
+            $profile->normalized_phone = $identity['normalized_phone'];
             $changed = true;
         }
 
@@ -509,6 +526,14 @@ class MarketingProfileSyncService
         $normalizedPhone = $this->normalizer->normalizePhone($review->raw_phone);
         if ($normalizedPhone && !$profile->normalized_phone) {
             $profile->phone = $review->raw_phone;
+            $profile->normalized_phone = $normalizedPhone;
+            $updated = true;
+        } elseif (
+            $normalizedPhone &&
+            $profile->normalized_phone &&
+            $this->phonesEquivalent($profile->normalized_phone, $normalizedPhone) &&
+            $profile->normalized_phone !== $normalizedPhone
+        ) {
             $profile->normalized_phone = $normalizedPhone;
             $updated = true;
         }
@@ -659,6 +684,14 @@ class MarketingProfileSyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function phonesEquivalent(?string $left, ?string $right): bool
+    {
+        $leftNormalized = $this->normalizer->normalizePhone($left);
+        $rightNormalized = $this->normalizer->normalizePhone($right);
+
+        return $leftNormalized !== null && $rightNormalized !== null && $leftNormalized === $rightNormalized;
     }
 
     /**

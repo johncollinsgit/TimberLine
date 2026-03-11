@@ -9,9 +9,37 @@
             hint-text="Profiles are derived from source records and linked by exact normalized email/phone matches. Ambiguous matches are held in Identity Review instead of auto-merged."
         />
 
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthday Capture</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((float) ($birthdayReporting['capture_rate'] ?? 0), 1) }}%</div>
+                <div class="text-xs text-white/60">{{ number_format((int) ($birthdayReporting['with_birthday'] ?? 0)) }} / {{ number_format((int) ($birthdayReporting['total_profiles'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Birthdays</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['missing_birthday'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthdays Today</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['birthdays_today'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthdays This Week</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['birthdays_this_week'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Rewards Issued (Year)</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['rewards_issued_this_year'] ?? 0)) }}</div>
+            </article>
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Rewards Claimed (Year)</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($birthdayReporting['rewards_claimed_this_year'] ?? 0)) }}</div>
+            </article>
+        </section>
+
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
             <form method="GET" action="{{ route('marketing.customers') }}" class="grid gap-3 md:grid-cols-12">
-                <div class="md:col-span-5">
+                <div class="md:col-span-4">
                     <label for="search" class="text-xs uppercase tracking-[0.2em] text-white/55">Search</label>
                     <input
                         id="search"
@@ -40,6 +68,16 @@
                     </select>
                 </div>
                 <div class="md:col-span-2">
+                    <label for="birthday_filter" class="text-xs uppercase tracking-[0.2em] text-white/55">Birthday Filter</label>
+                    <select id="birthday_filter" name="birthday_filter" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        <option value="all" @selected(($birthdayFilter ?? 'all') === 'all')>All</option>
+                        <option value="today" @selected(($birthdayFilter ?? 'all') === 'today')>Birthdays Today</option>
+                        <option value="week" @selected(($birthdayFilter ?? 'all') === 'week')>This Week</option>
+                        <option value="month" @selected(($birthdayFilter ?? 'all') === 'month')>This Month</option>
+                        <option value="missing" @selected(($birthdayFilter ?? 'all') === 'missing')>Missing</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
                     <label for="per_page" class="text-xs uppercase tracking-[0.2em] text-white/55">Rows</label>
                     <select id="per_page" name="per_page" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                         @foreach([25, 50, 100] as $rowCount)
@@ -55,23 +93,55 @@
             </form>
         </section>
 
+        @if(($profiles->total() ?? 0) === 0 && !empty($emptyStateDiagnostics))
+            <section class="rounded-3xl border border-amber-300/35 bg-amber-500/10 p-4 sm:p-5">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-100">Unified Profile Index Not Built</h2>
+                <p class="mt-2 text-sm text-amber-50/90">
+                    No marketing profiles have been built yet, but upstream Shopify/Growave customer candidates exist.
+                    Run profile sync to build the canonical customer index.
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2 text-xs text-amber-100/90">
+                    <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
+                        Shopify Orders: {{ number_format((int) ($emptyStateDiagnostics['shopify_order_candidates'] ?? 0)) }}
+                    </span>
+                    <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
+                        Shopify Customers: {{ number_format((int) ($emptyStateDiagnostics['shopify_customer_candidates'] ?? 0)) }}
+                    </span>
+                    <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
+                        Growave: {{ number_format((int) ($emptyStateDiagnostics['growave_candidates'] ?? 0)) }}
+                    </span>
+                </div>
+                <div class="mt-3 text-xs text-amber-50/80">
+                    <code>php artisan marketing:sync-profiles --source=all --chunk=500</code>
+                    @if(!empty($emptyStateDiagnostics['last_sync_at']))
+                        <span class="ml-2">
+                            Last sync: {{ $emptyStateDiagnostics['last_sync_at'] }}
+                            @if(!empty($emptyStateDiagnostics['last_sync_status']))
+                                ({{ $emptyStateDiagnostics['last_sync_status'] }})
+                            @endif
+                        </span>
+                    @endif
+                </div>
+            </section>
+        @endif
+
         <section class="rounded-3xl border border-white/10 bg-black/15 p-2 sm:p-3">
             <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-full text-sm">
+                <table class="min-w-[1450px] text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Customer</th>
-                            <th class="px-4 py-3 text-left">Email</th>
-                            <th class="px-4 py-3 text-left">Phone</th>
-                            <th class="px-4 py-3 text-left">Source Channels</th>
-                            <th class="px-4 py-3 text-left">Linked Sources</th>
-                            <th class="px-4 py-3 text-left">Order Count</th>
-                            <th class="px-4 py-3 text-left">Last Order</th>
-                            <th class="px-4 py-3 text-left">Last Activity</th>
-                            <th class="px-4 py-3 text-left">Marketing Score</th>
-                            <th class="px-4 py-3 text-left">Consent</th>
-                            <th class="px-4 py-3 text-left">Updated</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[190px]">Customer</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[190px]">Email</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[140px]">Phone</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[180px]">Source Channels</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Linked Sources</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Orders</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Last Order</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Last Activity</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Marketing Score</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[150px]">Consent</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Updated</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap min-w-[95px]">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
