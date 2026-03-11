@@ -5,6 +5,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
+use App\Http\Controllers\Marketing\MarketingMessagesController;
 use App\Http\Controllers\Marketing\MarketingMessageTemplatesController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
@@ -243,6 +244,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/message-templates/{template}/edit', [MarketingMessageTemplatesController::class, 'edit'])->name('message-templates.edit');
             Route::patch('/message-templates/{template}', [MarketingMessageTemplatesController::class, 'update'])->name('message-templates.update');
             Route::get('/message-templates/{template}/preview', [MarketingMessageTemplatesController::class, 'preview'])->name('message-templates.preview');
+            Route::get('/messages/send', [MarketingMessagesController::class, 'send'])->name('messages.send');
+            Route::post('/messages/send/audience', [MarketingMessagesController::class, 'saveAudience'])->name('messages.save-audience');
+            Route::post('/messages/send/message', [MarketingMessagesController::class, 'saveMessage'])->name('messages.save-message');
+            Route::post('/messages/send/test', [MarketingMessagesController::class, 'sendTest'])->name('messages.send-test');
+            Route::post('/messages/send/execute', [MarketingMessagesController::class, 'executeSend'])->name('messages.execute');
+            Route::post('/messages/send/reset', [MarketingMessagesController::class, 'resetWizard'])->name('messages.reset');
+            Route::get('/messages/deliveries', [MarketingMessagesController::class, 'deliveries'])->name('messages.deliveries');
 
             Route::get('/recommendations', [MarketingRecommendationsController::class, 'index'])->name('recommendations');
             Route::post('/recommendations/generate-global', [MarketingRecommendationsController::class, 'generateGlobal'])->name('recommendations.generate-global');

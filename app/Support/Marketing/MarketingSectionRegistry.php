@@ -100,6 +100,17 @@ class MarketingSectionRegistry
                     'Channel-specific formatting helpers and preview states.',
                 ],
             ],
+            'messages' => [
+                'label' => 'Messages',
+                'route' => 'marketing.messages.send',
+                'description' => 'Internal direct-send wizard for targeted SMS sends with reusable groups and delivery logging.',
+                'hint_title' => 'How to use this page',
+                'hint_text' => 'Build an audience, draft a message, review counts, and send through Twilio delivery rails with audit visibility.',
+                'coming_next' => [
+                    'Direct email channel support using shared audience/message steps.',
+                    'Scheduled send orchestration and throttling controls.',
+                ],
+            ],
             'recommendations' => [
                 'label' => 'Recommendations',
                 'route' => 'marketing.recommendations',

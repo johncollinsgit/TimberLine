@@ -15,11 +15,18 @@ class TwilioSmsService
         protected ?string $fromNumber = null,
         protected ?string $statusCallbackUrl = null
     ) {
-        $this->accountSid = $this->accountSid ?: (string) config('marketing.twilio.account_sid');
-        $this->authToken = $this->authToken ?: (string) config('marketing.twilio.auth_token');
-        $this->messagingServiceSid = $this->messagingServiceSid ?: $this->nullableString(config('marketing.twilio.messaging_service_sid'));
-        $this->fromNumber = $this->fromNumber ?: $this->nullableString(config('marketing.twilio.from_number'));
-        $this->statusCallbackUrl = $this->statusCallbackUrl ?: $this->nullableString(config('marketing.twilio.status_callback_url'));
+        $serviceTwilio = (array) config('services.twilio', []);
+
+        $this->accountSid = $this->accountSid
+            ?: (string) ($serviceTwilio['account_sid'] ?? config('marketing.twilio.account_sid'));
+        $this->authToken = $this->authToken
+            ?: (string) ($serviceTwilio['auth_token'] ?? config('marketing.twilio.auth_token'));
+        $this->messagingServiceSid = $this->messagingServiceSid
+            ?: $this->nullableString($serviceTwilio['messaging_service_sid'] ?? config('marketing.twilio.messaging_service_sid'));
+        $this->fromNumber = $this->fromNumber
+            ?: $this->nullableString($serviceTwilio['from'] ?? $serviceTwilio['from_number'] ?? config('marketing.twilio.from_number'));
+        $this->statusCallbackUrl = $this->statusCallbackUrl
+            ?: $this->nullableString($serviceTwilio['status_callback_url'] ?? config('marketing.twilio.status_callback_url'));
     }
 
     /**
