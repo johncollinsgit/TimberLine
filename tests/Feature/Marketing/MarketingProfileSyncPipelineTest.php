@@ -108,6 +108,29 @@ test('skips records with no usable email and no usable phone', function () {
         ->and(MarketingProfile::query()->count())->toBe(0);
 });
 
+test('creates source-linked profile for shopify orders without email or phone', function () {
+    $order = Order::factory()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 501001,
+        'customer_name' => 'Fallback Shopper',
+    ]);
+
+    $result = app(MarketingProfileSyncService::class)->syncOrder($order);
+
+    expect($result['profiles_created'])->toBe(1)
+        ->and($result['records_skipped'])->toBe(0)
+        ->and($result['reason'])->toBe('created_from_source_without_identity')
+        ->and(MarketingProfile::query()->count())->toBe(1);
+
+    $profile = MarketingProfile::query()->firstOrFail();
+
+    expect((array) $profile->source_channels)->toContain('shopify')
+        ->and(MarketingProfileLink::query()->where('source_type', 'order')->where('source_id', (string) $order->id)->exists())->toBeTrue()
+        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_order')->exists())->toBeTrue();
+});
+
 test('creates source links once and reuses links on rerun', function () {
     $order = Order::factory()->create([
         'source' => 'shopify_retail',
@@ -149,5 +172,37 @@ test('marketing sync command runs and reports counts', function () {
         ->expectsOutputToContain('links_reused=')
         ->expectsOutputToContain('reviews_created=')
         ->expectsOutputToContain('records_skipped=')
+        ->assertExitCode(0);
+});
+
+test('marketing sync command supports shopify-only scope', function () {
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 707001,
+    ]);
+    Order::factory()->create([
+        'source' => 'manual',
+        'shopify_order_id' => null,
+    ]);
+
+    $this->artisan('marketing:sync-profiles --shopify-only --dry-run')
+        ->expectsOutputToContain('scope=shopify_only')
+        ->expectsOutputToContain('processed=1')
+        ->assertExitCode(0);
+});
+
+test('marketing rebuild customers command delegates to sync command', function () {
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 808001,
+    ]);
+
+    $this->artisan('marketing:rebuild-customers --shopify-only --dry-run')
+        ->expectsOutputToContain('scope=shopify_only')
+        ->expectsOutputToContain('processed=1')
         ->assertExitCode(0);
 });

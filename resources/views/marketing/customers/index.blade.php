@@ -55,45 +55,89 @@
             </form>
         </section>
 
+        @php
+            $toneStyles = [
+                'success' => 'border-emerald-300/35 bg-emerald-500/10 text-emerald-100',
+                'warning' => 'border-amber-300/35 bg-amber-500/10 text-amber-100',
+                'info' => 'border-sky-300/35 bg-sky-500/10 text-sky-100',
+                'neutral' => 'border-white/15 bg-white/5 text-white/80',
+            ];
+            $indexTone = $toneStyles[$indexStatus['tone'] ?? 'neutral'] ?? $toneStyles['neutral'];
+            $growaveTone = $toneStyles[$growaveStatus['tone'] ?? 'neutral'] ?? $toneStyles['neutral'];
+        @endphp
+
+        <section class="grid gap-3 lg:grid-cols-2">
+            <article class="rounded-2xl border p-4 {{ $indexTone }}">
+                <div class="text-xs uppercase tracking-[0.2em] opacity-80">{{ $indexStatus['title'] ?? 'Index status' }}</div>
+                <p class="mt-2 text-sm opacity-95">{{ $indexStatus['message'] ?? '' }}</p>
+                @if(!empty($indexStatus['commands']))
+                    <div class="mt-2 space-y-1">
+                        @foreach((array) $indexStatus['commands'] as $command)
+                            <code class="block rounded-lg border border-white/15 bg-black/20 px-2 py-1 text-[11px] text-white/90">{{ $command }}</code>
+                        @endforeach
+                    </div>
+                @endif
+            </article>
+            <article class="rounded-2xl border p-4 {{ $growaveTone }}">
+                <div class="text-xs uppercase tracking-[0.2em] opacity-80">{{ $growaveStatus['title'] ?? 'Growave status' }}</div>
+                <p class="mt-2 text-sm opacity-95">{{ $growaveStatus['message'] ?? '' }}</p>
+                @if(!empty($growaveStatus['commands']))
+                    <div class="mt-2 space-y-1">
+                        @foreach((array) $growaveStatus['commands'] as $command)
+                            <code class="block rounded-lg border border-white/15 bg-black/20 px-2 py-1 text-[11px] text-white/90">{{ $command }}</code>
+                        @endforeach
+                    </div>
+                @endif
+            </article>
+        </section>
+
         <section class="rounded-3xl border border-white/10 bg-black/15 p-2 sm:p-3">
             <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-full text-sm">
+                <table class="min-w-[1360px] w-full table-auto text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Customer</th>
-                            <th class="px-4 py-3 text-left">Email</th>
-                            <th class="px-4 py-3 text-left">Phone</th>
-                            <th class="px-4 py-3 text-left">Source Channels</th>
-                            <th class="px-4 py-3 text-left">Linked Sources</th>
-                            <th class="px-4 py-3 text-left">Order Count</th>
-                            <th class="px-4 py-3 text-left">Last Order</th>
-                            <th class="px-4 py-3 text-left">Last Activity</th>
-                            <th class="px-4 py-3 text-left">Marketing Score</th>
-                            <th class="px-4 py-3 text-left">Consent</th>
-                            <th class="px-4 py-3 text-left">Updated</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-44">Customer</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-56">Email</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-40">Phone</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-52">Source Channels</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-32">Linked Sources</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-28">Orders</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-32">Last Order</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-32">Last Activity</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-32">Marketing Score</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-36">Consent</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap break-normal w-28">Updated</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap break-normal w-24">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
                         @forelse($profiles as $profile)
                             @php
+                                $isFallback = (bool) ($profile->is_fallback ?? false);
                                 $name = trim((string) ($profile->first_name . ' ' . $profile->last_name));
                                 $displayName = $name !== '' ? $name : 'Unnamed profile';
                                 $channels = is_array($profile->source_channels) ? $profile->source_channels : [];
                                 $stats = $derivedStats[(int) $profile->id] ?? ['order_count' => 0, 'last_order_at' => null];
                             @endphp
                             <tr
-                                class="cursor-pointer hover:bg-white/5"
-                                onclick="window.location='{{ route('marketing.customers.show', $profile) }}'"
+                                class="{{ $isFallback ? 'hover:bg-white/5' : 'cursor-pointer hover:bg-white/5' }}"
+                                @unless($isFallback)
+                                    onclick="window.location='{{ route('marketing.customers.show', $profile) }}'"
+                                @endunless
                             >
                                 <td class="px-4 py-3">
-                                    <a href="{{ route('marketing.customers.show', $profile) }}" wire:navigate class="font-semibold text-emerald-100 hover:text-white">
-                                        {{ $displayName }}
-                                    </a>
-                                    <div class="text-xs text-white/45">ID #{{ $profile->id }}</div>
+                                    @if($isFallback)
+                                        <div class="font-semibold text-amber-100">{{ $displayName }}</div>
+                                        <div class="text-xs text-amber-100/70">Shopify fallback row</div>
+                                    @else
+                                        <a href="{{ route('marketing.customers.show', $profile) }}" wire:navigate class="font-semibold text-emerald-100 hover:text-white">
+                                            {{ $displayName }}
+                                        </a>
+                                        <div class="text-xs text-white/45">ID #{{ $profile->id }}</div>
+                                    @endif
                                 </td>
-                                <td class="px-4 py-3 text-white/80">{{ $profile->email ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/80">{{ $profile->phone ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/80 whitespace-nowrap">{{ $profile->email ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/80 whitespace-nowrap">{{ $profile->phone ?: '—' }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-1.5">
                                         @forelse($channels as $channel)
@@ -129,9 +173,15 @@
                                 </td>
                                 <td class="px-4 py-3 text-white/60">{{ optional($profile->updated_at)->format('Y-m-d') }}</td>
                                 <td class="px-4 py-3 text-right">
-                                    <a href="{{ route('marketing.customers.show', $profile) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/10">
-                                        View
-                                    </a>
+                                    @if($isFallback)
+                                        <span class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100/90">
+                                            Index Pending
+                                        </span>
+                                    @else
+                                        <a href="{{ route('marketing.customers.show', $profile) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/10">
+                                            View
+                                        </a>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

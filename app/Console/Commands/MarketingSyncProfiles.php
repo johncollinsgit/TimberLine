@@ -13,6 +13,7 @@ class MarketingSyncProfiles extends Command
         {--limit= : Maximum number of orders to process}
         {--since= : Process orders updated on/after this datetime}
         {--order-id= : Process a single order by ID}
+        {--shopify-only : Process only Shopify-linked orders}
         {--dry-run : Preview changes without writing}';
 
     protected $description = 'Backfill/sync marketing profiles from existing operational orders.';
@@ -24,6 +25,7 @@ class MarketingSyncProfiles extends Command
         $limit = $this->integerOption('limit');
         $orderId = $this->integerOption('order-id');
         $since = $this->dateOption('since');
+        $shopifyOnly = (bool) $this->option('shopify-only');
 
         $summary = [
             'processed' => 0,
@@ -34,6 +36,8 @@ class MarketingSyncProfiles extends Command
             'reviews_created' => 0,
             'records_skipped' => 0,
         ];
+        /** @var array<string,int> $reasonCounts */
+        $reasonCounts = [];
 
         if ($orderId !== null) {
             $order = Order::query()->find($orderId);
@@ -44,6 +48,7 @@ class MarketingSyncProfiles extends Command
 
             $result = $syncService->syncOrder($order, ['dry_run' => $dryRun]);
             $this->accumulate($summary, $result);
+            $this->accumulateReason($reasonCounts, $result);
             $summary['processed']++;
 
             if ($verbose) {
@@ -51,6 +56,12 @@ class MarketingSyncProfiles extends Command
             }
         } else {
             $query = Order::query()
+                ->when($shopifyOnly, function ($builder): void {
+                    $builder->where(function ($nested): void {
+                        $nested->whereNotNull('shopify_order_id')
+                            ->orWhere('source', 'like', '%shopify%');
+                    });
+                })
                 ->when($since, fn ($builder) => $builder->where('updated_at', '>=', $since))
                 ->orderBy('id');
 
@@ -61,6 +72,7 @@ class MarketingSyncProfiles extends Command
 
                 $result = $syncService->syncOrder($order, ['dry_run' => $dryRun]);
                 $this->accumulate($summary, $result);
+                $this->accumulateReason($reasonCounts, $result);
                 $summary['processed']++;
 
                 if ($verbose) {
@@ -70,6 +82,7 @@ class MarketingSyncProfiles extends Command
         }
 
         $this->line($dryRun ? 'Mode: dry-run (no writes performed)' : 'Mode: live-sync');
+        $this->line('scope=' . ($shopifyOnly ? 'shopify_only' : 'all_orders'));
         $this->line('processed=' . $summary['processed']);
         $this->line('profiles_created=' . $summary['profiles_created']);
         $this->line('profiles_updated=' . $summary['profiles_updated']);
@@ -77,6 +90,11 @@ class MarketingSyncProfiles extends Command
         $this->line('links_reused=' . $summary['links_reused']);
         $this->line('reviews_created=' . $summary['reviews_created']);
         $this->line('records_skipped=' . $summary['records_skipped']);
+        if ($reasonCounts !== []) {
+            foreach ($reasonCounts as $reason => $count) {
+                $this->line("reason_{$reason}={$count}");
+            }
+        }
 
         return self::SUCCESS;
     }
@@ -90,6 +108,20 @@ class MarketingSyncProfiles extends Command
         foreach (['profiles_created', 'profiles_updated', 'links_created', 'links_reused', 'reviews_created', 'records_skipped'] as $key) {
             $summary[$key] += (int) ($result[$key] ?? 0);
         }
+    }
+
+    /**
+     * @param array<string,int> $reasonCounts
+     * @param array<string,mixed> $result
+     */
+    protected function accumulateReason(array &$reasonCounts, array $result): void
+    {
+        $reason = trim((string) ($result['reason'] ?? 'unknown'));
+        if ($reason === '') {
+            $reason = 'unknown';
+        }
+
+        $reasonCounts[$reason] = (int) ($reasonCounts[$reason] ?? 0) + 1;
     }
 
     protected function integerOption(string $key): ?int

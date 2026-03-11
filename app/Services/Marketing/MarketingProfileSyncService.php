@@ -114,7 +114,19 @@ class MarketingProfileSyncService
 
         if (! $identity['has_identity']) {
             if (! $sourceLinkedProfile) {
-                return $this->result('skipped', 'missing_email_phone', null, 0, 0, 0, 0, 0, 1);
+                if (! $this->shouldCreateSourceLinkedProfileWithoutIdentity($identity)) {
+                    return $this->result('skipped', 'missing_email_phone', null, 0, 0, 0, 0, 0, 1);
+                }
+
+                return $this->persistProfileAndLinks(
+                    identity: $identity,
+                    profile: new MarketingProfile(),
+                    matchMethod: 'created_from_source_without_identity',
+                    confidence: null,
+                    createProfile: true,
+                    reviewContext: $reviewContext,
+                    dryRun: $dryRun
+                );
             }
 
             return $this->persistProfileAndLinks(
@@ -202,6 +214,38 @@ class MarketingProfileSyncService
         }
 
         return $this->result('skipped', 'no_action_taken', null, 0, 0, 0, 0, 0, 1);
+    }
+
+    /**
+     * Allow source-only profile creation for Shopify-linked orders so existing
+     * operational order data can bootstrap the marketing index even when
+     * contact fields were not persisted on the order row.
+     *
+     * @param array<string,mixed> $identity
+     */
+    protected function shouldCreateSourceLinkedProfileWithoutIdentity(array $identity): bool
+    {
+        $channels = collect((array) ($identity['source_channels'] ?? []))
+            ->map(fn ($value) => strtolower(trim((string) $value)))
+            ->filter()
+            ->values();
+
+        if ($channels->contains('shopify')) {
+            return true;
+        }
+
+        foreach ((array) ($identity['source_links'] ?? []) as $link) {
+            if (! is_array($link)) {
+                continue;
+            }
+
+            $sourceType = strtolower(trim((string) ($link['source_type'] ?? '')));
+            if (in_array($sourceType, ['shopify_order', 'shopify_customer'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function resolveReviewToExistingProfile(
