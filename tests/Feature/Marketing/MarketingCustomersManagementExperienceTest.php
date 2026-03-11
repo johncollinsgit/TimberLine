@@ -217,3 +217,177 @@ test('add customer wizard can select an existing canonical profile instead of cr
 
     $response->assertRedirect(route('marketing.customers.show', $existing));
 });
+
+test('customers index includes canonical rows even when no growave enrichment exists', function () {
+    $shopifyOnly = MarketingProfile::query()->create([
+        'first_name' => 'Shopify',
+        'last_name' => 'Only',
+        'email' => 'shopify.only@example.com',
+        'normalized_email' => 'shopify.only@example.com',
+        'source_channels' => ['shopify'],
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $shopifyOnly->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'shopify:1001',
+        'source_meta' => [],
+        'match_method' => 'seed',
+        'confidence' => 1.00,
+    ]);
+
+    $growaveEnriched = MarketingProfile::query()->create([
+        'first_name' => 'Growave',
+        'last_name' => 'Enriched',
+        'email' => 'growave.enriched@example.com',
+        'normalized_email' => 'growave.enriched@example.com',
+        'source_channels' => ['shopify'],
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $growaveEnriched->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'grow-2002',
+        'points_balance' => 220,
+        'vip_tier' => 'Gold',
+        'synced_at' => now(),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers'))
+        ->assertOk()
+        ->assertSeeText('Shopify Only')
+        ->assertSeeText('Growave Enriched')
+        ->assertSeeText('Gold');
+});
+
+test('customer row exposes detail route and detail renders canonical and external sections', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Detail',
+        'last_name' => 'Tester',
+        'email' => 'detail.tester@example.com',
+        'normalized_email' => 'detail.tester@example.com',
+        'phone' => '(555) 818-9999',
+        'normalized_phone' => '5558189999',
+        'source_channels' => ['shopify', 'manual'],
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'detail-123',
+        'points_balance' => 80,
+        'vip_tier' => 'Silver',
+        'referral_link' => 'https://example.test/ref/detail',
+        'synced_at' => now(),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers'))
+        ->assertOk()
+        ->assertSee(route('marketing.customers.show', $profile), false);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers.show', $profile))
+        ->assertOk()
+        ->assertSeeText('Detail Tester')
+        ->assertSeeText('Edit Customer Profile')
+        ->assertSeeText('External Enrichment (Read-Only)')
+        ->assertSeeText('Growave Points')
+        ->assertSeeText('Silver');
+});
+
+test('customer detail edit updates canonical fields and preserves normalized identity', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Before',
+        'last_name' => 'Name',
+        'email' => 'before@example.com',
+        'normalized_email' => 'before@example.com',
+        'phone' => '555-123-1234',
+        'normalized_phone' => '5551231234',
+        'notes' => 'Old notes',
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->patch(route('marketing.customers.update', $profile), [
+            'first_name' => 'After',
+            'last_name' => 'Update',
+            'email' => 'After.Update@example.com',
+            'phone' => '(555) 444-9900',
+            'notes' => 'Canonical notes updated',
+        ]);
+
+    $response->assertRedirect(route('marketing.customers.show', $profile));
+
+    $fresh = $profile->fresh();
+
+    expect($fresh)->not->toBeNull()
+        ->and($fresh->first_name)->toBe('After')
+        ->and($fresh->last_name)->toBe('Update')
+        ->and($fresh->email)->toBe('After.Update@example.com')
+        ->and($fresh->normalized_email)->toBe('after.update@example.com')
+        ->and($fresh->normalized_phone)->toBe('+15554449900')
+        ->and($fresh->notes)->toBe('Canonical notes updated');
+});
+
+test('customer detail update keeps growave enrichment read-only', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Readonly',
+        'last_name' => 'Check',
+        'email' => 'readonly@example.com',
+        'normalized_email' => 'readonly@example.com',
+    ]);
+
+    $external = CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'readonly-444',
+        'points_balance' => 500,
+        'vip_tier' => 'Platinum',
+        'synced_at' => now(),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->patch(route('marketing.customers.update', $profile), [
+            'first_name' => 'Readonly',
+            'last_name' => 'Updated',
+            'email' => 'readonly.updated@example.com',
+            'phone' => '555-898-1212',
+            'notes' => 'Only canonical profile should change',
+            'points_balance' => 999999,
+            'vip_tier' => 'Diamond',
+        ])
+        ->assertRedirect(route('marketing.customers.show', $profile));
+
+    $freshExternal = $external->fresh();
+
+    expect($freshExternal)->not->toBeNull()
+        ->and((int) $freshExternal->points_balance)->toBe(500)
+        ->and($freshExternal->vip_tier)->toBe('Platinum');
+});

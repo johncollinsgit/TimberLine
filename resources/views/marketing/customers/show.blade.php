@@ -64,6 +64,59 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+            <h2 class="text-lg font-semibold text-white">Edit Customer Profile</h2>
+            <p class="mt-1 text-sm text-white/65">Editable canonical identity fields stored in Backstage.</p>
+
+            <form method="POST" action="{{ route('marketing.customers.update', $profile) }}" class="mt-4 space-y-3">
+                @csrf
+                @method('PATCH')
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div class="space-y-1">
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">First Name</label>
+                        <input type="text" name="first_name" value="{{ old('first_name', $profile->first_name) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        @error('first_name')
+                            <p class="text-xs text-rose-200">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Last Name</label>
+                        <input type="text" name="last_name" value="{{ old('last_name', $profile->last_name) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        @error('last_name')
+                            <p class="text-xs text-rose-200">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Email</label>
+                        <input type="email" name="email" value="{{ old('email', $profile->email) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        @error('email')
+                            <p class="text-xs text-rose-200">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Phone</label>
+                        <input type="text" name="phone" value="{{ old('phone', $profile->phone) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        @error('phone')
+                            <p class="text-xs text-rose-200">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Internal Notes</label>
+                    <textarea name="notes" rows="3" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">{{ old('notes', $profile->notes) }}</textarea>
+                    @error('notes')
+                        <p class="text-xs text-rose-200">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-xs text-white/50">External provider fields are read-only in this form.</p>
+                    <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
+                        Save Customer
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-white">Linked Source Records</h2>
             <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
                 <table class="min-w-full text-sm">
@@ -96,8 +149,34 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-            <h2 class="text-lg font-semibold text-white">External Profile Snapshots</h2>
-            <p class="mt-1 text-sm text-white/65">Provider-level profile snapshots (including Growave loyalty metafields) mapped to this marketing profile.</p>
+            <h2 class="text-lg font-semibold text-white">External Enrichment (Read-Only)</h2>
+            <p class="mt-1 text-sm text-white/65">Provider snapshots and loyalty attributes are shown for context and are not editable from this screen.</p>
+            <div class="mt-4 grid gap-3 md:grid-cols-4">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Points</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveExternal?->points_balance ?? 0)) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Tier</div>
+                    <div class="mt-2 text-sm text-white">{{ $latestGrowaveExternal?->vip_tier ?: '—' }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Referral Link</div>
+                    @if($latestGrowaveExternal?->referral_link)
+                        <a href="{{ $latestGrowaveExternal->referral_link }}" target="_blank" rel="noopener" class="mt-2 inline-flex text-xs text-emerald-100 underline decoration-dotted">
+                            Open Referral Link
+                        </a>
+                    @else
+                        <div class="mt-2 text-sm text-white/60">—</div>
+                    @endif
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">External Records</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format($externalProfiles->count()) }}</div>
+                </article>
+            </div>
+
+            <h3 class="mt-5 text-sm font-semibold text-white">External Profile Snapshots</h3>
             <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
