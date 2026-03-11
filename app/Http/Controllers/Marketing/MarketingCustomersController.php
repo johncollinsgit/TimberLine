@@ -100,6 +100,7 @@ class MarketingCustomersController extends Controller
                         ->orWhere('last_name', 'like', $searchLike)
                         ->orWhere('email', 'like', $searchLike)
                         ->orWhere('phone', 'like', $searchLike)
+                        ->orWhere('notes', 'like', $searchLike)
                         ->orWhereHas('links', function ($linkQuery) use ($searchLike): void {
                             $linkQuery->where('source_id', 'like', $searchLike);
                         })

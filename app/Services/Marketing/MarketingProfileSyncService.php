@@ -116,6 +116,20 @@ class MarketingProfileSyncService
 
         if (! $identity['has_identity']) {
             if (! $sourceLinkedProfile) {
+                if ($allowCreate && $this->shouldCreateSourceLinkedProfileWithoutIdentity($identity)) {
+                    $profile = new MarketingProfile();
+
+                    return $this->persistProfileAndLinks(
+                        identity: $identity,
+                        profile: $profile,
+                        matchMethod: 'created_from_source_without_identity',
+                        confidence: null,
+                        createProfile: true,
+                        reviewContext: $reviewContext,
+                        dryRun: $dryRun
+                    );
+                }
+
                 return $this->result('skipped', 'missing_email_phone', null, 0, 0, 0, 0, 0, 1);
             }
 
@@ -684,6 +698,37 @@ class MarketingProfileSyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    protected function shouldCreateSourceLinkedProfileWithoutIdentity(array $identity): bool
+    {
+        $customerSourceTypes = [
+            'shopify_customer',
+            'growave_customer',
+            'square_customer',
+            'wholesale_customer',
+            'event_customer',
+            'internal_customer',
+            'manual_customer',
+        ];
+
+        foreach ((array) ($identity['source_links'] ?? []) as $link) {
+            if (! is_array($link)) {
+                continue;
+            }
+
+            $sourceType = trim((string) ($link['source_type'] ?? ''));
+            if (in_array($sourceType, $customerSourceTypes, true)) {
+                return true;
+            }
+        }
+
+        $primarySourceType = trim((string) ($identity['primary_source']['source_type'] ?? ''));
+
+        return in_array($primarySourceType, $customerSourceTypes, true);
     }
 
     protected function phonesEquivalent(?string $left, ?string $right): bool

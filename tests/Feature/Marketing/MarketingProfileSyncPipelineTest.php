@@ -86,6 +86,32 @@ test('square-only customer candidate creates canonical marketing profile', funct
         ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1);
 });
 
+test('square customer without direct email or phone still creates canonical profile from source link', function () {
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-PIPE-NOID',
+        'given_name' => 'Square',
+        'family_name' => 'No Identity',
+        'email' => null,
+        'phone' => null,
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')
+        ->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
+
+    expect($profile->first_name)->toBe('Square')
+        ->and($profile->last_name)->toBe('No Identity')
+        ->and($profile->normalized_email)->toBeNull()
+        ->and($profile->normalized_phone)->toBeNull()
+        ->and(MarketingProfileLink::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('source_type', 'square_customer')
+            ->where('source_id', 'SQ-CUST-PIPE-NOID')
+            ->exists())->toBeTrue();
+});
+
 test('square order and payment records attach to existing square customer profile', function () {
     SquareCustomer::query()->create([
         'square_customer_id' => 'SQ-CUST-PIPE-2',
