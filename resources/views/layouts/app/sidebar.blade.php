@@ -1561,13 +1561,13 @@
           <div class="space-y-1 mf-sidebar-main-list" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
             @foreach($orderedSidebarItems as $item)
               <div
-                class="mf-sidebar-sort-item {{ $item['current'] ? 'mf-active-pill' : '' }}"
+                class="mf-sidebar-sort-item"
                 data-sidebar-item
                 data-sidebar-key="{{ $item['key'] }}"
               >
                 @if($item['key'] === 'administration' && count($adminSubItems) > 0)
                   <details class="mf-admin-group" {{ $adminActive ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary">
+                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
                         <flux:icon.wrench-screwdriver class="size-4" />
                         <span class="mf-nav-label">Administration</span>
@@ -1588,7 +1588,7 @@
                   </details>
                 @elseif($item['key'] === 'marketing' && count($marketingSubItems) > 0)
                   <details class="mf-admin-group" {{ $marketingActive ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary">
+                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
                         <flux:icon.megaphone class="size-4" />
                         <span class="mf-nav-label">Marketing</span>
@@ -1608,15 +1608,15 @@
                     </div>
                   </details>
                 @else
-                  <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item">
+                  <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item {{ $item['current'] ? 'mf-active-pill' : '' }}">
                     <span class="mf-nav-label">{{ $item['label'] }}</span>
                   </flux:sidebar.item>
                 @endif
               </div>
             @endforeach
-            <div class="mf-sidebar-sort-item {{ $wikiSectionsActive ? 'mf-active-pill' : '' }}">
+            <div class="mf-sidebar-sort-item">
               <details class="mf-admin-group" {{ $wikiSectionsActive ? 'open' : '' }}>
-                <summary class="mf-admin-group-summary">
+                <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'mf-active-pill' : '' }}">
                   <span class="mf-admin-group-main">
                     <flux:icon.book-open class="size-4" />
                     <span class="mf-nav-label">Wiki Sections</span>
