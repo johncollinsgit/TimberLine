@@ -367,10 +367,6 @@
                         </div>
                     </div>
 
-                    <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
-                        <p class="text-xs uppercase tracking-[0.2em] text-white/50">Preview</p>
-                        <p class="mt-2 whitespace-pre-wrap text-sm text-white/88" x-text="text || 'Your preview will show up here.'"></p>
-                    </div>
                 </form>
 
                 <div class="mt-5 flex flex-wrap items-center justify-between gap-2">

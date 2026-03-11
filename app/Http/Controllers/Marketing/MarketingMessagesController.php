@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendMarketingDirectMessageBatch;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageTemplate;
@@ -17,7 +18,9 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class MarketingMessagesController extends Controller
 {
@@ -462,17 +465,45 @@ class MarketingMessagesController extends Controller
             $groupId = (int) $adHocGroup->id;
         }
 
+        $sendAt = $this->parseScheduledSendAt($state['send_at'] ?? null);
+        $batchId = (string) Str::uuid();
+        $sendOptions = [
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => (int) auth()->id(),
+            'group_id' => $groupId,
+            'source_label' => 'direct_message_wizard',
+            'batch_id' => $batchId,
+            'scheduled_for' => $sendAt?->toIso8601String(),
+        ];
+
+        if ($sendAt && $sendAt->isFuture()) {
+            SendMarketingDirectMessageBatch::dispatch(
+                channel: 'sms',
+                recipients: $recipients,
+                message: $message,
+                options: $sendOptions,
+            )->delay($sendAt);
+
+            $this->clearWizardState();
+
+            return redirect()
+                ->route('marketing.messages.deliveries', ['batch' => $batchId])
+                ->with('toast', [
+                    'style' => 'success',
+                    'message' => sprintf(
+                        'Message scheduled for %s %s.',
+                        $sendAt->format('Y-m-d H:i'),
+                        (string) config('app.timezone', 'UTC')
+                    ),
+                ]);
+        }
+
         try {
             $summary = $service->send(
                 channel: 'sms',
                 recipients: $recipients,
                 message: $message,
-                options: [
-                    'dry_run' => (bool) ($data['dry_run'] ?? false),
-                    'actor_id' => (int) auth()->id(),
-                    'group_id' => $groupId,
-                    'source_label' => 'direct_message_wizard',
-                ]
+                options: $sendOptions,
             );
         } catch (\Throwable $e) {
             return redirect()
@@ -892,6 +923,20 @@ class MarketingMessagesController extends Controller
     protected function normalizeStep(int $step): int
     {
         return max(1, min(4, $step));
+    }
+
+    protected function parseScheduledSendAt(mixed $value): ?Carbon
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($raw, (string) config('app.timezone', 'UTC'));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     protected function nullableString(mixed $value): ?string

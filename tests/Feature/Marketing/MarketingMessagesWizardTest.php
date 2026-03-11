@@ -1,10 +1,13 @@
 <?php
 
+use App\Jobs\SendMarketingDirectMessageBatch;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingProfile;
 use App\Models\MarketingShortLink;
 use App\Models\User;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
     config()->set('marketing.sms.enabled', true);
@@ -186,6 +189,70 @@ test('manual phone audience creates profile and logs delivery on send', function
         ->and($delivery)->not->toBeNull()
         ->and((int) $delivery->marketing_profile_id)->toBe((int) $profile->id)
         ->and($delivery->provider_message_id)->toStartWith('DRYRUN-');
+});
+
+test('future send_at queues direct send job instead of sending immediately', function () {
+    Queue::fake();
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Future',
+        'last_name' => 'Send',
+        'email' => 'future.send@example.com',
+        'normalized_email' => 'future.send@example.com',
+        'phone' => '+15553334444',
+        'normalized_phone' => '+15553334444',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $scheduledAt = now()->addMinutes(5)->second(0);
+
+    $this->actingAs($user)
+        ->post(route('marketing.messages.save-audience'), [
+            'audience_kind' => 'person',
+            'selected_profile_id' => $profile->id,
+        ])
+        ->assertRedirect(route('marketing.messages.send'));
+
+    $this->actingAs($user)
+        ->post(route('marketing.messages.save-message'), [
+            'message_text' => 'Scheduled message',
+            'send_at' => $scheduledAt->format('Y-m-d\TH:i'),
+        ])
+        ->assertRedirect(route('marketing.messages.send'));
+
+    $this->actingAs($user)
+        ->post(route('marketing.messages.execute'), [
+            'confirm_send' => '1',
+            'dry_run' => '1',
+        ])
+        ->assertRedirect();
+
+    Queue::assertPushed(SendMarketingDirectMessageBatch::class, function (SendMarketingDirectMessageBatch $job) use ($profile, $scheduledAt): bool {
+        if ((string) $job->channel !== 'sms') {
+            return false;
+        }
+
+        if ((int) data_get($job->recipients, '0.profile_id') !== (int) $profile->id) {
+            return false;
+        }
+
+        if (!($job->delay instanceof \DateTimeInterface)) {
+            return false;
+        }
+
+        return Carbon::instance($job->delay)->format('Y-m-d H:i') === $scheduledAt->format('Y-m-d H:i');
+    });
+
+    expect(
+        MarketingMessageDelivery::query()
+            ->whereNull('campaign_id')
+            ->count()
+    )->toBe(0);
 });
 
 test('customer autocomplete endpoint returns marketing profile matches', function () {
