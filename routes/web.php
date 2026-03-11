@@ -209,6 +209,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->defaults('section', 'overview')
                 ->name('overview');
             Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
+            Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
+            Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
             Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
             Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
             Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
