@@ -97,7 +97,7 @@
             <section class="rounded-3xl border border-amber-300/35 bg-amber-500/10 p-4 sm:p-5">
                 <h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-100">Unified Profile Index Not Built</h2>
                 <p class="mt-2 text-sm text-amber-50/90">
-                    No marketing profiles have been built yet, but upstream Shopify/Growave customer candidates exist.
+                    No marketing profiles have been built yet, but upstream Shopify/Growave/Square customer candidates exist.
                     Run profile sync to build the canonical customer index.
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2 text-xs text-amber-100/90">
@@ -109,6 +109,15 @@
                     </span>
                     <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
                         Growave: {{ number_format((int) ($emptyStateDiagnostics['growave_candidates'] ?? 0)) }}
+                    </span>
+                    <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
+                        Square Customers: {{ number_format((int) ($emptyStateDiagnostics['square_customer_candidates'] ?? 0)) }}
+                    </span>
+                    <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
+                        Square Orders: {{ number_format((int) ($emptyStateDiagnostics['square_order_candidates'] ?? 0)) }}
+                    </span>
+                    <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-500/15 px-2.5 py-1">
+                        Square Payments: {{ number_format((int) ($emptyStateDiagnostics['square_payment_candidates'] ?? 0)) }}
                     </span>
                 </div>
                 <div class="mt-3 text-xs text-amber-50/80">

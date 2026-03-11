@@ -5,6 +5,9 @@ namespace App\Console\Commands;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
 use App\Models\Order;
+use App\Models\SquareCustomer;
+use App\Models\SquareOrder;
+use App\Models\SquarePayment;
 use App\Services\Marketing\MarketingProfileSyncService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -14,14 +17,14 @@ use Illuminate\Support\Facades\Schema;
 class MarketingSyncProfiles extends Command
 {
     protected $signature = 'marketing:sync-profiles
-        {--source=all : all|shopify|growave}
+        {--source=all : all|shopify|growave|square}
         {--limit= : Maximum number of candidate records to process}
         {--chunk=500 : Chunk size for candidate streaming}
         {--since= : Process records updated on/after this datetime}
         {--order-id= : Process a single Shopify order row by ID}
         {--dry-run : Preview changes without writing}';
 
-    protected $description = 'Backfill/sync canonical marketing profiles from Shopify orders/customers and Growave customer snapshots.';
+    protected $description = 'Backfill/sync canonical marketing profiles from Shopify, Growave, and Square source layers.';
 
     public function handle(MarketingProfileSyncService $syncService): int
     {
@@ -30,8 +33,8 @@ class MarketingSyncProfiles extends Command
         $source = strtolower(trim((string) $this->option('source')));
         $source = $source !== '' ? $source : 'all';
 
-        if (! in_array($source, ['all', 'shopify', 'growave'], true)) {
-            $this->error('Invalid --source value. Use all|shopify|growave.');
+        if (! in_array($source, ['all', 'shopify', 'growave', 'square'], true)) {
+            $this->error('Invalid --source value. Use all|shopify|growave|square.');
 
             return self::FAILURE;
         }
@@ -56,6 +59,9 @@ class MarketingSyncProfiles extends Command
             'shopify_order_candidates' => 0,
             'shopify_customer_candidates' => 0,
             'growave_candidates' => 0,
+            'square_customer_candidates' => 0,
+            'square_order_candidates' => 0,
+            'square_payment_candidates' => 0,
         ];
 
         $run = $this->beginRun($dryRun, $source, $limit, $chunk, $since);
@@ -102,6 +108,12 @@ class MarketingSyncProfiles extends Command
                         $verbose
                     );
                 }
+
+                if (in_array($source, ['all', 'square'], true)) {
+                    $this->syncSquareCustomerCandidates($syncService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
+                    $this->syncSquareOrderCandidates($syncService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
+                    $this->syncSquarePaymentCandidates($syncService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
+                }
             }
         } catch (\Throwable $e) {
             $summary['errors']++;
@@ -132,6 +144,9 @@ class MarketingSyncProfiles extends Command
             'shopify_order_candidates',
             'shopify_customer_candidates',
             'growave_candidates',
+            'square_customer_candidates',
+            'square_order_candidates',
+            'square_payment_candidates',
         ] as $key) {
             $this->line($key . '=' . (int) ($summary[$key] ?? 0));
         }
@@ -250,6 +265,203 @@ class MarketingSyncProfiles extends Command
     /**
      * @param array<string,int> $summary
      */
+    protected function syncSquareCustomerCandidates(
+        MarketingProfileSyncService $syncService,
+        array &$summary,
+        ?CarbonImmutable $since,
+        int $chunk,
+        ?int &$remaining,
+        bool $dryRun,
+        bool $verbose
+    ): void {
+        if (! Schema::hasTable('square_customers')) {
+            return;
+        }
+
+        $query = SquareCustomer::query()
+            ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
+            ->orderBy('id');
+
+        foreach ($query->lazyById($chunk) as $customer) {
+            if ($remaining !== null && $remaining <= 0) {
+                break;
+            }
+
+            $summary['square_customer_candidates']++;
+
+            try {
+                $result = $syncService->syncExternalIdentity(
+                    $this->identityPayloadFromSquareCustomer($customer),
+                    [
+                        'dry_run' => $dryRun,
+                        'review_context' => [
+                            'source_label' => 'marketing_profiles_sync',
+                            'source_id' => (string) $customer->square_customer_id,
+                            'source_record_id' => (int) $customer->id,
+                            'provider' => 'square',
+                            'integration' => 'square_customer',
+                        ],
+                    ]
+                );
+                $this->mergeSyncResult($summary, $result);
+
+                if ($verbose) {
+                    $this->line(sprintf(
+                        'square_customer#%s status=%s reason=%s profile=%s',
+                        (string) $customer->square_customer_id,
+                        (string) ($result['status'] ?? 'unknown'),
+                        (string) ($result['reason'] ?? 'n/a'),
+                        $result['profile_id'] !== null ? (string) $result['profile_id'] : '-'
+                    ));
+                }
+            } catch (\Throwable $e) {
+                $summary['errors']++;
+                if ($verbose) {
+                    $this->warn('square_customer#' . (string) $customer->square_customer_id . ' error=' . $e->getMessage());
+                }
+            }
+
+            if ($remaining !== null) {
+                $remaining--;
+            }
+        }
+    }
+
+    /**
+     * @param array<string,int> $summary
+     */
+    protected function syncSquareOrderCandidates(
+        MarketingProfileSyncService $syncService,
+        array &$summary,
+        ?CarbonImmutable $since,
+        int $chunk,
+        ?int &$remaining,
+        bool $dryRun,
+        bool $verbose
+    ): void {
+        if (! Schema::hasTable('square_orders')) {
+            return;
+        }
+
+        $query = SquareOrder::query()
+            ->with('customer')
+            ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
+            ->orderBy('id');
+
+        foreach ($query->lazyById($chunk) as $order) {
+            if ($remaining !== null && $remaining <= 0) {
+                break;
+            }
+
+            $summary['square_order_candidates']++;
+
+            try {
+                $result = $syncService->syncExternalIdentity(
+                    $this->identityPayloadFromSquareOrder($order),
+                    [
+                        'dry_run' => $dryRun,
+                        'review_context' => [
+                            'source_label' => 'marketing_profiles_sync',
+                            'source_id' => (string) $order->square_order_id,
+                            'source_record_id' => (int) $order->id,
+                            'provider' => 'square',
+                            'integration' => 'square_order',
+                        ],
+                    ]
+                );
+                $this->mergeSyncResult($summary, $result);
+
+                if ($verbose) {
+                    $this->line(sprintf(
+                        'square_order#%s status=%s reason=%s profile=%s',
+                        (string) $order->square_order_id,
+                        (string) ($result['status'] ?? 'unknown'),
+                        (string) ($result['reason'] ?? 'n/a'),
+                        $result['profile_id'] !== null ? (string) $result['profile_id'] : '-'
+                    ));
+                }
+            } catch (\Throwable $e) {
+                $summary['errors']++;
+                if ($verbose) {
+                    $this->warn('square_order#' . (string) $order->square_order_id . ' error=' . $e->getMessage());
+                }
+            }
+
+            if ($remaining !== null) {
+                $remaining--;
+            }
+        }
+    }
+
+    /**
+     * @param array<string,int> $summary
+     */
+    protected function syncSquarePaymentCandidates(
+        MarketingProfileSyncService $syncService,
+        array &$summary,
+        ?CarbonImmutable $since,
+        int $chunk,
+        ?int &$remaining,
+        bool $dryRun,
+        bool $verbose
+    ): void {
+        if (! Schema::hasTable('square_payments')) {
+            return;
+        }
+
+        $query = SquarePayment::query()
+            ->with('customer')
+            ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
+            ->orderBy('id');
+
+        foreach ($query->lazyById($chunk) as $payment) {
+            if ($remaining !== null && $remaining <= 0) {
+                break;
+            }
+
+            $summary['square_payment_candidates']++;
+
+            try {
+                $result = $syncService->syncExternalIdentity(
+                    $this->identityPayloadFromSquarePayment($payment),
+                    [
+                        'dry_run' => $dryRun,
+                        'review_context' => [
+                            'source_label' => 'marketing_profiles_sync',
+                            'source_id' => (string) $payment->square_payment_id,
+                            'source_record_id' => (int) $payment->id,
+                            'provider' => 'square',
+                            'integration' => 'square_payment',
+                        ],
+                    ]
+                );
+                $this->mergeSyncResult($summary, $result);
+
+                if ($verbose) {
+                    $this->line(sprintf(
+                        'square_payment#%s status=%s reason=%s profile=%s',
+                        (string) $payment->square_payment_id,
+                        (string) ($result['status'] ?? 'unknown'),
+                        (string) ($result['reason'] ?? 'n/a'),
+                        $result['profile_id'] !== null ? (string) $result['profile_id'] : '-'
+                    ));
+                }
+            } catch (\Throwable $e) {
+                $summary['errors']++;
+                if ($verbose) {
+                    $this->warn('square_payment#' . (string) $payment->square_payment_id . ' error=' . $e->getMessage());
+                }
+            }
+
+            if ($remaining !== null) {
+                $remaining--;
+            }
+        }
+    }
+
+    /**
+     * @param array<string,int> $summary
+     */
     protected function syncOrderCandidate(
         MarketingProfileSyncService $syncService,
         Order $order,
@@ -352,6 +564,162 @@ class MarketingSyncProfiles extends Command
             'shopify_customer_id' => $shopifyCustomerId,
             'store_key' => $storeKey,
             'source_channels' => array_values(array_unique($sourceChannels)),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function identityPayloadFromSquareCustomer(SquareCustomer $customer): array
+    {
+        $sourceId = (string) $customer->square_customer_id;
+
+        return [
+            'first_name' => $this->nullableString($customer->given_name),
+            'last_name' => $this->nullableString($customer->family_name),
+            'raw_email' => $this->nullableString($customer->email),
+            'raw_phone' => $this->nullableString($customer->phone),
+            'source_channels' => ['square'],
+            'source_links' => [[
+                'source_type' => 'square_customer',
+                'source_id' => $sourceId,
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'customer',
+                    'external_id' => $sourceId,
+                    'reference_id' => $this->nullableString($customer->reference_id),
+                ],
+            ]],
+            'primary_source' => [
+                'source_type' => 'square_customer',
+                'source_id' => $sourceId,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function identityPayloadFromSquareOrder(SquareOrder $order): array
+    {
+        $sourceId = (string) $order->square_order_id;
+        $squareCustomerId = $this->nullableString($order->square_customer_id);
+        $sourceName = strtolower((string) $order->source_name);
+
+        $channels = ['square'];
+        if (str_contains($sourceName, 'online')) {
+            $channels[] = 'online';
+        }
+
+        $customer = $order->relationLoaded('customer')
+            ? $order->customer
+            : ($squareCustomerId !== null
+                ? SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first()
+                : null);
+
+        $sourceLinks = [[
+            'source_type' => 'square_order',
+            'source_id' => $sourceId,
+            'source_meta' => [
+                'source_system' => 'square',
+                'source_record_type' => 'order_contact',
+                'external_id' => $sourceId,
+                'square_customer_id' => $squareCustomerId,
+                'location_id' => $this->nullableString($order->location_id),
+                'state' => $this->nullableString($order->state),
+                'source_name' => $this->nullableString($order->source_name),
+            ],
+        ]];
+
+        if ($squareCustomerId !== null) {
+            $sourceLinks[] = [
+                'source_type' => 'square_customer',
+                'source_id' => $squareCustomerId,
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'customer',
+                    'external_id' => $squareCustomerId,
+                ],
+            ];
+        }
+
+        return [
+            'first_name' => $this->nullableString($customer?->given_name),
+            'last_name' => $this->nullableString($customer?->family_name),
+            'raw_email' => $this->nullableString($customer?->email),
+            'raw_phone' => $this->nullableString($customer?->phone),
+            'source_channels' => array_values(array_unique($channels)),
+            'source_links' => $sourceLinks,
+            'primary_source' => [
+                'source_type' => 'square_order',
+                'source_id' => $sourceId,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function identityPayloadFromSquarePayment(SquarePayment $payment): array
+    {
+        $sourceId = (string) $payment->square_payment_id;
+        $squareOrderId = $this->nullableString($payment->square_order_id);
+        $squareCustomerId = $this->nullableString($payment->square_customer_id);
+
+        $customer = $payment->relationLoaded('customer')
+            ? $payment->customer
+            : ($squareCustomerId !== null
+                ? SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first()
+                : null);
+
+        $sourceLinks = [[
+            'source_type' => 'square_payment',
+            'source_id' => $sourceId,
+            'source_meta' => [
+                'source_system' => 'square',
+                'source_record_type' => 'payment',
+                'external_id' => $sourceId,
+                'square_order_id' => $squareOrderId,
+                'square_customer_id' => $squareCustomerId,
+                'status' => $this->nullableString($payment->status),
+            ],
+        ]];
+
+        if ($squareOrderId !== null) {
+            $sourceLinks[] = [
+                'source_type' => 'square_order',
+                'source_id' => $squareOrderId,
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'order_contact',
+                    'external_id' => $squareOrderId,
+                ],
+            ];
+        }
+
+        if ($squareCustomerId !== null) {
+            $sourceLinks[] = [
+                'source_type' => 'square_customer',
+                'source_id' => $squareCustomerId,
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'customer',
+                    'external_id' => $squareCustomerId,
+                ],
+            ];
+        }
+
+        return [
+            'first_name' => $this->nullableString($customer?->given_name),
+            'last_name' => $this->nullableString($customer?->family_name),
+            'raw_email' => $this->nullableString($customer?->email),
+            'raw_phone' => $this->nullableString($customer?->phone),
+            'source_channels' => ['square'],
+            'source_links' => $sourceLinks,
+            'primary_source' => [
+                'source_type' => 'square_payment',
+                'source_id' => $sourceId,
+            ],
         ];
     }
 

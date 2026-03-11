@@ -4,6 +4,7 @@ use App\Models\MarketingIdentityReview;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\SquareCustomer;
 use App\Models\User;
 
 test('admin and marketing manager can access customers and identity review pages', function () {
@@ -214,6 +215,14 @@ test('customers empty state surfaces upstream sync diagnostics and readable head
         'shopify_customer_id' => '8801',
         'email' => 'empty-state@example.com',
     ]);
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-EMPTY-1',
+        'given_name' => 'Square',
+        'family_name' => 'Candidate',
+        'email' => 'square-empty@example.com',
+        'phone' => '5551012020',
+        'synced_at' => now(),
+    ]);
 
     $admin = User::factory()->create([
         'role' => 'admin',
@@ -224,6 +233,7 @@ test('customers empty state surfaces upstream sync diagnostics and readable head
         ->get(route('marketing.customers'))
         ->assertOk()
         ->assertSeeText('No marketing profiles have been built yet')
+        ->assertSeeText('Shopify/Growave/Square')
         ->assertSeeText('Run profile sync to build the canonical customer index.')
         ->assertSeeText('Customer')
         ->assertSeeText('Source Channels')

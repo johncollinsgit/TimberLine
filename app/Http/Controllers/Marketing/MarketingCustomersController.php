@@ -15,6 +15,7 @@ use App\Models\MarketingOrderEventAttribution;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingGroup;
 use App\Models\Order;
+use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Services\Marketing\BirthdayProfileService;
@@ -743,14 +744,23 @@ class MarketingCustomersController extends Controller
                 ->sortByDesc(fn (Order $order) => optional($order->ordered_at)->timestamp ?? 0)
                 ->first();
 
-            $squareOrderDates = $profileLinks->where('source_type', 'square_order')
+        $squareOrderDates = $profileLinks->where('source_type', 'square_order')
                 ->map(fn (MarketingProfileLink $link) => optional($squareOrdersById->get((string) $link->source_id)?->closed_at)->timestamp)
                 ->filter();
             $squarePaymentDates = $profileLinks->where('source_type', 'square_payment')
                 ->map(fn (MarketingProfileLink $link) => optional($squarePaymentsById->get((string) $link->source_id)?->created_at_source)->timestamp)
                 ->filter();
-            $orderDate = optional($lastOrder?->ordered_at)->timestamp;
-            $latestTimestamp = collect([$orderDate, ...$squareOrderDates->all(), ...$squarePaymentDates->all()])
+            $squareOrderCount = (int) $profileLinks
+                ->where('source_type', 'square_order')
+                ->pluck('source_id')
+                ->filter()
+                ->unique()
+                ->count();
+
+            $shopifyOrderTimestamp = optional($lastOrder?->ordered_at)->timestamp;
+            $squareOrderTimestamp = $squareOrderDates->max();
+            $lastOrderTimestamp = collect([$shopifyOrderTimestamp, $squareOrderTimestamp])->filter()->max();
+            $latestTimestamp = collect([$shopifyOrderTimestamp, $squareOrderTimestamp, ...$squarePaymentDates->all()])
                 ->filter()
                 ->max();
 
@@ -776,8 +786,8 @@ class MarketingCustomersController extends Controller
             }
 
             $stats[(int) $profile->id] = [
-                'order_count' => $allOrders->count(),
-                'last_order_at' => optional($lastOrder?->ordered_at)->toDateString(),
+                'order_count' => $allOrders->count() + $squareOrderCount,
+                'last_order_at' => $lastOrderTimestamp ? date('Y-m-d', (int) $lastOrderTimestamp) : null,
                 'last_activity_at' => $latestTimestamp ? date('Y-m-d', (int) $latestTimestamp) : null,
                 'source_badges' => $badges,
             ];
@@ -840,14 +850,35 @@ class MarketingCustomersController extends Controller
                 ->count()
             : 0;
 
-        $upstreamCandidates = $shopifyOrderCandidates + $shopifyCustomerCandidates + $growaveCandidates;
+        $squareCustomerCandidates = Schema::hasTable('square_customers')
+            ? (int) SquareCustomer::query()->count()
+            : 0;
+        $squareOrderCandidates = Schema::hasTable('square_orders')
+            ? (int) SquareOrder::query()->count()
+            : 0;
+        $squarePaymentCandidates = Schema::hasTable('square_payments')
+            ? (int) SquarePayment::query()->count()
+            : 0;
+
+        $upstreamCandidates = $shopifyOrderCandidates
+            + $shopifyCustomerCandidates
+            + $growaveCandidates
+            + $squareCustomerCandidates
+            + $squareOrderCandidates
+            + $squarePaymentCandidates;
         if ($upstreamCandidates === 0) {
             return null;
         }
 
         $lastSyncRun = Schema::hasTable('marketing_import_runs')
             ? MarketingImportRun::query()
-                ->whereIn('type', ['marketing_profiles_sync', 'shopify_customer_metafields_sync'])
+                ->whereIn('type', [
+                    'marketing_profiles_sync',
+                    'shopify_customer_metafields_sync',
+                    'square_customers_sync',
+                    'square_orders_sync',
+                    'square_payments_sync',
+                ])
                 ->orderByDesc('finished_at')
                 ->orderByDesc('id')
                 ->first()
@@ -857,6 +888,9 @@ class MarketingCustomersController extends Controller
             'shopify_order_candidates' => $shopifyOrderCandidates,
             'shopify_customer_candidates' => $shopifyCustomerCandidates,
             'growave_candidates' => $growaveCandidates,
+            'square_customer_candidates' => $squareCustomerCandidates,
+            'square_order_candidates' => $squareOrderCandidates,
+            'square_payment_candidates' => $squarePaymentCandidates,
             'upstream_candidates' => $upstreamCandidates,
             'last_sync_at' => optional($lastSyncRun?->finished_at ?? $lastSyncRun?->started_at)?->toDateTimeString(),
             'last_sync_status' => $lastSyncRun?->status,
