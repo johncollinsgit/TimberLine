@@ -103,13 +103,34 @@ class MarketingMessagesController extends Controller
         $profileCount = (int) MarketingProfile::query()->count();
 
         if ($queryText === '') {
+            $recent = MarketingProfile::query()
+                ->where(function ($query): void {
+                    $query->where(function ($named): void {
+                        $named->whereNotNull('first_name')
+                            ->where('first_name', '!=', '');
+                    })->orWhere(function ($email): void {
+                        $email->whereNotNull('email')
+                            ->where('email', '!=', '');
+                    })->orWhere(function ($phone): void {
+                        $phone->whereNotNull('phone')
+                            ->where('phone', '!=', '');
+                    });
+                })
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'normalized_phone']);
+
             return response()->json([
-                'data' => [],
+                'data' => $recent->map(fn (MarketingProfile $profile): array => $this->profileSearchPayload($profile))->values()->all(),
                 'meta' => [
                     'query' => $queryText,
                     'profile_count' => $profileCount,
                     'has_profiles' => $profileCount > 0,
-                    'empty_reason' => $profileCount === 0 ? 'no_profiles' : 'empty_query',
+                    'mode' => 'recent',
+                    'empty_reason' => $profileCount === 0
+                        ? 'no_profiles'
+                        : ($recent->isEmpty() ? 'no_searchable_profiles' : null),
                 ],
             ]);
         }
@@ -184,11 +205,17 @@ class MarketingMessagesController extends Controller
         };
 
         if ($members === []) {
+            $warning = match ($audienceKind) {
+                'manual' => 'Couldn’t parse any phone numbers. Try +15551234567 or 5551234567.',
+                'person' => 'Pick a person, or switch to Manual and paste a phone number.',
+                default => 'No sendable recipients yet. Pick someone, a group, a segment, or paste valid numbers.',
+            };
+
             return redirect()
                 ->route('marketing.messages.send')
                 ->with('toast', [
                     'style' => 'warning',
-                    'message' => 'No sendable recipients yet. Pick someone, a group, a segment, or paste valid numbers.',
+                    'message' => $warning,
                 ]);
         }
 
@@ -816,7 +843,7 @@ class MarketingMessagesController extends Controller
     {
         $default = [
             'step' => 1,
-            'audience_kind' => 'person',
+            'audience_kind' => 'manual',
             'group_mode' => 'saved',
             'selected_profile_id' => 0,
             'selected_profile_ids' => [],

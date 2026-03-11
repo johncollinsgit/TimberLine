@@ -82,7 +82,7 @@
                                     type="text"
                                     x-model="query"
                                     @keydown="handleKeydown($event)"
-                                    @focus="if (items.length > 0) open = true"
+                                    @focus="handleFocus()"
                                     placeholder="Type a name, email, or phone"
                                     class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35"
                                 />
@@ -114,7 +114,10 @@
                                             <template x-if="meta.empty_reason === 'no_profiles'">
                                                 <p>No profiles yet. Sync customers first.</p>
                                             </template>
-                                            <template x-if="meta.empty_reason !== 'no_profiles'">
+                                            <template x-if="meta.empty_reason === 'no_searchable_profiles'">
+                                                <p>Profiles exist, but most are missing names/emails. You can still use Manual for a quick test.</p>
+                                            </template>
+                                            <template x-if="meta.empty_reason !== 'no_profiles' && meta.empty_reason !== 'no_searchable_profiles'">
                                                 <p>No matches yet. Try another name, email, or phone.</p>
                                             </template>
                                         </div>
@@ -177,7 +180,7 @@
                                         type="text"
                                         x-model="query"
                                         @keydown="handleKeydown($event)"
-                                        @focus="if (items.length > 0) open = true"
+                                        @focus="handleFocus()"
                                         placeholder="Search and press enter to add"
                                         class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35"
                                     />
@@ -547,14 +550,25 @@
                     this.$watch('query', (value) => this.debounceSearch(value));
                 },
 
+                handleFocus() {
+                    const term = (this.query || '').trim();
+                    if (term === '') {
+                        this.search('');
+                        return;
+                    }
+
+                    if (this.items.length > 0) {
+                        this.open = true;
+                    }
+                },
+
                 debounceSearch(value) {
                     window.clearTimeout(this.debounceTimer);
                     const term = (value || '').trim();
                     if (term === '') {
-                        this.items = [];
-                        this.open = false;
-                        this.activeIndex = -1;
-                        this.meta.empty_reason = this.profileCount > 0 ? 'empty_query' : 'no_profiles';
+                        this.debounceTimer = window.setTimeout(() => {
+                            this.search('');
+                        }, 180);
                         return;
                     }
 
@@ -652,13 +666,25 @@
                     this.$watch('query', (value) => this.debounceSearch(value));
                 },
 
+                handleFocus() {
+                    const term = (this.query || '').trim();
+                    if (term === '') {
+                        this.search('');
+                        return;
+                    }
+
+                    if (this.items.length > 0) {
+                        this.open = true;
+                    }
+                },
+
                 debounceSearch(value) {
                     window.clearTimeout(this.debounceTimer);
                     const term = (value || '').trim();
                     if (term === '') {
-                        this.items = [];
-                        this.open = false;
-                        this.activeIndex = -1;
+                        this.debounceTimer = window.setTimeout(() => {
+                            this.search('');
+                        }, 180);
                         return;
                     }
 
