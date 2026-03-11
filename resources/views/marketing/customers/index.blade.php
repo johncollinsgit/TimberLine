@@ -163,10 +163,10 @@
                                 <td class="px-4 py-3 text-white/65">{{ $profile->marketing_score !== null ? number_format((float) $profile->marketing_score, 2) : 'Pending' }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-col gap-1">
-                                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                                        <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                                             Email {{ $profile->accepts_email_marketing ? 'Opt-In' : 'Opt-Out' }}
                                         </span>
-                                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                                        <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                                             SMS {{ $profile->accepts_sms_marketing ? 'Opt-In' : 'Opt-Out' }}
                                         </span>
                                     </div>

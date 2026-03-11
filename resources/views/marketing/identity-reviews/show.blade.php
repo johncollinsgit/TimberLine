@@ -65,11 +65,11 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Profile</th>
-                            <th class="px-4 py-3 text-left">Email</th>
-                            <th class="px-4 py-3 text-left">Phone</th>
-                            <th class="px-4 py-3 text-left">Channels</th>
-                            <th class="px-4 py-3 text-right">Resolve</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Email</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Phone</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Channels</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Resolve</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

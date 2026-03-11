@@ -53,12 +53,12 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Campaign</th>
-                            <th class="px-4 py-3 text-left">Profile</th>
-                            <th class="px-4 py-3 text-left">Channel</th>
-                            <th class="px-4 py-3 text-left">Variant</th>
-                            <th class="px-4 py-3 text-left">Reason Codes</th>
-                            <th class="px-4 py-3 text-right">Actions</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Campaign</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Channel</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Variant</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Reason Codes</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -96,13 +96,13 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Title</th>
-                            <th class="px-4 py-3 text-left">Type</th>
-                            <th class="px-4 py-3 text-left">Campaign</th>
-                            <th class="px-4 py-3 text-left">Profile</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Confidence</th>
-                            <th class="px-4 py-3 text-right">Actions</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Title</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Type</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Campaign</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Confidence</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

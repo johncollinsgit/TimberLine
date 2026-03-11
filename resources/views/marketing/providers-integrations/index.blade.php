@@ -115,12 +115,12 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Type</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Source</th>
-                            <th class="px-4 py-3 text-left">File</th>
-                            <th class="px-4 py-3 text-left">Started</th>
-                            <th class="px-4 py-3 text-left">Finished</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Type</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">File</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Started</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Finished</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -182,14 +182,14 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Source System</th>
-                            <th class="px-4 py-3 text-left">Raw Value</th>
-                            <th class="px-4 py-3 text-left">Normalized</th>
-                            <th class="px-4 py-3 text-left">Event Instance</th>
-                            <th class="px-4 py-3 text-left">Confidence</th>
-                            <th class="px-4 py-3 text-left">Active</th>
-                            <th class="px-4 py-3 text-left">Updated</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source System</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Raw Value</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Normalized</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Event Instance</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Confidence</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Active</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Updated</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -222,10 +222,10 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Source System</th>
-                            <th class="px-4 py-3 text-left">Raw Value</th>
-                            <th class="px-4 py-3 text-left">Normalized</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source System</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Raw Value</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Normalized</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

@@ -83,7 +83,7 @@
                                 </td>
                                 <td class="px-4 py-3 text-white/80 whitespace-nowrap">{{ $delivery->to_phone ?: '—' }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ in_array($delivery->send_status, ['sent', 'delivered'], true) ? 'bg-emerald-500/20 text-emerald-100' : (in_array($delivery->send_status, ['failed', 'undelivered', 'canceled'], true) ? 'bg-rose-500/20 text-rose-100' : 'bg-white/10 text-white/70') }}">
+                                    <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ in_array($delivery->send_status, ['sent', 'delivered'], true) ? 'bg-emerald-500/20 text-emerald-100' : (in_array($delivery->send_status, ['failed', 'undelivered', 'canceled'], true) ? 'bg-rose-500/20 text-rose-100' : 'bg-white/10 text-white/70') }}">
                                         {{ $delivery->send_status }}
                                     </span>
                                 </td>

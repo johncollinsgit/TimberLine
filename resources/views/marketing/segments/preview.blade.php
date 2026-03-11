@@ -56,11 +56,11 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Profile</th>
-                            <th class="px-4 py-3 text-left">Email</th>
-                            <th class="px-4 py-3 text-left">Phone</th>
-                            <th class="px-4 py-3 text-left">Reasons</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Email</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Phone</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Reasons</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

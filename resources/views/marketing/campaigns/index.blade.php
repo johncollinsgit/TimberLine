@@ -21,15 +21,15 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Channel</th>
-                            <th class="px-4 py-3 text-left">Objective</th>
-                            <th class="px-4 py-3 text-left">Segment</th>
-                            <th class="px-4 py-3 text-left">Recipients</th>
-                            <th class="px-4 py-3 text-left">Launched</th>
-                            <th class="px-4 py-3 text-left">Updated</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Name</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Channel</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Objective</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Segment</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Recipients</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Launched</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Updated</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

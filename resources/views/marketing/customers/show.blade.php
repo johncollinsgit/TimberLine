@@ -37,10 +37,10 @@
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Consent Status</div>
                     <div class="mt-2 flex flex-wrap gap-2">
-                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                        <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                             Email {{ $profile->accepts_email_marketing ? 'Opt-In' : 'Opt-Out' }}
                         </span>
-                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                        <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                             SMS {{ $profile->accepts_sms_marketing ? 'Opt-In' : 'Opt-Out' }}
                         </span>
                     </div>
@@ -69,11 +69,11 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Source Type</th>
-                            <th class="px-4 py-3 text-left">Source ID</th>
-                            <th class="px-4 py-3 text-left">Match Method</th>
-                            <th class="px-4 py-3 text-left">Confidence</th>
-                            <th class="px-4 py-3 text-left">Created</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source Type</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source ID</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Match Method</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Confidence</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Created</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -102,14 +102,14 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Provider</th>
-                            <th class="px-4 py-3 text-left">Store</th>
-                            <th class="px-4 py-3 text-left">External Customer</th>
-                            <th class="px-4 py-3 text-left">Email</th>
-                            <th class="px-4 py-3 text-left">Points</th>
-                            <th class="px-4 py-3 text-left">VIP Tier</th>
-                            <th class="px-4 py-3 text-left">Referral</th>
-                            <th class="px-4 py-3 text-left">Synced</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Provider</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Store</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">External Customer</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Email</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Points</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">VIP Tier</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Referral</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Synced</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -154,11 +154,11 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Order</th>
-                            <th class="px-4 py-3 text-left">Source/Channel</th>
-                            <th class="px-4 py-3 text-left">Order Date</th>
-                            <th class="px-4 py-3 text-left">Customer Snapshot</th>
-                            <th class="px-4 py-3 text-right">Operational Detail</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Order</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source/Channel</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Order Date</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Customer Snapshot</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Operational Detail</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -374,11 +374,11 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-white/5 text-white/65">
                             <tr>
-                                <th class="px-4 py-3 text-left">Occurred</th>
-                                <th class="px-4 py-3 text-left">Channel</th>
-                                <th class="px-4 py-3 text-left">Event</th>
-                                <th class="px-4 py-3 text-left">Source</th>
-                                <th class="px-4 py-3 text-left">Details</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Occurred</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Channel</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Event</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Source</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Details</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/10">

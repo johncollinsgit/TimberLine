@@ -21,13 +21,13 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Channel Scope</th>
-                            <th class="px-4 py-3 text-left">Type</th>
-                            <th class="px-4 py-3 text-left">Last Previewed</th>
-                            <th class="px-4 py-3 text-left">Updated</th>
-                            <th class="px-4 py-3 text-right">Actions</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Name</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Channel Scope</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Type</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Last Previewed</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Updated</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

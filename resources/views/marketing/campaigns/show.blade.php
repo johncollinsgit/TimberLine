@@ -210,14 +210,14 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-white/5 text-white/65">
                             <tr>
-                                <th class="px-4 py-3 text-left">Select</th>
-                                <th class="px-4 py-3 text-left">Profile</th>
-                                <th class="px-4 py-3 text-left">Status</th>
-                                <th class="px-4 py-3 text-left">Variant</th>
-                                <th class="px-4 py-3 text-left">Reason Codes</th>
-                                <th class="px-4 py-3 text-left">Last Delivery</th>
-                                <th class="px-4 py-3 text-left">Message Preview</th>
-                                <th class="px-4 py-3 text-right">Actions</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Select</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Variant</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Reason Codes</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Last Delivery</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap">Message Preview</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/10">
@@ -296,14 +296,14 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Recipient</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Attempt</th>
-                            <th class="px-4 py-3 text-left">Provider SID</th>
-                            <th class="px-4 py-3 text-left">Sent</th>
-                            <th class="px-4 py-3 text-left">Delivered</th>
-                            <th class="px-4 py-3 text-left">Failure</th>
-                            <th class="px-4 py-3 text-left">Message</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Recipient</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Attempt</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Provider SID</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Sent</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Delivered</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Failure</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Message</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

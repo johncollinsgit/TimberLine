@@ -52,13 +52,13 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Raw Identity</th>
-                            <th class="px-4 py-3 text-left">Source</th>
-                            <th class="px-4 py-3 text-left">Conflict Reasons</th>
-                            <th class="px-4 py-3 text-left">Created</th>
-                            <th class="px-4 py-3 text-left">Reviewed</th>
-                            <th class="px-4 py-3 text-right">Action</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Raw Identity</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Source</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Conflict Reasons</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Created</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Reviewed</th>
+                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -68,7 +68,7 @@
                             @endphp
                             <tr class="hover:bg-white/5">
                                 <td class="px-4 py-3">
-                                    <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{
+                                    <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{
                                         $review->status === 'pending'
                                             ? 'bg-amber-500/20 text-amber-100'
                                             : ($review->status === 'resolved'
