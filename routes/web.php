@@ -11,6 +11,7 @@ use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
+use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyWebhookController;
@@ -71,6 +72,15 @@ Route::get('/', function () {
 
     return redirect()->route('login');
 })->name('home');
+
+$marketingShortLinkPrefix = trim((string) config('marketing.links.path_prefix', 'go'), '/');
+if ($marketingShortLinkPrefix === '') {
+    $marketingShortLinkPrefix = 'go';
+}
+
+Route::get('/' . $marketingShortLinkPrefix . '/{code}', [MarketingShortLinkRedirectController::class, 'show'])
+    ->where('code', '[A-Za-z0-9]+')
+    ->name('marketing.short-links.redirect');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -245,9 +255,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('/message-templates/{template}', [MarketingMessageTemplatesController::class, 'update'])->name('message-templates.update');
             Route::get('/message-templates/{template}/preview', [MarketingMessageTemplatesController::class, 'preview'])->name('message-templates.preview');
             Route::get('/messages/send', [MarketingMessagesController::class, 'send'])->name('messages.send');
+            Route::get('/messages/customers/search', [MarketingMessagesController::class, 'searchCustomers'])->name('messages.search-customers');
             Route::post('/messages/send/audience', [MarketingMessagesController::class, 'saveAudience'])->name('messages.save-audience');
             Route::post('/messages/send/message', [MarketingMessagesController::class, 'saveMessage'])->name('messages.save-message');
             Route::post('/messages/send/test', [MarketingMessagesController::class, 'sendTest'])->name('messages.send-test');
+            Route::post('/messages/step', [MarketingMessagesController::class, 'setStep'])->name('messages.set-step');
             Route::post('/messages/send/execute', [MarketingMessagesController::class, 'executeSend'])->name('messages.execute');
             Route::post('/messages/send/reset', [MarketingMessagesController::class, 'resetWizard'])->name('messages.reset');
             Route::get('/messages/deliveries', [MarketingMessagesController::class, 'deliveries'])->name('messages.deliveries');

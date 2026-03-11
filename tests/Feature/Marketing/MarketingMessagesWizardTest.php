@@ -3,6 +3,7 @@
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingProfile;
+use App\Models\MarketingShortLink;
 use App\Models\User;
 
 beforeEach(function () {
@@ -36,7 +37,7 @@ test('admin and marketing manager can access messaging wizard and delivery log',
         $this->actingAs($user)
             ->get(route('marketing.messages.send'))
             ->assertOk()
-            ->assertSeeText('Messaging Wizard');
+            ->assertSeeText('Send a text');
 
         $this->actingAs($user)
             ->get(route('marketing.messages.deliveries'))
@@ -68,7 +69,7 @@ test('single-customer wizard flow creates direct sms delivery records', function
 
     $this->actingAs($user)
         ->post(route('marketing.messages.save-audience'), [
-            'audience_type' => 'single_customer',
+            'audience_kind' => 'person',
             'selected_profile_id' => $profile->id,
         ])
         ->assertRedirect(route('marketing.messages.send'));
@@ -129,7 +130,8 @@ test('custom group audience can be saved as reusable group', function () {
 
     $this->actingAs($user)
         ->post(route('marketing.messages.save-audience'), [
-            'audience_type' => 'custom_group',
+            'audience_kind' => 'group',
+            'group_mode' => 'custom',
             'selected_profile_ids' => [$profileA->id, $profileB->id],
             'group_name' => 'VIP Spring Group',
             'group_description' => 'Reusable campaign audience',
@@ -153,7 +155,7 @@ test('manual phone audience creates profile and logs delivery on send', function
 
     $this->actingAs($user)
         ->post(route('marketing.messages.save-audience'), [
-            'audience_type' => 'manual',
+            'audience_kind' => 'manual',
             'manual_phones' => '+1 (555) 777-1212',
         ])
         ->assertRedirect(route('marketing.messages.send'));
@@ -184,4 +186,78 @@ test('manual phone audience creates profile and logs delivery on send', function
         ->and($delivery)->not->toBeNull()
         ->and((int) $delivery->marketing_profile_id)->toBe((int) $profile->id)
         ->and($delivery->provider_message_id)->toStartWith('DRYRUN-');
+});
+
+test('customer autocomplete endpoint returns marketing profile matches', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    MarketingProfile::query()->create([
+        'first_name' => 'Casey',
+        'last_name' => 'Lookup',
+        'email' => 'casey.lookup@example.com',
+        'normalized_email' => 'casey.lookup@example.com',
+        'phone' => '+15558889999',
+        'normalized_phone' => '+15558889999',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('marketing.messages.search-customers', ['q' => 'casey']))
+        ->assertOk()
+        ->assertJsonPath('data.0.name', 'Casey Lookup')
+        ->assertJsonPath('meta.has_profiles', true);
+});
+
+test('message save auto-shortens links and stores preview metadata', function () {
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Link',
+        'last_name' => 'Test',
+        'email' => 'link.test@example.com',
+        'normalized_email' => 'link.test@example.com',
+        'phone' => '+15550001122',
+        'normalized_phone' => '+15550001122',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('marketing.messages.save-audience'), [
+            'audience_kind' => 'person',
+            'selected_profile_id' => $profile->id,
+        ])
+        ->assertRedirect(route('marketing.messages.send'));
+
+    $response = $this->actingAs($user)
+        ->post(route('marketing.messages.save-message'), [
+            'message_text' => 'New drop alert: https://example.com/products/spring-launch?ref=campaign',
+        ]);
+
+    $response->assertRedirect(route('marketing.messages.send'))
+        ->assertSessionHas('marketing.messages.wizard.shortened_links');
+
+    $shortLink = MarketingShortLink::query()->first();
+
+    expect($shortLink)->not->toBeNull()
+        ->and($shortLink->destination_url)->toContain('https://example.com/products/spring-launch');
+});
+
+test('short links redirect to destination and increment usage count', function () {
+    $link = MarketingShortLink::query()->create([
+        'code' => 'abc1234',
+        'destination_url' => 'https://example.com/product/forest',
+        'url_hash' => hash('sha256', 'https://example.com/product/forest'),
+    ]);
+
+    $this->get(route('marketing.short-links.redirect', ['code' => $link->code]))
+        ->assertRedirect('https://example.com/product/forest');
+
+    expect($link->fresh()->usage_count)->toBe(1)
+        ->and($link->fresh()->last_used_at)->not->toBeNull();
 });

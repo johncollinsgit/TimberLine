@@ -45,4 +45,10 @@ return [
         'status_callback_url' => env('TWILIO_STATUS_CALLBACK_URL'),
         'verify_signature' => (bool) env('MARKETING_TWILIO_VERIFY_SIGNATURE', false),
     ],
+
+    'links' => [
+        'enabled' => (bool) env('MARKETING_LINK_SHORTENING_ENABLED', true),
+        'base_url' => env('MARKETING_SHORT_LINK_BASE_URL', ''),
+        'path_prefix' => trim((string) env('MARKETING_SHORT_LINK_PATH_PREFIX', 'go'), '/'),
+    ],
 ];

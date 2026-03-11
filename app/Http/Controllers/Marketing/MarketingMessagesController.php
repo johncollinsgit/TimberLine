@@ -9,10 +9,12 @@ use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSegment;
 use App\Services\Marketing\MarketingDirectMessagingService;
+use App\Services\Marketing\MarketingLinkShortenerService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -21,15 +23,20 @@ class MarketingMessagesController extends Controller
 {
     public function __construct(
         protected MarketingIdentityNormalizer $identityNormalizer,
-        protected MarketingSegmentEvaluator $segmentEvaluator
+        protected MarketingSegmentEvaluator $segmentEvaluator,
+        protected MarketingLinkShortenerService $linkShortener
     ) {
     }
 
     public function send(Request $request): View
     {
         $state = $this->wizardState();
-        $search = trim((string) $request->query('customer_search', $state['customer_search'] ?? ''));
-        $searchResults = $this->customerSearchResults($search);
+        $step = $this->normalizeStep((int) ($state['step'] ?? 1));
+
+        $selectedPerson = ((int) ($state['selected_profile_id'] ?? 0)) > 0
+            ? MarketingProfile::query()->find((int) $state['selected_profile_id'])
+            : null;
+
         $selectedProfileIds = collect((array) ($state['selected_profile_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id) => $id > 0)
@@ -43,20 +50,19 @@ class MarketingMessagesController extends Controller
                 ->whereIn('id', $selectedProfileIds)
                 ->orderBy('first_name')
                 ->orderBy('last_name')
-                ->get();
+                ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'normalized_phone']);
 
-        $message = (string) ($state['message_text'] ?? '');
-        $segmentsPerMessage = $this->smsSegmentCount($message);
+        $rawMessage = (string) ($state['raw_message_text'] ?? '');
+        $finalMessage = (string) ($state['message_text'] ?? '');
+        $segmentsPerMessage = $this->smsSegmentCount($finalMessage !== '' ? $finalMessage : $rawMessage);
         $recipientCount = count((array) ($state['recipients'] ?? []));
         $estimatedSegments = $segmentsPerMessage > 0 ? $segmentsPerMessage * max(1, $recipientCount) : 0;
 
+        $profileCount = (int) MarketingProfile::query()->count();
+
         return view('marketing/messages/send', [
-            'section' => MarketingSectionRegistry::section('messages'),
-            'sections' => $this->navigationItems(),
             'state' => $state,
-            'search' => $search,
-            'searchResults' => $searchResults,
-            'selectedProfiles' => $selectedProfiles,
+            'step' => $step,
             'segments' => MarketingSegment::query()
                 ->where('status', 'active')
                 ->orderBy('name')
@@ -72,16 +78,74 @@ class MarketingMessagesController extends Controller
                 ->where('channel', 'sms')
                 ->orderBy('name')
                 ->get(['id', 'name', 'template_text']),
+            'selectedPerson' => $selectedPerson ? $this->profileSearchPayload($selectedPerson) : null,
+            'selectedProfiles' => $selectedProfiles->map(fn (MarketingProfile $profile): array => $this->profileSearchPayload($profile))->values()->all(),
             'segmentsPerMessage' => $segmentsPerMessage,
             'estimatedSegments' => $estimatedSegments,
             'recipientCount' => $recipientCount,
+            'recipientWarnings' => $this->recipientWarnings((array) ($state['recipients'] ?? [])),
+            'profileCount' => $profileCount,
+            'shortenedLinks' => (array) ($state['shortened_links'] ?? []),
+            'searchEndpoint' => route('marketing.messages.search-customers'),
+            'deliveryLogUrl' => route('marketing.messages.deliveries'),
+            'segmentRecipientEstimate' => (string) ($state['audience_kind'] ?? '') === 'segment' ? $recipientCount : null,
+            'shortLinkPathPrefix' => trim((string) config('marketing.links.path_prefix', 'go'), '/'),
+        ]);
+    }
+
+    public function searchCustomers(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $queryText = trim((string) ($data['q'] ?? ''));
+        $profileCount = (int) MarketingProfile::query()->count();
+
+        if ($queryText === '') {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'query' => $queryText,
+                    'profile_count' => $profileCount,
+                    'has_profiles' => $profileCount > 0,
+                    'empty_reason' => $profileCount === 0 ? 'no_profiles' : 'empty_query',
+                ],
+            ]);
+        }
+
+        $results = MarketingProfile::query()
+            ->where(function ($query) use ($queryText): void {
+                $query->where('first_name', 'like', '%' . $queryText . '%')
+                    ->orWhere('last_name', 'like', '%' . $queryText . '%')
+                    ->orWhere('email', 'like', '%' . $queryText . '%')
+                    ->orWhere('phone', 'like', '%' . $queryText . '%')
+                    ->orWhere('normalized_phone', 'like', '%' . $queryText . '%')
+                    ->orWhere('normalized_email', 'like', '%' . $queryText . '%');
+            })
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->limit(12)
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'normalized_phone']);
+
+        return response()->json([
+            'data' => $results->map(fn (MarketingProfile $profile): array => $this->profileSearchPayload($profile))->values()->all(),
+            'meta' => [
+                'query' => $queryText,
+                'profile_count' => $profileCount,
+                'has_profiles' => $profileCount > 0,
+                'empty_reason' => $profileCount === 0
+                    ? 'no_profiles'
+                    : ($results->isEmpty() ? 'no_match' : null),
+            ],
         ]);
     }
 
     public function saveAudience(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'audience_type' => ['required', 'in:single_customer,segment,existing_group,custom_group,manual'],
+            'audience_kind' => ['required', 'in:person,group,segment,manual'],
+            'group_mode' => ['nullable', 'in:saved,custom'],
             'selected_profile_id' => ['nullable', 'integer', 'exists:marketing_profiles,id'],
             'selected_profile_ids' => ['nullable', 'array'],
             'selected_profile_ids.*' => ['integer', 'exists:marketing_profiles,id'],
@@ -91,10 +155,11 @@ class MarketingMessagesController extends Controller
             'group_name' => ['nullable', 'string', 'max:120'],
             'group_description' => ['nullable', 'string', 'max:500'],
             'save_reusable_group' => ['nullable', 'boolean'],
-            'customer_search' => ['nullable', 'string', 'max:160'],
         ]);
 
-        $audienceType = (string) $data['audience_type'];
+        $audienceKind = (string) $data['audience_kind'];
+        $groupMode = (string) ($data['group_mode'] ?? 'saved');
+
         $selectedProfileIds = collect((array) ($data['selected_profile_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id) => $id > 0)
@@ -102,28 +167,28 @@ class MarketingMessagesController extends Controller
             ->values()
             ->all();
 
-        $search = trim((string) ($data['customer_search'] ?? ''));
         $manualPhonesText = trim((string) ($data['manual_phones'] ?? ''));
 
         $groupId = null;
-        $members = match ($audienceType) {
-            'single_customer' => $this->singleCustomerRecipients((int) ($data['selected_profile_id'] ?? 0)),
+        $members = match ($audienceKind) {
+            'person' => $this->singleCustomerRecipients((int) ($data['selected_profile_id'] ?? 0)),
             'segment' => $this->segmentRecipients((int) ($data['segment_id'] ?? 0)),
-            'existing_group' => (function () use (&$groupId, $data): array {
-                $groupId = (int) ($data['group_id'] ?? 0);
-                return $this->groupRecipients($groupId);
-            })(),
-            'custom_group' => $this->customRecipients($selectedProfileIds, $manualPhonesText),
+            'group' => $groupMode === 'saved'
+                ? (function () use (&$groupId, $data): array {
+                    $groupId = (int) ($data['group_id'] ?? 0);
+                    return $this->groupRecipients($groupId);
+                })()
+                : $this->customRecipients($selectedProfileIds, $manualPhonesText),
             'manual' => $this->manualRecipients($manualPhonesText),
             default => [],
         };
 
         if ($members === []) {
             return redirect()
-                ->route('marketing.messages.send', ['customer_search' => $search])
+                ->route('marketing.messages.send')
                 ->with('toast', [
                     'style' => 'warning',
-                    'message' => 'No sendable recipients found for the selected audience.',
+                    'message' => 'No sendable recipients yet. Pick someone, a group, a segment, or paste valid numbers.',
                 ]);
         }
 
@@ -132,7 +197,7 @@ class MarketingMessagesController extends Controller
         $groupDescription = trim((string) ($data['group_description'] ?? '')) ?: null;
         $adHocGroupPayload = null;
 
-        if ($audienceType === 'custom_group') {
+        if ($audienceKind === 'group' && $groupMode === 'custom') {
             if ($saveReusable && $groupName !== '') {
                 $group = app(MarketingDirectMessagingService::class)->saveGroup(
                     name: $groupName,
@@ -154,8 +219,8 @@ class MarketingMessagesController extends Controller
         $this->storeWizardState([
             ...$this->wizardState(),
             'step' => 2,
-            'audience_type' => $audienceType,
-            'customer_search' => $search,
+            'audience_kind' => $audienceKind,
+            'group_mode' => $groupMode,
             'segment_id' => (int) ($data['segment_id'] ?? 0),
             'group_id' => $groupId,
             'selected_profile_ids' => $selectedProfileIds,
@@ -166,13 +231,14 @@ class MarketingMessagesController extends Controller
             'group_description' => $groupDescription,
             'save_reusable_group' => $saveReusable,
             'ad_hoc_group_payload' => $adHocGroupPayload,
+            'audience_summary' => $this->audienceSummary($audienceKind, $groupMode, $data, $members),
         ]);
 
         return redirect()
             ->route('marketing.messages.send')
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Audience saved. Continue to message composition.',
+                'message' => 'Audience locked in. Next up: write the text.',
             ]);
     }
 
@@ -185,33 +251,84 @@ class MarketingMessagesController extends Controller
         ]);
 
         $state = $this->wizardState();
-        if (((int) ($state['step'] ?? 1)) < 2 || empty($state['recipients'])) {
+        if (empty($state['recipients'])) {
             return redirect()
                 ->route('marketing.messages.send')
-                ->with('toast', ['style' => 'warning', 'message' => 'Select an audience before composing a message.']);
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Pick an audience first so we know who this text is for.',
+                ]);
         }
 
-        $message = trim((string) $data['message_text']);
-        if ($message === '') {
+        $rawMessage = trim((string) $data['message_text']);
+        if ($rawMessage === '') {
             return redirect()
                 ->route('marketing.messages.send')
-                ->with('toast', ['style' => 'warning', 'message' => 'Message text is required.']);
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Message text is required.',
+                ]);
+        }
+
+        $shortened = $this->linkShortener->shortenMessage($rawMessage, (int) auth()->id());
+        $finalMessage = trim((string) ($shortened['message'] ?? $rawMessage));
+        if ($finalMessage === '') {
+            $finalMessage = $rawMessage;
         }
 
         $this->storeWizardState([
             ...$state,
             'step' => 3,
             'template_id' => (int) ($data['template_id'] ?? 0),
-            'message_text' => $message,
+            'raw_message_text' => $rawMessage,
+            'message_text' => $finalMessage,
+            'shortened_links' => (array) ($shortened['links'] ?? []),
             'send_at' => isset($data['send_at']) ? (string) $data['send_at'] : null,
         ]);
+
+        $shortenedCount = count((array) ($shortened['links'] ?? []));
 
         return redirect()
             ->route('marketing.messages.send')
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Message saved. Review and send when ready.',
+                'message' => $shortenedCount > 0
+                    ? "Message saved. {$shortenedCount} link(s) shortened and ready to review."
+                    : 'Message saved. Want to send yourself a test text next?',
             ]);
+    }
+
+    public function setStep(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'step' => ['required', 'integer', 'between:1,4'],
+        ]);
+
+        $target = $this->normalizeStep((int) $data['step']);
+        $state = $this->wizardState();
+
+        if ($target >= 2 && empty($state['recipients'])) {
+            return redirect()
+                ->route('marketing.messages.send')
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Choose an audience first.',
+                ]);
+        }
+
+        if ($target >= 3 && trim((string) ($state['message_text'] ?? '')) === '') {
+            return redirect()
+                ->route('marketing.messages.send')
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Write your message before jumping ahead.',
+                ]);
+        }
+
+        $state['step'] = $target;
+        $this->storeWizardState($state);
+
+        return redirect()->route('marketing.messages.send');
     }
 
     public function sendTest(Request $request, MarketingDirectMessagingService $service): RedirectResponse
@@ -226,7 +343,10 @@ class MarketingMessagesController extends Controller
         if ($message === '') {
             return redirect()
                 ->route('marketing.messages.send')
-                ->with('toast', ['style' => 'warning', 'message' => 'Compose a message before sending a test SMS.']);
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Write a message before sending a test text.',
+                ]);
         }
 
         try {
@@ -252,16 +372,22 @@ class MarketingMessagesController extends Controller
                 ->route('marketing.messages.send')
                 ->with('toast', [
                     'style' => 'warning',
-                    'message' => 'Test SMS failed: ' . $e->getMessage(),
+                    'message' => 'Test send failed: ' . $e->getMessage(),
                 ]);
         }
+
+        $this->storeWizardState([
+            ...$state,
+            'step' => 3,
+            'last_test_phone' => (string) $data['test_phone'],
+        ]);
 
         return redirect()
             ->route('marketing.messages.send')
             ->with('toast', [
                 'style' => 'success',
                 'message' => sprintf(
-                    'Test send complete. processed=%d sent=%d failed=%d skipped=%d',
+                    'Test sent. processed=%d sent=%d failed=%d skipped=%d',
                     (int) $summary['processed'],
                     (int) $summary['sent'],
                     (int) $summary['failed'],
@@ -284,12 +410,17 @@ class MarketingMessagesController extends Controller
         if ($message === '' || $recipients === []) {
             return redirect()
                 ->route('marketing.messages.send')
-                ->with('toast', ['style' => 'warning', 'message' => 'Audience and message are required before sending.']);
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Audience and message are required before sending.',
+                ]);
         }
 
         $groupId = isset($state['group_id']) ? (int) $state['group_id'] : null;
-        $audienceType = (string) ($state['audience_type'] ?? '');
-        if ($audienceType === 'custom_group' && ! $groupId && isset($state['ad_hoc_group_payload']) && is_array($state['ad_hoc_group_payload'])) {
+        $audienceKind = (string) ($state['audience_kind'] ?? '');
+        $groupMode = (string) ($state['group_mode'] ?? 'saved');
+
+        if ($audienceKind === 'group' && $groupMode === 'custom' && !$groupId && isset($state['ad_hoc_group_payload']) && is_array($state['ad_hoc_group_payload'])) {
             $payload = (array) $state['ad_hoc_group_payload'];
             $adHocName = trim((string) ($payload['name'] ?? '')) ?: 'Ad-hoc Group';
             $adHocDescription = trim((string) ($payload['description'] ?? '')) ?: null;
@@ -332,7 +463,7 @@ class MarketingMessagesController extends Controller
             ->with('toast', [
                 'style' => 'success',
                 'message' => sprintf(
-                    'Send complete. processed=%d sent=%d failed=%d skipped=%d',
+                    'Message sent. processed=%d sent=%d failed=%d skipped=%d',
                     (int) $summary['processed'],
                     (int) $summary['sent'],
                     (int) $summary['failed'],
@@ -347,7 +478,7 @@ class MarketingMessagesController extends Controller
 
         return redirect()
             ->route('marketing.messages.send')
-            ->with('toast', ['style' => 'success', 'message' => 'Wizard cleared.']);
+            ->with('toast', ['style' => 'success', 'message' => 'Wizard reset. Fresh start.']);
     }
 
     public function deliveries(Request $request): View
@@ -545,24 +676,6 @@ class MarketingMessagesController extends Controller
         return array_values($rows);
     }
 
-    protected function customerSearchResults(string $search): Collection
-    {
-        if ($search === '') {
-            return collect();
-        }
-
-        return MarketingProfile::query()
-            ->where(function ($query) use ($search): void {
-                $query->where('first_name', 'like', '%' . $search . '%')
-                    ->orWhere('last_name', 'like', '%' . $search . '%')
-                    ->orWhere('email', 'like', '%' . $search . '%')
-                    ->orWhere('phone', 'like', '%' . $search . '%');
-            })
-            ->orderByDesc('updated_at')
-            ->limit(40)
-            ->get();
-    }
-
     protected function smsSegmentCount(string $message): int
     {
         $message = trim($message);
@@ -608,13 +721,103 @@ class MarketingMessagesController extends Controller
     }
 
     /**
+     * @param array<int,array{profile_id:?int,name:?string,email:?string,phone:?string,normalized_phone:?string,source_type:string}> $recipients
+     * @return array<int,string>
+     */
+    protected function recipientWarnings(array $recipients): array
+    {
+        $warnings = [];
+        if ($recipients === []) {
+            return $warnings;
+        }
+
+        $profileIds = collect($recipients)
+            ->pluck('profile_id')
+            ->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($profileIds->isNotEmpty()) {
+            $nonConsented = MarketingProfile::query()
+                ->whereIn('id', $profileIds->all())
+                ->where('accepts_sms_marketing', false)
+                ->count();
+
+            if ($nonConsented > 0) {
+                $warnings[] = "{$nonConsented} profile(s) currently do not have SMS consent and will be skipped.";
+            }
+        }
+
+        $manualCount = collect($recipients)
+            ->filter(fn (array $row): bool => in_array((string) ($row['source_type'] ?? ''), ['manual', 'group_manual'], true))
+            ->count();
+
+        if ($manualCount > 0) {
+            $warnings[] = "{$manualCount} manual number(s) are included; double-check for typos before sending.";
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param array<int,array{profile_id:?int,name:?string,email:?string,phone:?string,normalized_phone:string,source_type:string}> $members
+     * @return array{label:string,detail:string}
+     */
+    protected function audienceSummary(string $audienceKind, string $groupMode, array $data, array $members): array
+    {
+        $count = count($members);
+
+        return match ($audienceKind) {
+            'person' => [
+                'label' => 'Person',
+                'detail' => $count . ' recipient selected.',
+            ],
+            'segment' => [
+                'label' => 'Segment',
+                'detail' => $count . ' recipients matched this segment right now.',
+            ],
+            'group' => $groupMode === 'saved'
+                ? [
+                    'label' => 'Saved Group',
+                    'detail' => $count . ' recipients loaded from your selected group.',
+                ]
+                : [
+                    'label' => 'Custom Group',
+                    'detail' => $count . ' recipients from your custom list.',
+                ],
+            default => [
+                'label' => 'Manual Numbers',
+                'detail' => $count . ' manual number(s) are ready.',
+            ],
+        };
+    }
+
+    /**
+     * @return array{id:int,name:string,email:?string,phone:?string}
+     */
+    protected function profileSearchPayload(MarketingProfile $profile): array
+    {
+        $name = trim((string) ($profile->first_name . ' ' . $profile->last_name));
+
+        return [
+            'id' => (int) $profile->id,
+            'name' => $name !== '' ? $name : 'Unnamed profile #' . $profile->id,
+            'email' => $this->nullableString($profile->email),
+            'phone' => $this->nullableString($profile->phone ?: $profile->normalized_phone),
+        ];
+    }
+
+    /**
      * @return array<string,mixed>
      */
     protected function wizardState(): array
     {
         $default = [
             'step' => 1,
-            'audience_type' => 'single_customer',
+            'audience_kind' => 'person',
+            'group_mode' => 'saved',
             'selected_profile_id' => 0,
             'selected_profile_ids' => [],
             'segment_id' => 0,
@@ -623,12 +826,15 @@ class MarketingMessagesController extends Controller
             'group_name' => '',
             'group_description' => '',
             'save_reusable_group' => false,
-            'customer_search' => '',
             'recipients' => [],
             'template_id' => 0,
+            'raw_message_text' => '',
             'message_text' => '',
+            'shortened_links' => [],
             'send_at' => null,
             'ad_hoc_group_payload' => null,
+            'audience_summary' => ['label' => 'Audience', 'detail' => 'No audience selected yet.'],
+            'last_test_phone' => '',
         ];
 
         $state = session('marketing.messages.wizard', []);
@@ -636,7 +842,10 @@ class MarketingMessagesController extends Controller
             $state = [];
         }
 
-        return array_replace($default, $state);
+        $merged = array_replace($default, $state);
+        $merged['step'] = $this->normalizeStep((int) ($merged['step'] ?? 1));
+
+        return $merged;
     }
 
     /**
@@ -644,12 +853,18 @@ class MarketingMessagesController extends Controller
      */
     protected function storeWizardState(array $state): void
     {
+        $state['step'] = $this->normalizeStep((int) ($state['step'] ?? 1));
         session(['marketing.messages.wizard' => $state]);
     }
 
     protected function clearWizardState(): void
     {
         session()->forget('marketing.messages.wizard');
+    }
+
+    protected function normalizeStep(int $step): int
+    {
+        return max(1, min(4, $step));
     }
 
     protected function nullableString(mixed $value): ?string
