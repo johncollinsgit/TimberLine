@@ -415,13 +415,11 @@ class MarketingMessagesController extends Controller
         return redirect()
             ->route('marketing.messages.send')
             ->with('toast', [
-                'style' => 'success',
-                'message' => sprintf(
-                    'Test sent. processed=%d sent=%d failed=%d skipped=%d',
-                    (int) $summary['processed'],
-                    (int) $summary['sent'],
-                    (int) $summary['failed'],
-                    (int) $summary['skipped']
+                'style' => $this->sendToastStyle($summary),
+                'message' => $this->sendToastMessage(
+                    summary: $summary,
+                    successPrefix: 'Test sent.',
+                    failurePrefix: 'Test failed.'
                 ),
             ]);
     }
@@ -519,13 +517,11 @@ class MarketingMessagesController extends Controller
         return redirect()
             ->route('marketing.messages.deliveries', ['batch' => $summary['batch_id']])
             ->with('toast', [
-                'style' => 'success',
-                'message' => sprintf(
-                    'Message sent. processed=%d sent=%d failed=%d skipped=%d',
-                    (int) $summary['processed'],
-                    (int) $summary['sent'],
-                    (int) $summary['failed'],
-                    (int) $summary['skipped']
+                'style' => $this->sendToastStyle($summary),
+                'message' => $this->sendToastMessage(
+                    summary: $summary,
+                    successPrefix: 'Message sent.',
+                    failurePrefix: 'Message send had failures.'
                 ),
             ]);
     }
@@ -552,7 +548,9 @@ class MarketingMessagesController extends Controller
                 $query->where(function ($nested) use ($search): void {
                     $nested->where('to_phone', 'like', '%' . $search . '%')
                         ->orWhere('provider_message_id', 'like', '%' . $search . '%')
-                        ->orWhere('rendered_message', 'like', '%' . $search . '%');
+                        ->orWhere('rendered_message', 'like', '%' . $search . '%')
+                        ->orWhere('error_code', 'like', '%' . $search . '%')
+                        ->orWhere('error_message', 'like', '%' . $search . '%');
                 });
             })
             ->when($status !== '', fn ($query) => $query->where('send_status', $status))
@@ -937,6 +935,46 @@ class MarketingMessagesController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param array<string,mixed> $summary
+     */
+    protected function sendToastStyle(array $summary): string
+    {
+        $failed = (int) ($summary['failed'] ?? 0);
+
+        return $failed > 0 ? 'warning' : 'success';
+    }
+
+    /**
+     * @param array<string,mixed> $summary
+     */
+    protected function sendToastMessage(array $summary, string $successPrefix, string $failurePrefix): string
+    {
+        $processed = (int) ($summary['processed'] ?? 0);
+        $sent = (int) ($summary['sent'] ?? 0);
+        $failed = (int) ($summary['failed'] ?? 0);
+        $skipped = (int) ($summary['skipped'] ?? 0);
+
+        $prefix = $failed > 0 ? $failurePrefix : $successPrefix;
+        $message = sprintf(
+            '%s processed=%d sent=%d failed=%d skipped=%d',
+            $prefix,
+            $processed,
+            $sent,
+            $failed,
+            $skipped
+        );
+
+        $errorCode = trim((string) ($summary['first_error_code'] ?? ''));
+        $errorMessage = trim((string) ($summary['first_error_message'] ?? ''));
+        if ($failed > 0 && ($errorCode !== '' || $errorMessage !== '')) {
+            $reason = trim($errorCode . ($errorMessage !== '' ? ': ' . $errorMessage : ''));
+            $message .= ' · Reason: ' . $reason;
+        }
+
+        return $message;
     }
 
     protected function nullableString(mixed $value): ?string

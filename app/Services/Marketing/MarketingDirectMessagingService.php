@@ -35,7 +35,9 @@ class MarketingDirectMessagingService
      *   failed:int,
      *   skipped:int,
      *   dry_run:int,
-     *   batch_id:string
+     *   batch_id:string,
+     *   first_error_code:?string,
+     *   first_error_message:?string
      * }
      */
     public function send(string $channel, array $recipients, string $message, array $options = []): array
@@ -65,6 +67,8 @@ class MarketingDirectMessagingService
             'skipped' => 0,
             'dry_run' => 0,
             'batch_id' => $batchId,
+            'first_error_code' => null,
+            'first_error_message' => null,
         ];
 
         $message = trim($message);
@@ -154,6 +158,12 @@ class MarketingDirectMessagingService
                 $summary['sent']++;
             } else {
                 $summary['failed']++;
+                if ($summary['first_error_code'] === null) {
+                    $summary['first_error_code'] = $this->nullableString($sendResult['error_code'] ?? null);
+                }
+                if ($summary['first_error_message'] === null) {
+                    $summary['first_error_message'] = $this->nullableString($sendResult['error_message'] ?? null);
+                }
             }
 
             if ((bool) ($sendResult['dry_run'] ?? false)) {

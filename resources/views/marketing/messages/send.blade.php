@@ -299,7 +299,17 @@
         @endif
 
         @if($step === 2)
-            <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5" x-data="messageComposer(@js((string) (($state['raw_message_text'] ?? '') !== '' ? $state['raw_message_text'] : ($state['message_text'] ?? ''))))" x-init="init()">
+            @php
+                $templateLookup = $templates
+                    ->mapWithKeys(fn ($template) => [(string) $template->id => (string) $template->template_text])
+                    ->all();
+                $initialTemplateId = (string) old('template_id', (string) ((int) ($state['template_id'] ?? 0) ?: ''));
+            @endphp
+            <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5" x-data="messageComposer(
+                @js((string) (($state['raw_message_text'] ?? '') !== '' ? $state['raw_message_text'] : ($state['message_text'] ?? ''))),
+                @js($templateLookup),
+                @js($initialTemplateId)
+            )" x-init="init()">
                 <div class="space-y-1">
                     <h2 class="text-xl font-semibold text-white">What should it say?</h2>
                     <p class="text-sm text-white/68">Keep it clear, friendly, and worth opening.</p>
@@ -310,10 +320,10 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label for="template_id" class="text-xs uppercase tracking-[0.2em] text-white/50">Template (optional)</label>
-                            <select id="template_id" name="template_id" @change="applyTemplate($event)" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                            <select id="template_id" name="template_id" x-model="selectedTemplateId" @change="applyTemplate($event)" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                                 <option value="">No template</option>
                                 @foreach($templates as $template)
-                                    <option value="{{ $template->id }}" data-template-text="{{ $template->template_text }}" @selected((int) ($state['template_id'] ?? 0) === (int) $template->id)>
+                                    <option value="{{ $template->id }}" @selected((int) old('template_id', (int) ($state['template_id'] ?? 0)) === (int) $template->id)>
                                         {{ $template->name }}
                                     </option>
                                 @endforeach
@@ -761,9 +771,11 @@
             };
         }
 
-        function messageComposer(initialText) {
+        function messageComposer(initialText, templateLookup, initialTemplateId) {
             return {
                 text: initialText || '',
+                templateLookup: templateLookup || {},
+                selectedTemplateId: initialTemplateId || '',
                 length: 0,
                 segments: 0,
                 linkDraft: '',
@@ -791,13 +803,14 @@
                 },
 
                 applyTemplate(event) {
-                    const option = event.target.selectedOptions[0];
-                    if (!option) {
+                    const templateId = String(event.target.value || '');
+                    this.selectedTemplateId = templateId;
+                    if (templateId === '') {
                         return;
                     }
 
-                    const templateText = option.dataset.templateText || '';
-                    if (templateText && (this.text || '').trim() === '') {
+                    const templateText = this.templateLookup[templateId] || '';
+                    if (templateText !== '') {
                         this.text = templateText;
                     }
                 },

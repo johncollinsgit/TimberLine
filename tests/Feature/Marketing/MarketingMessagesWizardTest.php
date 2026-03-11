@@ -255,6 +255,76 @@ test('future send_at queues direct send job instead of sending immediately', fun
     )->toBe(0);
 });
 
+test('test send shows explicit configuration reason when sms is disabled', function () {
+    config()->set('marketing.sms.enabled', false);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession([
+            'marketing.messages.wizard' => [
+                'step' => 3,
+                'message_text' => 'Config check message',
+            ],
+        ])
+        ->post(route('marketing.messages.send-test'), [
+            'test_phone' => '+15555550100',
+        ]);
+
+    $response->assertRedirect(route('marketing.messages.send'))
+        ->assertSessionHas('toast', function (array $toast): bool {
+            return ($toast['style'] ?? null) === 'warning'
+                && str_contains((string) ($toast['message'] ?? ''), 'Reason: sms_disabled')
+                && str_contains((string) ($toast['message'] ?? ''), 'MARKETING_SMS_ENABLED=true');
+        });
+});
+
+test('execute send toast includes failure reason when provider send fails', function () {
+    config()->set('marketing.sms.enabled', false);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Error',
+        'last_name' => 'Case',
+        'email' => 'error.case@example.com',
+        'normalized_email' => 'error.case@example.com',
+        'phone' => '+15550009999',
+        'normalized_phone' => '+15550009999',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('marketing.messages.save-audience'), [
+            'audience_kind' => 'person',
+            'selected_profile_id' => $profile->id,
+        ])
+        ->assertRedirect(route('marketing.messages.send'));
+
+    $this->actingAs($user)
+        ->post(route('marketing.messages.save-message'), [
+            'message_text' => 'Should fail with reason',
+        ])
+        ->assertRedirect(route('marketing.messages.send'));
+
+    $response = $this->actingAs($user)
+        ->post(route('marketing.messages.execute'), [
+            'confirm_send' => '1',
+        ]);
+
+    $response->assertRedirect()
+        ->assertSessionHas('toast', function (array $toast): bool {
+            return ($toast['style'] ?? null) === 'warning'
+                && str_contains((string) ($toast['message'] ?? ''), 'Reason: sms_disabled');
+        });
+});
+
 test('customer autocomplete endpoint returns marketing profile matches', function () {
     $user = User::factory()->create([
         'role' => 'admin',

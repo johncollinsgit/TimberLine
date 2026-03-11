@@ -52,12 +52,13 @@
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-2 sm:p-3">
             <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-[1280px] w-full text-sm">
+                <table class="min-w-[1400px] w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Recipient</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Phone</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap">Failure Reason</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Provider ID</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Batch</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Message</th>
@@ -71,6 +72,9 @@
                                 $profile = $delivery->profile;
                                 $name = $profile ? trim((string) ($profile->first_name . ' ' . $profile->last_name)) : '';
                                 $payload = is_array($delivery->provider_payload) ? $delivery->provider_payload : [];
+                                $reasonCode = trim((string) ($delivery->error_code ?? ''));
+                                $reasonMessage = trim((string) ($delivery->error_message ?? data_get($payload, 'twilio_response.message', '')));
+                                $reason = trim($reasonCode . ($reasonMessage !== '' ? ': ' . $reasonMessage : ''));
                             @endphp
                             <tr>
                                 <td class="px-4 py-3">
@@ -83,6 +87,13 @@
                                         {{ $delivery->send_status }}
                                     </span>
                                 </td>
+                                <td class="px-4 py-3 text-white/70 max-w-[360px]">
+                                    @if($reason !== '')
+                                        <div class="line-clamp-2">{{ $reason }}</div>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td class="px-4 py-3 text-white/70 whitespace-nowrap">{{ $delivery->provider_message_id ?: '—' }}</td>
                                 <td class="px-4 py-3 text-white/70 whitespace-nowrap">{{ $payload['batch_id'] ?? '—' }}</td>
                                 <td class="px-4 py-3 text-white/80 max-w-[500px]">
@@ -93,7 +104,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-white/55">
+                                <td colspan="9" class="px-4 py-8 text-center text-white/55">
                                     No direct message deliveries found for the current filters.
                                 </td>
                             </tr>

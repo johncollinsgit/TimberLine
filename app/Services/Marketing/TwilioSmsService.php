@@ -90,7 +90,7 @@ class TwilioSmsService
                 'provider_message_id' => null,
                 'status' => 'failed',
                 'error_code' => 'sms_disabled',
-                'error_message' => 'SMS sending is disabled by configuration.',
+                'error_message' => 'SMS sending is disabled by configuration. Set MARKETING_SMS_ENABLED=true and MARKETING_TWILIO_ENABLED=true.',
                 'from_identifier' => $this->fromIdentifier(),
                 'payload' => [],
                 'dry_run' => false,
@@ -104,8 +104,22 @@ class TwilioSmsService
                 'provider_message_id' => null,
                 'status' => 'failed',
                 'error_code' => 'missing_credentials',
-                'error_message' => 'Twilio credentials are not configured.',
+                'error_message' => 'Twilio credentials are not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.',
                 'from_identifier' => $this->fromIdentifier(),
+                'payload' => [],
+                'dry_run' => false,
+            ];
+        }
+
+        if (!$this->messagingServiceSid && !$this->fromNumber) {
+            return [
+                'success' => false,
+                'provider' => 'twilio',
+                'provider_message_id' => null,
+                'status' => 'failed',
+                'error_code' => 'missing_sender',
+                'error_message' => 'Twilio sender is not configured. Set TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_NUMBER.',
+                'from_identifier' => null,
                 'payload' => [],
                 'dry_run' => false,
             ];
