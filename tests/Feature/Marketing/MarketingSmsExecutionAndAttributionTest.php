@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingRecommendationEngine;
 use App\Services\Marketing\MarketingSmsExecutionService;
+use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -26,6 +27,61 @@ beforeEach(function () {
     config()->set('marketing.twilio.auth_token', 'AUTH_TEST');
     config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
     config()->set('marketing.twilio.verify_signature', false);
+});
+
+test('invalid messaging service sid is rejected before provider request', function () {
+    $authToken = '474946c5ae24a0aa1e115cde6764f2c5';
+    config()->set('marketing.twilio.auth_token', $authToken);
+    config()->set('marketing.twilio.messaging_service_sid', $authToken);
+    config()->set('marketing.twilio.from_number', null);
+
+    Http::fake();
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message');
+
+    Http::assertNothingSent();
+
+    expect($result['success'])->toBeFalse()
+        ->and($result['error_code'])->toBe('invalid_messaging_service_sid')
+        ->and((string) $result['error_message'])->toContain('must start with MG')
+        ->and($result['from_identifier'])->toBeNull();
+});
+
+test('missing sender identity fails before provider request', function () {
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', null);
+
+    Http::fake();
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message');
+
+    Http::assertNothingSent();
+
+    expect($result['success'])->toBeFalse()
+        ->and($result['error_code'])->toBe('missing_sender_identity')
+        ->and((string) $result['error_message'])->toContain('TWILIO_MESSAGING_SERVICE_SID');
+});
+
+test('twilio provider errors redact sensitive configured values', function () {
+    $authToken = '474946c5ae24a0aa1e115cde6764f2c5';
+    config()->set('marketing.twilio.auth_token', $authToken);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
+    config()->set('marketing.twilio.from_number', null);
+
+    Http::fake([
+        'https://api.twilio.com/*' => Http::response([
+            'code' => 21705,
+            'message' => "21705: The Messaging Service Sid {$authToken} is invalid.",
+            'status' => 'failed',
+        ], 400),
+    ]);
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message');
+
+    expect($result['success'])->toBeFalse()
+        ->and((string) $result['error_code'])->toBe('21705')
+        ->and((string) $result['error_message'])->not->toContain($authToken)
+        ->and((string) $result['error_message'])->toContain('[REDACTED_AUTH_TOKEN]');
 });
 
 function makeSmsRecipient(array $overrides = []): MarketingCampaignRecipient

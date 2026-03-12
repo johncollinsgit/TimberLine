@@ -104,6 +104,21 @@ class TwilioSmsService
             ];
         }
 
+        $senderValidation = $this->validateSenderConfiguration();
+        if ($senderValidation !== null) {
+            return [
+                'success' => false,
+                'provider' => 'twilio',
+                'provider_message_id' => null,
+                'status' => 'failed',
+                'error_code' => $senderValidation['code'],
+                'error_message' => $senderValidation['message'],
+                'from_identifier' => $this->fromIdentifier(),
+                'payload' => [],
+                'dry_run' => false,
+            ];
+        }
+
         $payload = array_filter([
             'To' => $toPhone,
             'Body' => $message,
@@ -123,7 +138,7 @@ class TwilioSmsService
                     'provider_message_id' => $this->nullableString($json['sid'] ?? null),
                     'status' => $this->normalizeTwilioStatus($json['status'] ?? 'failed'),
                     'error_code' => $this->nullableString($json['code'] ?? null) ?: (string) $response->status(),
-                    'error_message' => $this->nullableString($json['message'] ?? null) ?: 'Twilio request failed.',
+                    'error_message' => $this->sanitizeTwilioErrorMessage($json['message'] ?? null) ?: 'Twilio request failed.',
                     'from_identifier' => $this->fromIdentifier(),
                     'payload' => $json,
                     'dry_run' => false,
@@ -148,7 +163,7 @@ class TwilioSmsService
                 'provider_message_id' => null,
                 'status' => 'failed',
                 'error_code' => 'exception',
-                'error_message' => $e->getMessage(),
+                'error_message' => $this->sanitizeTwilioErrorMessage($e->getMessage()) ?: 'Twilio request exception.',
                 'from_identifier' => $this->fromIdentifier(),
                 'payload' => [],
                 'dry_run' => false,
@@ -197,7 +212,16 @@ class TwilioSmsService
 
     protected function fromIdentifier(): ?string
     {
-        return $this->messagingServiceSid ?: $this->fromNumber;
+        $identifier = $this->messagingServiceSid ?: $this->fromNumber;
+        if ($identifier === null) {
+            return null;
+        }
+
+        if ($this->authToken !== null && hash_equals($this->authToken, $identifier)) {
+            return null;
+        }
+
+        return $identifier;
     }
 
     protected function normalizeTwilioStatus(mixed $status): string
@@ -219,5 +243,85 @@ class TwilioSmsService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    /**
+     * @return array{code:string,message:string}|null
+     */
+    protected function validateSenderConfiguration(): ?array
+    {
+        if (! $this->sidHasPrefix($this->accountSid, 'AC')) {
+            return [
+                'code' => 'invalid_account_sid',
+                'message' => 'Twilio Account SID must start with AC.',
+            ];
+        }
+
+        if ($this->messagingServiceSid !== null) {
+            if (! $this->sidHasPrefix($this->messagingServiceSid, 'MG')) {
+                $message = 'Twilio Messaging Service SID must start with MG.';
+                if ($this->looksLikeSidBody($this->messagingServiceSid)) {
+                    $message .= ' It looks like only the 32-character SID body was provided.';
+                }
+                if ($this->authToken !== null && hash_equals($this->authToken, $this->messagingServiceSid)) {
+                    $message .= ' The configured value matches TWILIO_AUTH_TOKEN.';
+                }
+
+                return [
+                    'code' => 'invalid_messaging_service_sid',
+                    'message' => $message,
+                ];
+            }
+
+            return null;
+        }
+
+        if ($this->fromNumber === null) {
+            return [
+                'code' => 'missing_sender_identity',
+                'message' => 'Configure TWILIO_MESSAGING_SERVICE_SID (preferred) or TWILIO_FROM_NUMBER before sending SMS.',
+            ];
+        }
+
+        return null;
+    }
+
+    protected function sidHasPrefix(?string $value, string $prefix): bool
+    {
+        $value = strtoupper(trim((string) $value));
+        $prefix = strtoupper(trim($prefix));
+
+        return $value !== '' && $prefix !== '' && str_starts_with($value, $prefix);
+    }
+
+    protected function looksLikeSidBody(string $value): bool
+    {
+        return (bool) preg_match('/^[A-Fa-f0-9]{32}$/', trim($value));
+    }
+
+    protected function sanitizeTwilioErrorMessage(mixed $value): ?string
+    {
+        $message = $this->nullableString($value);
+        if ($message === null) {
+            return null;
+        }
+
+        $sensitiveValues = [
+            (string) $this->authToken => '[REDACTED_AUTH_TOKEN]',
+            (string) $this->accountSid => '[REDACTED_ACCOUNT_SID]',
+            (string) $this->messagingServiceSid => '[REDACTED_MESSAGING_SERVICE_SID]',
+        ];
+
+        foreach ($sensitiveValues as $sensitive => $replacement) {
+            if (trim($sensitive) === '') {
+                continue;
+            }
+
+            if (str_contains($message, $sensitive)) {
+                $message = str_replace($sensitive, $replacement, $message);
+            }
+        }
+
+        return $message;
     }
 }
