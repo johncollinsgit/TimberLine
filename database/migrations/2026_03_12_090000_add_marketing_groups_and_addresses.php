@@ -29,59 +29,69 @@ return new class extends Migration
             }
         });
 
-        Schema::create('marketing_groups', function (Blueprint $table): void {
-            $table->id();
-            $table->string('name');
-            $table->text('description')->nullable();
-            $table->boolean('is_internal')->default(false)->index();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('marketing_groups')) {
+            Schema::create('marketing_groups', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name');
+                $table->text('description')->nullable();
+                $table->boolean('is_internal')->default(false)->index();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
+            });
+        }
 
-        Schema::create('marketing_group_members', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('marketing_group_id')->constrained('marketing_groups')->cascadeOnDelete();
-            $table->foreignId('marketing_profile_id')->constrained('marketing_profiles')->cascadeOnDelete();
-            $table->foreignId('added_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
+        if (! Schema::hasTable('marketing_group_members')) {
+            Schema::create('marketing_group_members', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('marketing_group_id')->constrained('marketing_groups')->cascadeOnDelete();
+                $table->foreignId('marketing_profile_id')->constrained('marketing_profiles')->cascadeOnDelete();
+                $table->foreignId('added_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
 
-            $table->unique(['marketing_group_id', 'marketing_profile_id'], 'mgm_group_profile_unique');
-            $table->index(['marketing_profile_id', 'marketing_group_id'], 'mgm_profile_group_idx');
-        });
+                $table->unique(['marketing_group_id', 'marketing_profile_id'], 'mgm_group_profile_unique');
+                $table->index(['marketing_profile_id', 'marketing_group_id'], 'mgm_profile_group_idx');
+            });
+        }
 
-        Schema::create('marketing_campaign_groups', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('campaign_id')->constrained('marketing_campaigns')->cascadeOnDelete();
-            $table->foreignId('marketing_group_id')->constrained('marketing_groups')->cascadeOnDelete();
-            $table->timestamps();
+        if (! Schema::hasTable('marketing_campaign_groups')) {
+            Schema::create('marketing_campaign_groups', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('campaign_id')->constrained('marketing_campaigns')->cascadeOnDelete();
+                $table->foreignId('marketing_group_id')->constrained('marketing_groups')->cascadeOnDelete();
+                $table->timestamps();
 
-            $table->unique(['campaign_id', 'marketing_group_id'], 'mcg_campaign_group_unique');
-        });
+                $table->unique(['campaign_id', 'marketing_group_id'], 'mcg_campaign_group_unique');
+            });
+        }
 
-        Schema::create('marketing_group_import_runs', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('marketing_group_id')->nullable()->constrained('marketing_groups')->nullOnDelete();
-            $table->string('file_name')->nullable();
-            $table->string('status')->default('running')->index();
-            $table->timestamp('started_at')->nullable()->index();
-            $table->timestamp('finished_at')->nullable()->index();
-            $table->json('summary')->nullable();
-            $table->text('notes')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('marketing_group_import_runs')) {
+            Schema::create('marketing_group_import_runs', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('marketing_group_id')->nullable()->constrained('marketing_groups')->nullOnDelete();
+                $table->string('file_name')->nullable();
+                $table->string('status')->default('running')->index();
+                $table->timestamp('started_at')->nullable()->index();
+                $table->timestamp('finished_at')->nullable()->index();
+                $table->json('summary')->nullable();
+                $table->text('notes')->nullable();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
+            });
+        }
 
-        Schema::create('marketing_group_import_rows', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('marketing_group_import_run_id')->constrained('marketing_group_import_runs')->cascadeOnDelete();
-            $table->unsignedInteger('row_number')->nullable()->index();
-            $table->string('status')->default('pending')->index();
-            $table->string('external_key')->nullable()->index();
-            $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
-            $table->json('messages')->nullable();
-            $table->json('payload')->nullable();
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('marketing_group_import_rows')) {
+            Schema::create('marketing_group_import_rows', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('marketing_group_import_run_id')->constrained('marketing_group_import_runs')->cascadeOnDelete();
+                $table->unsignedInteger('row_number')->nullable()->index();
+                $table->string('status')->default('pending')->index();
+                $table->string('external_key')->nullable()->index();
+                $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
+                $table->json('messages')->nullable();
+                $table->json('payload')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void
