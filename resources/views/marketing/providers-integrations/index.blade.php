@@ -47,7 +47,8 @@
                     </div>
                     <div>
                         <label class="text-xs uppercase tracking-[0.2em] text-white/55">Limit</label>
-                        <input type="number" name="limit" value="200" min="1" max="1000" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
+                        <input type="number" name="limit" value="" min="1" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" placeholder="Leave blank for full sync" />
+                        <div class="mt-1 text-[11px] text-white/45">Blank now means exhaustion mode with checkpoint-safe runs.</div>
                     </div>
                     <div>
                         <label class="text-xs uppercase tracking-[0.2em] text-white/55">Since (optional)</label>
@@ -104,6 +105,247 @@
                         </button>
                     </div>
                 </form>
+            </article>
+        </section>
+
+        @php
+            $squareSummary = $squareAudit['summary'];
+            $squareProfiles = $squareAudit['profiles'];
+            $squareFilters = $squareAudit['filters'];
+            $squarePayload = $squareAudit['payload_diagnostics'];
+            $manualFollowUpOrders = $squareAudit['manual_follow_up_orders'];
+        @endphp
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-5">
+            <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Square Contact Quality</h2>
+                    <p class="mt-1 text-sm text-white/65">Audit Square-only profiles, contact gaps, and raw POS buyers that still need manual capture.</p>
+                </div>
+                <div class="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100/90">
+                    Current bottleneck is contact quality, not sync reliability. Square customer directory is locally resident; orders/payments still often lack `square_customer_id`.
+                </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Profiles with Square Link</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($squareSummary['profiles_with_square_link'] ?? 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">Canonical profiles linked to Square customers, orders, or payments.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Square-only Profiles</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($squareSummary['square_only_profiles'] ?? 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">Source channels indicate Square only, with no Shopify/Growave enrichment.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Square-only Missing Contact</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($squareSummary['square_only_missing_contact'] ?? 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">No email and no phone on the canonical profile.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">No Shopify / Growave</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($squareSummary['no_shopify_or_growave'] ?? 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">Square-linked profiles with no Shopify order/customer or Growave customer link.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Identity Reviews</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($squareSummary['square_identity_reviews'] ?? 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">Conflicts held for manual review instead of blind merge.</div>
+                </div>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,2fr),minmax(320px,1fr)]">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                    <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h3 class="text-base font-semibold text-white">Square-linked Profile Audit</h3>
+                            <p class="mt-1 text-sm text-white/60">Filter canonical profiles to find the biggest contact capture gaps before doing more automation work.</p>
+                        </div>
+                        <div class="text-xs text-white/45">High-value threshold: ${{ number_format((float) $squareMinSpendDollars, 2) }}</div>
+                    </div>
+
+                    <form method="GET" action="{{ route('marketing.providers-integrations') }}" class="grid gap-3 lg:grid-cols-12">
+                        <input type="hidden" name="search" value="{{ $search }}" />
+                        <input type="hidden" name="source_system" value="{{ $sourceSystem }}" />
+                        <input type="hidden" name="mapped" value="{{ $mapped }}" />
+                        <div class="lg:col-span-4">
+                            <label class="text-xs uppercase tracking-[0.2em] text-white/55">Audit Filter</label>
+                            <select name="square_filter" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                                @foreach($squareFilters as $filterOption)
+                                    <option value="{{ $filterOption['value'] }}" @selected($squareProfileFilter === $filterOption['value'])>{{ $filterOption['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="lg:col-span-4">
+                            <label class="text-xs uppercase tracking-[0.2em] text-white/55">Search</label>
+                            <input type="text" name="square_search" value="{{ $squareProfileSearch }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" placeholder="Name, email, phone, Square customer id" />
+                        </div>
+                        <div class="lg:col-span-2">
+                            <label class="text-xs uppercase tracking-[0.2em] text-white/55">Min Spend</label>
+                            <input type="number" step="0.01" min="0" name="square_min_spend" value="{{ $squareMinSpendDollars }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
+                        </div>
+                        <div class="lg:col-span-2 flex items-end">
+                            <button type="submit" class="w-full rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white">Apply</button>
+                        </div>
+                    </form>
+
+                    <div class="overflow-x-auto rounded-2xl border border-white/10">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-white/5 text-white/65">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Profile</th>
+                                    <th class="px-4 py-3 text-left">Square Customer</th>
+                                    <th class="px-4 py-3 text-left">Contact</th>
+                                    <th class="px-4 py-3 text-left">Square Value</th>
+                                    <th class="px-4 py-3 text-left">Linked Sources</th>
+                                    <th class="px-4 py-3 text-left">Last Square Activity</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/10">
+                                @forelse($squareProfiles as $profile)
+                                    @php
+                                        $displayName = trim((string) (($profile->first_name ?? '') . ' ' . ($profile->last_name ?? '')));
+                                        $squareSpend = ((int) ($profile->square_total_spend_cents ?? 0)) / 100;
+                                        $hasContact = filled($profile->email ?? null) || filled($profile->phone ?? null);
+                                        $lastSquareActivity = collect([$profile->last_square_order_at ?? null, $profile->last_square_payment_at ?? null])->filter()->max();
+                                    @endphp
+                                    <tr>
+                                        <td class="px-4 py-3 align-top">
+                                            <div class="font-semibold text-white">{{ $displayName !== '' ? $displayName : 'Unnamed profile' }}</div>
+                                            <div class="mt-1 text-xs text-white/55">Profile #{{ $profile->id }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top text-white/75">
+                                            <div>{{ $profile->sample_square_customer_id ?: '—' }}</div>
+                                            <div class="mt-1 text-xs text-white/45">{{ number_format((int) ($profile->square_customer_link_count ?? 0)) }} customer link(s)</div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top">
+                                            <div class="text-white/80">{{ $profile->email ?: 'No email' }}</div>
+                                            <div class="mt-1 text-white/70">{{ $profile->phone ?: 'No phone' }}</div>
+                                            <div class="mt-2 inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold {{ $hasContact ? 'border-emerald-300/30 bg-emerald-500/10 text-emerald-100' : 'border-amber-300/30 bg-amber-500/10 text-amber-100' }}">
+                                                {{ $hasContact ? 'Contact captured' : 'Needs manual capture' }}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top text-white/75">
+                                            <div>${{ number_format($squareSpend, 2) }}</div>
+                                            <div class="mt-1 text-xs text-white/45">{{ number_format((int) ($profile->square_order_count ?? 0)) }} orders / {{ number_format((int) ($profile->square_payment_count ?? 0)) }} payments</div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top text-white/75">
+                                            <div class="flex flex-wrap gap-2">
+                                                <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_shopify_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Shopify</span>
+                                                <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_growave_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Growave</span>
+                                                <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_square_order_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Square Order Link</span>
+                                                <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_square_payment_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Square Payment Link</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top text-white/70">
+                                            {{ $lastSquareActivity ? \Illuminate\Support\Carbon::parse($lastSquareActivity)->format('Y-m-d H:i') : 'No linked order/payment activity' }}
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-6 text-center text-white/55">No Square-linked profiles matched this audit filter.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div>{{ $squareProfiles->links() }}</div>
+                </article>
+
+                <div class="space-y-4">
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-white">Manual Follow-up Queue</h3>
+                            <p class="mt-1 text-sm text-white/60">Raw Square orders that still have no customer id and no canonical order link. These are the event/POS buyers most likely to need staff follow-up.</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                            <div class="text-xs uppercase tracking-[0.2em] text-white/50">High-value unlinked orders</div>
+                            <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($squareAudit['manual_follow_up_order_count'] ?? 0)) }}</div>
+                            <div class="mt-1 text-xs text-white/45">Orders without `square_customer_id` or canonical order link, at or above ${{ number_format((float) $squareMinSpendDollars, 2) }}.</div>
+                        </div>
+                        <div class="space-y-3">
+                            @forelse($manualFollowUpOrders as $row)
+                                <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="font-semibold text-white">{{ $row['square_order_id'] }}</div>
+                                            <div class="mt-1 text-xs text-white/50">{{ $row['source_name'] ?: 'Unknown source' }} · {{ $row['location_id'] ?: 'No location' }}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="font-semibold text-white">${{ number_format(((int) ($row['total_money_amount'] ?? 0)) / 100, 2) }}</div>
+                                            <div class="mt-1 text-xs {{ ($row['is_high_value'] ?? false) ? 'text-amber-100' : 'text-white/45' }}">
+                                                {{ ($row['is_high_value'] ?? false) ? 'High-value' : 'Below threshold' }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 grid gap-2 text-xs text-white/65">
+                                        <div>Closed: {{ $row['closed_at'] ?: '—' }}</div>
+                                        <div>Cardholder hint: {{ $row['cardholder_name'] ?: 'No cardholder name in payment payload' }}</div>
+                                        <div>Event attribution rows: {{ number_format((int) ($row['attribution_count'] ?? 0)) }}</div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+                                    No manual Square follow-up candidates matched the current threshold.
+                                </div>
+                            @endforelse
+                        </div>
+                    </article>
+
+                    <article class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-white">Raw Payload Diagnostics</h3>
+                            <p class="mt-1 text-sm text-white/60">This shows whether Square is actually giving us alternate contact fields beyond `square_customer_id` in the stored raw payloads.</p>
+                        </div>
+                        <div class="grid gap-3">
+                            <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                <div class="text-xs uppercase tracking-[0.2em] text-white/50">Orders</div>
+                                <div class="mt-2 space-y-1 text-sm text-white/75">
+                                    <div>Total: {{ number_format((int) data_get($squarePayload, 'orders.total', 0)) }}</div>
+                                    <div>No customer id: {{ number_format((int) data_get($squarePayload, 'orders.no_customer_id', 0)) }}</div>
+                                    <div>`customer_details.email_address`: {{ number_format((int) data_get($squarePayload, 'orders.customer_details_email', 0)) }}</div>
+                                    <div>`customer_details.phone_number`: {{ number_format((int) data_get($squarePayload, 'orders.customer_details_phone', 0)) }}</div>
+                                    <div>Pickup recipient name: {{ number_format((int) data_get($squarePayload, 'orders.pickup_recipient_name', 0)) }}</div>
+                                    <div>Shipment recipient name: {{ number_format((int) data_get($squarePayload, 'orders.shipment_recipient_name', 0)) }}</div>
+                                    <div>Tender customer id: {{ number_format((int) data_get($squarePayload, 'orders.tender_customer_id', 0)) }}</div>
+                                </div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                <div class="text-xs uppercase tracking-[0.2em] text-white/50">Payments</div>
+                                <div class="mt-2 space-y-1 text-sm text-white/75">
+                                    <div>Total: {{ number_format((int) data_get($squarePayload, 'payments.total', 0)) }}</div>
+                                    <div>No customer id: {{ number_format((int) data_get($squarePayload, 'payments.no_customer_id', 0)) }}</div>
+                                    <div>`buyer_email_address`: {{ number_format((int) data_get($squarePayload, 'payments.buyer_email', 0)) }}</div>
+                                    <div>`billing_address.address_line_1`: {{ number_format((int) data_get($squarePayload, 'payments.billing_address_line_1', 0)) }}</div>
+                                    <div>Recoverable payment cardholder: {{ number_format((int) data_get($squarePayload, 'payments.cardholder_name', 0)) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <x-admin.help-hint tone="neutral" title="Operational implication">
+                            Current production payloads do not expose order-level email/phone fields in a way that supports safe auto-linking. Cardholder name is present on some payments, but that is not strong enough to auto-merge identities without a captured email or phone.
+                        </x-admin.help-hint>
+                    </article>
+                </div>
+            </div>
+
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h3 class="text-base font-semibold text-white">Recommended Operational Capture Path</h3>
+                <div class="mt-3 grid gap-3 lg:grid-cols-3">
+                    <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <div class="text-sm font-semibold text-white">At Booth / POS</div>
+                        <div class="mt-2 text-sm text-white/70">Ask for phone or email at purchase with a clear loyalty claim reason: “Enter phone/email for Candle Cash.”</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <div class="text-sm font-semibold text-white">After Purchase</div>
+                        <div class="mt-2 text-sm text-white/70">Use QR and receipt signage to route buyers into a fast claim flow for rewards instead of relying on Square to supply contact data later.</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <div class="text-sm font-semibold text-white">Manual Follow-up</div>
+                        <div class="mt-2 text-sm text-white/70">Prioritize high-value unlinked orders first, then staff-review cardholder hints and mapped event sources where they exist.</div>
+                    </div>
+                </div>
             </article>
         </section>
 
