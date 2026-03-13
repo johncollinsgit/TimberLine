@@ -22,7 +22,10 @@ class MarketingConversionAttributionService
         $profileIds = $this->profileIdsForOrder($order);
         $convertedAt = $order->ordered_at ?: $order->created_at ?: now();
         $orderTotal = $this->orderTotalFromOrder($order);
-        $couponSignals = $this->couponSignalsFromOrder($order);
+        $couponSignals = array_values(array_unique(array_merge(
+            $this->couponSignalsFromOrder($order),
+            $this->normalizeCouponSignals((array) ($options['coupon_signals'] ?? []))
+        )));
 
         return $this->attributeForProfiles(
             profileIds: $profileIds,
@@ -46,7 +49,10 @@ class MarketingConversionAttributionService
         $orderTotal = $order->total_money_amount !== null
             ? round(((int) $order->total_money_amount) / 100, 2)
             : null;
-        $couponSignals = $this->couponSignalsFromSquareOrder($order);
+        $couponSignals = array_values(array_unique(array_merge(
+            $this->couponSignalsFromSquareOrder($order),
+            $this->normalizeCouponSignals((array) ($options['coupon_signals'] ?? []))
+        )));
 
         return $this->attributeForProfiles(
             profileIds: $profileIds,

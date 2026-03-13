@@ -70,9 +70,19 @@ class MarketingCampaignRecipient extends Model
         return $this->hasMany(MarketingMessageDelivery::class, 'campaign_recipient_id');
     }
 
+    public function emailDeliveries(): HasMany
+    {
+        return $this->hasMany(MarketingEmailDelivery::class, 'marketing_campaign_recipient_id');
+    }
+
     public function latestDelivery(): HasOne
     {
         return $this->hasOne(MarketingMessageDelivery::class, 'campaign_recipient_id')->latestOfMany();
+    }
+
+    public function latestEmailDelivery(): HasOne
+    {
+        return $this->hasOne(MarketingEmailDelivery::class, 'marketing_campaign_recipient_id')->latestOfMany();
     }
 
     public function approver(): BelongsTo

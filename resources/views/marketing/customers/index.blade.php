@@ -9,30 +9,22 @@
             hint-text="Canonical profiles are source-of-truth. External provider records enrich customer context without replacing identity ownership."
         />
 
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div class="text-xs uppercase tracking-[0.2em] text-white/55">Total Customers</div>
                 <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
-            </article>
-            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Shopify-Linked</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['shopify_linked'] ?? 0)) }}</div>
-            </article>
-            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Square-Linked</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['square_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Linked</div>
                 <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Email</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_email'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Shopify / Order Linked</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['shopify_or_order_linked'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Phone</div>
-                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_phone'] ?? 0)) }}</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Missing Contact</div>
+                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['missing_contact'] ?? 0)) }}</div>
             </article>
         </section>
 
@@ -163,16 +155,17 @@
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-2 sm:p-3">
             <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-[1650px] text-sm">
+                <table class="min-w-[1780px] text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[220px]">Customer</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[180px]">Email</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[150px]">Phone</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Points</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Loyalty Points</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Tier</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[100px]">Referrals</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[220px]">Source Badges</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Reviews</th>
+                            <th class="px-4 py-3 text-left whitespace-nowrap min-w-[260px]">Source Badges</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Linked Sources</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[95px]">Orders</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Last Order</th>
@@ -185,8 +178,10 @@
                             @php
                                 $name = trim((string) ($profile->first_name . ' ' . $profile->last_name));
                                 $displayName = $name !== '' ? $name : ($profile->email ?: ($profile->phone ?: 'Unnamed profile'));
+                                $channels = is_array($profile->source_channels) ? $profile->source_channels : [];
                                 $stats = $derivedStats[(int) $profile->id] ?? ['order_count' => 0, 'last_order_at' => null, 'source_badges' => []];
-                                $loyalty = $loyaltyStats[(int) $profile->id] ?? ['points' => 0, 'tier' => null, 'referrals' => 0, 'has_growave' => false];
+                                $loyalty = $loyaltyStats[(int) $profile->id] ?? ['points' => 0, 'tier' => null, 'referrals' => 0, 'has_growave' => false, 'review_count' => 0, 'average_rating' => null, 'last_synced_at' => null];
+                                $hasShopifySource = in_array('shopify', $channels, true) || in_array('Shopify', (array) ($stats['source_badges'] ?? []), true);
                             @endphp
                             <tr class="cursor-pointer hover:bg-white/5" onclick="window.location='{{ route('marketing.customers.show', $profile) }}'">
                                 <td class="px-4 py-3">
@@ -211,11 +206,34 @@
                                 <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['referrals'] ?? 0)) }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-1.5">
-                                        @forelse(($stats['source_badges'] ?? []) as $badge)
-                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/80">{{ $badge }}</span>
+                                        <span class="text-white/80">{{ number_format((int) ($loyalty['review_count'] ?? 0)) }}</span>
+                                        @if(($loyalty['average_rating'] ?? null) !== null)
+                                            <span class="text-xs text-white/55">{{ number_format((float) $loyalty['average_rating'], 2) }} avg</span>
+                                        @else
+                                            <span class="text-xs text-white/45">—</span>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="flex flex-wrap gap-1.5">
+                                        @if($hasShopifySource)
+                                            <span class="inline-flex rounded-full border border-blue-300/35 bg-blue-500/15 px-2 py-0.5 text-[11px] text-blue-100">Shopify</span>
+                                        @endif
+                                        @if(($loyalty['has_growave'] ?? false) === true)
+                                            <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">Growave</span>
+                                        @endif
+                                        @foreach($stats['source_badges'] ?? [] as $badge)
+                                            @continue(in_array($badge, ['Shopify'], true))
+                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/60">{{ $badge }}</span>
+                                        @endforeach
+                                        @forelse($channels as $channel)
+                                            @continue(strtolower((string) $channel) === 'shopify')
+                                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/60">{{ $channel }}</span>
                                         @empty
-                                            <span class="text-white/40">—</span>
                                         @endforelse
+                                    </div>
+                                    <div class="mt-1 text-[11px] text-white/45">
+                                        Last Growave Sync: {{ $loyalty['last_synced_at'] ?: '—' }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-white/75">{{ (int) $profile->links_count }}</td>
@@ -230,7 +248,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="12" class="px-4 py-8 text-center text-white/55">
+                                <td colspan="13" class="px-4 py-8 text-center text-white/55">
                                     No marketing profiles found for the current filters.
                                 </td>
                             </tr>

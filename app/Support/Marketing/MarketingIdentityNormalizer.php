@@ -30,18 +30,33 @@ class MarketingIdentityNormalizer
         }
 
         if (strlen($digits) === 11 && str_starts_with($digits, '1')) {
-            return '+' . $digits;
+            $digits = substr($digits, 1);
         }
 
-        if (strlen($digits) === 10) {
-            return '+1' . $digits;
+        return strlen($digits) === 10 ? $digits : null;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public function phoneMatchCandidates(?string $value): array
+    {
+        $normalized = $this->normalizePhone($value);
+        if ($normalized === null) {
+            return [];
         }
 
-        if (strlen($digits) >= 11 && strlen($digits) <= 15) {
-            return '+' . $digits;
+        return array_values(array_unique([$normalized, '+1' . $normalized]));
+    }
+
+    public function toE164(?string $value): ?string
+    {
+        $normalized = $this->normalizePhone($value);
+        if ($normalized === null) {
+            return null;
         }
 
-        return null;
+        return '+1' . $normalized;
     }
 
     /**

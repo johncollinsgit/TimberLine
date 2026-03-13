@@ -69,6 +69,21 @@
                     </div>
                 </div>
 
+                <div>
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Groups (Optional)</label>
+                    <select name="group_ids[]" multiple size="6" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        @php
+                            $oldGroupIds = collect((array) old('group_ids', $selectedGroupIds ?? []))->map(fn($id) => (int) $id)->all();
+                        @endphp
+                        @foreach($groups as $group)
+                            <option value="{{ $group->id }}" @selected(in_array((int) $group->id, $oldGroupIds, true))>
+                                {{ $group->name }}{{ $group->is_internal ? ' (internal)' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-white/55">Campaign audience can union segment matches, selected group members, and manual profile additions.</p>
+                </div>
+
                 <div class="grid gap-4 md:grid-cols-3">
                     <div>
                         <label class="text-xs uppercase tracking-[0.2em] text-white/55">Attribution Window (days)</label>

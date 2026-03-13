@@ -22,7 +22,7 @@ class SyncShopifyCustomerMetafieldsJob implements ShouldQueue
 
     public function __construct(
         public string $storeKey,
-        public int $limit = 200,
+        public ?int $limit = null,
         public ?string $cursor = null,
         public int $pageSize = 50,
         public bool $dryRun = false
@@ -36,7 +36,7 @@ class SyncShopifyCustomerMetafieldsJob implements ShouldQueue
         }
 
         $syncService->syncStore($store, [
-            'limit' => max(1, $this->limit),
+            'limit' => $this->limit !== null ? max(1, $this->limit) : null,
             'cursor' => $this->cursor,
             'page_size' => max(1, $this->pageSize),
             'dry_run' => $this->dryRun,

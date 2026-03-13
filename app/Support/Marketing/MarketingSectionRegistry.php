@@ -56,6 +56,17 @@ class MarketingSectionRegistry
                     'Attribution-ready order/event summary panels.',
                 ],
             ],
+            'groups' => [
+                'label' => 'Groups',
+                'route' => 'marketing.groups',
+                'description' => 'Manual customer list management for curated outreach cohorts outside rule-based segments.',
+                'hint_title' => 'How to use this page',
+                'hint_text' => 'Groups are explicit, admin-curated lists. They can be imported, edited, and layered with segments during campaign recipient preparation.',
+                'coming_next' => [
+                    'List-level deliverability and engagement rollups.',
+                    'Saved import mappings and recurring audience refresh controls.',
+                ],
+            ],
             'segments' => [
                 'label' => 'Segments',
                 'route' => 'marketing.segments',
@@ -70,9 +81,9 @@ class MarketingSectionRegistry
             'campaigns' => [
                 'label' => 'Campaigns',
                 'route' => 'marketing.campaigns',
-                'description' => 'Campaign orchestration hub for SMS/email targeting, approval workflow, Twilio send execution, and delivery/conversion visibility.',
+                'description' => 'Campaign orchestration hub for SMS/email targeting, approval workflow, Twilio/SendGrid execution, and delivery/conversion visibility.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Campaigns prepare recipients, route approvals, and execute approved SMS sends through Twilio with delivery tracking and retry controls.',
+                'hint_text' => 'Campaigns prepare recipients, route approvals, and execute approved sends through Twilio SMS or SendGrid email with delivery tracking and retry controls.',
                 'coming_next' => [
                     'Automated scheduling and throttled send orchestration.',
                     'Richer conversion attribution diagnostics and revenue drill-downs.',
@@ -100,23 +111,12 @@ class MarketingSectionRegistry
                     'Channel-specific formatting helpers and preview states.',
                 ],
             ],
-            'messages' => [
-                'label' => 'Messages',
-                'route' => 'marketing.messages.send',
-                'description' => 'Internal direct-send wizard for targeted SMS sends with reusable groups and delivery logging.',
-                'hint_title' => 'How to use this page',
-                'hint_text' => 'Build an audience, draft a message, review counts, and send through Twilio delivery rails with audit visibility.',
-                'coming_next' => [
-                    'Direct email channel support using shared audience/message steps.',
-                    'Scheduled send orchestration and throttling controls.',
-                ],
-            ],
             'recommendations' => [
                 'label' => 'Recommendations',
                 'route' => 'marketing.recommendations',
                 'description' => 'Rule-based recommendation center with recipient approvals and explainable next-best-action suggestions.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Recommendations are transparent rule outcomes, not autonomous sends. Review and approve/reject before any future execution stage.',
+                'hint_text' => 'Recommendations are transparent rule outcomes fed by real delivery/conversion performance, not autonomous sends. Review and approve/reject explicitly.',
                 'coming_next' => [
                     'Recommendation impact tracking tied to conversion outcomes.',
                     'Model-assisted scoring inputs layered on top of rule rails.',
@@ -125,12 +125,12 @@ class MarketingSectionRegistry
             'candle-cash' => [
                 'label' => 'Candle Cash',
                 'route' => 'marketing.candle-cash',
-                'description' => 'Rewards foundation area for future Candle Cash balances and activity.',
+                'description' => 'Candle Cash rewards ledger, issued-code lifecycle, and Shopify/Square redemption reconciliation visibility.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Rewards logic and ledgers are deferred. Stage 1 only sets up dedicated surface area and dependency mapping.',
+                'hint_text' => 'Codes are issued first, then reconciled during Shopify/Square order ingestion or staff-assisted workflows. Use Reconciliation Operations for unresolved storefront/public issues and audit-safe manual fixes.',
                 'coming_next' => [
-                    'Rewards ledger and redemption history.',
-                    'Balance-aware campaign targeting and safeguards.',
+                    'Automated storefront redemption validation feedback loops.',
+                    'Reward-assisted conversion drill-downs tied to campaign performance.',
                 ],
             ],
             'reviews' => [
@@ -160,7 +160,7 @@ class MarketingSectionRegistry
                 'route' => 'marketing.providers-integrations',
                 'description' => 'Square sync controls, legacy import tooling, and event attribution source mapping.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Run additive sync/import operations here, then clean unmapped values so attribution and identity stay reliable.',
+                'hint_text' => 'Run additive sync/import operations here, then clean unmapped values so attribution and identity stay reliable. Shopify widget endpoints must use verified signatures; public Laravel routes stay minimal event utilities.',
                 'coming_next' => [
                     'Provider health checks and scheduled sync jobs.',
                     'Expanded source adapters for review and messaging providers.',

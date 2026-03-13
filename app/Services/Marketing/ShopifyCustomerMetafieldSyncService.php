@@ -4,11 +4,10 @@ namespace App\Services\Marketing;
 
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
-use App\Models\MarketingProfile;
-use App\Models\MarketingProfileLink;
 use App\Services\Shopify\ShopifyCustomerMetafieldFetcher;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -17,7 +16,8 @@ class ShopifyCustomerMetafieldSyncService
 {
     public function __construct(
         protected GrowaveCustomerMetafieldParser $parser,
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected MarketingProfileSyncService $profileSyncService
     ) {}
 
     /**
@@ -33,7 +33,7 @@ class ShopifyCustomerMetafieldSyncService
         $apiVersion = $this->nullableString($store['api_version'] ?? null) ?: '2026-01';
 
         $dryRun = (bool) ($options['dry_run'] ?? false);
-        $limit = max(1, (int) ($options['limit'] ?? 200));
+        $limit = $this->nullableInt($options['limit'] ?? null);
         $pageSize = min(max(1, (int) ($options['page_size'] ?? 50)), 100);
         $cursor = $this->nullableString($options['cursor'] ?? null);
 
@@ -42,8 +42,14 @@ class ShopifyCustomerMetafieldSyncService
             'records_with_growave_metafields' => 0,
             'created' => 0,
             'updated' => 0,
+            'matched_existing' => 0,
+            'profiles_created' => 0,
+            'profiles_updated' => 0,
             'links_created' => 0,
             'links_reused' => 0,
+            'reviews_created' => 0,
+            'ambiguous_collisions' => 0,
+            'skipped_no_identity' => 0,
             'records_skipped' => 0,
             'pages_processed' => 0,
             'errors' => 0,
@@ -52,7 +58,7 @@ class ShopifyCustomerMetafieldSyncService
         $run = MarketingImportRun::query()->create([
             'type' => 'shopify_customer_metafields_sync',
             'status' => 'running',
-            'source_label' => 'shopify_growave_customers:'.$storeKey,
+            'source_label' => 'shopify_growave_customers:' . $storeKey,
             'started_at' => now(),
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'live-sync',
@@ -78,57 +84,43 @@ class ShopifyCustomerMetafieldSyncService
 
             $remaining = $limit;
             do {
-                $pageLimit = min($pageSize, $remaining);
+                $pageLimit = $remaining === null ? $pageSize : min($pageSize, $remaining);
+                if ($pageLimit <= 0) {
+                    break;
+                }
+
                 $page = $fetcher->fetchPage($cursor, $pageLimit);
                 $summary['pages_processed']++;
 
                 $customers = is_array($page['customers'] ?? null) ? $page['customers'] : [];
                 foreach ($customers as $customer) {
-                    if ($remaining <= 0) {
+                    if ($remaining !== null && $remaining <= 0) {
                         break 2;
                     }
 
-                    $remaining--;
+                    if ($remaining !== null) {
+                        $remaining--;
+                    }
                     $summary['processed']++;
 
-                    $parsed = $this->parser->parse((array) ($customer['metafields'] ?? []));
-                    if ($parsed['raw_metafields'] === []) {
-                        $summary['records_skipped']++;
-
-                        continue;
+                    try {
+                        $this->syncCustomerRecord($storeKey, $customer, $summary, $dryRun);
+                    } catch (\Throwable $e) {
+                        $summary['errors']++;
+                        Log::warning('shopify customer metafield sync customer failed', [
+                            'store_key' => $storeKey,
+                            'customer_id' => $customer['shopify_customer_id'] ?? null,
+                            'error' => $e->getMessage(),
+                        ]);
                     }
-
-                    $summary['records_with_growave_metafields']++;
-
-                    if ($dryRun) {
-                        $mapping = $this->resolveProfileMapping($storeKey, $customer, true);
-                        $action = $this->upsertSnapshot($storeKey, $customer, $mapping['marketing_profile_id'], $parsed, true);
-                    } else {
-                        [$mapping, $action] = DB::transaction(function () use ($storeKey, $customer, $parsed): array {
-                            $mapping = $this->resolveProfileMapping($storeKey, $customer, false);
-                            $action = $this->upsertSnapshot(
-                                $storeKey,
-                                $customer,
-                                $mapping['marketing_profile_id'],
-                                $parsed,
-                                false
-                            );
-
-                            return [$mapping, $action];
-                        });
-                    }
-
-                    $summary['links_created'] += (int) ($mapping['links_created'] ?? 0);
-                    $summary['links_reused'] += (int) ($mapping['links_reused'] ?? 0);
-                    $summary[$action]++;
                 }
 
                 $cursor = $this->nullableString($page['cursor'] ?? null);
                 $hasNext = (bool) ($page['has_next'] ?? false);
-            } while ($hasNext && $cursor !== null && $remaining > 0);
+            } while ($hasNext && $cursor !== null && ($remaining === null || $remaining > 0));
 
             $run->forceFill([
-                'status' => 'completed',
+                'status' => $summary['errors'] > 0 ? 'partial' : 'completed',
                 'finished_at' => now(),
                 'summary' => $summary,
                 'notes' => $dryRun ? 'Dry-run executed; no source rows were written.' : null,
@@ -170,13 +162,82 @@ class ShopifyCustomerMetafieldSyncService
      *   gid:string,
      *   shopify_customer_id:string,
      *   email:?string,
+     *   phone:?string,
      *   first_name:?string,
      *   last_name:?string,
+     *   order_count:?int,
+     *   last_order_at:?string,
+     *   accepts_marketing:?bool,
+     *   updated_at:?string,
      *   metafields:array<int,array{namespace:string,key:string,value:string,type:?string}>
      * } $customer
-     * @return array{marketing_profile_id:int,links_created:int,links_reused:int}
+     * @param array<string,int> $summary
      */
-    protected function resolveProfileMapping(string $storeKey, array $customer, bool $dryRun): array
+    protected function syncCustomerRecord(string $storeKey, array $customer, array &$summary, bool $dryRun): void
+    {
+        $parsed = $this->parser->parse((array) ($customer['metafields'] ?? []));
+        $hasGrowaveMetafields = $parsed['raw_metafields'] !== [];
+        if ($hasGrowaveMetafields) {
+            $summary['records_with_growave_metafields']++;
+        }
+
+        $identity = $this->identityPayloadFromCustomer($storeKey, $customer, $hasGrowaveMetafields);
+        $reviewContext = [
+            'source_label' => 'shopify_customer_metafield_sync',
+            'store_key' => $storeKey,
+            'source_id' => (string) ($identity['primary_source']['source_id'] ?? ''),
+        ];
+
+        if ($dryRun) {
+            $syncResult = $this->profileSyncService->syncExternalIdentity($identity, [
+                'dry_run' => true,
+                'review_context' => $reviewContext,
+            ]);
+            $action = $this->upsertSnapshot($storeKey, $customer, $parsed, $syncResult['profile_id'] ?? null, $hasGrowaveMetafields, true);
+        } else {
+            [$syncResult, $action] = DB::transaction(function () use ($storeKey, $customer, $parsed, $hasGrowaveMetafields, $reviewContext): array {
+                $syncResult = $this->profileSyncService->syncExternalIdentity(
+                    $this->identityPayloadFromCustomer($storeKey, $customer, $hasGrowaveMetafields),
+                    [
+                        'dry_run' => false,
+                        'review_context' => $reviewContext,
+                    ]
+                );
+
+                $action = $this->upsertSnapshot(
+                    $storeKey,
+                    $customer,
+                    $parsed,
+                    $syncResult['profile_id'] ?? null,
+                    $hasGrowaveMetafields,
+                    false
+                );
+
+                return [$syncResult, $action];
+            });
+        }
+
+        $summary[$action]++;
+        $this->mergeProfileSummary($summary, $syncResult);
+    }
+
+    /**
+     * @param array{
+     *   gid:string,
+     *   shopify_customer_id:string,
+     *   email:?string,
+     *   phone:?string,
+     *   first_name:?string,
+     *   last_name:?string,
+     *   order_count:?int,
+     *   last_order_at:?string,
+     *   accepts_marketing:?bool,
+     *   updated_at:?string,
+     *   metafields:array<int,array{namespace:string,key:string,value:string,type:?string}>
+     * } $customer
+     * @return array<string,mixed>
+     */
+    protected function identityPayloadFromCustomer(string $storeKey, array $customer, bool $hasGrowaveMetafields): array
     {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -186,126 +247,53 @@ class ShopifyCustomerMetafieldSyncService
             $customer['gid'] ?? null,
             "Shopify customer gid missing for customer '{$shopifyCustomerId}'."
         );
-        $canonicalSourceId = $storeKey.':'.$shopifyCustomerId;
-        $sourceCandidates = $this->sourceIdCandidates($storeKey, $shopifyCustomerId, $customerGid);
+        $canonicalSourceId = $storeKey . ':' . $shopifyCustomerId;
 
-        $idLinks = MarketingProfileLink::query()
-            ->where('source_type', 'shopify_customer')
-            ->whereIn('source_id', $sourceCandidates)
-            ->get();
-
-        $distinctProfileIds = $idLinks->pluck('marketing_profile_id')->filter()->unique()->values();
-        if ($distinctProfileIds->count() > 1) {
-            throw new RuntimeException(
-                "Mapping conflict for Shopify customer {$shopifyCustomerId}: customer ID links map to multiple profiles."
-            );
-        }
-
-        $normalizedEmail = $this->normalizer->normalizeEmail($this->nullableString($customer['email'] ?? null));
-        $matchMethod = 'shopify_customer_id';
-
-        if ($distinctProfileIds->count() === 1) {
-            $profile = MarketingProfile::query()->find((int) $distinctProfileIds->first());
-            if (! $profile) {
-                throw new RuntimeException(
-                    "Mapping error for Shopify customer {$shopifyCustomerId}: linked marketing profile no longer exists."
-                );
-            }
-
-            // If we can resolve email to a different profile, treat it as a hard mapping error.
-            if ($normalizedEmail !== null) {
-                $emailMatches = MarketingProfile::query()
-                    ->where('normalized_email', $normalizedEmail)
-                    ->get();
-
-                if ($emailMatches->count() > 1) {
-                    throw new RuntimeException(
-                        "Mapping conflict for Shopify customer {$shopifyCustomerId}: email '{$normalizedEmail}' is ambiguous."
-                    );
-                }
-
-                if ($emailMatches->count() === 1 && (int) $emailMatches->first()->id !== (int) $profile->id) {
-                    throw new RuntimeException(
-                        "Mapping conflict for Shopify customer {$shopifyCustomerId}: ID and email point to different profiles."
-                    );
-                }
-            }
+        $sourceChannels = ['shopify'];
+        if ($storeKey === 'wholesale') {
+            $sourceChannels[] = 'wholesale';
         } else {
-            if ($normalizedEmail === null) {
-                throw new RuntimeException(
-                    "Mapping error for Shopify customer {$shopifyCustomerId}: no Shopify ID link and no usable email fallback."
-                );
-            }
-
-            $emailMatches = MarketingProfile::query()
-                ->where('normalized_email', $normalizedEmail)
-                ->get();
-
-            if ($emailMatches->isEmpty()) {
-                throw new RuntimeException(
-                    "Mapping error for Shopify customer {$shopifyCustomerId}: no profile found for email '{$normalizedEmail}'."
-                );
-            }
-
-            if ($emailMatches->count() > 1) {
-                throw new RuntimeException(
-                    "Mapping conflict for Shopify customer {$shopifyCustomerId}: email '{$normalizedEmail}' maps to multiple profiles."
-                );
-            }
-
-            $profile = $emailMatches->first();
-            $matchMethod = 'email';
+            $sourceChannels[] = 'online';
+        }
+        if ($hasGrowaveMetafields) {
+            $sourceChannels[] = 'growave';
         }
 
-        $linksCreated = 0;
-        $linksReused = 0;
+        $sourceLinks = [[
+            'source_type' => 'shopify_customer',
+            'source_id' => $canonicalSourceId,
+            'source_meta' => [
+                'source_system' => 'shopify',
+                'store_key' => $storeKey,
+                'shopify_customer_id' => $shopifyCustomerId,
+                'shopify_customer_gid' => $customerGid,
+            ],
+        ]];
 
-        $existingCanonical = MarketingProfileLink::query()
-            ->where('source_type', 'shopify_customer')
-            ->where('source_id', $canonicalSourceId)
-            ->first();
-
-        if ($existingCanonical && (int) $existingCanonical->marketing_profile_id !== (int) $profile->id) {
-            throw new RuntimeException(
-                "Mapping conflict for Shopify customer {$shopifyCustomerId}: canonical Shopify link belongs to another profile."
-            );
-        }
-
-        if ($dryRun) {
-            if ($existingCanonical) {
-                $linksReused = 1;
-            } else {
-                $linksCreated = 1;
-            }
-        } else {
-            MarketingProfileLink::query()->updateOrCreate(
-                [
-                    'source_type' => 'shopify_customer',
-                    'source_id' => $canonicalSourceId,
+        if ($hasGrowaveMetafields) {
+            $sourceLinks[] = [
+                'source_type' => 'growave_customer',
+                'source_id' => $canonicalSourceId,
+                'source_meta' => [
+                    'source_system' => 'growave',
+                    'store_key' => $storeKey,
+                    'shopify_customer_id' => $shopifyCustomerId,
+                    'shopify_customer_gid' => $customerGid,
                 ],
-                [
-                    'marketing_profile_id' => (int) $profile->id,
-                    'source_meta' => [
-                        'store_key' => $storeKey,
-                        'shopify_customer_id' => $shopifyCustomerId,
-                        'shopify_customer_gid' => $customerGid,
-                    ],
-                    'match_method' => $matchMethod === 'shopify_customer_id' ? 'shopify_customer_id' : 'exact_email',
-                    'confidence' => $matchMethod === 'shopify_customer_id' ? 1.00 : 0.90,
-                ]
-            );
-
-            if ($existingCanonical) {
-                $linksReused = 1;
-            } else {
-                $linksCreated = 1;
-            }
+            ];
         }
 
         return [
-            'marketing_profile_id' => (int) $profile->id,
-            'links_created' => $linksCreated,
-            'links_reused' => $linksReused,
+            'first_name' => $this->nullableString($customer['first_name'] ?? null),
+            'last_name' => $this->nullableString($customer['last_name'] ?? null),
+            'raw_email' => $this->nullableString($customer['email'] ?? null),
+            'raw_phone' => $this->nullableString($customer['phone'] ?? null),
+            'source_channels' => array_values(array_unique(array_filter($sourceChannels))),
+            'source_links' => $sourceLinks,
+            'primary_source' => [
+                'source_type' => $hasGrowaveMetafields ? 'growave_customer' : 'shopify_customer',
+                'source_id' => $canonicalSourceId,
+            ],
         ];
     }
 
@@ -314,8 +302,13 @@ class ShopifyCustomerMetafieldSyncService
      *   gid:string,
      *   shopify_customer_id:string,
      *   email:?string,
+     *   phone:?string,
      *   first_name:?string,
      *   last_name:?string,
+     *   order_count:?int,
+     *   last_order_at:?string,
+     *   accepts_marketing:?bool,
+     *   updated_at:?string,
      *   metafields:array<int,array{namespace:string,key:string,value:string,type:?string}>
      * } $customer
      * @param array{
@@ -329,8 +322,9 @@ class ShopifyCustomerMetafieldSyncService
     protected function upsertSnapshot(
         string $storeKey,
         array $customer,
-        int $marketingProfileId,
         array $parsed,
+        mixed $marketingProfileId,
+        bool $hasGrowaveMetafields,
         bool $dryRun
     ): string {
         $shopifyCustomerId = $this->requiredString(
@@ -340,26 +334,43 @@ class ShopifyCustomerMetafieldSyncService
 
         $lookup = [
             'provider' => 'shopify',
-            'integration' => 'growave',
+            'integration' => $hasGrowaveMetafields ? 'growave' : 'shopify_customer',
             'store_key' => $storeKey,
             'external_customer_id' => $shopifyCustomerId,
         ];
 
         if ($dryRun) {
-            $exists = CustomerExternalProfile::query()->where($lookup)->exists();
-
-            return $exists ? 'updated' : 'created';
+            return CustomerExternalProfile::query()->where($lookup)->exists() ? 'updated' : 'created';
         }
 
         $existing = CustomerExternalProfile::query()->where($lookup)->first();
 
+        $firstName = $this->nullableString($customer['first_name'] ?? null);
+        $lastName = $this->nullableString($customer['last_name'] ?? null);
+        $fullName = trim(($firstName ?? '') . ' ' . ($lastName ?? ''));
+        $lastOrderAt = $this->parseDate($customer['last_order_at'] ?? null);
+        $updatedAt = $this->parseDate($customer['updated_at'] ?? null);
+
         CustomerExternalProfile::query()->updateOrCreate(
             $lookup,
             [
-                'marketing_profile_id' => $marketingProfileId,
+                'marketing_profile_id' => is_numeric($marketingProfileId) && (int) $marketingProfileId > 0 ? (int) $marketingProfileId : null,
                 'external_customer_gid' => $this->nullableString($customer['gid'] ?? null),
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'full_name' => $fullName !== '' ? $fullName : null,
                 'email' => $this->nullableString($customer['email'] ?? null),
                 'normalized_email' => $this->normalizer->normalizeEmail($this->nullableString($customer['email'] ?? null)),
+                'phone' => $this->nullableString($customer['phone'] ?? null),
+                'normalized_phone' => $this->normalizer->normalizePhone($this->nullableString($customer['phone'] ?? null)),
+                'accepts_marketing' => is_bool($customer['accepts_marketing'] ?? null) ? (bool) $customer['accepts_marketing'] : null,
+                'order_count' => is_numeric($customer['order_count'] ?? null) ? max(0, (int) $customer['order_count']) : null,
+                'last_order_at' => $lastOrderAt,
+                'last_activity_at' => $this->latestDate($lastOrderAt, $updatedAt),
+                'source_channels' => array_values(array_filter(array_unique([
+                    'shopify',
+                    $hasGrowaveMetafields ? 'growave' : null,
+                ]))),
                 'raw_metafields' => $parsed['raw_metafields'],
                 'points_balance' => $parsed['points_balance'],
                 'vip_tier' => $parsed['vip_tier'],
@@ -372,16 +383,33 @@ class ShopifyCustomerMetafieldSyncService
     }
 
     /**
-     * @return array<int,string>
+     * @param array<string,int> $summary
+     * @param array<string,mixed> $syncResult
      */
-    protected function sourceIdCandidates(string $storeKey, string $shopifyCustomerId, string $customerGid): array
+    protected function mergeProfileSummary(array &$summary, array $syncResult): void
     {
-        return array_values(array_unique(array_filter([
-            $storeKey.':'.$shopifyCustomerId,
-            $shopifyCustomerId,
-            $customerGid,
-            $storeKey.':'.$customerGid,
-        ], fn ($value): bool => trim((string) $value) !== '')));
+        foreach (['profiles_created', 'profiles_updated', 'links_created', 'links_reused', 'reviews_created', 'records_skipped'] as $key) {
+            $summary[$key] += (int) ($syncResult[$key] ?? 0);
+        }
+
+        if (
+            (int) ($syncResult['profile_id'] ?? 0) > 0
+            && (int) ($syncResult['profiles_created'] ?? 0) === 0
+            && (int) ($syncResult['reviews_created'] ?? 0) === 0
+            && (int) ($syncResult['records_skipped'] ?? 0) === 0
+        ) {
+            $summary['matched_existing']++;
+        }
+
+        if (in_array((string) ($syncResult['reason'] ?? ''), [
+            'missing_email_phone',
+            'create_not_allowed',
+            'no_action_taken',
+        ], true)) {
+            $summary['skipped_no_identity']++;
+        }
+
+        $summary['ambiguous_collisions'] += (int) ($syncResult['reviews_created'] ?? 0);
     }
 
     protected function requiredString(mixed $value, string $message): string
@@ -399,5 +427,44 @@ class ShopifyCustomerMetafieldSyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function nullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return max(1, (int) $value);
+    }
+
+    protected function parseDate(mixed $value): ?CarbonImmutable
+    {
+        $string = trim((string) $value);
+        if ($string === '') {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($string);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function latestDate(?CarbonImmutable $left, ?CarbonImmutable $right): ?CarbonImmutable
+    {
+        if ($left === null) {
+            return $right;
+        }
+        if ($right === null) {
+            return $left;
+        }
+
+        return $left->greaterThan($right) ? $left : $right;
     }
 }

@@ -1,0 +1,389 @@
+<?php
+
+use App\Models\CandleCashRedemption;
+use App\Models\CandleCashReward;
+use App\Models\EventInstance;
+use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
+use App\Models\User;
+use App\Services\Marketing\CandleCashService;
+
+test('storefront contract responses include standardized envelope states and recovery states', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Stage9',
+        'email' => 'stage9.contract@example.com',
+        'normalized_email' => 'stage9.contract@example.com',
+        'phone' => '5551119999',
+        'normalized_phone' => '+15551119999',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $query = ['email' => $profile->email, 'phone' => $profile->phone];
+    $headers = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $query, '', 'stage9-secret');
+    $this->withHeaders($headers)
+        ->getJson(route('marketing.shopify.rewards.balance', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('version', 'v1')
+        ->assertJsonStructure(['ok', 'version', 'data', 'meta' => ['states']]);
+
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $errorPayload = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+        'reuse_existing_code' => false,
+    ];
+    $errorHeaders = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($errorPayload), 'stage9-secret');
+    $this->withHeaders($errorHeaders)
+        ->postJson(route('marketing.shopify.rewards.redeem'), $errorPayload)
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('error.code', 'insufficient_points')
+        ->assertJsonStructure(['error' => ['states', 'recovery_states']]);
+});
+
+test('storefront security supports valid signatures and rejects invalid or stale requests', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $valid = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'stage9-secret');
+    $this->withHeaders($valid)
+        ->getJson(route('marketing.shopify.rewards.available'))
+        ->assertOk();
+
+    $bad = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'wrong-secret');
+    $this->withHeaders($bad)
+        ->getJson(route('marketing.shopify.rewards.available'))
+        ->assertStatus(401);
+
+    $stale = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'stage9-secret', time() - 3600);
+    $this->withHeaders($stale)
+        ->getJson(route('marketing.shopify.rewards.available'))
+        ->assertStatus(401)
+        ->assertJsonPath('error.code', 'unauthorized_storefront_request');
+});
+
+test('storefront app proxy signature mode is accepted when enabled', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage9-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'unused');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $query = stage9AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'stage9-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.rewards.available', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('meta.auth_mode', 'app_proxy');
+});
+
+test('reward redemption feedback loop returns code issued and already has active code states', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Reward',
+        'email' => 'reward.feedback@example.com',
+        'normalized_email' => 'reward.feedback@example.com',
+        'phone' => '5552229999',
+        'normalized_phone' => '+15552229999',
+        'accepts_sms_marketing' => true,
+    ]);
+    app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+
+    $payload = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+    ];
+    $headers = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($payload), 'stage9-secret');
+
+    $first = $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.rewards.redeem'), $payload)
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.state', 'code_issued')
+        ->json();
+
+    expect((string) data_get($first, 'data.redemption_code'))->toStartWith('CC-');
+
+    $second = $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.rewards.redeem'), $payload)
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.state', 'already_has_active_code')
+        ->json();
+
+    expect((string) data_get($second, 'data.redemption_code'))->toBe((string) data_get($first, 'data.redemption_code'));
+});
+
+test('ambiguous storefront identity returns verification required instead of silent linkage', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $left = MarketingProfile::query()->create([
+        'first_name' => 'Left',
+        'email' => 'left.stage9@example.com',
+        'normalized_email' => 'left.stage9@example.com',
+        'phone' => '5553001000',
+        'normalized_phone' => '+15553001000',
+    ]);
+    $right = MarketingProfile::query()->create([
+        'first_name' => 'Right',
+        'email' => 'right.stage9@example.com',
+        'normalized_email' => 'right.stage9@example.com',
+        'phone' => '5553002000',
+        'normalized_phone' => '+15553002000',
+    ]);
+    expect($left->id)->not->toBe($right->id);
+
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $payload = [
+        'email' => 'left.stage9@example.com',
+        'phone' => '5553002000',
+        'reward_id' => $reward->id,
+    ];
+    $headers = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($payload), 'stage9-secret');
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.rewards.redeem'), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'identity_review_required')
+        ->assertJsonPath('error.states.0', 'needs_verification');
+});
+
+test('reconciliation dashboard surfaces unresolved issues and supports resolution actions', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Ops',
+        'email' => 'ops.stage9@example.com',
+        'normalized_email' => 'ops.stage9@example.com',
+    ]);
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
+    $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
+    $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
+
+    $event = MarketingStorefrontEvent::query()->create([
+        'event_type' => 'widget_redeem_request',
+        'status' => 'error',
+        'issue_type' => 'redemption_blocked',
+        'source_surface' => 'shopify_widget',
+        'endpoint' => '/shopify/marketing/rewards/redeem',
+        'marketing_profile_id' => $profile->id,
+        'candle_cash_redemption_id' => $redemption->id,
+        'resolution_status' => 'open',
+        'occurred_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.operations.reconciliation', ['status' => 'open']))
+        ->assertOk()
+        ->assertSeeText('Unresolved Storefront/Public Issues')
+        ->assertSeeText('redemption_blocked');
+
+    $this->actingAs($admin)
+        ->post(route('marketing.operations.reconciliation.issues.resolve', $event), [
+            'resolution_status' => 'resolved',
+            'notes' => 'Manually reviewed.',
+        ])
+        ->assertRedirect();
+
+    $event->refresh();
+    expect($event->resolution_status)->toBe('resolved')
+        ->and((int) $event->resolved_by)->toBe((int) $admin->id);
+});
+
+test('dashboard mark redeemed action reconciles issued code for staff-assisted cases', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $profile = MarketingProfile::query()->create(['first_name' => 'Manual']);
+    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'seed');
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'square');
+    $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
+
+    $this->actingAs($admin)
+        ->post(route('marketing.operations.reconciliation.redemptions.mark-redeemed', $redemption), [
+            'platform' => 'square',
+            'external_order_source' => 'square_manual',
+            'external_order_id' => 'SQ-STAGE9-001',
+            'notes' => 'Booth redemption confirmed',
+        ])
+        ->assertRedirect();
+
+    $redemption->refresh();
+    expect($redemption->status)->toBe('redeemed')
+        ->and((string) $redemption->external_order_id)->toBe('SQ-STAGE9-001')
+        ->and((int) $redemption->redeemed_by)->toBe((int) $admin->id);
+});
+
+test('storefront and public touchpoints are logged and visible on customer timeline', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Timeline',
+        'email' => 'timeline.stage9@example.com',
+        'normalized_email' => 'timeline.stage9@example.com',
+        'phone' => '5557001111',
+        'normalized_phone' => '+15557001111',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $query = ['email' => $profile->email, 'phone' => $profile->phone];
+    $headers = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $query, '', 'stage9-secret');
+    $this->withHeaders($headers)
+        ->getJson(route('marketing.shopify.rewards.balance', $query))
+        ->assertOk();
+
+    $this->get(route('marketing.public.rewards-lookup', ['email' => $profile->email, 'phone' => $profile->phone]))
+        ->assertOk()
+        ->assertSeeText('Rewards Lookup');
+
+    expect(MarketingStorefrontEvent::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('event_type', 'widget_balance_lookup')
+        ->exists())->toBeTrue()
+        ->and(MarketingStorefrontEvent::query()
+            ->where('event_type', 'public_reward_lookup')
+            ->exists())->toBeTrue();
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers.show', $profile))
+        ->assertOk()
+        ->assertSeeText('Widget/Public Event Timeline')
+        ->assertSeeText('widget_balance_lookup');
+});
+
+test('festival public flow uses canonical slug and logs event context', function () {
+    $event = EventInstance::query()->create([
+        'title' => 'Flowertown Spring Festival',
+        'public_slug' => 'flowertown-public',
+        'starts_at' => now()->addDays(7),
+    ]);
+
+    $this->get(route('marketing.public.events.optin', ['eventSlug' => 'flowertown-spring-festival']))
+        ->assertRedirect(route('marketing.public.events.optin', ['eventSlug' => 'flowertown-public']));
+
+    $this->post(route('marketing.public.events.optin.store', ['eventSlug' => 'flowertown-public']), [
+        'email' => 'festival.stage9@example.com',
+        'phone' => '5558124444',
+        'first_name' => 'Festival',
+        'consent_sms' => 1,
+        'award_bonus' => 0,
+    ])->assertRedirect();
+
+    expect(MarketingStorefrontEvent::query()
+        ->where('event_type', 'public_event_optin_submit')
+        ->where('event_instance_id', $event->id)
+        ->exists())->toBeTrue();
+});
+
+test('reconciliation dashboard remains restricted to marketing roles', function () {
+    $manager = User::factory()->create(['role' => 'manager', 'email_verified_at' => now()]);
+
+    $this->actingAs($manager)
+        ->get(route('marketing.operations.reconciliation'))
+        ->assertForbidden();
+});
+
+/**
+ * @param array<string,mixed> $query
+ * @return array<string,string>
+ */
+function stage9SignedHeaders(
+    string $method,
+    string $path,
+    array $query,
+    string $body,
+    string $secret,
+    ?int $timestamp = null
+): array {
+    $timestamp = $timestamp ?? time();
+    $canonicalQuery = stage9CanonicalQuery($query);
+    $bodyHash = hash('sha256', $body);
+    $payload = implode("\n", [$timestamp, strtoupper($method), $path, $canonicalQuery, $bodyHash]);
+    $signature = hash_hmac('sha256', $payload, $secret);
+
+    return [
+        'X-Marketing-Timestamp' => (string) $timestamp,
+        'X-Marketing-Signature' => $signature,
+    ];
+}
+
+/**
+ * @param array<string,mixed> $query
+ */
+function stage9CanonicalQuery(array $query): string
+{
+    if ($query === []) {
+        return '';
+    }
+
+    ksort($query);
+    $parts = [];
+    foreach ($query as $key => $value) {
+        if (is_array($value)) {
+            $value = stage9CanonicalQuery($value);
+        } elseif (is_bool($value)) {
+            $value = $value ? '1' : '0';
+        } elseif ($value === null) {
+            $value = '';
+        } else {
+            $value = (string) $value;
+        }
+
+        $parts[] = rawurlencode((string) $key) . '=' . rawurlencode((string) $value);
+    }
+
+    return implode('&', $parts);
+}
+
+/**
+ * @param array<string,mixed> $params
+ * @return array<string,mixed>
+ */
+function stage9AppProxySignedQuery(array $params, string $secret): array
+{
+    $canonical = stage9AppProxyCanonical($params);
+    $signature = hash_hmac('sha256', $canonical, $secret);
+
+    return [...$params, 'signature' => $signature];
+}
+
+/**
+ * @param array<string,mixed> $params
+ */
+function stage9AppProxyCanonical(array $params): string
+{
+    if ($params === []) {
+        return '';
+    }
+
+    ksort($params);
+    $parts = [];
+    foreach ($params as $key => $value) {
+        if (is_array($value)) {
+            $value = stage9AppProxyCanonical($value);
+        } elseif (is_bool($value)) {
+            $value = $value ? '1' : '0';
+        } elseif ($value === null) {
+            $value = '';
+        } else {
+            $value = (string) $value;
+        }
+
+        $parts[] = (string) $key . '=' . (string) $value;
+    }
+
+    return implode('', $parts);
+}

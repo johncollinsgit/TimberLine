@@ -19,6 +19,9 @@
                         <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2.5 py-1">Channel: {{ strtoupper($campaign->channel) }}</span>
                         <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2.5 py-1">Objective: {{ $campaign->objective ?: '—' }}</span>
                         <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2.5 py-1">Segment: {{ $campaign->segment?->name ?: 'Unlinked' }}</span>
+                        <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2.5 py-1">
+                            Groups: {{ $campaign->groups->isNotEmpty() ? $campaign->groups->pluck('name')->join(', ') : 'Unlinked' }}
+                        </span>
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -69,10 +72,12 @@
                     @csrf
                     <button type="submit" class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">Generate Recommendations</button>
                 </form>
-                <form method="POST" action="{{ route('marketing.campaigns.send-approved-sms', $campaign) }}" class="inline-flex items-center gap-2">
+                <form method="POST" action="{{ $campaign->channel === 'email' ? route('marketing.campaigns.send-approved-email', $campaign) : route('marketing.campaigns.send-approved-sms', $campaign) }}" class="inline-flex items-center gap-2">
                     @csrf
                     <input type="hidden" name="limit" value="500" />
-                    <button type="submit" class="inline-flex rounded-full border border-sky-300/40 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100">Send Approved Recipients</button>
+                    <button type="submit" class="inline-flex rounded-full border border-sky-300/40 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100">
+                        Send Approved {{ strtoupper($campaign->channel) }}
+                    </button>
                     <label class="inline-flex items-center gap-1 text-xs text-white/70">
                         <input type="checkbox" name="dry_run" value="1" class="rounded border-white/20 bg-white/5" /> Dry run
                     </label>
@@ -184,8 +189,97 @@
                             <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">{{ $type }}: {{ (int) $count }}</span>
                         @endforeach
                     </div>
+                    <div class="mt-2 text-xs text-white/65">
+                        Reward-assisted conversions: {{ (int) ($rewardConversionSummary['assisted_count'] ?? 0) }}
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-1.5">
+                        @foreach((array) ($rewardConversionSummary['by_platform'] ?? []) as $platform => $count)
+                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">{{ strtoupper((string) $platform) }}: {{ (int) $count }}</span>
+                        @endforeach
+                    </div>
+                </article>
+
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-sm font-semibold text-white">Performance Snapshot</div>
+                    <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-white/70">
+                        <div>Sent: {{ (int) ($performanceSummary['sent'] ?? 0) }}</div>
+                        <div>Delivered: {{ (int) ($performanceSummary['delivered'] ?? 0) }}</div>
+                        <div>Opened: {{ (int) ($performanceSummary['opened'] ?? 0) }}</div>
+                        <div>Clicked: {{ (int) ($performanceSummary['clicked'] ?? 0) }}</div>
+                        <div>Converted: {{ (int) ($performanceSummary['converted'] ?? 0) }}</div>
+                        <div>Revenue: ${{ number_format((float) ($performanceSummary['revenue'] ?? 0), 2) }}</div>
+                    </div>
+                    <div class="mt-2 text-xs text-white/55">
+                        These metrics are derived from real delivery + conversion outcomes and feed recommendation scoring.
+                    </div>
+                </article>
+
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-sm font-semibold text-white">Timing Insight</div>
+                    <x-admin.help-hint tone="neutral" title="Send-time optimization">
+                        Timing suggestions are rule-based and advisory. Applying them still requires explicit admin choice and does not auto-send.
+                    </x-admin.help-hint>
+                    @if($timingInsight)
+                        <div class="mt-2 text-sm text-white/75">
+                            Suggested hour: <span class="font-semibold text-white">{{ str_pad((string) (int) ($timingInsight->recommended_hour ?? 13), 2, '0', STR_PAD_LEFT) }}:00</span>
+                            · {{ $timingInsight->recommended_daypart ?: 'daypart n/a' }}
+                        </div>
+                        <div class="mt-1 text-xs text-white/60">Confidence: {{ number_format((float) ($timingInsight->confidence ?? 0), 2) }}</div>
+                    @else
+                        <div class="mt-2 text-xs text-white/60">No timing insight available yet for this campaign context.</div>
+                    @endif
                 </article>
             </article>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h3 class="text-sm font-semibold text-white">Variant Performance Comparison</h3>
+            <x-admin.help-hint tone="neutral" title="Learning model scope">
+                Variant comparisons are computed from observed sends, engagement, and conversions. Variants are never auto-promoted or auto-paused.
+            </x-admin.help-hint>
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Variant</th>
+                            <th class="px-4 py-3 text-left">Channel</th>
+                            <th class="px-4 py-3 text-left">Sent</th>
+                            <th class="px-4 py-3 text-left">Delivered</th>
+                            <th class="px-4 py-3 text-left">Opened</th>
+                            <th class="px-4 py-3 text-left">Clicked</th>
+                            <th class="px-4 py-3 text-left">Converted</th>
+                            <th class="px-4 py-3 text-left">Conversion Rate</th>
+                            <th class="px-4 py-3 text-left">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse((array) ($performanceSummary['variant_rows'] ?? []) as $row)
+                            @php
+                                $variantName = 'No variant';
+                                if (!empty($row['variant_id'])) {
+                                    $found = $campaign->variants->firstWhere('id', (int) $row['variant_id']);
+                                    $variantName = $found?->name ?: ('Variant #' . (int) $row['variant_id']);
+                                }
+                            @endphp
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $variantName }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ strtoupper((string) ($row['channel'] ?? $campaign->channel)) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ (int) ($row['sent_count'] ?? 0) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ (int) ($row['delivered_count'] ?? 0) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ (int) ($row['opened_count'] ?? 0) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ (int) ($row['clicked_count'] ?? 0) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ (int) ($row['converted_count'] ?? 0) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ number_format(((float) ($row['conversion_rate'] ?? 0)) * 100, 1) }}%</td>
+                                <td class="px-4 py-3 text-white/70">${{ number_format((float) ($row['attributed_revenue'] ?? 0), 2) }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="9" class="px-4 py-8 text-center text-white/55">No variant performance data available yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
@@ -194,7 +288,7 @@
                 Approvals are separate from execution by design. Sends can be run in dry-run mode, and failed recipients can be retried individually without deleting prior attempts.
             </x-admin.help-hint>
 
-            <form method="POST" action="{{ route('marketing.campaigns.send-selected-sms', $campaign) }}" class="space-y-3">
+            <form method="POST" action="{{ $campaign->channel === 'email' ? route('marketing.campaigns.send-selected-email', $campaign) : route('marketing.campaigns.send-selected-sms', $campaign) }}" class="space-y-3">
                 @csrf
                 <div class="flex items-center justify-between gap-3">
                     <div class="text-xs text-white/60">Select approved recipients below for targeted send execution.</div>
@@ -210,14 +304,14 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-white/5 text-white/65">
                             <tr>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Select</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Variant</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Reason Codes</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Last Delivery</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Message Preview</th>
-                                <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
+                                <th class="px-4 py-3 text-left">Select</th>
+                                <th class="px-4 py-3 text-left">Profile</th>
+                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-left">Variant</th>
+                                <th class="px-4 py-3 text-left">Reason Codes</th>
+                                <th class="px-4 py-3 text-left">Last Delivery</th>
+                                <th class="px-4 py-3 text-left">Message Preview</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/10">
@@ -244,7 +338,15 @@
                                         </div>
                                     </td>
                                     <td class="px-4 py-3 text-white/65">
-                                        @if($recipient->latestDelivery)
+                                        @if($campaign->channel === 'email')
+                                            @if($recipient->latestEmailDelivery)
+                                                {{ $recipient->latestEmailDelivery->status }}
+                                                <div class="text-xs text-white/50">{{ optional($recipient->latestEmailDelivery->sent_at)->format('Y-m-d H:i') ?: optional($recipient->latestEmailDelivery->created_at)->format('Y-m-d H:i') }}</div>
+                                                <div class="text-xs text-white/45">{{ $recipient->latestEmailDelivery->sendgrid_message_id ?: 'No SendGrid ID' }}</div>
+                                            @else
+                                                —
+                                            @endif
+                                        @elseif($recipient->latestDelivery)
                                             {{ $recipient->latestDelivery->send_status }}
                                             <div class="text-xs text-white/50">{{ optional($recipient->latestDelivery->sent_at)->format('Y-m-d H:i') ?: optional($recipient->latestDelivery->created_at)->format('Y-m-d H:i') }}</div>
                                             <div class="text-xs text-white/45">{{ $recipient->latestDelivery->provider_message_id ?: 'No SID' }}</div>
@@ -266,7 +368,7 @@
                                                 </form>
                                             @endif
                                             @if(in_array($recipient->status, ['failed', 'undelivered'], true))
-                                                <form method="POST" action="{{ route('marketing.campaigns.recipients.retry-sms', [$campaign, $recipient]) }}">
+                                                <form method="POST" action="{{ $campaign->channel === 'email' ? route('marketing.campaigns.recipients.retry-email', [$campaign, $recipient]) : route('marketing.campaigns.recipients.retry-sms', [$campaign, $recipient]) }}">
                                                     @csrf
                                                     <button type="submit" class="inline-flex rounded-full border border-rose-300/35 bg-rose-500/15 px-3 py-1 text-xs font-semibold text-rose-100">Retry</button>
                                                 </form>
@@ -287,55 +389,95 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
-            <h3 class="text-sm font-semibold text-white">SMS Delivery Log</h3>
+            <h3 class="text-sm font-semibold text-white">{{ strtoupper($campaign->channel) }} Delivery Log</h3>
             <x-admin.help-hint tone="neutral" title="Delivery state updates">
-                Twilio callback events can arrive after initial send. Delivery statuses are updated idempotently and appended to delivery event history.
+                Provider callback events can arrive after initial send. Delivery statuses are updated idempotently and retained for auditability.
             </x-admin.help-hint>
 
-            <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-full text-sm">
-                    <thead class="bg-white/5 text-white/65">
-                        <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Recipient</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Attempt</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Provider SID</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Sent</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Delivered</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Failure</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Message</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/10">
-                        @forelse($deliveryLog as $delivery)
+            @if($campaign->channel === 'email')
+                <div class="overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-white/5 text-white/65">
                             <tr>
-                                <td class="px-4 py-3 text-white/80">
-                                    {{ trim((string) ($delivery->profile?->first_name . ' ' . $delivery->profile?->last_name)) ?: ('Profile #' . $delivery->marketing_profile_id) }}
-                                    <div class="text-xs text-white/55">{{ $delivery->to_phone ?: ($delivery->profile?->phone ?: '—') }}</div>
-                                </td>
-                                <td class="px-4 py-3 text-white/75">{{ $delivery->send_status }}</td>
-                                <td class="px-4 py-3 text-white/75">#{{ (int) $delivery->attempt_number }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ $delivery->provider_message_id ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ optional($delivery->sent_at)->format('Y-m-d H:i') ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ optional($delivery->delivered_at)->format('Y-m-d H:i') ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/65">
-                                    @if($delivery->error_code || $delivery->error_message)
-                                        <div>{{ $delivery->error_code ?: 'error' }}</div>
-                                        <div class="text-xs text-white/50">{{ \Illuminate\Support\Str::limit((string) $delivery->error_message, 80) }}</div>
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-white/65">{{ \Illuminate\Support\Str::limit((string) $delivery->rendered_message, 95) }}</td>
+                                <th class="px-4 py-3 text-left">Recipient</th>
+                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-left">SendGrid ID</th>
+                                <th class="px-4 py-3 text-left">Sent</th>
+                                <th class="px-4 py-3 text-left">Delivered</th>
+                                <th class="px-4 py-3 text-left">Opened</th>
+                                <th class="px-4 py-3 text-left">Clicked</th>
+                                <th class="px-4 py-3 text-left">Failed</th>
                             </tr>
-                        @empty
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse($emailDeliveryLog as $delivery)
+                                <tr>
+                                    <td class="px-4 py-3 text-white/80">
+                                        {{ trim((string) ($delivery->profile?->first_name . ' ' . $delivery->profile?->last_name)) ?: ('Profile #' . $delivery->marketing_profile_id) }}
+                                        <div class="text-xs text-white/55">{{ $delivery->email ?: ($delivery->profile?->email ?: '—') }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-white/75">{{ $delivery->status }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ $delivery->sendgrid_message_id ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->sent_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->delivered_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->opened_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->clicked_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->failed_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="8" class="px-4 py-8 text-center text-white/55">No email delivery attempts logged for this campaign yet.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div class="overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-white/5 text-white/65">
                             <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-white/55">No delivery attempts logged for this campaign yet.</td>
+                                <th class="px-4 py-3 text-left">Recipient</th>
+                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-left">Attempt</th>
+                                <th class="px-4 py-3 text-left">Provider SID</th>
+                                <th class="px-4 py-3 text-left">Sent</th>
+                                <th class="px-4 py-3 text-left">Delivered</th>
+                                <th class="px-4 py-3 text-left">Failure</th>
+                                <th class="px-4 py-3 text-left">Message</th>
                             </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse($deliveryLog as $delivery)
+                                <tr>
+                                    <td class="px-4 py-3 text-white/80">
+                                        {{ trim((string) ($delivery->profile?->first_name . ' ' . $delivery->profile?->last_name)) ?: ('Profile #' . $delivery->marketing_profile_id) }}
+                                        <div class="text-xs text-white/55">{{ $delivery->to_phone ?: ($delivery->profile?->phone ?: '—') }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-white/75">{{ $delivery->send_status }}</td>
+                                    <td class="px-4 py-3 text-white/75">#{{ (int) $delivery->attempt_number }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ $delivery->provider_message_id ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->sent_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ optional($delivery->delivered_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">
+                                        @if($delivery->error_code || $delivery->error_message)
+                                            <div>{{ $delivery->error_code ?: 'error' }}</div>
+                                            <div class="text-xs text-white/50">{{ \Illuminate\Support\Str::limit((string) $delivery->error_message, 80) }}</div>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3 text-white/65">{{ \Illuminate\Support\Str::limit((string) $delivery->rendered_message, 95) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="8" class="px-4 py-8 text-center text-white/55">No delivery attempts logged for this campaign yet.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            @endif
         </section>
     </div>
 </x-layouts::app>

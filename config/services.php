@@ -56,10 +56,13 @@ return [
     'twilio' => [
         'account_sid' => env('TWILIO_ACCOUNT_SID'),
         'auth_token' => env('TWILIO_AUTH_TOKEN'),
-        'from' => env('TWILIO_FROM_NUMBER'),
-        'from_number' => env('TWILIO_FROM_NUMBER'),
         'messaging_service_sid' => env('TWILIO_MESSAGING_SERVICE_SID'),
+        'from_number' => env('TWILIO_FROM_NUMBER'),
         'status_callback_url' => env('TWILIO_STATUS_CALLBACK_URL'),
+    ],
+
+    'sendgrid' => [
+        'api_key' => env('SENDGRID_API_KEY'),
     ],
 
     /*
@@ -78,10 +81,11 @@ return [
     'shopify' => [
 
         'api_version' => env('SHOPIFY_API_VERSION', '2026-01'),
+        'allow_env_token_fallback' => (bool) env('SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK', false),
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
-            'read_orders,read_products'
+            'read_orders,read_products,read_customers'
         ),
 
         'stores' => [

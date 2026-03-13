@@ -241,11 +241,11 @@ test('customers empty state surfaces upstream sync diagnostics and readable head
         ->assertSeeText('Shopify/Growave/Square')
         ->assertSeeText('Run profile sync to build the canonical customer index.')
         ->assertSeeText('Customer')
-        ->assertSeeText('Source Channels')
+        ->assertSeeText('Source Badges')
         ->assertSeeText('Linked Sources')
         ->assertSeeText('Orders')
         ->assertSeeText('Actions')
         ->assertSee('whitespace-nowrap', false)
-        ->assertSee('min-w-[1650px]', false)
+        ->assertSee('min-w-[1780px]', false)
         ->assertSee('php artisan marketing:sync-profiles --source=all --chunk=500', false);
 });

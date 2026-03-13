@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketingCampaign extends Model
@@ -61,6 +62,17 @@ class MarketingCampaign extends Model
     public function deliveries(): HasMany
     {
         return $this->hasMany(MarketingMessageDelivery::class, 'campaign_id');
+    }
+
+    public function groups(): BelongsToMany
+    {
+        return $this->belongsToMany(MarketingGroup::class, 'marketing_campaign_groups', 'campaign_id', 'marketing_group_id')
+            ->withTimestamps();
+    }
+
+    public function performanceSnapshots(): HasMany
+    {
+        return $this->hasMany(MarketingVariantPerformanceSnapshot::class, 'campaign_id');
     }
 
     public function creator(): BelongsTo

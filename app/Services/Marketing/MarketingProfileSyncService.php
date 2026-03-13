@@ -72,11 +72,13 @@ class MarketingProfileSyncService
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $reviewContext = is_array($options['review_context'] ?? null) ? $options['review_context'] : [];
+        $allowCreate = (bool) ($options['allow_create'] ?? true);
 
         return $this->syncIdentity(
             identity: $this->normalizeIdentityPayload($identity),
             reviewContext: $reviewContext,
-            dryRun: $dryRun
+            dryRun: $dryRun,
+            allowCreate: $allowCreate
         );
     }
 
@@ -95,7 +97,7 @@ class MarketingProfileSyncService
      *   records_skipped:int
      * }
      */
-    protected function syncIdentity(array $identity, array $reviewContext, bool $dryRun): array
+    protected function syncIdentity(array $identity, array $reviewContext, bool $dryRun, bool $allowCreate = true): array
     {
         $sourceLinkProfiles = $this->profilesFromSourceLinks($identity['source_links']);
         $sourceLinkedProfile = $sourceLinkProfiles->count() === 1 ? $sourceLinkProfiles->first() : null;
@@ -114,19 +116,21 @@ class MarketingProfileSyncService
 
         if (! $identity['has_identity']) {
             if (! $sourceLinkedProfile) {
-                if (! $this->shouldCreateSourceLinkedProfileWithoutIdentity($identity)) {
-                    return $this->result('skipped', 'missing_email_phone', null, 0, 0, 0, 0, 0, 1);
+                if ($allowCreate && $this->shouldCreateSourceLinkedProfileWithoutIdentity($identity)) {
+                    $profile = new MarketingProfile();
+
+                    return $this->persistProfileAndLinks(
+                        identity: $identity,
+                        profile: $profile,
+                        matchMethod: 'created_from_source_without_identity',
+                        confidence: null,
+                        createProfile: true,
+                        reviewContext: $reviewContext,
+                        dryRun: $dryRun
+                    );
                 }
 
-                return $this->persistProfileAndLinks(
-                    identity: $identity,
-                    profile: new MarketingProfile(),
-                    matchMethod: 'created_from_source_without_identity',
-                    confidence: null,
-                    createProfile: true,
-                    reviewContext: $reviewContext,
-                    dryRun: $dryRun
-                );
+                return $this->result('skipped', 'missing_email_phone', null, 0, 0, 0, 0, 0, 1);
             }
 
             return $this->persistProfileAndLinks(
@@ -200,6 +204,10 @@ class MarketingProfileSyncService
         }
 
         if ($match['outcome'] === 'create') {
+            if (! $allowCreate) {
+                return $this->result('skipped', 'create_not_allowed', null, 0, 0, 0, 0, 0, 1);
+            }
+
             $profile = new MarketingProfile();
 
             return $this->persistProfileAndLinks(
@@ -214,50 +222,6 @@ class MarketingProfileSyncService
         }
 
         return $this->result('skipped', 'no_action_taken', null, 0, 0, 0, 0, 0, 1);
-    }
-
-    /**
-     * Allow source-only profile creation for trusted customer source links so
-     * canonical profiles can still be created when email/phone are missing.
-     *
-     * @param array<string,mixed> $identity
-     */
-    protected function shouldCreateSourceLinkedProfileWithoutIdentity(array $identity): bool
-    {
-        $channels = collect((array) ($identity['source_channels'] ?? []))
-            ->map(fn ($value) => strtolower(trim((string) $value)))
-            ->filter()
-            ->values();
-
-        if ($channels->intersect(['shopify', 'square', 'growave', 'wholesale', 'event', 'manual'])->isNotEmpty()) {
-            return true;
-        }
-
-        $allowedSourceTypes = [
-            'shopify_order',
-            'shopify_customer',
-            'growave_customer',
-            'square_customer',
-            'square_order',
-            'square_payment',
-            'wholesale_customer',
-            'event_customer',
-            'internal_customer',
-            'manual_customer',
-        ];
-
-        foreach ((array) ($identity['source_links'] ?? []) as $link) {
-            if (! is_array($link)) {
-                continue;
-            }
-
-            $sourceType = strtolower(trim((string) ($link['source_type'] ?? '')));
-            if (in_array($sourceType, $allowedSourceTypes, true)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public function resolveReviewToExistingProfile(
@@ -518,11 +482,22 @@ class MarketingProfileSyncService
         } elseif (
             $profile->normalized_phone &&
             $identity['normalized_phone'] &&
-            $profile->normalized_phone === $identity['normalized_phone'] &&
+            $this->phonesEquivalent($profile->normalized_phone, $identity['normalized_phone']) &&
             !$profile->phone &&
             $identity['raw_phone']
         ) {
             $profile->phone = $identity['raw_phone'];
+            $changed = true;
+        }
+
+        if (
+            $profile->normalized_phone &&
+            $identity['normalized_phone'] &&
+            $this->phonesEquivalent($profile->normalized_phone, $identity['normalized_phone']) &&
+            $profile->normalized_phone !== $identity['normalized_phone']
+        ) {
+            // Canonicalize to 10-digit identity token while retaining raw phone for display/sending.
+            $profile->normalized_phone = $identity['normalized_phone'];
             $changed = true;
         }
 
@@ -565,6 +540,14 @@ class MarketingProfileSyncService
         $normalizedPhone = $this->normalizer->normalizePhone($review->raw_phone);
         if ($normalizedPhone && !$profile->normalized_phone) {
             $profile->phone = $review->raw_phone;
+            $profile->normalized_phone = $normalizedPhone;
+            $updated = true;
+        } elseif (
+            $normalizedPhone &&
+            $profile->normalized_phone &&
+            $this->phonesEquivalent($profile->normalized_phone, $normalizedPhone) &&
+            $profile->normalized_phone !== $normalizedPhone
+        ) {
             $profile->normalized_phone = $normalizedPhone;
             $updated = true;
         }
@@ -715,6 +698,45 @@ class MarketingProfileSyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    protected function shouldCreateSourceLinkedProfileWithoutIdentity(array $identity): bool
+    {
+        $customerSourceTypes = [
+            'shopify_customer',
+            'growave_customer',
+            'square_customer',
+            'wholesale_customer',
+            'event_customer',
+            'internal_customer',
+            'manual_customer',
+        ];
+
+        foreach ((array) ($identity['source_links'] ?? []) as $link) {
+            if (! is_array($link)) {
+                continue;
+            }
+
+            $sourceType = trim((string) ($link['source_type'] ?? ''));
+            if (in_array($sourceType, $customerSourceTypes, true)) {
+                return true;
+            }
+        }
+
+        $primarySourceType = trim((string) ($identity['primary_source']['source_type'] ?? ''));
+
+        return in_array($primarySourceType, $customerSourceTypes, true);
+    }
+
+    protected function phonesEquivalent(?string $left, ?string $right): bool
+    {
+        $leftNormalized = $this->normalizer->normalizePhone($left);
+        $rightNormalized = $this->normalizer->normalizePhone($right);
+
+        return $leftNormalized !== null && $rightNormalized !== null && $leftNormalized === $rightNormalized;
     }
 
     /**

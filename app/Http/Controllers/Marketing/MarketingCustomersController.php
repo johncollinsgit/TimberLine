@@ -8,6 +8,8 @@ use App\Models\CandleCashReward;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
+use App\Models\MarketingReviewHistory;
+use App\Models\MarketingReviewSummary;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingSegment;
@@ -23,6 +25,7 @@ use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
+use App\Services\Marketing\GrowaveProjectionService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingEventAttributionService;
 use App\Services\Marketing\MarketingNextBestActionService;
@@ -40,33 +43,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 
 class MarketingCustomersController extends Controller
 {
-    protected ?object $candleCashService;
-    protected ?object $redemptionReconciliationService;
-    protected ?object $nextBestActionService;
-    protected ?object $birthdayProfileService;
-    protected ?object $birthdayRewardEngine;
-    protected ?object $birthdayReportingService;
-    protected ?object $shopifyBirthdayMetafieldService;
-
     public function __construct(
         protected MarketingEventAttributionService $attributionService,
         protected MarketingProfileScoreService $scoreService,
         protected MarketingSegmentEvaluator $segmentEvaluator,
         protected MarketingConsentService $consentService,
+        protected CandleCashService $candleCashService,
+        protected CandleCashRedemptionReconciliationService $redemptionReconciliationService,
+        protected MarketingNextBestActionService $nextBestActionService,
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected MarketingProfileMatcher $profileMatcher,
+        protected BirthdayProfileService $birthdayProfileService,
+        protected BirthdayRewardEngineService $birthdayRewardEngine,
+        protected BirthdayReportingService $birthdayReportingService,
+        protected ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService,
+        protected GrowaveProjectionService $growaveProjectionService
     ) {
-        $this->candleCashService = $this->resolveOptionalService(CandleCashService::class);
-        $this->redemptionReconciliationService = $this->resolveOptionalService(CandleCashRedemptionReconciliationService::class);
-        $this->nextBestActionService = $this->resolveOptionalService(MarketingNextBestActionService::class);
-        $this->birthdayProfileService = $this->resolveOptionalService(BirthdayProfileService::class);
-        $this->birthdayRewardEngine = $this->resolveOptionalService(BirthdayRewardEngineService::class);
-        $this->birthdayReportingService = $this->resolveOptionalService(BirthdayReportingService::class);
-        $this->shopifyBirthdayMetafieldService = $this->resolveOptionalService(ShopifyBirthdayMetafieldService::class);
     }
 
     public function index(Request $request): View
@@ -99,13 +94,8 @@ class MarketingCustomersController extends Controller
 
         $today = now();
         $weekTuples = $this->birthdayWeekTuples($today);
-        $supportsBirthdayProfiles = method_exists(MarketingProfile::class, 'birthdayProfile');
         $supportsCandleCashBalances = Schema::hasTable('candle_cash_balances');
         $searchLike = '%'.$search.'%';
-
-        if (! $supportsBirthdayProfiles) {
-            $birthdayFilter = 'all';
-        }
 
         $profiles = MarketingProfile::query()
             ->when($search !== '', function ($query) use ($searchLike): void {
@@ -198,30 +188,17 @@ class MarketingCustomersController extends Controller
                         });
                 });
             })
-            ->when($supportsBirthdayProfiles, function ($query): void {
-                $query->with([
-                    'birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year',
-                ]);
-            })
+            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
             ->withCount('links')
             ->orderBy($sort, $dir)
             ->paginate($perPage)
             ->withQueryString();
 
+        $derivedStats = $this->buildDerivedStats($profiles->getCollection());
         $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
-        $derivedStats = $this->buildDerivedStats($profiles->getCollection(), $loyaltyStats);
-        $birthdayReporting = ($this->birthdayReportingService && method_exists($this->birthdayReportingService, 'summary'))
-            ? (array) $this->birthdayReportingService->summary($today)
-            : [
-                'today_count' => 0,
-                'upcoming_week_count' => 0,
-                'upcoming_month_count' => 0,
-                'missing_count' => 0,
-                'total_tracked' => 0,
-                'upcoming_birthdays' => [],
-            ];
+        $birthdayReporting = $this->birthdayReportingService->summary($today);
         $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics((int) $profiles->total());
-        $quickStats = $this->buildIndexQuickStats();
+        $quickStats = $this->buildIndexQuickStats((int) $profiles->total());
 
         return view('marketing.customers.index', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -397,7 +374,18 @@ class MarketingCustomersController extends Controller
     {
         $marketingProfile->load([
             'links' => fn ($query) => $query->orderByDesc('id'),
+            'groups:id,name,is_internal',
         ]);
+
+        /** @var CustomerBirthdayProfile|null $birthdayProfile */
+        $birthdayProfile = $marketingProfile->birthdayProfile()
+            ->with([
+                'audits' => fn ($query) => $query->orderByDesc('id')->limit(25),
+                'rewardIssuances' => fn ($query) => $query->orderByDesc('id')->limit(25),
+            ])
+            ->first();
+
+        $birthdayRewardStatus = $this->birthdayRewardEngine->statusForProfile($birthdayProfile);
 
         $orderLinks = $marketingProfile->links
             ->where('source_type', 'order')
@@ -456,14 +444,58 @@ class MarketingCustomersController extends Controller
             ->orderByDesc('id')
             ->limit(30)
             ->get();
-        $latestGrowaveExternal = $externalProfiles
-            ->first(fn (CustomerExternalProfile $row): bool => (string) $row->integration === 'growave');
-        $profileSourceBadges = $this->canonicalSourceBadges(
-            $marketingProfile,
-            $marketingProfile->links,
-            $latestGrowaveExternal !== null,
-            false
+        $latestGrowaveExternal = $this->growaveProjectionService->preferredExternal(
+            $externalProfiles->filter(fn (CustomerExternalProfile $row): bool => (string) $row->integration === 'growave')
         );
+        $latestGrowaveReviewSummary = $this->growaveProjectionService->preferredReviewSummary(
+            $marketingProfile->reviewSummaries()
+                ->where('provider', 'growave')
+                ->where('integration', 'growave')
+                ->get(),
+            $latestGrowaveExternal
+        );
+
+        if (! $latestGrowaveReviewSummary && $latestGrowaveExternal) {
+            $latestGrowaveReviewSummary = MarketingReviewSummary::query()
+                ->where('provider', 'growave')
+                ->where('integration', 'growave')
+                ->where('store_key', $latestGrowaveExternal->store_key)
+                ->where('external_customer_id', $latestGrowaveExternal->external_customer_id)
+                ->orderByDesc('source_synced_at')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        $growaveReviewHistory = $marketingProfile->reviewHistory()
+            ->where('provider', 'growave')
+            ->where('integration', 'growave')
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+
+        if ($growaveReviewHistory->isEmpty() && $latestGrowaveReviewSummary) {
+            $growaveReviewHistory = MarketingReviewHistory::query()
+                ->where('marketing_review_summary_id', $latestGrowaveReviewSummary->id)
+                ->orderByDesc('reviewed_at')
+                ->orderByDesc('id')
+                ->limit(25)
+                ->get();
+        }
+
+        $growaveLastSyncAt = collect([
+            optional($latestGrowaveExternal?->synced_at)->toDateTimeString(),
+            optional($latestGrowaveReviewSummary?->source_synced_at)->toDateTimeString(),
+        ])->filter()->max();
+
+        $growaveSourceMeta = [
+            'provider' => $latestGrowaveExternal?->provider ?: 'growave',
+            'integration' => $latestGrowaveExternal?->integration ?: 'growave',
+            'store_key' => $latestGrowaveExternal?->store_key ?: $latestGrowaveReviewSummary?->store_key,
+            'external_customer_id' => $latestGrowaveExternal?->external_customer_id ?: $latestGrowaveReviewSummary?->external_customer_id,
+            'external_customer_email' => $latestGrowaveReviewSummary?->external_customer_email,
+            'last_synced_at' => $growaveLastSyncAt,
+        ];
 
         $eventSummary = $this->attributionService->eventSummaryForProfile($marketingProfile);
         $unresolvedAttributionValues = $this->attributionService->unresolvedValuesForProfile($marketingProfile);
@@ -489,40 +521,89 @@ class MarketingCustomersController extends Controller
             ->limit(12)
             ->get(['id', 'name', 'status']);
 
-        $deliveries = method_exists($marketingProfile, 'messageDeliveries')
-            ? $marketingProfile->messageDeliveries()
-                ->with(['campaign:id,name', 'variant:id,name', 'recipient:id,status'])
-                ->orderByDesc('id')
-                ->limit(120)
-                ->get()
-            : collect();
+        $deliveries = $marketingProfile->messageDeliveries()
+            ->with(['campaign:id,name', 'variant:id,name', 'recipient:id,status'])
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
 
-        $conversions = method_exists($marketingProfile, 'campaignConversions')
-            ? $marketingProfile->campaignConversions()
-                ->with(['campaign:id,name', 'recipient:id,status'])
-                ->orderByDesc('converted_at')
-                ->orderByDesc('id')
-                ->limit(120)
-                ->get()
-            : collect();
+        $conversions = $marketingProfile->campaignConversions()
+            ->with(['campaign:id,name', 'recipient:id,status'])
+            ->orderByDesc('converted_at')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
 
-        $consentEvents = method_exists($marketingProfile, 'consentEvents')
-            ? $marketingProfile->consentEvents()
-                ->orderByDesc('occurred_at')
+        $consentEvents = $marketingProfile->consentEvents()
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+
+        $emailDeliveries = $marketingProfile->emailDeliveries()
+            ->with(['recipient.campaign:id,name'])
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+
+        $candleBalance = $this->candleCashService->currentBalance($marketingProfile);
+        $candleTransactions = $marketingProfile->candleCashTransactions()
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+        $growaveLoyaltyTransactions = $this->normalizeGrowaveLoyaltyTransactions(
+            $marketingProfile->candleCashTransactions()
+                ->where('source', 'growave_activity')
                 ->orderByDesc('id')
                 ->limit(120)
                 ->get()
-            : collect();
-        $timelinePlan = $this->buildTimelinePlan(
-            profile: $marketingProfile,
-            orders: $orders,
-            squareOrders: $squareOrders,
-            squarePayments: $squarePayments,
-            externalProfiles: $externalProfiles,
-            deliveries: $deliveries,
-            conversions: $conversions,
-            consentEvents: $consentEvents
         );
+        $candleRedemptions = $marketingProfile->candleCashRedemptions()
+            ->with('reward:id,name,reward_type,reward_value')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+        $nextBestAction = $this->nextBestActionService->forProfile($marketingProfile);
+        $activeRewards = CandleCashReward::query()
+            ->where('is_active', true)
+            ->orderBy('points_cost')
+            ->get(['id', 'name', 'points_cost', 'reward_type', 'reward_value']);
+        $allGroups = MarketingGroup::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_internal']);
+        $storefrontTouchpoints = $marketingProfile->links
+            ->whereIn('source_type', [
+                'shopify_widget_contact',
+                'shopify_widget_reward_balance',
+                'shopify_widget_reward_history',
+                'shopify_widget_redeem_request',
+                'shopify_widget_customer_status',
+                'shopify_widget_optin',
+                'shopify_widget_birthday_status',
+                'shopify_widget_birthday_capture',
+                'shopify_widget_birthday_claim',
+                'event_public_optin',
+                'event_reward_lookup',
+                'reward_lookup',
+                'storefront_optin',
+                'storefront_verify',
+            ])
+            ->values();
+        $storefrontEvents = $marketingProfile->storefrontEvents()
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get();
+        $openStorefrontIssues = (int) $storefrontEvents
+            ->where('resolution_status', 'open')
+            ->whereIn('status', ['error', 'verification_required', 'pending'])
+            ->count();
+        $redemptionSummary = [
+            'issued' => (int) $candleRedemptions->where('status', 'issued')->count(),
+            'redeemed' => (int) $candleRedemptions->where('status', 'redeemed')->count(),
+            'canceled' => (int) $candleRedemptions->where('status', 'canceled')->count(),
+            'expired' => (int) $candleRedemptions->where('status', 'expired')->count(),
+        ];
 
         return view('marketing.customers.show', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -535,7 +616,10 @@ class MarketingCustomersController extends Controller
             'legacyLinks' => $legacyLinks,
             'externalProfiles' => $externalProfiles,
             'latestGrowaveExternal' => $latestGrowaveExternal,
-            'profileSourceBadges' => $profileSourceBadges,
+            'latestGrowaveReviewSummary' => $latestGrowaveReviewSummary,
+            'growaveReviewHistory' => $growaveReviewHistory,
+            'growaveSourceMeta' => $growaveSourceMeta,
+            'growaveLoyaltyTransactions' => $growaveLoyaltyTransactions,
             'eventSummary' => $eventSummary,
             'unresolvedAttributionValues' => $unresolvedAttributionValues,
             'campaignStats' => $campaignStats,
@@ -544,9 +628,21 @@ class MarketingCustomersController extends Controller
             'matchingSegments' => $matchingSegments,
             'campaignOptions' => $campaignOptions,
             'deliveries' => $deliveries,
+            'emailDeliveries' => $emailDeliveries,
             'conversions' => $conversions,
             'consentEvents' => $consentEvents,
-            'timelinePlan' => $timelinePlan,
+            'candleBalance' => $candleBalance,
+            'candleTransactions' => $candleTransactions,
+            'candleRedemptions' => $candleRedemptions,
+            'redemptionSummary' => $redemptionSummary,
+            'storefrontTouchpoints' => $storefrontTouchpoints,
+            'storefrontEvents' => $storefrontEvents,
+            'openStorefrontIssues' => $openStorefrontIssues,
+            'nextBestAction' => $nextBestAction,
+            'activeRewards' => $activeRewards,
+            'allGroups' => $allGroups,
+            'birthdayProfile' => $birthdayProfile,
+            'birthdayRewardStatus' => $birthdayRewardStatus,
         ]);
     }
 
@@ -557,6 +653,12 @@ class MarketingCustomersController extends Controller
             'last_name' => ['nullable', 'string', 'max:120'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
+            'address_line_1' => ['nullable', 'string', 'max:255'],
+            'address_line_2' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'state' => ['nullable', 'string', 'max:120'],
+            'postal_code' => ['nullable', 'string', 'max:40'],
+            'country' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:4000'],
         ]);
 
@@ -570,6 +672,12 @@ class MarketingCustomersController extends Controller
             'normalized_email' => $email !== '' ? $this->identityNormalizer->normalizeEmail($email) : null,
             'phone' => $phone !== '' ? $phone : null,
             'normalized_phone' => $phone !== '' ? $this->identityNormalizer->normalizePhone($phone) : null,
+            'address_line_1' => trim((string) ($data['address_line_1'] ?? '')) ?: null,
+            'address_line_2' => trim((string) ($data['address_line_2'] ?? '')) ?: null,
+            'city' => trim((string) ($data['city'] ?? '')) ?: null,
+            'state' => trim((string) ($data['state'] ?? '')) ?: null,
+            'postal_code' => trim((string) ($data['postal_code'] ?? '')) ?: null,
+            'country' => trim((string) ($data['country'] ?? '')) ?: null,
             'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
         ])->save();
 
@@ -1049,10 +1157,9 @@ class MarketingCustomersController extends Controller
             }
 
             if ($sourceFilter === 'manual') {
-                $sourceQuery->whereJsonContains('source_channels', 'manual')
-                    ->orWhereHas('links', function ($linkQuery): void {
-                        $linkQuery->whereIn('source_type', ['manual_customer', 'internal_customer']);
-                    });
+                $sourceQuery->whereHas('links', function ($linkQuery): void {
+                    $linkQuery->where('source_type', 'manual_customer');
+                });
 
                 return;
             }
@@ -1093,7 +1200,15 @@ class MarketingCustomersController extends Controller
 
     /**
      * @param Collection<int,MarketingProfile> $profiles
-     * @return array<int,array{points:int,tier:?string,referrals:int,has_growave:bool}>
+     * @return array<int,array{
+     *   points:int,
+     *   tier:?string,
+     *   referrals:int,
+     *   has_growave:bool,
+     *   review_count:int,
+     *   average_rating:?float,
+     *   last_synced_at:?string
+     * }>
      */
     protected function buildLoyaltyEnrichment(Collection $profiles): array
     {
@@ -1107,15 +1222,27 @@ class MarketingCustomersController extends Controller
             ->where('integration', 'growave')
             ->orderByDesc('synced_at')
             ->orderByDesc('id')
-            ->get(['id', 'marketing_profile_id', 'points_balance', 'vip_tier', 'referral_link', 'raw_metafields']);
+            ->get(['id', 'marketing_profile_id', 'points_balance', 'vip_tier', 'referral_link', 'raw_metafields', 'synced_at']);
 
-        $latestExternal = [];
-        foreach ($externalProfiles as $external) {
-            $profileId = (int) $external->marketing_profile_id;
-            if (! array_key_exists($profileId, $latestExternal)) {
-                $latestExternal[$profileId] = $external;
-            }
-        }
+        $latestExternal = $this->growaveProjectionService->preferredExternalMap($externalProfiles);
+
+        $reviewSummaries = MarketingReviewSummary::query()
+            ->whereIn('marketing_profile_id', $profileIds)
+            ->where('provider', 'growave')
+            ->where('integration', 'growave')
+            ->get([
+                'id',
+                'marketing_profile_id',
+                'store_key',
+                'external_customer_id',
+                'review_count',
+                'published_review_count',
+                'average_rating',
+                'last_reviewed_at',
+                'source_synced_at',
+            ]);
+
+        $latestReviewSummary = $this->growaveProjectionService->preferredReviewSummaryMap($reviewSummaries, $latestExternal);
 
         $candleBalances = [];
         if (Schema::hasTable('candle_cash_balances')) {
@@ -1130,6 +1257,7 @@ class MarketingCustomersController extends Controller
         foreach ($profiles as $profile) {
             $profileId = (int) $profile->id;
             $external = $latestExternal[$profileId] ?? null;
+            $reviewSummary = $latestReviewSummary[$profileId] ?? null;
             $points = $external?->points_balance !== null
                 ? (int) $external->points_balance
                 : (int) ($candleBalances[$profileId] ?? 0);
@@ -1142,11 +1270,21 @@ class MarketingCustomersController extends Controller
                 }
             }
 
+            $lastSyncedAt = collect([
+                optional($external?->synced_at)->toDateTimeString(),
+                optional($reviewSummary?->source_synced_at)->toDateTimeString(),
+            ])->filter()->max();
+
             $rows[$profileId] = [
                 'points' => $points,
                 'tier' => $external?->vip_tier ? (string) $external->vip_tier : null,
                 'referrals' => $referrals,
                 'has_growave' => $external !== null,
+                'review_count' => (int) ($reviewSummary?->review_count ?? 0),
+                'average_rating' => $reviewSummary?->average_rating !== null
+                    ? (float) $reviewSummary->average_rating
+                    : null,
+                'last_synced_at' => $lastSyncedAt,
             ];
         }
 
@@ -1174,37 +1312,10 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @return array{
-     *   total_customers:int,
-     *   shopify_linked:int,
-     *   square_linked:int,
-     *   growave_linked:int,
-     *   missing_email:int,
-     *   missing_phone:int
-     * }
+     * @return array{total_customers:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int}
      */
-    protected function buildIndexQuickStats(): array
+    protected function buildIndexQuickStats(int $totalProfiles): array
     {
-        $totalCustomers = (int) MarketingProfile::query()->count();
-
-        $shopifyLinked = (int) MarketingProfile::query()
-            ->where(function ($query): void {
-                $query->whereJsonContains('source_channels', 'shopify')
-                    ->orWhereHas('links', function ($linkQuery): void {
-                        $linkQuery->whereIn('source_type', ['shopify_order', 'shopify_customer']);
-                    });
-            })
-            ->count();
-
-        $squareLinked = (int) MarketingProfile::query()
-            ->where(function ($query): void {
-                $query->whereJsonContains('source_channels', 'square')
-                    ->orWhereHas('links', function ($linkQuery): void {
-                        $linkQuery->whereIn('source_type', ['square_customer', 'square_order', 'square_payment']);
-                    });
-            })
-            ->count();
-
         $growaveLinked = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
                 ->where('integration', 'growave')
@@ -1213,34 +1324,33 @@ class MarketingCustomersController extends Controller
                 ->count('marketing_profile_id')
             : 0;
 
-        $missingEmail = (int) MarketingProfile::query()
+        $shopifyOrOrderLinked = (int) MarketingProfileLink::query()
+            ->whereIn('source_type', ['order', 'shopify_order', 'shopify_customer'])
+            ->distinct('marketing_profile_id')
+            ->count('marketing_profile_id');
+
+        $missingContact = (int) MarketingProfile::query()
             ->where(function ($query): void {
                 $query->whereNull('normalized_email')->orWhere('normalized_email', '');
             })
-            ->count();
-
-        $missingPhone = (int) MarketingProfile::query()
             ->where(function ($query): void {
                 $query->whereNull('normalized_phone')->orWhere('normalized_phone', '');
             })
             ->count();
 
         return [
-            'total_customers' => $totalCustomers,
-            'shopify_linked' => $shopifyLinked,
-            'square_linked' => $squareLinked,
+            'total_customers' => $totalProfiles,
             'growave_linked' => $growaveLinked,
-            'missing_email' => $missingEmail,
-            'missing_phone' => $missingPhone,
+            'shopify_or_order_linked' => $shopifyOrOrderLinked,
+            'missing_contact' => $missingContact,
         ];
     }
 
     /**
      * @param Collection<int,MarketingProfile> $profiles
-     * @param array<int,array{points:int,tier:?string,referrals:int,has_growave:bool}> $loyaltyStats
      * @return array<int,array{order_count:int,last_order_at:?string,last_activity_at:?string,source_badges:array<int,string>}>
      */
-    protected function buildDerivedStats(Collection $profiles, array $loyaltyStats = []): array
+    protected function buildDerivedStats(Collection $profiles): array
     {
         if ($profiles->isEmpty()) {
             return [];
@@ -1398,14 +1508,26 @@ class MarketingCustomersController extends Controller
                 ->filter()
                 ->max();
 
+            $channels = is_array($profile->source_channels) ? $profile->source_channels : [];
+            $sourceTypes = $profileLinks->pluck('source_type')->unique()->values()->all();
+            $badges = [];
+            if (in_array('shopify', $channels, true) || in_array('shopify_order', $sourceTypes, true)) {
+                $badges[] = 'Shopify';
+            }
+            if (in_array('square', $channels, true) || collect($sourceTypes)->contains(fn (string $type) => str_starts_with($type, 'square_'))) {
+                $badges[] = 'Square';
+            }
+            if (collect($sourceTypes)->intersect(['yotpo_contact', 'square_marketing_contact'])->isNotEmpty()) {
+                $badges[] = 'Legacy Import';
+            }
             $profileSquareOrderIds = $profileLinks->where('source_type', 'square_order')->pluck('source_id')->values();
             $hasAttributedSquareOrder = $profileSquareOrderIds->intersect($attributedSquareOrderIds)->isNotEmpty();
-            $badges = $this->canonicalSourceBadges(
-                $profile,
-                $profileLinks,
-                (bool) ($loyaltyStats[(int) $profile->id]['has_growave'] ?? false),
-                $hasAttributedSquareOrder
-            );
+            if (in_array('event', $channels, true) || $hasAttributedSquareOrder) {
+                $badges[] = 'Event Buyer';
+            }
+            if (in_array('online', $channels, true) || in_array('Shopify', $badges, true) || in_array('Square', $badges, true)) {
+                $badges[] = 'Online Buyer';
+            }
 
             $stats[(int) $profile->id] = [
                 'order_count' => $allOrders->count() + $squareOrderCount,
@@ -1416,143 +1538,6 @@ class MarketingCustomersController extends Controller
         }
 
         return $stats;
-    }
-
-    /**
-     * @param Collection<int,MarketingProfileLink> $links
-     * @return array<int,string>
-     */
-    protected function canonicalSourceBadges(
-        MarketingProfile $profile,
-        Collection $links,
-        bool $hasGrowaveEnrichment = false,
-        bool $hasAttributedEvent = false
-    ): array {
-        $channelTokens = collect(is_array($profile->source_channels) ? $profile->source_channels : [])
-            ->map(fn ($value): string => strtolower(trim((string) $value)))
-            ->filter()
-            ->values();
-        $sourceTypes = $links
-            ->pluck('source_type')
-            ->map(fn ($value): string => strtolower(trim((string) $value)))
-            ->filter()
-            ->values();
-
-        $badges = [];
-        if (
-            $channelTokens->contains('shopify')
-            || $sourceTypes->intersect(['shopify_order', 'shopify_customer'])->isNotEmpty()
-        ) {
-            $badges[] = 'Shopify';
-        }
-        if (
-            $channelTokens->contains('square')
-            || $sourceTypes->contains(fn (string $type): bool => str_starts_with($type, 'square_'))
-        ) {
-            $badges[] = 'Square';
-        }
-        if ($hasGrowaveEnrichment || $sourceTypes->contains('growave_customer')) {
-            $badges[] = 'Growave';
-        }
-        if (
-            $channelTokens->contains('wholesale')
-            || $sourceTypes->contains(fn (string $type): bool => str_starts_with($type, 'wholesale'))
-        ) {
-            $badges[] = 'Wholesale';
-        }
-        if (
-            $channelTokens->contains('event')
-            || $hasAttributedEvent
-            || $sourceTypes->contains(fn (string $type): bool => str_starts_with($type, 'event'))
-        ) {
-            $badges[] = 'Event';
-        }
-        if (
-            $channelTokens->intersect(['manual', 'manual_import'])->isNotEmpty()
-            || $sourceTypes->intersect(['manual_customer', 'internal_customer'])->isNotEmpty()
-        ) {
-            $badges[] = 'Manual';
-        }
-
-        return array_values(array_unique($badges));
-    }
-
-    /**
-     * @param Collection<int,Order> $orders
-     * @param Collection<int,SquareOrder> $squareOrders
-     * @param Collection<int,SquarePayment> $squarePayments
-     * @param Collection<int,CustomerExternalProfile> $externalProfiles
-     * @param Collection<int,mixed> $deliveries
-     * @param Collection<int,mixed> $conversions
-     * @param Collection<int,mixed> $consentEvents
-     * @return array<int,array{
-     *   key:string,
-     *   label:string,
-     *   status:string,
-     *   count:int,
-     *   data_path:string,
-     *   note:string
-     * }>
-     */
-    protected function buildTimelinePlan(
-        MarketingProfile $profile,
-        Collection $orders,
-        Collection $squareOrders,
-        Collection $squarePayments,
-        Collection $externalProfiles,
-        Collection $deliveries,
-        Collection $conversions,
-        Collection $consentEvents
-    ): array {
-        $links = $profile->links instanceof Collection ? $profile->links : collect();
-        $growaveRows = $externalProfiles->where('integration', 'growave');
-        $reviewSignals = $links
-            ->pluck('source_type')
-            ->filter(fn ($sourceType): bool => str_contains(strtolower((string) $sourceType), 'review'))
-            ->count();
-
-        return [
-            [
-                'key' => 'shopify_orders',
-                'label' => 'Shopify Orders',
-                'status' => $orders->isNotEmpty() ? 'ready' : 'planned',
-                'count' => (int) $orders->count(),
-                'data_path' => 'orders + marketing_profile_links(shopify_order/shopify_customer)',
-                'note' => 'Timeline event rows can be emitted from canonical order links.',
-            ],
-            [
-                'key' => 'square_activity',
-                'label' => 'Square Purchases/Payments',
-                'status' => ($squareOrders->isNotEmpty() || $squarePayments->isNotEmpty()) ? 'ready' : 'planned',
-                'count' => (int) ($squareOrders->count() + $squarePayments->count()),
-                'data_path' => 'square_orders/square_payments + marketing_profile_links(square_*)',
-                'note' => 'Supports POS + event attribution with payment/order reconciliation.',
-            ],
-            [
-                'key' => 'growave_loyalty',
-                'label' => 'Growave Loyalty Activity',
-                'status' => $growaveRows->isNotEmpty() ? 'ready' : 'planned',
-                'count' => (int) $growaveRows->count(),
-                'data_path' => 'customer_external_profiles(integration=growave)',
-                'note' => 'Read-only enrichment; canonical identity remains in marketing_profiles.',
-            ],
-            [
-                'key' => 'reviews',
-                'label' => 'Reviews',
-                'status' => $reviewSignals > 0 ? 'partial' : 'planned',
-                'count' => (int) $reviewSignals,
-                'data_path' => 'future: review provider events + profile links(review_*)',
-                'note' => 'Will attach review submissions/prompts as immutable timeline events.',
-            ],
-            [
-                'key' => 'marketing_activity',
-                'label' => 'Messages/Marketing Activity',
-                'status' => ($deliveries->isNotEmpty() || $conversions->isNotEmpty() || $consentEvents->isNotEmpty()) ? 'ready' : 'planned',
-                'count' => (int) ($deliveries->count() + $conversions->count() + $consentEvents->count()),
-                'data_path' => 'messageDeliveries + campaignConversions + consentEvents',
-                'note' => 'Current detail page already exposes these streams; timeline unification is next.',
-            ],
-        ];
     }
 
     /**
@@ -1579,19 +1564,108 @@ class MarketingCustomersController extends Controller
         return strtolower(trim($storeKey)) . ':' . trim($customerId);
     }
 
-    protected function resolveOptionalService(string $className): ?object
+    /**
+     * @param Collection<int,\App\Models\CandleCashTransaction> $transactions
+     * @return Collection<int,array{
+     *   id:int,
+     *   occurred_at:?string,
+     *   points:int,
+     *   category:string,
+     *   provider_activity:string,
+     *   source_id:?string,
+     *   description:?string,
+     *   note:?string
+     * }>
+     */
+    protected function normalizeGrowaveLoyaltyTransactions(Collection $transactions): Collection
     {
-        if (! class_exists($className)) {
+        return $transactions
+            ->map(function ($transaction): array {
+                $description = trim((string) ($transaction->description ?? ''));
+                $providerActivity = $this->extractProviderActivityTypeFromDescription($description) ?: 'unknown';
+                $note = $this->extractProviderActivityNoteFromDescription($description);
+
+                return [
+                    'id' => (int) $transaction->id,
+                    'occurred_at' => optional($transaction->created_at)->toDateTimeString(),
+                    'points' => (int) $transaction->points,
+                    'category' => $this->normalizeGrowaveActivityCategory(
+                        providerActivity: $providerActivity,
+                        note: $note,
+                        points: (int) $transaction->points
+                    ),
+                    'provider_activity' => strtoupper(str_replace('_', ' ', $providerActivity)),
+                    'source_id' => $this->nullableString($transaction->source_id),
+                    'description' => $description !== '' ? $description : null,
+                    'note' => $note,
+                ];
+            })
+            ->values();
+    }
+
+    protected function extractProviderActivityTypeFromDescription(string $description): ?string
+    {
+        if ($description === '') {
             return null;
         }
 
-        try {
-            $service = app($className);
-
-            return is_object($service) ? $service : null;
-        } catch (Throwable) {
+        if (preg_match('/\(([a-z_]+)\)/i', $description, $matches) !== 1) {
             return null;
         }
+
+        $value = strtolower(trim((string) ($matches[1] ?? '')));
+
+        return $value !== '' ? $value : null;
+    }
+
+    protected function extractProviderActivityNoteFromDescription(string $description): ?string
+    {
+        if (! str_contains($description, '):')) {
+            return null;
+        }
+
+        [, $note] = explode('):', $description, 2);
+        $note = trim((string) $note);
+
+        return $note !== '' ? $note : null;
+    }
+
+    protected function normalizeGrowaveActivityCategory(string $providerActivity, ?string $note, int $points): string
+    {
+        $noteLower = strtolower(trim((string) $note));
+
+        if (in_array($providerActivity, ['referrer', 'referred'], true)) {
+            return 'Referral Reward';
+        }
+
+        if ($providerActivity === 'expired') {
+            return 'Expired';
+        }
+
+        if ($providerActivity === 'redeem') {
+            return 'Redeemed';
+        }
+
+        if (in_array($providerActivity, ['manual', 'import', 'refund'], true)) {
+            return 'Manual Adjustment';
+        }
+
+        if (str_contains($noteLower, 'review')) {
+            return 'Review Reward';
+        }
+
+        if (str_contains($noteLower, 'refer')) {
+            return 'Referral Reward';
+        }
+
+        return $points >= 0 ? 'Earned' : 'Redeemed';
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 
     /**

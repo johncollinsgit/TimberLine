@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingProfile;
 use App\Models\MarketingRecommendation;
+use App\Models\MarketingRecommendationRun;
 use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingRecommendationEngine;
 use App\Support\Marketing\MarketingSectionRegistry;
@@ -36,6 +37,18 @@ class MarketingRecommendationsController extends Controller
             ->limit(100)
             ->get();
 
+        $typeSummary = MarketingRecommendation::query()
+            ->selectRaw('type, count(*) as aggregate')
+            ->where('status', 'pending')
+            ->groupBy('type')
+            ->pluck('aggregate', 'type')
+            ->all();
+
+        $latestRuns = MarketingRecommendationRun::query()
+            ->orderByDesc('id')
+            ->limit(12)
+            ->get();
+
         return view('marketing/recommendations/index', [
             'section' => MarketingSectionRegistry::section('recommendations'),
             'sections' => $this->navigationItems(),
@@ -43,6 +56,8 @@ class MarketingRecommendationsController extends Controller
             'approvalRecipients' => $approvalRecipients,
             'status' => $status,
             'type' => $type,
+            'typeSummary' => $typeSummary,
+            'latestRuns' => $latestRuns,
         ]);
     }
 
@@ -52,7 +67,10 @@ class MarketingRecommendationsController extends Controller
 
         return redirect()
             ->route('marketing.recommendations')
-            ->with('toast', ['style' => 'success', 'message' => "Generated {$result['created']} global recommendations."]);
+            ->with('toast', [
+                'style' => 'success',
+                'message' => "Generated {$result['created']} global recommendations (potential {$result['potential']}).",
+            ]);
     }
 
     public function createForProfile(

@@ -108,6 +108,53 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-white">Public Event Utilities + Shopify Endpoints</h2>
+            <x-admin.help-hint title="Architecture boundary">
+                Laravel public pages here are minimal event/QR utilities only. Online storefront UI remains in Shopify theme widgets, which should call the JSON endpoints below.
+            </x-admin.help-hint>
+            <div class="grid gap-4 lg:grid-cols-2">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-sm font-semibold text-white">Public event routes</div>
+                    <div class="mt-2 space-y-1 text-xs text-white/70">
+                        <div><code>/events/{event-slug}/optin</code> - event QR consent/profile capture</div>
+                        <div><code>/events/{event-slug}/rewards</code> - event reward balance + redemption lookup</div>
+                        <div><code>/rewards/lookup</code> - generic public reward lookup utility</div>
+                        <div><code>/marketing/consent/confirm</code> - confirmation page for capture flows</div>
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-sm font-semibold text-white">Shopify widget endpoints</div>
+                    <div class="mt-2 space-y-1 text-xs text-white/70">
+                        <div><code>GET /shopify/marketing/v1/rewards/balance</code></div>
+                        <div><code>GET /shopify/marketing/v1/rewards/available</code></div>
+                        <div><code>GET /shopify/marketing/v1/rewards/history</code></div>
+                        <div><code>POST /shopify/marketing/v1/rewards/redeem</code></div>
+                        <div><code>POST /shopify/marketing/v1/consent/optin</code></div>
+                        <div><code>POST /shopify/marketing/v1/consent/confirm</code></div>
+                        <div><code>GET /shopify/marketing/v1/birthday/status</code></div>
+                        <div><code>POST /shopify/marketing/v1/birthday/capture</code></div>
+                        <div><code>POST /shopify/marketing/v1/birthday/claim</code></div>
+                        <div><code>GET /shopify/marketing/v1/customer/status</code></div>
+                    </div>
+                    <x-admin.help-hint tone="neutral" title="Storefront request verification">
+                        Shopify-facing endpoints now require signed requests:
+                        <div class="mt-1"><code>X-Marketing-Timestamp</code> + <code>X-Marketing-Signature</code> (HMAC SHA-256 over method/path/query/body).</div>
+                        <div class="mt-1">App-proxy mode can also be enabled via <code>signature</code> query verification.</div>
+                        <div class="mt-1">Legacy <code>X-Marketing-Token</code> support is optional and disabled by default.</div>
+                    </x-admin.help-hint>
+                    <div class="mt-2 text-[11px] text-white/55">
+                        Contract shape: <code>{`"ok":true,"version":"v1","data":{...},"meta":{"states":[...]}`}</code> and errors as <code>{`"ok":false,"version":"v1","error":{"code":"...","states":[...],"recovery_states":[...]}`}</code>.
+                    </div>
+                    <div class="mt-2 rounded-xl border border-white/10 bg-black/20 p-3 text-[11px] text-white/65">
+                        Widget state examples:
+                        <div class="mt-1"><code>known_customer_has_balance</code>, <code>reward_available</code>, <code>already_has_active_code</code>, <code>sms_requested</code>, <code>linked_customer</code>, <code>needs_verification</code>.</div>
+                        <div class="mt-1">Recovery states include <code>verification_required</code>, <code>try_again_later</code>, <code>already_redeemed</code>, and <code>contact_support</code>.</div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h2 class="text-lg font-semibold text-white">Recent Import/Sync Runs</h2>
             </div>
@@ -115,12 +162,12 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Type</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Source</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">File</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Started</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Finished</th>
+                            <th class="px-4 py-3 text-left">Type</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Source</th>
+                            <th class="px-4 py-3 text-left">File</th>
+                            <th class="px-4 py-3 text-left">Started</th>
+                            <th class="px-4 py-3 text-left">Finished</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -182,14 +229,14 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Source System</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Raw Value</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Normalized</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Event Instance</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Confidence</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Active</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Updated</th>
-                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
+                            <th class="px-4 py-3 text-left">Source System</th>
+                            <th class="px-4 py-3 text-left">Raw Value</th>
+                            <th class="px-4 py-3 text-left">Normalized</th>
+                            <th class="px-4 py-3 text-left">Event Instance</th>
+                            <th class="px-4 py-3 text-left">Confidence</th>
+                            <th class="px-4 py-3 text-left">Active</th>
+                            <th class="px-4 py-3 text-left">Updated</th>
+                            <th class="px-4 py-3 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -222,10 +269,10 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Source System</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Raw Value</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Normalized</th>
-                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
+                            <th class="px-4 py-3 text-left">Source System</th>
+                            <th class="px-4 py-3 text-left">Raw Value</th>
+                            <th class="px-4 py-3 text-left">Normalized</th>
+                            <th class="px-4 py-3 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

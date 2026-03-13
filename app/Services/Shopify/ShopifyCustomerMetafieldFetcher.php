@@ -14,8 +14,10 @@ query FetchCustomerMetafields($first: Int!, $after: String) {
       node {
         id
         email
+        phone
         firstName
         lastName
+        updatedAt
         metafields(first: 250) {
           edges {
             node {
@@ -46,8 +48,10 @@ GRAPHQL;
      *     gid:string,
      *     shopify_customer_id:string,
      *     email:?string,
+     *     phone:?string,
      *     first_name:?string,
      *     last_name:?string,
+     *     updated_at:?string,
      *     metafields:array<int,array{namespace:string,key:string,value:string,type:?string}>
      *   }>,
      *   has_next:bool,
@@ -101,8 +105,13 @@ GRAPHQL;
                 'gid' => $gid,
                 'shopify_customer_id' => $shopifyCustomerId,
                 'email' => $this->nullableString($node['email'] ?? null),
+                'phone' => $this->nullableString($node['phone'] ?? null),
                 'first_name' => $this->nullableString($node['firstName'] ?? null),
                 'last_name' => $this->nullableString($node['lastName'] ?? null),
+                'order_count' => null,
+                'last_order_at' => null,
+                'accepts_marketing' => null,
+                'updated_at' => $this->nullableString($node['updatedAt'] ?? null),
                 'metafields' => $this->normalizeMetafields($node['metafields'] ?? null),
             ];
         }

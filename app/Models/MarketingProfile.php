@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MarketingProfile extends Model
 {
@@ -14,6 +16,12 @@ class MarketingProfile extends Model
         'normalized_email',
         'phone',
         'normalized_phone',
+        'address_line_1',
+        'address_line_2',
+        'city',
+        'state',
+        'postal_code',
+        'country',
         'accepts_email_marketing',
         'accepts_sms_marketing',
         'email_opted_out_at',
@@ -79,8 +87,65 @@ class MarketingProfile extends Model
         return $this->hasMany(MarketingConsentEvent::class, 'marketing_profile_id');
     }
 
+    public function consentRequests(): HasMany
+    {
+        return $this->hasMany(MarketingConsentRequest::class, 'marketing_profile_id');
+    }
+
+    public function groups(): BelongsToMany
+    {
+        return $this->belongsToMany(MarketingGroup::class, 'marketing_group_members', 'marketing_profile_id', 'marketing_group_id')
+            ->withPivot(['added_by', 'created_at'])
+            ->withTimestamps();
+    }
+
+    public function emailDeliveries(): HasMany
+    {
+        return $this->hasMany(MarketingEmailDelivery::class, 'marketing_profile_id');
+    }
+
+    public function candleCashBalance(): HasOne
+    {
+        return $this->hasOne(CandleCashBalance::class, 'marketing_profile_id');
+    }
+
+    public function candleCashTransactions(): HasMany
+    {
+        return $this->hasMany(CandleCashTransaction::class, 'marketing_profile_id');
+    }
+
+    public function candleCashRedemptions(): HasMany
+    {
+        return $this->hasMany(CandleCashRedemption::class, 'marketing_profile_id');
+    }
+
+    public function storefrontEvents(): HasMany
+    {
+        return $this->hasMany(MarketingStorefrontEvent::class, 'marketing_profile_id');
+    }
+
     public function externalProfiles(): HasMany
     {
         return $this->hasMany(CustomerExternalProfile::class, 'marketing_profile_id');
+    }
+
+    public function birthdayProfile(): HasOne
+    {
+        return $this->hasOne(CustomerBirthdayProfile::class, 'marketing_profile_id');
+    }
+
+    public function birthdayRewardIssuances(): HasMany
+    {
+        return $this->hasMany(BirthdayRewardIssuance::class, 'marketing_profile_id');
+    }
+
+    public function reviewSummaries(): HasMany
+    {
+        return $this->hasMany(MarketingReviewSummary::class, 'marketing_profile_id');
+    }
+
+    public function reviewHistory(): HasMany
+    {
+        return $this->hasMany(MarketingReviewHistory::class, 'marketing_profile_id');
     }
 }

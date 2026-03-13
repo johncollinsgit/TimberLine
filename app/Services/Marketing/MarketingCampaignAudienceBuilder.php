@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
+use App\Models\MarketingGroupMember;
 use App\Models\MarketingProfile;
 
 class MarketingCampaignAudienceBuilder
@@ -33,22 +34,58 @@ class MarketingCampaignAudienceBuilder
             'updated' => 0,
         ];
 
-        if (! $campaign->segment) {
+        $campaign->loadMissing(['segment', 'groups:id,name']);
+
+        $segmentMatches = $this->segmentMatches($campaign);
+        $groupMatches = $this->groupMatches($campaign);
+        $manualProfileIds = $this->manualProfileIds($campaign);
+
+        $candidateIds = collect(array_keys($segmentMatches))
+            ->merge(array_keys($groupMatches))
+            ->merge($manualProfileIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($limit !== null) {
+            $candidateIds = $candidateIds->take(max(1, $limit))->values();
+        }
+
+        if ($candidateIds->isEmpty()) {
             return $summary;
         }
 
-        $profilesQuery = MarketingProfile::query()->orderBy('id');
-        if ($limit !== null) {
-            $profilesQuery->limit(max(1, $limit));
-        }
+        $profiles = MarketingProfile::query()
+            ->whereIn('id', $candidateIds->all())
+            ->get()
+            ->keyBy('id');
 
         $defaultVariant = $this->defaultVariantForCampaign($campaign);
+        $manualLookup = collect($manualProfileIds)->map(fn ($id) => (int) $id)->flip();
 
-        foreach ($profilesQuery->get() as $profile) {
-            $evaluation = $this->segmentEvaluator->evaluateProfile($campaign->segment, $profile);
-            if (! $evaluation['matched']) {
+        foreach ($candidateIds as $profileId) {
+            $profile = $profiles->get((int) $profileId);
+            if (! $profile) {
                 continue;
             }
+
+            $segmentReasons = (array) ($segmentMatches[(int) $profileId] ?? []);
+            $groupData = (array) ($groupMatches[(int) $profileId] ?? ['group_ids' => [], 'group_names' => []]);
+            $groupIds = collect((array) ($groupData['group_ids'] ?? []))
+                ->map(fn ($value) => (int) $value)
+                ->filter(fn (int $value) => $value > 0)
+                ->unique()
+                ->values()
+                ->all();
+            $groupNames = collect((array) ($groupData['group_names'] ?? []))
+                ->map(fn ($value) => trim((string) $value))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $manual = $manualLookup->has((int) $profileId);
 
             $summary['processed']++;
 
@@ -62,9 +99,28 @@ class MarketingCampaignAudienceBuilder
                 $status = $existing->status;
             }
 
+            $audienceSources = [];
+            $audienceReasons = [];
+            if ($segmentReasons !== []) {
+                $audienceSources[] = 'segment';
+                $audienceReasons[] = 'segment_match';
+            }
+            if ($groupIds !== []) {
+                $audienceSources[] = 'group';
+                foreach ($groupIds as $groupId) {
+                    $audienceReasons[] = 'group_' . $groupId;
+                }
+            }
+            if ($manual) {
+                $audienceSources[] = 'manual_add';
+                $audienceReasons[] = 'manual_add';
+            }
+
             $recommendationSnapshot = [
                 'score' => $profile->marketing_score,
-                'segment_reasons' => $evaluation['reasons'],
+                'segment_reasons' => $segmentReasons,
+                'group_names' => $groupNames,
+                'manual_add' => $manual,
             ];
 
             $recipient = MarketingCampaignRecipient::query()->updateOrCreate(
@@ -77,13 +133,20 @@ class MarketingCampaignAudienceBuilder
                         'segment_id' => $campaign->segment_id,
                         'segment_name' => $campaign->segment?->name,
                         'matched_at' => now()->toIso8601String(),
-                        'reasons' => $evaluation['reasons'],
+                        'segment_reasons' => $segmentReasons,
+                        'group_ids' => $groupIds,
+                        'group_names' => $groupNames,
+                        'manual_add' => $manual,
+                        'audience_sources' => $audienceSources,
                     ],
                     'recommendation_snapshot' => $recommendationSnapshot,
                     'variant_id' => $defaultVariant?->id,
                     'channel' => $campaign->channel,
                     'status' => $status,
-                    'reason_codes' => $reasons,
+                    'reason_codes' => array_values(array_unique(array_filter([
+                        ...$audienceReasons,
+                        ...$reasons,
+                    ]))),
                     'last_status_note' => null,
                 ]
             );
@@ -106,6 +169,106 @@ class MarketingCampaignAudienceBuilder
         }
 
         return $summary;
+    }
+
+    /**
+     * @return array<int,array<int,string>>
+     */
+    protected function segmentMatches(MarketingCampaign $campaign): array
+    {
+        if (! $campaign->segment) {
+            return [];
+        }
+
+        $matches = [];
+        MarketingProfile::query()
+            ->orderBy('id')
+            ->chunkById(300, function ($profiles) use ($campaign, &$matches): void {
+                foreach ($profiles as $profile) {
+                    $evaluation = $this->segmentEvaluator->evaluateProfile($campaign->segment, $profile);
+                    if (! ($evaluation['matched'] ?? false)) {
+                        continue;
+                    }
+
+                    $matches[(int) $profile->id] = array_values(array_filter((array) ($evaluation['reasons'] ?? [])));
+                }
+            });
+
+        return $matches;
+    }
+
+    /**
+     * @return array<int,array{group_ids:array<int,int>,group_names:array<int,string>}>
+     */
+    protected function groupMatches(MarketingCampaign $campaign): array
+    {
+        $groupIds = $campaign->groups->pluck('id')->map(fn ($id) => (int) $id)->filter(fn (int $id) => $id > 0)->all();
+        if ($groupIds === []) {
+            return [];
+        }
+
+        $groupNames = $campaign->groups
+            ->keyBy('id')
+            ->map(fn ($group) => (string) $group->name);
+
+        $matches = [];
+        $members = MarketingGroupMember::query()
+            ->whereIn('marketing_group_id', $groupIds)
+            ->get(['marketing_group_id', 'marketing_profile_id']);
+
+        foreach ($members as $member) {
+            $profileId = (int) $member->marketing_profile_id;
+            $groupId = (int) $member->marketing_group_id;
+            if ($profileId <= 0 || $groupId <= 0) {
+                continue;
+            }
+
+            $existing = $matches[$profileId] ?? ['group_ids' => [], 'group_names' => []];
+            $existing['group_ids'][] = $groupId;
+            $existing['group_names'][] = (string) ($groupNames[$groupId] ?? ('group_' . $groupId));
+            $existing['group_ids'] = array_values(array_unique($existing['group_ids']));
+            $existing['group_names'] = array_values(array_unique(array_filter($existing['group_names'])));
+            $matches[$profileId] = $existing;
+        }
+
+        return $matches;
+    }
+
+    /**
+     * @return array<int,int>
+     */
+    protected function manualProfileIds(MarketingCampaign $campaign): array
+    {
+        return MarketingCampaignRecipient::query()
+            ->where('campaign_id', $campaign->id)
+            ->get(['marketing_profile_id', 'reason_codes', 'segment_snapshot'])
+            ->filter(function (MarketingCampaignRecipient $recipient): bool {
+                $reasonCodes = collect((array) $recipient->reason_codes)
+                    ->map(fn ($value) => strtolower(trim((string) $value)))
+                    ->filter()
+                    ->values();
+                if ($reasonCodes->contains('manual_add')) {
+                    return true;
+                }
+
+                $snapshot = (array) $recipient->segment_snapshot;
+                if ((bool) ($snapshot['manual_add'] ?? false)) {
+                    return true;
+                }
+
+                $sources = collect((array) ($snapshot['audience_sources'] ?? []))
+                    ->map(fn ($value) => strtolower(trim((string) $value)))
+                    ->filter()
+                    ->values();
+
+                return $sources->contains('manual_add');
+            })
+            ->pluck('marketing_profile_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

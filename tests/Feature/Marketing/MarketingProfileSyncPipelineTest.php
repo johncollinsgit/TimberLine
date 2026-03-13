@@ -1,163 +1,105 @@
 <?php
 
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\SquareCustomer;
+use App\Models\SquareOrder;
+use App\Models\SquarePayment;
 use App\Services\Marketing\MarketingProfileSyncService;
 
-test('creates new profile when no exact match exists', function () {
-    $order = Order::factory()->create();
-
-    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
-        'identity_context' => [
-            'email' => 'Alice@example.com',
-            'phone' => '(555) 123-4567',
-            'first_name' => 'Alice',
-            'last_name' => 'Zephyr',
-            'source_channels' => ['shopify', 'online'],
-        ],
-    ]);
-
-    expect($result['profiles_created'])->toBe(1)
-        ->and($result['records_skipped'])->toBe(0)
-        ->and(MarketingProfile::query()->count())->toBe(1);
-
-    $profile = MarketingProfile::query()->firstOrFail();
-    expect($profile->normalized_email)->toBe('alice@example.com')
-        ->and($profile->normalized_phone)->toBe('+15551234567')
-        ->and(MarketingProfileLink::query()->where('marketing_profile_id', $profile->id)->count())->toBe(1);
-});
-
-test('reuses profile on exact normalized email match', function () {
-    $existing = MarketingProfile::query()->create([
-        'first_name' => 'Casey',
-        'email' => 'casey@example.com',
-        'normalized_email' => 'casey@example.com',
-    ]);
-
-    $order = Order::factory()->create();
-
-    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
-        'identity_context' => [
-            'email' => 'CASEY@EXAMPLE.COM',
-            'phone' => null,
-        ],
-    ]);
-
-    expect($result['profile_id'])->toBe($existing->id)
-        ->and(MarketingProfile::query()->count())->toBe(1)
-        ->and(MarketingProfileLink::query()->where('marketing_profile_id', $existing->id)->exists())->toBeTrue();
-});
-
-test('reuses profile on exact normalized phone match', function () {
-    $existing = MarketingProfile::query()->create([
-        'first_name' => 'Jordan',
-        'phone' => '555-333-4444',
-        'normalized_phone' => '+15553334444',
-    ]);
-
-    $order = Order::factory()->create();
-
-    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
-        'identity_context' => [
-            'phone' => '+1 (555) 333-4444',
-        ],
-    ]);
-
-    expect($result['profile_id'])->toBe($existing->id)
-        ->and(MarketingProfile::query()->count())->toBe(1)
-        ->and(MarketingProfileLink::query()->where('marketing_profile_id', $existing->id)->exists())->toBeTrue();
-});
-
-test('creates identity review on email phone conflict', function () {
-    $emailProfile = MarketingProfile::query()->create([
-        'first_name' => 'Email',
-        'email' => 'conflict@example.com',
-        'normalized_email' => 'conflict@example.com',
-    ]);
-    $phoneProfile = MarketingProfile::query()->create([
-        'first_name' => 'Phone',
-        'phone' => '555-777-8888',
-        'normalized_phone' => '+15557778888',
-    ]);
-
-    $order = Order::factory()->create();
-
-    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
-        'identity_context' => [
-            'email' => 'conflict@example.com',
-            'phone' => '5557778888',
-        ],
-    ]);
-
-    expect($result['reviews_created'])->toBe(1)
-        ->and($result['profile_id'])->toBeNull()
-        ->and(MarketingIdentityReview::query()->count())->toBe(1)
-        ->and(MarketingIdentityReview::query()->firstOrFail()->conflict_reasons)->toContain('email_phone_conflict')
-        ->and($emailProfile->id)->not->toBe($phoneProfile->id);
-});
-
-test('skips records with no usable email and no usable phone', function () {
-    $order = Order::factory()->create();
-
-    $result = app(MarketingProfileSyncService::class)->syncOrder($order);
-
-    expect($result['records_skipped'])->toBe(1)
-        ->and($result['reason'])->toBe('missing_email_phone')
-        ->and(MarketingProfile::query()->count())->toBe(0);
-});
-
-test('creates source-linked profile for shopify orders without email or phone', function () {
-    $order = Order::factory()->create([
+test('shopify-only candidate creates profile from operational order data', function () {
+    Order::factory()->create([
         'source' => 'shopify_retail',
+        'order_type' => 'retail',
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
-        'shopify_order_id' => 501001,
-        'customer_name' => 'Fallback Shopper',
+        'shopify_order_id' => 1001,
+        'shopify_customer_id' => '2001',
+        'first_name' => 'Shopify',
+        'last_name' => 'Only',
+        'email' => 'shopify.only@example.com',
+        'phone' => '+1 (555) 123-0000',
     ]);
 
-    $result = app(MarketingProfileSyncService::class)->syncOrder($order);
+    $this->artisan('marketing:sync-profiles --source=shopify')
+        ->assertExitCode(0);
 
-    expect($result['profiles_created'])->toBe(1)
-        ->and($result['records_skipped'])->toBe(0)
-        ->and($result['reason'])->toBe('created_from_source_without_identity')
-        ->and(MarketingProfile::query()->count())->toBe(1);
+    $profile = MarketingProfile::query()->sole();
 
-    $profile = MarketingProfile::query()->firstOrFail();
-
-    expect((array) $profile->source_channels)->toContain('shopify')
-        ->and(MarketingProfileLink::query()->where('source_type', 'order')->where('source_id', (string) $order->id)->exists())->toBeTrue()
-        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_order')->exists())->toBeTrue();
+    expect($profile->normalized_email)->toBe('shopify.only@example.com')
+        ->and($profile->normalized_phone)->toBe('5551230000')
+        ->and(MarketingProfileLink::query()->where('source_type', 'order')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_order')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_customer')->count())->toBe(1);
 });
 
-test('creates source-linked profile for square customer without email or phone', function () {
-    $service = app(MarketingProfileSyncService::class);
-
-    $result = $service->syncExternalIdentity([
-        'first_name' => 'Square',
-        'last_name' => 'No Identity',
-        'source_channels' => ['square'],
-        'source_links' => [[
-            'source_type' => 'square_customer',
-            'source_id' => 'SQ-CUST-NOID-1',
-            'source_meta' => [
-                'source_system' => 'square',
-                'source_record_type' => 'customer',
-            ],
-        ]],
-        'primary_source' => [
-            'source_type' => 'square_customer',
-            'source_id' => 'SQ-CUST-NOID-1',
+test('growave-only candidate creates canonical marketing profile', function () {
+    CustomerExternalProfile::query()->create([
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => '3001',
+        'external_customer_gid' => 'gid://shopify/Customer/3001',
+        'first_name' => 'Growave',
+        'last_name' => 'Only',
+        'email' => 'growave.only@example.com',
+        'normalized_email' => 'growave.only@example.com',
+        'phone' => '(555) 222-1111',
+        'normalized_phone' => '5552221111',
+        'raw_metafields' => [
+            ['namespace' => 'ssw', 'key' => 'loyalty_points', 'value' => '120', 'type' => 'number_integer'],
         ],
+        'points_balance' => 120,
+        'vip_tier' => 'Gold',
+        'source_channels' => ['shopify', 'growave'],
+        'synced_at' => now(),
     ]);
 
-    expect($result['profiles_created'])->toBe(1)
-        ->and($result['records_skipped'])->toBe(0)
-        ->and($result['reason'])->toBe('created_from_source_without_identity')
-        ->and(MarketingProfile::query()->count())->toBe(1);
+    $this->artisan('marketing:sync-profiles --source=growave')
+        ->assertExitCode(0);
 
-    $profile = MarketingProfile::query()->firstOrFail();
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'growave_customer')->count())->toBe(1)
+        ->and(CustomerExternalProfile::query()->whereNotNull('marketing_profile_id')->count())->toBe(1);
+});
+
+test('square-only customer candidate creates canonical marketing profile', function () {
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-PIPE-1',
+        'given_name' => 'Square',
+        'family_name' => 'Only',
+        'email' => 'square.only@example.com',
+        'phone' => '+1 (555) 801-9000',
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')
+        ->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
+
+    expect($profile->normalized_email)->toBe('square.only@example.com')
+        ->and($profile->normalized_phone)->toBe('5558019000')
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1);
+});
+
+test('square customer without direct email or phone still creates canonical profile from source link', function () {
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-PIPE-NOID',
+        'given_name' => 'Square',
+        'family_name' => 'No Identity',
+        'email' => null,
+        'phone' => null,
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')
+        ->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
 
     expect($profile->first_name)->toBe('Square')
         ->and($profile->last_name)->toBe('No Identity')
@@ -166,82 +108,287 @@ test('creates source-linked profile for square customer without email or phone',
         ->and(MarketingProfileLink::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('source_type', 'square_customer')
-            ->where('source_id', 'SQ-CUST-NOID-1')
+            ->where('source_id', 'SQ-CUST-PIPE-NOID')
             ->exists())->toBeTrue();
 });
 
-test('creates source links once and reuses links on rerun', function () {
-    $order = Order::factory()->create([
+test('square order and payment records attach to existing square customer profile', function () {
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-PIPE-2',
+        'given_name' => 'Square',
+        'family_name' => 'Buyer',
+        'email' => 'square.buyer@example.com',
+        'phone' => '5557002211',
+        'synced_at' => now(),
+    ]);
+    SquareOrder::query()->create([
+        'square_order_id' => 'SQ-ORDER-PIPE-2',
+        'square_customer_id' => 'SQ-CUST-PIPE-2',
+        'state' => 'COMPLETED',
+        'closed_at' => now()->subDay(),
+        'source_name' => 'In-Person',
+        'synced_at' => now(),
+    ]);
+    SquarePayment::query()->create([
+        'square_payment_id' => 'SQ-PAY-PIPE-2',
+        'square_order_id' => 'SQ-ORDER-PIPE-2',
+        'square_customer_id' => 'SQ-CUST-PIPE-2',
+        'status' => 'COMPLETED',
+        'created_at_source' => now()->subDay(),
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')
+        ->assertExitCode(0);
+
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_order')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_payment')->count())->toBe(1);
+});
+
+test('shopify and growave with same normalized email resolve to one profile with two source links', function () {
+    Order::factory()->create([
         'source' => 'shopify_retail',
         'order_type' => 'retail',
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
-        'shopify_order_id' => 9001,
+        'shopify_order_id' => 1101,
+        'shopify_customer_id' => '2101',
+        'email' => 'dupe.person@example.com',
+        'phone' => '555-303-4040',
     ]);
 
-    $service = app(MarketingProfileSyncService::class);
-
-    $first = $service->syncOrder($order, [
-        'identity_context' => [
-            'email' => 'repeat@example.com',
-            'phone' => '5551112222',
+    CustomerExternalProfile::query()->create([
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => '2101',
+        'external_customer_gid' => 'gid://shopify/Customer/2101',
+        'email' => 'DUPE.PERSON@example.com',
+        'normalized_email' => 'dupe.person@example.com',
+        'phone' => '+1 (555) 303-4040',
+        'normalized_phone' => '5553034040',
+        'raw_metafields' => [
+            ['namespace' => 'ssw', 'key' => 'vip_tier', 'value' => 'Silver', 'type' => 'single_line_text_field'],
         ],
-    ]);
-    $second = $service->syncOrder($order, [
-        'identity_context' => [
-            'email' => 'repeat@example.com',
-            'phone' => '5551112222',
-        ],
+        'source_channels' => ['shopify', 'growave'],
+        'synced_at' => now(),
     ]);
 
-    expect($first['links_created'])->toBe(2)
-        ->and($second['links_reused'])->toBeGreaterThanOrEqual(2)
-        ->and(MarketingProfileLink::query()->where('source_type', 'order')->count())->toBe(1)
-        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_order')->count())->toBe(1);
+    $this->artisan('marketing:sync-profiles --source=all')
+        ->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
+
+    expect(MarketingProfileLink::query()
+        ->where('source_type', 'shopify_order')
+        ->where('marketing_profile_id', $profile->id)
+        ->exists())->toBeTrue()
+        ->and(MarketingProfileLink::query()
+            ->where('source_type', 'growave_customer')
+            ->where('marketing_profile_id', $profile->id)
+            ->exists())->toBeTrue();
 });
 
-test('marketing sync command runs and reports counts', function () {
-    Order::factory()->count(2)->create();
+test('shopify email match enriches existing profile without creating duplicate', function () {
+    $existing = MarketingProfile::query()->create([
+        'first_name' => 'Existing',
+        'email' => 'existing@example.com',
+        'normalized_email' => 'existing@example.com',
+        'phone' => '555-777-5555',
+        'normalized_phone' => '5557775555',
+    ]);
 
-    $this->artisan('marketing:sync-profiles --limit=1 --dry-run')
-        ->expectsOutputToContain('processed=1')
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'order_type' => 'retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 1201,
+        'shopify_customer_id' => '2201',
+        'email' => 'EXISTING@example.com',
+        'phone' => '+1 (555) 777-5555',
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=shopify')
+        ->assertExitCode(0);
+
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and(MarketingProfileLink::query()
+            ->where('source_type', 'shopify_order')
+            ->where('marketing_profile_id', $existing->id)
+            ->exists())->toBeTrue();
+});
+
+test('email and phone conflicts are held for identity review instead of auto merge', function () {
+    MarketingProfile::query()->create([
+        'email' => 'conflict@example.com',
+        'normalized_email' => 'conflict@example.com',
+    ]);
+    MarketingProfile::query()->create([
+        'phone' => '5554449999',
+        'normalized_phone' => '5554449999',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => '2301',
+        'external_customer_gid' => 'gid://shopify/Customer/2301',
+        'email' => 'conflict@example.com',
+        'normalized_email' => 'conflict@example.com',
+        'phone' => '555-444-9999',
+        'normalized_phone' => '5554449999',
+        'raw_metafields' => [
+            ['namespace' => 'ssw', 'key' => 'loyalty_points', 'value' => '10', 'type' => 'number_integer'],
+        ],
+        'source_channels' => ['shopify', 'growave'],
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=growave')
+        ->assertExitCode(0);
+
+    expect(MarketingProfile::query()->count())->toBe(2)
+        ->and(MarketingIdentityReview::query()
+            ->where('source_type', 'growave_customer')
+            ->where('source_id', 'retail:2301')
+            ->exists())->toBeTrue();
+});
+
+test('square email and phone conflicts are held for identity review instead of auto merge', function () {
+    MarketingProfile::query()->create([
+        'email' => 'square-conflict@example.com',
+        'normalized_email' => 'square-conflict@example.com',
+    ]);
+    MarketingProfile::query()->create([
+        'phone' => '5559996666',
+        'normalized_phone' => '5559996666',
+    ]);
+
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-CONFLICT-1',
+        'given_name' => 'Square',
+        'family_name' => 'Conflict',
+        'email' => 'square-conflict@example.com',
+        'phone' => '(555) 999-6666',
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')
+        ->assertExitCode(0);
+
+    expect(MarketingProfile::query()->count())->toBe(2)
+        ->and(MarketingIdentityReview::query()
+            ->where('source_type', 'square_customer')
+            ->where('source_id', 'SQ-CUST-CONFLICT-1')
+            ->exists())->toBeTrue();
+});
+
+test('rerunning sync is idempotent for profiles and links', function () {
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'order_type' => 'retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 1301,
+        'shopify_customer_id' => '2401',
+        'email' => 'rerun@example.com',
+        'phone' => '+1 (555) 111-2222',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => '2401',
+        'external_customer_gid' => 'gid://shopify/Customer/2401',
+        'email' => 'rerun@example.com',
+        'normalized_email' => 'rerun@example.com',
+        'phone' => '5551112222',
+        'normalized_phone' => '5551112222',
+        'raw_metafields' => [
+            ['namespace' => 'ssw', 'key' => 'vip_tier', 'value' => 'Bronze', 'type' => 'single_line_text_field'],
+        ],
+        'source_channels' => ['shopify', 'growave'],
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=all')->assertExitCode(0);
+    $this->artisan('marketing:sync-profiles --source=all')->assertExitCode(0);
+
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'order')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_order')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'shopify_customer')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'growave_customer')->count())->toBe(1);
+});
+
+test('rerunning square sync is idempotent for profiles and links', function () {
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-RERUN',
+        'given_name' => 'Square',
+        'family_name' => 'Rerun',
+        'email' => 'square-rerun@example.com',
+        'phone' => '5552223000',
+        'synced_at' => now(),
+    ]);
+    SquareOrder::query()->create([
+        'square_order_id' => 'SQ-ORDER-RERUN',
+        'square_customer_id' => 'SQ-CUST-RERUN',
+        'state' => 'COMPLETED',
+        'closed_at' => now()->subHours(5),
+        'source_name' => 'In-Person',
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')->assertExitCode(0);
+    $this->artisan('marketing:sync-profiles --source=square')->assertExitCode(0);
+
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1)
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_order')->count())->toBe(1);
+});
+
+test('profile sync normalizes US phone identities to ten digits', function () {
+    $order = Order::factory()->create();
+
+    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
+        'identity_context' => [
+            'email' => 'normalizer@example.com',
+            'phone' => '+1 (555) 987-6543',
+        ],
+    ]);
+
+    expect($result['profiles_created'])->toBe(1);
+
+    $profile = MarketingProfile::query()->sole();
+    expect($profile->normalized_phone)->toBe('5559876543');
+});
+
+test('marketing sync command reports required counters', function () {
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'order_type' => 'retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 1401,
+        'shopify_customer_id' => '2501',
+        'email' => 'dryrun@example.com',
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=shopify --limit=1 --dry-run')
+        ->expectsOutputToContain('candidates_scanned=1')
+        ->expectsOutputToContain('matched_existing=')
         ->expectsOutputToContain('profiles_created=')
         ->expectsOutputToContain('profiles_updated=')
         ->expectsOutputToContain('links_created=')
-        ->expectsOutputToContain('links_reused=')
-        ->expectsOutputToContain('reviews_created=')
-        ->expectsOutputToContain('records_skipped=')
-        ->assertExitCode(0);
-});
-
-test('marketing sync command supports shopify-only scope', function () {
-    Order::factory()->create([
-        'source' => 'shopify_retail',
-        'shopify_store_key' => 'retail',
-        'shopify_store' => 'retail',
-        'shopify_order_id' => 707001,
-    ]);
-    Order::factory()->create([
-        'source' => 'manual',
-        'shopify_order_id' => null,
-    ]);
-
-    $this->artisan('marketing:sync-profiles --shopify-only --dry-run')
-        ->expectsOutputToContain('scope=shopify_only')
-        ->expectsOutputToContain('processed=1')
-        ->assertExitCode(0);
-});
-
-test('marketing rebuild customers command delegates to sync command', function () {
-    Order::factory()->create([
-        'source' => 'shopify_retail',
-        'shopify_store_key' => 'retail',
-        'shopify_store' => 'retail',
-        'shopify_order_id' => 808001,
-    ]);
-
-    $this->artisan('marketing:rebuild-customers --shopify-only --dry-run')
-        ->expectsOutputToContain('scope=shopify_only')
-        ->expectsOutputToContain('processed=1')
+        ->expectsOutputToContain('ambiguous_collisions=')
+        ->expectsOutputToContain('skipped_no_identity=')
+        ->expectsOutputToContain('square_customer_candidates=')
+        ->expectsOutputToContain('square_order_candidates=')
+        ->expectsOutputToContain('square_payment_candidates=')
         ->assertExitCode(0);
 });

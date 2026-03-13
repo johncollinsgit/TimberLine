@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashRedemption;
+use App\Models\CandleCashTransaction;
 use App\Models\Event;
 use App\Models\EventInstance;
+use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\ShopifyImportRun;
@@ -29,6 +33,7 @@ class MarketingPagesController extends Controller
             'overviewCards' => $section === 'overview' ? $this->overviewCards() : [],
             'customersFocusAreas' => $section === 'customers' ? $this->customersFocusAreas() : [],
             'customersDiscoverySummary' => $section === 'customers' ? $this->customersDiscoverySummary() : [],
+            'candleCashDashboard' => $section === 'candle-cash' ? $this->candleCashDashboard() : [],
         ]);
     }
 
@@ -60,50 +65,50 @@ class MarketingPagesController extends Controller
             [
                 'title' => 'Customer Identity Layer',
                 'what' => 'Unifies customer identity with profile records and source links.',
-                'status' => 'Profiles, source links, and identity review workflow are active.',
-                'next' => 'Richer merge diagnostics, reviewer assignment, and bulk resolution tooling.',
+                'status' => 'Stage 1 foundation tables and admin placeholders created.',
+                'next' => 'Identity merge logic, conflict workflows, and profile drill-downs.',
             ],
             [
                 'title' => 'Campaigns & Messaging',
                 'what' => 'Controls campaign drafts, channels, and future send orchestration.',
-                'status' => 'Campaign drafts, approval queue, and SMS delivery rails are active.',
-                'next' => 'Email send execution, scheduling, and automation controls.',
+                'status' => 'Stage 1 navigation + route skeleton only.',
+                'next' => 'Campaign composer, approvals, and send execution rails.',
             ],
             [
                 'title' => 'Candle Cash / Rewards',
                 'what' => 'Tracks rewards value and links behavior to retention actions.',
-                'status' => 'Navigation and section scaffolding are in place; ledger rollout is pending.',
-                'next' => 'Ledger, balance usage, and reward event integrations.',
+                'status' => 'Balances, transactions, redemptions, storefront endpoints, and ops reconciliation are live; Growave parity is partial.',
+                'next' => 'Import Growave opening balances and add full earn/review/expiration reward event ingestion.',
             ],
             [
                 'title' => 'Reviews',
                 'what' => 'Coordinates review provider ingestion and review engagement flows.',
-                'status' => 'Placeholder only; provider sync and prompt execution are not live yet.',
+                'status' => 'Placeholder surface only; provider sync and prompt execution are not live.',
                 'next' => 'Review sync, review prompts, and sentiment reporting.',
             ],
             [
                 'title' => 'Source Integrations',
                 'what' => 'Connects Shopify/Square/review and messaging systems into marketing workflows.',
-                'status' => 'Square sync + legacy import tools are active; Growave sync is now available via Shopify customer metafield sync.',
-                'next' => 'Provider health monitoring, scheduled sync automation, and expanded adapters.',
+                'status' => 'Square sync and Shopify Growave metafield snapshot sync are live; full Growave loyalty ingestion is pending.',
+                'next' => 'Provider-specific sync monitoring, ingestion handlers, and reward-ledger parity checks.',
             ],
             [
                 'title' => 'Consent / Suppression',
                 'what' => 'Applies channel-safe consent states and suppression rules.',
-                'status' => 'Profile-level consent controls and SMS send-time consent checks are active.',
-                'next' => 'Storefront consent capture and suppression lifecycle automation.',
+                'status' => 'Stage 1 profile-level consent fields and settings seeded.',
+                'next' => 'Enforcement checks and suppression lifecycle management.',
             ],
             [
                 'title' => 'Event Attribution',
                 'what' => 'Relates events, orders, and channels for conversion understanding.',
-                'status' => 'Event-source mapping and conversion attribution services are active.',
-                'next' => 'Attribution quality diagnostics and expanded cross-channel matching.',
+                'status' => 'Stage 1 event-source mapping table introduced.',
+                'next' => 'Attribution processing and event matching workflows.',
             ],
             [
                 'title' => 'Recommendations / Optimization',
                 'what' => 'Guides next-best actions from profile and behavior signals.',
-                'status' => 'Rule-based recommendation generation and approval workflow are active.',
-                'next' => 'Scoring improvements and optimization experiments.',
+                'status' => 'Stage 1 planning surface only.',
+                'next' => 'Recommendation scoring and optimization experiments.',
             ],
         ];
     }
@@ -221,5 +226,76 @@ class MarketingPagesController extends Controller
         }
 
         return $rows;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function candleCashDashboard(): array
+    {
+        if (! Schema::hasTable('candle_cash_redemptions')) {
+            return [];
+        }
+
+        $statusBreakdown = CandleCashRedemption::query()
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status')
+            ->map(fn ($value) => (int) $value)
+            ->all();
+
+        $platformBreakdown = CandleCashRedemption::query()
+            ->selectRaw("coalesce(platform, 'unknown') as platform_key, count(*) as aggregate")
+            ->groupBy('platform_key')
+            ->pluck('aggregate', 'platform_key')
+            ->map(fn ($value) => (int) $value)
+            ->all();
+
+        $outstanding = CandleCashRedemption::query()
+            ->where('status', 'issued')
+            ->count();
+
+        $recentRedemptions = CandleCashRedemption::query()
+            ->with(['profile:id,first_name,last_name,email,phone', 'reward:id,name'])
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+
+        $recentTransactions = Schema::hasTable('candle_cash_transactions')
+            ? CandleCashTransaction::query()->orderByDesc('id')->limit(25)->get()
+            : collect();
+
+        $openIssues = Schema::hasTable('marketing_storefront_events')
+            ? (int) MarketingStorefrontEvent::query()
+                ->where('resolution_status', 'open')
+                ->whereIn('status', ['error', 'verification_required', 'pending'])
+                ->count()
+            : 0;
+
+        $widgetEvents24h = Schema::hasTable('marketing_storefront_events')
+            ? (int) MarketingStorefrontEvent::query()
+                ->where('source_surface', 'shopify_widget')
+                ->where('occurred_at', '>=', now()->subDay())
+                ->count()
+            : 0;
+
+        $rewardAssistedOrders = (int) (CandleCashRedemption::query()
+            ->where('status', 'redeemed')
+            ->whereNotNull('external_order_id')
+            ->where('external_order_id', '!=', '')
+            ->selectRaw("count(distinct concat(coalesce(external_order_source,''), ':', coalesce(external_order_id,''))) as aggregate")
+            ->value('aggregate') ?? 0);
+
+        return [
+            'profiles_count' => Schema::hasTable('marketing_profiles') ? (int) MarketingProfile::query()->count() : 0,
+            'status_breakdown' => $statusBreakdown,
+            'platform_breakdown' => $platformBreakdown,
+            'outstanding_issued' => (int) $outstanding,
+            'recent_redemptions' => $recentRedemptions,
+            'recent_transactions' => $recentTransactions,
+            'unresolved_issues_open' => $openIssues,
+            'widget_events_24h' => $widgetEvents24h,
+            'reward_assisted_orders' => $rewardAssistedOrders,
+        ];
     }
 }

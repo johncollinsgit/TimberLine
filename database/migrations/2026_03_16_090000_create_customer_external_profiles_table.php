@@ -19,8 +19,18 @@ return new class extends Migration
             $table->string('store_key')->nullable()->index();
             $table->string('external_customer_id')->index();
             $table->string('external_customer_gid')->nullable();
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+            $table->string('full_name')->nullable();
             $table->string('email')->nullable()->index();
             $table->string('normalized_email')->nullable()->index();
+            $table->string('phone')->nullable()->index();
+            $table->string('normalized_phone')->nullable()->index();
+            $table->boolean('accepts_marketing')->nullable();
+            $table->unsignedInteger('order_count')->nullable();
+            $table->timestamp('last_order_at')->nullable();
+            $table->timestamp('last_activity_at')->nullable();
+            $table->json('source_channels')->nullable();
             $table->json('raw_metafields')->nullable();
             $table->integer('points_balance')->nullable();
             $table->string('vip_tier')->nullable();

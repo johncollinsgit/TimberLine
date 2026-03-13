@@ -9,62 +9,26 @@ class ShopifyStores
 {
     public static function all(bool $allowMissingToken = false): array
     {
-        return array_values(array_filter(array_map(function (array $store): array {
-            return self::overlayDbStore($store);
-        }, self::stores()), function (array $store) use ($allowMissingToken): bool {
-            if (empty($store['shop'])) {
-                return false;
-            }
+        [$stores] = self::resolvedStoresAndIssues(null, $allowMissingToken);
 
-            if ($allowMissingToken) {
-                return !empty($store['client_id']);
-            }
-
-            return !empty($store['token']);
-        }));
+        return array_values($stores);
     }
 
     public static function resolve(?string $storeKey, bool $allowMissingToken = false): array
     {
-        if ($storeKey === null) {
-            return self::all($allowMissingToken);
-        }
+        [$stores] = self::resolvedStoresAndIssues($storeKey, $allowMissingToken);
 
-        $stores = self::stores();
-        $normalized = strtolower($storeKey);
+        return array_values($stores);
+    }
 
-        if ($normalized === 'all') {
-            return self::all($allowMissingToken);
-        }
+    /**
+     * @return array<int,string>
+     */
+    public static function unresolvedMessages(?string $storeKey, bool $allowMissingToken = false): array
+    {
+        [, $issues] = self::resolvedStoresAndIssues($storeKey, $allowMissingToken);
 
-        if (in_array($normalized, ['shopify_retail', 'retail'], true)) {
-            $normalized = 'retail';
-        }
-
-        if (in_array($normalized, ['shopify_wholesale', 'wholesale'], true)) {
-            $normalized = 'wholesale';
-        }
-
-        if (!array_key_exists($normalized, $stores)) {
-            return [];
-        }
-
-        $store = $stores[$normalized];
-        $store = self::overlayDbStore($store);
-        if (empty($store['shop'])) {
-            return [];
-        }
-        if ($allowMissingToken) {
-            if (empty($store['client_id'])) {
-                return [];
-            }
-        } else {
-            if (empty($store['token'])) {
-                return [];
-            }
-        }
-
-        return [$store];
+        return array_values($issues);
     }
 
     public static function find(string $storeKey, bool $allowMissingToken = false): ?array
@@ -77,7 +41,7 @@ class ShopifyStores
     {
         $retailShop = config('services.shopify.stores.retail.shop')
             ?? config('services.shopify.retail.shop');
-        $retailToken = config('services.shopify.stores.retail.token')
+        $retailLegacyToken = config('services.shopify.stores.retail.token')
             ?? config('services.shopify.stores.retail.access_token')
             ?? config('services.shopify.retail.token')
             ?? config('services.shopify.retail.access_token');
@@ -87,7 +51,7 @@ class ShopifyStores
             ?? config('services.shopify.retail.client_secret');
         $wholesaleShop = config('services.shopify.stores.wholesale.shop')
             ?? config('services.shopify.wholesale.shop');
-        $wholesaleToken = config('services.shopify.stores.wholesale.token')
+        $wholesaleLegacyToken = config('services.shopify.stores.wholesale.token')
             ?? config('services.shopify.stores.wholesale.access_token')
             ?? config('services.shopify.wholesale.token')
             ?? config('services.shopify.wholesale.access_token');
@@ -100,7 +64,7 @@ class ShopifyStores
             'retail' => [
                 'key' => 'retail',
                 'shop' => $retailShop,
-                'token' => $retailToken,
+                'legacy_token' => $retailLegacyToken,
                 'source' => 'shopify_retail',
                 'secret' => $retailSecret,
                 'client_id' => $retailClientId,
@@ -109,7 +73,7 @@ class ShopifyStores
             'wholesale' => [
                 'key' => 'wholesale',
                 'shop' => $wholesaleShop,
-                'token' => $wholesaleToken,
+                'legacy_token' => $wholesaleLegacyToken,
                 'source' => 'shopify_wholesale',
                 'secret' => $wholesaleSecret,
                 'client_id' => $wholesaleClientId,
@@ -120,38 +84,152 @@ class ShopifyStores
 
     public static function findByShopDomain(string $shopDomain): ?array
     {
-        $normalized = strtolower(preg_replace('#^https?://#', '', $shopDomain));
-        $normalized = rtrim($normalized, '/');
+        $normalized = self::normalizeDomain($shopDomain);
 
-        foreach (self::stores() as $store) {
-            $storeDomain = strtolower(preg_replace('#^https?://#', '', (string) ($store['shop'] ?? '')));
-            $storeDomain = rtrim($storeDomain, '/');
+        foreach (self::all(true) as $store) {
+            $storeDomain = self::normalizeDomain((string) ($store['shop'] ?? ''));
 
             if ($storeDomain !== '' && $storeDomain === $normalized) {
-                return self::overlayDbStore($store);
+                return $store;
             }
         }
 
         return null;
     }
 
-    protected static function overlayDbStore(array $store): array
+    /**
+     * @return array{0:array<int,array<string,mixed>>,1:array<int,string>}
+     */
+    protected static function resolvedStoresAndIssues(?string $storeKey, bool $allowMissingToken): array
     {
-        if (!Schema::hasTable('shopify_stores')) {
-            return $store;
+        $stores = self::stores();
+        $keys = self::requestedStoreKeys($storeKey, $stores);
+        if ($keys === []) {
+            $normalized = trim((string) $storeKey);
+            if ($normalized === '') {
+                return [[], []];
+            }
+
+            return [[], ["Unknown Shopify store key '{$normalized}'. Use retail|wholesale|all."]];
         }
 
-        $record = ShopifyStore::query()
-            ->where('store_key', $store['key'])
-            ->first();
+        $records = self::storeRecordsByKey($keys);
 
-        if (!$record) {
-            return $store;
+        $resolved = [];
+        $issues = [];
+
+        foreach ($keys as $key) {
+            $base = $stores[$key];
+            $record = $records[$key] ?? null;
+
+            $configuredShop = trim((string) ($base['shop'] ?? ''));
+            $storedShop = trim((string) ($record?->shop_domain ?? ''));
+            $shop = $storedShop !== '' ? $storedShop : $configuredShop;
+
+            $clientId = trim((string) ($base['client_id'] ?? ''));
+            $secret = trim((string) ($base['secret'] ?? ''));
+            $storedToken = trim((string) ($record?->access_token ?? ''));
+            $legacyToken = trim((string) ($base['legacy_token'] ?? ''));
+
+            $token = '';
+            $tokenSource = 'none';
+            if ($storedToken !== '') {
+                $token = $storedToken;
+                $tokenSource = 'oauth_db';
+            } elseif (self::allowLegacyEnvTokenFallback() && $legacyToken !== '') {
+                $token = $legacyToken;
+                $tokenSource = 'env_legacy';
+            }
+
+            if ($shop === '') {
+                $issues[] = "{$key} store domain missing in config.";
+                continue;
+            }
+
+            if ($allowMissingToken) {
+                if ($clientId === '') {
+                    $issues[] = "{$key} store client id missing.";
+                    continue;
+                }
+            } elseif ($token === '') {
+                if ($record === null) {
+                    $issues[] = "{$key} store not installed (OAuth token missing). Run /shopify/auth/{$key}.";
+                } else {
+                    $issues[] = "{$key} store token missing. Run /shopify/reinstall/{$key}.";
+                }
+
+                continue;
+            }
+
+            $resolved[] = [
+                'key' => $key,
+                'shop' => $shop,
+                'token' => $token,
+                'source' => $base['source'] ?? null,
+                'secret' => $secret !== '' ? $secret : null,
+                'client_id' => $clientId !== '' ? $clientId : null,
+                'api_version' => $base['api_version'] ?? config('services.shopify.api_version', '2026-01'),
+                'scopes' => $record?->scopes,
+                'installed_at' => $record?->installed_at,
+                'token_source' => $tokenSource,
+            ];
         }
 
-        $store['shop'] = $record->shop_domain ?: $store['shop'];
-        $store['token'] = $record->access_token ?: $store['token'];
+        return [$resolved, $issues];
+    }
 
-        return $store;
+    /**
+     * @param  array<string,array<string,mixed>>  $stores
+     * @return array<int,string>
+     */
+    protected static function requestedStoreKeys(?string $storeKey, array $stores): array
+    {
+        if ($storeKey === null) {
+            return array_keys($stores);
+        }
+
+        $normalized = strtolower(trim($storeKey));
+        if ($normalized === '' || $normalized === 'all') {
+            return array_keys($stores);
+        }
+
+        if (in_array($normalized, ['shopify_retail', 'retail'], true)) {
+            return array_key_exists('retail', $stores) ? ['retail'] : [];
+        }
+
+        if (in_array($normalized, ['shopify_wholesale', 'wholesale'], true)) {
+            return array_key_exists('wholesale', $stores) ? ['wholesale'] : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int,string>  $keys
+     * @return array<string,ShopifyStore>
+     */
+    protected static function storeRecordsByKey(array $keys): array
+    {
+        if ($keys === [] || !Schema::hasTable('shopify_stores')) {
+            return [];
+        }
+
+        return ShopifyStore::query()
+            ->whereIn('store_key', $keys)
+            ->get()
+            ->keyBy('store_key')
+            ->all();
+    }
+
+    protected static function allowLegacyEnvTokenFallback(): bool
+    {
+        return (bool) config('services.shopify.allow_env_token_fallback', false);
+    }
+
+    protected static function normalizeDomain(string $shopDomain): string
+    {
+        $normalized = strtolower((string) preg_replace('#^https?://#', '', $shopDomain));
+
+        return rtrim($normalized, '/');
     }
 }

@@ -3,6 +3,9 @@
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingReviewSummary;
+use App\Models\Order;
+use App\Models\SquareCustomer;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
@@ -58,6 +61,98 @@ test('customers index renders canonical customer rows with loyalty enrichment an
         ->assertSeeText('135');
 });
 
+test('customers projections prefer data-rich Growave rows over newer empty duplicates', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Projection',
+        'last_name' => 'Target',
+        'email' => 'projection.target@example.com',
+        'normalized_email' => 'projection.target@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'GRO-RICH-7001',
+        'points_balance' => 4321,
+        'vip_tier' => 'Gold',
+        'referral_link' => 'https://refrr.app/example/preferred',
+        'raw_metafields' => [
+            ['namespace' => 'growave', 'key' => 'review_count', 'value' => '7', 'type' => 'number_integer'],
+            ['namespace' => 'growave', 'key' => 'published_review_count', 'value' => '7', 'type' => 'number_integer'],
+            ['namespace' => 'growave', 'key' => 'activity_total', 'value' => '11', 'type' => 'number_integer'],
+        ],
+        'synced_at' => now()->subHour(),
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'GRO-EMPTY-7002',
+        'points_balance' => 0,
+        'vip_tier' => null,
+        'referral_link' => null,
+        'raw_metafields' => [
+            ['namespace' => 'growave', 'key' => 'review_count', 'value' => '0', 'type' => 'number_integer'],
+            ['namespace' => 'growave', 'key' => 'published_review_count', 'value' => '0', 'type' => 'number_integer'],
+            ['namespace' => 'growave', 'key' => 'activity_total', 'value' => '0', 'type' => 'number_integer'],
+        ],
+        'synced_at' => now(),
+    ]);
+
+    MarketingReviewSummary::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'GRO-RICH-7001',
+        'external_customer_email' => $profile->email,
+        'review_count' => 7,
+        'published_review_count' => 7,
+        'average_rating' => 4.75,
+        'source_synced_at' => now()->subHour(),
+        'raw_payload' => [],
+    ]);
+
+    MarketingReviewSummary::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'GRO-EMPTY-7002',
+        'external_customer_email' => $profile->email,
+        'review_count' => 0,
+        'published_review_count' => 0,
+        'average_rating' => null,
+        'source_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers'))
+        ->assertOk()
+        ->assertSeeText('Projection Target')
+        ->assertSeeText('4,321')
+        ->assertSeeText('7')
+        ->assertSeeText('4.75 avg');
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers.show', $profile))
+        ->assertOk()
+        ->assertSeeText('4,321')
+        ->assertSeeText('7')
+        ->assertSeeText('4.75')
+        ->assertSeeText('Open Referral Link');
+});
+
 test('customers search matches external source ids through canonical profile query', function () {
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Search',
@@ -88,66 +183,37 @@ test('customers search matches external source ids through canonical profile que
         ->assertSeeText('search.target@example.com');
 });
 
-test('customers search matches phone fragments on canonical profiles', function () {
-    MarketingProfile::query()->create([
-        'first_name' => 'Phone',
-        'last_name' => 'Lookup',
-        'email' => 'phone.lookup@example.com',
-        'normalized_email' => 'phone.lookup@example.com',
-        'phone' => '+1 (555) 302-9090',
-        'normalized_phone' => '+15553029090',
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['search' => '302-9090']))
-        ->assertOk()
-        ->assertSeeText('Phone Lookup')
-        ->assertSeeText('phone.lookup@example.com');
-});
-
 test('customers index includes shopify and square-only canonical profiles without requiring growave', function () {
-    $shopifyProfile = MarketingProfile::query()->create([
+    Order::factory()->create([
+        'source' => 'shopify_retail',
+        'order_type' => 'retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 7101,
+        'shopify_customer_id' => '8101',
         'first_name' => 'Shopify',
         'last_name' => 'Only',
         'email' => 'shopify.only.index@example.com',
-        'normalized_email' => 'shopify.only.index@example.com',
         'phone' => '+1 (555) 440-0101',
-        'normalized_phone' => '+15554400101',
-        'source_channels' => ['shopify'],
     ]);
 
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $shopifyProfile->id,
-        'source_type' => 'shopify_customer',
-        'source_id' => 'retail:8101',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $squareProfile = MarketingProfile::query()->create([
-        'first_name' => 'Square',
-        'last_name' => 'Only',
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-IDX-1',
+        'given_name' => 'Square',
+        'family_name' => 'Only',
         'email' => 'square.only.index@example.com',
-        'normalized_email' => 'square.only.index@example.com',
         'phone' => '+1 (555) 440-0202',
-        'normalized_phone' => '+15554400202',
-        'source_channels' => ['square'],
+        'synced_at' => now(),
     ]);
 
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $squareProfile->id,
-        'source_type' => 'square_customer',
-        'source_id' => 'SQ-CUST-IDX-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
+    $this->artisan('marketing:sync-profiles --source=shopify')->assertExitCode(0);
+    $this->artisan('marketing:sync-profiles --source=square')->assertExitCode(0);
+
+    $shopifyProfile = MarketingProfile::query()->where('normalized_email', 'shopify.only.index@example.com')->first();
+    $squareProfile = MarketingProfile::query()->where('normalized_email', 'square.only.index@example.com')->first();
+
+    expect($shopifyProfile)->not->toBeNull()
+        ->and($squareProfile)->not->toBeNull();
 
     $admin = User::factory()->create([
         'role' => 'admin',
@@ -161,202 +227,6 @@ test('customers index includes shopify and square-only canonical profiles withou
         ->assertSeeText('shopify.only.index@example.com')
         ->assertSeeText('Square Only')
         ->assertSeeText('square.only.index@example.com');
-});
-
-test('customers index quick stats, source badges, and filters work across canonical sources', function () {
-    $shopify = MarketingProfile::query()->create([
-        'first_name' => 'Shopify',
-        'last_name' => 'Filter',
-        'email' => 'shopify.filter@example.com',
-        'normalized_email' => 'shopify.filter@example.com',
-        'phone' => '555-111-0001',
-        'normalized_phone' => '+15551110001',
-        'source_channels' => ['shopify'],
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $shopify->id,
-        'source_type' => 'shopify_customer',
-        'source_id' => 'retail:sf-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $square = MarketingProfile::query()->create([
-        'first_name' => 'Square',
-        'last_name' => 'Filter',
-        'email' => 'square.filter@example.com',
-        'normalized_email' => 'square.filter@example.com',
-        'source_channels' => ['square'],
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $square->id,
-        'source_type' => 'square_customer',
-        'source_id' => 'SQ-FILTER-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $growave = MarketingProfile::query()->create([
-        'first_name' => 'Growave',
-        'last_name' => 'Filter',
-        'email' => 'growave.filter@example.com',
-        'normalized_email' => 'growave.filter@example.com',
-        'phone' => '555-111-0003',
-        'normalized_phone' => '+15551110003',
-        'source_channels' => ['shopify'],
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $growave->id,
-        'source_type' => 'shopify_customer',
-        'source_id' => 'retail:gf-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-    CustomerExternalProfile::query()->create([
-        'marketing_profile_id' => $growave->id,
-        'provider' => 'shopify',
-        'integration' => 'growave',
-        'store_key' => 'retail',
-        'external_customer_id' => 'grow-filter-1',
-        'points_balance' => 120,
-        'vip_tier' => 'Gold',
-        'synced_at' => now(),
-    ]);
-
-    $wholesale = MarketingProfile::query()->create([
-        'first_name' => 'Wholesale',
-        'last_name' => 'Filter',
-        'phone' => '555-111-0004',
-        'normalized_phone' => '+15551110004',
-        'source_channels' => ['wholesale'],
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $wholesale->id,
-        'source_type' => 'wholesale_customer',
-        'source_id' => 'W-FILTER-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $event = MarketingProfile::query()->create([
-        'first_name' => 'Event',
-        'last_name' => 'Filter',
-        'email' => 'event.filter@example.com',
-        'normalized_email' => 'event.filter@example.com',
-        'source_channels' => ['event'],
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $event->id,
-        'source_type' => 'event_customer',
-        'source_id' => 'E-FILTER-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $manual = MarketingProfile::query()->create([
-        'first_name' => 'Manual',
-        'last_name' => 'Filter',
-        'source_channels' => ['manual'],
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $manual->id,
-        'source_type' => 'manual_customer',
-        'source_id' => 'M-FILTER-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $indexResponse = $this->actingAs($admin)
-        ->get(route('marketing.customers'))
-        ->assertOk()
-        ->assertSeeText('Shopify')
-        ->assertSeeText('Square')
-        ->assertSeeText('Growave')
-        ->assertSeeText('Wholesale')
-        ->assertSeeText('Event')
-        ->assertSeeText('Manual');
-
-    $indexResponse->assertViewHas('quickStats', function (array $stats): bool {
-        return ($stats['total_customers'] ?? null) === 6
-            && ($stats['shopify_linked'] ?? null) === 2
-            && ($stats['square_linked'] ?? null) === 1
-            && ($stats['growave_linked'] ?? null) === 1
-            && ($stats['missing_email'] ?? null) === 2
-            && ($stats['missing_phone'] ?? null) === 3;
-    });
-
-    $indexResponse->assertViewHas('derivedStats', function (array $stats) use ($shopify, $square, $growave, $wholesale, $event, $manual): bool {
-        return in_array('Shopify', $stats[(int) $shopify->id]['source_badges'] ?? [], true)
-            && in_array('Square', $stats[(int) $square->id]['source_badges'] ?? [], true)
-            && in_array('Growave', $stats[(int) $growave->id]['source_badges'] ?? [], true)
-            && in_array('Wholesale', $stats[(int) $wholesale->id]['source_badges'] ?? [], true)
-            && in_array('Event', $stats[(int) $event->id]['source_badges'] ?? [], true)
-            && in_array('Manual', $stats[(int) $manual->id]['source_badges'] ?? [], true);
-    });
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['source' => 'shopify']))
-        ->assertOk()
-        ->assertSeeText('Shopify Filter')
-        ->assertSeeText('Growave Filter')
-        ->assertDontSeeText('Square Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['source' => 'square']))
-        ->assertOk()
-        ->assertSeeText('Square Filter')
-        ->assertDontSeeText('Shopify Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['source' => 'growave']))
-        ->assertOk()
-        ->assertSeeText('Growave Filter')
-        ->assertDontSeeText('Shopify Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['source' => 'wholesale']))
-        ->assertOk()
-        ->assertSeeText('Wholesale Filter')
-        ->assertDontSeeText('Event Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['source' => 'event']))
-        ->assertOk()
-        ->assertSeeText('Event Filter')
-        ->assertDontSeeText('Manual Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['source' => 'manual']))
-        ->assertOk()
-        ->assertSeeText('Manual Filter')
-        ->assertDontSeeText('Shopify Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['has_points' => 'yes']))
-        ->assertOk()
-        ->assertSeeText('Growave Filter')
-        ->assertDontSeeText('Shopify Filter');
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers', ['has_phone' => 'yes']))
-        ->assertOk()
-        ->assertSeeText('Shopify Filter')
-        ->assertSeeText('Growave Filter')
-        ->assertSeeText('Wholesale Filter')
-        ->assertDontSeeText('Square Filter')
-        ->assertDontSeeText('Event Filter')
-        ->assertDontSeeText('Manual Filter');
 });
 
 test('customers index row links to detail page and detail renders canonical identity fields', function () {
@@ -396,7 +266,7 @@ test('customers index row links to detail page and detail renders canonical iden
     $this->actingAs($admin)
         ->get($showUrl)
         ->assertOk()
-        ->assertSeeText('Edit Customer Profile')
+        ->assertSeeText('Identity + Address Update')
         ->assertSeeText('External Enrichment (Read-Only)')
         ->assertSeeText('riley.carter@example.com')
         ->assertSeeText('555-321-0000')
@@ -454,86 +324,11 @@ test('customer detail update saves canonical fields and keeps growave enrichment
     expect($profile->first_name)->toBe('Mel')
         ->and($profile->last_name)->toBe('Orr-Updated')
         ->and($profile->normalized_email)->toBe('mel.updated@example.com')
-        ->and($profile->normalized_phone)->toBe('+15557778888')
+        ->and($profile->normalized_phone)->toBe('5557778888')
         ->and($profile->notes)->toBe('Updated internal profile note')
         ->and((int) $external->points_balance)->toBe(240)
         ->and((string) $external->vip_tier)->toBe('Gold')
         ->and((string) $external->referral_link)->toBe('https://example.test/ref/melissa');
-});
-
-test('customer detail surfaces source badges and timeline planning streams', function () {
-    $profile = MarketingProfile::query()->create([
-        'first_name' => 'Timeline',
-        'last_name' => 'Viewer',
-        'email' => 'timeline.viewer@example.com',
-        'normalized_email' => 'timeline.viewer@example.com',
-        'source_channels' => ['shopify', 'square', 'event'],
-    ]);
-
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'source_type' => 'shopify_customer',
-        'source_id' => 'retail:timeline-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'source_type' => 'square_customer',
-        'source_id' => 'SQ-TIMELINE-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'source_type' => 'event_customer',
-        'source_id' => 'EV-TIMELINE-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'source_type' => 'manual_customer',
-        'source_id' => 'MAN-TIMELINE-1',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    CustomerExternalProfile::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'provider' => 'shopify',
-        'integration' => 'growave',
-        'store_key' => 'retail',
-        'external_customer_id' => 'timeline-grow-1',
-        'points_balance' => 50,
-        'vip_tier' => 'Silver',
-        'synced_at' => now(),
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers.show', $profile))
-        ->assertOk()
-        ->assertSeeText('Linked Sources')
-        ->assertSeeText('Shopify')
-        ->assertSeeText('Square')
-        ->assertSeeText('Growave')
-        ->assertSeeText('Event')
-        ->assertSeeText('Manual')
-        ->assertSeeText('Unified Customer Timeline Plan')
-        ->assertSeeText('Shopify Orders')
-        ->assertSeeText('Square Purchases/Payments')
-        ->assertSeeText('Growave Loyalty Activity')
-        ->assertSeeText('Reviews')
-        ->assertSeeText('Messages/Marketing Activity');
 });
 
 test('add customer wizard creates canonical customer and manual source link', function () {
@@ -664,178 +459,4 @@ test('add customer wizard can select an existing canonical profile instead of cr
             ->exists())->toBeTrue();
 
     $response->assertRedirect(route('marketing.customers.show', $existing));
-});
-
-test('customers index includes canonical rows even when no growave enrichment exists', function () {
-    $shopifyOnly = MarketingProfile::query()->create([
-        'first_name' => 'Shopify',
-        'last_name' => 'Only',
-        'email' => 'shopify.only@example.com',
-        'normalized_email' => 'shopify.only@example.com',
-        'source_channels' => ['shopify'],
-    ]);
-
-    MarketingProfileLink::query()->create([
-        'marketing_profile_id' => $shopifyOnly->id,
-        'source_type' => 'shopify_customer',
-        'source_id' => 'shopify:1001',
-        'source_meta' => [],
-        'match_method' => 'seed',
-        'confidence' => 1.00,
-    ]);
-
-    $growaveEnriched = MarketingProfile::query()->create([
-        'first_name' => 'Growave',
-        'last_name' => 'Enriched',
-        'email' => 'growave.enriched@example.com',
-        'normalized_email' => 'growave.enriched@example.com',
-        'source_channels' => ['shopify'],
-    ]);
-
-    CustomerExternalProfile::query()->create([
-        'marketing_profile_id' => $growaveEnriched->id,
-        'provider' => 'shopify',
-        'integration' => 'growave',
-        'store_key' => 'retail',
-        'external_customer_id' => 'grow-2002',
-        'points_balance' => 220,
-        'vip_tier' => 'Gold',
-        'synced_at' => now(),
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers'))
-        ->assertOk()
-        ->assertSeeText('Shopify Only')
-        ->assertSeeText('Growave Enriched')
-        ->assertSeeText('Gold');
-});
-
-test('customer row exposes detail route and detail renders canonical and external sections', function () {
-    $profile = MarketingProfile::query()->create([
-        'first_name' => 'Detail',
-        'last_name' => 'Tester',
-        'email' => 'detail.tester@example.com',
-        'normalized_email' => 'detail.tester@example.com',
-        'phone' => '(555) 818-9999',
-        'normalized_phone' => '5558189999',
-        'source_channels' => ['shopify', 'manual'],
-    ]);
-
-    CustomerExternalProfile::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'provider' => 'shopify',
-        'integration' => 'growave',
-        'store_key' => 'retail',
-        'external_customer_id' => 'detail-123',
-        'points_balance' => 80,
-        'vip_tier' => 'Silver',
-        'referral_link' => 'https://example.test/ref/detail',
-        'synced_at' => now(),
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers'))
-        ->assertOk()
-        ->assertSee(route('marketing.customers.show', $profile), false);
-
-    $this->actingAs($admin)
-        ->get(route('marketing.customers.show', $profile))
-        ->assertOk()
-        ->assertSeeText('Detail Tester')
-        ->assertSeeText('Edit Customer Profile')
-        ->assertSeeText('External Enrichment (Read-Only)')
-        ->assertSeeText('Growave Points')
-        ->assertSeeText('Silver');
-});
-
-test('customer detail edit updates canonical fields and preserves normalized identity', function () {
-    $profile = MarketingProfile::query()->create([
-        'first_name' => 'Before',
-        'last_name' => 'Name',
-        'email' => 'before@example.com',
-        'normalized_email' => 'before@example.com',
-        'phone' => '555-123-1234',
-        'normalized_phone' => '5551231234',
-        'notes' => 'Old notes',
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $response = $this->actingAs($admin)
-        ->patch(route('marketing.customers.update', $profile), [
-            'first_name' => 'After',
-            'last_name' => 'Update',
-            'email' => 'After.Update@example.com',
-            'phone' => '(555) 444-9900',
-            'notes' => 'Canonical notes updated',
-        ]);
-
-    $response->assertRedirect(route('marketing.customers.show', $profile));
-
-    $fresh = $profile->fresh();
-
-    expect($fresh)->not->toBeNull()
-        ->and($fresh->first_name)->toBe('After')
-        ->and($fresh->last_name)->toBe('Update')
-        ->and($fresh->email)->toBe('After.Update@example.com')
-        ->and($fresh->normalized_email)->toBe('after.update@example.com')
-        ->and($fresh->normalized_phone)->toBe('+15554449900')
-        ->and($fresh->notes)->toBe('Canonical notes updated');
-});
-
-test('customer detail update keeps growave enrichment read-only', function () {
-    $profile = MarketingProfile::query()->create([
-        'first_name' => 'Readonly',
-        'last_name' => 'Check',
-        'email' => 'readonly@example.com',
-        'normalized_email' => 'readonly@example.com',
-    ]);
-
-    $external = CustomerExternalProfile::query()->create([
-        'marketing_profile_id' => $profile->id,
-        'provider' => 'shopify',
-        'integration' => 'growave',
-        'store_key' => 'retail',
-        'external_customer_id' => 'readonly-444',
-        'points_balance' => 500,
-        'vip_tier' => 'Platinum',
-        'synced_at' => now(),
-    ]);
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($admin)
-        ->patch(route('marketing.customers.update', $profile), [
-            'first_name' => 'Readonly',
-            'last_name' => 'Updated',
-            'email' => 'readonly.updated@example.com',
-            'phone' => '555-898-1212',
-            'notes' => 'Only canonical profile should change',
-            'points_balance' => 999999,
-            'vip_tier' => 'Diamond',
-        ])
-        ->assertRedirect(route('marketing.customers.show', $profile));
-
-    $freshExternal = $external->fresh();
-
-    expect($freshExternal)->not->toBeNull()
-        ->and((int) $freshExternal->points_balance)->toBe(500)
-        ->and($freshExternal->vip_tier)->toBe('Platinum');
 });

@@ -37,10 +37,10 @@
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Consent Status</div>
                     <div class="mt-2 flex flex-wrap gap-2">
-                        <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_email_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                             Email {{ $profile->accepts_email_marketing ? 'Opt-In' : 'Opt-Out' }}
                         </span>
-                        <span class="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] {{ $profile->accepts_sms_marketing ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
                             SMS {{ $profile->accepts_sms_marketing ? 'Opt-In' : 'Opt-Out' }}
                         </span>
                     </div>
@@ -49,13 +49,10 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Profile Meta</div>
                     <div class="mt-2 text-xs text-white/70">Created: {{ optional($profile->created_at)->format('Y-m-d H:i') }}</div>
                     <div class="mt-1 text-xs text-white/70">Updated: {{ optional($profile->updated_at)->format('Y-m-d H:i') }}</div>
-                    <div class="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/55">Linked Sources</div>
                     <div class="mt-2 flex flex-wrap gap-1.5">
-                        @forelse($profileSourceBadges as $badge)
-                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/80">{{ $badge }}</span>
-                        @empty
-                            <span class="text-xs text-white/45">No linked source badges yet.</span>
-                        @endforelse
+                        @foreach((array) $profile->source_channels as $channel)
+                            <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">{{ $channel }}</span>
+                        @endforeach
                     </div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -67,56 +64,296 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-            <h2 class="text-lg font-semibold text-white">Edit Customer Profile</h2>
-            <p class="mt-1 text-sm text-white/65">Editable canonical identity fields stored in Backstage.</p>
-
+            <h2 class="text-lg font-semibold text-white">Identity + Address Update</h2>
+            <p class="mt-1 text-sm text-white/65">Primary profile fields for location-aware segmentation and future localized campaigns.</p>
             <form method="POST" action="{{ route('marketing.customers.update', $profile) }}" class="mt-4 space-y-3">
                 @csrf
                 @method('PATCH')
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <div class="space-y-1">
-                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">First Name</label>
-                        <input type="text" name="first_name" value="{{ old('first_name', $profile->first_name) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                        @error('first_name')
-                            <p class="text-xs text-rose-200">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Last Name</label>
-                        <input type="text" name="last_name" value="{{ old('last_name', $profile->last_name) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                        @error('last_name')
-                            <p class="text-xs text-rose-200">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Email</label>
-                        <input type="email" name="email" value="{{ old('email', $profile->email) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                        @error('email')
-                            <p class="text-xs text-rose-200">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Phone</label>
-                        <input type="text" name="phone" value="{{ old('phone', $profile->phone) }}" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                        @error('phone')
-                            <p class="text-xs text-rose-200">{{ $message }}</p>
-                        @enderror
-                    </div>
+                    <input type="text" name="first_name" value="{{ old('first_name', $profile->first_name) }}" placeholder="First name" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="text" name="last_name" value="{{ old('last_name', $profile->last_name) }}" placeholder="Last name" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="email" name="email" value="{{ old('email', $profile->email) }}" placeholder="Email" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="text" name="phone" value="{{ old('phone', $profile->phone) }}" placeholder="Phone" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="text" name="address_line_1" value="{{ old('address_line_1', $profile->address_line_1) }}" placeholder="Address line 1" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white xl:col-span-2">
+                    <input type="text" name="address_line_2" value="{{ old('address_line_2', $profile->address_line_2) }}" placeholder="Address line 2" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white xl:col-span-2">
+                    <input type="text" name="city" value="{{ old('city', $profile->city) }}" placeholder="City" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="text" name="state" value="{{ old('state', $profile->state) }}" placeholder="State" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="text" name="postal_code" value="{{ old('postal_code', $profile->postal_code) }}" placeholder="Postal code" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <input type="text" name="country" value="{{ old('country', $profile->country) }}" placeholder="Country" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
                 </div>
-                <div class="space-y-1">
-                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Internal Notes</label>
-                    <textarea name="notes" rows="3" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">{{ old('notes', $profile->notes) }}</textarea>
-                    @error('notes')
-                        <p class="text-xs text-rose-200">{{ $message }}</p>
-                    @enderror
+                <textarea name="notes" rows="2" placeholder="Notes" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">{{ old('notes', $profile->notes) }}</textarea>
+                <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
+                    Save Profile
+                </button>
+            </form>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-white">External Enrichment (Read-Only)</h2>
+            <p class="text-sm text-white/65">These values come from linked external systems and are displayed for context. Edit core identity fields in the section above.</p>
+
+            <div class="flex flex-wrap gap-2 text-xs">
+                <span class="inline-flex rounded-full border border-blue-300/35 bg-blue-500/15 px-2.5 py-1 text-blue-100">Shopify Source</span>
+                @if($latestGrowaveExternal || $latestGrowaveReviewSummary)
+                    <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-2.5 py-1 text-emerald-100">Growave Source</span>
+                @endif
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-8">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Points</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveExternal?->points_balance ?? 0)) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Tier</div>
+                    <div class="mt-2 text-sm text-white">{{ $latestGrowaveExternal?->vip_tier ?: '—' }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Referral Link</div>
+                    @if($latestGrowaveExternal?->referral_link)
+                        <a href="{{ $latestGrowaveExternal->referral_link }}" target="_blank" rel="noreferrer" class="mt-2 inline-flex text-xs text-emerald-100 underline decoration-dotted">
+                            Open Referral Link
+                        </a>
+                    @else
+                        <div class="mt-2 text-sm text-white/60">—</div>
+                    @endif
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">External Records</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format($externalProfiles->count()) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Reviews</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveReviewSummary?->review_count ?? 0)) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Avg Rating</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">
+                        @if($latestGrowaveReviewSummary?->average_rating !== null)
+                            {{ number_format((float) $latestGrowaveReviewSummary->average_rating, 2) }}
+                        @else
+                            —
+                        @endif
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Last Growave Sync</div>
+                    <div class="mt-2 text-sm text-white">{{ $growaveSourceMeta['last_synced_at'] ?? '—' }}</div>
+                    <div class="mt-1 text-[11px] text-white/55">Profile row update: {{ optional($latestGrowaveExternal?->updated_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4 xl:col-span-2">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Source Metadata</div>
+                    <div class="mt-2 text-xs text-white/75">Provider: {{ $growaveSourceMeta['provider'] ?: '—' }}</div>
+                    <div class="mt-1 text-xs text-white/75">Integration: {{ $growaveSourceMeta['integration'] ?: '—' }}</div>
+                    <div class="mt-1 text-xs text-white/75">Store: {{ $growaveSourceMeta['store_key'] ?: '—' }}</div>
+                    <div class="mt-1 text-xs text-white/75">External ID: {{ $growaveSourceMeta['external_customer_id'] ?: '—' }}</div>
+                </article>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Provider</th>
+                            <th class="px-4 py-3 text-left">Integration</th>
+                            <th class="px-4 py-3 text-left">Store</th>
+                            <th class="px-4 py-3 text-left">External ID</th>
+                            <th class="px-4 py-3 text-left">Points</th>
+                            <th class="px-4 py-3 text-left">Tier</th>
+                            <th class="px-4 py-3 text-left">Synced</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($externalProfiles as $externalProfile)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $externalProfile->provider ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $externalProfile->integration ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $externalProfile->store_key ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $externalProfile->external_customer_id ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $externalProfile->points_balance !== null ? number_format((int) $externalProfile->points_balance) : '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $externalProfile->vip_tier ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($externalProfile->synced_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-4 py-6 text-center text-white/55">No external enrichment rows linked yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Review ID</th>
+                            <th class="px-4 py-3 text-left">Rating</th>
+                            <th class="px-4 py-3 text-left">Product</th>
+                            <th class="px-4 py-3 text-left">Published</th>
+                            <th class="px-4 py-3 text-left">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($growaveReviewHistory as $review)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $review->external_review_id }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $review->rating !== null ? number_format((int) $review->rating) : '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $review->product_title ?: ($review->product_id ?: '—') }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $review->is_published === null ? '—' : ($review->is_published ? 'yes' : 'no') }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($review->reviewed_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-4 py-6 text-center text-white/55">No Growave review history synced yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Occurred</th>
+                            <th class="px-4 py-3 text-left">Category</th>
+                            <th class="px-4 py-3 text-left">Provider Event</th>
+                            <th class="px-4 py-3 text-left">Points</th>
+                            <th class="px-4 py-3 text-left">Source ID</th>
+                            <th class="px-4 py-3 text-left">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($growaveLoyaltyTransactions as $activity)
+                            <tr>
+                                <td class="px-4 py-3 text-white/65">{{ $activity['occurred_at'] ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/85">{{ $activity['category'] }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ $activity['provider_activity'] }}</td>
+                                <td class="px-4 py-3">
+                                    <span class="{{ (int) $activity['points'] >= 0 ? 'text-emerald-100' : 'text-rose-200' }}">
+                                        {{ (int) $activity['points'] > 0 ? '+' : '' }}{{ number_format((int) $activity['points']) }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-white/65 font-mono text-xs">{{ $activity['source_id'] ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ $activity['note'] ?: ($activity['description'] ?: '—') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-6 text-center text-white/55">No Growave loyalty activity transactions synced yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-white">Birthday Management</h2>
+            <p class="text-sm text-white/65">Backstage is the canonical source for customer birthdays and annual reward issuance guardrails.</p>
+
+            <div class="grid gap-3 md:grid-cols-4">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Birthday</div>
+                    <div class="mt-2 text-sm text-white">
+                        @if($birthdayProfile && $birthdayProfile->birth_month && $birthdayProfile->birth_day)
+                            {{ sprintf('%02d/%02d', (int) $birthdayProfile->birth_month, (int) $birthdayProfile->birth_day) }}
+                            @if($birthdayProfile->birth_year)
+                                /{{ (int) $birthdayProfile->birth_year }}
+                            @endif
+                        @else
+                            Missing
+                        @endif
+                    </div>
+                    <div class="mt-1 text-xs text-white/55">Full date: {{ optional($birthdayProfile?->birthday_full_date)->toDateString() ?: '—' }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Source</div>
+                    <div class="mt-2 text-sm text-white">{{ $birthdayProfile?->source ?: '—' }}</div>
+                    <div class="mt-1 text-xs text-white/55">Captured: {{ optional($birthdayProfile?->source_captured_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Reward Status</div>
+                    <div class="mt-2 text-sm text-white">{{ str_replace('_', ' ', (string) ($birthdayRewardStatus['state'] ?? 'birthday_saved')) }}</div>
+                    <div class="mt-1 text-xs text-white/55">Last issued: {{ optional($birthdayProfile?->reward_last_issued_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Last Issued Year</div>
+                    <div class="mt-2 text-sm text-white">{{ $birthdayProfile?->reward_last_issued_year ?: '—' }}</div>
+                    <div class="mt-1 text-xs text-white/55">Updated: {{ optional($birthdayProfile?->updated_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                </article>
+            </div>
+
+            <form method="POST" action="{{ route('marketing.customers.update-birthday', $profile) }}" class="grid gap-3 md:grid-cols-5">
+                @csrf
+                <div>
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Birth Month</label>
+                    <input type="number" min="1" max="12" name="birth_month" value="{{ old('birth_month', $birthdayProfile?->birth_month) }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
                 </div>
-                <div class="flex items-center justify-between gap-3">
-                    <p class="text-xs text-white/50">External provider fields are read-only in this form.</p>
+                <div>
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Birth Day</label>
+                    <input type="number" min="1" max="31" name="birth_day" value="{{ old('birth_day', $birthdayProfile?->birth_day) }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Birth Year (optional)</label>
+                    <input type="number" min="1900" max="{{ now()->year + 1 }}" name="birth_year" value="{{ old('birth_year', $birthdayProfile?->birth_year) }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Source</label>
+                    <input type="text" name="source" value="{{ old('source', $birthdayProfile?->source ?: 'admin_backstage') }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" />
+                </div>
+                <div class="flex items-end gap-2">
                     <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
-                        Save Customer
+                        Save Birthday
                     </button>
                 </div>
+                <div class="md:col-span-5 flex flex-wrap gap-3 text-sm text-white/75">
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="issue_reward_now" value="1" class="rounded border-white/20 bg-white/5" />
+                        Issue reward now if eligible
+                    </label>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="sync_shopify" value="1" checked class="rounded border-white/20 bg-white/5" />
+                        Sync to Shopify metafields
+                    </label>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="clear" value="1" class="rounded border-white/20 bg-white/5" />
+                        Clear birthday fields
+                    </label>
+                </div>
             </form>
+
+            <div class="grid gap-4 lg:grid-cols-2">
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <h3 class="text-sm font-semibold text-white">Reward Issuance History</h3>
+                    <div class="mt-3 space-y-2">
+                        @forelse(($birthdayProfile?->rewardIssuances ?? collect()) as $issuance)
+                            <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/75">
+                                <div>{{ $issuance->cycle_year }} · {{ $issuance->reward_type }} · {{ $issuance->status }}</div>
+                                <div class="mt-1">Issued: {{ optional($issuance->issued_at)->format('Y-m-d H:i') ?: '—' }} · Claimed: {{ optional($issuance->claimed_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                                @if($issuance->reward_code)
+                                    <div class="mt-1">Code: <span class="font-semibold text-white">{{ $issuance->reward_code }}</span></div>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/60">No birthday reward issuance history yet.</div>
+                        @endforelse
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <h3 class="text-sm font-semibold text-white">Birthday Audit History</h3>
+                    <div class="mt-3 space-y-2">
+                        @forelse(($birthdayProfile?->audits ?? collect()) as $audit)
+                            <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/75">
+                                <div>{{ $audit->action }} · {{ optional($audit->created_at)->format('Y-m-d H:i') }}</div>
+                                <div class="mt-1">Source: {{ $audit->source ?: '—' }}{{ $audit->is_uncertain ? ' · uncertain' : '' }}</div>
+                            </div>
+                        @empty
+                            <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/60">No birthday audit records yet.</div>
+                        @endforelse
+                    </div>
+                </article>
+            </div>
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
@@ -125,11 +362,11 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Source Type</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Source ID</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Match Method</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Confidence</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Created</th>
+                            <th class="px-4 py-3 text-left">Source Type</th>
+                            <th class="px-4 py-3 text-left">Source ID</th>
+                            <th class="px-4 py-3 text-left">Match Method</th>
+                            <th class="px-4 py-3 text-left">Confidence</th>
+                            <th class="px-4 py-3 text-left">Created</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -152,95 +389,17 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-            <h2 class="text-lg font-semibold text-white">External Enrichment (Read-Only)</h2>
-            <p class="mt-1 text-sm text-white/65">Provider snapshots and loyalty attributes are shown for context and are not editable from this screen.</p>
-            <div class="mt-4 grid gap-3 md:grid-cols-4">
-                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Points</div>
-                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveExternal?->points_balance ?? 0)) }}</div>
-                </article>
-                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Tier</div>
-                    <div class="mt-2 text-sm text-white">{{ $latestGrowaveExternal?->vip_tier ?: '—' }}</div>
-                </article>
-                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Referral Link</div>
-                    @if($latestGrowaveExternal?->referral_link)
-                        <a href="{{ $latestGrowaveExternal->referral_link }}" target="_blank" rel="noopener" class="mt-2 inline-flex text-xs text-emerald-100 underline decoration-dotted">
-                            Open Referral Link
-                        </a>
-                    @else
-                        <div class="mt-2 text-sm text-white/60">—</div>
-                    @endif
-                </article>
-                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">External Records</div>
-                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format($externalProfiles->count()) }}</div>
-                </article>
-            </div>
-
-            <h3 class="mt-5 text-sm font-semibold text-white">External Profile Snapshots</h3>
-            <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-full text-sm">
-                    <thead class="bg-white/5 text-white/65">
-                        <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Provider</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Store</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">External Customer</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Email</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Points</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">VIP Tier</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Referral</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Synced</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/10">
-                        @forelse($externalProfiles as $external)
-                            <tr>
-                                <td class="px-4 py-3 text-white/80">{{ $external->provider }} / {{ $external->integration }}</td>
-                                <td class="px-4 py-3 text-white/70">{{ $external->store_key ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/70">
-                                    {{ $external->external_customer_id }}
-                                    @if($external->external_customer_gid)
-                                        <div class="mt-1 text-xs text-white/45">{{ \Illuminate\Support\Str::limit((string) $external->external_customer_gid, 38) }}</div>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-white/70">{{ $external->email ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/70">{{ $external->points_balance !== null ? number_format((int) $external->points_balance) : '—' }}</td>
-                                <td class="px-4 py-3 text-white/70">{{ $external->vip_tier ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/70">
-                                    @if($external->referral_link)
-                                        <a href="{{ $external->referral_link }}" target="_blank" rel="noopener" class="underline decoration-dotted">
-                                            {{ \Illuminate\Support\Str::limit((string) $external->referral_link, 42) }}
-                                        </a>
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-white/60">{{ optional($external->synced_at)->format('Y-m-d H:i') ?: optional($external->updated_at)->format('Y-m-d H:i') }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="8" class="px-4 py-6 text-center text-white/50">No external snapshots linked yet.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-white">Orders</h2>
             <p class="mt-1 text-sm text-white/65">Operational orders linked through marketing profile source links.</p>
             <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Order</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Source/Channel</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Order Date</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Customer Snapshot</th>
-                            <th class="px-4 py-3 text-right whitespace-nowrap">Operational Detail</th>
+                            <th class="px-4 py-3 text-left">Order</th>
+                            <th class="px-4 py-3 text-left">Source/Channel</th>
+                            <th class="px-4 py-3 text-left">Order Date</th>
+                            <th class="px-4 py-3 text-left">Customer Snapshot</th>
+                            <th class="px-4 py-3 text-right">Operational Detail</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -405,39 +564,6 @@
             </article>
         </section>
 
-        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-            <h3 class="text-sm font-semibold text-white">Unified Customer Timeline Plan</h3>
-            <p class="mt-1 text-sm text-white/65">
-                Architecture preview for merging Shopify orders, Square activity, Growave loyalty, reviews, and marketing activity into a single customer timeline stream.
-            </p>
-            <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-                <table class="min-w-full text-sm">
-                    <thead class="bg-white/5 text-white/65">
-                        <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Stream</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Current Count</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Data Path</th>
-                            <th class="px-4 py-3 text-left">Planning Note</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/10">
-                        @foreach($timelinePlan as $stream)
-                            <tr>
-                                <td class="px-4 py-3 text-white/80">{{ $stream['label'] }}</td>
-                                <td class="px-4 py-3 text-white/75">
-                                    <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] uppercase tracking-[0.12em]">{{ $stream['status'] }}</span>
-                                </td>
-                                <td class="px-4 py-3 text-white/75">{{ number_format((int) $stream['count']) }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ $stream['data_path'] }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ $stream['note'] }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
         <section class="grid gap-4 lg:grid-cols-2">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
                 <h3 class="text-sm font-semibold text-white">Customer Communication Timeline</h3>
@@ -466,6 +592,33 @@
             </article>
 
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+                <h3 class="text-sm font-semibold text-white">Email Delivery Timeline</h3>
+                <x-admin.help-hint tone="neutral" title="SendGrid callback behavior">
+                    Delivery/open/click/bounce events are applied idempotently from SendGrid webhooks. Duplicate callbacks do not create duplicate state transitions.
+                </x-admin.help-hint>
+                <div class="mt-3 space-y-2">
+                    @forelse($emailDeliveries as $delivery)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            <div class="text-sm text-white">
+                                {{ $delivery->recipient?->campaign?->name ?: 'Campaign email' }} · {{ strtoupper((string) $delivery->status) }}
+                            </div>
+                            <div class="mt-1 text-xs text-white/60">
+                                {{ $delivery->email }} · Sent {{ optional($delivery->sent_at)->format('Y-m-d H:i') ?: '—' }}
+                            </div>
+                            <div class="mt-1 text-xs text-white/55">
+                                Delivered {{ optional($delivery->delivered_at)->format('Y-m-d H:i') ?: '—' }}
+                                · Opened {{ optional($delivery->opened_at)->format('Y-m-d H:i') ?: '—' }}
+                                · Clicked {{ optional($delivery->clicked_at)->format('Y-m-d H:i') ?: '—' }}
+                            </div>
+                            <div class="mt-1 text-xs text-white/45">SendGrid: {{ $delivery->sendgrid_message_id ?: '—' }}</div>
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60">No email touches logged yet.</div>
+                    @endforelse
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
                 <h3 class="text-sm font-semibold text-white">Campaign Conversion History</h3>
                 <x-admin.help-hint tone="neutral" title="Attribution summary">
                     Conversion rows can be `code_based`, `last_touch`, or `assisted`. Attribution is conservative and may be partial when source order data is incomplete.
@@ -489,11 +642,11 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-white/5 text-white/65">
                             <tr>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Occurred</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Channel</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Event</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Source</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap">Details</th>
+                                <th class="px-4 py-3 text-left">Occurred</th>
+                                <th class="px-4 py-3 text-left">Channel</th>
+                                <th class="px-4 py-3 text-left">Event</th>
+                                <th class="px-4 py-3 text-left">Source</th>
+                                <th class="px-4 py-3 text-left">Details</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/10">
@@ -516,10 +669,238 @@
             </article>
         </section>
 
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h3 class="text-sm font-semibold text-white">Groups</h3>
+            <div class="flex flex-wrap gap-2">
+                @forelse($profile->groups as $group)
+                    <a href="{{ route('marketing.groups.show', $group) }}" wire:navigate
+                       class="inline-flex rounded-full border {{ $group->is_internal ? 'border-amber-300/35 bg-amber-500/20 text-amber-100' : 'border-white/15 bg-white/5 text-white/80' }} px-3 py-1 text-xs font-semibold">
+                        {{ $group->name }}{{ $group->is_internal ? ' · internal' : '' }}
+                    </a>
+                @empty
+                    <span class="text-sm text-white/60">No groups assigned.</span>
+                @endforelse
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-2">
+                <form method="POST" action="{{ route('marketing.groups.members.add', ['group' => $allGroups->first()?->id ?? 0]) }}" class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3" id="add_to_group_form">
+                    @csrf
+                    <input type="hidden" name="marketing_profile_id" value="{{ $profile->id }}">
+                    <input type="hidden" name="return_to" value="customer:{{ $profile->id }}">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Add to Group</div>
+                    <select id="customer_group_select" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white">
+                        @forelse($allGroups as $groupOption)
+                            <option value="{{ $groupOption->id }}">{{ $groupOption->name }}{{ $groupOption->is_internal ? ' (internal)' : '' }}</option>
+                        @empty
+                            <option value="">No groups available</option>
+                        @endforelse
+                    </select>
+                    <button type="submit" @disabled($allGroups->isEmpty()) class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+                        Add to group
+                    </button>
+                </form>
+
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Create New Group</div>
+                    <a href="{{ route('marketing.groups.create', ['marketing_profile_id' => $profile->id]) }}" wire:navigate
+                       class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">
+                        Create new group
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h3 class="text-sm font-semibold text-white">Storefront / Public Flow Links</h3>
+            <x-admin.help-hint tone="neutral" title="Touchpoint tracking">
+                These links show where this profile was touched by Shopify widget calls or minimal public event routes. They improve attribution and help diagnose cross-channel identity history.
+            </x-admin.help-hint>
+            <div class="flex flex-wrap items-center gap-2 text-xs text-white/70">
+                <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2.5 py-1">Open issues: {{ (int) ($openStorefrontIssues ?? 0) }}</span>
+                <a href="{{ route('marketing.operations.reconciliation') }}" wire:navigate class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-2.5 py-1 font-semibold text-amber-100">
+                    Open Reconciliation Ops
+                </a>
+            </div>
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Source Type</th>
+                            <th class="px-4 py-3 text-left">Source ID</th>
+                            <th class="px-4 py-3 text-left">Match Method</th>
+                            <th class="px-4 py-3 text-left">Meta</th>
+                            <th class="px-4 py-3 text-left">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($storefrontTouchpoints as $touchpoint)
+                            <tr>
+                                <td class="px-4 py-3 text-white/75">{{ $touchpoint->source_type }}</td>
+                                <td class="px-4 py-3 text-white/65 font-mono">{{ $touchpoint->source_id }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ $touchpoint->match_method ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/55">{{ \Illuminate\Support\Str::limit(json_encode($touchpoint->source_meta), 110) }}</td>
+                                <td class="px-4 py-3 text-white/55">{{ optional($touchpoint->created_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="px-4 py-5 text-center text-white/55">No storefront/public flow links recorded yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="text-sm font-semibold text-white">Widget/Public Event Timeline</h4>
+            <x-admin.help-hint tone="neutral" title="State + recovery visibility">
+                Widget/public events store explicit status and unresolved issue signals (for example `verification_required`, `issued_not_reconciled`, `signature_verification_failed`). Use this timeline for storefront troubleshooting.
+            </x-admin.help-hint>
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Occurred</th>
+                            <th class="px-4 py-3 text-left">Event</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Issue</th>
+                            <th class="px-4 py-3 text-left">Resolution</th>
+                            <th class="px-4 py-3 text-left">Meta</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse(($storefrontEvents ?? collect()) as $eventRow)
+                            <tr>
+                                <td class="px-4 py-3 text-white/65">{{ optional($eventRow->occurred_at ?: $eventRow->created_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/80">
+                                    {{ $eventRow->event_type }}
+                                    <div class="text-xs text-white/50">{{ $eventRow->endpoint ?: '—' }}</div>
+                                </td>
+                                <td class="px-4 py-3 text-white/70">{{ strtoupper((string) $eventRow->status) }}</td>
+                                <td class="px-4 py-3 text-white/70">{{ $eventRow->issue_type ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">
+                                    {{ strtoupper((string) $eventRow->resolution_status) }}
+                                    @if($eventRow->resolved_at)
+                                        <div class="text-xs text-white/45">{{ optional($eventRow->resolved_at)->format('Y-m-d H:i') }}</div>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 text-white/55">{{ \Illuminate\Support\Str::limit(json_encode($eventRow->meta), 110) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="px-4 py-5 text-center text-white/55">No widget/public event timeline rows yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article class="rounded-3xl border border-white/10 bg-black/15 p-5">
+            <article class="rounded-3xl border border-white/10 bg-black/15 p-5 space-y-4">
                 <h3 class="text-sm font-semibold text-white">Candle Cash</h3>
-                <p class="mt-2 text-xs text-white/65">Rewards balances and activity are intentionally deferred to later stages.</p>
+                <div class="text-2xl font-semibold text-white">{{ number_format((int) $candleBalance) }} pts</div>
+                <x-admin.help-hint tone="neutral" title="Rewards ledger behavior">
+                    All point changes are appended to the Candle Cash transaction ledger. Redemptions are issued first, then reconciled as redeemed/canceled/expired. Shopify code usage is validated during ingestion, while Square event usage can be staff-reconciled.
+                </x-admin.help-hint>
+                <div class="flex flex-wrap gap-2 text-xs">
+                    <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-white/75">Issued: {{ (int) ($redemptionSummary['issued'] ?? 0) }}</span>
+                    <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/20 px-2 py-0.5 text-emerald-100">Redeemed: {{ (int) ($redemptionSummary['redeemed'] ?? 0) }}</span>
+                    <span class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/20 px-2 py-0.5 text-amber-100">Canceled: {{ (int) ($redemptionSummary['canceled'] ?? 0) }}</span>
+                    <span class="inline-flex rounded-full border border-rose-300/35 bg-rose-500/20 px-2 py-0.5 text-rose-100">Expired: {{ (int) ($redemptionSummary['expired'] ?? 0) }}</span>
+                </div>
+
+                <form method="POST" action="{{ route('marketing.customers.candle-cash.grant', $profile) }}" class="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                    @csrf
+                    <div class="grid gap-2 sm:grid-cols-3">
+                        <select name="type" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                            <option value="earn">Earn</option>
+                            <option value="adjust">Adjust</option>
+                        </select>
+                        <input type="number" name="points" required placeholder="Points (+/-)" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                        <input type="text" name="description" placeholder="Description" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                    </div>
+                    <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-white">
+                        Save Points Entry
+                    </button>
+                </form>
+
+                <form method="POST" action="{{ route('marketing.customers.candle-cash.redeem', $profile) }}" class="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                    @csrf
+                    <div class="grid gap-2 sm:grid-cols-3">
+                        <select name="reward_id" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                            @foreach($activeRewards as $reward)
+                                <option value="{{ $reward->id }}">{{ $reward->name }} ({{ (int) $reward->points_cost }} pts)</option>
+                            @endforeach
+                        </select>
+                        <select name="platform" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                            <option value="shopify">Shopify</option>
+                            <option value="square">Square</option>
+                        </select>
+                        <button type="submit" @disabled($activeRewards->isEmpty()) class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-100 disabled:opacity-40">
+                            Redeem
+                        </button>
+                    </div>
+                </form>
+
+                <div class="grid gap-3 md:grid-cols-2">
+                    <div class="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <h4 class="text-xs font-semibold uppercase tracking-[0.2em] text-white/55">Recent Transactions</h4>
+                        <div class="mt-2 space-y-1.5 text-xs text-white/75">
+                            @forelse($candleTransactions as $transaction)
+                                <div>
+                                    {{ strtoupper($transaction->type) }} {{ $transaction->points > 0 ? '+' : '' }}{{ (int) $transaction->points }}
+                                    · {{ $transaction->source }}
+                                    <div class="text-white/55">{{ optional($transaction->created_at)->format('Y-m-d H:i') }} · {{ $transaction->description ?: '—' }}</div>
+                                </div>
+                            @empty
+                                <div class="text-white/55">No transactions yet.</div>
+                            @endforelse
+                        </div>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <h4 class="text-xs font-semibold uppercase tracking-[0.2em] text-white/55">Issued/Redemption Lifecycle</h4>
+                        <div class="mt-2 space-y-1.5 text-xs text-white/75">
+                            @forelse($candleRedemptions as $redemption)
+                                <div class="rounded-xl border border-white/10 bg-black/20 p-2.5 space-y-1.5">
+                                    <div class="font-semibold text-white/90">
+                                        {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
+                                        <span class="text-[10px] uppercase tracking-[0.18em] text-white/55">· {{ strtoupper((string) ($redemption->status ?: 'issued')) }}</span>
+                                    </div>
+                                    <div class="text-white/65">{{ (int) $redemption->points_spent }} pts · <span class="font-mono">{{ $redemption->redemption_code }}</span></div>
+                                    <div class="text-white/55">
+                                        {{ strtoupper((string) ($redemption->platform ?: 'n/a')) }}
+                                        · {{ optional($redemption->issued_at ?: $redemption->created_at)->format('Y-m-d H:i') ?: '—' }}
+                                        @if($redemption->redeemed_at)
+                                            · redeemed {{ optional($redemption->redeemed_at)->format('Y-m-d H:i') }}
+                                        @endif
+                                    </div>
+                                    @if($redemption->external_order_source || $redemption->external_order_id)
+                                        <div class="text-white/55">Order link: {{ $redemption->external_order_source ?: '—' }}{{ $redemption->external_order_id ? (' · ' . $redemption->external_order_id) : '' }}</div>
+                                    @endif
+                                    @if($redemption->reconciliation_notes)
+                                        <div class="text-white/55">Notes: {{ $redemption->reconciliation_notes }}</div>
+                                    @endif
+                                    @if(($redemption->status ?? 'issued') === 'issued')
+                                        <div class="flex flex-wrap gap-2">
+                                            <form method="POST" action="{{ route('marketing.customers.candle-cash.redemptions.mark-redeemed', [$profile, $redemption]) }}" class="flex flex-wrap items-center gap-1.5">
+                                                @csrf
+                                                <input type="hidden" name="platform" value="square" />
+                                                <input type="hidden" name="external_order_source" value="square_manual" />
+                                                <input type="text" name="external_order_id" placeholder="Order ID" class="w-28 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white" />
+                                                <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                                                    Mark Redeemed
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ route('marketing.customers.candle-cash.redemptions.cancel', [$profile, $redemption]) }}">
+                                                @csrf
+                                                <button type="submit" class="inline-flex rounded-full border border-rose-300/35 bg-rose-500/20 px-2.5 py-1 text-[11px] font-semibold text-rose-100">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        </div>
+                                    @endif
+                                </div>
+                            @empty
+                                <div class="text-white/55">No redemptions yet.</div>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 xl:col-span-2">
                 <h3 class="text-sm font-semibold text-white">Marketing Likelihood</h3>
@@ -551,6 +932,29 @@
             <x-admin.help-hint tone="neutral" title="Action safety">
                 Quick actions create recommendations or queue campaign recipients. They do not directly send provider messages.
             </x-admin.help-hint>
+
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 class="text-sm font-semibold text-white">Next Best Action</h4>
+                <x-admin.help-hint tone="neutral" title="Rule-based guidance">
+                    This recommendation is computed from observed orders, consent, event activity, and reward state. It is suggestive only and does not auto-send.
+                </x-admin.help-hint>
+                <div class="mt-2 text-sm text-white">
+                    {{ $nextBestAction['title'] ?? 'No action recommended right now' }}
+                </div>
+                <div class="mt-1 text-xs text-white/65">{{ $nextBestAction['summary'] ?? '—' }}</div>
+                <div class="mt-2 flex flex-wrap gap-2 text-xs text-white/60">
+                    <span class="inline-flex rounded-full border border-white/15 bg-black/20 px-2 py-0.5">Key: {{ $nextBestAction['action_key'] ?? 'none' }}</span>
+                    <span class="inline-flex rounded-full border border-white/15 bg-black/20 px-2 py-0.5">Confidence: {{ number_format((float) ($nextBestAction['confidence'] ?? 0), 2) }}</span>
+                    @if(!empty($nextBestAction['suggested_channel']))
+                        <span class="inline-flex rounded-full border border-white/15 bg-black/20 px-2 py-0.5">Channel: {{ strtoupper((string) $nextBestAction['suggested_channel']) }}</span>
+                    @endif
+                </div>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                    @foreach((array) ($nextBestAction['reasons'] ?? []) as $reason)
+                        <span class="inline-flex rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[11px] text-white/70">{{ $reason }}</span>
+                    @endforeach
+                </div>
+            </article>
 
             <div class="grid gap-4 lg:grid-cols-2">
                 <div class="space-y-3">
@@ -629,6 +1033,18 @@
                 };
                 select.addEventListener('change', updateAction);
                 updateAction();
+
+                const groupForm = document.getElementById('add_to_group_form');
+                const groupSelect = document.getElementById('customer_group_select');
+                if (groupForm && groupSelect) {
+                    const updateGroupAction = () => {
+                        const groupId = groupSelect.value;
+                        if (!groupId) return;
+                        groupForm.action = "{{ route('marketing.groups.members.add', ['group' => '__group__']) }}".replace('__group__', groupId);
+                    };
+                    groupSelect.addEventListener('change', updateGroupAction);
+                    updateGroupAction();
+                }
             })();
         </script>
     </div>

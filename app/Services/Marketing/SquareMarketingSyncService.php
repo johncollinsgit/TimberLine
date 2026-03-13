@@ -17,7 +17,8 @@ class SquareMarketingSyncService
         protected MarketingProfileSyncService $profileSyncService,
         protected MarketingEventAttributionService $attributionService,
         protected MarketingConsentService $consentService,
-        protected MarketingConversionAttributionService $conversionAttributionService
+        protected MarketingConversionAttributionService $conversionAttributionService,
+        protected CandleCashRedemptionReconciliationService $redemptionReconciliationService
     ) {
     }
 
@@ -99,13 +100,6 @@ class SquareMarketingSyncService
                 $orderResult = $this->upsertSquareOrder($payload, $dryRun);
                 $summary[$orderResult['action']]++;
 
-                if (! $dryRun) {
-                    $this->attributionService->refreshForSquareOrder($orderResult['model']);
-                    if ($orderResult['model']) {
-                        $this->conversionAttributionService->attributeForSquareOrder($orderResult['model']);
-                    }
-                }
-
                 $customer = null;
                 $squareCustomerId = trim((string) ($payload['customer_id'] ?? ''));
                 if ($squareCustomerId !== '') {
@@ -122,6 +116,14 @@ class SquareMarketingSyncService
                     ],
                 ]);
                 $this->mergeProfileSummary($summary, $result);
+
+                if (! $dryRun && $orderResult['model']) {
+                    $this->attributionService->refreshForSquareOrder($orderResult['model']);
+                    $rewardSummary = $this->redemptionReconciliationService->reconcileSquareOrder($orderResult['model']);
+                    $this->conversionAttributionService->attributeForSquareOrder($orderResult['model'], [
+                        'reward_reconcile_summary' => $rewardSummary,
+                    ]);
+                }
             }
         );
     }
@@ -387,6 +389,9 @@ class SquareMarketingSyncService
                 'source_type' => 'square_customer',
                 'source_id' => $sourceId,
                 'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'customer',
+                    'external_id' => $sourceId,
                     'reference_id' => $payload['reference_id'] ?? null,
                 ],
             ]],
@@ -435,6 +440,10 @@ class SquareMarketingSyncService
             'source_type' => 'square_order',
             'source_id' => $sourceId,
             'source_meta' => [
+                'source_system' => 'square',
+                'source_record_type' => 'order_contact',
+                'external_id' => $sourceId,
+                'square_customer_id' => $squareCustomerId !== '' ? $squareCustomerId : null,
                 'location_id' => $payload['location_id'] ?? null,
                 'state' => $payload['state'] ?? null,
                 'source_name' => $payload['source']['name'] ?? $payload['source_name'] ?? null,
@@ -444,7 +453,11 @@ class SquareMarketingSyncService
             $links[] = [
                 'source_type' => 'square_customer',
                 'source_id' => $squareCustomerId,
-                'source_meta' => [],
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'customer',
+                    'external_id' => $squareCustomerId,
+                ],
             ];
         }
 
@@ -476,6 +489,11 @@ class SquareMarketingSyncService
             'source_type' => 'square_payment',
             'source_id' => $sourceId,
             'source_meta' => [
+                'source_system' => 'square',
+                'source_record_type' => 'payment',
+                'external_id' => $sourceId,
+                'square_order_id' => $squareOrderId !== '' ? $squareOrderId : null,
+                'square_customer_id' => $squareCustomerId !== '' ? $squareCustomerId : null,
                 'amount_money' => $payload['amount_money'] ?? null,
                 'status' => $payload['status'] ?? null,
             ],
@@ -484,14 +502,22 @@ class SquareMarketingSyncService
             $links[] = [
                 'source_type' => 'square_order',
                 'source_id' => $squareOrderId,
-                'source_meta' => [],
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'order_contact',
+                    'external_id' => $squareOrderId,
+                ],
             ];
         }
         if ($squareCustomerId !== '') {
             $links[] = [
                 'source_type' => 'square_customer',
                 'source_id' => $squareCustomerId,
-                'source_meta' => [],
+                'source_meta' => [
+                    'source_system' => 'square',
+                    'source_record_type' => 'customer',
+                    'external_id' => $squareCustomerId,
+                ],
             ];
         }
 

@@ -1,18 +1,29 @@
 <?php
 
 use App\Models\CustomerExternalProfile;
+use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\ShopifyStore;
 use App\Services\Marketing\GrowaveCustomerMetafieldParser;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
     config()->set('services.shopify.api_version', '2026-01');
     config()->set('services.shopify.stores.retail.shop', 'retail-test.myshopify.com');
-    config()->set('services.shopify.stores.retail.access_token', 'retail-token');
     config()->set('services.shopify.stores.wholesale.shop', null);
-    config()->set('services.shopify.stores.wholesale.access_token', null);
+    config()->set('services.shopify.allow_env_token_fallback', false);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'retail-test.myshopify.com',
+            'access_token' => 'retail-token',
+            'scopes' => 'read_orders,read_products,read_customers',
+            'installed_at' => now(),
+        ]
+    );
 });
 
 test('growave parser extracts normalized fields and keeps detected growave metafields', function () {
@@ -151,7 +162,7 @@ test('dry-run mode performs no writes to external profile snapshot table', funct
         ->and(MarketingImportRun::query()->where('type', 'shopify_customer_metafields_sync')->count())->toBe(1);
 });
 
-test('sync fails loudly when fallback email mapping is ambiguous', function () {
+test('sync routes ambiguous email mapping to identity review without unsafe merge', function () {
     MarketingProfile::query()->create([
         'first_name' => 'Dup A',
         'email' => 'dup@example.com',
@@ -176,12 +187,12 @@ test('sync fails loudly when fallback email mapping is ambiguous', function () {
     ]);
 
     $this->artisan('shopify:sync-customer-metafields retail --limit=10')
-        ->assertExitCode(1);
+        ->assertExitCode(0);
 
-    expect(CustomerExternalProfile::query()->count())->toBe(0)
-        ->and(MarketingImportRun::query()
-            ->where('type', 'shopify_customer_metafields_sync')
-            ->where('status', 'failed')
+    expect(CustomerExternalProfile::query()->count())->toBe(1)
+        ->and(MarketingIdentityReview::query()
+            ->where('source_type', 'growave_customer')
+            ->where('source_id', 'retail:4040')
             ->exists())->toBeTrue();
 });
 
@@ -203,11 +214,48 @@ test('sync fails loudly on shopify graphql API errors', function () {
         ->exists())->toBeTrue();
 });
 
+test('sync without limit paginates through all available Shopify customer pages', function () {
+    $firstPage = shopifyCustomersPayload([[
+        'id' => 'gid://shopify/Customer/9001',
+        'email' => 'page.one@example.com',
+        'firstName' => 'Page',
+        'lastName' => 'One',
+        'metafields' => [],
+    ]], true, 'cursor-1');
+
+    $secondPage = shopifyCustomersPayload([[
+        'id' => 'gid://shopify/Customer/9002',
+        'email' => 'page.two@example.com',
+        'firstName' => 'Page',
+        'lastName' => 'Two',
+        'metafields' => [],
+    ]], false, 'cursor-2');
+
+    Http::fake([
+        'https://retail-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::sequence()
+            ->push($firstPage, 200)
+            ->push($secondPage, 200),
+    ]);
+
+    $this->artisan('shopify:sync-customer-metafields retail --page-size=1')
+        ->expectsOutputToContain('status=completed')
+        ->expectsOutputToContain('processed=2')
+        ->assertExitCode(0);
+
+    $run = MarketingImportRun::query()
+        ->where('type', 'shopify_customer_metafields_sync')
+        ->latest('id')
+        ->first();
+
+    expect(CustomerExternalProfile::query()->where('integration', 'shopify_customer')->count())->toBe(2)
+        ->and(data_get($run?->summary, 'limit'))->toBeNull();
+});
+
 /**
  * @param  array<int,array<string,mixed>>  $customers
  * @return array<string,mixed>
  */
-function shopifyCustomersPayload(array $customers): array
+function shopifyCustomersPayload(array $customers, bool $hasNextPage = false, ?string $endCursor = null): array
 {
     return [
         'data' => [
@@ -237,8 +285,8 @@ function shopifyCustomersPayload(array $customers): array
                     ];
                 }, $customers, array_keys($customers)),
                 'pageInfo' => [
-                    'hasNextPage' => false,
-                    'endCursor' => count($customers) > 0 ? 'cursor-'.count($customers) : null,
+                    'hasNextPage' => $hasNextPage,
+                    'endCursor' => $endCursor ?? (count($customers) > 0 ? 'cursor-'.count($customers) : null),
                 ],
             ],
         ],

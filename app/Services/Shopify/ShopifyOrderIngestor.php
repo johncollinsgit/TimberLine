@@ -97,6 +97,19 @@ class ShopifyOrderIngestor
             $order->shipping_address1 = $orderData['shipping_address']['address1'] ?? null;
             $order->billing_company = $orderData['billing_address']['company'] ?? null;
             $order->billing_address1 = $orderData['billing_address']['address1'] ?? null;
+            $order->shopify_customer_id = isset($orderData['customer']['id']) && $orderData['customer']['id'] !== null
+                ? (string) $orderData['customer']['id']
+                : null;
+            $order->first_name = $orderData['customer']['first_name'] ?? null;
+            $order->last_name = $orderData['customer']['last_name'] ?? null;
+            $order->email = $orderData['email'] ?? null;
+            $order->phone = $orderData['phone'] ?? null;
+            $order->customer_email = $orderData['customer']['email'] ?? null;
+            $order->customer_phone = $orderData['customer']['phone'] ?? null;
+            $order->shipping_email = $orderData['shipping_address']['email'] ?? ($orderData['email'] ?? null);
+            $order->shipping_phone = $orderData['shipping_address']['phone'] ?? null;
+            $order->billing_email = $orderData['billing_address']['email'] ?? ($orderData['email'] ?? null);
+            $order->billing_phone = $orderData['billing_address']['phone'] ?? null;
 
             if (empty($order->status)) {
                 $order->status = 'new';
@@ -1105,6 +1118,7 @@ class ShopifyOrderIngestor
 
         $firstName = trim((string) ($orderData['customer']['first_name'] ?? ''));
         $lastName = trim((string) ($orderData['customer']['last_name'] ?? ''));
+        $shopifyCustomerId = trim((string) ($orderData['customer']['id'] ?? ''));
 
         $channels = ['shopify'];
         if ($storeKey !== '') {
@@ -1116,13 +1130,102 @@ class ShopifyOrderIngestor
             $channels[] = 'event';
         }
 
+        $couponSignals = $this->extractCouponSignals($orderData);
+        $redemptionCodes = collect($couponSignals)
+            ->map(fn ($value) => strtoupper(trim((string) $value)))
+            ->filter(fn (string $value): bool => str_starts_with($value, 'CC-'))
+            ->values()
+            ->all();
+
         return [
             'email' => $email !== '' ? $email : null,
             'phone' => $phone !== '' ? $phone : null,
             'full_name' => $fullName !== '' ? $fullName : null,
             'first_name' => $firstName !== '' ? $firstName : null,
             'last_name' => $lastName !== '' ? $lastName : null,
+            'shopify_customer_id' => $shopifyCustomerId !== '' ? $shopifyCustomerId : null,
             'source_channels' => array_values(array_unique($channels)),
+            'source_links' => $shopifyCustomerId !== '' ? [[
+                'source_type' => 'shopify_customer',
+                'source_id' => ($storeKey !== '' ? $storeKey . ':' : '') . $shopifyCustomerId,
+                'source_meta' => [
+                    'shopify_customer_id' => $shopifyCustomerId,
+                    'shopify_store_key' => $storeKey !== '' ? $storeKey : null,
+                ],
+            ]] : [],
+            'coupon_signals' => $couponSignals,
+            'applied_reward_codes' => $redemptionCodes,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $orderData
+     * @return array<int,string>
+     */
+    protected function extractCouponSignals(array $orderData): array
+    {
+        $signals = [];
+
+        foreach ((array) ($orderData['discount_codes'] ?? []) as $row) {
+            if (is_array($row)) {
+                $code = trim((string) ($row['code'] ?? $row['discount_code'] ?? ''));
+            } else {
+                $code = trim((string) $row);
+            }
+
+            if ($code !== '') {
+                $signals[] = $code;
+            }
+        }
+
+        foreach ((array) ($orderData['discount_applications'] ?? []) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            foreach (['code', 'title', 'description'] as $key) {
+                $value = trim((string) ($row[$key] ?? ''));
+                if ($value !== '') {
+                    $signals[] = $value;
+                }
+            }
+        }
+
+        foreach ((array) ($orderData['note_attributes'] ?? []) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $name = strtolower(trim((string) ($row['name'] ?? '')));
+            if (
+                $name !== ''
+                && ! str_contains($name, 'code')
+                && ! str_contains($name, 'coupon')
+                && ! str_contains($name, 'promo')
+                && ! str_contains($name, 'reward')
+            ) {
+                continue;
+            }
+
+            $value = trim((string) ($row['value'] ?? ''));
+            if ($value !== '') {
+                $signals[] = $value;
+            }
+        }
+
+        $raw = json_encode($orderData);
+        if (is_string($raw) && $raw !== '') {
+            preg_match_all('/\bCC-[A-Z0-9]{6,20}\b/i', strtoupper($raw), $matches);
+            foreach ((array) ($matches[0] ?? []) as $code) {
+                $signals[] = (string) $code;
+            }
+        }
+
+        return collect($signals)
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 }

@@ -11,6 +11,7 @@ class EventInstance extends Model
 {
     protected $fillable = [
         'title',
+        'public_slug',
         'venue',
         'city',
         'state',

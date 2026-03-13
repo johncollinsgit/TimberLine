@@ -1,0 +1,1245 @@
+<?php
+
+namespace App\Http\Controllers\Marketing;
+
+use App\Http\Controllers\Controller;
+use App\Models\CandleCashRedemption;
+use App\Models\CandleCashReward;
+use App\Models\CandleCashTransaction;
+use App\Models\CustomerExternalProfile;
+use App\Models\CustomerBirthdayProfile;
+use App\Models\MarketingConsentRequest;
+use App\Models\MarketingProfile;
+use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\BirthdayProfileService;
+use App\Services\Marketing\BirthdayRewardEngineService;
+use App\Services\Marketing\MarketingConsentCaptureService;
+use App\Services\Marketing\MarketingConsentIncentiveService;
+use App\Services\Marketing\MarketingConsentService;
+use App\Services\Marketing\ShopifyBirthdayMetafieldService;
+use App\Services\Marketing\MarketingStorefrontEventLogger;
+use App\Services\Marketing\MarketingStorefrontIdentityService;
+use App\Services\Marketing\MarketingStorefrontWidgetService;
+use App\Support\Marketing\MarketingStorefrontContract;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+
+class MarketingShopifyIntegrationController extends Controller
+{
+    public function __construct(
+        protected MarketingStorefrontIdentityService $identityService,
+        protected MarketingStorefrontWidgetService $widgetService,
+        protected MarketingStorefrontEventLogger $eventLogger
+    ) {
+    }
+
+    public function rewardBalance(Request $request, CandleCashService $candleCashService): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'reward_balance', allowCreate: false);
+        if (! $resolved['profile']) {
+            $this->logStorefrontEvent($request, 'widget_balance_lookup', [
+                'status' => 'error',
+                'issue_type' => 'identity_' . $resolved['status'],
+                'source_type' => 'shopify_widget_reward_balance',
+            ]);
+
+            return $this->identityErrorResponse($resolved['status'], $request);
+        }
+
+        $profile = $resolved['profile'];
+        $balance = $candleCashService->currentBalance($profile);
+        $rewards = $this->activeRewards();
+        $redemptions = $this->recentRedemptions($profile);
+        $states = $this->widgetService->rewardWidgetStates($profile, $balance, $rewards, $redemptions);
+
+        $this->logStorefrontEvent($request, 'widget_balance_lookup', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_reward_balance',
+            'source_id' => 'profile:' . $profile->id,
+            'meta' => [
+                'balance' => $balance,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'balance' => $balance,
+            'state' => $states[0] ?? 'linked_customer',
+            'consent' => [
+                'sms' => (bool) $profile->accepts_sms_marketing,
+                'email' => (bool) $profile->accepts_email_marketing,
+            ],
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function availableRewards(Request $request, CandleCashService $candleCashService): JsonResponse
+    {
+        $resolved = null;
+        $hasIdentityQuery = trim((string) $request->query('email', '')) !== ''
+            || trim((string) $request->query('phone', '')) !== ''
+            || $this->resolveShopifyCustomerId($request, allowBody: false) !== ''
+            || (int) $request->query('marketing_profile_id', 0) > 0;
+        if ($hasIdentityQuery) {
+            $resolved = $this->resolveProfile($request, scope: 'available_rewards', allowCreate: false);
+        }
+
+        $profile = $resolved['profile'] ?? null;
+        $rewards = $this->activeRewards();
+        $redemptions = $profile ? $this->recentRedemptions($profile) : collect();
+        $balance = $profile ? $candleCashService->currentBalance($profile) : 0;
+        $states = $this->widgetService->rewardWidgetStates($profile, $balance, $rewards, $redemptions);
+
+        $this->logStorefrontEvent($request, 'widget_rewards_lookup', [
+            'status' => $profile ? 'ok' : 'pending',
+            'issue_type' => $profile ? null : 'unknown_customer',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_rewards_available',
+            'meta' => [
+                'reward_count' => $rewards->count(),
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile ? (int) $profile->id : null,
+            'balance' => $profile ? $balance : null,
+            'state' => $states[0] ?? ($profile ? 'linked_customer' : 'unknown_customer'),
+            'rewards' => $rewards->map(fn (CandleCashReward $reward): array => [
+                'id' => (int) $reward->id,
+                'name' => (string) $reward->name,
+                'description' => $reward->description ? (string) $reward->description : null,
+                'points_cost' => (int) $reward->points_cost,
+                'reward_type' => (string) $reward->reward_type,
+                'reward_value' => $reward->reward_value ? (string) $reward->reward_value : null,
+            ])->all(),
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function rewardHistory(Request $request, CandleCashService $candleCashService): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'reward_history', allowCreate: false);
+        if (! $resolved['profile']) {
+            $this->logStorefrontEvent($request, 'widget_reward_history_lookup', [
+                'status' => 'error',
+                'issue_type' => 'identity_' . $resolved['status'],
+                'source_type' => 'shopify_widget_reward_history',
+            ]);
+
+            return $this->identityErrorResponse($resolved['status'], $request);
+        }
+
+        $profile = $resolved['profile'];
+        $transactions = $profile->candleCashTransactions()
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at']);
+        $redemptions = $this->recentRedemptions($profile);
+        $balance = $candleCashService->currentBalance($profile);
+        $states = $this->widgetService->rewardWidgetStates($profile, $balance, $this->activeRewards(), $redemptions);
+
+        $this->logStorefrontEvent($request, 'widget_reward_history_lookup', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_reward_history',
+            'source_id' => 'profile:' . $profile->id,
+            'meta' => [
+                'transactions' => $transactions->count(),
+                'redemptions' => $redemptions->count(),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'balance' => $balance,
+            'state' => $states[0] ?? 'linked_customer',
+            'transactions' => $transactions->map(fn ($row): array => [
+                'id' => (int) $row->id,
+                'type' => (string) $row->type,
+                'points' => (int) $row->points,
+                'source' => (string) $row->source,
+                'source_id' => $row->source_id ? (string) $row->source_id : null,
+                'description' => $row->description ? (string) $row->description : null,
+                'created_at' => optional($row->created_at)->toIso8601String(),
+            ])->all(),
+            'redemptions' => $redemptions->map(fn ($row): array => [
+                'id' => (int) $row->id,
+                'points_spent' => (int) $row->points_spent,
+                'status' => (string) ($row->status ?: 'issued'),
+                'platform' => $row->platform ? (string) $row->platform : null,
+                'redemption_code' => (string) $row->redemption_code,
+                'issued_at' => optional($row->issued_at)->toIso8601String(),
+                'redeemed_at' => optional($row->redeemed_at)->toIso8601String(),
+                'expires_at' => optional($row->expires_at)->toIso8601String(),
+                'reward' => [
+                    'id' => (int) $row->reward_id,
+                    'name' => (string) ($row->reward?->name ?: ''),
+                    'reward_type' => (string) ($row->reward?->reward_type ?: ''),
+                    'reward_value' => $row->reward?->reward_value ? (string) $row->reward->reward_value : null,
+                ],
+            ])->all(),
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function requestRedemption(Request $request, CandleCashService $candleCashService): JsonResponse
+    {
+        $data = $request->validate([
+            'reward_id' => ['required', 'integer', 'exists:candle_cash_rewards,id'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+            'reuse_existing_code' => ['nullable', 'boolean'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'redeem_request', allowCreate: false, allowBody: true);
+        if (! $resolved['profile']) {
+            $this->logStorefrontEvent($request, 'widget_redeem_request', [
+                'status' => 'error',
+                'issue_type' => 'identity_' . $resolved['status'],
+                'source_type' => 'shopify_widget_redeem_request',
+            ]);
+
+            return $this->identityErrorResponse($resolved['status'], $request);
+        }
+
+        $profile = $resolved['profile'];
+        $reward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
+        $result = $candleCashService->requestStorefrontRedemption(
+            profile: $profile,
+            reward: $reward,
+            platform: 'shopify',
+            reuseActiveCode: (bool) ($data['reuse_existing_code'] ?? true)
+        );
+        $states = $this->widgetService->redemptionStates($result);
+        $state = (string) ($result['state'] ?? ($states[0] ?? 'try_again_later'));
+        $recoveryStates = $this->widgetService->recoveryStatesForError((string) ($result['error'] ?? ''));
+
+        $redemption = null;
+        if ((int) ($result['redemption_id'] ?? 0) > 0) {
+            $redemption = CandleCashRedemption::query()->find((int) $result['redemption_id']);
+        }
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            $errorCode = (string) ($result['error'] ?? 'redemption_failed');
+            $this->logStorefrontEvent($request, 'widget_redeem_request', [
+                'status' => 'error',
+                'issue_type' => $errorCode,
+                'profile' => $profile,
+                'candle_cash_redemption_id' => $redemption?->id,
+                'source_type' => 'shopify_widget_redeem_request',
+                'source_id' => (string) $reward->id,
+                'meta' => [
+                    'reward_id' => (int) $reward->id,
+                    'state' => $state,
+                    'balance' => (int) ($result['balance'] ?? 0),
+                ],
+            ]);
+
+            return MarketingStorefrontContract::error(
+                code: $errorCode,
+                message: 'Reward redemption request could not be completed.',
+                status: 422,
+                details: [
+                    'balance' => (int) ($result['balance'] ?? 0),
+                    'state' => $state,
+                ],
+                states: $states,
+                recoveryStates: $recoveryStates
+            );
+        }
+
+        $this->logStorefrontEvent($request, 'widget_redeem_request', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'candle_cash_redemption_id' => $redemption?->id,
+            'source_type' => 'shopify_widget_redeem_request',
+            'source_id' => (string) $reward->id,
+            'meta' => [
+                'reward_id' => (int) $reward->id,
+                'state' => $state,
+                'balance' => (int) ($result['balance'] ?? 0),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'reward_id' => (int) $reward->id,
+            'redemption_id' => (int) ($result['redemption_id'] ?? 0),
+            'redemption_code' => (string) ($result['code'] ?? ''),
+            'state' => $state,
+            'status' => $redemption?->status ?: 'issued',
+            'expires_at' => optional($redemption?->expires_at)->toIso8601String(),
+            'balance' => (int) ($result['balance'] ?? 0),
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function requestConsentOptin(
+        Request $request,
+        MarketingConsentCaptureService $consentCaptureService,
+        MarketingConsentService $consentService,
+        MarketingConsentIncentiveService $incentiveService
+    ): JsonResponse {
+        $data = $request->validate([
+            'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
+            'phone' => ['nullable', 'string', 'max:40', 'required_without:email'],
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'consent_sms' => ['nullable', 'boolean'],
+            'consent_email' => ['nullable', 'boolean'],
+            'award_bonus' => ['nullable', 'boolean'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+            'flow' => ['nullable', 'in:direct,verification'],
+        ]);
+
+        $flow = (string) ($data['flow'] ?? 'direct');
+        $shopifyCustomerId = trim((string) ($data['shopify_customer_id'] ?? ''));
+        $sourceId = $this->identityService->deterministicSourceId(
+            prefix: 'shopify_widget_optin',
+            email: (string) ($data['email'] ?? ''),
+            phone: (string) ($data['phone'] ?? ''),
+            extra: [$shopifyCustomerId]
+        );
+
+        $result = $consentCaptureService->requestSmsConfirmation([
+            'email' => (string) ($data['email'] ?? ''),
+            'phone' => (string) ($data['phone'] ?? ''),
+            'first_name' => (string) ($data['first_name'] ?? ''),
+            'last_name' => (string) ($data['last_name'] ?? ''),
+        ], [
+            'source_type' => 'shopify_widget_contact',
+            'source_id' => $sourceId,
+            'source_label' => 'shopify_widget_optin',
+            'source_channels' => ['shopify', 'online', 'shopify_widget'],
+            'source_meta' => [
+                'shopify_customer_id' => $shopifyCustomerId !== '' ? $shopifyCustomerId : null,
+            ],
+            'flow' => $flow === 'verification' ? 'verification' : 'direct_confirmed',
+            'allow_create' => true,
+            'award_bonus' => (bool) ($data['award_bonus'] ?? false),
+            'request_meta' => [
+                'ip' => (string) $request->ip(),
+            ],
+        ]);
+
+        if (! $result['profile']) {
+            $this->logStorefrontEvent($request, 'widget_consent_request', [
+                'status' => 'verification_required',
+                'issue_type' => 'identity_review_required',
+                'source_type' => 'shopify_widget_optin',
+            ]);
+
+            return MarketingStorefrontContract::error(
+                code: 'identity_review_required',
+                message: 'Identity could not be safely auto-linked and was routed to review.',
+                status: 422,
+                states: ['needs_verification'],
+                recoveryStates: ['verification_required', 'contact_support']
+            );
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $result['profile'];
+        $consentSms = (bool) ($data['consent_sms'] ?? false);
+        $consentEmail = (bool) ($data['consent_email'] ?? false);
+
+        if ($consentEmail) {
+            $consentService->setEmailConsent($profile, true, [
+                'source_type' => 'shopify_widget_optin',
+                'source_id' => $sourceId,
+            ]);
+        }
+
+        $state = 'requested';
+        $bonusAwarded = 0;
+        $verificationToken = null;
+
+        if ($consentSms && $flow === 'verification') {
+            $verificationToken = (string) ($result['token'] ?? '');
+            $state = 'requested';
+        } elseif ($consentSms) {
+            $consentService->setSmsConsent($profile, true, [
+                'source_type' => 'shopify_widget_optin',
+                'source_id' => $sourceId,
+                'details' => ['flow' => 'direct_confirmed'],
+            ]);
+
+            if ((bool) ($data['award_bonus'] ?? false)) {
+                $bonus = $incentiveService->awardSmsConsentBonusOnce(
+                    profile: $profile,
+                    sourceId: $sourceId,
+                    description: 'Shopify widget SMS consent bonus'
+                );
+                if ($bonus['awarded']) {
+                    $bonusAwarded = (int) $bonus['points'];
+                }
+            }
+
+            if ($result['request']) {
+                $result['request']->forceFill([
+                    'status' => 'confirmed',
+                    'confirmed_at' => now(),
+                    'reward_awarded_points' => $bonusAwarded > 0 ? $bonusAwarded : (int) ($result['request']->reward_awarded_points ?? 0),
+                    'reward_awarded_at' => $bonusAwarded > 0 ? now() : $result['request']->reward_awarded_at,
+                ])->save();
+            }
+
+            $state = 'confirmed';
+        } else {
+            $consentService->setSmsConsent($profile, false, [
+                'source_type' => 'shopify_widget_optin',
+                'source_id' => $sourceId,
+                'details' => ['flow' => 'explicit_revoke'],
+            ]);
+
+            if ($result['request']) {
+                $result['request']->forceFill([
+                    'status' => 'revoked',
+                    'revoked_at' => now(),
+                ])->save();
+            }
+
+            $state = 'revoked';
+        }
+
+        /** @var MarketingConsentRequest|null $requestRow */
+        $requestRow = $result['request'] ?? null;
+        $states = $this->widgetService->consentWidgetStates(
+            profile: $profile->fresh(),
+            request: $requestRow?->fresh(),
+            incentiveEnabled: (bool) ($data['award_bonus'] ?? false)
+        );
+
+        $this->logStorefrontEvent($request, 'widget_consent_request', [
+            'status' => $state === 'requested' ? 'pending' : 'ok',
+            'issue_type' => $state === 'requested' ? 'verification_required' : null,
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_optin',
+            'source_id' => $sourceId,
+            'meta' => [
+                'consent_state' => $state,
+                'flow' => $flow,
+                'bonus_awarded' => $bonusAwarded,
+                'request_id' => $requestRow?->id,
+            ],
+            'resolution_status' => $state === 'requested' ? 'open' : 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'consent_state' => $state,
+            'verification_required' => $state === 'requested',
+            'verification_token' => $verificationToken,
+            'accepts_sms_marketing' => (bool) $profile->fresh()->accepts_sms_marketing,
+            'accepts_email_marketing' => (bool) $profile->fresh()->accepts_email_marketing,
+            'bonus_awarded' => $bonusAwarded,
+            'state' => $state === 'confirmed' ? 'sms_confirmed' : ($state === 'requested' ? 'sms_requested' : 'sms_not_consented'),
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function confirmConsentOptin(
+        Request $request,
+        MarketingConsentCaptureService $consentCaptureService
+    ): JsonResponse {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'min:20', 'max:120'],
+        ]);
+
+        $result = $consentCaptureService->confirmSmsByToken((string) $data['token'], [
+            'source_type' => 'shopify_widget_confirm',
+            'bonus_description' => 'Shopify widget SMS consent confirmation bonus',
+        ]);
+
+        if (($result['status'] ?? '') === 'invalid' || ($result['status'] ?? '') === 'expired') {
+            $errorCode = ($result['status'] ?? '') === 'expired'
+                ? 'consent_token_expired'
+                : 'consent_token_invalid';
+
+            $this->logStorefrontEvent($request, 'widget_consent_confirm', [
+                'status' => 'error',
+                'issue_type' => $errorCode,
+                'source_type' => 'shopify_widget_confirm',
+                'meta' => [
+                    'token_tail' => substr((string) $data['token'], -8),
+                ],
+            ]);
+
+            return MarketingStorefrontContract::error(
+                code: $errorCode,
+                message: 'Consent confirmation could not be completed.',
+                status: 422,
+                details: ['status' => (string) ($result['status'] ?? '')],
+                states: ['verification_required'],
+                recoveryStates: ['try_again_later', 'contact_support']
+            );
+        }
+
+        /** @var MarketingProfile|null $profile */
+        $profile = $result['profile'] ?? null;
+        /** @var MarketingConsentRequest|null $requestRow */
+        $requestRow = $result['request'] ?? null;
+        $states = $this->widgetService->consentWidgetStates(
+            profile: $profile,
+            request: $requestRow,
+            incentiveEnabled: true
+        );
+
+        $this->logStorefrontEvent($request, 'widget_consent_confirm', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_confirm',
+            'source_id' => $requestRow?->source_id,
+            'meta' => [
+                'request_id' => $requestRow?->id,
+                'bonus_awarded' => (int) ($result['bonus_awarded'] ?? 0),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile ? (int) $profile->id : null,
+            'consent_state' => (string) ($result['status'] ?? 'confirmed'),
+            'bonus_awarded' => (int) ($result['bonus_awarded'] ?? 0),
+            'state' => 'sms_confirmed',
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function consentStatus(Request $request): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'consent_status', allowCreate: false);
+        if (! $resolved['profile']) {
+            $identityStates = $this->widgetService->customerStatusStates(null, (string) $resolved['status']);
+            $states = collect(array_merge($identityStates, ['sms_not_consented', 'email_not_consented']))
+                ->map(fn ($value): string => trim(strtolower((string) $value)))
+                ->filter(fn (string $value): bool => $value !== '')
+                ->unique()
+                ->values()
+                ->all();
+
+            $this->logStorefrontEvent($request, 'widget_consent_status_lookup', [
+                'status' => 'pending',
+                'issue_type' => (string) $resolved['status'],
+                'source_type' => 'shopify_widget_consent_status',
+                'meta' => [
+                    'resolved' => false,
+                ],
+                'resolution_status' => 'open',
+            ]);
+
+            return MarketingStorefrontContract::success([
+                'profile_id' => null,
+                'state' => in_array('needs_verification', $states, true) ? 'needs_verification' : 'unknown_customer',
+                'consent_state' => 'not_consented',
+                'verification_required' => in_array('needs_verification', $states, true),
+                'consent' => [
+                    'sms' => false,
+                    'email' => false,
+                ],
+                'incentive' => [
+                    'available' => false,
+                    'already_awarded' => false,
+                ],
+            ], $this->contractMeta($request), $states);
+        }
+
+        $profile = $resolved['profile'];
+        $requestRow = MarketingConsentRequest::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->orderByDesc('id')
+            ->first();
+
+        $states = $this->widgetService->consentWidgetStates(
+            profile: $profile,
+            request: $requestRow,
+            incentiveEnabled: true
+        );
+        $bonusAlreadyAwarded = CandleCashTransaction::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('source', 'consent')
+            ->where('points', '>', 0)
+            ->exists();
+
+        $state = in_array('sms_confirmed', $states, true)
+            ? 'sms_confirmed'
+            : (in_array('sms_requested', $states, true) ? 'sms_requested' : 'sms_not_consented');
+
+        $this->logStorefrontEvent($request, 'widget_consent_status_lookup', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_consent_status',
+            'source_id' => 'profile:' . $profile->id,
+            'meta' => [
+                'state' => $state,
+                'request_id' => $requestRow?->id,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'state' => $state,
+            'consent_state' => $state === 'sms_confirmed'
+                ? 'confirmed'
+                : ($state === 'sms_requested' ? 'requested' : 'not_consented'),
+            'verification_required' => $state === 'sms_requested',
+            'consent' => [
+                'sms' => (bool) $profile->accepts_sms_marketing,
+                'email' => (bool) $profile->accepts_email_marketing,
+            ],
+            'incentive' => [
+                'available' => in_array('incentive_available', $states, true),
+                'already_awarded' => $bonusAlreadyAwarded || in_array('incentive_already_awarded', $states, true),
+            ],
+            'latest_request' => [
+                'id' => $requestRow ? (int) $requestRow->id : null,
+                'status' => $requestRow?->status ? (string) $requestRow->status : null,
+                'requested_at' => optional($requestRow?->created_at)->toIso8601String(),
+                'confirmed_at' => optional($requestRow?->confirmed_at)->toIso8601String(),
+            ],
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function birthdayStatus(Request $request, BirthdayRewardEngineService $rewardEngine): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'birthday_status', allowCreate: false);
+        if (! $resolved['profile']) {
+            $states = ['unknown_customer', 'add_birthday_unlock_reward'];
+            $this->logStorefrontEvent($request, 'widget_birthday_status_lookup', [
+                'status' => 'pending',
+                'issue_type' => (string) $resolved['status'],
+                'source_type' => 'shopify_widget_birthday_status',
+                'meta' => ['resolved' => false],
+                'resolution_status' => 'open',
+            ]);
+
+            return MarketingStorefrontContract::success([
+                'profile_id' => null,
+                'state' => 'unknown_customer',
+                'birthday' => null,
+                'reward' => [
+                    'state' => 'add_birthday_unlock_reward',
+                    'issuance' => null,
+                ],
+            ], $this->contractMeta($request), $states);
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $resolved['profile'];
+        $birthdayProfile = $profile->birthdayProfile;
+
+        $status = $rewardEngine->statusForProfile($birthdayProfile);
+        if (($status['state'] ?? '') === 'birthday_reward_eligible' && $birthdayProfile instanceof CustomerBirthdayProfile) {
+            $rewardEngine->issueAnnualReward($birthdayProfile);
+            $birthdayProfile = $birthdayProfile->fresh();
+            $status = $rewardEngine->statusForProfile($birthdayProfile);
+        }
+
+        $stateList = array_values(array_unique(array_filter([
+            'linked_customer',
+            (string) ($status['state'] ?? 'birthday_saved'),
+            $birthdayProfile ? 'birthday_saved' : 'add_birthday_unlock_reward',
+        ])));
+
+        $this->logStorefrontEvent($request, 'widget_birthday_status_lookup', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_birthday_status',
+            'source_id' => 'profile:'.$profile->id,
+            'meta' => [
+                'birthday_present' => $birthdayProfile !== null && $birthdayProfile->birth_month && $birthdayProfile->birth_day,
+                'reward_state' => (string) ($status['state'] ?? 'birthday_saved'),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'state' => (string) ($status['state'] ?? 'birthday_saved'),
+            'birthday' => $birthdayProfile ? $this->birthdayPayload($birthdayProfile) : null,
+            'reward' => [
+                'state' => (string) ($status['state'] ?? 'birthday_saved'),
+                'issuance' => $this->birthdayIssuancePayload($status['issuance'] ?? null),
+            ],
+        ], $this->contractMeta($request), $stateList);
+    }
+
+    public function captureBirthday(
+        Request $request,
+        BirthdayProfileService $birthdayProfileService,
+        BirthdayRewardEngineService $rewardEngine,
+        ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService
+    ): JsonResponse {
+        $data = $request->validate([
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'birth_month' => ['nullable', 'integer', 'between:1,12'],
+            'birth_day' => ['nullable', 'integer', 'between:1,31'],
+            'birth_year' => ['nullable', 'integer', 'between:1900,2100'],
+            'birthday_full_date' => ['nullable', 'date'],
+            'source' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'birthday_capture', allowCreate: true, allowBody: true);
+        if (! $resolved['profile']) {
+            $this->logStorefrontEvent($request, 'widget_birthday_capture', [
+                'status' => 'error',
+                'issue_type' => 'identity_'.$resolved['status'],
+                'source_type' => 'shopify_widget_birthday_capture',
+            ]);
+
+            return $this->identityErrorResponse($resolved['status'], $request);
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $resolved['profile'];
+
+        try {
+            $birthdayProfile = $birthdayProfileService->captureForProfile(
+                profile: $profile,
+                payload: [
+                    'birth_month' => $data['birth_month'] ?? null,
+                    'birth_day' => $data['birth_day'] ?? null,
+                    'birth_year' => $data['birth_year'] ?? null,
+                    'birthday_full_date' => $data['birthday_full_date'] ?? null,
+                    'source' => (string) ($data['source'] ?? 'shopify_widget'),
+                ],
+                options: [
+                    'source' => (string) ($data['source'] ?? 'shopify_widget'),
+                    'replace_source' => true,
+                ]
+            );
+        } catch (\Throwable $e) {
+            return MarketingStorefrontContract::error(
+                code: 'invalid_birthday_payload',
+                message: $e->getMessage(),
+                status: 422,
+                details: ['error' => $e->getMessage()],
+                states: ['invalid_birthday_payload'],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        $syncResult = $shopifyBirthdayMetafieldService->writeBirthdayForProfile($profile, $birthdayProfile);
+        $status = $rewardEngine->statusForProfile($birthdayProfile);
+        if (($status['state'] ?? '') === 'birthday_reward_eligible') {
+            $rewardEngine->issueAnnualReward($birthdayProfile);
+            $birthdayProfile = $birthdayProfile->fresh();
+            $status = $rewardEngine->statusForProfile($birthdayProfile);
+        }
+
+        $states = array_values(array_unique(array_filter([
+            'birthday_saved',
+            (string) ($status['state'] ?? 'birthday_saved'),
+            (($syncResult['errors'] ?? []) !== []) ? 'shopify_sync_failed' : 'shopify_sync_ok',
+        ])));
+
+        $this->logStorefrontEvent($request, 'widget_birthday_capture', [
+            'status' => (($syncResult['errors'] ?? []) === []) ? 'ok' : 'error',
+            'issue_type' => (($syncResult['errors'] ?? []) === []) ? null : 'shopify_sync_failed',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_birthday_capture',
+            'source_id' => 'profile:'.$profile->id,
+            'meta' => [
+                'reward_state' => (string) ($status['state'] ?? 'birthday_saved'),
+                'write_back_updates' => (int) ($syncResult['updated'] ?? 0),
+                'write_back_errors' => (array) ($syncResult['errors'] ?? []),
+            ],
+            'resolution_status' => (($syncResult['errors'] ?? []) === []) ? 'resolved' : 'open',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'state' => (string) ($status['state'] ?? 'birthday_saved'),
+            'birthday' => $this->birthdayPayload($birthdayProfile),
+            'reward' => [
+                'state' => (string) ($status['state'] ?? 'birthday_saved'),
+                'issuance' => $this->birthdayIssuancePayload($status['issuance'] ?? null),
+            ],
+            'shopify_sync' => [
+                'updated' => (int) ($syncResult['updated'] ?? 0),
+                'stores' => (array) ($syncResult['stores'] ?? []),
+                'errors' => (array) ($syncResult['errors'] ?? []),
+            ],
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function claimBirthdayReward(Request $request, BirthdayRewardEngineService $rewardEngine): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'birthday_claim', allowCreate: false, allowBody: true);
+        if (! $resolved['profile']) {
+            return $this->identityErrorResponse($resolved['status'], $request);
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $resolved['profile'];
+        $birthdayProfile = $profile->birthdayProfile;
+        if (! $birthdayProfile) {
+            return MarketingStorefrontContract::error(
+                code: 'missing_birthday',
+                message: 'Birthday is required before claiming a birthday reward.',
+                status: 422,
+                details: ['profile_id' => (int) $profile->id],
+                states: ['add_birthday_unlock_reward'],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        $result = $rewardEngine->claimIssuedReward($birthdayProfile);
+        if (! (bool) ($result['ok'] ?? false)) {
+            return MarketingStorefrontContract::error(
+                code: (string) ($result['error'] ?? 'birthday_reward_claim_failed'),
+                message: 'Birthday reward claim could not be completed.',
+                status: 422,
+                details: [
+                    'state' => (string) ($result['state'] ?? 'birthday_reward_not_ready'),
+                ],
+                states: [(string) ($result['state'] ?? 'birthday_reward_not_ready')],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        $issuancePayload = $this->birthdayIssuancePayload($result['issuance'] ?? null);
+        $states = ['already_claimed'];
+
+        $this->logStorefrontEvent($request, 'widget_birthday_claim', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_birthday_claim',
+            'source_id' => 'profile:'.$profile->id,
+            'meta' => [
+                'issuance' => $issuancePayload,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'state' => 'already_claimed',
+            'reward' => [
+                'state' => 'already_claimed',
+                'issuance' => $issuancePayload,
+            ],
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function customerStatus(
+        Request $request,
+        CandleCashService $candleCashService,
+        BirthdayRewardEngineService $birthdayRewardEngine
+    ): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'customer_status', allowCreate: false);
+        if (! $resolved['profile']) {
+            $states = $this->widgetService->customerStatusStates(null, (string) $resolved['status']);
+            $states[] = 'add_birthday_unlock_reward';
+            $states = array_values(array_unique(array_filter($states)));
+            $this->logStorefrontEvent($request, 'widget_customer_status_lookup', [
+                'status' => 'verification_required',
+                'issue_type' => (string) $resolved['status'],
+                'source_type' => 'shopify_widget_customer_status',
+                'resolution_status' => 'open',
+            ]);
+
+            return MarketingStorefrontContract::success([
+                'profile_id' => null,
+                'state' => $states[0] ?? 'unknown_customer',
+                'consent' => ['sms' => false, 'email' => false],
+                'source_channels' => [],
+                'candle_cash_balance' => 0,
+                'groups' => [],
+                'eligibility' => [
+                    'winback' => false,
+                    'reward_nudge' => false,
+                ],
+                'birthday' => [
+                    'state' => 'add_birthday_unlock_reward',
+                    'birthday' => null,
+                    'issuance' => null,
+                ],
+            ], $this->contractMeta($request), $states);
+        }
+
+        $profile = $resolved['profile'];
+        $profile->load('groups:id,name,is_internal');
+        $birthdayProfile = $profile->birthdayProfile;
+        $birthdayStatus = $birthdayRewardEngine->statusForProfile($birthdayProfile);
+        $balance = $candleCashService->currentBalance($profile);
+        $minRewardPoints = (int) (CandleCashReward::query()
+            ->where('is_active', true)
+            ->min('points_cost') ?? 0);
+        $states = $this->widgetService->customerStatusStates($profile, (string) $resolved['status'], [
+            'candle_cash_balance' => $balance,
+            'min_reward_points' => $minRewardPoints,
+        ]);
+        $states[] = (string) ($birthdayStatus['state'] ?? 'birthday_saved');
+        $states = array_values(array_unique(array_filter($states)));
+
+        $this->logStorefrontEvent($request, 'widget_customer_status_lookup', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_customer_status',
+            'source_id' => 'profile:' . $profile->id,
+            'meta' => [
+                'states' => $states,
+                'group_count' => $profile->groups->where('is_internal', false)->count(),
+                'birthday_state' => (string) ($birthdayStatus['state'] ?? 'birthday_saved'),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'state' => $states[0] ?? 'linked_customer',
+            'consent' => [
+                'sms' => (bool) $profile->accepts_sms_marketing,
+                'email' => (bool) $profile->accepts_email_marketing,
+            ],
+            'source_channels' => array_values(array_filter((array) $profile->source_channels)),
+            'candle_cash_balance' => $balance,
+            'groups' => $profile->groups->where('is_internal', false)->values()->map(fn ($group): array => [
+                'id' => (int) $group->id,
+                'name' => (string) $group->name,
+                'is_internal' => (bool) $group->is_internal,
+            ])->values()->all(),
+            'eligibility' => [
+                'winback' => in_array('eligible_for_winback', $states, true),
+                'reward_nudge' => in_array('eligible_for_reward_nudge', $states, true),
+            ],
+            'birthday' => [
+                'state' => (string) ($birthdayStatus['state'] ?? 'birthday_saved'),
+                'birthday' => $birthdayProfile ? $this->birthdayPayload($birthdayProfile) : null,
+                'issuance' => $this->birthdayIssuancePayload($birthdayStatus['issuance'] ?? null),
+            ],
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function proxyHealth(Request $request): JsonResponse
+    {
+        $resolved = $this->resolveProfile($request, scope: 'proxy_health', allowCreate: false);
+        $profile = $resolved['profile'] ?? null;
+
+        $identityStates = $this->widgetService->customerStatusStates(
+            $profile,
+            (string) ($resolved['status'] ?? 'missing_identity')
+        );
+        $identityState = $identityStates[0] ?? ($profile ? 'linked_customer' : 'unknown_customer');
+
+        return MarketingStorefrontContract::success([
+            'transport' => 'ok',
+            'state' => $identityState,
+            'identity' => [
+                'status' => (string) ($resolved['status'] ?? 'missing_identity'),
+                'state' => $identityState,
+                'profile_id' => $profile ? (int) $profile->id : null,
+            ],
+            'runtime' => [
+                'app_proxy_enabled' => (bool) config('marketing.shopify.app_proxy_enabled', false),
+                'has_signing_secret' => trim((string) config('marketing.shopify.signing_secret', '')) !== '',
+                'has_app_proxy_secret' => trim((string) (config('marketing.shopify.app_proxy_secret')
+                    ?: config('marketing.shopify.signing_secret')
+                    ?: '')) !== '',
+                'contract_version' => trim((string) config('marketing.shopify.contract_version', 'v1')) ?: 'v1',
+            ],
+            'timestamp' => now()->toIso8601String(),
+        ], $this->contractMeta($request), $identityStates);
+    }
+
+    /**
+     * @return array{status:string,profile:?MarketingProfile,sync:array<string,mixed>}
+     */
+    protected function resolveProfile(
+        Request $request,
+        string $scope,
+        bool $allowCreate = false,
+        bool $allowBody = false
+    ): array {
+        $profileId = (int) ($request->query('marketing_profile_id', 0) ?: ($allowBody ? $request->input('marketing_profile_id', 0) : 0));
+        if ($profileId > 0) {
+            $profile = MarketingProfile::query()->find($profileId);
+
+            return [
+                'status' => $profile ? 'resolved' : 'not_found',
+                'profile' => $profile,
+                'sync' => [],
+            ];
+        }
+
+        $emailInput = $allowBody ? $request->input('email', $request->query('email', '')) : $request->query('email', '');
+        $phoneInput = $allowBody ? $request->input('phone', $request->query('phone', '')) : $request->query('phone', '');
+        $firstName = $allowBody ? $request->input('first_name', '') : '';
+        $lastName = $allowBody ? $request->input('last_name', '') : '';
+        $shopifyCustomerId = $this->resolveShopifyCustomerId($request, $allowBody);
+        $emailInput = trim((string) $emailInput);
+        $phoneInput = trim((string) $phoneInput);
+        if ($emailInput === '' && $phoneInput === '' && $shopifyCustomerId === '') {
+            return [
+                'status' => 'missing_identity',
+                'profile' => null,
+                'sync' => [],
+            ];
+        }
+
+        if ($emailInput === '' && $phoneInput === '' && $shopifyCustomerId !== '') {
+            $externalProfile = $this->profileFromShopifyCustomerId($shopifyCustomerId);
+            if ($externalProfile) {
+                return [
+                    'status' => 'resolved',
+                    'profile' => $externalProfile,
+                    'sync' => [],
+                ];
+            }
+        }
+
+        $sourceType = 'shopify_widget_' . Str::slug($scope, '_');
+        $sourceId = $this->identityService->deterministicSourceId(
+            prefix: $sourceType,
+            email: $emailInput,
+            phone: $phoneInput,
+            extra: [$shopifyCustomerId]
+        );
+
+        return $this->identityService->resolve([
+            'email' => $emailInput,
+            'phone' => $phoneInput,
+            'first_name' => (string) $firstName,
+            'last_name' => (string) $lastName,
+        ], [
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'source_label' => 'shopify_widget_' . $scope,
+            'source_channels' => ['shopify', 'online', 'shopify_widget'],
+            'source_meta' => [
+                'shopify_customer_id' => $shopifyCustomerId !== '' ? $shopifyCustomerId : null,
+                'endpoint' => $scope,
+            ],
+            'allow_create' => $allowCreate,
+        ]);
+    }
+
+    protected function resolveShopifyCustomerId(Request $request, bool $allowBody = false): string
+    {
+        $candidates = [
+            $allowBody ? $request->input('shopify_customer_id', '') : '',
+            $request->query('shopify_customer_id', ''),
+            $request->query('logged_in_customer_id', ''),
+            $request->query('customer_id', ''),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $normalized = $this->normalizeShopifyCustomerId($candidate);
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        return '';
+    }
+
+    protected function normalizeShopifyCustomerId(mixed $value): string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return '';
+        }
+
+        if (preg_match('/\/Customer\/(\d+)$/', $raw, $matches)) {
+            return (string) $matches[1];
+        }
+
+        return $raw;
+    }
+
+    protected function profileFromShopifyCustomerId(string $shopifyCustomerId): ?MarketingProfile
+    {
+        $external = CustomerExternalProfile::query()
+            ->where('provider', 'shopify')
+            ->where('external_customer_id', $shopifyCustomerId)
+            ->whereNotNull('marketing_profile_id')
+            ->orderByDesc('synced_at')
+            ->orderByDesc('id')
+            ->first(['marketing_profile_id']);
+
+        if (! $external || (int) $external->marketing_profile_id <= 0) {
+            return null;
+        }
+
+        return MarketingProfile::query()->find((int) $external->marketing_profile_id);
+    }
+
+    protected function identityErrorResponse(string $status, ?Request $request = null): JsonResponse
+    {
+        if ($status === 'review_required') {
+            return MarketingStorefrontContract::error(
+                code: 'identity_review_required',
+                message: 'Identity is ambiguous and requires internal review.',
+                status: 422,
+                details: ['status' => $status],
+                states: ['needs_verification'],
+                recoveryStates: ['verification_required', 'contact_support']
+            );
+        }
+        if ($status === 'missing_identity') {
+            return MarketingStorefrontContract::error(
+                code: 'missing_identity',
+                message: 'Customer identity is required for this widget request.',
+                status: 422,
+                details: ['status' => $status],
+                states: ['verification_required'],
+                recoveryStates: ['verification_required']
+            );
+        }
+
+        $states = $status === 'not_found' ? ['unknown_customer'] : ['verification_required'];
+        $recovery = $status === 'not_found' ? ['verification_required'] : ['try_again_later'];
+
+        if ($request) {
+            $this->logStorefrontEvent($request, 'widget_identity_error', [
+                'status' => 'error',
+                'issue_type' => $status,
+                'source_type' => 'shopify_widget_identity',
+                'meta' => [
+                    'status' => $status,
+                ],
+            ]);
+        }
+
+        return MarketingStorefrontContract::error(
+            code: 'profile_not_found',
+            message: 'No matching customer profile was found.',
+            status: 404,
+            details: ['status' => $status],
+            states: $states,
+            recoveryStates: $recovery
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function contractMeta(Request $request): array
+    {
+        $mode = (string) $request->attributes->get('marketing_storefront_auth_mode', 'unknown');
+
+        return [
+            'auth_mode' => $mode,
+            'integration_mode' => $mode === 'app_proxy' ? 'shopify_app_proxy' : 'shopify_theme_signed',
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function birthdayPayload(?CustomerBirthdayProfile $birthdayProfile): ?array
+    {
+        if (! $birthdayProfile) {
+            return null;
+        }
+
+        return [
+            'birth_month' => $birthdayProfile->birth_month !== null ? (int) $birthdayProfile->birth_month : null,
+            'birth_day' => $birthdayProfile->birth_day !== null ? (int) $birthdayProfile->birth_day : null,
+            'birth_year' => $birthdayProfile->birth_year !== null ? (int) $birthdayProfile->birth_year : null,
+            'birthday_full_date' => optional($birthdayProfile->birthday_full_date)->toDateString(),
+            'source' => $birthdayProfile->source ? (string) $birthdayProfile->source : null,
+            'source_captured_at' => optional($birthdayProfile->source_captured_at)->toIso8601String(),
+            'updated_at' => optional($birthdayProfile->updated_at)->toIso8601String(),
+            'reward_last_issued_at' => optional($birthdayProfile->reward_last_issued_at)->toIso8601String(),
+            'reward_last_issued_year' => $birthdayProfile->reward_last_issued_year !== null
+                ? (int) $birthdayProfile->reward_last_issued_year
+                : null,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function birthdayIssuancePayload(mixed $issuance): ?array
+    {
+        if (! is_object($issuance)) {
+            return null;
+        }
+
+        return [
+            'id' => isset($issuance->id) ? (int) $issuance->id : null,
+            'cycle_year' => isset($issuance->cycle_year) ? (int) $issuance->cycle_year : null,
+            'reward_type' => isset($issuance->reward_type) ? (string) $issuance->reward_type : null,
+            'status' => isset($issuance->status) ? (string) $issuance->status : null,
+            'points_awarded' => isset($issuance->points_awarded) && $issuance->points_awarded !== null
+                ? (int) $issuance->points_awarded
+                : null,
+            'reward_code' => isset($issuance->reward_code) && $issuance->reward_code !== null
+                ? (string) $issuance->reward_code
+                : null,
+            'issued_at' => isset($issuance->issued_at) ? optional($issuance->issued_at)->toIso8601String() : null,
+            'claimed_at' => isset($issuance->claimed_at) ? optional($issuance->claimed_at)->toIso8601String() : null,
+            'claim_window_starts_at' => isset($issuance->claim_window_starts_at)
+                ? optional($issuance->claim_window_starts_at)->toIso8601String()
+                : null,
+            'claim_window_ends_at' => isset($issuance->claim_window_ends_at)
+                ? optional($issuance->claim_window_ends_at)->toIso8601String()
+                : null,
+        ];
+    }
+
+    /**
+     * @return Collection<int,CandleCashReward>
+     */
+    protected function activeRewards(): Collection
+    {
+        return CandleCashReward::query()
+            ->where('is_active', true)
+            ->orderBy('points_cost')
+            ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value', 'is_active']);
+    }
+
+    /**
+     * @return Collection<int,CandleCashRedemption>
+     */
+    protected function recentRedemptions(MarketingProfile $profile): Collection
+    {
+        return $profile->candleCashRedemptions()
+            ->with('reward:id,name,reward_type,reward_value')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get();
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    protected function logStorefrontEvent(Request $request, string $eventType, array $context = []): void
+    {
+        $endpoint = '/' . ltrim((string) $request->path(), '/');
+        $authMode = (string) $request->attributes->get('marketing_storefront_auth_mode', 'unknown');
+
+        $this->eventLogger->log($eventType, [
+            'status' => (string) ($context['status'] ?? 'ok'),
+            'issue_type' => $context['issue_type'] ?? null,
+            'source_surface' => 'shopify_widget',
+            'endpoint' => $endpoint,
+            'request_key' => (string) ($context['request_key'] ?? substr(hash('sha1', $request->fullUrl() . '|' . $request->ip() . '|' . $eventType), 0, 48)),
+            'signature_mode' => $authMode,
+            'profile' => $context['profile'] ?? null,
+            'marketing_profile_id' => $context['marketing_profile_id'] ?? null,
+            'event_instance_id' => $context['event_instance_id'] ?? null,
+            'candle_cash_redemption_id' => $context['candle_cash_redemption_id'] ?? null,
+            'source_type' => $context['source_type'] ?? null,
+            'source_id' => $context['source_id'] ?? null,
+            'meta' => array_merge((array) ($context['meta'] ?? []), [
+                'method' => strtoupper((string) $request->getMethod()),
+                'ip' => (string) $request->ip(),
+            ]),
+            'resolution_status' => (string) ($context['resolution_status'] ?? 'open'),
+            'occurred_at' => now(),
+        ]);
+    }
+}

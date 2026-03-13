@@ -1,0 +1,210 @@
+<?php
+
+namespace App\Services\Marketing;
+
+use App\Models\MarketingCampaign;
+use App\Models\MarketingCampaignRecipient;
+use App\Models\MarketingEmailDelivery;
+use Illuminate\Support\Facades\DB;
+
+class MarketingEmailExecutionService
+{
+    public function __construct(
+        protected SendGridEmailService $sendGridEmailService,
+        protected MarketingTemplateRenderer $templateRenderer
+    ) {
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @return array<string,int>
+     */
+    public function sendApprovedForCampaign(MarketingCampaign $campaign, array $options = []): array
+    {
+        $limit = max(1, (int) ($options['limit'] ?? 250));
+        $dryRun = (bool) ($options['dry_run'] ?? false);
+        $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $recipientIds = collect((array) ($options['recipient_ids'] ?? []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $query = MarketingCampaignRecipient::query()
+            ->where('campaign_id', $campaign->id)
+            ->where('channel', 'email')
+            ->whereIn('status', ['approved', 'scheduled'])
+            ->orderBy('scheduled_for')
+            ->orderBy('id');
+
+        if ($recipientIds !== []) {
+            $query->whereIn('id', $recipientIds);
+        }
+
+        $summary = [
+            'processed' => 0,
+            'sent' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+            'dry_run' => 0,
+        ];
+
+        foreach ($query->limit($limit)->with(['campaign', 'profile', 'variant'])->get() as $recipient) {
+            $result = $this->sendRecipient($recipient, [
+                'dry_run' => $dryRun,
+                'actor_id' => $actorId,
+            ]);
+            $summary['processed']++;
+            if (($result['outcome'] ?? '') === 'sent') {
+                $summary['sent']++;
+            } elseif (($result['outcome'] ?? '') === 'failed') {
+                $summary['failed']++;
+            } else {
+                $summary['skipped']++;
+            }
+            if ((bool) ($result['dry_run'] ?? false)) {
+                $summary['dry_run']++;
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function retryRecipient(MarketingCampaignRecipient $recipient, array $options = []): array
+    {
+        return $this->sendRecipient($recipient, [
+            ...$options,
+            'force_retry' => true,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function sendRecipient(MarketingCampaignRecipient $recipient, array $options = []): array
+    {
+        $dryRun = (bool) ($options['dry_run'] ?? false);
+        $forceRetry = (bool) ($options['force_retry'] ?? false);
+        $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+
+        $recipient->loadMissing(['campaign', 'profile', 'variant']);
+        $campaign = $recipient->campaign;
+        $profile = $recipient->profile;
+
+        if (! $campaign || ! $profile) {
+            return ['outcome' => 'failed', 'reason' => 'missing_campaign_or_profile', 'dry_run' => $dryRun];
+        }
+
+        if ($recipient->channel !== 'email' || strtolower((string) $campaign->channel) !== 'email') {
+            return $this->skipRecipient($recipient, 'non_email_channel', 'Recipient/campaign channel is not email.');
+        }
+
+        $allowed = $forceRetry ? ['approved', 'scheduled', 'failed', 'undelivered'] : ['approved', 'scheduled'];
+        if (! in_array((string) $recipient->status, $allowed, true)) {
+            return ['outcome' => 'skipped', 'reason' => 'status_not_sendable', 'dry_run' => $dryRun];
+        }
+
+        if (! (bool) $profile->accepts_email_marketing) {
+            return $this->skipRecipient($recipient, 'email_not_consented', 'Profile no longer has email consent.');
+        }
+
+        $email = trim((string) ($profile->normalized_email ?: $profile->email));
+        if ($email === '') {
+            return $this->skipRecipient($recipient, 'missing_email', 'Profile has no deliverable email address.');
+        }
+
+        $messageText = trim((string) ($recipient->variant?->message_text ?: data_get($recipient->recommendation_snapshot, 'suggested_message', '')));
+        if ($messageText === '') {
+            $fallbackVariant = $campaign->variants()
+                ->whereIn('status', ['active', 'draft'])
+                ->orderByDesc('is_control')
+                ->orderByDesc('weight')
+                ->orderBy('id')
+                ->first(['message_text']);
+            $messageText = trim((string) ($fallbackVariant?->message_text ?? ''));
+        }
+        if ($messageText === '') {
+            return ['outcome' => 'failed', 'reason' => 'missing_message', 'dry_run' => $dryRun];
+        }
+
+        $subject = trim((string) ($campaign->name ?: 'Timberline Update'));
+        $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
+
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId): MarketingEmailDelivery {
+            $recipient->forceFill([
+                'status' => 'sending',
+                'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
+                'last_send_attempt_at' => now(),
+            ])->save();
+
+            return MarketingEmailDelivery::query()->create([
+                'marketing_campaign_recipient_id' => $recipient->id,
+                'marketing_profile_id' => $profile->id,
+                'email' => $email,
+                'status' => 'sending',
+                'raw_payload' => [
+                    'actor_id' => $actorId,
+                ],
+            ]);
+        });
+
+        $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
+            'dry_run' => $dryRun,
+            'custom_args' => [
+                'marketing_email_delivery_id' => (string) $delivery->id,
+                'marketing_campaign_recipient_id' => (string) $recipient->id,
+            ],
+        ]);
+
+        $success = (bool) ($send['success'] ?? false);
+        $delivery->forceFill([
+            'sendgrid_message_id' => $send['message_id'] ?? null,
+            'status' => $success ? 'sent' : 'failed',
+            'sent_at' => $success ? now() : null,
+            'failed_at' => $success ? null : now(),
+            'raw_payload' => is_array($send['payload'] ?? null) ? $send['payload'] : ['raw' => $send],
+        ])->save();
+
+        $recipient->forceFill([
+            'status' => $success ? 'sent' : 'failed',
+            'sent_at' => $success ? ($recipient->sent_at ?: now()) : $recipient->sent_at,
+            'failed_at' => ! $success ? ($recipient->failed_at ?: now()) : $recipient->failed_at,
+            'last_status_note' => $success ? null : (string) ($send['error_message'] ?? 'SendGrid send failed.'),
+        ])->save();
+
+        return [
+            'outcome' => $success ? 'sent' : 'failed',
+            'reason' => $success ? 'sent' : 'provider_failure',
+            'delivery_id' => $delivery->id,
+            'dry_run' => (bool) ($send['dry_run'] ?? false),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function skipRecipient(MarketingCampaignRecipient $recipient, string $reason, string $note): array
+    {
+        $reasons = collect((array) $recipient->reason_codes)
+            ->push($reason)
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->map(fn ($value) => strtolower(trim((string) $value)))
+            ->unique()
+            ->values()
+            ->all();
+
+        $recipient->forceFill([
+            'status' => 'skipped',
+            'reason_codes' => $reasons,
+            'last_status_note' => $note,
+        ])->save();
+
+        return ['outcome' => 'skipped', 'reason' => $reason, 'dry_run' => false];
+    }
+}

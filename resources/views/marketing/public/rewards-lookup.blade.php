@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rewards Account</title>
+    @vite(['resources/css/app.css'])
+</head>
+<body class="min-h-screen bg-zinc-950 text-zinc-100">
+<main class="mx-auto max-w-5xl px-4 py-8 space-y-5">
+    <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
+        <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine Rewards Account</div>
+        <h1 class="mt-2 text-2xl font-semibold text-white">Rewards Lookup Account</h1>
+        <p class="mt-2 text-sm text-zinc-300">
+            Check your Candle Cash balance, activity history, referral details, review status, and available rewards.
+        </p>
+    </section>
+
+    <section class="rounded-3xl border border-white/10 bg-black/20 p-5">
+        <form method="GET" action="{{ route('marketing.public.account-rewards') }}" class="grid gap-3 sm:grid-cols-3">
+            <input type="email" name="email" value="{{ request('email') }}" placeholder="Email" class="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white sm:col-span-1">
+            <input type="text" name="phone" value="{{ request('phone') }}" placeholder="Phone" class="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white sm:col-span-1">
+            <button type="submit" class="rounded-xl border border-sky-300/35 bg-sky-500/20 px-4 py-2 text-sm font-semibold text-sky-100 sm:col-span-1">Lookup</button>
+        </form>
+        <p class="mt-2 text-xs text-zinc-400">Lookup requires both email and phone to reduce accidental exposure.</p>
+        @if(($lookupState ?? '') !== '')
+            <div class="mt-2 text-xs text-zinc-300">
+                State: <span class="font-semibold">{{ strtoupper((string) $lookupState) }}</span>
+                @if($lookupState === 'verification_required')
+                    · Provide both fields to continue.
+                @elseif($lookupState === 'needs_verification')
+                    · Identity is ambiguous and needs verification.
+                @elseif($lookupState === 'unknown_customer')
+                    · No profile match found yet.
+                @endif
+            </div>
+        @endif
+    </section>
+
+    @if(is_array($redeemResult ?? null))
+        <section class="rounded-3xl border p-4 text-sm {{ ($redeemResult['ok'] ?? false) ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100' : 'border-amber-300/30 bg-amber-500/15 text-amber-100' }}">
+            <div class="font-semibold">{{ ($redeemResult['ok'] ?? false) ? 'Redemption Update' : 'Redemption Failed' }}</div>
+            <div class="mt-1">{{ (string) ($redeemResult['message'] ?? 'Unknown redemption state.') }}</div>
+            @if(($redeemResult['ok'] ?? false) && !empty($redeemResult['redemption_code']))
+                <div class="mt-2 text-xs">Code: <span class="font-mono">{{ $redeemResult['redemption_code'] }}</span></div>
+            @endif
+            <div class="mt-2 text-xs opacity-90">
+                State: {{ strtoupper((string) ($redeemResult['state'] ?? 'unknown')) }}
+                @if(isset($redeemResult['balance']))
+                    · Balance: {{ number_format((int) $redeemResult['balance']) }} pts
+                @endif
+            </div>
+        </section>
+    @endif
+
+    @if($profile)
+        @php
+            $maskedEmail = $profile->email ? preg_replace('/(^.).+(@.*$)/', '$1***$2', $profile->email) : null;
+            $maskedPhone = $profile->phone ? preg_replace('/\d(?=\d{2})/', '*', preg_replace('/\D+/', '', $profile->phone)) : null;
+        @endphp
+        <section class="grid gap-4 lg:grid-cols-3">
+            <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
+                <h2 class="text-sm font-semibold text-white">Balance</h2>
+                <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) $balance) }} pts</div>
+                <div class="mt-2 text-xs text-zinc-400">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
+            </article>
+            <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
+                <h2 class="text-sm font-semibold text-white">Referral</h2>
+                @if($latestGrowaveExternal && $latestGrowaveExternal->referral_link)
+                    <div class="mt-2 break-all text-sm text-sky-200">{{ $latestGrowaveExternal->referral_link }}</div>
+                @else
+                    <div class="mt-2 text-sm text-zinc-400">No referral link on file.</div>
+                @endif
+                <div class="mt-3 text-xs text-zinc-400">
+                    Growave ID: {{ $latestGrowaveExternal?->external_customer_id ?: '—' }}
+                </div>
+            </article>
+            <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
+                <h2 class="text-sm font-semibold text-white">Review Status</h2>
+                <div class="mt-2 text-sm text-white/80">
+                    {{ (int) ($latestReviewSummary?->review_count ?? 0) }} reviews
+                    · Avg {{ number_format((float) ($latestReviewSummary?->average_rating ?? 0), 2) }}
+                </div>
+                <div class="mt-2 text-xs text-zinc-400">
+                    Review rewards: {{ (int) ($reviewRewardStatus['count'] ?? 0) }}
+                    @if(! empty($reviewRewardStatus['last_rewarded_at'] ?? null))
+                        · Last: {{ \Illuminate\Support\Carbon::parse((string) $reviewRewardStatus['last_rewarded_at'])->format('Y-m-d H:i') }}
+                    @endif
+                </div>
+                <div class="mt-2 text-xs text-zinc-500">
+                    Last Growave sync: {{ $lastGrowaveSyncAt ? \Illuminate\Support\Carbon::parse((string) $lastGrowaveSyncAt)->format('Y-m-d H:i') : '—' }}
+                </div>
+            </article>
+        </section>
+
+        <section class="grid gap-4 lg:grid-cols-2">
+            <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
+                <h2 class="text-sm font-semibold text-white">Redeemable Rewards</h2>
+                <div class="mt-3 space-y-3">
+                    @forelse($availableRewards as $reward)
+                        @php
+                            $canRedeem = ((int) $balance) >= ((int) $reward->points_cost);
+                        @endphp
+                        <div class="rounded-xl border border-white/10 bg-white/5 p-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-sm font-semibold text-white">{{ $reward->name }}</div>
+                                    <div class="text-xs text-zinc-400">{{ (int) $reward->points_cost }} pts · {{ strtoupper((string) $reward->reward_type) }}</div>
+                                </div>
+                                <form method="POST" action="{{ route('marketing.public.account-rewards.redeem') }}" class="shrink-0">
+                                    @csrf
+                                    <input type="hidden" name="email" value="{{ request('email') }}">
+                                    <input type="hidden" name="phone" value="{{ request('phone') }}">
+                                    <input type="hidden" name="reward_id" value="{{ (int) $reward->id }}">
+                                    <button type="submit" class="rounded-lg border px-3 py-1.5 text-xs font-semibold {{ $canRedeem ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100' : 'border-zinc-500/40 bg-zinc-700/30 text-zinc-300' }}" {{ $canRedeem ? '' : 'disabled' }}>
+                                        {{ $canRedeem ? 'Redeem' : 'Need More Points' }}
+                                    </button>
+                                </form>
+                            </div>
+                            @if($reward->description)
+                                <div class="mt-2 text-xs text-zinc-400">{{ $reward->description }}</div>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="text-sm text-zinc-400">No active rewards configured.</div>
+                    @endforelse
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
+                <h2 class="text-sm font-semibold text-white">Recent Redemptions</h2>
+                <div class="mt-3 space-y-2 text-sm text-white/80">
+                    @forelse($redemptions as $redemption)
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
+                            · {{ (int) $redemption->points_spent }} pts
+                            · {{ strtoupper((string) ($redemption->status ?: 'issued')) }}
+                            @if($redemption->redemption_code)
+                                · <span class="font-mono text-xs">{{ $redemption->redemption_code }}</span>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="text-sm text-zinc-400">No redemptions found.</div>
+                    @endforelse
+                </div>
+            </article>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/20 p-5">
+            <h2 class="text-sm font-semibold text-white">Transaction History</h2>
+            <div class="mt-3 overflow-x-auto">
+                <table class="min-w-full text-left text-sm text-white/85">
+                    <thead class="text-xs uppercase tracking-wide text-zinc-400">
+                    <tr>
+                        <th class="py-2 pr-4">When</th>
+                        <th class="py-2 pr-4">Category</th>
+                        <th class="py-2 pr-4">Points</th>
+                        <th class="py-2">Details</th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5">
+                    @forelse($transactions as $row)
+                        <tr>
+                            <td class="py-2 pr-4 whitespace-nowrap">{{ $row['occurred_at'] ? \Illuminate\Support\Carbon::parse((string) $row['occurred_at'])->format('Y-m-d H:i') : '—' }}</td>
+                            <td class="py-2 pr-4">{{ $row['category'] }}</td>
+                            <td class="py-2 pr-4 font-semibold {{ ((int) $row['points']) >= 0 ? 'text-emerald-300' : 'text-rose-300' }}">
+                                {{ ((int) $row['points']) >= 0 ? '+' : '' }}{{ (int) $row['points'] }}
+                            </td>
+                            <td class="py-2">{{ $row['description'] ?: '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="py-4 text-zinc-400">No loyalty transactions available yet.</td>
+                        </tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @elseif(request()->query('email') || request()->query('phone'))
+        <section class="rounded-3xl border border-amber-300/30 bg-amber-500/15 p-4 text-sm text-amber-100">
+            No profile found for that email + phone combination.
+        </section>
+    @endif
+</main>
+</body>
+</html>

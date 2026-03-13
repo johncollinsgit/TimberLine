@@ -16,6 +16,23 @@ return [
         'sync_payments_enabled' => (bool) env('MARKETING_SQUARE_SYNC_PAYMENTS_ENABLED', true),
     ],
 
+    'growave' => [
+        'enabled' => (bool) env('MARKETING_GROWAVE_ENABLED', false),
+        'base_url' => env('MARKETING_GROWAVE_BASE_URL', 'https://api.growave.io'),
+        'client_id' => env('MARKETING_GROWAVE_CLIENT_ID'),
+        'client_secret' => env('MARKETING_GROWAVE_CLIENT_SECRET'),
+        'scope' => env('MARKETING_GROWAVE_SCOPE', 'read_customer read_review read_reward'),
+        'shop' => env('MARKETING_GROWAVE_SHOP'),
+        'timeout_seconds' => (int) env('MARKETING_GROWAVE_TIMEOUT_SECONDS', 20),
+        'retry_attempts' => (int) env('MARKETING_GROWAVE_RETRY_ATTEMPTS', 3),
+        'request_min_interval_ms' => (int) env('MARKETING_GROWAVE_REQUEST_MIN_INTERVAL_MS', 300),
+        'request_jitter_ms' => (int) env('MARKETING_GROWAVE_REQUEST_JITTER_MS', 100),
+        'backoff_base_ms' => (int) env('MARKETING_GROWAVE_BACKOFF_BASE_MS', 1000),
+        'backoff_max_ms' => (int) env('MARKETING_GROWAVE_BACKOFF_MAX_MS', 15000),
+        'candidate_delay_ms' => (int) env('MARKETING_GROWAVE_CANDIDATE_DELAY_MS', 50),
+        'page_delay_ms' => (int) env('MARKETING_GROWAVE_PAGE_DELAY_MS', 150),
+    ],
+
     'imports' => [
         'store_row_payloads' => (bool) env('MARKETING_IMPORTS_STORE_ROW_PAYLOADS', true),
     ],
@@ -36,6 +53,13 @@ return [
         ],
     ],
 
+    'email' => [
+        'enabled' => (bool) env('MARKETING_EMAIL_ENABLED', false),
+        'dry_run' => (bool) env('MARKETING_EMAIL_DRY_RUN', false),
+        'from_email' => env('MARKETING_EMAIL_FROM_EMAIL'),
+        'from_name' => env('MARKETING_EMAIL_FROM_NAME', 'TimberLine Marketing'),
+    ],
+
     'twilio' => [
         'enabled' => (bool) env('MARKETING_TWILIO_ENABLED', false),
         'account_sid' => env('TWILIO_ACCOUNT_SID'),
@@ -46,9 +70,40 @@ return [
         'verify_signature' => (bool) env('MARKETING_TWILIO_VERIFY_SIGNATURE', false),
     ],
 
-    'links' => [
-        'enabled' => (bool) env('MARKETING_LINK_SHORTENING_ENABLED', true),
-        'base_url' => env('MARKETING_SHORT_LINK_BASE_URL', ''),
-        'path_prefix' => trim((string) env('MARKETING_SHORT_LINK_PATH_PREFIX', 'go'), '/'),
+    'shopify' => [
+        'contract_version' => env('MARKETING_SHOPIFY_CONTRACT_VERSION', 'v1'),
+        'widget_token' => env('MARKETING_SHOPIFY_WIDGET_TOKEN'),
+        'allow_legacy_token' => (bool) env('MARKETING_SHOPIFY_ALLOW_LEGACY_TOKEN', false),
+        'signing_secret' => env('MARKETING_SHOPIFY_SIGNING_SECRET'),
+        'signature_ttl_seconds' => (int) env('MARKETING_SHOPIFY_SIGNATURE_TTL_SECONDS', 300),
+        'app_proxy_enabled' => (bool) env('MARKETING_SHOPIFY_APP_PROXY_ENABLED', true),
+        'app_proxy_secret' => env('MARKETING_SHOPIFY_APP_PROXY_SECRET'),
+        'app_proxy_ttl_seconds' => (int) env('MARKETING_SHOPIFY_APP_PROXY_TTL_SECONDS', 900),
+        'birthday' => [
+            'namespace' => env('MARKETING_SHOPIFY_BIRTHDAY_NAMESPACE', 'forestry_marketing'),
+            'write_growave_aliases' => (bool) env('MARKETING_SHOPIFY_BIRTHDAY_WRITE_GROWAVE_ALIASES', true),
+        ],
+    ],
+
+    'public' => [
+        'event_flows_enabled' => (bool) env('MARKETING_PUBLIC_EVENT_FLOWS_ENABLED', true),
+    ],
+
+    'consent_bonus_points' => [
+        'sms' => (int) env('MARKETING_SMS_CONSENT_BONUS_POINTS', 0),
+    ],
+
+    'candle_cash' => [
+        'code_expiry_days' => (int) env('MARKETING_CANDLE_CASH_CODE_EXPIRY_DAYS', 30),
+    ],
+
+    'birthday_rewards' => [
+        'enabled' => (bool) env('MARKETING_BIRTHDAY_REWARDS_ENABLED', true),
+        'reward_type' => env('MARKETING_BIRTHDAY_REWARD_TYPE', 'points'),
+        'points_amount' => (int) env('MARKETING_BIRTHDAY_POINTS_AMOUNT', 50),
+        'discount_code_prefix' => env('MARKETING_BIRTHDAY_DISCOUNT_CODE_PREFIX', 'BDAY'),
+        'free_shipping_code_prefix' => env('MARKETING_BIRTHDAY_FREE_SHIPPING_CODE_PREFIX', 'BDAYSHIP'),
+        'claim_window_days_before' => (int) env('MARKETING_BIRTHDAY_CLAIM_WINDOW_DAYS_BEFORE', 0),
+        'claim_window_days_after' => (int) env('MARKETING_BIRTHDAY_CLAIM_WINDOW_DAYS_AFTER', 14),
     ],
 ];

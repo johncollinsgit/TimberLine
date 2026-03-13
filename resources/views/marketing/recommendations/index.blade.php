@@ -21,8 +21,17 @@
             </div>
 
             <x-admin.help-hint tone="neutral" title="Recommendation types">
-                Send suggestions, copy improvements, timing suggestions, and segment opportunities are rule-generated from current profile/campaign data.
+                Recommendations are generated from real performance outcomes plus profile/event/reward rules. They are explainable suggestions and never autonomous sends.
             </x-admin.help-hint>
+
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                @foreach((array) $typeSummary as $typeKey => $count)
+                    <article class="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                        <div class="text-[11px] uppercase tracking-[0.18em] text-white/55">{{ $typeKey }}</div>
+                        <div class="mt-1 text-lg font-semibold text-white">{{ (int) $count }}</div>
+                    </article>
+                @endforeach
+            </div>
 
             <form method="GET" action="{{ route('marketing.recommendations') }}" class="grid gap-3 md:grid-cols-12">
                 <div class="md:col-span-3">
@@ -36,7 +45,7 @@
                 <div class="md:col-span-3">
                     <label class="text-xs uppercase tracking-[0.2em] text-white/55">Type</label>
                     <select name="type" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                        @foreach(['all', 'send_suggestion', 'copy_improvement', 'segment_opportunity', 'timing_suggestion', 'variant_recommendation'] as $typeOption)
+                        @foreach(['all', 'send_suggestion', 'copy_improvement', 'segment_opportunity', 'timing_suggestion', 'variant_recommendation', 'channel_suggestion', 'reward_opportunity'] as $typeOption)
                             <option value="{{ $typeOption }}" @selected($type === $typeOption)>{{ $typeOption }}</option>
                         @endforeach
                     </select>
@@ -48,17 +57,50 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
+            <h3 class="text-sm font-semibold text-white">Recent Recommendation Runs</h3>
+            <x-admin.help-hint tone="neutral" title="Learning + governance">
+                Learning uses observed delivery and conversion outcomes. Apply actions remain manual and auditable through approvals.
+            </x-admin.help-hint>
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Run Type</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Started</th>
+                            <th class="px-4 py-3 text-left">Finished</th>
+                            <th class="px-4 py-3 text-left">Summary</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($latestRuns as $run)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $run->type }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $run->status }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($run->started_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($run->finished_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ \Illuminate\Support\Str::limit(json_encode($run->summary), 160) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="px-4 py-8 text-center text-white/55">No recommendation runs logged yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
             <h3 class="text-sm font-semibold text-white">Campaign Recipient Approval Queue</h3>
             <div class="overflow-x-auto rounded-2xl border border-white/10">
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Campaign</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Channel</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Variant</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Reason Codes</th>
-                            <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
+                            <th class="px-4 py-3 text-left">Campaign</th>
+                            <th class="px-4 py-3 text-left">Profile</th>
+                            <th class="px-4 py-3 text-left">Channel</th>
+                            <th class="px-4 py-3 text-left">Variant</th>
+                            <th class="px-4 py-3 text-left">Reason Codes</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -96,13 +138,13 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Title</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Type</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Campaign</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Profile</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Confidence</th>
-                            <th class="px-4 py-3 text-right whitespace-nowrap">Actions</th>
+                            <th class="px-4 py-3 text-left">Title</th>
+                            <th class="px-4 py-3 text-left">Type</th>
+                            <th class="px-4 py-3 text-left">Campaign</th>
+                            <th class="px-4 py-3 text-left">Profile</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Confidence</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">
@@ -111,6 +153,9 @@
                                 <td class="px-4 py-3 text-white/85">
                                     {{ $recommendation->title }}
                                     <div class="text-xs text-white/55">{{ $recommendation->summary }}</div>
+                                    @if(is_array($recommendation->details_json) && $recommendation->details_json !== [])
+                                        <div class="mt-1 text-[11px] text-white/45">{{ \Illuminate\Support\Str::limit(json_encode($recommendation->details_json), 170) }}</div>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-3 text-white/75">{{ $recommendation->type }}</td>
                                 <td class="px-4 py-3 text-white/75">{{ $recommendation->campaign?->name ?: '—' }}</td>

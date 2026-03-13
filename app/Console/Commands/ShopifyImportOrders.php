@@ -8,6 +8,7 @@ use App\Services\Shopify\ShopifyStores;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use App\Models\ShopifyImportRun;
+use Throwable;
 
 class ShopifyImportOrders extends Command
 {
@@ -20,7 +21,7 @@ class ShopifyImportOrders extends Command
         $storeArg = $this->option('store') ?: $this->argument('store');
         $stores = ShopifyStores::resolve($storeArg);
         if (empty($stores)) {
-            $this->error('No valid Shopify store configuration found for the given store key.');
+            $this->renderStoreResolutionErrors($storeArg);
             return self::FAILURE;
         }
 
@@ -33,6 +34,12 @@ class ShopifyImportOrders extends Command
         $ingestor = app(ShopifyOrderIngestor::class);
 
         foreach ($stores as $store) {
+            if (($scopeError = $this->scopeErrorForOrderImport($store)) !== null) {
+                $this->error($scopeError);
+
+                return self::FAILURE;
+            }
+
             $summary = [
                 'imported_count' => 0,
                 'updated_count' => 0,
@@ -65,7 +72,13 @@ class ShopifyImportOrders extends Command
                 $params['created_at_min'] = $since->toIso8601String();
             }
 
-            $response = $client->get('orders.json', $params);
+            try {
+                $response = $client->get('orders.json', $params);
+            } catch (Throwable $e) {
+                $this->error($this->formatSyncFailureMessage((string) $store['key'], 'order import', $e));
+
+                return self::FAILURE;
+            }
             $orders = $response['orders'] ?? [];
 
             if ($limit) {
@@ -127,6 +140,83 @@ class ShopifyImportOrders extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    protected function renderStoreResolutionErrors(mixed $storeArg): void
+    {
+        $normalized = is_string($storeArg) && trim($storeArg) !== '' ? trim($storeArg) : null;
+        $issues = ShopifyStores::unresolvedMessages($normalized);
+
+        if ($issues === []) {
+            $this->error('No valid Shopify store configuration found for the given store key.');
+
+            return;
+        }
+
+        foreach ($issues as $issue) {
+            $this->error($issue);
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $store
+     */
+    protected function scopeErrorForOrderImport(array $store): ?string
+    {
+        $scopeString = trim((string) ($store['scopes'] ?? ''));
+        if ($scopeString === '') {
+            return null;
+        }
+
+        $scopes = $this->normalizeScopes($scopeString);
+        $acceptableScopes = [
+            'read_orders',
+            'read_all_orders',
+            'write_orders',
+        ];
+
+        if (array_intersect($acceptableScopes, $scopes) !== []) {
+            return null;
+        }
+
+        $storeKey = (string) ($store['key'] ?? 'unknown');
+
+        return "{$storeKey} store scopes insufficient for order import (missing read_orders/read_all_orders). Run /shopify/reinstall/{$storeKey}.";
+    }
+
+    protected function formatSyncFailureMessage(string $storeKey, string $context, Throwable $e): string
+    {
+        $message = trim($e->getMessage());
+        $normalized = strtolower($message);
+
+        if (
+            str_contains($normalized, '401')
+            || str_contains($normalized, 'unauthorized')
+            || str_contains($normalized, 'invalid api key or access token')
+        ) {
+            return "{$storeKey} store token missing or revoked during {$context}. Run /shopify/reinstall/{$storeKey}.";
+        }
+
+        if (
+            str_contains($normalized, '403')
+            || str_contains($normalized, 'access denied')
+            || str_contains($normalized, 'insufficient_scope')
+        ) {
+            return "{$storeKey} store scopes insufficient for {$context}. Run /shopify/reinstall/{$storeKey}.";
+        }
+
+        return "{$storeKey} {$context} failed: {$message}";
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function normalizeScopes(string $scopeString): array
+    {
+        return array_values(array_filter(array_map(
+            static fn (string $scope): string => trim(strtolower($scope)),
+            explode(',', $scopeString)
+        )));
     }
 
     protected function resolveSince(): CarbonImmutable

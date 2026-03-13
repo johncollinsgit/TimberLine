@@ -6,7 +6,7 @@
             title="Campaigns"
             description="Campaign orchestration for segment targeting, variants, recipient preparation, and approval tracking."
             hint-title="Campaign lifecycle"
-            hint-text="Campaigns are prepared and approved here; provider execution is intentionally disabled until Stage 5."
+            hint-text="Campaigns are prepared and approved here, then executed through Twilio SMS or SendGrid email with delivery tracking."
         />
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
@@ -21,15 +21,15 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Name</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Status</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Channel</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Objective</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Segment</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Recipients</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Launched</th>
-                            <th class="px-4 py-3 text-left whitespace-nowrap">Updated</th>
-                            <th class="px-4 py-3 text-right whitespace-nowrap">Action</th>
+                            <th class="px-4 py-3 text-left">Name</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Channel</th>
+                            <th class="px-4 py-3 text-left">Objective</th>
+                            <th class="px-4 py-3 text-left">Segment</th>
+                            <th class="px-4 py-3 text-left">Recipients</th>
+                            <th class="px-4 py-3 text-left">Launched</th>
+                            <th class="px-4 py-3 text-left">Updated</th>
+                            <th class="px-4 py-3 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/10">

@@ -3,16 +3,22 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashRedemption;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingCampaignVariant;
+use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingGroup;
 use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSegment;
 use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingCampaignAudienceBuilder;
+use App\Services\Marketing\MarketingEmailExecutionService;
+use App\Services\Marketing\MarketingPerformanceAnalyticsService;
 use App\Services\Marketing\MarketingRecommendationEngine;
 use App\Services\Marketing\MarketingSmsExecutionService;
+use App\Services\Marketing\MarketingTimingRecommendationService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -52,6 +58,8 @@ class MarketingCampaignsController extends Controller
                 'segment_id' => $prefillSegmentId,
             ]),
             'segments' => MarketingSegment::query()->whereIn('status', ['active', 'draft'])->orderBy('name')->get(['id', 'name']),
+            'groups' => MarketingGroup::query()->orderBy('name')->get(['id', 'name', 'is_internal']),
+            'selectedGroupIds' => [],
             'mode' => 'create',
         ]);
     }
@@ -59,6 +67,13 @@ class MarketingCampaignsController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validatedCampaign($request);
+        $groupIds = collect((array) ($data['group_ids'] ?? []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+        unset($data['group_ids']);
 
         $campaign = MarketingCampaign::query()->create([
             ...$data,
@@ -66,6 +81,7 @@ class MarketingCampaignsController extends Controller
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),
         ]);
+        $campaign->groups()->sync($groupIds);
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
@@ -79,6 +95,8 @@ class MarketingCampaignsController extends Controller
             'sections' => $this->navigationItems(),
             'campaign' => $campaign,
             'segments' => MarketingSegment::query()->whereIn('status', ['active', 'draft'])->orderBy('name')->get(['id', 'name']),
+            'groups' => MarketingGroup::query()->orderBy('name')->get(['id', 'name', 'is_internal']),
+            'selectedGroupIds' => $campaign->groups()->pluck('marketing_groups.id')->map(fn ($id) => (int) $id)->all(),
             'mode' => 'edit',
         ]);
     }
@@ -86,21 +104,35 @@ class MarketingCampaignsController extends Controller
     public function update(Request $request, MarketingCampaign $campaign): RedirectResponse
     {
         $data = $this->validatedCampaign($request);
+        $groupIds = collect((array) ($data['group_ids'] ?? []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+        unset($data['group_ids']);
+
         $campaign->fill([
             ...$data,
             'slug' => Str::slug($data['name']),
             'updated_by' => auth()->id(),
         ])->save();
+        $campaign->groups()->sync($groupIds);
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
             ->with('toast', ['style' => 'success', 'message' => 'Campaign updated.']);
     }
 
-    public function show(MarketingCampaign $campaign): View
+    public function show(
+        MarketingCampaign $campaign,
+        MarketingPerformanceAnalyticsService $performanceAnalyticsService,
+        MarketingTimingRecommendationService $timingRecommendationService
+    ): View
     {
         $campaign->load([
             'segment:id,name',
+            'groups:id,name,is_internal',
             'variants.template:id,name',
             'recommendations' => fn ($query) => $query->orderByDesc('id')->limit(10),
         ]);
@@ -112,7 +144,7 @@ class MarketingCampaignsController extends Controller
             ->all();
 
         $approvalQueue = $campaign->recipients()
-            ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name', 'latestDelivery'])
+            ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name', 'latestDelivery', 'latestEmailDelivery'])
             ->whereIn('status', ['queued_for_approval', 'approved', 'rejected', 'sending', 'sent', 'delivered', 'failed', 'undelivered', 'converted'])
             ->orderByRaw("case when status = 'queued_for_approval' then 0 when status='approved' then 1 when status='sending' then 2 when status='failed' then 3 else 4 end")
             ->orderByDesc('updated_at')
@@ -121,6 +153,16 @@ class MarketingCampaignsController extends Controller
 
         $deliveryLog = $campaign->deliveries()
             ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name'])
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get();
+        $emailDeliveryLog = MarketingEmailDelivery::query()
+            ->whereIn('marketing_campaign_recipient_id', function ($query) use ($campaign): void {
+                $query->select('id')
+                    ->from('marketing_campaign_recipients')
+                    ->where('campaign_id', $campaign->id);
+            })
+            ->with(['profile:id,first_name,last_name,email,phone', 'recipient:id,status'])
             ->orderByDesc('id')
             ->limit(200)
             ->get();
@@ -134,6 +176,34 @@ class MarketingCampaignsController extends Controller
                 ->pluck('aggregate', 'attribution_type')
                 ->all(),
         ];
+        $conversionSourceKeys = $campaign->conversions()
+            ->get(['source_type', 'source_id'])
+            ->map(fn ($row): string => strtolower(trim((string) $row->source_type)) . '|' . trim((string) $row->source_id))
+            ->filter()
+            ->unique()
+            ->values();
+        $rewardLinked = $conversionSourceKeys->isEmpty()
+            ? collect()
+            : CandleCashRedemption::query()
+                ->where('status', 'redeemed')
+                ->whereNotNull('external_order_source')
+                ->whereNotNull('external_order_id')
+                ->get(['id', 'platform', 'external_order_source', 'external_order_id'])
+                ->filter(function (CandleCashRedemption $redemption) use ($conversionSourceKeys): bool {
+                    $key = strtolower(trim((string) $redemption->external_order_source)) . '|' . trim((string) $redemption->external_order_id);
+
+                    return $conversionSourceKeys->contains($key);
+                });
+        $rewardConversionSummary = [
+            'assisted_count' => (int) $rewardLinked->count(),
+            'by_platform' => $rewardLinked
+                ->groupBy(fn (CandleCashRedemption $redemption): string => strtolower((string) ($redemption->platform ?: 'unknown')))
+                ->map(fn ($group): int => (int) $group->count())
+                ->all(),
+        ];
+
+        $performanceSummary = $performanceAnalyticsService->campaignSummary($campaign, 120);
+        $timingInsight = $timingRecommendationService->bestInsightForCampaign($campaign);
 
         return view('marketing/campaigns/show', [
             'section' => MarketingSectionRegistry::section('campaigns'),
@@ -142,7 +212,11 @@ class MarketingCampaignsController extends Controller
             'recipientSummary' => $recipientSummary,
             'approvalQueue' => $approvalQueue,
             'deliveryLog' => $deliveryLog,
+            'emailDeliveryLog' => $emailDeliveryLog,
             'conversionSummary' => $conversionSummary,
+            'rewardConversionSummary' => $rewardConversionSummary,
+            'performanceSummary' => $performanceSummary,
+            'timingInsight' => $timingInsight,
             'templates' => MarketingMessageTemplate::query()
                 ->where('is_active', true)
                 ->where('channel', $campaign->channel)
@@ -177,6 +251,97 @@ class MarketingCampaignsController extends Controller
                     (int) $summary['sent'],
                     (int) $summary['failed'],
                     (int) $summary['skipped']
+                ),
+            ]);
+    }
+
+    public function sendApprovedEmail(
+        MarketingCampaign $campaign,
+        Request $request,
+        MarketingEmailExecutionService $executionService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:2000'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $summary = $executionService->sendApprovedForCampaign($campaign, [
+            'limit' => (int) ($data['limit'] ?? 500),
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => sprintf(
+                    'Email send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    (int) $summary['processed'],
+                    (int) $summary['sent'],
+                    (int) $summary['failed'],
+                    (int) $summary['skipped']
+                ),
+            ]);
+    }
+
+    public function sendSelectedEmail(
+        MarketingCampaign $campaign,
+        Request $request,
+        MarketingEmailExecutionService $executionService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'recipient_ids' => ['required', 'array', 'min:1'],
+            'recipient_ids.*' => ['integer', 'exists:marketing_campaign_recipients,id'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $summary = $executionService->sendApprovedForCampaign($campaign, [
+            'recipient_ids' => array_map('intval', (array) $data['recipient_ids']),
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'limit' => count((array) $data['recipient_ids']),
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => sprintf(
+                    'Selected email send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    (int) $summary['processed'],
+                    (int) $summary['sent'],
+                    (int) $summary['failed'],
+                    (int) $summary['skipped']
+                ),
+            ]);
+    }
+
+    public function retryRecipientEmail(
+        MarketingCampaign $campaign,
+        MarketingCampaignRecipient $recipient,
+        Request $request,
+        MarketingEmailExecutionService $executionService
+    ): RedirectResponse {
+        abort_unless((int) $recipient->campaign_id === (int) $campaign->id, 404);
+
+        $data = $request->validate([
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $result = $executionService->retryRecipient($recipient, [
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => ($result['outcome'] ?? 'skipped') === 'sent' ? 'success' : 'warning',
+                'message' => sprintf(
+                    'Email retry result: outcome=%s reason=%s',
+                    (string) ($result['outcome'] ?? 'unknown'),
+                    (string) ($result['reason'] ?? 'n/a')
                 ),
             ]);
     }
@@ -369,7 +534,10 @@ class MarketingCampaignsController extends Controller
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
-            ->with('toast', ['style' => 'success', 'message' => "Generated {$result['created']} recommendations."]);
+            ->with('toast', [
+                'style' => 'success',
+                'message' => "Generated {$result['created']} recommendations (potential {$result['potential']}).",
+            ]);
     }
 
     public function addProfileRecipient(
@@ -458,6 +626,8 @@ class MarketingCampaignsController extends Controller
             'status' => ['required', 'in:draft,ready_for_review,active,paused,completed,archived'],
             'channel' => ['required', 'in:sms,email'],
             'segment_id' => ['nullable', 'integer', 'exists:marketing_segments,id'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['integer', 'exists:marketing_groups,id'],
             'objective' => ['nullable', 'in:winback,repeat_purchase,event_followup,consent_capture,review_request'],
             'attribution_window_days' => ['nullable', 'integer', 'min:1', 'max:60'],
             'coupon_code' => ['nullable', 'string', 'max:120'],
@@ -489,6 +659,7 @@ class MarketingCampaignsController extends Controller
             'status' => (string) $data['status'],
             'channel' => (string) $data['channel'],
             'segment_id' => $data['segment_id'] ?? null,
+            'group_ids' => array_map('intval', (array) ($data['group_ids'] ?? [])),
             'objective' => $data['objective'] ?? null,
             'attribution_window_days' => (int) ($data['attribution_window_days'] ?? 7),
             'coupon_code' => trim((string) ($data['coupon_code'] ?? '')) ?: null,

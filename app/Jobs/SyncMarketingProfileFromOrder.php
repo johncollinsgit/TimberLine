@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Order;
+use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use Illuminate\Bus\Queueable;
@@ -29,7 +30,8 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
 
     public function handle(
         MarketingProfileSyncService $syncService,
-        MarketingConversionAttributionService $conversionAttributionService
+        MarketingConversionAttributionService $conversionAttributionService,
+        CandleCashRedemptionReconciliationService $reconciliationService
     ): void
     {
         $order = Order::query()->find($this->orderId);
@@ -41,6 +43,13 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
             'identity_context' => $this->identityContext,
         ]);
 
-        $conversionAttributionService->attributeForOrder($order);
+        $rewardSummary = $reconciliationService->reconcileShopifyOrder($order, [
+            'codes' => (array) ($this->identityContext['applied_reward_codes'] ?? []),
+        ]);
+
+        $conversionAttributionService->attributeForOrder($order, [
+            'coupon_signals' => (array) ($this->identityContext['coupon_signals'] ?? []),
+            'reward_reconcile_summary' => $rewardSummary,
+        ]);
     }
 }

@@ -38,4 +38,9 @@ class MarketingCampaignVariant extends Model
     {
         return $this->hasMany(MarketingCampaignRecipient::class, 'variant_id');
     }
+
+    public function performanceSnapshots(): HasMany
+    {
+        return $this->hasMany(MarketingVariantPerformanceSnapshot::class, 'variant_id');
+    }
 }
