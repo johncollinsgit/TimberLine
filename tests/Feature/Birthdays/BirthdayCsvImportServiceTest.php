@@ -61,3 +61,41 @@ test('birthday csv import creates canonical profiles, birthday rows, reward hist
         ->and((string) $issuance->status)->toBe('redeemed')
         ->and(BirthdayMessageEvent::query()->first()->status)->toBe('clicked');
 });
+
+test('birthday csv import salvages impossible years by keeping month and day', function () {
+    $path = storage_path('framework/testing/birthday-invalid-year.csv');
+    @mkdir(dirname($path), 0777, true);
+
+    file_put_contents($path, implode("\n", [
+        'email,birthday,"first name","last name",capture_date,signup_channel,unsubscribed',
+        'salvage@example.com,08/10/0004,Sal,Vage,"03/13/2026 09:00","Order Status Page (Legacy)",No',
+    ]));
+
+    $service = app(BirthdayCsvImportService::class);
+
+    $result = $service->importPath(
+        path: $path,
+        fileName: 'birthday-invalid-year.csv',
+        mapping: $service->guessMapping([
+            'email',
+            'birthday',
+            'first_name',
+            'last_name',
+            'capture_date',
+            'signup_channel',
+            'unsubscribed',
+        ]),
+        createdBy: null,
+        dryRun: false,
+    );
+
+    $profile = MarketingProfile::query()->where('email', 'salvage@example.com')->firstOrFail();
+    $birthday = CustomerBirthdayProfile::query()->where('marketing_profile_id', $profile->id)->firstOrFail();
+
+    expect((string) $result['status'])->toBe('completed')
+        ->and((int) data_get($result, 'summary.failed', 0))->toBe(0)
+        ->and((int) $birthday->birth_month)->toBe(8)
+        ->and((int) $birthday->birth_day)->toBe(10)
+        ->and($birthday->birth_year)->toBeNull()
+        ->and($birthday->birthday_full_date)->toBeNull();
+});

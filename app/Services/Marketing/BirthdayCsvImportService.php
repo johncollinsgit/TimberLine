@@ -15,6 +15,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class BirthdayCsvImportService
 {
@@ -773,12 +774,11 @@ class BirthdayCsvImportService
 
         $parsed = $this->asDate($birthday);
         if ($parsed) {
-            return [
-                'birth_month' => (int) $parsed->month,
-                'birth_day' => (int) $parsed->day,
-                'birth_year' => (int) $parsed->year,
-                'birthday_full_date' => $parsed->toDateString(),
-            ];
+            return $this->normalizeBirthdayPayload(
+                month: (int) $parsed->month,
+                day: (int) $parsed->day,
+                year: (int) $parsed->year,
+            );
         }
 
         $parts = preg_split('/[\/\-]/', $birthday) ?: [];
@@ -787,14 +787,37 @@ class BirthdayCsvImportService
             $day = (int) $parts[1];
             $year = isset($parts[2]) && is_numeric($parts[2]) ? (int) $parts[2] : null;
 
+            return $this->normalizeBirthdayPayload($month, $day, $year);
+        }
+
+        return null;
+    }
+
+    /**
+     * Imported birthday CSVs sometimes contain placeholder years like 0004 or 1058.
+     * Preserve the valid month/day instead of rejecting the row when the year is unusable.
+     *
+     * @return array{birth_month:?int,birth_day:?int,birth_year:?int,birthday_full_date:?string}
+     */
+    protected function normalizeBirthdayPayload(int $month, int $day, ?int $year): array
+    {
+        try {
             return $this->birthdayProfileService->normalizeBirthday([
                 'birth_month' => $month,
                 'birth_day' => $day,
                 'birth_year' => $year,
             ]);
-        }
+        } catch (RuntimeException $e) {
+            if ($year !== null && $e->getMessage() === 'Birthday year is outside the allowed range.') {
+                return $this->birthdayProfileService->normalizeBirthday([
+                    'birth_month' => $month,
+                    'birth_day' => $day,
+                    'birth_year' => null,
+                ]);
+            }
 
-        return null;
+            throw $e;
+        }
     }
 
     protected function emailSubscribedState(array $row): ?bool
