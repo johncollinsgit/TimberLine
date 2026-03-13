@@ -10,8 +10,10 @@ use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
+use App\Models\MarketingStorefrontEvent;
 use App\Services\Marketing\BirthdayCsvImportService;
 use App\Services\Marketing\BirthdayReportingService;
+use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Support\Birthdays\BirthdaySectionRegistry;
 use Illuminate\Contracts\View\View;
@@ -111,7 +113,7 @@ class BirthdayPagesController extends Controller
             'rewardSummary' => $reportingService->rewardSummary(),
             'rewardConfig' => $this->rewardConfig(),
             'rewardIssuances' => BirthdayRewardIssuance::query()
-                ->with('marketingProfile:id,first_name,last_name,email,phone')
+                ->with('marketingProfile:id,first_name,last_name,email,phone', 'birthdayProfile:id,marketing_profile_id')
                 ->latest('id')
                 ->paginate(25)
                 ->withQueryString(),
@@ -231,6 +233,11 @@ class BirthdayPagesController extends Controller
                 ->latest('id')
                 ->paginate(20, ['*'], 'events_page')
                 ->withQueryString(),
+            'recentRewardSignals' => MarketingStorefrontEvent::query()
+                ->where('event_type', 'like', 'birthday_reward_%')
+                ->latest('id')
+                ->paginate(20, ['*'], 'signals_page')
+                ->withQueryString(),
             'recentImports' => MarketingImportRun::query()
                 ->where('type', 'birthday_customers_import')
                 ->latest('id')
@@ -254,19 +261,22 @@ class BirthdayPagesController extends Controller
         return back()->with('toast', ['style' => (bool) ($result['ok'] ?? false) ? 'success' : 'danger', 'message' => $message]);
     }
 
-    public function activateReward(BirthdayRewardIssuance $issuance, BirthdayRewardEngineService $engine): RedirectResponse
+    public function activateReward(BirthdayRewardIssuance $issuance, BirthdayRewardActivationService $activationService): RedirectResponse
     {
-        $profile = $issuance->birthdayProfile;
-        if (! $profile) {
+        $birthdayProfile = $issuance->birthdayProfile;
+        if (! $birthdayProfile) {
             return back()->with('toast', ['style' => 'danger', 'message' => 'Birthday reward has no linked profile.']);
         }
 
-        $result = $engine->claimIssuedReward($profile, (int) $issuance->cycle_year);
+        $result = $activationService->activate($issuance, [
+            'source_surface' => 'admin',
+            'endpoint' => 'birthdays/rewards/activate',
+        ]);
 
         return back()->with('toast', [
             'style' => (bool) ($result['ok'] ?? false) ? 'success' : 'danger',
             'message' => (bool) ($result['ok'] ?? false)
-                ? 'Birthday reward activated.'
+                ? 'Birthday reward activated and synced to Shopify.'
                 : 'Birthday reward could not be activated: ' . (string) ($result['error'] ?? 'unknown'),
         ]);
     }
@@ -280,9 +290,12 @@ class BirthdayPagesController extends Controller
         $updates = ['status' => $data['status']];
         if ($data['status'] === 'claimed' && ! $issuance->claimed_at) {
             $updates['claimed_at'] = now();
+            $updates['activated_at'] = $issuance->activated_at ?: now();
         }
         if ($data['status'] === 'redeemed' && ! $issuance->redeemed_at) {
             $updates['redeemed_at'] = now();
+            $updates['claimed_at'] = $issuance->claimed_at ?: now();
+            $updates['activated_at'] = $issuance->activated_at ?: ($issuance->claimed_at ?: now());
         }
 
         $issuance->forceFill($updates)->save();

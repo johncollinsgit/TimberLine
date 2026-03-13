@@ -67,7 +67,7 @@ class BirthdayReportingService
             ->where('cycle_year', $year)
             ->count();
 
-        $claimedThisYear = (int) BirthdayRewardIssuance::query()
+        $activatedThisYear = (int) BirthdayRewardIssuance::query()
             ->where('cycle_year', $year)
             ->whereIn('status', ['claimed', 'redeemed'])
             ->count();
@@ -75,6 +75,20 @@ class BirthdayReportingService
         $redeemedThisYear = (int) BirthdayRewardIssuance::query()
             ->where('cycle_year', $year)
             ->where('status', 'redeemed')
+            ->count();
+
+        $attributedRevenue = (float) (BirthdayRewardIssuance::query()
+            ->where('cycle_year', $year)
+            ->where('status', 'redeemed')
+            ->sum('attributed_revenue') ?? 0);
+
+        $averageOrderValue = $redeemedThisYear > 0
+            ? round($attributedRevenue / $redeemedThisYear, 2)
+            : 0.0;
+
+        $syncFailures = (int) BirthdayRewardIssuance::query()
+            ->where('cycle_year', $year)
+            ->where('discount_sync_status', 'failed')
             ->count();
 
         $emailEventsThisYear = BirthdayMessageEvent::query()
@@ -129,8 +143,13 @@ class BirthdayReportingService
             'shopify_matched' => $shopifyMatched,
             'non_shopify' => $nonShopify,
             'rewards_issued_this_year' => $issuedThisYear,
-            'rewards_claimed_this_year' => $claimedThisYear,
+            'rewards_activated_this_year' => $activatedThisYear,
             'rewards_redeemed_this_year' => $redeemedThisYear,
+            'reward_activation_rate' => $issuedThisYear > 0 ? round(($activatedThisYear / $issuedThisYear) * 100, 2) : 0.0,
+            'reward_redemption_rate' => $activatedThisYear > 0 ? round(($redeemedThisYear / $activatedThisYear) * 100, 2) : 0.0,
+            'attributed_revenue' => round($attributedRevenue, 2),
+            'reward_average_order_value' => $averageOrderValue,
+            'discount_sync_failures' => $syncFailures,
             'emails_sent_this_year' => $emailsSent,
             'emails_opened_this_year' => $emailsOpened,
             'emails_clicked_this_year' => $emailsClicked,
@@ -175,12 +194,25 @@ class BirthdayReportingService
      */
     public function rewardSummary(): array
     {
+        $issued = (int) BirthdayRewardIssuance::query()->count();
+        $activated = (int) BirthdayRewardIssuance::query()->whereIn('status', ['claimed', 'redeemed'])->count();
+        $redeemed = (int) BirthdayRewardIssuance::query()->where('status', 'redeemed')->count();
+        $revenue = (float) (BirthdayRewardIssuance::query()
+            ->where('status', 'redeemed')
+            ->sum('attributed_revenue') ?? 0);
+
         return [
             'available' => (int) BirthdayRewardIssuance::query()->where('status', 'issued')->count(),
-            'activated' => (int) BirthdayRewardIssuance::query()->where('status', 'claimed')->count(),
-            'redeemed' => (int) BirthdayRewardIssuance::query()->where('status', 'redeemed')->count(),
+            'activated' => $activated,
+            'redeemed' => $redeemed,
             'expired' => (int) BirthdayRewardIssuance::query()->where('status', 'expired')->count(),
+            'sync_failures' => (int) BirthdayRewardIssuance::query()->where('discount_sync_status', 'failed')->count(),
+            'activation_rate' => $issued > 0 ? round(($activated / $issued) * 100, 2) : 0.0,
+            'redemption_rate' => $activated > 0 ? round(($redeemed / $activated) * 100, 2) : 0.0,
+            'attributed_revenue' => round($revenue, 2),
+            'average_order_value' => $redeemed > 0 ? round($revenue / $redeemed, 2) : 0.0,
             'latest' => BirthdayRewardIssuance::query()
+                ->with('marketingProfile:id,first_name,last_name,email')
                 ->latest('id')
                 ->limit(10)
                 ->get(),

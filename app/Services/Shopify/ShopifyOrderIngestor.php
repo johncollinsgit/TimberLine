@@ -1137,6 +1137,10 @@ class ShopifyOrderIngestor
             ->values()
             ->all();
 
+        $orderTotal = $orderData['current_total_price']
+            ?? $orderData['total_price']
+            ?? null;
+
         return [
             'email' => $email !== '' ? $email : null,
             'phone' => $phone !== '' ? $phone : null,
@@ -1155,6 +1159,7 @@ class ShopifyOrderIngestor
             ]] : [],
             'coupon_signals' => $couponSignals,
             'applied_reward_codes' => $redemptionCodes,
+            'order_total' => $orderTotal !== null && $orderTotal !== '' ? number_format((float) $orderTotal, 2, '.', '') : null,
         ];
     }
 

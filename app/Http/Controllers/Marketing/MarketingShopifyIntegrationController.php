@@ -12,6 +12,7 @@ use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\BirthdayProfileService;
+use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
@@ -772,7 +773,11 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), $states);
     }
 
-    public function claimBirthdayReward(Request $request, BirthdayRewardEngineService $rewardEngine): JsonResponse
+    public function claimBirthdayReward(
+        Request $request,
+        BirthdayRewardEngineService $rewardEngine,
+        BirthdayRewardActivationService $activationService
+    ): JsonResponse
     {
         $resolved = $this->resolveProfile($request, scope: 'birthday_claim', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {
@@ -793,7 +798,32 @@ class MarketingShopifyIntegrationController extends Controller
             );
         }
 
-        $result = $rewardEngine->claimIssuedReward($birthdayProfile);
+        $status = $rewardEngine->statusForProfile($birthdayProfile);
+        if (($status['state'] ?? '') === 'birthday_reward_eligible') {
+            $rewardEngine->issueAnnualReward($birthdayProfile);
+            $birthdayProfile = $birthdayProfile->fresh();
+            $status = $rewardEngine->statusForProfile($birthdayProfile);
+        }
+
+        $issuance = $status['issuance'] ?? null;
+        if (! $issuance) {
+            return MarketingStorefrontContract::error(
+                code: 'birthday_reward_not_ready',
+                message: 'Birthday reward claim could not be completed.',
+                status: 422,
+                details: [
+                    'state' => (string) ($status['state'] ?? 'birthday_reward_not_ready'),
+                ],
+                states: [(string) ($status['state'] ?? 'birthday_reward_not_ready')],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        $result = $activationService->activate($issuance, [
+            'source_surface' => 'shopify_widget',
+            'endpoint' => '/shopify/marketing/birthday/claim',
+            'store_key' => $this->preferredBirthdayStoreKey($profile),
+        ]);
         if (! (bool) ($result['ok'] ?? false)) {
             return MarketingStorefrontContract::error(
                 code: (string) ($result['error'] ?? 'birthday_reward_claim_failed'),
@@ -1188,8 +1218,23 @@ class MarketingShopifyIntegrationController extends Controller
             'shopify_discount_id' => isset($issuance->shopify_discount_id) && $issuance->shopify_discount_id !== null
                 ? (string) $issuance->shopify_discount_id
                 : null,
+            'shopify_discount_node_id' => isset($issuance->shopify_discount_node_id) && $issuance->shopify_discount_node_id !== null
+                ? (string) $issuance->shopify_discount_node_id
+                : null,
+            'shopify_store_key' => isset($issuance->shopify_store_key) && $issuance->shopify_store_key !== null
+                ? (string) $issuance->shopify_store_key
+                : null,
+            'discount_sync_status' => method_exists($issuance, 'resolvedDiscountSyncStatus')
+                ? (string) $issuance->resolvedDiscountSyncStatus()
+                : (isset($issuance->discount_sync_status) ? (string) $issuance->discount_sync_status : null),
+            'discount_sync_error' => isset($issuance->discount_sync_error) && $issuance->discount_sync_error !== null
+                ? (string) $issuance->discount_sync_error
+                : null,
             'issued_at' => isset($issuance->issued_at) ? optional($issuance->issued_at)->toIso8601String() : null,
             'claimed_at' => isset($issuance->claimed_at) ? optional($issuance->claimed_at)->toIso8601String() : null,
+            'activated_at' => method_exists($issuance, 'resolvedActivationAt')
+                ? optional($issuance->resolvedActivationAt())->toIso8601String()
+                : (isset($issuance->activated_at) ? optional($issuance->activated_at)->toIso8601String() : null),
             'expires_at' => isset($issuance->expires_at) ? optional($issuance->expires_at)->toIso8601String() : null,
             'redeemed_at' => isset($issuance->redeemed_at) ? optional($issuance->redeemed_at)->toIso8601String() : null,
             'claim_window_starts_at' => isset($issuance->claim_window_starts_at)
@@ -1204,7 +1249,37 @@ class MarketingShopifyIntegrationController extends Controller
             'order_total' => isset($issuance->order_total) && $issuance->order_total !== null
                 ? (string) $issuance->order_total
                 : null,
+            'attributed_revenue' => isset($issuance->attributed_revenue) && $issuance->attributed_revenue !== null
+                ? (string) $issuance->attributed_revenue
+                : null,
+            'is_activated' => method_exists($issuance, 'isActivated') ? (bool) $issuance->isActivated() : in_array((string) ($issuance->status ?? ''), ['claimed', 'redeemed'], true),
+            'is_redeemed' => method_exists($issuance, 'isRedeemed') ? (bool) $issuance->isRedeemed() : (string) ($issuance->status ?? '') === 'redeemed',
+            'is_usable' => method_exists($issuance, 'isUsable') ? (bool) $issuance->isUsable() : false,
         ];
+    }
+
+    protected function preferredBirthdayStoreKey(MarketingProfile $profile): ?string
+    {
+        $shopifyLinks = $profile->links()
+            ->where('source_type', 'shopify_customer')
+            ->pluck('source_id')
+            ->map(function ($sourceId): ?string {
+                $value = trim((string) $sourceId);
+                if (preg_match('/^(retail|wholesale):/i', $value, $matches) === 1) {
+                    return strtolower((string) $matches[1]);
+                }
+
+                return null;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($shopifyLinks->contains('retail')) {
+            return 'retail';
+        }
+
+        return $shopifyLinks->first();
     }
 
     /**

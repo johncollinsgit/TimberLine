@@ -234,14 +234,15 @@
                 <div class="mt-4">{{ $profiles->links() }}</div>
             </section>
         @elseif($sectionKey === 'analytics')
-            <section class="grid gap-4 xl:grid-cols-4">
+            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 @foreach([
                     ['label' => 'Birthdays Today', 'value' => data_get($summary, 'birthdays_today', 0), 'detail' => 'Birthdays happening today.'],
                     ['label' => 'Birthdays This Week', 'value' => data_get($summary, 'birthdays_this_week', 0), 'detail' => 'Birthdays in the current week.'],
-                    ['label' => 'Rewards Redeemed', 'value' => data_get($summary, 'rewards_redeemed_this_year', 0), 'detail' => 'Birthday rewards redeemed this year.'],
-                    ['label' => 'Email Open Rate', 'value' => number_format((float) data_get($summary, 'email_open_rate', 0), 1) . '%', 'detail' => 'Open rate across stored birthday email events.'],
+                    ['label' => 'Rewards Activated', 'value' => data_get($summary, 'rewards_activated_this_year', 0), 'detail' => number_format((float) data_get($summary, 'reward_activation_rate', 0), 1) . '% activation rate'],
+                    ['label' => 'Rewards Redeemed', 'value' => data_get($summary, 'rewards_redeemed_this_year', 0), 'detail' => number_format((float) data_get($summary, 'reward_redemption_rate', 0), 1) . '% redemption rate'],
+                    ['label' => 'Birthday Revenue', 'value' => '$' . number_format((float) data_get($summary, 'attributed_revenue', 0), 2), 'detail' => 'AOV $' . number_format((float) data_get($summary, 'reward_average_order_value', 0), 2)],
                 ] as $card)
-                    <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
+                    <article class="rounded-[1.7rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(0,0,0,0.08)_55%,rgba(0,0,0,0.24))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
                         <div class="mt-3 text-4xl font-semibold text-white">{{ $card['value'] }}</div>
                         <p class="mt-2 text-sm text-white/65">{{ $card['detail'] }}</p>
@@ -249,11 +250,20 @@
                 @endforeach
             </section>
 
-            <section class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr),minmax(360px,0.85fr)]">
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Recent Trend</div>
-                    <h2 class="mt-2 text-lg font-semibold text-white">Last 30 days</h2>
-                    <div class="mt-4 space-y-3">
+            <section class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr),minmax(360px,0.9fr)]">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.08),rgba(0,0,0,0.18))] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Recent Trend</div>
+                            <h2 class="mt-2 text-lg font-semibold text-white">Last 30 days</h2>
+                            <p class="mt-2 max-w-2xl text-sm text-white/65">Track signups, issuance, and redemptions without leaving the birthdays workspace.</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Sync Failures</div>
+                            <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($summary, 'discount_sync_failures', 0)) }}</div>
+                        </div>
+                    </div>
+                    <div class="mt-6 space-y-4">
                         @foreach(collect(data_get($summary, 'recent_trend', []))->take(-10) as $day)
                             @php($max = max(1, collect(data_get($summary, 'recent_trend', []))->max('signups'), collect(data_get($summary, 'recent_trend', []))->max('issued'), collect(data_get($summary, 'recent_trend', []))->max('redeemed')))
                             <div>
@@ -261,17 +271,35 @@
                                     <span>{{ \Carbon\CarbonImmutable::parse($day['date'])->format('M j') }}</span>
                                     <span>Signups {{ $day['signups'] }} · Issued {{ $day['issued'] }} · Redeemed {{ $day['redeemed'] }}</span>
                                 </div>
-                                <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                                <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10">
                                     <div class="h-full rounded-full bg-rose-300/70" style="width: {{ min(100, (($day['signups'] + $day['issued'] + $day['redeemed']) / ($max * 3)) * 100) }}%"></div>
                                 </div>
                             </div>
                         @endforeach
                     </div>
                 </article>
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.14))] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Campaign Overview</div>
-                    <h2 class="mt-2 text-lg font-semibold text-white">Stored birthday sends</h2>
-                    <div class="mt-4 space-y-3">
+                    <h2 class="mt-2 text-lg font-semibold text-white">Reward funnel</h2>
+                    <div class="mt-5 space-y-4">
+                        @php($issuedTotal = max(1, (int) data_get($summary, 'rewards_issued_this_year', 0)))
+                        @foreach([
+                            ['label' => 'Issued', 'value' => (int) data_get($summary, 'rewards_issued_this_year', 0), 'pct' => 100, 'tone' => 'bg-white/70'],
+                            ['label' => 'Activated', 'value' => (int) data_get($summary, 'rewards_activated_this_year', 0), 'pct' => min(100, ((int) data_get($summary, 'rewards_activated_this_year', 0) / $issuedTotal) * 100), 'tone' => 'bg-rose-300/80'],
+                            ['label' => 'Redeemed', 'value' => (int) data_get($summary, 'rewards_redeemed_this_year', 0), 'pct' => min(100, ((int) data_get($summary, 'rewards_redeemed_this_year', 0) / $issuedTotal) * 100), 'tone' => 'bg-amber-300/80'],
+                        ] as $row)
+                            <div>
+                                <div class="flex items-center justify-between text-sm text-white/70">
+                                    <span>{{ $row['label'] }}</span>
+                                    <span>{{ number_format($row['value']) }}</span>
+                                </div>
+                                <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10">
+                                    <div class="h-full rounded-full {{ $row['tone'] }}" style="width: {{ $row['pct'] }}%"></div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="mt-6 space-y-3">
                         @foreach(($campaignSummary ?? []) as $campaignType => $stats)
                             <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
                                 <div class="text-sm font-semibold text-white">{{ str($campaignType)->replace('_', ' ')->title() }}</div>
@@ -288,7 +316,7 @@
             </section>
 
             <section class="grid gap-4 xl:grid-cols-2">
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.14))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Birthdays by Month</div>
                     <div class="mt-4 space-y-3">
                         @php($monthMax = max(1, collect(data_get($summary, 'segments_by_month', []))->max('total')))
@@ -305,7 +333,7 @@
                         @endforeach
                     </div>
                 </article>
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.14))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Signup Sources</div>
                     <div class="mt-4 space-y-3">
                         @php($sourceMax = max(1, collect(data_get($summary, 'signup_sources', []))->max('total')))
@@ -355,24 +383,39 @@
                 @endforeach
             </section>
         @elseif($sectionKey === 'rewards')
-            <section class="grid gap-4 xl:grid-cols-4">
+            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 @foreach([
-                    ['label' => 'Available', 'value' => data_get($rewardSummary, 'available', 0)],
-                    ['label' => 'Activated', 'value' => data_get($rewardSummary, 'activated', 0)],
-                    ['label' => 'Redeemed', 'value' => data_get($rewardSummary, 'redeemed', 0)],
-                    ['label' => 'Expired', 'value' => data_get($rewardSummary, 'expired', 0)],
+                    ['label' => 'Available', 'value' => number_format((int) data_get($rewardSummary, 'available', 0))],
+                    ['label' => 'Activated', 'value' => number_format((int) data_get($rewardSummary, 'activated', 0))],
+                    ['label' => 'Redeemed', 'value' => number_format((int) data_get($rewardSummary, 'redeemed', 0))],
+                    ['label' => 'Expired', 'value' => number_format((int) data_get($rewardSummary, 'expired', 0))],
+                    ['label' => 'Sync Failures', 'value' => number_format((int) data_get($rewardSummary, 'sync_failures', 0))],
+                    ['label' => 'Revenue', 'value' => '$' . number_format((float) data_get($rewardSummary, 'attributed_revenue', 0), 2)],
                 ] as $card)
-                    <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
+                    <article class="rounded-[1.7rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(0,0,0,0.08)_55%,rgba(0,0,0,0.24))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
-                        <div class="mt-3 text-4xl font-semibold text-white">{{ number_format((int) $card['value']) }}</div>
+                        <div class="mt-3 text-4xl font-semibold text-white">{{ $card['value'] }}</div>
                     </article>
                 @endforeach
             </section>
 
             <section class="grid gap-4 xl:grid-cols-[minmax(0,0.85fr),minmax(0,1.15fr)]">
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Reward Rules</div>
                     <h2 class="mt-2 text-lg font-semibold text-white">Birthday reward defaults</h2>
+                    <div class="mt-4 rounded-[1.4rem] border border-white/10 bg-black/20 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-white/45">Performance</div>
+                        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-[11px] uppercase tracking-[0.2em] text-white/45">Activation Rate</div>
+                                <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((float) data_get($rewardSummary, 'activation_rate', 0), 1) }}%</div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-[11px] uppercase tracking-[0.2em] text-white/45">Average Order</div>
+                                <div class="mt-2 text-2xl font-semibold text-white">${{ number_format((float) data_get($rewardSummary, 'average_order_value', 0), 2) }}</div>
+                            </div>
+                        </div>
+                    </div>
                     <form method="POST" action="{{ route('birthdays.settings.save') }}" class="mt-4 grid gap-3">
                         @csrf
                         <input type="hidden" name="scope" value="reward" />
@@ -408,7 +451,7 @@
                     </form>
                 </article>
 
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
                     <div class="flex items-end justify-between gap-3">
                         <div>
                             <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Issuances</div>
@@ -422,29 +465,70 @@
                                     <th class="px-4 py-3">Customer</th>
                                     <th class="px-4 py-3">Reward</th>
                                     <th class="px-4 py-3">Status</th>
-                                    <th class="px-4 py-3">Code</th>
-                                    <th class="px-4 py-3">Dates</th>
+                                    <th class="px-4 py-3">Code + Sync</th>
+                                    <th class="px-4 py-3">Dates + Order</th>
                                     <th class="px-4 py-3">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($rewardIssuances as $issuance)
                                     @php($profile = $issuance->marketingProfile)
+                                    @php($syncStatus = method_exists($issuance, 'resolvedDiscountSyncStatus') ? $issuance->resolvedDiscountSyncStatus() : ($issuance->discount_sync_status ?? 'pending'))
                                     <tr class="border-t border-white/10">
                                         <td class="px-4 py-3">{{ trim(($profile->first_name ?? '').' '.($profile->last_name ?? '')) ?: ($profile->email ?: 'Unknown') }}</td>
                                         <td class="px-4 py-3">{{ $issuance->reward_name ?: $issuance->reward_type }} @if($issuance->reward_value) · ${{ number_format((float) $issuance->reward_value, 2) }} @endif</td>
-                                        <td class="px-4 py-3">{{ ucfirst((string) $issuance->status) }}</td>
-                                        <td class="px-4 py-3">{{ $issuance->reward_code ?: '—' }}</td>
+                                        <td class="px-4 py-3">
+                                            <div class="inline-flex rounded-full border px-3 py-1 text-xs font-semibold
+                                                @if($issuance->status === 'redeemed') border-emerald-300/35 bg-emerald-500/10 text-emerald-100
+                                                @elseif($issuance->status === 'claimed') border-sky-300/35 bg-sky-500/10 text-sky-100
+                                                @elseif($issuance->status === 'expired') border-amber-300/35 bg-amber-500/10 text-amber-100
+                                                @elseif($issuance->status === 'cancelled') border-white/15 bg-white/5 text-white/60
+                                                @else border-white/15 bg-white/5 text-white/80 @endif">
+                                                {{ match((string) $issuance->status) {
+                                                    'claimed' => 'Activated',
+                                                    'redeemed' => 'Redeemed',
+                                                    'expired' => 'Expired',
+                                                    'cancelled' => 'Cancelled',
+                                                    default => 'Available',
+                                                } }}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top">
+                                            <div class="font-mono text-xs text-white">{{ $issuance->reward_code ?: '—' }}</div>
+                                            <div class="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold
+                                                @if($syncStatus === 'synced') border-emerald-300/35 bg-emerald-500/10 text-emerald-100
+                                                @elseif($syncStatus === 'failed') border-rose-300/35 bg-rose-500/10 text-rose-100
+                                                @elseif($syncStatus === 'syncing') border-sky-300/35 bg-sky-500/10 text-sky-100
+                                                @else border-white/15 bg-white/5 text-white/70 @endif">
+                                                {{ str($syncStatus)->replace('_', ' ')->title() }}
+                                            </div>
+                                            @if($issuance->shopify_store_key)
+                                                <div class="mt-1 text-[11px] text-white/45">{{ $issuance->shopify_store_key }}</div>
+                                            @endif
+                                            @if($issuance->discount_sync_error)
+                                                <div class="mt-2 rounded-xl border border-rose-300/20 bg-rose-500/10 px-3 py-2 text-[11px] leading-5 text-rose-100">{{ $issuance->discount_sync_error }}</div>
+                                            @endif
+                                        </td>
                                         <td class="px-4 py-3 text-xs text-white/60">
                                             Issued {{ optional($issuance->issued_at)->format('Y-m-d') ?: '—' }}<br>
+                                            Activated {{ optional($issuance->resolvedActivationAt())->format('Y-m-d') ?: '—' }}<br>
                                             Expires {{ optional($issuance->expires_at)->format('Y-m-d') ?: '—' }}
+                                            @if($issuance->redeemed_at)
+                                                <br>Redeemed {{ optional($issuance->redeemed_at)->format('Y-m-d') }}
+                                            @endif
+                                            @if($issuance->order_number)
+                                                <br>Order {{ $issuance->order_number }}
+                                            @endif
+                                            @if($issuance->attributed_revenue)
+                                                <br>Revenue ${{ number_format((float) $issuance->attributed_revenue, 2) }}
+                                            @endif
                                         </td>
                                         <td class="px-4 py-3">
                                             <div class="flex flex-wrap gap-2">
-                                                @if($issuance->status === 'issued')
+                                                @if(in_array($issuance->status, ['issued', 'claimed'], true) && ! in_array($syncStatus, ['synced', 'not_applicable'], true))
                                                     <form method="POST" action="{{ route('birthdays.rewards.activate', $issuance) }}">
                                                         @csrf
-                                                        <button type="submit" class="inline-flex rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-white/80">Activate</button>
+                                                        <button type="submit" class="inline-flex rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-white/80">{{ $issuance->status === 'claimed' ? 'Retry Sync' : 'Activate' }}</button>
                                                     </form>
                                                 @endif
                                                 @foreach(['redeemed' => 'Mark Used', 'expired' => 'Expire', 'cancelled' => 'Cancel'] as $value => $label)
@@ -536,8 +620,8 @@
                 </article>
             </section>
         @elseif($sectionKey === 'activity')
-            <section class="grid gap-4 xl:grid-cols-3">
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5 xl:col-span-1">
+            <section class="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Imports</div>
                     <div class="mt-4 space-y-3">
                         @forelse($recentImports as $run)
@@ -551,7 +635,7 @@
                         @endforelse
                     </div>
                 </article>
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5 xl:col-span-1">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Audit</div>
                     <div class="mt-4 space-y-3">
                         @foreach($recentAudits as $audit)
@@ -564,7 +648,7 @@
                     </div>
                     <div class="mt-4">{{ $recentAudits->links() }}</div>
                 </article>
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5 xl:col-span-1">
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Messages</div>
                     <div class="mt-4 space-y-3">
                         @foreach($recentEvents as $event)
@@ -576,6 +660,22 @@
                         @endforeach
                     </div>
                     <div class="mt-4">{{ $recentEvents->links() }}</div>
+                </article>
+                <article class="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
+                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Reward Sync</div>
+                    <div class="mt-4 space-y-3">
+                        @foreach($recentRewardSignals as $signal)
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-sm font-semibold text-white">{{ str($signal->event_type)->replace('_', ' ')->title() }}</div>
+                                <div class="mt-1 text-xs text-white/55">{{ $signal->issue_type ?: 'ok' }} · {{ $signal->source_id ?: '—' }}</div>
+                                @if(data_get($signal->meta, 'reward_code'))
+                                    <div class="mt-1 font-mono text-[11px] text-white/45">{{ data_get($signal->meta, 'reward_code') }}</div>
+                                @endif
+                                <div class="mt-1 text-xs text-white/45">{{ optional($signal->occurred_at)->format('Y-m-d H:i') ?: '—' }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="mt-4">{{ $recentRewardSignals->links() }}</div>
                 </article>
             </section>
         @endif

@@ -201,10 +201,15 @@ class BirthdayRewardEngineService
                 'reward_value' => $this->rewardValue($rewardType, $config),
                 'reward_code' => null,
                 'shopify_discount_id' => null,
+                'shopify_store_key' => null,
+                'shopify_discount_node_id' => null,
+                'discount_sync_status' => $rewardType === 'points' ? 'not_applicable' : 'pending',
+                'discount_sync_error' => null,
                 'claim_window_starts_at' => $window['starts_at'],
                 'claim_window_ends_at' => $window['ends_at'],
                 'issued_at' => $now,
                 'claimed_at' => null,
+                'activated_at' => null,
                 'expires_at' => $window['ends_at'],
                 'redeemed_at' => null,
                 'order_id' => null,
@@ -233,6 +238,7 @@ class BirthdayRewardEngineService
                 $issuancePayload['points_awarded'] = $points;
                 $issuancePayload['reward_value'] = (string) $points;
                 $issuancePayload['claimed_at'] = $now;
+                $issuancePayload['activated_at'] = $now;
                 $issuancePayload['metadata'] = [
                     'transaction_id' => (int) ($result['transaction_id'] ?? 0),
                     'balance_after' => (int) ($result['balance'] ?? 0),
@@ -272,6 +278,15 @@ class BirthdayRewardEngineService
                 'claim_window' => $window,
             ];
         });
+    }
+
+    public function generateUniqueCodeForRewardType(string $rewardType, int $cycleYear, ?array $config = null): string
+    {
+        return $this->generateCode(
+            $this->normalizeRewardType($rewardType),
+            $cycleYear,
+            $config ?: $this->rewardConfig()
+        );
     }
 
     /**
