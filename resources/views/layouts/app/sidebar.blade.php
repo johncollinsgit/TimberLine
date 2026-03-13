@@ -94,6 +94,9 @@
       display: grid;
       gap: .05rem;
     }
+    .mf-admin-group.mf-admin-group-nested{
+      gap: .12rem;
+    }
     .mf-admin-group-summary{
       list-style: none;
       cursor: pointer;
@@ -109,6 +112,11 @@
     .mf-admin-group-summary::-webkit-details-marker{ display:none; }
     .mf-admin-group-summary:hover{
       background: var(--mf-nav-bg-hover);
+    }
+    .mf-admin-group-summary.mf-admin-group-summary-compact{
+      padding: .38rem .6rem;
+      border-radius: .8rem;
+      font-size: .69rem;
     }
     .mf-admin-group-main{
       display: flex;
@@ -129,6 +137,11 @@
     .mf-admin-group[open] .mf-admin-group-chevron{
       transform: rotate(90deg);
       color: var(--mf-sidebar-text);
+    }
+    .mf-admin-subnav.mf-admin-subnav-deep{
+      margin-left: .65rem;
+      padding-left: .55rem;
+      border-left-color: rgba(var(--mf-accent), .12);
     }
     .mf-sidebar-sort-item { cursor: grab; touch-action: manipulation; }
     .mf-sidebar-sort-item:active { cursor: grabbing; }
@@ -1457,6 +1470,7 @@
   }
 
   $marketingSubItems = [];
+  $marketingSubGroups = [];
   if ($canAccessMarketing) {
       $marketingSubItems = collect(\App\Support\Marketing\MarketingSectionRegistry::sections())
           ->map(function (array $section, string $key): array {
@@ -1469,6 +1483,8 @@
           })
           ->values()
           ->all();
+
+      $marketingSubGroups = \App\Support\Marketing\MarketingSectionRegistry::groupNavigationItems($marketingSubItems);
   }
 
   $wikiSectionItems = [
@@ -1586,7 +1602,7 @@
                       @endforeach
                     </div>
                   </details>
-                @elseif($item['key'] === 'marketing' && count($marketingSubItems) > 0)
+                @elseif($item['key'] === 'marketing' && count($marketingSubGroups) > 0)
                   <details class="mf-admin-group" {{ $marketingActive ? 'open' : '' }}>
                     <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
@@ -1596,14 +1612,26 @@
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                     </summary>
                     <div class="mf-admin-subnav">
-                      @foreach($marketingSubItems as $subItem)
-                        <a
-                          href="{{ $subItem['href'] }}"
-                          wire:navigate
-                          class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                        >
-                          <span>{{ $subItem['label'] }}</span>
-                        </a>
+                      @foreach($marketingSubGroups as $marketingGroup)
+                        <details class="mf-admin-group mf-admin-group-nested" {{ ($marketingGroup['current'] ?? false) ? 'open' : '' }}>
+                          <summary class="mf-admin-group-summary mf-admin-group-summary-compact">
+                            <span class="mf-admin-group-main">
+                              <span class="mf-nav-label">{{ $marketingGroup['label'] }}</span>
+                            </span>
+                            <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                          </summary>
+                          <div class="mf-admin-subnav mf-admin-subnav-deep">
+                            @foreach($marketingGroup['items'] as $subItem)
+                              <a
+                                href="{{ $subItem['href'] }}"
+                                wire:navigate
+                                class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                              >
+                                <span>{{ $subItem['label'] }}</span>
+                              </a>
+                            @endforeach
+                          </div>
+                        </details>
                       @endforeach
                     </div>
                   </details>

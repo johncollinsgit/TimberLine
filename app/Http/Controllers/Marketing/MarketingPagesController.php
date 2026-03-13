@@ -3,26 +3,42 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
+use App\Models\CustomerExternalProfile;
 use App\Models\Event;
 use App\Models\EventInstance;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingGroup;
+use App\Models\MarketingIdentityReview;
+use App\Models\MarketingImportRun;
 use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
+use App\Models\MarketingReviewSummary;
+use App\Models\MarketingSegment;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\SquareCustomer;
+use App\Models\SquareOrder;
+use App\Models\SquarePayment;
 use App\Models\ShopifyImportRun;
 use App\Models\WholesaleCustomScent;
+use App\Services\Marketing\MarketingSourceOverlapReportService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 
 class MarketingPagesController extends Controller
 {
+    public function __construct(
+        protected MarketingSourceOverlapReportService $sourceOverlapReportService
+    ) {
+    }
+
     public function show(string $section = 'overview'): View
     {
         $sections = MarketingSectionRegistry::sections();
@@ -34,7 +50,7 @@ class MarketingPagesController extends Controller
             'currentSectionKey' => $section,
             'currentSection' => $sectionConfig,
             'sections' => $this->buildNavigation($sections),
-            'overviewCards' => $section === 'overview' ? $this->overviewCards() : [],
+            'overviewDashboard' => $section === 'overview' ? $this->overviewDashboard() : [],
             'messagesDashboard' => $section === 'messages' ? $this->messagesDashboard() : [],
             'customersFocusAreas' => $section === 'customers' ? $this->customersFocusAreas() : [],
             'customersDiscoverySummary' => $section === 'customers' ? $this->customersDiscoverySummary() : [],
@@ -62,59 +78,285 @@ class MarketingPagesController extends Controller
     }
 
     /**
-     * @return array<int,array{title:string,what:string,status:string,next:string}>
+     * @return array<string,mixed>
      */
-    protected function overviewCards(): array
+    protected function overviewDashboard(): array
     {
+        $totalProfiles = Schema::hasTable('marketing_profiles')
+            ? (int) MarketingProfile::query()->count()
+            : 0;
+        $missingBothContact = Schema::hasTable('marketing_profiles')
+            ? (int) MarketingProfile::query()
+                ->where(function ($query): void {
+                    $query->whereNull('email')->orWhere('email', '');
+                })
+                ->where(function ($query): void {
+                    $query->whereNull('phone')->orWhere('phone', '');
+                })
+                ->count()
+            : 0;
+        $reachableProfiles = max(0, $totalProfiles - $missingBothContact);
+
+        $overlapSummary = $this->sourceOverlapReportService->summary();
+        $bucketDefinitions = $this->sourceOverlapReportService->bucketDefinitions();
+
+        $sourcePresence = [
+            'shopify' => $this->profileCountForSource($overlapSummary, 'shopify', $bucketDefinitions),
+            'square' => $this->profileCountForSource($overlapSummary, 'square', $bucketDefinitions),
+            'growave' => $this->profileCountForSource($overlapSummary, 'growave', $bucketDefinitions),
+        ];
+
+        $groupsCount = Schema::hasTable('marketing_groups') ? (int) MarketingGroup::query()->count() : 0;
+        $campaignCount = Schema::hasTable('marketing_campaigns') ? (int) MarketingCampaign::query()->count() : 0;
+        $templateCount = Schema::hasTable('marketing_message_templates') ? (int) MarketingMessageTemplate::query()->count() : 0;
+        $segmentCount = Schema::hasTable('marketing_segments') ? (int) MarketingSegment::query()->count() : 0;
+        $queuedApprovals = Schema::hasTable('marketing_campaign_recipients')
+            ? (int) MarketingCampaignRecipient::query()->where('status', 'queued_for_approval')->count()
+            : 0;
+
+        $positiveBalanceProfiles = Schema::hasTable('candle_cash_balances')
+            ? (int) CandleCashBalance::query()->where('balance', '>', 0)->count()
+            : 0;
+        $totalCandleCashBalance = Schema::hasTable('candle_cash_balances')
+            ? (int) CandleCashBalance::query()->sum('balance')
+            : 0;
+        $growaveActivityCount = Schema::hasTable('candle_cash_transactions')
+            ? (int) CandleCashTransaction::query()->where('source', 'growave_activity')->count()
+            : 0;
+        $reviewSummaryCount = Schema::hasTable('marketing_review_summaries')
+            ? (int) MarketingReviewSummary::query()->where('integration', 'growave')->count()
+            : 0;
+
+        $pendingIdentityReviews = Schema::hasTable('marketing_identity_reviews')
+            ? (int) MarketingIdentityReview::query()->where('status', 'pending')->count()
+            : 0;
+
+        $latestShopifyRun = Schema::hasTable('shopify_import_runs')
+            ? ShopifyImportRun::query()->orderByDesc('id')->first()
+            : null;
+        $recentImportRuns = Schema::hasTable('marketing_import_runs')
+            ? MarketingImportRun::query()->orderByDesc('id')->limit(6)->get()
+            : collect();
+
+        $topBuckets = collect([
+            'shopify_square_growave',
+            'square_only',
+            'shopify_growave',
+            'shopify_only',
+            'unlinked_or_other',
+        ])->map(function (string $key) use ($overlapSummary): array {
+            return (array) ($overlapSummary[$key] ?? []);
+        })->filter(fn (array $bucket): bool => ! empty($bucket))->values()->all();
+
+        $sourceCards = [
+            [
+                'label' => 'Shopify',
+                'profiles' => $sourcePresence['shopify'],
+                'supporting_value' => Schema::hasTable('customer_external_profiles')
+                    ? (int) CustomerExternalProfile::query()->where('integration', 'shopify_customer')->count()
+                    : 0,
+                'supporting_label' => 'external customer rows',
+                'detail' => 'Canonical profiles with ecommerce customer or order linkage.',
+                'tone' => 'emerald',
+            ],
+            [
+                'label' => 'Square',
+                'profiles' => $sourcePresence['square'],
+                'supporting_value' => Schema::hasTable('square_customers') ? (int) SquareCustomer::query()->count() : 0,
+                'supporting_label' => 'directory customers',
+                'detail' => 'POS and event buyers landed through the source-table ingestion path.',
+                'tone' => 'sky',
+            ],
+            [
+                'label' => 'Growave',
+                'profiles' => $sourcePresence['growave'],
+                'supporting_value' => Schema::hasTable('customer_external_profiles')
+                    ? (int) CustomerExternalProfile::query()->where('integration', 'growave')->count()
+                    : 0,
+                'supporting_label' => 'loyalty external rows',
+                'detail' => 'Imported loyalty, referral, review, and historical activity attached locally.',
+                'tone' => 'amber',
+            ],
+        ];
+
         return [
-            [
-                'title' => 'Customer Identity Layer',
-                'what' => 'Unifies customer identity with profile records and source links.',
-                'status' => 'Stage 1 foundation tables and admin placeholders created.',
-                'next' => 'Identity merge logic, conflict workflows, and profile drill-downs.',
+            'hero_metrics' => [
+                [
+                    'label' => 'Canonical Profiles',
+                    'value' => $totalProfiles,
+                    'caption' => 'Unified customers now resident in `marketing_profiles`.',
+                    'tone' => 'emerald',
+                ],
+                [
+                    'label' => 'Reachable Profiles',
+                    'value' => $reachableProfiles,
+                    'caption' => $totalProfiles > 0
+                        ? number_format(($reachableProfiles / max(1, $totalProfiles)) * 100, 1) . '% have an email or phone.'
+                        : 'No reachable profiles yet.',
+                    'tone' => 'sky',
+                ],
+                [
+                    'label' => 'Cross-channel Core',
+                    'value' => (int) data_get($overlapSummary, 'shopify_square_growave.profile_count', 0),
+                    'caption' => 'Profiles with Shopify + Square + Growave overlap.',
+                    'tone' => 'amber',
+                ],
+                [
+                    'label' => 'Square-only Missing Contact',
+                    'value' => (int) data_get($overlapSummary, 'square_only.missing_both_count', 0),
+                    'caption' => 'POS buyers that still need contact capture before messaging.',
+                    'tone' => 'rose',
+                ],
             ],
-            [
-                'title' => 'Campaigns & Messaging',
-                'what' => 'Controls campaign drafts, channels, and future send orchestration.',
-                'status' => 'Stage 1 navigation + route skeleton only.',
-                'next' => 'Campaign composer, approvals, and send execution rails.',
+            'source_cards' => $sourceCards,
+            'system_cards' => [
+                [
+                    'title' => 'Messages',
+                    'primary_label' => 'Campaigns / Templates',
+                    'primary_value' => $campaignCount . ' / ' . $templateCount,
+                    'secondary' => number_format($groupsCount) . ' groups · ' . number_format($segmentCount) . ' segments · ' . number_format($queuedApprovals) . ' queued approvals',
+                    'href' => route('marketing.messages'),
+                    'cta' => 'Open Messages',
+                    'tone' => 'sky',
+                ],
+                [
+                    'title' => 'Rewards',
+                    'primary_label' => 'Positive Balance Profiles',
+                    'primary_value' => number_format($positiveBalanceProfiles),
+                    'secondary' => number_format($totalCandleCashBalance) . ' total balance · '
+                        . number_format($growaveActivityCount) . ' Growave activity rows · '
+                        . number_format($reviewSummaryCount) . ' review summaries',
+                    'href' => route('marketing.candle-cash'),
+                    'cta' => 'Open Rewards',
+                    'tone' => 'amber',
+                ],
+                [
+                    'title' => 'Fix Matches',
+                    'primary_label' => 'Pending Match Fixes',
+                    'primary_value' => number_format($pendingIdentityReviews),
+                    'secondary' => number_format((int) data_get($overlapSummary, 'unlinked_or_other.profile_count', 0)) . ' unlinked/other profiles · '
+                        . number_format((int) data_get($overlapSummary, 'square_only.missing_both_count', 0)) . ' square-only no-contact profiles',
+                    'href' => route('marketing.identity-review'),
+                    'cta' => 'Open Fix Matches',
+                    'tone' => 'rose',
+                ],
             ],
-            [
-                'title' => 'Candle Cash / Rewards',
-                'what' => 'Tracks rewards value and links behavior to retention actions.',
-                'status' => 'Balances, transactions, redemptions, storefront endpoints, and ops reconciliation are live; Growave parity is partial.',
-                'next' => 'Import Growave opening balances and add full earn/review/expiration reward event ingestion.',
+            'bucket_summary' => $topBuckets,
+            'focus_actions' => collect([
+                [
+                    'title' => 'Capture Square buyer contact info',
+                    'metric' => (int) data_get($overlapSummary, 'square_only.missing_both_count', 0),
+                    'detail' => 'Square-only profiles with neither email nor phone. These buyers are countable but not marketable yet.',
+                    'href' => route('marketing.providers-integrations', ['square_filter' => 'square_only_missing_contact', 'overlap_filter' => 'square_only_missing_contact']),
+                    'cta' => 'Open contact quality queue',
+                    'tone' => 'rose',
+                ],
+                [
+                    'title' => 'Move Shopify customers into loyalty',
+                    'metric' => $this->bucketCount($overlapSummary, 'shopify_only'),
+                    'detail' => 'Shopify-linked profiles without Growave enrichment are the cleanest loyalty expansion target.',
+                    'href' => route('marketing.providers-integrations', ['overlap_filter' => 'shopify_without_growave']),
+                    'cta' => 'Inspect Shopify without Growave',
+                    'tone' => 'emerald',
+                ],
+                [
+                    'title' => 'Strengthen multi-channel core customers',
+                    'metric' => $this->bucketCount($overlapSummary, 'shopify_square_growave'),
+                    'detail' => 'These are the highest-context customers already touching ecommerce, POS, and loyalty.',
+                    'href' => route('marketing.providers-integrations', ['overlap_filter' => 'all_three']),
+                    'cta' => 'Open all-source overlap',
+                    'tone' => 'amber',
+                ],
+                [
+                    'title' => 'Clear identity review backlog',
+                    'metric' => $pendingIdentityReviews,
+                    'detail' => 'Pending reviews are intentionally blocking ambiguous merges from entering the canonical customer graph.',
+                    'href' => route('marketing.identity-review'),
+                    'cta' => 'Resolve conflicts',
+                    'tone' => 'sky',
+                ],
+            ])->filter(fn (array $item): bool => $item['metric'] > 0)->values()->all(),
+            'recent_import_runs' => $recentImportRuns
+                ->map(fn (MarketingImportRun $run): array => $this->presentImportRun($run))
+                ->values()
+                ->all(),
+            'latest_shopify_run' => $latestShopifyRun ? [
+                'id' => (int) $latestShopifyRun->id,
+                'status' => (string) ($latestShopifyRun->status ?? 'unknown'),
+                'store' => (string) ($latestShopifyRun->store_key ?? $latestShopifyRun->store ?? 'unknown'),
+                'type' => (string) ($latestShopifyRun->type ?? 'shopify'),
+                'finished_at' => optional($latestShopifyRun->finished_at)->toDateTimeString(),
+                'started_at' => optional($latestShopifyRun->started_at)->toDateTimeString(),
+            ] : null,
+            'source_overlap_total_profiles' => array_sum(array_map(
+                fn (array $bucket): int => (int) ($bucket['profile_count'] ?? 0),
+                $overlapSummary
+            )),
+            'source_metrics' => [
+                'square_customers' => Schema::hasTable('square_customers') ? (int) SquareCustomer::query()->count() : 0,
+                'square_orders' => Schema::hasTable('square_orders') ? (int) SquareOrder::query()->count() : 0,
+                'square_payments' => Schema::hasTable('square_payments') ? (int) SquarePayment::query()->count() : 0,
+                'growave_external_profiles' => Schema::hasTable('customer_external_profiles')
+                    ? (int) CustomerExternalProfile::query()->where('integration', 'growave')->count()
+                    : 0,
+                'review_summaries' => $reviewSummaryCount,
             ],
-            [
-                'title' => 'Reviews',
-                'what' => 'Coordinates review provider ingestion and review engagement flows.',
-                'status' => 'Placeholder surface only; provider sync and prompt execution are not live.',
-                'next' => 'Review sync, review prompts, and sentiment reporting.',
-            ],
-            [
-                'title' => 'Source Integrations',
-                'what' => 'Connects Shopify/Square/review and messaging systems into marketing workflows.',
-                'status' => 'Square sync and Shopify Growave metafield snapshot sync are live; full Growave loyalty ingestion is pending.',
-                'next' => 'Provider-specific sync monitoring, ingestion handlers, and reward-ledger parity checks.',
-            ],
-            [
-                'title' => 'Consent / Suppression',
-                'what' => 'Applies channel-safe consent states and suppression rules.',
-                'status' => 'Stage 1 profile-level consent fields and settings seeded.',
-                'next' => 'Enforcement checks and suppression lifecycle management.',
-            ],
-            [
-                'title' => 'Event Attribution',
-                'what' => 'Relates events, orders, and channels for conversion understanding.',
-                'status' => 'Stage 1 event-source mapping table introduced.',
-                'next' => 'Attribution processing and event matching workflows.',
-            ],
-            [
-                'title' => 'Recommendations / Optimization',
-                'what' => 'Guides next-best actions from profile and behavior signals.',
-                'status' => 'Stage 1 planning surface only.',
-                'next' => 'Recommendation scoring and optimization experiments.',
-            ],
+        ];
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $summary
+     * @param array<string,array<string,mixed>> $definitions
+     */
+    protected function profileCountForSource(array $summary, string $source, array $definitions): int
+    {
+        $count = 0;
+
+        foreach ($definitions as $bucketKey => $definition) {
+            if (($definition[$source] ?? false) !== true) {
+                continue;
+            }
+
+            $count += (int) data_get($summary, $bucketKey . '.profile_count', 0);
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $summary
+     */
+    protected function bucketCount(array $summary, string $bucketKey): int
+    {
+        return (int) data_get($summary, $bucketKey . '.profile_count', 0);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function presentImportRun(MarketingImportRun $run): array
+    {
+        $summary = is_array($run->summary) ? $run->summary : [];
+        $processed = data_get($summary, 'checkpoint.processed')
+            ?? data_get($summary, 'processed')
+            ?? data_get($summary, 'candidates_scanned')
+            ?? data_get($summary, 'created')
+            ?? data_get($summary, 'rows_processed')
+            ?? null;
+        $errors = data_get($summary, 'checkpoint.errors')
+            ?? data_get($summary, 'errors')
+            ?? null;
+
+        return [
+            'id' => (int) $run->id,
+            'type' => (string) $run->type,
+            'source_label' => (string) ($run->source_label ?: $run->type),
+            'status' => (string) $run->status,
+            'processed' => $processed !== null ? (int) $processed : null,
+            'errors' => $errors !== null ? (int) $errors : null,
+            'started_at' => optional($run->started_at)->toDateTimeString(),
+            'finished_at' => optional($run->finished_at)->toDateTimeString(),
+            'updated_at' => optional($run->updated_at)->toDateTimeString(),
         ];
     }
 

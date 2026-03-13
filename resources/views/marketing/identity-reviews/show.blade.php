@@ -1,9 +1,9 @@
-<x-layouts::app :title="'Identity Review Detail'">
+<x-layouts::app :title="'Review Match'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Identity Review Detail"
+            title="Review Match"
             description="Resolve a conflicting identity safely by linking to an existing profile, creating a new profile, or dismissing the review."
             hint-title="Review safety rule"
             hint-text="Do not force uncertain merges. Use this page to make explicit reviewer choices and keep an audit trail of the decision."

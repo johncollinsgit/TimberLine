@@ -36,12 +36,12 @@ test('admin and marketing manager can access stage 4 marketing pages', function 
         $this->actingAs($user)
             ->get(route('marketing.message-templates'))
             ->assertOk()
-            ->assertSeeText('Message Templates');
+            ->assertSeeText('Templates');
 
         $this->actingAs($user)
             ->get(route('marketing.recommendations'))
             ->assertOk()
-            ->assertSeeText('Recommendations');
+            ->assertSeeText('Suggestions');
     }
 });
 

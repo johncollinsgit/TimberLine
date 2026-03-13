@@ -1,9 +1,9 @@
-<x-layouts::app :title="'Marketing Message Templates'">
+<x-layouts::app :title="'Templates'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Message Templates"
+            title="Templates"
             description="Reusable SMS/email template library for campaign variants and one-off recommendation drafts."
             hint-title="Template usage"
             hint-text="Templates support variable rendering and channel-specific copy reuse. Sending is still approval-first and execution-disabled."

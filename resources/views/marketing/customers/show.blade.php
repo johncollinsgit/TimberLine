@@ -1,9 +1,9 @@
-<x-layouts::app :title="'Marketing Customer Detail'">
+<x-layouts::app :title="'Customer'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Customer Detail"
+            title="Customer"
             description="Detailed marketing identity view with linked source records, campaign touches, consent history, and conversion context."
             hint-title="How to use this detail page"
             hint-text="This profile is a marketing-layer identity record. Source links and communication history are additive overlays on operational data, not replacements."

@@ -1,65 +1,219 @@
 <x-layouts::app :title="$currentSection['label']">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.6)]">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                    <div class="text-[11px] uppercase tracking-[0.32em] text-white/55">Marketing</div>
-                    <h1 class="mt-2 text-2xl sm:text-3xl font-semibold text-white">{{ $currentSection['label'] }}</h1>
-                    <p class="mt-2 text-sm text-white/70 max-w-3xl">{{ $currentSection['description'] }}</p>
-                </div>
-                <a href="{{ route('marketing.overview') }}" wire:navigate class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
-                    Open Marketing Overview
-                </a>
-            </div>
-        </section>
-
-        <x-admin.help-hint :title="$currentSection['hint_title']">
-            {{ $currentSection['hint_text'] }}
-        </x-admin.help-hint>
-
-        <section class="rounded-3xl border border-white/10 bg-black/15 p-4 sm:p-5">
-            <div class="text-[11px] uppercase tracking-[0.28em] text-white/55">Marketing Sections</div>
-            <div class="mt-3 flex flex-wrap gap-2">
-                @foreach($sections as $section)
-                    <a
-                        href="{{ $section['href'] }}"
-                        wire:navigate
-                        class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition {{ $section['current'] ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-50' : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10' }}"
-                    >
-                        {{ $section['label'] }}
-                    </a>
-                @endforeach
-            </div>
-        </section>
+        <x-marketing.partials.section-shell
+            :section="$currentSection"
+            :sections="$sections"
+        />
 
         @if($currentSectionKey === 'overview')
-            <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-                <div class="text-[11px] uppercase tracking-[0.28em] text-white/55">Current Rollout Status</div>
-                <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    @foreach($overviewCards as $card)
-                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <h2 class="text-sm font-semibold text-white">{{ $card['title'] }}</h2>
-                            <p class="mt-2 text-xs text-white/75">{{ $card['what'] }}</p>
-                            <div class="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                                <div class="text-[10px] uppercase tracking-[0.2em] text-white/55">Current Status</div>
-                                <div class="mt-1 text-xs text-white/80">{{ $card['status'] }}</div>
-                            </div>
-                            <div class="mt-3 text-xs text-white/65">
-                                <span class="font-semibold text-white/80">Future Stage:</span>
-                                {{ $card['next'] }}
-                            </div>
+            @php
+                $toneClasses = [
+                    'emerald' => [
+                        'card' => 'border-emerald-300/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))]',
+                        'badge' => 'border-emerald-300/30 bg-emerald-400/[0.12] text-emerald-50',
+                    ],
+                    'sky' => [
+                        'card' => 'border-sky-300/20 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))]',
+                        'badge' => 'border-sky-300/30 bg-sky-400/[0.12] text-sky-50',
+                    ],
+                    'amber' => [
+                        'card' => 'border-amber-300/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.16),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))]',
+                        'badge' => 'border-amber-300/30 bg-amber-400/[0.12] text-amber-50',
+                    ],
+                    'rose' => [
+                        'card' => 'border-rose-300/20 bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.16),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))]',
+                        'badge' => 'border-rose-300/30 bg-rose-400/[0.12] text-rose-50',
+                    ],
+                ];
+                $heroMetrics = data_get($overviewDashboard, 'hero_metrics', []);
+                $sourceCards = data_get($overviewDashboard, 'source_cards', []);
+                $systemCards = data_get($overviewDashboard, 'system_cards', []);
+                $bucketSummary = data_get($overviewDashboard, 'bucket_summary', []);
+                $focusActions = data_get($overviewDashboard, 'focus_actions', []);
+                $recentImportRuns = data_get($overviewDashboard, 'recent_import_runs', []);
+                $latestShopifyRun = data_get($overviewDashboard, 'latest_shopify_run');
+            @endphp
+
+            <section class="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.09),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-5 sm:p-6 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.65)] backdrop-blur-xl">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <div class="text-[11px] uppercase tracking-[0.28em] text-white/50">Customer Universe</div>
+                        <h2 class="mt-2 text-xl font-semibold text-white sm:text-2xl">What is actually resident in the marketing system</h2>
+                        <p class="mt-2 max-w-4xl text-sm text-white/65">This overview is now built from the imported Shopify, Square, Growave, loyalty, review, and messaging data already living in Backstage. No rollout placeholders.</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/60">
+                        Source overlap base: {{ number_format((int) data_get($overviewDashboard, 'source_overlap_total_profiles', 0)) }} canonical profiles
+                    </div>
+                </div>
+
+                <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach($heroMetrics as $metric)
+                        @php($tone = $toneClasses[$metric['tone']] ?? $toneClasses['emerald'])
+                        <article class="rounded-[1.55rem] border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_16px_36px_-28px_rgba(0,0,0,0.9)] {{ $tone['card'] }}">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $metric['label'] }}</div>
+                            <div class="mt-3 text-3xl font-semibold text-white">{{ number_format((int) $metric['value']) }}</div>
+                            <p class="mt-2 text-sm leading-6 text-white/66">{{ $metric['caption'] }}</p>
                         </article>
                     @endforeach
                 </div>
             </section>
 
-            <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
-                <h2 class="text-lg font-semibold text-white">Coming in later stages</h2>
-                <ul class="mt-3 space-y-2 text-sm text-white/75">
-                    @foreach($currentSection['coming_next'] as $item)
-                        <li class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">{{ $item }}</li>
+            <section class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr),minmax(360px,0.8fr)]">
+                <article class="rounded-[2rem] border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+                    <div class="flex items-end justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] uppercase tracking-[0.26em] text-white/45">Source Footprint</div>
+                            <h2 class="mt-2 text-lg font-semibold text-white">Where the customer universe is coming from</h2>
+                        </div>
+                        <a href="{{ route('marketing.providers-integrations') }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">Open Provider Report</a>
+                    </div>
+                    <div class="grid gap-4 md:grid-cols-3">
+                        @foreach($sourceCards as $card)
+                            @php($tone = $toneClasses[$card['tone']] ?? $toneClasses['emerald'])
+                            <article class="rounded-[1.45rem] border p-4 {{ $tone['card'] }}">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="text-sm font-semibold text-white">{{ $card['label'] }}</div>
+                                    <span class="inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold {{ $tone['badge'] }}">Profiles</span>
+                                </div>
+                                <div class="mt-3 text-3xl font-semibold text-white">{{ number_format((int) $card['profiles']) }}</div>
+                                <div class="mt-2 text-xs uppercase tracking-[0.22em] text-white/42">{{ number_format((int) $card['supporting_value']) }} {{ $card['supporting_label'] }}</div>
+                                <p class="mt-3 text-sm leading-6 text-white/64">{{ $card['detail'] }}</p>
+                            </article>
+                        @endforeach
+                    </div>
+                </article>
+
+                <article class="rounded-[2rem] border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+                    <div class="text-[11px] uppercase tracking-[0.26em] text-white/45">Sync Snapshot</div>
+                    <h2 class="text-lg font-semibold text-white">Latest ingestion state</h2>
+
+                    @if($latestShopifyRun)
+                        <div class="rounded-[1.35rem] border border-emerald-300/20 bg-emerald-500/8 p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="text-sm font-semibold text-white">Latest Shopify import</div>
+                                <span class="inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-[11px] font-semibold uppercase text-emerald-100">{{ strtoupper((string) ($latestShopifyRun['status'] ?? 'unknown')) }}</span>
+                            </div>
+                            <div class="mt-2 text-sm text-white/70">{{ strtoupper((string) ($latestShopifyRun['store'] ?? 'unknown')) }} · {{ strtoupper((string) ($latestShopifyRun['type'] ?? 'shopify')) }}</div>
+                            <div class="mt-2 text-xs text-white/52">Finished: {{ $latestShopifyRun['finished_at'] ?? ($latestShopifyRun['started_at'] ?? '—') }}</div>
+                        </div>
+                    @endif
+
+                    <div class="space-y-3">
+                        @forelse($recentImportRuns as $run)
+                            <div class="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-white">{{ $run['source_label'] }}</div>
+                                        <div class="mt-1 text-xs uppercase tracking-[0.22em] text-white/42">{{ $run['type'] }}</div>
+                                    </div>
+                                    <span class="inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase {{ ($run['status'] ?? '') === 'completed' ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100' : ((($run['status'] ?? '') === 'running') ? 'border-sky-300/30 bg-sky-400/10 text-sky-100' : 'border-amber-300/30 bg-amber-400/10 text-amber-100') }}">
+                                        {{ strtoupper((string) ($run['status'] ?? 'unknown')) }}
+                                    </span>
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-2 text-xs text-white/60">
+                                    @if(!is_null($run['processed']))
+                                        <span class="rounded-full border border-white/10 bg-black/20 px-2 py-1">Processed {{ number_format((int) $run['processed']) }}</span>
+                                    @endif
+                                    @if(!is_null($run['errors']))
+                                        <span class="rounded-full border border-white/10 bg-black/20 px-2 py-1">Errors {{ number_format((int) $run['errors']) }}</span>
+                                    @endif
+                                    <span class="rounded-full border border-white/10 bg-black/20 px-2 py-1">{{ $run['finished_at'] ?: ($run['updated_at'] ?: 'No timestamp') }}</span>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="rounded-[1.35rem] border border-white/10 bg-white/5 p-4 text-sm text-white/60">No marketing import runs recorded yet.</div>
+                        @endforelse
+                    </div>
+                </article>
+            </section>
+
+            <section class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr),minmax(360px,0.85fr)]">
+                <article class="rounded-[2rem] border border-white/10 bg-black/15 p-5 sm:p-6 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+                    <div class="flex items-end justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] uppercase tracking-[0.26em] text-white/45">Source Overlap</div>
+                            <h2 class="mt-2 text-lg font-semibold text-white">How the canonical customer universe breaks down</h2>
+                        </div>
+                        <a href="{{ route('marketing.providers-integrations', ['overlap_filter' => 'all']) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">Open overlap dashboard</a>
+                    </div>
+
+                    <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        @foreach($bucketSummary as $bucket)
+                            <article class="rounded-[1.35rem] border border-white/10 bg-white/5 p-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-white">{{ $bucket['label'] }}</div>
+                                        <p class="mt-1 text-xs leading-5 text-white/58">{{ $bucket['description'] }}</p>
+                                    </div>
+                                    <span class="inline-flex rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-semibold text-white/72">{{ number_format((float) ($bucket['percent_of_total'] ?? 0), 1) }}%</span>
+                                </div>
+                                <div class="mt-4 text-3xl font-semibold text-white">{{ number_format((int) ($bucket['profile_count'] ?? 0)) }}</div>
+                                <div class="mt-3 flex flex-wrap gap-2 text-xs text-white/60">
+                                    <span class="rounded-full border border-white/10 bg-black/20 px-2 py-1">Missing both {{ number_format((int) ($bucket['missing_both_count'] ?? 0)) }}</span>
+                                    <span class="rounded-full border border-white/10 bg-black/20 px-2 py-1">Balance {{ number_format((int) ($bucket['total_candle_cash_balance'] ?? 0)) }}</span>
+                                    <span class="rounded-full border border-white/10 bg-black/20 px-2 py-1">Reviews {{ number_format((int) ($bucket['total_review_count'] ?? 0)) }}</span>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </article>
+
+                <article class="rounded-[2rem] border border-white/10 bg-black/15 p-5 sm:p-6 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+                    <div class="flex items-end justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] uppercase tracking-[0.26em] text-white/45">Operator Queue</div>
+                            <h2 class="mt-2 text-lg font-semibold text-white">What should be worked next</h2>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 space-y-3">
+                        @forelse($focusActions as $action)
+                            @php($tone = $toneClasses[$action['tone']] ?? $toneClasses['emerald'])
+                            <div class="rounded-[1.35rem] border p-4 {{ $tone['card'] }}">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-white">{{ $action['title'] }}</div>
+                                        <p class="mt-2 text-sm leading-6 text-white/65">{{ $action['detail'] }}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-3xl font-semibold text-white">{{ number_format((int) $action['metric']) }}</div>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <a href="{{ $action['href'] }}" wire:navigate class="inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold {{ $tone['badge'] }}">{{ $action['cta'] }}</a>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="rounded-[1.35rem] border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+                                No urgent operator queues detected from the current overlap and sync state.
+                            </div>
+                        @endforelse
+                    </div>
+                </article>
+            </section>
+
+            <section class="rounded-[2rem] border border-white/10 bg-black/15 p-5 sm:p-6 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+                <div class="flex items-end justify-between gap-3">
+                    <div>
+                        <div class="text-[11px] uppercase tracking-[0.26em] text-white/45">Working Surfaces</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">The parts of marketing that are already operational</h2>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-4 xl:grid-cols-3">
+                    @foreach($systemCards as $card)
+                        @php($tone = $toneClasses[$card['tone']] ?? $toneClasses['emerald'])
+                        <article class="rounded-[1.45rem] border p-4 {{ $tone['card'] }}">
+                            <div class="text-[11px] uppercase tracking-[0.22em] text-white/42">{{ $card['title'] }}</div>
+                            <div class="mt-3 text-sm font-semibold text-white">{{ $card['primary_label'] }}</div>
+                            <div class="mt-2 text-3xl font-semibold text-white">{{ $card['primary_value'] }}</div>
+                            <p class="mt-3 text-sm leading-6 text-white/65">{{ $card['secondary'] }}</p>
+                            <div class="mt-4">
+                                <a href="{{ $card['href'] }}" wire:navigate class="inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold {{ $tone['badge'] }}">{{ $card['cta'] }}</a>
+                            </div>
+                        </article>
                     @endforeach
-                </ul>
+                </div>
             </section>
         @elseif($currentSectionKey === 'customers')
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
@@ -68,14 +222,14 @@
                 </x-admin.help-hint>
                 <div>
                     <a href="{{ route('marketing.customers') }}" wire:navigate class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
-                        Open Customers Command Center
+                        Open Customers
                     </a>
                 </div>
             </section>
         @elseif($currentSectionKey === 'messages')
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
                 <x-admin.help-hint tone="neutral" title="How Messages works now">
-                    This restores the Messages entry as a hub over the current messaging stack: Groups for curated lists, internal groups for direct sends, Campaigns for approval-driven SMS/email, and Message Templates for reusable copy.
+                    This restores the Messages entry as a hub over the current messaging stack: Groups for curated lists, internal groups for direct sends, Campaigns for approval-driven SMS/email, and Templates for reusable copy.
                 </x-admin.help-hint>
                 <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                     <article class="rounded-2xl border border-white/10 bg-white/5 p-4">

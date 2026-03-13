@@ -48,17 +48,17 @@ test('admin and marketing manager can access customers and identity review pages
         $this->actingAs($user)
             ->get(route('marketing.customers.show', $profile))
             ->assertOk()
-            ->assertSeeText('Customer Detail');
+            ->assertSeeText('Customer');
 
         $this->actingAs($user)
             ->get(route('marketing.identity-review'))
             ->assertOk()
-            ->assertSeeText('Identity Review Queue');
+            ->assertSeeText('Fix Matches');
 
         $this->actingAs($user)
             ->get(route('marketing.identity-review.show', $review))
             ->assertOk()
-            ->assertSeeText('Identity Review Detail');
+            ->assertSeeText('Review Match');
     }
 });
 

@@ -1,9 +1,9 @@
-<x-layouts::app :title="'Marketing Groups'">
+<x-layouts::app :title="'Groups'">
     <div class="mx-auto w-full max-w-[1700px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Marketing Groups"
+            title="Groups"
             description="Manual curated lists for targeted outreach and operational list management outside rule-based segments."
             hint-title="Groups vs segments"
             hint-text="Groups are explicit, hand-curated lists. Segments remain rule-based and dynamic. Campaign recipient preparation can combine both."
@@ -84,4 +84,3 @@
         </section>
     </div>
 </x-layouts::app>
-
