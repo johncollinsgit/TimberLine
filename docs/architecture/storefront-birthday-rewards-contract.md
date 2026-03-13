@@ -27,6 +27,13 @@ Storefront requests are expected to use the Shopify app proxy surface:
 
 Equivalent `/shopify/marketing/v1/*` routes exist in Laravel, but theme code should use the proxied `/apps/forestry/*` paths.
 
+Canonical Shopify app identity:
+
+- Shopify app: `ModernForestryBackstage`
+- client id: `197d01d6597c938c96b3b35fae6a087c`
+
+The storefront proxy and signed storefront requests should verify against the canonical retail Shopify app secret. Do not point rewards traffic at the legacy split-out theme app.
+
 ## Identity Inputs
 
 The storefront may send any stable subset of:

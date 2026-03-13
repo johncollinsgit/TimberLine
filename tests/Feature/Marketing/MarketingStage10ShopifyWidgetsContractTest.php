@@ -112,6 +112,24 @@ test('shopify v1 consent status accepts app proxy signed requests', function () 
         ->assertJsonPath('meta.auth_mode', 'app_proxy');
 });
 
+test('shopify v1 consent status falls back to retail shopify secret for app proxy verification', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', null);
+    config()->set('marketing.shopify.signing_secret', null);
+    config()->set('services.shopify.stores.retail.client_secret', 'stage10-retail-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'stage10-retail-secret');
+
+    $this->getJson(route('marketing.shopify.v1.consent.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('meta.auth_mode', 'app_proxy');
+});
+
 test('shopify v1 app proxy health endpoint confirms transport and runtime secret loading', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');

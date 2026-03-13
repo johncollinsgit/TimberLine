@@ -44,11 +44,7 @@ class MarketingStorefrontRequestVerifier
             return ['ok' => false, 'mode' => null, 'reason' => 'app_proxy_disabled'];
         }
 
-        $secret = trim((string) (
-            config('marketing.shopify.app_proxy_secret')
-            ?: config('marketing.shopify.signing_secret')
-            ?: ''
-        ));
+        $secret = $this->appProxySecret();
         if ($secret === '') {
             return ['ok' => false, 'mode' => null, 'reason' => 'app_proxy_secret_not_configured'];
         }
@@ -93,7 +89,7 @@ class MarketingStorefrontRequestVerifier
      */
     protected function verifyHmacSignature(Request $request): array
     {
-        $secret = trim((string) config('marketing.shopify.signing_secret', ''));
+        $secret = $this->signingSecret();
         if ($secret === '') {
             return ['ok' => false, 'mode' => null, 'reason' => 'signing_secret_not_configured'];
         }
@@ -257,5 +253,29 @@ class MarketingStorefrontRequestVerifier
         }
 
         return implode('', $parts);
+    }
+
+    protected function appProxySecret(): string
+    {
+        $marketingSecret = trim((string) config('marketing.shopify.app_proxy_secret', ''));
+        if ($marketingSecret !== '') {
+            return $marketingSecret;
+        }
+
+        return $this->signingSecret();
+    }
+
+    protected function signingSecret(): string
+    {
+        $marketingSecret = trim((string) config('marketing.shopify.signing_secret', ''));
+        if ($marketingSecret !== '') {
+            return $marketingSecret;
+        }
+
+        return trim((string) (
+            config('services.shopify.stores.retail.client_secret')
+            ?? config('services.shopify.retail.client_secret')
+            ?? ''
+        ));
     }
 }

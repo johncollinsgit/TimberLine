@@ -74,10 +74,11 @@ return [
         'contract_version' => env('MARKETING_SHOPIFY_CONTRACT_VERSION', 'v1'),
         'widget_token' => env('MARKETING_SHOPIFY_WIDGET_TOKEN'),
         'allow_legacy_token' => (bool) env('MARKETING_SHOPIFY_ALLOW_LEGACY_TOKEN', false),
-        'signing_secret' => env('MARKETING_SHOPIFY_SIGNING_SECRET'),
+        // Storefront verification should track the canonical retail Shopify app by default.
+        'signing_secret' => env('MARKETING_SHOPIFY_SIGNING_SECRET', env('SHOPIFY_RETAIL_CLIENT_SECRET')),
         'signature_ttl_seconds' => (int) env('MARKETING_SHOPIFY_SIGNATURE_TTL_SECONDS', 300),
         'app_proxy_enabled' => (bool) env('MARKETING_SHOPIFY_APP_PROXY_ENABLED', true),
-        'app_proxy_secret' => env('MARKETING_SHOPIFY_APP_PROXY_SECRET'),
+        'app_proxy_secret' => env('MARKETING_SHOPIFY_APP_PROXY_SECRET', env('SHOPIFY_RETAIL_CLIENT_SECRET')),
         'app_proxy_ttl_seconds' => (int) env('MARKETING_SHOPIFY_APP_PROXY_TTL_SECONDS', 900),
         'birthday' => [
             'namespace' => env('MARKETING_SHOPIFY_BIRTHDAY_NAMESPACE', 'forestry_marketing'),
