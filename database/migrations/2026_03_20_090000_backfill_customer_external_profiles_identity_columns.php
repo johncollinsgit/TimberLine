@@ -13,6 +13,16 @@ return new class extends Migration
             return;
         }
 
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement("
+                ALTER TABLE customer_external_profiles
+                MODIFY provider VARCHAR(80) NOT NULL,
+                MODIFY integration VARCHAR(80) NOT NULL,
+                MODIFY store_key VARCHAR(80) NULL,
+                MODIFY external_customer_id VARCHAR(120) NOT NULL
+            ");
+        }
+
         $columns = collect(Schema::getColumnListing('customer_external_profiles'));
 
         Schema::table('customer_external_profiles', function (Blueprint $table) use ($columns): void {
