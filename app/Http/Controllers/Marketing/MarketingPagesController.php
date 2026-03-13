@@ -7,6 +7,10 @@ use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\Event;
 use App\Models\EventInstance;
+use App\Models\MarketingCampaign;
+use App\Models\MarketingCampaignRecipient;
+use App\Models\MarketingGroup;
+use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
@@ -31,6 +35,7 @@ class MarketingPagesController extends Controller
             'currentSection' => $sectionConfig,
             'sections' => $this->buildNavigation($sections),
             'overviewCards' => $section === 'overview' ? $this->overviewCards() : [],
+            'messagesDashboard' => $section === 'messages' ? $this->messagesDashboard() : [],
             'customersFocusAreas' => $section === 'customers' ? $this->customersFocusAreas() : [],
             'customersDiscoverySummary' => $section === 'customers' ? $this->customersDiscoverySummary() : [],
             'candleCashDashboard' => $section === 'candle-cash' ? $this->candleCashDashboard() : [],
@@ -110,6 +115,48 @@ class MarketingPagesController extends Controller
                 'status' => 'Stage 1 planning surface only.',
                 'next' => 'Recommendation scoring and optimization experiments.',
             ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function messagesDashboard(): array
+    {
+        $groups = MarketingGroup::query()
+            ->withCount('members')
+            ->orderByDesc('updated_at')
+            ->limit(8)
+            ->get(['id', 'name', 'description', 'is_internal', 'updated_at']);
+
+        $internalGroups = $groups
+            ->where('is_internal', true)
+            ->values();
+
+        $campaigns = MarketingCampaign::query()
+            ->withCount('recipients')
+            ->orderByDesc('updated_at')
+            ->limit(8)
+            ->get(['id', 'name', 'status', 'channel', 'updated_at']);
+
+        $templates = MarketingMessageTemplate::query()
+            ->orderByDesc('updated_at')
+            ->limit(8)
+            ->get(['id', 'name', 'channel', 'objective', 'is_active', 'updated_at']);
+
+        return [
+            'counts' => [
+                'groups' => MarketingGroup::query()->count(),
+                'internal_groups' => MarketingGroup::query()->where('is_internal', true)->count(),
+                'campaigns' => MarketingCampaign::query()->count(),
+                'queued_approvals' => MarketingCampaignRecipient::query()->where('status', 'queued_for_approval')->count(),
+                'templates' => MarketingMessageTemplate::query()->count(),
+                'active_templates' => MarketingMessageTemplate::query()->where('is_active', true)->count(),
+            ],
+            'groups' => $groups,
+            'internal_groups' => $internalGroups,
+            'campaigns' => $campaigns,
+            'templates' => $templates,
         ];
     }
 

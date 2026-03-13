@@ -216,6 +216,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('customers.candle-cash.redemptions.mark-redeemed');
             Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/cancel', [MarketingCustomersController::class, 'cancelCandleCashRedemption'])
                 ->name('customers.candle-cash.redemptions.cancel');
+            Route::get('/messages', [MarketingPagesController::class, 'show'])
+                ->defaults('section', 'messages')
+                ->name('messages');
             Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
             Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
             Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');

@@ -34,6 +34,17 @@ class MarketingSectionRegistry
                     'Scoring and recommendation signals once identity coverage increases.',
                 ],
             ],
+            'messages' => [
+                'label' => 'Messages',
+                'route' => 'marketing.messages',
+                'description' => 'Operator hub for groups, manual internal sends, campaign approvals, and reusable message templates.',
+                'hint_title' => 'How to use this page',
+                'hint_text' => 'Use Messages as the fastest way into groups, direct internal sends, campaigns, and templates. It is a hub over the existing messaging system, not a separate flow.',
+                'coming_next' => [
+                    'Saved messaging playbooks that prefill group + template + campaign setups.',
+                    'Richer send readiness diagnostics for contact quality and consent coverage.',
+                ],
+            ],
             'identity-review' => [
                 'label' => 'Identity Review',
                 'route' => 'marketing.identity-review',

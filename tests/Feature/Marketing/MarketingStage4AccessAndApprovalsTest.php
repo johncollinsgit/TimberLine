@@ -19,6 +19,11 @@ test('admin and marketing manager can access stage 4 marketing pages', function 
 
     foreach ([$admin, $marketingManager] as $user) {
         $this->actingAs($user)
+            ->get(route('marketing.messages'))
+            ->assertOk()
+            ->assertSeeText('Messages');
+
+        $this->actingAs($user)
             ->get(route('marketing.segments'))
             ->assertOk()
             ->assertSeeText('Segments');
@@ -46,6 +51,9 @@ test('unauthorized roles cannot access stage 4 marketing pages', function () {
         'email_verified_at' => now(),
     ]);
 
+    $this->actingAs($manager)
+        ->get(route('marketing.messages'))
+        ->assertForbidden();
     $this->actingAs($manager)
         ->get(route('marketing.segments'))
         ->assertForbidden();
