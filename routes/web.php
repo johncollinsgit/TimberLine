@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
+use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
 use App\Http\Controllers\Marketing\MarketingGroupsController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
@@ -219,6 +220,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/messages', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'messages')
                 ->name('messages');
+            Route::get('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'show'])->name('send.all-opted-in');
+            Route::post('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'submit'])->name('send.all-opted-in.submit');
             Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
             Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
             Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');

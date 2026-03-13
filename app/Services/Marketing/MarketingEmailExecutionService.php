@@ -133,8 +133,13 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_message', 'dry_run' => $dryRun];
         }
 
-        $subject = trim((string) ($campaign->name ?: 'Timberline Update'));
+        $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->name ?: 'Timberline Update'));
+        $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
+
+        if ($subject === '') {
+            return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
+        }
 
         $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId): MarketingEmailDelivery {
             $recipient->forceFill([

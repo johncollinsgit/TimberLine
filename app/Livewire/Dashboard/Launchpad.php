@@ -58,7 +58,7 @@ class Launchpad extends Component
 
     private function popularActions(): array
     {
-        return [
+        $actions = [
             [
                 'emoji' => '📦',
                 'title' => 'Send Retail List to Pour Room',
@@ -108,6 +108,17 @@ class Launchpad extends Component
                 'url' => route('admin.index'),
             ],
         ];
+
+        if (auth()->user()?->canAccessMarketing()) {
+            array_unshift($actions, [
+                'emoji' => '💬',
+                'title' => 'Send Message to All Opted-In Customers',
+                'description' => 'Quick send to all SMS/email subscribers.',
+                'url' => route('marketing.send.all-opted-in'),
+            ]);
+        }
+
+        return $actions;
     }
 
     private function resolveSearchUrl(?string $input): string
@@ -144,6 +155,10 @@ class Launchpad extends Component
 
         if ($this->matchesAny($normalized, ['stats', 'analytics', 'metrics'])) {
             return route('analytics.index');
+        }
+
+        if (auth()->user()?->canAccessMarketing() && $this->matchesAny($normalized, ['message all', 'send message', 'text all', 'email all', 'opted in'])) {
+            return route('marketing.send.all-opted-in');
         }
 
         if ($this->matchesAny($normalized, ['event', 'market event'])) {

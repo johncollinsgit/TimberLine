@@ -266,7 +266,11 @@
                         <p class="mt-1 text-sm text-white/70">Fastest paths for adding groups, drafting manual text/email copy, or starting a campaign.</p>
                     </div>
                 </div>
-                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                    <a href="{{ route('marketing.send.all-opted-in') }}" wire:navigate class="rounded-2xl border border-sky-300/35 bg-sky-500/15 p-4 text-left">
+                        <div class="text-sm font-semibold text-white">Send to All Opted-In</div>
+                        <div class="mt-2 text-sm text-white/70">Fast lane for sending one SMS/email blast to every opted-in customer.</div>
+                    </a>
                     <a href="{{ route('marketing.groups.create') }}" wire:navigate class="rounded-2xl border border-emerald-300/35 bg-emerald-500/15 p-4 text-left">
                         <div class="text-sm font-semibold text-white">Create Group</div>
                         <div class="mt-2 text-sm text-white/70">Start a curated outreach list, then add members manually or by CSV.</div>
