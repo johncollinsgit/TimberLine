@@ -9,15 +9,12 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Square -> canonical marketing profile sync cadence.
-Schedule::command('marketing:sync-square-customers', [
-    '--limit' => 30000,
-])
+Schedule::command('marketing:sync-square-customers')
     ->dailyAt('01:10')
     ->withoutOverlapping(240)
     ->runInBackground();
 
 Schedule::command('marketing:sync-square-orders', [
-    '--limit' => 2000,
     '--since' => '3 days ago',
 ])
     ->everyThirtyMinutes()
@@ -25,7 +22,6 @@ Schedule::command('marketing:sync-square-orders', [
     ->runInBackground();
 
 Schedule::command('marketing:sync-square-payments', [
-    '--limit' => 2000,
     '--since' => '3 days ago',
 ])
     ->everyThirtyMinutes()

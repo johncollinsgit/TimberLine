@@ -181,10 +181,11 @@ class SquareMarketingSyncService
         callable $handleItem
     ): array {
         $dryRun = (bool) ($options['dry_run'] ?? false);
-        $limit = max(1, (int) ($options['limit'] ?? 200));
+        $limit = $this->nullableInt($options['limit'] ?? null);
         $cursor = $this->nullableString($options['cursor'] ?? null);
         $since = $this->asDate($options['since'] ?? null);
         $createdBy = isset($options['created_by']) ? (int) $options['created_by'] : null;
+        $checkpointEvery = max(1, (int) ($options['checkpoint_every'] ?? 100));
 
         $summary = [
             'processed' => 0,
@@ -206,21 +207,29 @@ class SquareMarketingSyncService
             'started_at' => now(),
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'live-sync',
+                'limit' => $limit,
                 'cursor' => $cursor,
                 'since' => $since?->toIso8601String(),
+                'checkpoint_every' => $checkpointEvery,
+                'checkpoint' => [
+                    'cursor' => $cursor,
+                    'processed' => 0,
+                    'updated_at' => now()->toDateTimeString(),
+                ],
             ],
             'created_by' => $createdBy,
         ]);
 
         try {
             $remaining = $limit;
+            $nextCheckpoint = $checkpointEvery;
             do {
-                $pageLimit = min(100, $remaining);
+                $pageLimit = $remaining === null ? 100 : min(100, $remaining);
                 $page = $fetchPage($cursor, $pageLimit, $since);
                 $items = is_array($page['items'] ?? null) ? $page['items'] : [];
 
                 foreach ($items as $payload) {
-                    if ($remaining <= 0) {
+                    if ($remaining !== null && $remaining <= 0) {
                         break 2;
                     }
 
@@ -235,24 +244,32 @@ class SquareMarketingSyncService
                             'payload' => $payload,
                         ]);
                     } finally {
-                        $remaining--;
+                        if ($remaining !== null) {
+                            $remaining--;
+                        }
                     }
                 }
 
                 $cursor = $this->nullableString($page['cursor'] ?? null);
-            } while ($cursor && $remaining > 0);
+                if ($summary['processed'] >= $nextCheckpoint || $cursor === null || ($remaining !== null && $remaining <= 0)) {
+                    $this->persistCheckpoint($run, $summary, $cursor, $limit, $since, $checkpointEvery, $dryRun);
+                    while ($summary['processed'] >= $nextCheckpoint) {
+                        $nextCheckpoint += $checkpointEvery;
+                    }
+                }
+            } while ($cursor && ($remaining === null || $remaining > 0));
 
             $run->forceFill([
                 'status' => $summary['errors'] > 0 ? 'partial' : 'completed',
                 'finished_at' => now(),
-                'summary' => $summary,
+                'summary' => $this->finalSummary($summary, $cursor, $limit, $since, $checkpointEvery, $dryRun),
                 'notes' => $dryRun ? 'Dry-run executed; source rows were not persisted.' : null,
             ])->save();
         } catch (\Throwable $e) {
             $run->forceFill([
                 'status' => 'failed',
                 'finished_at' => now(),
-                'summary' => $summary,
+                'summary' => $this->finalSummary($summary, $cursor, $limit, $since, $checkpointEvery, $dryRun),
                 'notes' => $e->getMessage(),
             ])->save();
 
@@ -573,10 +590,67 @@ class SquareMarketingSyncService
         }
     }
 
+    /**
+     * @param array<string,mixed> $summary
+     */
+    protected function persistCheckpoint(
+        MarketingImportRun $run,
+        array $summary,
+        ?string $cursor,
+        ?int $limit,
+        ?CarbonImmutable $since,
+        int $checkpointEvery,
+        bool $dryRun
+    ): void {
+        $run->forceFill([
+            'summary' => $this->finalSummary($summary, $cursor, $limit, $since, $checkpointEvery, $dryRun),
+        ])->save();
+    }
+
+    /**
+     * @param array<string,mixed> $summary
+     * @return array<string,mixed>
+     */
+    protected function finalSummary(
+        array $summary,
+        ?string $cursor,
+        ?int $limit,
+        ?CarbonImmutable $since,
+        int $checkpointEvery,
+        bool $dryRun
+    ): array {
+        return array_merge($summary, [
+            'mode' => $dryRun ? 'dry-run' : 'live-sync',
+            'limit' => $limit,
+            'cursor' => $cursor,
+            'since' => $since?->toIso8601String(),
+            'checkpoint_every' => $checkpointEvery,
+            'checkpoint' => [
+                'cursor' => $cursor,
+                'processed' => (int) ($summary['processed'] ?? 0),
+                'errors' => (int) ($summary['errors'] ?? 0),
+                'updated_at' => now()->toDateTimeString(),
+            ],
+        ]);
+    }
+
     protected function nullableString(mixed $value): ?string
     {
         $string = trim((string) $value);
         return $string !== '' ? $string : null;
+    }
+
+    protected function nullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return max(1, (int) $value);
     }
 
     protected function asDate(mixed $value): ?CarbonImmutable

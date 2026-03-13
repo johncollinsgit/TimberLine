@@ -4,6 +4,8 @@ use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\SquareCustomer;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -147,4 +149,78 @@ test('square order sync creates records and profile links', function () {
 
     expect(\App\Models\SquareOrder::query()->where('square_order_id', 'SQ-ORDER-1')->exists())->toBeTrue()
         ->and(MarketingProfileLink::query()->where('source_type', 'square_order')->where('source_id', 'SQ-ORDER-1')->exists())->toBeTrue();
+});
+
+test('square customer sync without limit exhausts paginated results and stores checkpoint summary', function () {
+    Http::fake(function (Request $request) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+        return match ($query['cursor'] ?? null) {
+            'CUR-2' => Http::response([
+                'customers' => [[
+                    'id' => 'SQ-CUST-2',
+                    'given_name' => 'Second',
+                    'email_address' => 'second@example.com',
+                ]],
+                'cursor' => null,
+            ], 200),
+            default => Http::response([
+                'customers' => [[
+                    'id' => 'SQ-CUST-1',
+                    'given_name' => 'First',
+                    'email_address' => 'first@example.com',
+                ]],
+                'cursor' => 'CUR-2',
+            ], 200),
+        };
+    });
+
+    $this->artisan('marketing:sync-square-customers')->assertExitCode(0);
+
+    $run = MarketingImportRun::query()->where('type', 'square_customers_sync')->latest('id')->firstOrFail();
+
+    expect(SquareCustomer::query()->count())->toBe(2)
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(2)
+        ->and(data_get($run->summary, 'limit'))->toBeNull()
+        ->and(data_get($run->summary, 'checkpoint.processed'))->toBe(2)
+        ->and(data_get($run->summary, 'checkpoint.cursor'))->toBeNull();
+});
+
+test('square customer sync resumes from prior run checkpoint cursor', function () {
+    $requestedCursors = [];
+
+    Http::fake(function (Request $request) use (&$requestedCursors) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+        $cursor = $query['cursor'] ?? null;
+        $requestedCursors[] = $cursor;
+
+        return match ($cursor) {
+            'CUR-2' => Http::response([
+                'customers' => [[
+                    'id' => 'SQ-CUST-2',
+                    'given_name' => 'Second',
+                    'email_address' => 'second@example.com',
+                ]],
+                'cursor' => null,
+            ], 200),
+            default => Http::response([
+                'customers' => [[
+                    'id' => 'SQ-CUST-1',
+                    'given_name' => 'First',
+                    'email_address' => 'first@example.com',
+                ]],
+                'cursor' => 'CUR-2',
+            ], 200),
+        };
+    });
+
+    $this->artisan('marketing:sync-square-customers --limit=1 --checkpoint-every=1')->assertExitCode(0);
+
+    $firstRun = MarketingImportRun::query()->where('type', 'square_customers_sync')->latest('id')->firstOrFail();
+
+    $this->artisan('marketing:sync-square-customers --resume-run-id=' . $firstRun->id)->assertExitCode(0);
+
+    expect($requestedCursors)->toBe([null, 'CUR-2'])
+        ->and(SquareCustomer::query()->count())->toBe(2)
+        ->and(data_get($firstRun->fresh()->summary, 'checkpoint.cursor'))->toBe('CUR-2');
 });
