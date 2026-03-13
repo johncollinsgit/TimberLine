@@ -11,7 +11,11 @@ return new class extends Migration
     {
         Schema::create('marketing_email_deliveries', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('marketing_campaign_recipient_id')->nullable()->constrained('marketing_campaign_recipients')->nullOnDelete();
+            $table->foreignId('marketing_campaign_recipient_id')->nullable();
+            $table->foreign('marketing_campaign_recipient_id', 'med_recipient_fk')
+                ->references('id')
+                ->on('marketing_campaign_recipients')
+                ->nullOnDelete();
             $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
             $table->string('sendgrid_message_id')->nullable()->index();
             $table->string('email')->index();
