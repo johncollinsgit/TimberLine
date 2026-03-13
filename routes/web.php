@@ -510,6 +510,9 @@ Route::prefix('shopify/marketing')
     Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('rewards.redeem');
+    Route::post('/rewards/event', [MarketingShopifyIntegrationController::class, 'logRewardEvent'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('rewards.event');
     Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
     Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
         ->withoutMiddleware([VerifyCsrfToken::class])
@@ -541,6 +544,9 @@ Route::prefix('shopify/marketing/v1')
     Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('rewards.redeem');
+    Route::post('/rewards/event', [MarketingShopifyIntegrationController::class, 'logRewardEvent'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('rewards.event');
     Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
     Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
         ->withoutMiddleware([VerifyCsrfToken::class])

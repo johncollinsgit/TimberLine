@@ -280,6 +280,56 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), $states);
     }
 
+    public function logRewardEvent(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'event_type' => ['required', 'string', 'in:reward_view,reward_activate_click,reward_activation_success,reward_activation_failure,reward_apply_click,reward_apply_success,reward_apply_failure,reward_confetti_shown'],
+            'request_key' => ['nullable', 'string', 'max:120'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+            'reward_code' => ['nullable', 'string', 'max:120'],
+            'reward_kind' => ['nullable', 'string', 'max:80'],
+            'surface' => ['nullable', 'string', 'max:80'],
+            'state' => ['nullable', 'string', 'max:120'],
+            'message' => ['nullable', 'string', 'max:255'],
+            'meta' => ['nullable', 'array'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'reward_event', allowCreate: false, allowBody: true);
+        $profile = $resolved['profile'] ?? null;
+
+        $event = $this->eventLogger->log((string) $data['event_type'], [
+            'status' => str_contains((string) $data['event_type'], 'failure') ? 'error' : 'ok',
+            'issue_type' => str_contains((string) $data['event_type'], 'failure')
+                ? ((string) ($data['state'] ?? 'reward_interaction_failed') ?: 'reward_interaction_failed')
+                : null,
+            'source_surface' => trim((string) ($data['surface'] ?? 'shopify_rewards_surface')) ?: 'shopify_rewards_surface',
+            'endpoint' => '/' . ltrim((string) $request->path(), '/'),
+            'request_key' => trim((string) ($data['request_key'] ?? '')) ?: null,
+            'dedupe_key' => trim((string) ($data['request_key'] ?? '')) ?: null,
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_reward_surface',
+            'source_id' => trim((string) ($data['reward_code'] ?? '')) ?: ($profile ? 'profile:' . $profile->id : null),
+            'meta' => array_filter([
+                'reward_code' => trim((string) ($data['reward_code'] ?? '')) ?: null,
+                'reward_kind' => trim((string) ($data['reward_kind'] ?? '')) ?: null,
+                'state' => trim((string) ($data['state'] ?? '')) ?: null,
+                'message' => trim((string) ($data['message'] ?? '')) ?: null,
+                'identity_status' => (string) ($resolved['status'] ?? 'missing_identity'),
+                'extra' => (array) ($data['meta'] ?? []),
+            ], static fn ($value): bool => $value !== null && $value !== []),
+            'resolution_status' => str_contains((string) $data['event_type'], 'failure') ? 'open' : 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'event_id' => (int) $event->id,
+            'profile_id' => $profile ? (int) $profile->id : null,
+            'event_type' => (string) $event->event_type,
+        ], $this->contractMeta($request), ['reward_event_logged']);
+    }
+
     public function requestConsentOptin(
         Request $request,
         MarketingConsentCaptureService $consentCaptureService,
@@ -1198,6 +1248,10 @@ class MarketingShopifyIntegrationController extends Controller
             return null;
         }
 
+        $rewardCode = isset($issuance->reward_code) && $issuance->reward_code !== null
+            ? trim((string) $issuance->reward_code)
+            : '';
+
         return [
             'id' => isset($issuance->id) ? (int) $issuance->id : null,
             'cycle_year' => isset($issuance->cycle_year) ? (int) $issuance->cycle_year : null,
@@ -1212,8 +1266,14 @@ class MarketingShopifyIntegrationController extends Controller
             'points_awarded' => isset($issuance->points_awarded) && $issuance->points_awarded !== null
                 ? (int) $issuance->points_awarded
                 : null,
-            'reward_code' => isset($issuance->reward_code) && $issuance->reward_code !== null
-                ? (string) $issuance->reward_code
+            'reward_code' => $rewardCode !== ''
+                ? $rewardCode
+                : null,
+            'discount_title' => $rewardCode !== ''
+                ? $this->birthdayDiscountTitle($issuance)
+                : null,
+            'apply_path' => $rewardCode !== ''
+                ? $this->birthdayApplyPath($rewardCode)
                 : null,
             'shopify_discount_id' => isset($issuance->shopify_discount_id) && $issuance->shopify_discount_id !== null
                 ? (string) $issuance->shopify_discount_id
@@ -1256,6 +1316,20 @@ class MarketingShopifyIntegrationController extends Controller
             'is_redeemed' => method_exists($issuance, 'isRedeemed') ? (bool) $issuance->isRedeemed() : (string) ($issuance->status ?? '') === 'redeemed',
             'is_usable' => method_exists($issuance, 'isUsable') ? (bool) $issuance->isUsable() : false,
         ];
+    }
+
+    protected function birthdayDiscountTitle(mixed $issuance): string
+    {
+        $base = trim((string) (($issuance->reward_name ?? null) ?: 'Birthday Reward'));
+
+        return sprintf('%s %s #%d', $base, (string) ($issuance->cycle_year ?? date('Y')), (int) ($issuance->id ?? 0));
+    }
+
+    protected function birthdayApplyPath(string $rewardCode): string
+    {
+        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=birthday';
+
+        return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
     }
 
     protected function preferredBirthdayStoreKey(MarketingProfile $profile): ?string

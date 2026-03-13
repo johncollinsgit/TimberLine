@@ -141,11 +141,59 @@ test('storefront birthday payload reflects activated reward state correctly', fu
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.reward.issuance.reward_code', (string) $issuance->reward_code)
+        ->assertJsonPath('data.reward.issuance.discount_title', 'Birthday Candle Cash 2026 #1')
+        ->assertJsonPath('data.reward.issuance.apply_path', '/discount/' . rawurlencode((string) $issuance->reward_code) . '?redirect=' . rawurlencode('/cart?forestry_reward_code=' . rawurlencode((string) $issuance->reward_code) . '&forestry_reward_kind=birthday'))
         ->assertJsonPath('data.reward.issuance.discount_sync_status', 'synced')
         ->assertJsonPath('data.reward.issuance.is_activated', true)
         ->assertJsonPath('data.reward.issuance.is_usable', true)
         ->assertJsonPath('data.reward.issuance.shopify_discount_id', 'gid://shopify/DiscountCodeBasic/222')
         ->assertJsonPath('data.reward.issuance.shopify_store_key', 'retail');
+});
+
+test('storefront reward event endpoint logs idempotent interaction telemetry', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'birthday-signing-secret');
+
+    [$profile, $birthday, $issuance] = birthdayRewardFixture([
+        'status' => 'claimed',
+        'shopify_discount_id' => 'gid://shopify/DiscountCodeBasic/222',
+        'shopify_discount_node_id' => 'gid://shopify/DiscountCodeNode/222',
+        'shopify_store_key' => 'retail',
+        'discount_sync_status' => 'synced',
+        'claimed_at' => now()->subHour(),
+        'activated_at' => now()->subHour(),
+    ]);
+
+    $query = birthdayAppProxySignedQuery([
+        'shop' => 'retail.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'birthday-proxy-secret');
+
+    $payload = [
+        'event_type' => 'reward_apply_click',
+        'request_key' => 'birthday-apply-' . $issuance->id,
+        'marketing_profile_id' => $profile->id,
+        'reward_code' => (string) $issuance->reward_code,
+        'reward_kind' => 'birthday',
+        'surface' => 'rewards_page',
+        'state' => 'already_claimed',
+        'meta' => ['page' => 'rewards'],
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.rewards.event', $query), $payload)
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.profile_id', $profile->id)
+        ->assertJsonPath('meta.states.0', 'reward_event_logged');
+
+    $this->postJson(route('marketing.shopify.v1.rewards.event', $query), $payload)
+        ->assertOk();
+
+    expect(MarketingStorefrontEvent::query()
+        ->where('event_type', 'reward_apply_click')
+        ->where('request_key', 'birthday-apply-' . $issuance->id)
+        ->count())->toBe(1);
 });
 
 test('order sync job closes birthday reward redemption loop and ignores replay', function () {
