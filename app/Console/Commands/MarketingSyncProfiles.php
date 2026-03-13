@@ -4,10 +4,12 @@ namespace App\Console\Commands;
 
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
+use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -26,7 +28,7 @@ class MarketingSyncProfiles extends Command
 
     protected $description = 'Backfill/sync canonical marketing profiles from Shopify, Growave, and Square source layers.';
 
-    public function handle(MarketingProfileSyncService $syncService): int
+    public function handle(MarketingProfileSyncService $syncService, MarketingConsentService $consentService): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $verbose = $this->getOutput()->isVerbose();
@@ -110,7 +112,7 @@ class MarketingSyncProfiles extends Command
                 }
 
                 if (in_array($source, ['all', 'square'], true)) {
-                    $this->syncSquareCustomerCandidates($syncService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
+                    $this->syncSquareCustomerCandidates($syncService, $consentService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
                     $this->syncSquareOrderCandidates($syncService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
                     $this->syncSquarePaymentCandidates($syncService, $summary, $since, $chunk, $remaining, $dryRun, $verbose);
                 }
@@ -267,6 +269,7 @@ class MarketingSyncProfiles extends Command
      */
     protected function syncSquareCustomerCandidates(
         MarketingProfileSyncService $syncService,
+        MarketingConsentService $consentService,
         array &$summary,
         ?CarbonImmutable $since,
         int $chunk,
@@ -304,6 +307,7 @@ class MarketingSyncProfiles extends Command
                     ]
                 );
                 $this->mergeSyncResult($summary, $result);
+                $this->applySquareCustomerConsent($customer, $result, $consentService, $dryRun);
 
                 if ($verbose) {
                     $this->line(sprintf(
@@ -325,6 +329,42 @@ class MarketingSyncProfiles extends Command
                 $remaining--;
             }
         }
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     */
+    protected function applySquareCustomerConsent(
+        SquareCustomer $customer,
+        array $result,
+        MarketingConsentService $consentService,
+        bool $dryRun
+    ): void {
+        if ($dryRun) {
+            return;
+        }
+
+        $profileId = (int) ($result['profile_id'] ?? 0);
+        if ($profileId <= 0) {
+            return;
+        }
+
+        $profile = MarketingProfile::query()->find($profileId);
+        if (! $profile) {
+            return;
+        }
+
+        $consentService->applyToProfile(
+            $profile,
+            $this->consentPayloadFromSquareCustomer($customer),
+            [
+                'source_type' => 'square_customer_sync',
+                'source_id' => (string) $customer->square_customer_id,
+                'details' => [
+                    'applied_via' => 'marketing_profiles_sync',
+                ],
+            ]
+        );
     }
 
     /**
@@ -594,6 +634,27 @@ class MarketingSyncProfiles extends Command
                 'source_type' => 'square_customer',
                 'source_id' => $sourceId,
             ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function consentPayloadFromSquareCustomer(SquareCustomer $customer): array
+    {
+        $preferences = is_array($customer->preferences) ? $customer->preferences : [];
+        $emailUnsubscribed = $preferences['email_unsubscribed'] ?? null;
+        $smsUnsubscribed = $preferences['sms_unsubscribed'] ?? null;
+        $phone = $this->nullableString($customer->phone);
+        $smsOptIn = is_bool($smsUnsubscribed)
+            ? ! $smsUnsubscribed
+            : ($phone !== null ? true : null);
+
+        return [
+            'accepts_email_marketing' => is_bool($emailUnsubscribed) ? ! $emailUnsubscribed : null,
+            'accepts_sms_marketing' => $smsOptIn,
+            'email_opted_out_at' => $emailUnsubscribed === true ? now()->toIso8601String() : null,
+            'sms_opted_out_at' => $smsUnsubscribed === true ? now()->toIso8601String() : null,
         ];
     }
 

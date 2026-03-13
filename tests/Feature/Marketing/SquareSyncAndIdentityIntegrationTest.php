@@ -93,6 +93,32 @@ test('square customer exact phone links to existing marketing profile', function
             ->exists())->toBeTrue();
 });
 
+test('square customer with visible phone defaults to sms consent when sms preference is missing', function () {
+    Http::fake([
+        'https://connect.squareup.com/v2/customers*' => Http::response([
+            'customers' => [[
+                'id' => 'SQ-CUST-SMS-FALLBACK',
+                'given_name' => 'Phone',
+                'family_name' => 'Visible',
+                'email_address' => 'visible.phone@example.com',
+                'phone_number' => '+1 (555) 123-9898',
+                'preferences' => [
+                    'email_unsubscribed' => false,
+                ],
+            ]],
+            'cursor' => null,
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:sync-square-customers --limit=1')->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
+
+    expect($profile->accepts_sms_marketing)->toBeTrue()
+        ->and($profile->accepts_email_marketing)->toBeTrue()
+        ->and($profile->normalized_phone)->toBe('5551239898');
+});
+
 test('square customer conflicting identifiers create identity review', function () {
     MarketingProfile::query()->create([
         'email' => 'conflict@example.com',

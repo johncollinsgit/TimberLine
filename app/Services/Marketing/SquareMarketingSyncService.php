@@ -426,13 +426,17 @@ class SquareMarketingSyncService
     protected function consentFromSquareCustomerPayload(array $payload): array
     {
         $preferences = is_array($payload['preferences'] ?? null) ? $payload['preferences'] : [];
+        $phone = $this->nullableString($payload['phone_number'] ?? null);
 
         $emailUnsubscribed = $preferences['email_unsubscribed'] ?? null;
         $smsUnsubscribed = $preferences['sms_unsubscribed'] ?? null;
+        $smsOptIn = is_bool($smsUnsubscribed)
+            ? ! $smsUnsubscribed
+            : ($phone !== null ? true : null);
 
         return [
             'accepts_email_marketing' => is_bool($emailUnsubscribed) ? !$emailUnsubscribed : null,
-            'accepts_sms_marketing' => is_bool($smsUnsubscribed) ? !$smsUnsubscribed : null,
+            'accepts_sms_marketing' => $smsOptIn,
             'email_opted_out_at' => $emailUnsubscribed === true ? now()->toIso8601String() : null,
             'sms_opted_out_at' => $smsUnsubscribed === true ? now()->toIso8601String() : null,
         ];

@@ -86,6 +86,29 @@ test('square-only customer candidate creates canonical marketing profile', funct
         ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1);
 });
 
+test('square source sync applies sms consent from visible phone when sms preference is missing', function () {
+    SquareCustomer::query()->create([
+        'square_customer_id' => 'SQ-CUST-PIPE-SMS',
+        'given_name' => 'Square',
+        'family_name' => 'Consent',
+        'email' => 'square.sms@example.com',
+        'phone' => '+1 (555) 812-4567',
+        'preferences' => [
+            'email_unsubscribed' => false,
+        ],
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=square')
+        ->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
+
+    expect($profile->accepts_sms_marketing)->toBeTrue()
+        ->and($profile->accepts_email_marketing)->toBeTrue()
+        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1);
+});
+
 test('square customer without direct email or phone still creates canonical profile from source link', function () {
     SquareCustomer::query()->create([
         'square_customer_id' => 'SQ-CUST-PIPE-NOID',
