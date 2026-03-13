@@ -1,0 +1,100 @@
+# Repo Instructions
+
+Analysis-first rule:
+
+Before writing any code, run a repository scan to locate relevant existing
+controllers, services, models, commands, migrations, and queries.
+
+Summarize what already exists and how the requested feature could reuse
+or extend that logic.
+
+Only proceed with implementation after confirming that reuse is not possible.
+
+Before building anything new:
+
+1. Search the codebase for existing:
+   - controllers
+   - services
+   - models
+   - commands
+   - migrations
+   - queries
+2. Determine whether the requested feature already exists or partially exists.
+3. If it exists, reuse or extend it rather than creating a duplicate.
+4. If a similar pattern exists elsewhere in the repo, follow that pattern.
+5. Only introduce a new file or system if no suitable existing structure exists.
+6. When a new component is necessary, explain why reuse was not possible.
+
+Do not create duplicate systems that replicate existing logic.
+Prefer modifying the current architecture over introducing parallel structures.
+
+Identity architecture rule:
+- The canonical customer identity model is `marketing_profiles`.
+- External systems such as Shopify, Square, and Growave must integrate through:
+  - `customer_external_profiles`
+  - `marketing_profile_links`
+  - the `MarketingProfileSyncService` pipeline
+- Never create a new identity, loyalty, or profile model unless explicitly instructed.
+- All customer identity must flow through the canonical `marketing_profiles` system.
+- Do not introduce:
+  - alternate identity tables
+  - parallel loyalty systems
+  - sidecar profile models
+  - duplicate identity resolution logic
+
+Idempotency rule:
+- All imports, sync jobs, and merge operations must be idempotent.
+- Running a sync multiple times must not create duplicate records.
+- Prefer:
+  - upserts
+  - unique provider keys
+  - source identifiers
+  - stable external IDs
+
+Import pipeline rule:
+- External integrations such as Shopify, Square, and other providers must land raw data in source tables first.
+- Source data must then flow through the `MarketingProfileSyncService` pipeline.
+- Do not write integrations that insert directly into `marketing_profiles`.
+
+Commit review rule:
+- If the local branch contains commits ahead of origin, inspect them before pushing.
+- Summarize:
+  - commit message
+  - affected subsystems
+  - files changed
+- Only push automatically if the ahead commits appear intentional and safe.
+- If anything appears experimental, temporary, or unrelated, stop and ask before pushing.
+
+Production data safety rule:
+
+Never write code that mutates or deletes production customer data without
+explicitly confirming the safety of the operation.
+
+The following operations require special caution and explanation before implementation:
+- mass updates
+- deletes
+- schema migrations affecting customer data
+- loyalty balance recalculations
+- profile merges
+- identity remapping
+
+Before implementing any data-changing logic:
+
+1. Identify which tables will be affected.
+2. Explain whether the change is reversible.
+3. Prefer idempotent operations and upserts over destructive changes.
+4. Avoid direct deletes; prefer soft-delete or archival patterns when possible.
+5. Do not overwrite canonical identifiers (`marketing_profile_id`, external IDs).
+6. When possible, stage changes through:
+   - new columns
+   - background migrations
+   - recomputation jobs
+
+Never destroy or rewrite historical records such as:
+- `candle_cash_transactions`
+- `marketing_review_histories`
+- `marketing_import_runs`
+
+When working on integrations such as Shopify, Growave, Square, marketing sync, loyalty, reviews, or segmentation:
+- Check for existing services, sync commands, link tables, and projection logic first.
+- Extend the unified profile pipeline instead of creating sidecar identity flows.

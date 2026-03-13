@@ -114,6 +114,12 @@
             $squareFilters = $squareAudit['filters'];
             $squarePayload = $squareAudit['payload_diagnostics'];
             $manualFollowUpOrders = $squareAudit['manual_follow_up_orders'];
+            $overlapSummary = $sourceOverlap['summary'];
+            $overlapProfiles = $sourceOverlap['profiles'];
+            $overlapFilters = $sourceOverlap['filters'];
+            $overlapFilter = $sourceOverlap['active_filter'];
+            $overlapSearch = $sourceOverlap['search'];
+            $overlapTotalProfiles = $sourceOverlap['total_profiles'];
         @endphp
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-5">
@@ -346,6 +352,197 @@
                         <div class="mt-2 text-sm text-white/70">Prioritize high-value unlinked orders first, then staff-review cardholder hints and mapped event sources where they exist.</div>
                     </div>
                 </div>
+            </article>
+        </section>
+
+        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-5">
+            <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Customer Source Overlap</h2>
+                    <p class="mt-1 text-sm text-white/65">Break the canonical customer universe into Shopify, Square, and Growave overlap buckets so channel coverage and contact quality are obvious.</p>
+                </div>
+                <div class="rounded-2xl border border-sky-300/20 bg-sky-500/10 px-4 py-3 text-xs text-sky-100/90">
+                    Uses canonical <code>marketing_profiles</code> plus existing provider links. This is reporting only; no new identity model or sync path is introduced.
+                </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Canonical Profiles</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) $overlapTotalProfiles) }}</div>
+                    <div class="mt-1 text-xs text-white/50">Total customer universe used as the overlap base.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Square-only</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($overlapSummary, 'square_only.profile_count', 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">POS/event-heavy customers not yet linked to Shopify or Growave.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">All 3 Sources</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($overlapSummary, 'shopify_square_growave.profile_count', 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">True multi-channel customers touching Shopify, Square, and Growave.</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Square-only Missing Contact</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($overlapSummary, 'square_only.missing_both_count', 0)) }}</div>
+                    <div class="mt-1 text-xs text-white/50">Square-only profiles with no email and no phone.</div>
+                </div>
+            </div>
+
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                <div>
+                    <h3 class="text-base font-semibold text-white">Overlap Buckets</h3>
+                    <p class="mt-1 text-sm text-white/60">Each row is derived from existing source links on canonical profiles. Tracked spend reflects currently stored Shopify order totals and Square customer-linked spend where available.</p>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-white/5 text-white/65">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Bucket</th>
+                                <th class="px-4 py-3 text-left">Profiles</th>
+                                <th class="px-4 py-3 text-left">Missing Email</th>
+                                <th class="px-4 py-3 text-left">Missing Phone</th>
+                                <th class="px-4 py-3 text-left">Missing Both</th>
+                                <th class="px-4 py-3 text-left">Tracked Spend</th>
+                                <th class="px-4 py-3 text-left">Candle Cash</th>
+                                <th class="px-4 py-3 text-left">Review Coverage</th>
+                                <th class="px-4 py-3 text-left"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @foreach($overlapSummary as $bucket)
+                                <tr>
+                                    <td class="px-4 py-3 align-top">
+                                        <div class="font-semibold text-white">{{ $bucket['label'] }}</div>
+                                        <div class="mt-1 text-xs text-white/50">{{ $bucket['description'] }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-white/80">
+                                        <div>{{ number_format((int) $bucket['profile_count']) }}</div>
+                                        <div class="mt-1 text-xs text-white/45">{{ number_format((float) $bucket['percent_of_total'], 1) }}% of total</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-white/75">{{ number_format((int) $bucket['missing_email_count']) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">{{ number_format((int) $bucket['missing_phone_count']) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">{{ number_format((int) $bucket['missing_both_count']) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">${{ number_format(((int) $bucket['total_tracked_spend_cents']) / 100, 2) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">{{ number_format((int) $bucket['total_candle_cash_balance']) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">
+                                        <div>{{ number_format((int) $bucket['review_summary_profile_count']) }} profiles</div>
+                                        <div class="mt-1 text-xs text-white/45">{{ number_format((int) $bucket['total_review_count']) }} total reviews</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-right">
+                                        <a
+                                            href="{{ route('marketing.providers-integrations', array_merge(request()->query(), ['overlap_filter' => 'bucket:' . $bucket['key'], 'overlap_page' => null])) }}"
+                                            class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80"
+                                        >
+                                            View Profiles
+                                        </a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h3 class="text-base font-semibold text-white">Profile Drilldown</h3>
+                        <p class="mt-1 text-sm text-white/60">Use this to isolate the operational buckets that matter: Square-only missing contact, Shopify without Growave, Growave without Square, or full cross-channel customers.</p>
+                    </div>
+                    <div class="text-xs text-white/45">Filter is applied against canonical source-link presence, not raw source channel text.</div>
+                </div>
+
+                <form method="GET" action="{{ route('marketing.providers-integrations') }}" class="grid gap-3 lg:grid-cols-12">
+                    <input type="hidden" name="search" value="{{ $search }}" />
+                    <input type="hidden" name="source_system" value="{{ $sourceSystem }}" />
+                    <input type="hidden" name="mapped" value="{{ $mapped }}" />
+                    <input type="hidden" name="square_filter" value="{{ $squareProfileFilter }}" />
+                    <input type="hidden" name="square_search" value="{{ $squareProfileSearch }}" />
+                    <input type="hidden" name="square_min_spend" value="{{ $squareMinSpendDollars }}" />
+                    <div class="lg:col-span-4">
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Overlap Filter</label>
+                        <select name="overlap_filter" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                            @foreach($overlapFilters as $filterOption)
+                                <option value="{{ $filterOption['value'] }}" @selected($overlapFilter === $filterOption['value'])>{{ $filterOption['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="lg:col-span-6">
+                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Search</label>
+                        <input type="text" name="overlap_search" value="{{ $overlapSearch }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" placeholder="Name, email, phone" />
+                    </div>
+                    <div class="lg:col-span-2 flex items-end">
+                        <button type="submit" class="w-full rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white">Apply</button>
+                    </div>
+                </form>
+
+                <div class="overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-white/5 text-white/65">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Profile</th>
+                                <th class="px-4 py-3 text-left">Overlap Bucket</th>
+                                <th class="px-4 py-3 text-left">Sources</th>
+                                <th class="px-4 py-3 text-left">Contact</th>
+                                <th class="px-4 py-3 text-left">Tracked Spend</th>
+                                <th class="px-4 py-3 text-left">Candle Cash</th>
+                                <th class="px-4 py-3 text-left">Reviews</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/10">
+                            @forelse($overlapProfiles as $profile)
+                                @php
+                                    $displayName = trim((string) (($profile->first_name ?? '') . ' ' . ($profile->last_name ?? '')));
+                                    $hasEmail = filled($profile->email ?? null);
+                                    $hasPhone = filled($profile->phone ?? null);
+                                    $bucket = $overlapSummary[(string) ($profile->overlap_bucket ?? 'unlinked_or_other')] ?? null;
+                                @endphp
+                                <tr>
+                                    <td class="px-4 py-3 align-top">
+                                        <div class="font-semibold text-white">{{ $displayName !== '' ? $displayName : 'Unnamed profile' }}</div>
+                                        <div class="mt-1 text-xs text-white/55">Profile #{{ $profile->id }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-white/75">
+                                        <div>{{ $bucket['label'] ?? 'Unlinked / Other' }}</div>
+                                        <div class="mt-1 text-xs text-white/45">{{ $bucket['description'] ?? 'No Shopify, Square, or Growave link present.' }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-white/75">
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_shopify_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Shopify</span>
+                                            <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_square_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Square</span>
+                                            <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] {{ ((int) ($profile->has_growave_link ?? 0)) === 1 ? 'text-emerald-100' : 'text-white/45' }}">Growave</span>
+                                        </div>
+                                        <div class="mt-2 text-xs text-white/45">
+                                            {{ number_format((int) ($profile->square_customer_link_count ?? 0)) }} Square customers ·
+                                            {{ number_format((int) ($profile->shopify_order_link_count ?? 0)) }} Shopify orders
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top">
+                                        <div class="text-white/80">{{ $profile->email ?: 'No email' }}</div>
+                                        <div class="mt-1 text-white/70">{{ $profile->phone ?: 'No phone' }}</div>
+                                        <div class="mt-2 inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold {{ $hasEmail || $hasPhone ? 'border-emerald-300/30 bg-emerald-500/10 text-emerald-100' : 'border-amber-300/30 bg-amber-500/10 text-amber-100' }}">
+                                            {{ $hasEmail || $hasPhone ? 'Reachable' : 'Missing both' }}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-white/75">${{ number_format(((int) ($profile->tracked_spend_cents ?? 0)) / 100, 2) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">{{ number_format((int) ($profile->candle_cash_balance ?? 0)) }}</td>
+                                    <td class="px-4 py-3 align-top text-white/75">
+                                        <div>{{ number_format((int) ($profile->review_count ?? 0)) }} reviews</div>
+                                        <div class="mt-1 text-xs text-white/45">{{ ((int) ($profile->has_review_summary ?? 0)) === 1 ? 'Review summary present' : 'No review summary' }}</div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" class="px-4 py-6 text-center text-white/55">No canonical profiles matched this overlap filter.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>{{ $overlapProfiles->links() }}</div>
             </article>
         </section>
 

@@ -133,6 +133,7 @@ test('providers integrations page renders square contact quality audit and filte
         ->get(route('marketing.providers-integrations', [
             'square_filter' => 'square_only_missing_contact',
             'square_min_spend' => '100',
+            'overlap_filter' => 'square_only_missing_contact',
         ]))
         ->assertOk()
         ->assertSeeText('Square Contact Quality')
