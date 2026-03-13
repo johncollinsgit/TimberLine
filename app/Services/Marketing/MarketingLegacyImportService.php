@@ -3,9 +3,11 @@
 namespace App\Services\Marketing;
 
 use App\Models\MarketingExternalCampaignStat;
+use App\Models\MarketingConsentEvent;
 use App\Models\MarketingImportRow;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -14,7 +16,8 @@ class MarketingLegacyImportService
 {
     public function __construct(
         protected MarketingProfileSyncService $profileSyncService,
-        protected MarketingConsentService $consentService
+        protected MarketingConsentService $consentService,
+        protected MarketingIdentityNormalizer $normalizer,
     ) {
     }
 
@@ -27,13 +30,60 @@ class MarketingLegacyImportService
         ?int $createdBy = null,
         bool $dryRun = false
     ): array {
+        $path = $file->getRealPath();
+        if (! $path || ! file_exists($path)) {
+            throw new \RuntimeException('Uploaded file could not be read.');
+        }
+
+        return $this->importCsvPath(
+            path: $path,
+            fileName: $file->getClientOriginalName(),
+            type: $type,
+            createdBy: $createdBy,
+            dryRun: $dryRun,
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function importPath(
+        string $path,
+        string $type,
+        ?int $createdBy = null,
+        bool $dryRun = false
+    ): array {
+        $absolutePath = realpath($path) ?: $path;
+        if (! is_file($absolutePath)) {
+            throw new \RuntimeException('Import file could not be read: ' . $path);
+        }
+
+        return $this->importCsvPath(
+            path: $absolutePath,
+            fileName: basename($absolutePath),
+            type: $type,
+            createdBy: $createdBy,
+            dryRun: $dryRun,
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function importCsvPath(
+        string $path,
+        string $fileName,
+        string $type,
+        ?int $createdBy = null,
+        bool $dryRun = false
+    ): array {
         $normalizedType = $this->normalizeType($type);
 
         $run = MarketingImportRun::query()->create([
             'type' => $normalizedType,
             'status' => 'running',
             'source_label' => $normalizedType === 'yotpo_contacts_import' ? 'yotpo' : 'square_marketing',
-            'file_name' => $file->getClientOriginalName(),
+            'file_name' => $fileName,
             'started_at' => now(),
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'import',
@@ -53,22 +103,22 @@ class MarketingLegacyImportService
             'links_reused' => 0,
             'reviews_created' => 0,
             'records_skipped' => 0,
+            'matched_existing' => 0,
+            'sms_marketable' => 0,
+            'email_marketable' => 0,
+            'sms_suppressed' => 0,
+            'email_suppressed' => 0,
         ];
 
         try {
-            $path = $file->getRealPath();
-            if (! $path || ! file_exists($path)) {
-                throw new \RuntimeException('Uploaded file could not be read.');
-            }
-
             $rowNumber = 0;
             $handle = fopen($path, 'rb');
             if (! $handle) {
-                throw new \RuntimeException('Unable to open uploaded CSV.');
+                throw new \RuntimeException('Unable to open CSV import file.');
             }
 
             $header = null;
-            while (($data = fgetcsv($handle)) !== false) {
+            while (($data = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
                 if ($header === null) {
                     $header = $this->normalizeHeader($data);
                     continue;
@@ -83,6 +133,7 @@ class MarketingLegacyImportService
                 foreach ($header as $index => $key) {
                     $row[$key] = $data[$index] ?? null;
                 }
+                $row = $this->normalizeRow($normalizedType, $row);
 
                 $summary['processed']++;
                 $externalKey = $this->externalKeyForRow($normalizedType, $row, $rowNumber);
@@ -90,7 +141,19 @@ class MarketingLegacyImportService
                 try {
                     $result = $this->importRow($normalizedType, $row, $externalKey, $dryRun);
                     $summary[$result['status']]++;
-                    foreach (['profiles_created', 'profiles_updated', 'links_created', 'links_reused', 'reviews_created', 'records_skipped'] as $key) {
+                    foreach ([
+                        'profiles_created',
+                        'profiles_updated',
+                        'links_created',
+                        'links_reused',
+                        'reviews_created',
+                        'records_skipped',
+                        'matched_existing',
+                        'sms_marketable',
+                        'email_marketable',
+                        'sms_suppressed',
+                        'email_suppressed',
+                    ] as $key) {
                         $summary[$key] += (int) ($result[$key] ?? 0);
                     }
 
@@ -142,11 +205,17 @@ class MarketingLegacyImportService
      *  links_created:int,
      *  links_reused:int,
      *  reviews_created:int,
-     *  records_skipped:int
+     *  records_skipped:int,
+     *  matched_existing:int,
+     *  sms_marketable:int,
+     *  email_marketable:int,
+     *  sms_suppressed:int,
+     *  email_suppressed:int
      * }
      */
     protected function importRow(string $type, array $row, string $externalKey, bool $dryRun): array
     {
+        $channelSnapshot = $this->consentSnapshotForRow($type, $row);
         $identity = $this->identityPayloadForRow($type, $row, $externalKey);
         $syncResult = $this->profileSyncService->syncExternalIdentity($identity, [
             'dry_run' => $dryRun,
@@ -167,6 +236,11 @@ class MarketingLegacyImportService
                 'links_reused' => (int) ($syncResult['links_reused'] ?? 0),
                 'reviews_created' => (int) ($syncResult['reviews_created'] ?? 0),
                 'records_skipped' => (int) ($syncResult['records_skipped'] ?? 0),
+                'matched_existing' => 0,
+                'sms_marketable' => $this->isChannelMarketable($channelSnapshot['sms'], $row['phone_number'] ?? $row['phone'] ?? null) ? 1 : 0,
+                'email_marketable' => $this->isChannelMarketable($channelSnapshot['email'], $row['email'] ?? $row['email_address'] ?? null) ? 1 : 0,
+                'sms_suppressed' => (int) $channelSnapshot['sms']['suppressed'],
+                'email_suppressed' => (int) $channelSnapshot['email']['suppressed'],
             ];
         }
 
@@ -176,6 +250,7 @@ class MarketingLegacyImportService
             $profile = MarketingProfile::query()->find($profileId);
             if ($profile) {
                 $this->applyConsent($profile, $row, $type, $externalKey);
+                $this->recordConsentSnapshots($profile, $type, $externalKey, $channelSnapshot);
                 $this->upsertCampaignStats($profile, $type, $row, $externalKey);
             }
         } elseif ($dryRun && $profileId > 0) {
@@ -196,30 +271,69 @@ class MarketingLegacyImportService
             'links_reused' => (int) ($syncResult['links_reused'] ?? 0),
             'reviews_created' => (int) ($syncResult['reviews_created'] ?? 0),
             'records_skipped' => (int) ($syncResult['records_skipped'] ?? 0),
+            'matched_existing' => $profileId > 0 && (int) ($syncResult['profiles_created'] ?? 0) === 0 && (int) ($syncResult['records_skipped'] ?? 0) === 0 ? 1 : 0,
+            'sms_marketable' => $this->isChannelMarketable($channelSnapshot['sms'], $row['phone_number'] ?? $row['phone'] ?? null) ? 1 : 0,
+            'email_marketable' => $this->isChannelMarketable($channelSnapshot['email'], $row['email'] ?? $row['email_address'] ?? null) ? 1 : 0,
+            'sms_suppressed' => (int) $channelSnapshot['sms']['suppressed'],
+            'email_suppressed' => (int) $channelSnapshot['email']['suppressed'],
         ];
     }
 
     protected function applyConsent(MarketingProfile $profile, array $row, string $type, string $externalKey): void
     {
+        $snapshot = $this->consentSnapshotForRow($type, $row);
+
         $this->consentService->applyToProfile($profile, [
-            'accepts_email_marketing' => $this->firstNonNull([
-                $this->nullableBool($row['accepts_email_marketing'] ?? null),
-                $this->nullableBool($row['email_subscribed'] ?? null),
-                $this->nullableBool($row['email_opt_in'] ?? null),
-                $this->nullableBool($row['email_consent'] ?? null),
-            ]),
-            'accepts_sms_marketing' => $this->firstNonNull([
-                $this->nullableBool($row['accepts_sms_marketing'] ?? null),
-                $this->nullableBool($row['sms_subscribed'] ?? null),
-                $this->nullableBool($row['sms_opt_in'] ?? null),
-                $this->nullableBool($row['sms_consent'] ?? null),
-            ]),
-            'email_opted_out_at' => $this->nullableString($row['email_unsubscribed_at'] ?? $row['unsubscribed_at'] ?? null),
-            'sms_opted_out_at' => $this->nullableString($row['sms_unsubscribed_at'] ?? null),
+            'accepts_email_marketing' => $snapshot['email']['state'],
+            'accepts_sms_marketing' => $snapshot['sms']['state'],
+            'email_opted_out_at' => $snapshot['email']['state'] === false ? $snapshot['email']['occurred_at'] : null,
+            'sms_opted_out_at' => $snapshot['sms']['state'] === false ? $snapshot['sms']['occurred_at'] : null,
         ], [
             'source_type' => $type,
             'source_id' => $externalKey,
         ]);
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $snapshot
+     */
+    protected function recordConsentSnapshots(MarketingProfile $profile, string $type, string $externalKey, array $snapshot): void
+    {
+        foreach (['email', 'sms'] as $channel) {
+            $channelData = $snapshot[$channel];
+            $state = $channelData['state'];
+            $occurredAt = $channelData['occurred_at'] ?? null;
+            $source = $channelData['source'] ?? null;
+            $suppressed = (bool) ($channelData['suppressed'] ?? false);
+            $rawStatus = $channelData['raw_status'] ?? null;
+
+            if ($state === null && ! $suppressed && $source === null && $occurredAt === null) {
+                continue;
+            }
+
+            $eventType = $state === false ? 'opted_out' : 'imported';
+            $eventOccurredAt = $this->asDate($occurredAt) ?: now()->toImmutable();
+
+            MarketingConsentEvent::query()->firstOrCreate(
+                [
+                    'marketing_profile_id' => $profile->id,
+                    'channel' => $channel,
+                    'event_type' => $eventType,
+                    'source_type' => $type,
+                    'source_id' => $externalKey,
+                    'occurred_at' => $eventOccurredAt,
+                ],
+                [
+                    'details' => array_filter([
+                        'provider' => $type === 'yotpo_contacts_import' ? 'yotpo' : 'legacy_import',
+                        'consent_source' => $source,
+                        'suppressed' => $suppressed,
+                        'raw_status' => $rawStatus,
+                        'timestamp_origin' => $channelData['timestamp_origin'] ?? null,
+                    ], static fn ($value) => $value !== null),
+                ]
+            );
+        }
     }
 
     protected function upsertCampaignStats(MarketingProfile $profile, string $type, array $row, string $externalKey): void
@@ -283,6 +397,7 @@ class MarketingLegacyImportService
     {
         return array_map(function ($value): string {
             $normalized = Str::snake(trim((string) $value));
+            $normalized = preg_replace('/(^|_)s_m_s(_|$)/', '$1sms$2', $normalized) ?? $normalized;
             return $normalized !== '' ? $normalized : 'col_' . Str::random(6);
         }, $header);
     }
@@ -294,7 +409,7 @@ class MarketingLegacyImportService
     protected function identityPayloadForRow(string $type, array $row, string $externalKey): array
     {
         $fullName = $this->nullableString($row['name'] ?? $row['full_name'] ?? null);
-        [$splitFirst, $splitLast] = app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->splitName($fullName);
+        [$splitFirst, $splitLast] = $this->normalizer->splitName($fullName);
 
         $sourceType = $type === 'yotpo_contacts_import' ? 'yotpo_contact' : 'square_marketing_contact';
 
@@ -303,12 +418,13 @@ class MarketingLegacyImportService
             'last_name' => $this->nullableString($row['last_name'] ?? null) ?: $splitLast,
             'raw_email' => $this->nullableString($row['email'] ?? $row['email_address'] ?? $row['customer_email'] ?? null),
             'raw_phone' => $this->nullableString($row['phone'] ?? $row['phone_number'] ?? $row['sms_phone'] ?? null),
-            'source_channels' => [$type === 'yotpo_contacts_import' ? 'legacy_yotpo' : 'legacy_square_marketing'],
+            'source_channels' => [$type === 'yotpo_contacts_import' ? 'yotpo' : 'legacy_square_marketing'],
             'source_links' => [[
                 'source_type' => $sourceType,
                 'source_id' => $externalKey,
                 'source_meta' => [
                     'import_type' => $type,
+                    'created_at' => $this->nullableString($row['source_created_at'] ?? null),
                 ],
             ]],
             'primary_source' => [
@@ -323,6 +439,38 @@ class MarketingLegacyImportService
      */
     protected function externalKeyForRow(string $type, array $row, int $rowNumber): string
     {
+        if ($type === 'yotpo_contacts_import') {
+            $explicit = $this->firstNonNull([
+                $this->nullableString($row['external_id'] ?? null),
+                $this->nullableString($row['contact_id'] ?? null),
+                $this->nullableString($row['customer_id'] ?? null),
+                $this->nullableString($row['id'] ?? null),
+            ]);
+            if ($explicit !== null) {
+                return $explicit;
+            }
+
+            $normalizedEmail = $this->normalizer->normalizeEmail($this->nullableString($row['email'] ?? $row['email_address'] ?? null));
+            $normalizedPhone = $this->normalizer->normalizePhone($this->nullableString($row['phone_number'] ?? $row['phone'] ?? null));
+            $fullName = $this->nullableString($row['name'] ?? null);
+            $createdAt = $this->nullableString($row['source_created_at'] ?? null);
+
+            if ($normalizedEmail !== null) {
+                return 'yotpo-email:' . $normalizedEmail;
+            }
+
+            if ($normalizedPhone !== null) {
+                return 'yotpo-phone:' . $normalizedPhone;
+            }
+
+            $fingerprint = implode('|', array_map(
+                static fn (?string $value): string => $value ?? '',
+                [$fullName, $createdAt]
+            ));
+
+            return 'yotpo-row:' . sha1($fingerprint !== '|' ? $fingerprint : 'row:' . $rowNumber);
+        }
+
         $candidates = [
             $row['external_id'] ?? null,
             $row['contact_id'] ?? null,
@@ -390,6 +538,135 @@ class MarketingLegacyImportService
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    protected function normalizeRow(string $type, array $row): array
+    {
+        if ($type !== 'yotpo_contacts_import') {
+            return $row;
+        }
+
+        $row['source_created_at'] = $this->combineDateAndTime(
+            $this->nullableString($row['date_created'] ?? null),
+            $this->nullableString($row['time_created'] ?? null),
+        )?->toIso8601String();
+
+        return $row;
+    }
+
+    protected function combineDateAndTime(?string $date, ?string $time): ?\Carbon\CarbonImmutable
+    {
+        $date = $this->nullableString($date);
+        $time = $this->nullableString($time);
+
+        if ($date === null && $time === null) {
+            return null;
+        }
+
+        try {
+            return \Carbon\CarbonImmutable::parse(trim(($date ?? '') . ', ' . ($time ?? '')));
+        } catch (\Throwable) {
+            try {
+                return \Carbon\CarbonImmutable::parse((string) ($date ?? $time));
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,array<string,mixed>>
+     */
+    protected function consentSnapshotForRow(string $type, array $row): array
+    {
+        if ($type === 'yotpo_contacts_import') {
+            return [
+                'sms' => $this->yotpoChannelSnapshot($row, 'sms'),
+                'email' => $this->yotpoChannelSnapshot($row, 'email'),
+            ];
+        }
+
+        return [
+            'sms' => $this->genericChannelSnapshot($row, 'sms'),
+            'email' => $this->genericChannelSnapshot($row, 'email'),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    protected function genericChannelSnapshot(array $row, string $channel): array
+    {
+        $state = $this->firstNonNull([
+            $this->nullableBool($row['accepts_' . $channel . '_marketing'] ?? null),
+            $this->nullableBool($row[$channel . '_subscribed'] ?? null),
+            $this->nullableBool($row[$channel . '_opt_in'] ?? null),
+            $this->nullableBool($row[$channel . '_consent'] ?? null),
+        ]);
+
+        return [
+            'state' => $state,
+            'suppressed' => false,
+            'source' => null,
+            'raw_status' => $state,
+            'occurred_at' => $this->nullableString($row[$channel . '_consent_timestamp'] ?? $row[$channel . '_unsubscribed_at'] ?? $row['unsubscribed_at'] ?? null),
+            'timestamp_origin' => $this->nullableString($row[$channel . '_consent_timestamp'] ?? null) ? 'explicit_timestamp' : null,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    protected function yotpoChannelSnapshot(array $row, string $channel): array
+    {
+        $rawStatus = strtolower((string) ($row[$channel . '_marketing_consent'] ?? ''));
+        $rawStatus = trim($rawStatus);
+        $suppressedRaw = strtolower(trim((string) ($row[$channel . '_suppressed'] ?? '')));
+        $suppressed = $suppressedRaw === 'suppressed';
+
+        $state = match ($rawStatus) {
+            'subscribed' => true,
+            'unsubscribed' => false,
+            'never subscribed' => null,
+            default => $this->firstNonNull([
+                $this->nullableBool($row[$channel . '_marketing_consent'] ?? null),
+                $this->nullableBool($row[$channel . '_subscribed'] ?? null),
+                $this->nullableBool($row['accepts_' . $channel . '_marketing'] ?? null),
+                $this->nullableBool($row[$channel . '_opt_in'] ?? null),
+                $this->nullableBool($row[$channel . '_consent'] ?? null),
+            ]),
+        };
+
+        if ($suppressed) {
+            $state = false;
+        }
+
+        $explicitTimestamp = $this->nullableString($row[$channel . '_consent_timestamp'] ?? null);
+        $createdAtFallback = $this->nullableString($row['source_created_at'] ?? null);
+
+        return [
+            'state' => $state,
+            'suppressed' => $suppressed,
+            'source' => $this->nullableString($row[$channel . '_consent_source'] ?? null),
+            'raw_status' => $this->nullableString($row[$channel . '_marketing_consent'] ?? null),
+            'occurred_at' => $explicitTimestamp ?: $createdAtFallback,
+            'timestamp_origin' => $explicitTimestamp ? 'consent_timestamp' : ($createdAtFallback ? 'created_at_fallback' : null),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $snapshot
+     */
+    protected function isChannelMarketable(array $snapshot, mixed $contactValue): bool
+    {
+        return ($snapshot['state'] ?? null) === true && $this->nullableString($contactValue) !== null;
     }
 
     protected function asDate(?string $value): ?\Carbon\CarbonImmutable
