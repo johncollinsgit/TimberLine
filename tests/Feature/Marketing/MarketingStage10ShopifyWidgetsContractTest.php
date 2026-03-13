@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\CandleCashTask;
 use App\Models\MarketingProfile;
 use App\Models\CustomerExternalProfile;
+use App\Services\Marketing\CandleCashService;
 use Illuminate\Support\Str;
 
 test('shopify v1 consent status returns unknown customer state when identity is missing', function () {
@@ -219,6 +221,52 @@ test('shopify v1 customer status supports anonymous visitor and logged in custom
         ->assertJsonPath('data.state', 'linked_customer');
 });
 
+test('shopify v1 candle cash status returns central contract for linked customer', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Cash',
+        'last_name' => 'Customer',
+        'email' => 'cash.customer@example.com',
+        'normalized_email' => 'cash.customer@example.com',
+        'phone' => '5557771212',
+        'normalized_phone' => '+15557771212',
+        'accepts_email_marketing' => true,
+    ]);
+
+    app(CandleCashService::class)->addPoints(
+        profile: $profile,
+        points: 50,
+        type: 'earn',
+        source: 'test',
+        sourceId: 'stage10-candle-cash-status',
+        description: 'Stage10 Candle Cash'
+    );
+
+    CandleCashTask::query()->where('handle', 'google-review')->firstOrFail();
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('version', 'v1')
+        ->assertJsonPath('meta.auth_mode', 'app_proxy')
+        ->assertJsonPath('data.profile_id', $profile->id)
+        ->assertJsonPath('data.copy.title', 'Candle Cash Central')
+        ->assertJsonPath('data.balance.points', 50)
+        ->assertJsonPath('data.consent.email', true)
+        ->assertJsonPath('data.referral.enabled', true)
+        ->assertJsonCount(10, 'data.tasks');
+});
+
 test('shopify v1 endpoints used by extension resolve under app proxy transport', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
@@ -269,6 +317,13 @@ test('shopify v1 endpoints used by extension resolve under app proxy transport',
             'has_contract_version' => true,
         ],
         [
+            'method' => 'GET',
+            'route' => 'marketing.shopify.v1.candle-cash.status',
+            'status' => 200,
+            'query' => [],
+            'has_contract_version' => true,
+        ],
+        [
             'method' => 'POST',
             'route' => 'marketing.shopify.v1.rewards.redeem',
             'status' => 422,
@@ -287,6 +342,14 @@ test('shopify v1 endpoints used by extension resolve under app proxy transport',
         [
             'method' => 'POST',
             'route' => 'marketing.shopify.v1.consent.confirm',
+            'status' => 422,
+            'query' => [],
+            'payload' => [],
+            'has_contract_version' => false,
+        ],
+        [
+            'method' => 'POST',
+            'route' => 'marketing.shopify.v1.candle-cash.tasks.submit',
             'status' => 422,
             'query' => [],
             'payload' => [],

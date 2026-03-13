@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
@@ -288,9 +289,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/recommendations/{recommendation}/approve', [MarketingRecommendationsController::class, 'approve'])->name('recommendations.approve');
             Route::post('/recommendations/{recommendation}/reject', [MarketingRecommendationsController::class, 'reject'])->name('recommendations.reject');
             Route::post('/recommendations/{recommendation}/dismiss', [MarketingRecommendationsController::class, 'dismiss'])->name('recommendations.dismiss');
-            Route::get('/candle-cash', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'candle-cash')
-                ->name('candle-cash');
+            Route::get('/candle-cash', [CandleCashPagesController::class, 'dashboard'])->name('candle-cash');
+            Route::prefix('candle-cash')
+                ->name('candle-cash.')
+                ->group(function () {
+                    Route::get('/tasks', [CandleCashPagesController::class, 'tasks'])->name('tasks');
+                    Route::post('/tasks', [CandleCashPagesController::class, 'storeTask'])->name('tasks.store');
+                    Route::patch('/tasks/{task}', [CandleCashPagesController::class, 'updateTask'])->name('tasks.update');
+                    Route::post('/tasks/{task}/toggle', [CandleCashPagesController::class, 'toggleTask'])->name('tasks.toggle');
+                    Route::post('/tasks/{task}/archive', [CandleCashPagesController::class, 'archiveTask'])->name('tasks.archive');
+                    Route::get('/queue', [CandleCashPagesController::class, 'queue'])->name('queue');
+                    Route::post('/queue/{completion}/approve', [CandleCashPagesController::class, 'approveCompletion'])->name('queue.approve');
+                    Route::post('/queue/{completion}/reject', [CandleCashPagesController::class, 'rejectCompletion'])->name('queue.reject');
+                    Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');
+                    Route::post('/customers/{marketingProfile}/adjust', [CandleCashPagesController::class, 'adjustCustomer'])->name('customers.adjust');
+                    Route::get('/referrals', [CandleCashPagesController::class, 'referrals'])->name('referrals');
+                    Route::post('/referrals/{referral}/reprocess', [CandleCashPagesController::class, 'reprocessReferral'])->name('referrals.reprocess');
+                    Route::get('/settings', [CandleCashPagesController::class, 'settings'])->name('settings');
+                    Route::post('/settings', [CandleCashPagesController::class, 'saveSettings'])->name('settings.save');
+                });
             Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
                 ->name('operations.reconciliation');
             Route::post('/operations/reconciliation/issues/{event}/resolve', [MarketingOperationsController::class, 'resolveIssue'])
@@ -531,6 +548,10 @@ Route::prefix('shopify/marketing')
     Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('birthday.claim');
+    Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
+    Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('candle-cash.tasks.submit');
 });
 
 Route::prefix('shopify/marketing/v1')
@@ -565,6 +586,10 @@ Route::prefix('shopify/marketing/v1')
     Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('birthday.claim');
+    Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
+    Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('candle-cash.tasks.submit');
 });
 
 Route::prefix('shopify')->group(function () {

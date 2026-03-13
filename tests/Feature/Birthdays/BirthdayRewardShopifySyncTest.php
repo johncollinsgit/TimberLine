@@ -12,6 +12,7 @@ use App\Models\ShopifyStore;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardRedemptionReconciliationService;
+use App\Services\Marketing\CandleCashOrderEventService;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
@@ -236,6 +237,7 @@ test('order sync job closes birthday reward redemption loop and ignores replay',
     $job->handle(
         $syncService,
         $conversionService,
+        app(CandleCashOrderEventService::class),
         app(CandleCashRedemptionReconciliationService::class),
         app(BirthdayRewardRedemptionReconciliationService::class)
     );
@@ -251,6 +253,7 @@ test('order sync job closes birthday reward redemption loop and ignores replay',
     $job->handle(
         $syncService,
         $conversionService,
+        app(CandleCashOrderEventService::class),
         app(CandleCashRedemptionReconciliationService::class),
         app(BirthdayRewardRedemptionReconciliationService::class)
     );

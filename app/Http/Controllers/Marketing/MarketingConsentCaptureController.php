@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
+use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
@@ -40,7 +41,8 @@ class MarketingConsentCaptureController extends Controller
     public function storeOptin(
         Request $request,
         MarketingConsentCaptureService $captureService,
-        MarketingConsentService $consentService
+        MarketingConsentService $consentService,
+        CandleCashTaskService $taskService
     ): RedirectResponse {
         $data = $request->validate([
             'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
@@ -102,6 +104,14 @@ class MarketingConsentCaptureController extends Controller
                 'source_type' => 'storefront_optin',
                 'source_id' => $sourceId,
                 'details' => ['stage' => 'optin_capture'],
+            ]);
+
+            $taskService->awardSystemTask($profile, 'email-signup', [
+                'source_type' => 'storefront_optin',
+                'source_id' => $sourceId . ':email',
+                'metadata' => [
+                    'surface' => 'public_optin',
+                ],
             ]);
         }
 

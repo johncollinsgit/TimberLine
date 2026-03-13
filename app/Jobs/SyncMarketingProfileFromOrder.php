@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Order;
 use App\Services\Marketing\BirthdayRewardRedemptionReconciliationService;
+use App\Services\Marketing\CandleCashOrderEventService;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
@@ -32,6 +33,7 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
     public function handle(
         MarketingProfileSyncService $syncService,
         MarketingConversionAttributionService $conversionAttributionService,
+        CandleCashOrderEventService $candleCashOrderEventService,
         CandleCashRedemptionReconciliationService $reconciliationService,
         BirthdayRewardRedemptionReconciliationService $birthdayReconciliationService
     ): void
@@ -44,6 +46,8 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
         $syncService->syncOrder($order, [
             'identity_context' => $this->identityContext,
         ]);
+
+        $candleCashOrderEventService->handle($order, $this->identityContext);
 
         $rewardSummary = $reconciliationService->reconcileShopifyOrder($order, [
             'codes' => (array) ($this->identityContext['applied_reward_codes'] ?? []),

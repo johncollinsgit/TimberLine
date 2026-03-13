@@ -12,6 +12,7 @@ use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\GrowaveProjectionService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
+use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
@@ -62,7 +63,8 @@ class MarketingPublicEventController extends Controller
         Request $request,
         MarketingProfileSyncService $profileSyncService,
         MarketingConsentService $consentService,
-        MarketingConsentIncentiveService $incentiveService
+        MarketingConsentIncentiveService $incentiveService,
+        CandleCashTaskService $taskService
     ): RedirectResponse {
         $data = $request->validate([
             'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
@@ -141,6 +143,14 @@ class MarketingPublicEventController extends Controller
                 'source_type' => 'event_public_optin',
                 'source_id' => $sourceId,
                 'details' => ['event_slug' => $canonicalSlug, 'flow' => 'direct_confirmed'],
+            ]);
+
+            $taskService->awardSystemTask($profile, 'email-signup', [
+                'source_type' => 'event_public_optin',
+                'source_id' => $sourceId . ':email',
+                'metadata' => [
+                    'event_slug' => $canonicalSlug,
+                ],
             ]);
         }
 

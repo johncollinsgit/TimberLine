@@ -1136,6 +1136,7 @@ class ShopifyOrderIngestor
             ->filter(fn (string $value): bool => str_starts_with($value, 'CC-'))
             ->values()
             ->all();
+        $referralCode = $this->extractReferralCode($orderData);
 
         $orderTotal = $orderData['current_total_price']
             ?? $orderData['total_price']
@@ -1159,6 +1160,7 @@ class ShopifyOrderIngestor
             ]] : [],
             'coupon_signals' => $couponSignals,
             'applied_reward_codes' => $redemptionCodes,
+            'referral_code' => $referralCode,
             'order_total' => $orderTotal !== null && $orderTotal !== '' ? number_format((float) $orderTotal, 2, '.', '') : null,
         ];
     }
@@ -1232,5 +1234,45 @@ class ShopifyOrderIngestor
             ->unique()
             ->values()
             ->all();
+    }
+
+    protected function extractReferralCode(array $orderData): ?string
+    {
+        $signals = [];
+
+        foreach ((array) ($orderData['note_attributes'] ?? []) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $name = strtolower(trim((string) ($row['name'] ?? '')));
+            if (
+                $name !== ''
+                && ! str_contains($name, 'ref')
+                && ! str_contains($name, 'friend')
+                && ! str_contains($name, 'share')
+            ) {
+                continue;
+            }
+
+            $value = trim((string) ($row['value'] ?? ''));
+            if ($value !== '') {
+                $signals[] = $value;
+            }
+        }
+
+        $raw = json_encode($orderData);
+        if (is_string($raw) && $raw !== '') {
+            preg_match_all('/\bFOREST-[A-Z0-9]{3,32}\b/i', strtoupper($raw), $matches);
+            foreach ((array) ($matches[0] ?? []) as $code) {
+                $signals[] = (string) $code;
+            }
+        }
+
+        return collect($signals)
+            ->map(fn ($value): string => strtoupper(trim((string) $value)))
+            ->filter(fn (string $value): bool => str_starts_with($value, 'FOREST-'))
+            ->unique()
+            ->first();
     }
 }

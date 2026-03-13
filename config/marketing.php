@@ -96,6 +96,7 @@ return [
 
     'candle_cash' => [
         'code_expiry_days' => (int) env('MARKETING_CANDLE_CASH_CODE_EXPIRY_DAYS', 30),
+        'storefront_base_url' => env('MARKETING_CANDLE_CASH_STOREFRONT_BASE_URL', 'https://theforestrystudio.com'),
     ],
 
     'birthday_rewards' => [

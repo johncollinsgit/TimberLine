@@ -11,6 +11,8 @@ use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashReferralService;
+use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
@@ -334,7 +336,8 @@ class MarketingShopifyIntegrationController extends Controller
         Request $request,
         MarketingConsentCaptureService $consentCaptureService,
         MarketingConsentService $consentService,
-        MarketingConsentIncentiveService $incentiveService
+        MarketingConsentIncentiveService $incentiveService,
+        CandleCashTaskService $taskService
     ): JsonResponse {
         $data = $request->validate([
             'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
@@ -403,6 +406,15 @@ class MarketingShopifyIntegrationController extends Controller
             $consentService->setEmailConsent($profile, true, [
                 'source_type' => 'shopify_widget_optin',
                 'source_id' => $sourceId,
+            ]);
+
+            $taskService->awardSystemTask($profile, 'email-signup', [
+                'source_type' => 'shopify_widget_optin',
+                'source_id' => $sourceId . ':email',
+                'metadata' => [
+                    'surface' => 'shopify_widget',
+                    'flow' => $flow,
+                ],
             ]);
         }
 
@@ -723,7 +735,8 @@ class MarketingShopifyIntegrationController extends Controller
         Request $request,
         BirthdayProfileService $birthdayProfileService,
         BirthdayRewardEngineService $rewardEngine,
-        ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService
+        ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService,
+        CandleCashTaskService $taskService
     ): JsonResponse {
         $data = $request->validate([
             'marketing_profile_id' => ['nullable', 'integer'],
@@ -780,6 +793,18 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         $syncResult = $shopifyBirthdayMetafieldService->writeBirthdayForProfile($profile, $birthdayProfile);
+        $birthdaySignupFrequency = (string) data_get($taskService->programConfig(), 'birthday_reward_frequency', 'once_per_year');
+        $birthdayTaskSourceId = $birthdaySignupFrequency === 'once_per_lifetime'
+            ? 'birthday-signup:profile:' . $profile->id
+            : 'birthday-signup:profile:' . $profile->id . ':year:' . now()->year;
+        $taskService->awardSystemTask($profile, 'birthday-signup', [
+            'source_type' => 'birthday_capture',
+            'source_id' => $birthdayTaskSourceId,
+            'metadata' => [
+                'birth_month' => (int) $birthdayProfile->birth_month,
+                'birth_day' => (int) $birthdayProfile->birth_day,
+            ],
+        ]);
         $status = $rewardEngine->statusForProfile($birthdayProfile);
         if (($status['state'] ?? '') === 'birthday_reward_eligible') {
             $rewardEngine->issueAnnualReward($birthdayProfile);
@@ -909,6 +934,289 @@ class MarketingShopifyIntegrationController extends Controller
                 'issuance' => $issuancePayload,
             ],
         ], $this->contractMeta($request), $states);
+    }
+
+    public function candleCashStatus(
+        Request $request,
+        CandleCashService $candleCashService,
+        CandleCashTaskService $taskService,
+        CandleCashReferralService $referralService,
+        BirthdayRewardEngineService $birthdayRewardEngine
+    ): JsonResponse {
+        $resolved = $this->resolveProfile($request, scope: 'candle_cash_status', allowCreate: false);
+        $profile = $resolved['profile'] ?? null;
+        $referralCode = Str::upper(trim((string) $request->query('ref', '')));
+
+        if ($profile && $referralCode !== '') {
+            $referralService->captureReferral($profile, $referralCode, [
+                'email' => $profile->email,
+                'phone' => $profile->phone,
+            ], [
+                'metadata' => [
+                    'surface' => 'candle_cash_central',
+                    'source' => 'shopify_widget',
+                ],
+            ]);
+        }
+
+        $taskRows = $taskService->storefrontTasks($profile);
+        $taskHistory = $profile
+            ? $profile->candleCashTaskCompletions()->with('task:id,handle,title')->latest('id')->limit(20)->get()
+            : collect();
+        $summary = $profile ? $taskService->customerSummary($profile) : [
+            'current_balance_points' => 0,
+            'current_balance_amount' => 0,
+            'lifetime_earned_points' => 0,
+            'lifetime_earned_amount' => 0,
+            'lifetime_redeemed_points' => 0,
+            'lifetime_redeemed_amount' => 0,
+            'pending_rewards' => 0,
+            'referral_count' => 0,
+            'completed_tasks' => 0,
+        ];
+        $birthdayStatus = $profile
+            ? $birthdayRewardEngine->statusForProfile($profile->birthdayProfile)
+            : ['state' => 'add_birthday_unlock_reward', 'issuance' => null];
+        $recentTransactions = $profile
+            ? $profile->candleCashTransactions()->latest('id')->limit(20)->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at'])
+            : collect();
+        $activeCodes = $profile
+            ? $profile->candleCashRedemptions()
+                ->with('reward:id,name,reward_type,reward_value')
+                ->where('status', 'issued')
+                ->where(function ($query): void {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->latest('id')
+                ->limit(12)
+                ->get()
+            : collect();
+        $referrals = $profile
+            ? $profile->candleCashReferralsMade()->with('referredProfile:id,first_name,last_name,email')->latest('id')->limit(12)->get()
+            : collect();
+        $referralConfig = $taskService->referralConfig();
+        $frontendConfig = $taskService->frontendConfig();
+        $states = $profile ? ['linked_customer'] : ['unknown_customer', 'verification_required'];
+        if ($profile && ((int) ($summary['current_balance_points'] ?? 0)) > 0) {
+            $states[] = 'known_customer_has_balance';
+        }
+        if ($taskRows->contains(fn (array $row): bool => data_get($row, 'eligibility.state') === 'pending')) {
+            $states[] = 'task_pending_review';
+        }
+        if ($birthdayStatus['state'] ?? null) {
+            $states[] = (string) $birthdayStatus['state'];
+        }
+        $states = array_values(array_unique(array_filter($states)));
+
+        $this->logStorefrontEvent($request, 'widget_candle_cash_status_lookup', [
+            'status' => $profile ? 'ok' : 'pending',
+            'issue_type' => $profile ? null : (string) ($resolved['status'] ?? 'missing_identity'),
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_candle_cash_status',
+            'source_id' => $profile ? ('profile:' . $profile->id) : null,
+            'meta' => [
+                'task_count' => $taskRows->count(),
+                'pending_rewards' => (int) ($summary['pending_rewards'] ?? 0),
+                'captured_referral' => $referralCode !== '',
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile ? (int) $profile->id : null,
+            'state' => $states[0] ?? 'unknown_customer',
+            'copy' => [
+                'title' => (string) data_get($frontendConfig, 'central_title', 'Candle Cash Central'),
+                'subtitle' => (string) data_get($frontendConfig, 'central_subtitle', 'Earn rewards by helping us grow through reviews, referrals, and easy engagement.'),
+                'faq_approval_copy' => (string) data_get($frontendConfig, 'faq_approval_copy', ''),
+                'faq_stack_copy' => (string) data_get($frontendConfig, 'faq_stack_copy', ''),
+                'faq_pending_copy' => (string) data_get($frontendConfig, 'faq_pending_copy', ''),
+            ],
+            'summary' => $summary,
+            'balance' => [
+                'points' => (int) ($summary['current_balance_points'] ?? 0),
+                'amount' => (float) ($summary['current_balance_amount'] ?? 0),
+            ],
+            'consent' => [
+                'sms' => (bool) ($profile?->accepts_sms_marketing ?? false),
+                'email' => (bool) ($profile?->accepts_email_marketing ?? false),
+            ],
+            'reward_codes' => $activeCodes->map(function (CandleCashRedemption $row): array {
+                $platform = trim((string) ($row->platform ?? ''));
+                $isShopify = $platform === '' || $platform === 'shopify';
+
+                return [
+                    'id' => (int) $row->id,
+                    'status' => (string) ($row->status ?: 'issued'),
+                    'platform' => $platform !== '' ? $platform : null,
+                    'redemption_code' => (string) $row->redemption_code,
+                    'issued_at' => optional($row->issued_at)->toIso8601String(),
+                    'expires_at' => optional($row->expires_at)->toIso8601String(),
+                    'is_usable' => (string) ($row->status ?: '') === 'issued'
+                        && (! $row->expires_at || $row->expires_at->isFuture()),
+                    'apply_path' => $isShopify ? $this->candleCashApplyPath((string) $row->redemption_code) : null,
+                    'reward' => [
+                        'id' => (int) $row->reward_id,
+                        'name' => (string) ($row->reward?->name ?: 'Candle Cash'),
+                        'reward_type' => (string) ($row->reward?->reward_type ?: ''),
+                        'reward_value' => $row->reward?->reward_value !== null ? (string) $row->reward->reward_value : null,
+                    ],
+                ];
+            })->all(),
+            'referral' => [
+                'enabled' => $referralService->isEnabled(),
+                'code' => $profile ? $referralService->referralCodeForProfile($profile) : null,
+                'link' => $profile ? $referralService->referralLinkForProfile($profile) : null,
+                'headline' => (string) data_get($referralConfig, 'program_headline', 'Share Candle Cash with a friend'),
+                'copy' => (string) data_get($referralConfig, 'program_copy', 'Share your link and earn Candle Cash when a friend places a qualifying first order.'),
+                'referrer_reward_amount' => (float) data_get($referralConfig, 'referrer_reward_amount', 10),
+                'referred_reward_amount' => (float) data_get($referralConfig, 'referred_reward_amount', 5),
+                'count' => $profile ? (int) $profile->candleCashReferralsMade()->count() : 0,
+                'rows' => $referrals->map(function ($referral): array {
+                    $referred = $referral->referredProfile;
+
+                    return [
+                        'id' => (int) $referral->id,
+                        'status' => (string) $referral->status,
+                        'referrer_reward_status' => (string) $referral->referrer_reward_status,
+                        'referred_reward_status' => (string) $referral->referred_reward_status,
+                        'qualifying_order_number' => $referral->qualifying_order_number ? (string) $referral->qualifying_order_number : null,
+                        'qualifying_order_total' => $referral->qualifying_order_total !== null ? (string) $referral->qualifying_order_total : null,
+                        'qualified_at' => optional($referral->qualified_at)->toIso8601String(),
+                        'rewarded_at' => optional($referral->rewarded_at)->toIso8601String(),
+                        'referred_customer' => $referred
+                            ? [
+                                'id' => (int) $referred->id,
+                                'name' => trim(($referred->first_name ?? '') . ' ' . ($referred->last_name ?? '')) ?: ($referred->email ?: 'Friend'),
+                            ]
+                            : null,
+                    ];
+                })->all(),
+            ],
+            'tasks' => $taskRows->map(fn (array $row): array => [
+                'id' => (int) data_get($row, 'task.id'),
+                'handle' => (string) data_get($row, 'task.handle'),
+                'title' => (string) data_get($row, 'task.title'),
+                'description' => (string) data_get($row, 'task.description'),
+                'reward_amount' => (string) data_get($row, 'task.reward_amount'),
+                'task_type' => (string) data_get($row, 'task.task_type'),
+                'action_url' => data_get($row, 'task.action_url'),
+                'button_text' => (string) (data_get($row, 'task.button_text') ?: 'Complete task'),
+                'requires_manual_approval' => (bool) data_get($row, 'task.requires_manual_approval'),
+                'requires_customer_submission' => (bool) data_get($row, 'task.requires_customer_submission'),
+                'eligibility' => data_get($row, 'eligibility'),
+            ])->all(),
+            'history' => [
+                'tasks' => $taskHistory->map(function ($row): array {
+                    return [
+                        'id' => (int) $row->id,
+                        'task_title' => (string) ($row->task?->title ?: 'Task'),
+                        'task_handle' => (string) ($row->task?->handle ?: ''),
+                        'status' => (string) $row->status,
+                        'reward_amount' => $row->reward_amount !== null ? (string) $row->reward_amount : null,
+                        'review_notes' => $row->review_notes ? (string) $row->review_notes : null,
+                        'created_at' => optional($row->created_at)->toIso8601String(),
+                        'awarded_at' => optional($row->awarded_at)->toIso8601String(),
+                    ];
+                })->all(),
+                'ledger' => $recentTransactions->map(function ($row): array {
+                    return [
+                        'id' => (int) $row->id,
+                        'type' => (string) $row->type,
+                        'points' => (int) $row->points,
+                        'description' => $row->description ? (string) $row->description : null,
+                        'created_at' => optional($row->created_at)->toIso8601String(),
+                    ];
+                })->all(),
+            ],
+            'birthday' => [
+                'state' => (string) ($birthdayStatus['state'] ?? 'add_birthday_unlock_reward'),
+                'issuance' => $this->birthdayIssuancePayload($birthdayStatus['issuance'] ?? null),
+            ],
+        ], $this->contractMeta($request), $states);
+    }
+
+    public function submitCandleCashTask(
+        Request $request,
+        CandleCashTaskService $taskService
+    ): JsonResponse {
+        $data = $request->validate([
+            'task_handle' => ['required', 'string', 'max:120'],
+            'proof_url' => ['nullable', 'url', 'max:500'],
+            'proof_text' => ['nullable', 'string', 'max:2000'],
+            'request_key' => ['nullable', 'string', 'max:200'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'candle_cash_task_submit', allowCreate: false, allowBody: true);
+        if (! $resolved['profile']) {
+            return $this->identityErrorResponse((string) $resolved['status'], $request);
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $resolved['profile'];
+        $result = $taskService->submitCustomerTask(
+            $profile,
+            (string) $data['task_handle'],
+            [
+                'proof_url' => $data['proof_url'] ?? null,
+                'proof_text' => $data['proof_text'] ?? null,
+            ],
+            [
+                'source_type' => 'shopify_widget_task',
+                'source_id' => (string) $data['task_handle'],
+                'request_key' => trim((string) ($data['request_key'] ?? '')),
+                'metadata' => [
+                    'surface' => 'candle_cash_central',
+                ],
+            ]
+        );
+
+        $completion = $result['completion'] ?? null;
+        $ok = (bool) ($result['ok'] ?? false);
+        $state = (string) ($result['state'] ?? ($ok ? 'awarded' : 'blocked'));
+
+        $this->logStorefrontEvent($request, 'widget_candle_cash_task_submit', [
+            'status' => $ok ? 'ok' : 'error',
+            'issue_type' => $ok ? null : ((string) ($result['error'] ?? 'task_submit_failed')),
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_candle_cash_task',
+            'source_id' => (string) $data['task_handle'],
+            'request_key' => trim((string) ($data['request_key'] ?? '')),
+            'meta' => [
+                'task_handle' => (string) $data['task_handle'],
+                'state' => $state,
+                'completion_id' => $completion?->id,
+            ],
+            'resolution_status' => $ok ? 'resolved' : 'open',
+        ]);
+
+        if (! $ok) {
+            return MarketingStorefrontContract::error(
+                code: (string) ($result['error'] ?? 'task_submit_failed'),
+                message: 'That task could not be completed right now.',
+                status: 422,
+                details: ['state' => $state],
+                states: [$state],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'task_handle' => (string) $data['task_handle'],
+            'state' => $state,
+            'completion' => $completion ? [
+                'id' => (int) $completion->id,
+                'status' => (string) $completion->status,
+                'reward_amount' => $completion->reward_amount !== null ? (string) $completion->reward_amount : null,
+                'awarded_at' => optional($completion->awarded_at)->toIso8601String(),
+                'reviewed_at' => optional($completion->reviewed_at)->toIso8601String(),
+            ] : null,
+        ], $this->contractMeta($request), [$state]);
     }
 
     public function customerStatus(
@@ -1328,6 +1636,13 @@ class MarketingShopifyIntegrationController extends Controller
     protected function birthdayApplyPath(string $rewardCode): string
     {
         $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=birthday';
+
+        return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
+    }
+
+    protected function candleCashApplyPath(string $rewardCode): string
+    {
+        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=candle_cash';
 
         return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
     }

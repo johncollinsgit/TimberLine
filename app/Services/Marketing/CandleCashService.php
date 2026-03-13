@@ -7,11 +7,30 @@ use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
+use App\Models\MarketingSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CandleCashService
 {
+    public function pointsPerDollar(): int
+    {
+        $setting = MarketingSetting::query()->where('key', 'candle_cash_program_config')->first();
+        $configured = (int) data_get((array) ($setting?->value ?? []), 'points_per_dollar', 10);
+
+        return max(1, $configured);
+    }
+
+    public function pointsFromAmount(float|int|string $amount): int
+    {
+        return max(0, (int) round(((float) $amount) * $this->pointsPerDollar()));
+    }
+
+    public function amountFromPoints(int $points): float
+    {
+        return round($points / $this->pointsPerDollar(), 2);
+    }
+
     public function ensureBalance(MarketingProfile $profile): CandleCashBalance
     {
         return CandleCashBalance::query()->firstOrCreate(
