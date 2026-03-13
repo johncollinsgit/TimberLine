@@ -139,6 +139,11 @@ class MarketingProfile extends Model
         return $this->hasMany(BirthdayRewardIssuance::class, 'marketing_profile_id');
     }
 
+    public function birthdayMessageEvents(): HasMany
+    {
+        return $this->hasMany(BirthdayMessageEvent::class, 'marketing_profile_id');
+    }
+
     public function reviewSummaries(): HasMany
     {
         return $this->hasMany(MarketingReviewSummary::class, 'marketing_profile_id');

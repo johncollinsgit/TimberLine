@@ -1172,6 +1172,12 @@ class MarketingShopifyIntegrationController extends Controller
             'id' => isset($issuance->id) ? (int) $issuance->id : null,
             'cycle_year' => isset($issuance->cycle_year) ? (int) $issuance->cycle_year : null,
             'reward_type' => isset($issuance->reward_type) ? (string) $issuance->reward_type : null,
+            'reward_name' => isset($issuance->reward_name) && $issuance->reward_name !== null
+                ? (string) $issuance->reward_name
+                : null,
+            'reward_value' => isset($issuance->reward_value) && $issuance->reward_value !== null
+                ? (string) $issuance->reward_value
+                : null,
             'status' => isset($issuance->status) ? (string) $issuance->status : null,
             'points_awarded' => isset($issuance->points_awarded) && $issuance->points_awarded !== null
                 ? (int) $issuance->points_awarded
@@ -1179,13 +1185,24 @@ class MarketingShopifyIntegrationController extends Controller
             'reward_code' => isset($issuance->reward_code) && $issuance->reward_code !== null
                 ? (string) $issuance->reward_code
                 : null,
+            'shopify_discount_id' => isset($issuance->shopify_discount_id) && $issuance->shopify_discount_id !== null
+                ? (string) $issuance->shopify_discount_id
+                : null,
             'issued_at' => isset($issuance->issued_at) ? optional($issuance->issued_at)->toIso8601String() : null,
             'claimed_at' => isset($issuance->claimed_at) ? optional($issuance->claimed_at)->toIso8601String() : null,
+            'expires_at' => isset($issuance->expires_at) ? optional($issuance->expires_at)->toIso8601String() : null,
+            'redeemed_at' => isset($issuance->redeemed_at) ? optional($issuance->redeemed_at)->toIso8601String() : null,
             'claim_window_starts_at' => isset($issuance->claim_window_starts_at)
                 ? optional($issuance->claim_window_starts_at)->toIso8601String()
                 : null,
             'claim_window_ends_at' => isset($issuance->claim_window_ends_at)
                 ? optional($issuance->claim_window_ends_at)->toIso8601String()
+                : null,
+            'order_number' => isset($issuance->order_number) && $issuance->order_number !== null
+                ? (string) $issuance->order_number
+                : null,
+            'order_total' => isset($issuance->order_total) && $issuance->order_total !== null
+                ? (string) $issuance->order_total
                 : null,
         ];
     }

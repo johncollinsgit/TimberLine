@@ -1350,6 +1350,7 @@
   $adminActive     = request()->routeIs('admin.*')     || request()->is('admin*');
   $analyticsActive = request()->routeIs('analytics.*') || request()->is('analytics*');
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
+  $birthdaysActive = request()->routeIs('birthdays.*') || request()->is('birthdays*');
   $wikiActive = request()->routeIs('wiki.index') || request()->is('wiki');
   $inventoryActive = request()->routeIs('inventory.index');
   $eventsActive = request()->routeIs('events.*');
@@ -1375,6 +1376,9 @@
   }
   if ($canAccessMarketing) {
       $sidebarItems[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Marketing', 'current' => $marketingActive];
+  }
+  if ($canAccessMarketing) {
+      $sidebarItems[] = ['key' => 'birthdays', 'icon' => 'gift', 'href' => route('birthdays.customers'), 'label' => 'Birthdays', 'current' => $birthdaysActive];
   }
   if ($canAccessOps) {
       $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
@@ -1472,6 +1476,8 @@
 
   $marketingSubItems = [];
   $marketingSubGroups = [];
+  $birthdaySubItems = [];
+  $birthdaySubGroups = [];
   if ($canAccessMarketing) {
       $marketingSubItems = collect(\App\Support\Marketing\MarketingSectionRegistry::sections())
           ->map(function (array $section, string $key): array {
@@ -1486,6 +1492,20 @@
           ->all();
 
       $marketingSubGroups = \App\Support\Marketing\MarketingSectionRegistry::groupNavigationItems($marketingSubItems);
+
+      $birthdaySubItems = collect(\App\Support\Birthdays\BirthdaySectionRegistry::sections())
+          ->map(function (array $section, string $key): array {
+              return [
+                  'key' => $key,
+                  'label' => $section['label'],
+                  'href' => route($section['route']),
+                  'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
+              ];
+          })
+          ->values()
+          ->all();
+
+      $birthdaySubGroups = \App\Support\Birthdays\BirthdaySectionRegistry::groupNavigationItems($birthdaySubItems);
   }
 
   $wikiSectionItems = [
@@ -1623,6 +1643,39 @@
                           </summary>
                           <div class="mf-admin-subnav mf-admin-subnav-deep">
                             @foreach($marketingGroup['items'] as $subItem)
+                              <a
+                                href="{{ $subItem['href'] }}"
+                                wire:navigate
+                                class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                              >
+                                <span>{{ $subItem['label'] }}</span>
+                              </a>
+                            @endforeach
+                          </div>
+                        </details>
+                      @endforeach
+                    </div>
+                  </details>
+                @elseif($item['key'] === 'birthdays' && count($birthdaySubGroups) > 0)
+                  <details class="mf-admin-group" {{ $birthdaysActive ? 'open' : '' }}>
+                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
+                      <span class="mf-admin-group-main">
+                        <flux:icon.gift class="size-4" />
+                        <span class="mf-nav-label">Birthdays</span>
+                      </span>
+                      <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                    </summary>
+                    <div class="mf-admin-subnav">
+                      @foreach($birthdaySubGroups as $birthdayGroup)
+                        <details class="mf-admin-group mf-admin-group-nested" {{ ($birthdayGroup['current'] ?? false) ? 'open' : '' }}>
+                          <summary class="mf-admin-group-summary mf-admin-group-summary-compact">
+                            <span class="mf-admin-group-main">
+                              <span class="mf-nav-label">{{ $birthdayGroup['label'] }}</span>
+                            </span>
+                            <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                          </summary>
+                          <div class="mf-admin-subnav mf-admin-subnav-deep">
+                            @foreach($birthdayGroup['items'] as $subItem)
                               <a
                                 href="{{ $subItem['href'] }}"
                                 wire:navigate

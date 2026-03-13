@@ -47,7 +47,29 @@ class BirthdayRewardEngineService
             ->orderByDesc('id')
             ->first();
 
-        if ($issuance && in_array((string) $issuance->status, ['claimed', 'redeemed'], true)) {
+        if ($issuance && (string) $issuance->status === 'redeemed') {
+            return [
+                'state' => 'birthday_reward_redeemed',
+                'eligible' => false,
+                'reward_ready' => false,
+                'already_claimed' => true,
+                'issuance' => $issuance,
+                'claim_window' => $window,
+            ];
+        }
+
+        if ($issuance && (string) $issuance->status === 'expired') {
+            return [
+                'state' => 'birthday_reward_expired',
+                'eligible' => false,
+                'reward_ready' => false,
+                'already_claimed' => false,
+                'issuance' => $issuance,
+                'claim_window' => $window,
+            ];
+        }
+
+        if ($issuance && in_array((string) $issuance->status, ['claimed'], true)) {
             return [
                 'state' => 'already_claimed',
                 'eligible' => false,
@@ -173,13 +195,23 @@ class BirthdayRewardEngineService
                 'marketing_profile_id' => $locked->marketing_profile_id,
                 'cycle_year' => $cycleYear,
                 'reward_type' => $rewardType,
+                'reward_name' => $this->rewardName($config),
                 'status' => 'issued',
                 'points_awarded' => null,
+                'reward_value' => $this->rewardValue($rewardType, $config),
                 'reward_code' => null,
+                'shopify_discount_id' => null,
                 'claim_window_starts_at' => $window['starts_at'],
                 'claim_window_ends_at' => $window['ends_at'],
                 'issued_at' => $now,
                 'claimed_at' => null,
+                'expires_at' => $window['ends_at'],
+                'redeemed_at' => null,
+                'order_id' => null,
+                'order_number' => null,
+                'order_total' => null,
+                'attributed_revenue' => null,
+                'campaign_type' => 'birthday_email',
             ];
 
             if ($rewardType === 'points') {
@@ -199,6 +231,7 @@ class BirthdayRewardEngineService
 
                 $issuancePayload['status'] = 'claimed';
                 $issuancePayload['points_awarded'] = $points;
+                $issuancePayload['reward_value'] = (string) $points;
                 $issuancePayload['claimed_at'] = $now;
                 $issuancePayload['metadata'] = [
                     'transaction_id' => (int) ($result['transaction_id'] ?? 0),
@@ -383,7 +416,9 @@ class BirthdayRewardEngineService
 
         return array_merge([
             'enabled' => true,
-            'reward_type' => 'points',
+            'reward_type' => 'discount_code',
+            'reward_name' => 'Birthday Candle Cash',
+            'reward_value' => 10.00,
             'points_amount' => 50,
             'discount_code_prefix' => 'BDAY',
             'free_shipping_code_prefix' => 'BDAYSHIP',
@@ -437,5 +472,32 @@ class BirthdayRewardEngineService
             'shipping', 'free_ship' => 'free_shipping',
             default => 'points',
         };
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    protected function rewardName(array $config): string
+    {
+        $name = trim((string) ($config['reward_name'] ?? ''));
+
+        return $name !== '' ? $name : 'Birthday Candle Cash';
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    protected function rewardValue(string $rewardType, array $config): ?string
+    {
+        if ($rewardType === 'points') {
+            return (string) max(0, (int) ($config['points_amount'] ?? 0));
+        }
+
+        $value = $config['reward_value'] ?? null;
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return number_format((float) $value, 2, '.', '');
     }
 }

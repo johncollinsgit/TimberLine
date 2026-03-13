@@ -709,6 +709,7 @@ class MarketingProfileSyncService
             'shopify_customer',
             'growave_customer',
             'square_customer',
+            'birthday_customer',
             'wholesale_customer',
             'event_customer',
             'internal_customer',

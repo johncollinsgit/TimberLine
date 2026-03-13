@@ -15,6 +15,12 @@ class CustomerBirthdayProfile extends Model
         'birth_year',
         'birthday_full_date',
         'source',
+        'signup_source',
+        'capture_date',
+        'email_subscribed',
+        'sms_subscribed',
+        'unsubscribed',
+        'source_file',
         'source_captured_at',
         'reward_last_issued_at',
         'reward_last_issued_year',
@@ -26,6 +32,10 @@ class CustomerBirthdayProfile extends Model
         'birth_day' => 'integer',
         'birth_year' => 'integer',
         'birthday_full_date' => 'date',
+        'capture_date' => 'datetime',
+        'email_subscribed' => 'boolean',
+        'sms_subscribed' => 'boolean',
+        'unsubscribed' => 'boolean',
         'source_captured_at' => 'datetime',
         'reward_last_issued_at' => 'datetime',
         'reward_last_issued_year' => 'integer',
@@ -45,5 +55,10 @@ class CustomerBirthdayProfile extends Model
     public function rewardIssuances(): HasMany
     {
         return $this->hasMany(BirthdayRewardIssuance::class, 'customer_birthday_profile_id');
+    }
+
+    public function messageEvents(): HasMany
+    {
+        return $this->hasMany(BirthdayMessageEvent::class, 'customer_birthday_profile_id');
     }
 }

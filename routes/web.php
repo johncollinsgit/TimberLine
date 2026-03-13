@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminMasterDataController;
+use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
@@ -320,6 +321,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/suppression-consent', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'suppression-consent')
                 ->name('suppression-consent');
+        });
+
+    Route::middleware(['role:admin,marketing_manager'])
+        ->prefix('birthdays')
+        ->name('birthdays.')
+        ->group(function () {
+            Route::get('/', [BirthdayPagesController::class, 'customers'])->name('customers');
+            Route::post('/customers/import/preview', [BirthdayPagesController::class, 'previewImport'])->name('customers.import.preview');
+            Route::post('/customers/import', [BirthdayPagesController::class, 'runImport'])->name('customers.import.run');
+            Route::post('/customers/{marketingProfile}/issue-reward', [BirthdayPagesController::class, 'issueReward'])->name('customers.issue-reward');
+
+            Route::get('/analytics', [BirthdayPagesController::class, 'analytics'])->name('analytics');
+            Route::get('/campaigns', [BirthdayPagesController::class, 'campaigns'])->name('campaigns');
+            Route::get('/rewards', [BirthdayPagesController::class, 'rewards'])->name('rewards');
+            Route::post('/rewards/{issuance}/activate', [BirthdayPagesController::class, 'activateReward'])->name('rewards.activate');
+            Route::post('/rewards/{issuance}/status', [BirthdayPagesController::class, 'updateRewardStatus'])->name('rewards.status');
+            Route::get('/settings', [BirthdayPagesController::class, 'settings'])->name('settings');
+            Route::post('/settings', [BirthdayPagesController::class, 'saveSettings'])->name('settings.save');
+            Route::get('/activity', [BirthdayPagesController::class, 'activity'])->name('activity');
         });
 
     // Inventory
