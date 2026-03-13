@@ -31,6 +31,7 @@ Canonical Shopify app identity:
 
 - Shopify app: `ModernForestryBackstage`
 - client id: `197d01d6597c938c96b3b35fae6a087c`
+- embedded admin entrypoint: `GET /shopify/app`
 
 The storefront proxy and signed storefront requests should verify against the canonical retail Shopify app secret. Do not point rewards traffic at the legacy split-out theme app.
 

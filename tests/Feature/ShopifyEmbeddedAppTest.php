@@ -1,0 +1,71 @@
+<?php
+
+use App\Models\ShopifyStore;
+
+test('shopify embedded app route shows helpful launch message when opened outside shopify admin', function () {
+    $this->get(route('shopify.app'))
+        ->assertOk()
+        ->assertSeeText('Open this app from Shopify Admin')
+        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+});
+
+test('shopify embedded app route renders verified admin shell for configured store', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
+    config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
+
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'modernforestry.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+
+    $query = shopifyEmbeddedSignedQuery([
+        'shop' => 'modernforestry.myshopify.com',
+        'host' => 'admin-host-token',
+        'embedded' => '1',
+        'timestamp' => (string) time(),
+    ], 'shopify-client-secret');
+
+    $response = $this->get(route('shopify.app', $query));
+
+    $response->assertOk()
+        ->assertSeeText('Forestry rewards are connected')
+        ->assertSeeText('Storefront Rewards')
+        ->assertSeeText('Birthday Rewards')
+        ->assertSeeText('Store Page')
+        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+
+    expect($response->headers->get('X-Frame-Options'))->toBeNull();
+});
+
+test('shopify embedded app route rejects invalid hmac', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
+    config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
+
+    $this->get(route('shopify.app', [
+        'shop' => 'modernforestry.myshopify.com',
+        'host' => 'admin-host-token',
+        'embedded' => '1',
+        'timestamp' => (string) time(),
+        'hmac' => 'bad-signature',
+    ]))
+        ->assertStatus(401)
+        ->assertSeeText('We could not verify this Shopify request');
+});
+
+/**
+ * @param  array<string,string>  $query
+ * @return array<string,string>
+ */
+function shopifyEmbeddedSignedQuery(array $query, string $secret): array
+{
+    $payload = $query;
+    ksort($payload);
+
+    $payload['hmac'] = hash_hmac('sha256', http_build_query($payload, '', '&', PHP_QUERY_RFC3986), $secret);
+
+    return $payload;
+}

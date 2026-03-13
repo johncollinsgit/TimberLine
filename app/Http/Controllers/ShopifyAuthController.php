@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ShopifyStore;
+use App\Services\Shopify\ShopifyHmacVerifier;
 use App\Services\Shopify\ShopifyOAuth;
 use App\Services\Shopify\ShopifyStores;
 use Illuminate\Http\Request;
@@ -45,7 +46,7 @@ class ShopifyAuthController extends Controller
         return $this->auth($store, $oauth);
     }
 
-    public function callback(string $store, Request $request, ShopifyOAuth $oauth)
+    public function callback(string $store, Request $request, ShopifyOAuth $oauth, ShopifyHmacVerifier $hmacVerifier)
     {
         $config = ShopifyStores::find($store, true);
         if (!$config) {
@@ -62,7 +63,7 @@ class ShopifyAuthController extends Controller
             return response('Invalid state.', 400);
         }
 
-        if (!$this->isValidHmac($request->query(), (string) $config['secret'])) {
+        if (! $hmacVerifier->verifyQuery($request->query(), (string) $config['secret'])) {
             return response('Invalid signature.', 401);
         }
 
@@ -127,27 +128,6 @@ class ShopifyAuthController extends Controller
         ]);
 
         return redirect()->route('dashboard')->with('status', 'Shopify connected.');
-    }
-
-    /**
-     * @param array<string, mixed> $query
-     */
-    protected function isValidHmac(array $query, string $secret): bool
-    {
-        if ($secret === '') {
-            return false;
-        }
-
-        $hmac = $query['hmac'] ?? '';
-        if (!is_string($hmac) || $hmac === '') {
-            return false;
-        }
-
-        unset($query['hmac'], $query['signature']);
-        ksort($query);
-        $computed = hash_hmac('sha256', http_build_query($query, '', '&', PHP_QUERY_RFC3986), $secret);
-
-        return hash_equals($computed, $hmac);
     }
 
     protected function matchesExpectedShop(array $config, string $shopDomain): bool

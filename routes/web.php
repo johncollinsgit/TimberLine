@@ -20,6 +20,7 @@ use App\Http\Controllers\Marketing\MarketingConsentCaptureController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\ShopifyAuthController;
+use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WikiAdminController;
@@ -567,6 +568,7 @@ Route::prefix('shopify/marketing/v1')
 });
 
 Route::prefix('shopify')->group(function () {
+    Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/auth/{store}', [ShopifyAuthController::class, 'auth'])->name('shopify.auth');
     Route::get('/reinstall/{store}', [ShopifyAuthController::class, 'reinstall'])->name('shopify.reinstall');
     Route::get('/callback/{store}', [ShopifyAuthController::class, 'callback'])->name('shopify.callback');
