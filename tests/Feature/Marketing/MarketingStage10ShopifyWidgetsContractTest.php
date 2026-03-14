@@ -264,18 +264,23 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->assertJsonPath('data.balance.points', 50)
         ->assertJsonPath('data.consent.email', true)
         ->assertJsonPath('data.referral.enabled', true)
-        ->assertJsonCount(9, 'data.tasks');
+        ->assertJsonCount(10, 'data.tasks');
 
     $tasks = collect($response->json('data.tasks'));
     $googleReview = $tasks->firstWhere('handle', 'google-review');
+    $productReview = $tasks->firstWhere('handle', 'product-review');
     $vote = $tasks->firstWhere('handle', 'candle-club-vote');
 
     expect($googleReview)->not->toBeNull()
         ->and(data_get($googleReview, 'verification_mode'))->toBe('google_business_review')
         ->and(data_get($googleReview, 'auto_award'))->toBeTrue()
+        ->and(data_get($googleReview, 'action_url'))->toBe('https://g.page/r/CTucm4R1-wmOEAI/review')
+        ->and($productReview)->not->toBeNull()
+        ->and(data_get($productReview, 'verification_mode'))->toBe('product_review_platform_event')
+        ->and(data_get($productReview, 'auto_award'))->toBeTrue()
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
-        ->and($tasks->contains(fn (array $task): bool => data_get($task, 'handle') === 'product-review'))->toBeFalse();
+        ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
 });
 
 test('shopify v1 candle cash status keeps candle club vote locked for guests', function () {

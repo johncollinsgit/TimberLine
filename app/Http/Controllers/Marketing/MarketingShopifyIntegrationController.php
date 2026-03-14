@@ -22,6 +22,7 @@ use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingProfileSyncService;
+use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
@@ -1361,6 +1362,100 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), ['google_review_started']);
     }
 
+    public function productReviewStatus(
+        Request $request,
+        ProductReviewService $productReviewService
+    ): JsonResponse {
+        $data = $request->validate([
+            'product_id' => ['required', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'product_review_status', allowCreate: false);
+        $profile = $resolved['profile'] ?? null;
+        $product = $this->productReviewContext($data);
+        $payload = $productReviewService->storefrontPayload($product, $profile);
+        $states = ['product_reviews_ready', $profile ? 'linked_customer' : 'unknown_customer'];
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile?->id,
+            ...$payload,
+        ], $this->contractMeta($request), array_values(array_unique($states)));
+    }
+
+    public function submitProductReview(
+        Request $request,
+        ProductReviewService $productReviewService
+    ): JsonResponse {
+        $data = $request->validate([
+            'product_id' => ['required', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:190'],
+            'body' => ['required', 'string', 'max:4000'],
+            'name' => ['nullable', 'string', 'max:160'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'request_key' => ['nullable', 'string', 'max:200'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'product_review_submit', allowCreate: false, allowBody: true);
+        $profile = $resolved['profile'] ?? null;
+
+        $result = $productReviewService->submitReview($profile, $this->productReviewContext($data), [
+            'rating' => (int) $data['rating'],
+            'title' => $data['title'] ?? null,
+            'body' => (string) $data['body'],
+            'name' => $data['name'] ?? null,
+            'email' => $data['email'] ?? null,
+            'request_key' => $data['request_key'] ?? null,
+            'source_surface' => 'shopify_product_page',
+        ]);
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            return MarketingStorefrontContract::error(
+                code: (string) ($result['error'] ?? 'product_review_submit_failed'),
+                message: (string) ($result['message'] ?? 'That review could not be submitted right now.'),
+                status: 422,
+                details: [
+                    'product_id' => (string) $data['product_id'],
+                ],
+                states: [(string) ($result['error'] ?? 'product_review_submit_failed')],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        /** @var \App\Models\MarketingReviewHistory|null $review */
+        $review = $result['review'] ?? null;
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $review?->marketing_profile_id ?: $profile?->id,
+            'state' => (string) ($result['state'] ?? 'review_live'),
+            'review' => $review ? [
+                'id' => (int) $review->id,
+                'status' => (string) $review->status,
+                'rating' => (int) $review->rating,
+                'title' => $review->title ? (string) $review->title : null,
+                'body' => $review->body ? (string) $review->body : null,
+                'reviewer_name' => $review->displayReviewerName(),
+                'submitted_at' => optional($review->submitted_at ?: $review->created_at)->toIso8601String(),
+                'approved_at' => optional($review->approved_at)->toIso8601String(),
+                'is_verified_buyer' => (bool) $review->is_verified_buyer,
+            ] : null,
+            'award' => [
+                'state' => data_get($result, 'award.state'),
+                'completion_id' => data_get($result, 'award.completion.id'),
+                'event_id' => data_get($result, 'award.event.id'),
+            ],
+        ], $this->contractMeta($request), [(string) ($result['state'] ?? 'review_live')]);
+    }
+
     public function customerStatus(
         Request $request,
         CandleCashService $candleCashService,
@@ -1553,6 +1648,21 @@ class MarketingShopifyIntegrationController extends Controller
             ],
             'allow_create' => $allowCreate,
         ]);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key:string}
+     */
+    protected function productReviewContext(array $data): array
+    {
+        return [
+            'product_id' => trim((string) ($data['product_id'] ?? '')),
+            'product_handle' => $this->nullableString($data['product_handle'] ?? null),
+            'product_title' => $this->nullableString($data['product_title'] ?? null),
+            'product_url' => $this->nullableString($data['product_url'] ?? null),
+            'store_key' => 'retail',
+        ];
     }
 
     protected function resolveShopifyCustomerId(Request $request, bool $allowBody = false): string
@@ -1811,6 +1921,13 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         return $shopifyLinks->first();
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 
     /**

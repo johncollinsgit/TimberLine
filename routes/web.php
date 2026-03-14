@@ -302,6 +302,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::get('/queue', [CandleCashPagesController::class, 'queue'])->name('queue');
                     Route::post('/queue/{completion}/approve', [CandleCashPagesController::class, 'approveCompletion'])->name('queue.approve');
                     Route::post('/queue/{completion}/reject', [CandleCashPagesController::class, 'rejectCompletion'])->name('queue.reject');
+                    Route::get('/reviews', [CandleCashPagesController::class, 'reviews'])->name('reviews');
+                    Route::post('/reviews/{review}/approve', [CandleCashPagesController::class, 'approveReview'])->name('reviews.approve');
+                    Route::post('/reviews/{review}/reject', [CandleCashPagesController::class, 'rejectReview'])->name('reviews.reject');
+                    Route::post('/reviews/{review}/delete', [CandleCashPagesController::class, 'deleteReview'])->name('reviews.delete');
                     Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');
                     Route::post('/customers/{marketingProfile}/adjust', [CandleCashPagesController::class, 'adjustCustomer'])->name('customers.adjust');
                     Route::get('/referrals', [CandleCashPagesController::class, 'referrals'])->name('referrals');
@@ -561,6 +565,10 @@ Route::prefix('shopify/marketing')
     Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('candle-cash.tasks.submit');
+    Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
+    Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('product-reviews.submit');
     Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('google-business.review.start');
@@ -602,6 +610,10 @@ Route::prefix('shopify/marketing/v1')
     Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('candle-cash.tasks.submit');
+    Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
+    Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('product-reviews.submit');
     Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('google-business.review.start');

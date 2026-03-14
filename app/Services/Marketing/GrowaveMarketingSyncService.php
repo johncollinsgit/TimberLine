@@ -762,6 +762,15 @@ class GrowaveMarketingSyncService
 
             $productId = $this->nullableString(data_get($review, 'product.shopifyProductId'))
                 ?: $this->nullableString(data_get($review, 'product.productId'));
+            $reviewedAt = $this->asDate($review['createdAt'] ?? null);
+            $reviewerName = $this->nullableString(data_get($review, 'customer.name'))
+                ?: $this->nullableString(data_get($review, 'author.name'))
+                ?: $this->nullableString(data_get($review, 'customer.fullName'));
+            $reviewerEmail = $this->nullableString(data_get($review, 'customer.email'))
+                ?: $this->nullableString($customer['email'] ?? null);
+            $productHandle = $this->nullableString(data_get($review, 'product.handle'));
+            $productUrl = $productHandle ? '/products/' . ltrim($productHandle, '/') : null;
+            $isPublished = is_bool($review['isPublished'] ?? null) ? (bool) $review['isPublished'] : null;
 
             MarketingReviewHistory::query()->updateOrCreate(
                 $reviewLookup,
@@ -772,15 +781,24 @@ class GrowaveMarketingSyncService
                     'rating' => is_numeric($review['rate'] ?? null) ? (int) $review['rate'] : null,
                     'title' => $this->nullableString($review['title'] ?? null),
                     'body' => $this->nullableString($review['body'] ?? null),
-                    'is_published' => is_bool($review['isPublished'] ?? null) ? (bool) $review['isPublished'] : null,
+                    'reviewer_name' => $reviewerName,
+                    'reviewer_email' => $reviewerEmail,
+                    'is_published' => $isPublished,
+                    'status' => $isPublished === false ? 'rejected' : 'approved',
+                    'submission_source' => 'growave_import',
                     'is_pinned' => is_bool($review['isPinned'] ?? null) ? (bool) $review['isPinned'] : null,
                     'is_verified_buyer' => is_bool($review['isVerifiedBuyer'] ?? null) ? (bool) $review['isVerifiedBuyer'] : null,
                     'votes' => is_numeric($review['votes'] ?? null) ? (int) $review['votes'] : null,
                     'has_media' => is_array($review['images'] ?? null) && count((array) $review['images']) > 0,
                     'media_count' => is_array($review['images'] ?? null) ? count((array) $review['images']) : 0,
                     'product_id' => $productId,
+                    'product_handle' => $productHandle,
+                    'product_url' => $productUrl,
                     'product_title' => $this->nullableString(data_get($review, 'product.title')),
-                    'reviewed_at' => $this->asDate($review['createdAt'] ?? null),
+                    'reviewed_at' => $reviewedAt,
+                    'submitted_at' => $reviewedAt,
+                    'approved_at' => $isPublished === false ? null : $reviewedAt,
+                    'rejected_at' => $isPublished === false ? $reviewedAt : null,
                     'source_synced_at' => now(),
                     'raw_payload' => $review,
                 ]

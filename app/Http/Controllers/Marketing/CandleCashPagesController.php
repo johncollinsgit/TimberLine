@@ -8,6 +8,7 @@ use App\Models\CandleCashReferral;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
+use App\Models\MarketingReviewHistory;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
@@ -17,6 +18,7 @@ use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashTaskEligibilityService;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
+use App\Services\Marketing\ProductReviewService;
 use App\Support\Marketing\CandleCashSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -261,6 +263,97 @@ class CandleCashPagesController extends Controller
         return back()->with('toast', ['style' => 'success', 'message' => 'Task rejected.']);
     }
 
+    public function reviews(Request $request): View
+    {
+        $search = trim((string) $request->query('search', ''));
+        $status = trim((string) $request->query('status', 'all'));
+        $rating = trim((string) $request->query('rating', 'all'));
+        $source = trim((string) $request->query('source', 'all'));
+        $selectedId = (int) $request->query('review', 0);
+
+        $reviews = MarketingReviewHistory::query()
+            ->with('profile:id,first_name,last_name,email')
+            ->when($search !== '', function (Builder $builder) use ($search): void {
+                $builder->where(function (Builder $query) use ($search): void {
+                    $query->where('product_title', 'like', '%' . $search . '%')
+                        ->orWhere('product_handle', 'like', '%' . $search . '%')
+                        ->orWhere('reviewer_name', 'like', '%' . $search . '%')
+                        ->orWhere('reviewer_email', 'like', '%' . $search . '%')
+                        ->orWhere('body', 'like', '%' . $search . '%')
+                        ->orWhere('title', 'like', '%' . $search . '%');
+                });
+            })
+            ->when($status !== 'all', fn (Builder $builder) => $builder->where('status', $status))
+            ->when($rating !== 'all', fn (Builder $builder) => $builder->where('rating', (int) $rating))
+            ->when($source === 'imported', fn (Builder $builder) => $builder->where('submission_source', 'growave_import'))
+            ->when($source === 'native', fn (Builder $builder) => $builder->where('submission_source', '!=', 'growave_import'))
+            ->orderByDesc('approved_at')
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->paginate(25)
+            ->withQueryString();
+
+        $selectedReview = $selectedId > 0
+            ? MarketingReviewHistory::query()->with('profile:id,first_name,last_name,email')->find($selectedId)
+            : $reviews->first();
+
+        return view('marketing.candle-cash.show', [
+            'sectionKey' => 'reviews',
+            'section' => CandleCashSectionRegistry::section('reviews'),
+            'sections' => $this->navigationItems(),
+            'reviews' => $reviews,
+            'reviewFilters' => [
+                'search' => $search,
+                'status' => $status,
+                'rating' => $rating,
+                'source' => $source,
+            ],
+            'selectedReview' => $selectedReview,
+            'reviewSummary' => [
+                'all' => MarketingReviewHistory::query()->count(),
+                'approved' => MarketingReviewHistory::query()->where('status', 'approved')->count(),
+                'pending' => MarketingReviewHistory::query()->where('status', 'pending')->count(),
+                'rejected' => MarketingReviewHistory::query()->where('status', 'rejected')->count(),
+                'imported' => MarketingReviewHistory::query()->where('submission_source', 'growave_import')->count(),
+            ],
+        ]);
+    }
+
+    public function approveReview(
+        Request $request,
+        MarketingReviewHistory $review,
+        ProductReviewService $productReviewService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'moderation_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $productReviewService->approve($review, auth()->id(), $data['moderation_notes'] ?? null);
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Review approved.']);
+    }
+
+    public function rejectReview(
+        Request $request,
+        MarketingReviewHistory $review,
+        ProductReviewService $productReviewService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'moderation_notes' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $productReviewService->reject($review, auth()->id(), $data['moderation_notes']);
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Review rejected.']);
+    }
+
+    public function deleteReview(MarketingReviewHistory $review, ProductReviewService $productReviewService): RedirectResponse
+    {
+        $productReviewService->delete($review);
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Review deleted.']);
+    }
+
     public function customers(Request $request, CandleCashService $candleCashService, CandleCashTaskEligibilityService $eligibilityService): View
     {
         $search = trim((string) $request->query('search', ''));
@@ -496,6 +589,10 @@ class CandleCashPagesController extends Controller
                 'product_review_enabled' => ['nullable', 'boolean'],
                 'product_review_platform' => ['nullable', 'string', 'max:120'],
                 'product_review_matching_strategy' => ['required', 'string', 'max:120'],
+                'product_review_moderation_enabled' => ['nullable', 'boolean'],
+                'product_review_allow_guest' => ['nullable', 'boolean'],
+                'product_review_min_length' => ['required', 'integer', 'min:12', 'max:500'],
+                'product_review_notification_email' => ['nullable', 'email', 'max:255'],
                 'sms_signup_enabled' => ['nullable', 'boolean'],
                 'email_signup_enabled' => ['nullable', 'boolean'],
                 'vote_locked_join_url' => ['nullable', 'string', 'max:500'],
@@ -509,6 +606,10 @@ class CandleCashPagesController extends Controller
                 'product_review_enabled' => array_key_exists('product_review_enabled', $data) ? (bool) $data['product_review_enabled'] : false,
                 'product_review_platform' => trim((string) ($data['product_review_platform'] ?? '')) ?: null,
                 'product_review_matching_strategy' => trim((string) $data['product_review_matching_strategy']),
+                'product_review_moderation_enabled' => array_key_exists('product_review_moderation_enabled', $data) ? (bool) $data['product_review_moderation_enabled'] : false,
+                'product_review_allow_guest' => array_key_exists('product_review_allow_guest', $data) ? (bool) $data['product_review_allow_guest'] : false,
+                'product_review_min_length' => (int) $data['product_review_min_length'],
+                'product_review_notification_email' => trim((string) ($data['product_review_notification_email'] ?? '')) ?: null,
                 'sms_signup_enabled' => array_key_exists('sms_signup_enabled', $data) ? (bool) $data['sms_signup_enabled'] : false,
                 'email_signup_enabled' => array_key_exists('email_signup_enabled', $data) ? (bool) $data['email_signup_enabled'] : false,
                 'vote_locked_join_url' => trim((string) ($data['vote_locked_join_url'] ?? '')) ?: null,

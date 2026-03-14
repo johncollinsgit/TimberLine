@@ -241,6 +241,143 @@
                 </div>
                 <div class="mt-4">{{ $eventLog->links() }}</div>
             </section>
+        @elseif($sectionKey === 'reviews')
+            <section class="grid gap-4 md:grid-cols-5">
+                @foreach([
+                    'all' => 'All reviews',
+                    'approved' => 'Approved',
+                    'pending' => 'Pending',
+                    'rejected' => 'Rejected',
+                    'imported' => 'Imported',
+                ] as $key => $label)
+                    <a href="{{ route('marketing.candle-cash.reviews', ['status' => $key === 'imported' ? 'all' : $key, 'source' => $key === 'imported' ? 'imported' : 'all', 'search' => data_get($reviewFilters, 'search'), 'rating' => data_get($reviewFilters, 'rating')]) }}" wire:navigate class="rounded-[1.7rem] border p-5 {{ (($key === 'imported' ? 'all' : $key) === data_get($reviewFilters, 'status') && ($key !== 'imported' || data_get($reviewFilters, 'source') === 'imported')) ? 'border-amber-300/35 bg-amber-500/10' : 'border-white/10 bg-black/15' }}">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $label }}</div>
+                        <div class="mt-3 text-4xl font-semibold text-white">{{ number_format((int) data_get($reviewSummary, $key, 0)) }}</div>
+                    </a>
+                @endforeach
+            </section>
+
+            <section class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr),minmax(340px,0.95fr)]">
+                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                    <form method="GET" action="{{ route('marketing.candle-cash.reviews') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),180px,180px,180px,auto]">
+                        <input type="text" name="search" value="{{ data_get($reviewFilters, 'search') }}" placeholder="Search product, reviewer, title, body" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/35" />
+                        <select name="status" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                            @foreach(['all' => 'All statuses', 'approved' => 'Approved', 'pending' => 'Pending', 'rejected' => 'Rejected'] as $value => $label)
+                                <option value="{{ $value }}" @selected(data_get($reviewFilters, 'status') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <select name="rating" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                            <option value="all">All ratings</option>
+                            @for($stars = 5; $stars >= 1; $stars--)
+                                <option value="{{ $stars }}" @selected((string) data_get($reviewFilters, 'rating') === (string) $stars)>{{ $stars }} stars</option>
+                            @endfor
+                        </select>
+                        <select name="source" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                            <option value="all" @selected(data_get($reviewFilters, 'source') === 'all')>All sources</option>
+                            <option value="native" @selected(data_get($reviewFilters, 'source') === 'native')>Native</option>
+                            <option value="imported" @selected(data_get($reviewFilters, 'source') === 'imported')>Imported</option>
+                        </select>
+                        <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Apply</button>
+                    </form>
+
+                    <div class="mt-5 overflow-x-auto rounded-[1.4rem] border border-white/10">
+                        <table class="min-w-full text-left text-sm text-white/80">
+                            <thead class="bg-white/5 text-xs uppercase tracking-[0.18em] text-white/45">
+                                <tr>
+                                    <th class="px-4 py-3">Product</th>
+                                    <th class="px-4 py-3">Reviewer</th>
+                                    <th class="px-4 py-3">Rating</th>
+                                    <th class="px-4 py-3">Status</th>
+                                    <th class="px-4 py-3">Source</th>
+                                    <th class="px-4 py-3">Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($reviews as $review)
+                                    <tr class="border-t border-white/10">
+                                        <td class="px-4 py-3 align-top">
+                                            <a href="{{ route('marketing.candle-cash.reviews', array_filter(['search' => data_get($reviewFilters, 'search'), 'status' => data_get($reviewFilters, 'status'), 'rating' => data_get($reviewFilters, 'rating'), 'source' => data_get($reviewFilters, 'source'), 'review' => $review->id])) }}" wire:navigate class="font-semibold text-white">{{ $review->product_title ?: ($review->product_handle ?: 'Product #' . $review->product_id) }}</a>
+                                            <div class="mt-1 text-xs text-white/45">{{ $review->product_handle ?: $review->product_id ?: 'No product handle' }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top">
+                                            <div class="font-medium text-white">{{ $review->displayReviewerName() }}</div>
+                                            <div class="mt-1 text-xs text-white/45">{{ $review->reviewer_email ?: ($review->profile->email ?? 'No email') }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 align-top text-white/70">{{ str_repeat('★', max(0, (int) $review->rating)) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</td>
+                                        <td class="px-4 py-3 align-top text-white/70">{{ strtoupper($review->status ?: 'approved') }}</td>
+                                        <td class="px-4 py-3 align-top text-white/60">{{ $review->submission_source ?: 'native' }}</td>
+                                        <td class="px-4 py-3 align-top text-white/50">{{ optional($review->submitted_at ?: $review->created_at)->format('Y-m-d H:i') }}</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="6" class="px-4 py-6 text-center text-white/55">No product reviews match the current filters.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4">{{ $reviews->links() }}</div>
+                </article>
+
+                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Review detail</div>
+                    @if($selectedReview)
+                        <h2 class="mt-2 text-lg font-semibold text-white">{{ $selectedReview->product_title ?: ($selectedReview->product_handle ?: 'Product review') }}</h2>
+                        <div class="mt-2 text-sm text-white/60">{{ $selectedReview->displayReviewerName() }} · {{ optional($selectedReview->submitted_at ?: $selectedReview->created_at)->format('Y-m-d H:i') }}</div>
+
+                        <div class="mt-5 grid gap-3 md:grid-cols-2">
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Rating</div>
+                                <div class="mt-2 text-2xl text-white">{{ str_repeat('★', max(0, (int) $selectedReview->rating)) }}{{ str_repeat('☆', max(0, 5 - (int) $selectedReview->rating)) }}</div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Source</div>
+                                <div class="mt-2 text-lg font-semibold text-white">{{ $selectedReview->submission_source ?: 'native' }}</div>
+                                <div class="mt-1 text-xs text-white/45">{{ $selectedReview->status ?: 'approved' }}</div>
+                            </div>
+                        </div>
+
+                        @if($selectedReview->title)
+                            <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Headline</div>
+                                <div class="mt-2 text-lg font-semibold text-white">{{ $selectedReview->title }}</div>
+                            </div>
+                        @endif
+
+                        <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="text-xs uppercase tracking-[0.18em] text-white/45">Review body</div>
+                            <div class="mt-3 text-sm leading-7 text-white/80">{{ $selectedReview->body }}</div>
+                        </div>
+
+                        <div class="mt-5 grid gap-3">
+                            <form method="POST" action="{{ route('marketing.candle-cash.reviews.approve', $selectedReview) }}" class="space-y-3 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4">
+                                @csrf
+                                <div class="text-sm font-semibold text-white">Approve review</div>
+                                <textarea name="moderation_notes" rows="2" placeholder="Optional note" class="block w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white placeholder:text-white/35"></textarea>
+                                <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 px-4 py-2 text-sm font-semibold text-white">Approve</button>
+                            </form>
+
+                            <form method="POST" action="{{ route('marketing.candle-cash.reviews.reject', $selectedReview) }}" class="space-y-3 rounded-2xl border border-rose-300/20 bg-rose-500/10 p-4">
+                                @csrf
+                                <div class="text-sm font-semibold text-white">Reject review</div>
+                                <textarea name="moderation_notes" rows="2" required placeholder="Why should this stay hidden?" class="block w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white placeholder:text-white/35"></textarea>
+                                <button type="submit" class="inline-flex rounded-full border border-rose-300/35 px-4 py-2 text-sm font-semibold text-white">Reject</button>
+                            </form>
+
+                            <form method="POST" action="{{ route('marketing.candle-cash.reviews.delete', $selectedReview) }}" class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                @csrf
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-white">Delete review</div>
+                                        <div class="mt-1 text-xs text-white/50">Use this only when the review should be removed entirely.</div>
+                                    </div>
+                                    <button type="submit" class="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-white/80">Delete</button>
+                                </div>
+                            </form>
+                        </div>
+                    @else
+                        <div class="mt-3 text-sm text-white/60">Pick a review from the left to see details and moderation actions.</div>
+                    @endif
+                </article>
+            </section>
         @elseif($sectionKey === 'customers')
             <section class="grid gap-4 xl:grid-cols-[minmax(320px,0.9fr),minmax(0,1.1fr)]">
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
@@ -564,6 +701,10 @@
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_enabled" value="1" @checked(data_get($integrationConfig, 'product_review_enabled', false)) /> Product review integration enabled</label>
                         <label class="block text-sm text-white/75">Product review platform<input type="text" name="product_review_platform" value="{{ data_get($integrationConfig, 'product_review_platform') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Product review matching strategy<input type="text" name="product_review_matching_strategy" value="{{ data_get($integrationConfig, 'product_review_matching_strategy', 'profile_or_external_customer') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_moderation_enabled" value="1" @checked(data_get($integrationConfig, 'product_review_moderation_enabled', false)) /> Hold new product reviews for moderation</label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_allow_guest" value="1" @checked(data_get($integrationConfig, 'product_review_allow_guest', true)) /> Allow guest product reviews</label>
+                        <label class="block text-sm text-white/75">Product review minimum length<input type="number" min="12" max="500" name="product_review_min_length" value="{{ data_get($integrationConfig, 'product_review_min_length', 24) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Product review notification email<input type="email" name="product_review_notification_email" value="{{ data_get($integrationConfig, 'product_review_notification_email', 'info@theforestrystudio.com') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="email_signup_enabled" value="1" @checked(data_get($integrationConfig, 'email_signup_enabled', true)) /> Email signup task enabled</label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="sms_signup_enabled" value="1" @checked(data_get($integrationConfig, 'sms_signup_enabled', true)) /> SMS signup task enabled</label>
                         <label class="block text-sm text-white/75">Candle Club locked CTA URL<input type="text" name="vote_locked_join_url" value="{{ data_get($integrationConfig, 'vote_locked_join_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>

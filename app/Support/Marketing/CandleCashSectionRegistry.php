@@ -52,6 +52,12 @@ class CandleCashSectionRegistry
                 'description' => 'See verified task events, duplicate blocks, and the small number of fallback/manual items.',
                 'group' => 'work',
             ],
+            'reviews' => [
+                'label' => 'Reviews',
+                'route' => 'marketing.candle-cash.reviews',
+                'description' => 'Manage native product reviews, Growave imports, and moderation decisions.',
+                'group' => 'work',
+            ],
             'customers' => [
                 'label' => 'Customers',
                 'route' => 'marketing.candle-cash.customers',
