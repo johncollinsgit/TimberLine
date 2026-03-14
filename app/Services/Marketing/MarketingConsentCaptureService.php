@@ -217,8 +217,7 @@ class MarketingConsentCaptureService
         ]);
 
         $bonusAwarded = 0;
-        $awardBonus = (bool) data_get((array) $request->payload, 'award_bonus', false);
-        if ($awardBonus && ! $request->reward_awarded_at) {
+        if (! $request->reward_awarded_at) {
             $bonus = $this->incentiveService->awardSmsConsentBonusOnce(
                 profile: $profile,
                 sourceId: $request->source_id ?: ('consent-request:' . $request->id),
@@ -245,4 +244,3 @@ class MarketingConsentCaptureService
         ];
     }
 }
-

@@ -11,7 +11,8 @@ class CandleCashOrderEventService
     public function __construct(
         protected CandleCashTaskService $taskService,
         protected CandleCashReferralService $referralService,
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected CandleCashTaskEligibilityService $eligibilityService
     ) {
     }
 
@@ -24,6 +25,7 @@ class CandleCashOrderEventService
 
         if ($profile) {
             $this->awardSecondOrderTask($profile, $order);
+            $this->awardCandleClubJoinTask($profile, $order);
         }
 
         $referralCode = trim((string) ($identityContext['referral_code'] ?? ''));
@@ -56,8 +58,9 @@ class CandleCashOrderEventService
         }
 
         $result = $this->taskService->awardSystemTask($profile, 'second-order', [
-            'source_type' => 'order_triggered',
+            'source_type' => 'system_event',
             'source_id' => 'second-order:profile:' . $profile->id . ':order:' . $order->id,
+            'source_event_key' => 'second-order:profile:' . $profile->id . ':order:' . $order->id,
             'metadata' => [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
@@ -81,5 +84,23 @@ class CandleCashOrderEventService
                 'resolution_status' => 'open',
             ]);
         }
+    }
+
+    protected function awardCandleClubJoinTask(MarketingProfile $profile, Order $order): void
+    {
+        if ($this->eligibilityService->membershipStatusForProfile($profile) !== 'active_candle_club_member') {
+            return;
+        }
+
+        $this->taskService->awardSystemTask($profile, 'candle-club-join', [
+            'source_type' => 'system_event',
+            'source_id' => 'candle-club-join:profile:' . $profile->id . ':order:' . $order->id,
+            'source_event_key' => 'candle-club-join:profile:' . $profile->id,
+            'metadata' => [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'shopify_order_id' => $order->shopify_order_id,
+            ],
+        ]);
     }
 }

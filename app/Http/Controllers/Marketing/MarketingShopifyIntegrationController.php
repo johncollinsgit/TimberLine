@@ -19,6 +19,7 @@ use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
+use App\Services\Marketing\MarketingProfileSyncService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
@@ -337,6 +338,7 @@ class MarketingShopifyIntegrationController extends Controller
         MarketingConsentCaptureService $consentCaptureService,
         MarketingConsentService $consentService,
         MarketingConsentIncentiveService $incentiveService,
+        MarketingProfileSyncService $profileSyncService,
         CandleCashTaskService $taskService
     ): JsonResponse {
         $data = $request->validate([
@@ -360,12 +362,13 @@ class MarketingShopifyIntegrationController extends Controller
             extra: [$shopifyCustomerId]
         );
 
-        $result = $consentCaptureService->requestSmsConfirmation([
+        $identityPayload = [
             'email' => (string) ($data['email'] ?? ''),
             'phone' => (string) ($data['phone'] ?? ''),
             'first_name' => (string) ($data['first_name'] ?? ''),
             'last_name' => (string) ($data['last_name'] ?? ''),
-        ], [
+        ];
+        $syncContext = [
             'source_type' => 'shopify_widget_contact',
             'source_id' => $sourceId,
             'source_label' => 'shopify_widget_optin',
@@ -379,9 +382,45 @@ class MarketingShopifyIntegrationController extends Controller
             'request_meta' => [
                 'ip' => (string) $request->ip(),
             ],
-        ]);
+        ];
+        $consentSmsRequested = array_key_exists('consent_sms', $data);
 
-        if (! $result['profile']) {
+        if ($consentSmsRequested) {
+            $result = $consentCaptureService->requestSmsConfirmation($identityPayload, $syncContext);
+        } else {
+            $sync = $profileSyncService->syncExternalIdentity([
+                'first_name' => trim((string) ($identityPayload['first_name'] ?? '')) ?: null,
+                'last_name' => trim((string) ($identityPayload['last_name'] ?? '')) ?: null,
+                'raw_email' => trim((string) ($identityPayload['email'] ?? '')) ?: null,
+                'raw_phone' => trim((string) ($identityPayload['phone'] ?? '')) ?: null,
+                'source_channels' => (array) ($syncContext['source_channels'] ?? ['shopify_widget']),
+                'source_links' => [[
+                    'source_type' => (string) $syncContext['source_type'],
+                    'source_id' => (string) $syncContext['source_id'],
+                    'source_meta' => (array) ($syncContext['source_meta'] ?? []),
+                ]],
+                'primary_source' => [
+                    'source_type' => (string) $syncContext['source_type'],
+                    'source_id' => (string) $syncContext['source_id'],
+                ],
+            ], [
+                'review_context' => [
+                    'source_label' => (string) ($syncContext['source_label'] ?? 'shopify_widget_contact'),
+                    'source_id' => (string) $syncContext['source_id'],
+                ],
+                'allow_create' => true,
+            ]);
+
+            $result = [
+                'status' => (string) ($sync['status'] ?? 'review_required'),
+                'profile' => (int) ($sync['profile_id'] ?? 0) > 0 ? MarketingProfile::query()->find((int) $sync['profile_id']) : null,
+                'request' => null,
+                'token' => null,
+                'sync' => $sync,
+            ];
+        }
+
+        if (! ($result['profile'] ?? null)) {
             $this->logStorefrontEvent($request, 'widget_consent_request', [
                 'status' => 'verification_required',
                 'issue_type' => 'identity_review_required',
@@ -418,29 +457,27 @@ class MarketingShopifyIntegrationController extends Controller
             ]);
         }
 
-        $state = 'requested';
+        $state = (bool) $profile->accepts_sms_marketing ? 'confirmed' : 'not_consented';
         $bonusAwarded = 0;
         $verificationToken = null;
 
-        if ($consentSms && $flow === 'verification') {
+        if ($consentSmsRequested && $consentSms && $flow === 'verification') {
             $verificationToken = (string) ($result['token'] ?? '');
             $state = 'requested';
-        } elseif ($consentSms) {
+        } elseif ($consentSmsRequested && $consentSms) {
             $consentService->setSmsConsent($profile, true, [
                 'source_type' => 'shopify_widget_optin',
                 'source_id' => $sourceId,
                 'details' => ['flow' => 'direct_confirmed'],
             ]);
 
-            if ((bool) ($data['award_bonus'] ?? false)) {
-                $bonus = $incentiveService->awardSmsConsentBonusOnce(
-                    profile: $profile,
-                    sourceId: $sourceId,
-                    description: 'Shopify widget SMS consent bonus'
-                );
-                if ($bonus['awarded']) {
-                    $bonusAwarded = (int) $bonus['points'];
-                }
+            $bonus = $incentiveService->awardSmsConsentBonusOnce(
+                profile: $profile,
+                sourceId: $sourceId,
+                description: 'Shopify widget SMS consent bonus'
+            );
+            if ($bonus['awarded']) {
+                $bonusAwarded = (int) $bonus['points'];
             }
 
             if ($result['request']) {
@@ -453,7 +490,7 @@ class MarketingShopifyIntegrationController extends Controller
             }
 
             $state = 'confirmed';
-        } else {
+        } elseif ($consentSmsRequested) {
             $consentService->setSmsConsent($profile, false, [
                 'source_type' => 'shopify_widget_optin',
                 'source_id' => $sourceId,
@@ -996,6 +1033,9 @@ class MarketingShopifyIntegrationController extends Controller
             : collect();
         $referralConfig = $taskService->referralConfig();
         $frontendConfig = $taskService->frontendConfig();
+        $integrationConfig = $taskService->integrationConfig();
+        $googleReviewUrl = trim((string) data_get($integrationConfig, 'google_review_url', '')) ?: null;
+        $voteLockedJoinUrl = trim((string) data_get($integrationConfig, 'vote_locked_join_url', '')) ?: null;
         $states = $profile ? ['linked_customer'] : ['unknown_customer', 'verification_required'];
         if ($profile && ((int) ($summary['current_balance_points'] ?? 0)) > 0) {
             $states[] = 'known_customer_has_balance';
@@ -1027,10 +1067,11 @@ class MarketingShopifyIntegrationController extends Controller
             'state' => $states[0] ?? 'unknown_customer',
             'copy' => [
                 'title' => (string) data_get($frontendConfig, 'central_title', 'Candle Cash Central'),
-                'subtitle' => (string) data_get($frontendConfig, 'central_subtitle', 'Earn rewards by helping us grow through reviews, referrals, and easy engagement.'),
+                'subtitle' => (string) data_get($frontendConfig, 'central_subtitle', 'Earn rewards through verified actions like signups, reviews, referrals, and member-only perks.'),
                 'faq_approval_copy' => (string) data_get($frontendConfig, 'faq_approval_copy', ''),
                 'faq_stack_copy' => (string) data_get($frontendConfig, 'faq_stack_copy', ''),
                 'faq_pending_copy' => (string) data_get($frontendConfig, 'faq_pending_copy', ''),
+                'faq_verification_copy' => (string) data_get($frontendConfig, 'faq_verification_copy', ''),
             ],
             'summary' => $summary,
             'balance' => [
@@ -1093,19 +1134,39 @@ class MarketingShopifyIntegrationController extends Controller
                     ];
                 })->all(),
             ],
-            'tasks' => $taskRows->map(fn (array $row): array => [
-                'id' => (int) data_get($row, 'task.id'),
-                'handle' => (string) data_get($row, 'task.handle'),
-                'title' => (string) data_get($row, 'task.title'),
-                'description' => (string) data_get($row, 'task.description'),
-                'reward_amount' => (string) data_get($row, 'task.reward_amount'),
-                'task_type' => (string) data_get($row, 'task.task_type'),
-                'action_url' => data_get($row, 'task.action_url'),
-                'button_text' => (string) (data_get($row, 'task.button_text') ?: 'Complete task'),
-                'requires_manual_approval' => (bool) data_get($row, 'task.requires_manual_approval'),
-                'requires_customer_submission' => (bool) data_get($row, 'task.requires_customer_submission'),
-                'eligibility' => data_get($row, 'eligibility'),
-            ])->all(),
+            'tasks' => $taskRows->map(function (array $row) use ($googleReviewUrl, $voteLockedJoinUrl): array {
+                $handle = (string) data_get($row, 'task.handle');
+                $actionUrl = data_get($row, 'task.action_url');
+                if (($actionUrl === null || trim((string) $actionUrl) === '') && $handle === 'google-review' && $googleReviewUrl) {
+                    $actionUrl = $googleReviewUrl;
+                }
+
+                $eligibility = (array) data_get($row, 'eligibility', []);
+                if ($handle === 'candle-club-vote' && $voteLockedJoinUrl) {
+                    $eligibility['locked_cta_url'] = $voteLockedJoinUrl;
+                }
+
+                return [
+                    'id' => (int) data_get($row, 'task.id'),
+                    'handle' => $handle,
+                    'title' => (string) data_get($row, 'task.title'),
+                    'description' => (string) data_get($row, 'task.description'),
+                    'reward_amount' => (string) data_get($row, 'task.reward_amount'),
+                    'task_type' => (string) data_get($row, 'task.task_type'),
+                    'verification_mode' => (string) data_get($row, 'task.verification_mode'),
+                    'auto_award' => (bool) data_get($row, 'task.auto_award'),
+                    'action_url' => $actionUrl,
+                    'button_text' => (string) (data_get($row, 'task.button_text') ?: 'Complete task'),
+                    'campaign_key' => data_get($row, 'task.campaign_key'),
+                    'external_object_id' => data_get($row, 'task.external_object_id'),
+                    'verification_window_hours' => data_get($row, 'task.verification_window_hours'),
+                    'matching_rules' => data_get($row, 'task.matching_rules'),
+                    'metadata' => data_get($row, 'task.metadata'),
+                    'requires_manual_approval' => (bool) data_get($row, 'task.requires_manual_approval'),
+                    'requires_customer_submission' => (bool) data_get($row, 'task.requires_customer_submission'),
+                    'eligibility' => $eligibility,
+                ];
+            })->all(),
             'history' => [
                 'tasks' => $taskHistory->map(function ($row): array {
                     return [
@@ -1144,6 +1205,7 @@ class MarketingShopifyIntegrationController extends Controller
             'task_handle' => ['required', 'string', 'max:120'],
             'proof_url' => ['nullable', 'url', 'max:500'],
             'proof_text' => ['nullable', 'string', 'max:2000'],
+            'campaign_key' => ['nullable', 'string', 'max:160'],
             'request_key' => ['nullable', 'string', 'max:200'],
             'marketing_profile_id' => ['nullable', 'integer'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -1167,10 +1229,16 @@ class MarketingShopifyIntegrationController extends Controller
             ],
             [
                 'source_type' => 'shopify_widget_task',
-                'source_id' => (string) $data['task_handle'],
+                'source_id' => trim((string) ($data['campaign_key'] ?? '')) !== ''
+                    ? ((string) $data['task_handle'] . ':campaign:' . trim((string) $data['campaign_key']))
+                    : (string) $data['task_handle'],
+                'source_event_key' => trim((string) ($data['campaign_key'] ?? '')) !== ''
+                    ? ((string) $data['task_handle'] . ':profile:' . $profile->id . ':campaign:' . trim((string) $data['campaign_key']))
+                    : '',
                 'request_key' => trim((string) ($data['request_key'] ?? '')),
                 'metadata' => [
                     'surface' => 'candle_cash_central',
+                    'campaign_key' => trim((string) ($data['campaign_key'] ?? '')) ?: null,
                 ],
             ]
         );

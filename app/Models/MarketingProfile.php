@@ -124,6 +124,11 @@ class MarketingProfile extends Model
         return $this->hasMany(CandleCashTaskCompletion::class, 'marketing_profile_id');
     }
 
+    public function candleCashTaskEvents(): HasMany
+    {
+        return $this->hasMany(CandleCashTaskEvent::class, 'marketing_profile_id');
+    }
+
     public function candleCashReferralsMade(): HasMany
     {
         return $this->hasMany(CandleCashReferral::class, 'referrer_marketing_profile_id');

@@ -7,6 +7,7 @@ use App\Models\CandleCashBalance;
 use App\Models\CandleCashReferral;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
+use App\Models\CandleCashTaskEvent;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
@@ -26,11 +27,11 @@ class CandleCashPagesController extends Controller
 {
     public function dashboard(CandleCashService $candleCashService): View
     {
-        $taskSummary = CandleCashTaskCompletion::query()
-            ->selectRaw('count(*) as total_completions')
-            ->selectRaw("sum(case when status = 'pending' then 1 else 0 end) as pending_approvals")
-            ->selectRaw("sum(case when status = 'awarded' then 1 else 0 end) as awarded_completions")
-            ->selectRaw("avg(case when status = 'awarded' then reward_amount end) as avg_reward_amount")
+        $taskSummary = CandleCashTaskEvent::query()
+            ->selectRaw('count(*) as total_events')
+            ->selectRaw("sum(case when reward_awarded = 1 then 1 else 0 end) as awarded_events")
+            ->selectRaw("sum(case when status = 'pending' then 1 else 0 end) as pending_events")
+            ->selectRaw("sum(case when duplicate_hits > 0 then duplicate_hits else 0 end) as duplicate_hits")
             ->first();
 
         $positivePoints = (int) (CandleCashTransaction::query()
@@ -41,25 +42,61 @@ class CandleCashPagesController extends Controller
             ->leftJoin('candle_cash_task_completions as completions', 'completions.candle_cash_task_id', '=', 'candle_cash_tasks.id')
             ->select('candle_cash_tasks.*')
             ->selectRaw("sum(case when completions.status = 'awarded' then 1 else 0 end) as awarded_count")
-            ->selectRaw("sum(case when completions.status = 'pending' then 1 else 0 end) as pending_count")
+            ->selectRaw("sum(case when completions.status in ('pending','submitted','started') then 1 else 0 end) as pending_count")
             ->groupBy('candle_cash_tasks.id')
             ->orderByDesc('awarded_count')
             ->orderBy('display_order')
             ->limit(6)
             ->get();
 
-        $reviewHandles = ['google-review', 'product-review', 'photo-review'];
-        $reviewGenerated = (int) CandleCashTaskCompletion::query()
-            ->whereIn('status', ['pending', 'awarded'])
+        $reviewHandles = ['google-review', 'product-review'];
+        $reviewGenerated = (int) CandleCashTaskEvent::query()
+            ->where('reward_awarded', true)
             ->whereHas('task', fn (Builder $builder) => $builder->whereIn('handle', $reviewHandles))
+            ->count();
+
+        $secondOrderRewards = (int) CandleCashTaskEvent::query()
+            ->where('reward_awarded', true)
+            ->whereHas('task', fn (Builder $builder) => $builder->where('handle', 'second-order'))
+            ->count();
+
+        $googleReviewsMatched = (int) CandleCashTaskEvent::query()
+            ->where('reward_awarded', true)
+            ->whereHas('task', fn (Builder $builder) => $builder->where('handle', 'google-review'))
+            ->count();
+
+        $productReviewsMatched = (int) CandleCashTaskEvent::query()
+            ->where('reward_awarded', true)
+            ->whereHas('task', fn (Builder $builder) => $builder->where('handle', 'product-review'))
+            ->count();
+
+        $candleClubParticipation = (int) CandleCashTaskEvent::query()
+            ->where('reward_awarded', true)
+            ->whereHas('task', fn (Builder $builder) => $builder->whereIn('handle', ['candle-club-join', 'candle-club-vote']))
+            ->count();
+
+        $referralConversions = (int) CandleCashTaskEvent::query()
+            ->where('reward_awarded', true)
+            ->whereHas('task', fn (Builder $builder) => $builder->whereIn('handle', ['refer-a-friend', 'referred-friend-bonus']))
+            ->count();
+
+        $avgRewardAmount = (float) CandleCashTaskCompletion::query()
+            ->where('status', 'awarded')
+            ->avg('reward_amount');
+
+        $activeTasksCount = CandleCashTask::query()
+            ->where('enabled', true)
+            ->whereNull('archived_at')
             ->count();
 
         $activeTasks = CandleCashTask::query()
             ->where('enabled', true)
             ->whereNull('archived_at')
-            ->count();
+            ->orderBy('display_order')
+            ->limit(8)
+            ->get(['id', 'title', 'handle', 'verification_mode', 'reward_amount']);
 
-        $recentCompletions = CandleCashTaskCompletion::query()
+        $recentCompletions = CandleCashTaskEvent::query()
             ->with(['task:id,title,handle', 'profile:id,first_name,last_name,email'])
             ->latest('id')
             ->limit(12)
@@ -72,12 +109,19 @@ class CandleCashPagesController extends Controller
             'dashboard' => [
                 'total_issued_points' => $positivePoints,
                 'total_issued_amount' => $candleCashService->amountFromPoints($positivePoints),
-                'pending_approvals' => (int) ($taskSummary?->pending_approvals ?? 0),
+                'pending_events' => (int) ($taskSummary?->pending_events ?? 0),
                 'total_referrals' => (int) CandleCashReferral::query()->count(),
-                'active_tasks' => (int) $activeTasks,
+                'referral_conversions' => $referralConversions,
+                'active_tasks' => (int) $activeTasksCount,
                 'reviews_generated' => $reviewGenerated,
-                'avg_reward_cost' => round((float) ($taskSummary?->avg_reward_amount ?? 0), 2),
+                'google_reviews_matched' => $googleReviewsMatched,
+                'product_reviews_matched' => $productReviewsMatched,
+                'second_order_rewards' => $secondOrderRewards,
+                'candle_club_participation' => $candleClubParticipation,
+                'duplicate_hits' => (int) ($taskSummary?->duplicate_hits ?? 0),
+                'avg_reward_cost' => round($avgRewardAmount, 2),
                 'top_tasks' => $topTasks,
+                'active_task_rows' => $activeTasks,
                 'recent_completions' => $recentCompletions,
             ],
         ]);
@@ -87,6 +131,7 @@ class CandleCashPagesController extends Controller
     {
         $filter = trim((string) $request->query('filter', 'active'));
         $type = trim((string) $request->query('type', 'all'));
+        $verification = trim((string) $request->query('verification', 'all'));
 
         $tasks = CandleCashTask::query()
             ->when($filter === 'active', fn (Builder $builder) => $builder->where('enabled', true)->whereNull('archived_at'))
@@ -98,10 +143,12 @@ class CandleCashPagesController extends Controller
             }))
             ->when($filter === 'auto', fn (Builder $builder) => $builder->where('requires_manual_approval', false)->where('requires_customer_submission', false))
             ->when($type !== 'all', fn (Builder $builder) => $builder->where('task_type', $type))
+            ->when($verification !== 'all', fn (Builder $builder) => $builder->where('verification_mode', $verification))
             ->withCount([
                 'completions as awarded_count' => fn ($builder) => $builder->where('status', 'awarded'),
                 'completions as pending_count' => fn ($builder) => $builder->where('status', 'pending'),
                 'completions as blocked_count' => fn ($builder) => $builder->where('status', 'blocked'),
+                'events as event_count',
             ])
             ->orderBy('display_order')
             ->orderBy('id')
@@ -115,8 +162,10 @@ class CandleCashPagesController extends Controller
             'taskFilters' => [
                 'filter' => $filter,
                 'type' => $type,
+                'verification' => $verification,
             ],
             'taskTypes' => CandleCashTask::query()->distinct()->orderBy('task_type')->pluck('task_type')->filter()->values(),
+            'taskVerificationModes' => CandleCashTask::query()->distinct()->orderBy('verification_mode')->pluck('verification_mode')->filter()->values(),
             'newTask' => $this->defaultTaskPayload(),
         ]);
     }
@@ -158,27 +207,33 @@ class CandleCashPagesController extends Controller
 
     public function queue(Request $request): View
     {
-        $status = trim((string) $request->query('status', 'pending'));
-        $query = CandleCashTaskCompletion::query()
-            ->with(['task:id,title,handle,requires_manual_approval,requires_customer_submission', 'profile:id,first_name,last_name,email,phone'])
+        $status = trim((string) $request->query('status', 'all'));
+        $query = CandleCashTaskEvent::query()
+            ->with(['task:id,title,handle,verification_mode,auto_award', 'profile:id,first_name,last_name,email,phone', 'completion:id,status,review_notes'])
             ->latest('id');
 
-        if ($status !== 'all') {
+        if ($status === 'duplicates') {
+            $query->where('duplicate_hits', '>', 0);
+        } elseif ($status === 'awarded') {
+            $query->where('reward_awarded', true);
+        } elseif ($status !== 'all') {
             $query->where('status', $status);
         }
 
-        $completions = $query->paginate(25)->withQueryString();
+        $events = $query->paginate(25)->withQueryString();
 
         return view('marketing.candle-cash.show', [
             'sectionKey' => 'queue',
             'section' => CandleCashSectionRegistry::section('queue'),
             'sections' => $this->navigationItems(),
-            'completionQueue' => $completions,
+            'eventLog' => $events,
             'queueStatus' => $status,
             'queueSummary' => [
-                'pending' => CandleCashTaskCompletion::query()->where('status', 'pending')->count(),
-                'blocked' => CandleCashTaskCompletion::query()->where('status', 'blocked')->count(),
-                'rejected' => CandleCashTaskCompletion::query()->where('status', 'rejected')->count(),
+                'all' => CandleCashTaskEvent::query()->count(),
+                'awarded' => CandleCashTaskEvent::query()->where('reward_awarded', true)->count(),
+                'pending' => CandleCashTaskEvent::query()->where('status', 'pending')->count(),
+                'blocked' => CandleCashTaskEvent::query()->where('status', 'blocked')->count(),
+                'duplicates' => CandleCashTaskEvent::query()->where('duplicate_hits', '>', 0)->count(),
             ],
         ]);
     }
@@ -261,6 +316,7 @@ class CandleCashPagesController extends Controller
                 'lifetime_earned_points' => (int) $selectedProfile->candleCashTransactions->where('points', '>', 0)->sum('points'),
                 'lifetime_redeemed_points' => abs((int) $selectedProfile->candleCashTransactions->where('points', '<', 0)->sum('points')),
                 'membership_status' => $eligibilityService->membershipStatusForProfile($selectedProfile),
+                'blocked_duplicate_attempts' => (int) $selectedProfile->candleCashTaskEvents()->where('duplicate_hits', '>', 0)->sum('duplicate_hits'),
             ] : null,
         ]);
     }
@@ -344,6 +400,7 @@ class CandleCashPagesController extends Controller
             'programConfig' => $taskService->programConfig(),
             'referralConfig' => $taskService->referralConfig(),
             'frontendConfig' => $taskService->frontendConfig(),
+            'integrationConfig' => $taskService->integrationConfig(),
         ]);
     }
 
@@ -356,9 +413,13 @@ class CandleCashPagesController extends Controller
             $data = $request->validate([
                 'label' => ['required', 'string', 'max:120'],
                 'points_per_dollar' => ['required', 'integer', 'min:1', 'max:100'],
-                'google_review_requires_manual_approval' => ['nullable', 'boolean'],
-                'email_signup_auto_award' => ['nullable', 'boolean'],
-                'instagram_follow_approval_mode' => ['required', 'in:honor,manual'],
+                'email_signup_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'sms_signup_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'google_review_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'birthday_signup_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'candle_club_join_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'candle_club_vote_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'second_order_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
                 'birthday_reward_frequency' => ['required', 'in:once_per_year,once_per_lifetime'],
                 'homepage_signup_copy' => ['required', 'string', 'max:255'],
                 'homepage_central_title' => ['required', 'string', 'max:160'],
@@ -368,9 +429,13 @@ class CandleCashPagesController extends Controller
             $this->saveSetting('candle_cash_program_config', array_merge($existing, [
                 'label' => trim((string) $data['label']),
                 'points_per_dollar' => (int) $data['points_per_dollar'],
-                'google_review_requires_manual_approval' => array_key_exists('google_review_requires_manual_approval', $data) ? (bool) $data['google_review_requires_manual_approval'] : false,
-                'email_signup_auto_award' => array_key_exists('email_signup_auto_award', $data) ? (bool) $data['email_signup_auto_award'] : false,
-                'instagram_follow_approval_mode' => $data['instagram_follow_approval_mode'],
+                'email_signup_reward_amount' => (float) $data['email_signup_reward_amount'],
+                'sms_signup_reward_amount' => (float) $data['sms_signup_reward_amount'],
+                'google_review_reward_amount' => (float) $data['google_review_reward_amount'],
+                'birthday_signup_reward_amount' => (float) $data['birthday_signup_reward_amount'],
+                'candle_club_join_reward_amount' => (float) $data['candle_club_join_reward_amount'],
+                'candle_club_vote_reward_amount' => (float) $data['candle_club_vote_reward_amount'],
+                'second_order_reward_amount' => (float) $data['second_order_reward_amount'],
                 'birthday_reward_frequency' => $data['birthday_reward_frequency'],
                 'homepage_signup_copy' => trim((string) $data['homepage_signup_copy']),
                 'homepage_central_title' => trim((string) $data['homepage_central_title']),
@@ -397,7 +462,7 @@ class CandleCashPagesController extends Controller
                 'program_headline' => trim((string) $data['program_headline']),
                 'program_copy' => trim((string) $data['program_copy']),
             ]), 'Candle Cash referral settings.');
-        } else {
+        } elseif ($scope === 'frontend') {
             $existing = $this->settingValue('candle_cash_frontend_config');
             $data = $request->validate([
                 'central_title' => ['required', 'string', 'max:160'],
@@ -405,6 +470,7 @@ class CandleCashPagesController extends Controller
                 'faq_approval_copy' => ['required', 'string', 'max:255'],
                 'faq_stack_copy' => ['required', 'string', 'max:255'],
                 'faq_pending_copy' => ['required', 'string', 'max:255'],
+                'faq_verification_copy' => ['required', 'string', 'max:255'],
             ]);
 
             $this->saveSetting('candle_cash_frontend_config', array_merge($existing, [
@@ -413,7 +479,35 @@ class CandleCashPagesController extends Controller
                 'faq_approval_copy' => trim((string) $data['faq_approval_copy']),
                 'faq_stack_copy' => trim((string) $data['faq_stack_copy']),
                 'faq_pending_copy' => trim((string) $data['faq_pending_copy']),
+                'faq_verification_copy' => trim((string) $data['faq_verification_copy']),
             ]), 'Candle Cash frontend copy settings.');
+        } else {
+            $existing = $this->settingValue('candle_cash_integration_config');
+            $data = $request->validate([
+                'google_review_enabled' => ['nullable', 'boolean'],
+                'google_review_url' => ['nullable', 'string', 'max:500'],
+                'google_business_location_id' => ['nullable', 'string', 'max:120'],
+                'google_review_matching_strategy' => ['required', 'string', 'max:120'],
+                'product_review_enabled' => ['nullable', 'boolean'],
+                'product_review_platform' => ['nullable', 'string', 'max:120'],
+                'product_review_matching_strategy' => ['required', 'string', 'max:120'],
+                'sms_signup_enabled' => ['nullable', 'boolean'],
+                'email_signup_enabled' => ['nullable', 'boolean'],
+                'vote_locked_join_url' => ['nullable', 'string', 'max:500'],
+            ]);
+
+            $this->saveSetting('candle_cash_integration_config', array_merge($existing, [
+                'google_review_enabled' => array_key_exists('google_review_enabled', $data) ? (bool) $data['google_review_enabled'] : false,
+                'google_review_url' => trim((string) ($data['google_review_url'] ?? '')) ?: null,
+                'google_business_location_id' => trim((string) ($data['google_business_location_id'] ?? '')) ?: null,
+                'google_review_matching_strategy' => trim((string) $data['google_review_matching_strategy']),
+                'product_review_enabled' => array_key_exists('product_review_enabled', $data) ? (bool) $data['product_review_enabled'] : false,
+                'product_review_platform' => trim((string) ($data['product_review_platform'] ?? '')) ?: null,
+                'product_review_matching_strategy' => trim((string) $data['product_review_matching_strategy']),
+                'sms_signup_enabled' => array_key_exists('sms_signup_enabled', $data) ? (bool) $data['sms_signup_enabled'] : false,
+                'email_signup_enabled' => array_key_exists('email_signup_enabled', $data) ? (bool) $data['email_signup_enabled'] : false,
+                'vote_locked_join_url' => trim((string) ($data['vote_locked_join_url'] ?? '')) ?: null,
+            ]), 'Candle Cash integration settings.');
         }
 
         return back()->with('toast', ['style' => 'success', 'message' => 'Candle Cash settings saved.']);
@@ -450,7 +544,9 @@ class CandleCashPagesController extends Controller
             'enabled' => ['nullable', 'boolean'],
             'display_order' => ['required', 'integer', 'min:0', 'max:999'],
             'task_type' => ['required', 'string', 'max:80'],
-            'action_url' => ['nullable', 'url', 'max:500'],
+            'verification_mode' => ['required', 'string', 'max:80'],
+            'auto_award' => ['nullable', 'boolean'],
+            'action_url' => ['nullable', 'string', 'max:500'],
             'button_text' => ['nullable', 'string', 'max:80'],
             'max_completions_per_customer' => ['required', 'integer', 'min:1', 'max:999'],
             'requires_manual_approval' => ['nullable', 'boolean'],
@@ -459,11 +555,17 @@ class CandleCashPagesController extends Controller
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'eligibility_type' => ['required', 'string', 'max:80'],
+            'required_customer_tags' => ['nullable', 'string', 'max:5000'],
             'required_membership_status' => ['nullable', 'string', 'max:120'],
             'visible_to_noneligible_customers' => ['nullable', 'boolean'],
             'locked_message' => ['nullable', 'string', 'max:255'],
             'locked_cta_text' => ['nullable', 'string', 'max:80'],
-            'locked_cta_url' => ['nullable', 'url', 'max:500'],
+            'locked_cta_url' => ['nullable', 'string', 'max:500'],
+            'campaign_key' => ['nullable', 'string', 'max:160'],
+            'external_object_id' => ['nullable', 'string', 'max:160'],
+            'verification_window_hours' => ['nullable', 'integer', 'min:1', 'max:8760'],
+            'matching_rules' => ['nullable', 'string', 'max:10000'],
+            'metadata' => ['nullable', 'string', 'max:10000'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -475,6 +577,8 @@ class CandleCashPagesController extends Controller
             'enabled' => array_key_exists('enabled', $data) ? (bool) $data['enabled'] : false,
             'display_order' => (int) $data['display_order'],
             'task_type' => trim((string) $data['task_type']),
+            'verification_mode' => trim((string) $data['verification_mode']),
+            'auto_award' => array_key_exists('auto_award', $data) ? (bool) $data['auto_award'] : false,
             'action_url' => trim((string) ($data['action_url'] ?? '')) ?: null,
             'button_text' => trim((string) ($data['button_text'] ?? '')) ?: null,
             'completion_rule' => $task?->completion_rule,
@@ -485,11 +589,17 @@ class CandleCashPagesController extends Controller
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
             'eligibility_type' => trim((string) $data['eligibility_type']),
+            'required_customer_tags' => $this->decodeJsonField($data['required_customer_tags'] ?? null),
             'required_membership_status' => trim((string) ($data['required_membership_status'] ?? '')) ?: null,
             'visible_to_noneligible_customers' => array_key_exists('visible_to_noneligible_customers', $data) ? (bool) $data['visible_to_noneligible_customers'] : false,
             'locked_message' => trim((string) ($data['locked_message'] ?? '')) ?: null,
             'locked_cta_text' => trim((string) ($data['locked_cta_text'] ?? '')) ?: null,
             'locked_cta_url' => trim((string) ($data['locked_cta_url'] ?? '')) ?: null,
+            'campaign_key' => trim((string) ($data['campaign_key'] ?? '')) ?: null,
+            'external_object_id' => trim((string) ($data['external_object_id'] ?? '')) ?: null,
+            'verification_window_hours' => array_key_exists('verification_window_hours', $data) && $data['verification_window_hours'] !== null ? (int) $data['verification_window_hours'] : null,
+            'matching_rules' => $this->decodeJsonField($data['matching_rules'] ?? null),
+            'metadata' => $this->decodeJsonField($data['metadata'] ?? null),
             'admin_notes' => trim((string) ($data['admin_notes'] ?? '')) ?: null,
         ];
     }
@@ -506,7 +616,9 @@ class CandleCashPagesController extends Controller
             'reward_amount' => 1,
             'enabled' => true,
             'display_order' => 999,
-            'task_type' => 'external_link',
+            'task_type' => 'system_event',
+            'verification_mode' => 'system_event',
+            'auto_award' => true,
             'action_url' => '',
             'button_text' => 'Complete task',
             'max_completions_per_customer' => 1,
@@ -517,12 +629,30 @@ class CandleCashPagesController extends Controller
             'end_date' => null,
             'eligibility_type' => 'everyone',
             'required_membership_status' => null,
+            'required_customer_tags' => null,
             'visible_to_noneligible_customers' => false,
             'locked_message' => '',
             'locked_cta_text' => '',
             'locked_cta_url' => '',
+            'campaign_key' => '',
+            'external_object_id' => '',
+            'verification_window_hours' => 24,
+            'matching_rules' => "{\n  \"allow_manual_submit\": false\n}",
+            'metadata' => "{\n  \"customer_visible\": true\n}",
             'admin_notes' => '',
         ];
+    }
+
+    protected function decodeJsonField(mixed $value): ?array
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     /**

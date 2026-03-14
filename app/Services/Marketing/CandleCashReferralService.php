@@ -5,7 +5,6 @@ namespace App\Services\Marketing;
 use App\Models\CandleCashReferral;
 use App\Models\MarketingProfile;
 use App\Models\Order;
-use App\Models\OrderLine;
 use App\Models\MarketingSetting;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Str;
@@ -178,48 +177,39 @@ class CandleCashReferralService
             return $referral->fresh();
         }
 
-        $config = $this->config();
         $referrerResult = $this->taskService->awardSystemTask($referrer, 'refer-a-friend', [
-            'source_type' => 'referral_order',
+            'source_type' => 'referral_conversion',
             'source_id' => 'referrer:' . $referral->id . ':order:' . $order->id,
+            'source_event_key' => 'referral:referrer:' . $referral->id . ':order:' . $order->id,
             'metadata' => [
                 'referral_code' => $referral->referral_code,
                 'qualifying_order_id' => $order->id,
             ],
         ]);
 
-        $referredTransactionId = $referral->referred_transaction_id;
-        $referredRewardStatus = $referral->referred_reward_status;
-        if ($referredProfile && ! $referredTransactionId) {
-            $referredSourceId = 'referred:' . $referral->id . ':order:' . $order->id;
-            $alreadyIssued = $referredProfile->candleCashTransactions()
-                ->where('source', 'referral_bonus')
-                ->where('source_id', $referredSourceId)
-                ->exists();
-            if (! $alreadyIssued) {
-                $points = $this->candleCashService->pointsFromAmount((float) data_get($config, 'referred_reward_amount', 5));
-                $tx = $this->candleCashService->addPoints(
-                    profile: $referredProfile,
-                    points: $points,
-                    type: 'earn',
-                    source: 'referral_bonus',
-                    sourceId: $referredSourceId,
-                    description: 'Friend referral bonus'
-                );
-                $referredTransactionId = (int) ($tx['transaction_id'] ?? 0) ?: null;
-                $referredRewardStatus = 'awarded';
-            }
+        $referredResult = null;
+        if ($referredProfile) {
+            $referredResult = $this->taskService->awardSystemTask($referredProfile, 'referred-friend-bonus', [
+                'source_type' => 'referral_conversion',
+                'source_id' => 'referred:' . $referral->id . ':order:' . $order->id,
+                'source_event_key' => 'referral:referred:' . $referral->id . ':order:' . $order->id,
+                'metadata' => [
+                    'referral_code' => $referral->referral_code,
+                    'qualifying_order_id' => $order->id,
+                ],
+            ]);
         }
 
         $referral->forceFill([
             'status' => 'qualified',
-            'qualified_at' => now(),
+            'qualified_at' => $referral->qualified_at ?: now(),
             'rewarded_at' => now(),
             'referrer_completion_id' => $referrerResult['completion']?->id,
+            'referred_completion_id' => $referredResult['completion']?->id,
             'referrer_transaction_id' => $referrerResult['completion']?->candle_cash_transaction_id,
+            'referred_transaction_id' => $referredResult['completion']?->candle_cash_transaction_id,
             'referrer_reward_status' => $referrerResult['ok'] ? 'awarded' : $referral->referrer_reward_status,
-            'referred_transaction_id' => $referredTransactionId,
-            'referred_reward_status' => $referredRewardStatus,
+            'referred_reward_status' => $referredResult && ($referredResult['ok'] ?? false) ? 'awarded' : $referral->referred_reward_status,
         ])->save();
 
         return $referral->fresh();

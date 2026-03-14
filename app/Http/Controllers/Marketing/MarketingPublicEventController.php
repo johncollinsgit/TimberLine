@@ -164,7 +164,7 @@ class MarketingPublicEventController extends Controller
         }
 
         $bonus = 0;
-        if ($smsConsented && (bool) ($data['award_bonus'] ?? false)) {
+        if ($smsConsented) {
             $awarded = $incentiveService->awardSmsConsentBonusOnce(
                 profile: $profile,
                 sourceId: $sourceId,

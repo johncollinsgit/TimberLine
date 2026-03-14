@@ -3,6 +3,7 @@
 use App\Models\CandleCashReferral;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
+use App\Models\CandleCashTaskEvent;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
@@ -12,6 +13,8 @@ use App\Models\User;
 use App\Services\Marketing\CandleCashOrderEventService;
 use App\Services\Marketing\CandleCashReferralService;
 use App\Services\Marketing\CandleCashTaskService;
+use App\Services\Marketing\CandleCashVerificationService;
+use Illuminate\Support\Str;
 
 test('marketing manager can load candle cash dashboard via stable base route name', function () {
     $user = User::factory()->create([
@@ -23,7 +26,39 @@ test('marketing manager can load candle cash dashboard via stable base route nam
         ->get(route('marketing.candle-cash'))
         ->assertOk()
         ->assertSeeText('Candle Cash')
-        ->assertSeeText('Pending approvals');
+        ->assertSeeText('Pending events');
+});
+
+test('marketing manager can load candle cash management sections', function () {
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.tasks'))
+        ->assertOk()
+        ->assertSeeText('Task manager');
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.queue'))
+        ->assertOk()
+        ->assertSeeText('All events');
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.customers'))
+        ->assertOk()
+        ->assertSeeText('Pick a customer from the left');
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.referrals'))
+        ->assertOk()
+        ->assertSeeText('All referrals');
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.settings'))
+        ->assertOk()
+        ->assertSeeText('Verification hooks');
 });
 
 test('non candle club members are blocked from candle club voting reward', function () {
@@ -73,7 +108,7 @@ test('system triggered tasks cannot be submitted manually', function () {
     ]);
 
     expect($result['ok'])->toBeFalse();
-    expect($result['error'])->toBe('system_triggered_task');
+    expect($result['error'])->toBe('auto_verified_task');
 
     $task = CandleCashTask::query()->where('handle', 'second-order')->firstOrFail();
 
@@ -81,7 +116,7 @@ test('system triggered tasks cannot be submitted manually', function () {
         'marketing_profile_id' => $profile->id,
         'candle_cash_task_id' => $task->id,
         'status' => 'blocked',
-        'blocked_reason' => 'system_triggered_task',
+        'blocked_reason' => 'auto_verified_task',
     ]);
 });
 
@@ -186,6 +221,7 @@ test('qualifying referral order awards both sides once', function () {
     expect($referral->referred_marketing_profile_id)->toBe($referred->id);
 
     $task = CandleCashTask::query()->where('handle', 'refer-a-friend')->firstOrFail();
+    $friendTask = CandleCashTask::query()->where('handle', 'referred-friend-bonus')->firstOrFail();
 
     expect(CandleCashTaskCompletion::query()
         ->where('marketing_profile_id', $referrer->id)
@@ -193,8 +229,162 @@ test('qualifying referral order awards both sides once', function () {
         ->where('status', 'awarded')
         ->count())->toBe(1);
 
-    expect(CandleCashTransaction::query()
+    expect(CandleCashTaskCompletion::query()
         ->where('marketing_profile_id', $referred->id)
-        ->where('source', 'referral_bonus')
+        ->where('candle_cash_task_id', $friendTask->id)
+        ->where('status', 'awarded')
         ->count())->toBe(1);
+});
+
+test('eligible candle club members can earn the vote reward once per campaign', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Cora',
+        'email' => 'cora@example.com',
+        'normalized_email' => 'cora@example.com',
+        'source_channels' => ['candle_club'],
+    ]);
+
+    $service = app(CandleCashVerificationService::class);
+
+    $first = $service->recordCandleClubVote($profile, 'spring-2026');
+    $second = $service->recordCandleClubVote($profile, 'spring-2026');
+
+    expect($first['ok'])->toBeTrue()
+        ->and($first['state'])->toBe('awarded')
+        ->and($second['ok'])->toBeTrue()
+        ->and($second['state'])->toBe('awarded');
+
+    $task = CandleCashTask::query()->where('handle', 'candle-club-vote')->firstOrFail();
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(1);
+
+    expect(CandleCashTaskEvent::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('source_event_key', 'candle-club-vote:profile:' . $profile->id . ':campaign:spring-2026')
+        ->value('duplicate_hits'))->toBe(1);
+});
+
+test('email signup reward is awarded automatically on verified opt in without revoking sms consent', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Eden',
+        'email' => 'eden.' . Str::lower(Str::random(6)) . '@example.com',
+        'normalized_email' => null,
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $profile->forceFill([
+        'normalized_email' => Str::lower($profile->email),
+    ])->save();
+
+    $payload = [
+        'email' => $profile->email,
+        'first_name' => 'Eden',
+        'consent_email' => true,
+        'flow' => 'direct',
+    ];
+
+    $headers = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/consent/request',
+        [],
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.accepts_email_marketing', true)
+        ->assertJsonPath('data.accepts_sms_marketing', true);
+
+    $task = CandleCashTask::query()->where('handle', 'email-signup')->firstOrFail();
+
+    expect(MarketingProfile::query()->findOrFail($profile->id)->accepts_sms_marketing)->toBeTrue()
+        ->and(CandleCashTaskCompletion::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('candle_cash_task_id', $task->id)
+            ->where('status', 'awarded')
+            ->count())->toBe(1);
+});
+
+test('sms signup reward is awarded automatically once for the same verified opt in event', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $payload = [
+        'phone' => '5554441234',
+        'first_name' => 'Text',
+        'last_name' => 'Friend',
+        'consent_sms' => true,
+        'flow' => 'direct',
+    ];
+
+    $headers = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/consent/request',
+        [],
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $firstResponse = $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.state', 'sms_confirmed')
+        ->json();
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.state', 'sms_confirmed');
+
+    $profileId = (int) data_get($firstResponse, 'data.profile_id', 0);
+    $task = CandleCashTask::query()->where('handle', 'sms-signup')->firstOrFail();
+
+    expect($profileId)->toBeGreaterThan(0)
+        ->and(CandleCashTaskCompletion::query()
+            ->where('marketing_profile_id', $profileId)
+            ->where('candle_cash_task_id', $task->id)
+            ->where('status', 'awarded')
+            ->count())->toBe(1);
+});
+
+test('duplicate google review events cannot award twice', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Greta',
+        'email' => 'greta@example.com',
+        'normalized_email' => 'greta@example.com',
+    ]);
+
+    $service = app(CandleCashVerificationService::class);
+
+    $first = $service->awardGoogleReview($profile, 'google-review-123', ['rating' => 5]);
+    $second = $service->awardGoogleReview($profile, 'google-review-123', ['rating' => 5]);
+
+    expect($first['ok'])->toBeTrue()
+        ->and($first['state'])->toBe('awarded')
+        ->and($second['ok'])->toBeTrue()
+        ->and($second['state'])->toBe('awarded');
+
+    $task = CandleCashTask::query()->where('handle', 'google-review')->firstOrFail();
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(1);
+
+    expect(CandleCashTaskEvent::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('source_event_key', 'google-review:google-review-123')
+        ->value('duplicate_hits'))->toBe(1);
 });

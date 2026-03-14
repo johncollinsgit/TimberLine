@@ -11,10 +11,10 @@
             <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 @foreach([
                     ['label' => 'Issued', 'value' => '$' . number_format((float) data_get($dashboard, 'total_issued_amount', 0), 2), 'detail' => 'Total Candle Cash awarded across the program.'],
-                    ['label' => 'Pending approvals', 'value' => number_format((int) data_get($dashboard, 'pending_approvals', 0)), 'detail' => 'Tasks waiting on review or proof approval.'],
+                    ['label' => 'Pending events', 'value' => number_format((int) data_get($dashboard, 'pending_events', 0)), 'detail' => 'Events waiting on a final verification step or fallback handling.'],
                     ['label' => 'Referrals', 'value' => number_format((int) data_get($dashboard, 'total_referrals', 0)), 'detail' => 'Captured friend referrals in the system.'],
                     ['label' => 'Active tasks', 'value' => number_format((int) data_get($dashboard, 'active_tasks', 0)), 'detail' => 'Tasks currently visible to customers.'],
-                    ['label' => 'Reviews generated', 'value' => number_format((int) data_get($dashboard, 'reviews_generated', 0)), 'detail' => 'Google, product, and photo review submissions.'],
+                    ['label' => 'Referral conversions', 'value' => number_format((int) data_get($dashboard, 'referral_conversions', 0)), 'detail' => 'Verified referral rewards triggered by qualifying orders.'],
                     ['label' => 'Avg cost', 'value' => '$' . number_format((float) data_get($dashboard, 'avg_reward_cost', 0), 2), 'detail' => 'Average reward cost per awarded task.'],
                 ] as $card)
                     <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
@@ -79,11 +79,11 @@
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Task manager</div>
-                        <h2 class="mt-2 text-lg font-semibold text-white">Create and tune growth tasks</h2>
+                        <h2 class="mt-2 text-lg font-semibold text-white">Create and tune verified growth tasks</h2>
                     </div>
-                    <form method="GET" action="{{ route('marketing.candle-cash.tasks') }}" class="grid gap-3 sm:grid-cols-2">
+                    <form method="GET" action="{{ route('marketing.candle-cash.tasks') }}" class="grid gap-3 sm:grid-cols-3">
                         <select name="filter" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
-                            @foreach(['active' => 'Active', 'inactive' => 'Inactive', 'archived' => 'Archived', 'manual' => 'Manual / proof', 'auto' => 'Auto-award'] as $value => $label)
+                            @foreach(['active' => 'Active', 'inactive' => 'Inactive', 'archived' => 'Archived', 'manual' => 'Fallback / manual', 'auto' => 'Automatic'] as $value => $label)
                                 <option value="{{ $value }}" @selected(data_get($taskFilters, 'filter') === $value)>{{ $label }}</option>
                             @endforeach
                         </select>
@@ -93,7 +93,13 @@
                                 <option value="{{ $taskType }}" @selected(data_get($taskFilters, 'type') === $taskType)>{{ $taskType }}</option>
                             @endforeach
                         </select>
-                        <button type="submit" class="sm:col-span-2 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Apply filters</button>
+                        <select name="verification" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                            <option value="all">All verification modes</option>
+                            @foreach(($taskVerificationModes ?? collect()) as $mode)
+                                <option value="{{ $mode }}" @selected(data_get($taskFilters, 'verification') === $mode)>{{ $mode }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="sm:col-span-3 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Apply filters</button>
                     </form>
                 </div>
             </section>
@@ -101,7 +107,7 @@
             <section class="grid gap-4 xl:grid-cols-[minmax(0,0.95fr),minmax(0,1.05fr)]">
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">New task</div>
-                    <h2 class="mt-2 text-lg font-semibold text-white">Add another low-lift growth reward</h2>
+                    <h2 class="mt-2 text-lg font-semibold text-white">Add another verified reward task</h2>
                     <form method="POST" action="{{ route('marketing.candle-cash.tasks.store') }}" class="mt-4 grid gap-3 md:grid-cols-2">
                         @csrf
                         @include('marketing.candle-cash.task-form-fields', ['taskForm' => $newTask, 'taskPrefix' => 'new'])
@@ -121,9 +127,11 @@
                                     <p class="mt-2 text-sm text-white/65">{{ $task->description }}</p>
                                     <div class="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/45">
                                         <span>{{ $task->task_type }}</span>
+                                        <span>{{ $task->verification_mode }}</span>
                                         <span>{{ number_format((int) $task->awarded_count) }} awarded</span>
                                         <span>{{ number_format((int) $task->pending_count) }} pending</span>
                                         <span>{{ number_format((int) $task->blocked_count) }} blocked</span>
+                                        <span>{{ number_format((int) $task->event_count) }} events</span>
                                     </div>
                                 </div>
                                 <div class="flex flex-wrap gap-2">
@@ -150,11 +158,13 @@
                 </article>
             </section>
         @elseif($sectionKey === 'queue')
-            <section class="grid gap-4 md:grid-cols-3">
+            <section class="grid gap-4 md:grid-cols-5">
                 @foreach([
-                    'pending' => 'Pending approvals',
-                    'blocked' => 'Blocked duplicate / ineligible',
-                    'rejected' => 'Rejected submissions',
+                    'all' => 'All events',
+                    'awarded' => 'Awarded',
+                    'pending' => 'Pending',
+                    'blocked' => 'Blocked',
+                    'duplicates' => 'Duplicates',
                 ] as $key => $label)
                     <a href="{{ route('marketing.candle-cash.queue', ['status' => $key]) }}" wire:navigate class="rounded-[1.7rem] border p-5 {{ $queueStatus === $key ? 'border-emerald-300/35 bg-emerald-500/10' : 'border-white/10 bg-black/15' }}">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $label }}</div>
@@ -170,63 +180,66 @@
                             <tr>
                                 <th class="px-4 py-3">Customer</th>
                                 <th class="px-4 py-3">Task</th>
+                                <th class="px-4 py-3">Mode</th>
                                 <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3">Submitted</th>
-                                <th class="px-4 py-3">Proof</th>
+                                <th class="px-4 py-3">Source</th>
+                                <th class="px-4 py-3">Event</th>
                                 <th class="px-4 py-3">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($completionQueue as $completion)
+                            @forelse($eventLog as $event)
                                 <tr class="border-t border-white/10">
                                     <td class="px-4 py-3 align-top">
-                                        <div class="font-semibold text-white">{{ trim(($completion->profile->first_name ?? '') . ' ' . ($completion->profile->last_name ?? '')) ?: ($completion->profile->email ?? 'Unknown customer') }}</div>
-                                        <div class="mt-1 text-xs text-white/50">{{ $completion->profile->email ?: ($completion->profile->phone ?: 'No email or phone') }}</div>
+                                        <div class="font-semibold text-white">{{ trim(($event->profile->first_name ?? '') . ' ' . ($event->profile->last_name ?? '')) ?: ($event->profile->email ?? 'Unknown customer') }}</div>
+                                        <div class="mt-1 text-xs text-white/50">{{ $event->profile->email ?: ($event->profile->phone ?: 'No email or phone') }}</div>
                                     </td>
                                     <td class="px-4 py-3 align-top">
-                                        <div class="font-medium text-white">{{ $completion->task?->title ?: 'Task' }}</div>
-                                        <div class="mt-1 text-xs text-white/50">{{ $completion->task?->handle }}</div>
+                                        <div class="font-medium text-white">{{ $event->task?->title ?: 'Task' }}</div>
+                                        <div class="mt-1 text-xs text-white/50">{{ $event->task?->handle }}</div>
                                     </td>
-                                    <td class="px-4 py-3 align-top text-white/70">{{ strtoupper($completion->status) }}</td>
-                                    <td class="px-4 py-3 align-top text-white/60">{{ optional($completion->submitted_at ?: $completion->created_at)->format('Y-m-d H:i') }}</td>
+                                    <td class="px-4 py-3 align-top text-white/60">{{ $event->verification_mode }}</td>
+                                    <td class="px-4 py-3 align-top text-white/70">{{ strtoupper($event->status) }}@if($event->reward_awarded) · AWARDED @endif</td>
                                     <td class="px-4 py-3 align-top text-white/70">
-                                        @if($completion->proof_url)
-                                            <a href="{{ $completion->proof_url }}" target="_blank" rel="noopener" class="underline decoration-dotted">Open proof</a>
-                                        @elseif($completion->proof_text)
-                                            <div class="max-w-xs whitespace-pre-wrap text-xs text-white/60">{{ $completion->proof_text }}</div>
-                                        @else
-                                            —
+                                        <div>{{ $event->source_type ?: '—' }}</div>
+                                        <div class="mt-1 text-xs text-white/45">{{ $event->source_id ?: 'No source id' }}</div>
+                                        @if($event->duplicate_hits > 0)
+                                            <div class="mt-1 text-xs text-amber-200">{{ number_format((int) $event->duplicate_hits) }} duplicate hit{{ (int) $event->duplicate_hits === 1 ? '' : 's' }}</div>
                                         @endif
-                                        @if($completion->blocked_reason)
-                                            <div class="mt-1 text-xs text-rose-200">{{ str_replace('_', ' ', $completion->blocked_reason) }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top text-white/60">
+                                        <div>{{ $event->source_event_key }}</div>
+                                        <div class="mt-1 text-xs text-white/45">{{ optional($event->processed_at ?: $event->occurred_at ?: $event->created_at)->format('Y-m-d H:i') }}</div>
+                                        @if($event->blocked_reason)
+                                            <div class="mt-1 text-xs text-rose-200">{{ str_replace('_', ' ', $event->blocked_reason) }}</div>
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 align-top">
-                                        @if($completion->status === 'pending')
+                                        @if($event->completion && $event->completion->status === 'pending')
                                             <div class="flex flex-wrap gap-2">
-                                                <form method="POST" action="{{ route('marketing.candle-cash.queue.approve', $completion) }}" class="space-y-2">
+                                                <form method="POST" action="{{ route('marketing.candle-cash.queue.approve', $event->completion) }}" class="space-y-2">
                                                     @csrf
-                                                    <textarea name="review_notes" rows="2" placeholder="Optional approval note" class="block w-56 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-white/35"></textarea>
+                                                    <textarea name="review_notes" rows="2" placeholder="Optional note" class="block w-56 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-white/35"></textarea>
                                                     <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-white">Approve</button>
                                                 </form>
-                                                <form method="POST" action="{{ route('marketing.candle-cash.queue.reject', $completion) }}" class="space-y-2">
+                                                <form method="POST" action="{{ route('marketing.candle-cash.queue.reject', $event->completion) }}" class="space-y-2">
                                                     @csrf
                                                     <textarea name="review_notes" rows="2" required placeholder="Reason for rejection" class="block w-56 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-white/35"></textarea>
                                                     <button type="submit" class="inline-flex rounded-full border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-white">Reject</button>
                                                 </form>
                                             </div>
                                         @else
-                                            <div class="text-xs text-white/50">{{ $completion->review_notes ?: 'No action available.' }}</div>
+                                            <div class="text-xs text-white/50">{{ $event->completion?->review_notes ?: 'No action needed.' }}</div>
                                         @endif
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="px-4 py-6 text-center text-white/55">No queue items match this status.</td></tr>
+                                <tr><td colspan="7" class="px-4 py-6 text-center text-white/55">No event log rows match this status.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
-                <div class="mt-4">{{ $completionQueue->links() }}</div>
+                <div class="mt-4">{{ $eventLog->links() }}</div>
             </section>
         @elseif($sectionKey === 'customers')
             <section class="grid gap-4 xl:grid-cols-[minmax(320px,0.9fr),minmax(0,1.1fr)]">
@@ -270,6 +283,7 @@
                             <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Lifetime earned</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'lifetime_earned_points', 0)) }} pts</div></div>
                             <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Lifetime redeemed</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'lifetime_redeemed_points', 0)) }} pts</div></div>
                             <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Candle Club</div><div class="mt-2 text-lg font-semibold text-white">{{ data_get($selectedProfileSummary, 'membership_status') === 'active_candle_club_member' ? 'Active member' : 'Not active' }}</div></div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Blocked duplicates</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'blocked_duplicate_attempts', 0)) }}</div></div>
                         </div>
 
                         <form method="POST" action="{{ route('marketing.candle-cash.customers.adjust', $selectedProfile) }}" class="mt-5 grid gap-3 md:grid-cols-4">
@@ -390,10 +404,14 @@
                         <input type="hidden" name="scope" value="program" />
                         <label class="block text-sm text-white/75">Label<input type="text" name="label" value="{{ data_get($programConfig, 'label', 'Candle Cash') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Points per $1<input type="number" min="1" max="100" name="points_per_dollar" value="{{ data_get($programConfig, 'points_per_dollar', 10) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
-                        <label class="block text-sm text-white/75">Instagram follow mode<select name="instagram_follow_approval_mode" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white"><option value="honor" @selected(data_get($programConfig, 'instagram_follow_approval_mode') === 'honor')>Honor based</option><option value="manual" @selected(data_get($programConfig, 'instagram_follow_approval_mode') === 'manual')>Manual approval</option></select></label>
+                        <label class="block text-sm text-white/75">Email signup reward<input type="number" step="0.01" min="0" max="50" name="email_signup_reward_amount" value="{{ data_get($programConfig, 'email_signup_reward_amount', 5) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">SMS signup reward<input type="number" step="0.01" min="0" max="50" name="sms_signup_reward_amount" value="{{ data_get($programConfig, 'sms_signup_reward_amount', 2) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Google review reward<input type="number" step="0.01" min="0" max="50" name="google_review_reward_amount" value="{{ data_get($programConfig, 'google_review_reward_amount', 3) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Birthday reward<input type="number" step="0.01" min="0" max="50" name="birthday_signup_reward_amount" value="{{ data_get($programConfig, 'birthday_signup_reward_amount', 2) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Candle Club join reward<input type="number" step="0.01" min="0" max="50" name="candle_club_join_reward_amount" value="{{ data_get($programConfig, 'candle_club_join_reward_amount', 2) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Candle Club vote reward<input type="number" step="0.01" min="0" max="50" name="candle_club_vote_reward_amount" value="{{ data_get($programConfig, 'candle_club_vote_reward_amount', 1) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Second order reward<input type="number" step="0.01" min="0" max="50" name="second_order_reward_amount" value="{{ data_get($programConfig, 'second_order_reward_amount', 5) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Birthday frequency<select name="birthday_reward_frequency" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white"><option value="once_per_year" @selected(data_get($programConfig, 'birthday_reward_frequency') === 'once_per_year')>Once per year</option><option value="once_per_lifetime" @selected(data_get($programConfig, 'birthday_reward_frequency') === 'once_per_lifetime')>Once per lifetime</option></select></label>
-                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="google_review_requires_manual_approval" value="1" @checked(data_get($programConfig, 'google_review_requires_manual_approval', true)) /> Google review requires manual approval</label>
-                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="email_signup_auto_award" value="1" @checked(data_get($programConfig, 'email_signup_auto_award', true)) /> Email signup auto-awards</label>
                         <label class="block text-sm text-white/75">Homepage signup copy<input type="text" name="homepage_signup_copy" value="{{ data_get($programConfig, 'homepage_signup_copy') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Homepage hero title<input type="text" name="homepage_central_title" value="{{ data_get($programConfig, 'homepage_central_title') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Homepage hero copy<textarea name="homepage_central_copy" rows="3" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white">{{ data_get($programConfig, 'homepage_central_copy') }}</textarea></label>
@@ -429,7 +447,28 @@
                         <label class="block text-sm text-white/75">Approval help<input type="text" name="faq_approval_copy" value="{{ data_get($frontendConfig, 'faq_approval_copy') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Stacking help<input type="text" name="faq_stack_copy" value="{{ data_get($frontendConfig, 'faq_stack_copy') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Pending help<input type="text" name="faq_pending_copy" value="{{ data_get($frontendConfig, 'faq_pending_copy') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Verification help<input type="text" name="faq_verification_copy" value="{{ data_get($frontendConfig, 'faq_verification_copy') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Save frontend copy</button>
+                    </form>
+                </article>
+
+                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Integrations</div>
+                    <h2 class="mt-2 text-lg font-semibold text-white">Verification hooks</h2>
+                    <form method="POST" action="{{ route('marketing.candle-cash.settings.save') }}" class="mt-4 space-y-3">
+                        @csrf
+                        <input type="hidden" name="scope" value="integrations" />
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="google_review_enabled" value="1" @checked(data_get($integrationConfig, 'google_review_enabled', false)) /> Google review matching enabled</label>
+                        <label class="block text-sm text-white/75">Google review URL<input type="text" name="google_review_url" value="{{ data_get($integrationConfig, 'google_review_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Google Business location id<input type="text" name="google_business_location_id" value="{{ data_get($integrationConfig, 'google_business_location_id') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Google matching strategy<input type="text" name="google_review_matching_strategy" value="{{ data_get($integrationConfig, 'google_review_matching_strategy', 'email_phone_or_profile') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_enabled" value="1" @checked(data_get($integrationConfig, 'product_review_enabled', false)) /> Product review integration enabled</label>
+                        <label class="block text-sm text-white/75">Product review platform<input type="text" name="product_review_platform" value="{{ data_get($integrationConfig, 'product_review_platform') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Product review matching strategy<input type="text" name="product_review_matching_strategy" value="{{ data_get($integrationConfig, 'product_review_matching_strategy', 'profile_or_external_customer') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="email_signup_enabled" value="1" @checked(data_get($integrationConfig, 'email_signup_enabled', true)) /> Email signup task enabled</label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="sms_signup_enabled" value="1" @checked(data_get($integrationConfig, 'sms_signup_enabled', true)) /> SMS signup task enabled</label>
+                        <label class="block text-sm text-white/75">Candle Club locked CTA URL<input type="text" name="vote_locked_join_url" value="{{ data_get($integrationConfig, 'vote_locked_join_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Save integration settings</button>
                     </form>
                 </article>
             </section>

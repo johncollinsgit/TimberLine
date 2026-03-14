@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CandleCashTaskCompletion extends Model
 {
@@ -60,5 +61,10 @@ class CandleCashTaskCompletion extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(CandleCashTransaction::class, 'candle_cash_transaction_id');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(CandleCashTaskEvent::class, 'candle_cash_task_completion_id');
     }
 }

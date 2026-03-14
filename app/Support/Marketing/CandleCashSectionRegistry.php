@@ -16,8 +16,8 @@ class CandleCashSectionRegistry
                 'accent' => 'amber',
             ],
             'work' => [
-                'label' => 'Work Queue',
-                'description' => 'Tasks, approvals, and customer reward operations.',
+                'label' => 'Tasks & Events',
+                'description' => 'Tasks, verified events, and customer reward operations.',
                 'accent' => 'emerald',
             ],
             'growth' => [
@@ -47,9 +47,9 @@ class CandleCashSectionRegistry
                 'group' => 'work',
             ],
             'queue' => [
-                'label' => 'Queue',
+                'label' => 'Events',
                 'route' => 'marketing.candle-cash.queue',
-                'description' => 'Review pending submissions, blocked duplicates, and manual approvals.',
+                'description' => 'See verified task events, duplicate blocks, and the small number of fallback/manual items.',
                 'group' => 'work',
             ],
             'customers' => [
@@ -67,7 +67,7 @@ class CandleCashSectionRegistry
             'settings' => [
                 'label' => 'Settings',
                 'route' => 'marketing.candle-cash.settings',
-                'description' => 'Configure Candle Cash copy, referral amounts, approvals, and fraud rules.',
+                'description' => 'Configure Candle Cash copy, referral amounts, integration matching, and fraud rules.',
                 'group' => 'growth',
             ],
         ];

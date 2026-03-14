@@ -254,7 +254,7 @@ test('shopify v1 candle cash status returns central contract for linked customer
         'email' => $profile->email,
     ], 'stage10-proxy-secret');
 
-    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+    $response = $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('version', 'v1')
@@ -264,7 +264,42 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->assertJsonPath('data.balance.points', 50)
         ->assertJsonPath('data.consent.email', true)
         ->assertJsonPath('data.referral.enabled', true)
-        ->assertJsonCount(10, 'data.tasks');
+        ->assertJsonCount(9, 'data.tasks');
+
+    $tasks = collect($response->json('data.tasks'));
+    $googleReview = $tasks->firstWhere('handle', 'google-review');
+    $vote = $tasks->firstWhere('handle', 'candle-club-vote');
+
+    expect($googleReview)->not->toBeNull()
+        ->and(data_get($googleReview, 'verification_mode'))->toBe('google_business_review')
+        ->and(data_get($googleReview, 'auto_award'))->toBeTrue()
+        ->and($vote)->not->toBeNull()
+        ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
+        ->and($tasks->contains(fn (array $task): bool => data_get($task, 'handle') === 'product-review'))->toBeFalse();
+});
+
+test('shopify v1 candle cash status keeps candle club vote locked for guests', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'stage10-proxy-secret');
+
+    $response = $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.state', 'unknown_customer');
+
+    $tasks = collect($response->json('data.tasks'));
+    $vote = $tasks->firstWhere('handle', 'candle-club-vote');
+
+    expect($vote)->not->toBeNull()
+        ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
+        ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
 });
 
 test('shopify v1 endpoints used by extension resolve under app proxy transport', function () {
