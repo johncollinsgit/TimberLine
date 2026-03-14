@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
+use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
@@ -307,6 +308,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::post('/referrals/{referral}/reprocess', [CandleCashPagesController::class, 'reprocessReferral'])->name('referrals.reprocess');
                     Route::get('/settings', [CandleCashPagesController::class, 'settings'])->name('settings');
                     Route::post('/settings', [CandleCashPagesController::class, 'saveSettings'])->name('settings.save');
+                    Route::get('/google-business/connect', [GoogleBusinessProfileController::class, 'connect'])->name('google-business.connect');
+                    Route::get('/google-business/status', [GoogleBusinessProfileController::class, 'status'])->name('google-business.status');
+                    Route::post('/google-business/disconnect', [GoogleBusinessProfileController::class, 'disconnect'])->name('google-business.disconnect');
+                    Route::post('/google-business/sync', [GoogleBusinessProfileController::class, 'sync'])->name('google-business.sync');
+                    Route::post('/google-business/select-location', [GoogleBusinessProfileController::class, 'selectLocation'])->name('google-business.select-location');
                 });
             Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
                 ->name('operations.reconciliation');
@@ -340,6 +346,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->defaults('section', 'suppression-consent')
                 ->name('suppression-consent');
         });
+
+Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
+    ->name('marketing.candle-cash.google-business.callback');
 
     Route::middleware(['role:admin,marketing_manager'])
         ->prefix('birthdays')
@@ -552,6 +561,9 @@ Route::prefix('shopify/marketing')
     Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('candle-cash.tasks.submit');
+    Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('google-business.review.start');
 });
 
 Route::prefix('shopify/marketing/v1')
@@ -590,6 +602,9 @@ Route::prefix('shopify/marketing/v1')
     Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('candle-cash.tasks.submit');
+    Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('google-business.review.start');
 });
 
 Route::prefix('shopify')->group(function () {

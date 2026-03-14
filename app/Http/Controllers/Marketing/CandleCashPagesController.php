@@ -16,6 +16,7 @@ use App\Services\Marketing\CandleCashReferralService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashTaskEligibilityService;
 use App\Services\Marketing\CandleCashTaskService;
+use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Support\Marketing\CandleCashSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -391,7 +392,10 @@ class CandleCashPagesController extends Controller
         return back()->with('toast', ['style' => 'success', 'message' => 'Referral reprocessed.']);
     }
 
-    public function settings(CandleCashTaskService $taskService): View
+    public function settings(
+        CandleCashTaskService $taskService,
+        GoogleBusinessProfileConnectionService $googleBusinessConnectionService
+    ): View
     {
         return view('marketing.candle-cash.show', [
             'sectionKey' => 'settings',
@@ -401,6 +405,7 @@ class CandleCashPagesController extends Controller
             'referralConfig' => $taskService->referralConfig(),
             'frontendConfig' => $taskService->frontendConfig(),
             'integrationConfig' => $taskService->integrationConfig(),
+            'googleBusinessStatus' => $googleBusinessConnectionService->status(),
         ]);
     }
 

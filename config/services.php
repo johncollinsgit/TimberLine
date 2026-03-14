@@ -46,6 +46,14 @@ return [
         'asana_skylight_calendar_id' => env('ASANA_SKYLIGHT_CALENDAR_ID', 'e4790b1a07ff610489e40c5fb28d50f4f8b74dc2d4b24db2a9b13bef0df39541@group.calendar.google.com'),
     ],
 
+    'google_gbp' => [
+        'client_id' => env('GOOGLE_GBP_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_GBP_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_GBP_REDIRECT_URI'),
+        'enabled' => env('GOOGLE_GBP_ENABLED', false),
+        'scopes' => env('GOOGLE_GBP_SCOPES', 'https://www.googleapis.com/auth/business.manage'),
+    ],
+
     'square' => [
         'access_token' => env('SQUARE_ACCESS_TOKEN'),
         'base_url' => env('SQUARE_BASE_URL', 'https://connect.squareup.com'),

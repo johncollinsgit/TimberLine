@@ -16,6 +16,8 @@ use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
+use App\Services\Marketing\GoogleBusinessProfileConnectionService;
+use App\Services\Marketing\GoogleBusinessProfileException;
 use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
@@ -1285,6 +1287,78 @@ class MarketingShopifyIntegrationController extends Controller
                 'reviewed_at' => optional($completion->reviewed_at)->toIso8601String(),
             ] : null,
         ], $this->contractMeta($request), [$state]);
+    }
+
+    public function startGoogleBusinessReview(
+        Request $request,
+        GoogleBusinessProfileConnectionService $connectionService
+    ): JsonResponse {
+        $data = $request->validate([
+            'request_key' => ['required', 'string', 'max:200'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'google_business_review_start', allowCreate: false, allowBody: true);
+        if (! $resolved['profile']) {
+            return $this->identityErrorResponse((string) $resolved['status'], $request);
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $resolved['profile'];
+
+        try {
+            $result = $connectionService->startReview(
+                $profile,
+                trim((string) $data['request_key']),
+                'candle_cash_central'
+            );
+        } catch (GoogleBusinessProfileException $exception) {
+            $this->logStorefrontEvent($request, 'widget_google_business_review_start', [
+                'status' => 'error',
+                'issue_type' => $exception->errorCode,
+                'profile' => $profile,
+                'source_type' => 'shopify_widget_google_business_review',
+                'source_id' => trim((string) $data['request_key']),
+                'request_key' => trim((string) $data['request_key']),
+                'meta' => [
+                    'request_key' => trim((string) $data['request_key']),
+                ],
+                'resolution_status' => 'open',
+            ]);
+
+            return MarketingStorefrontContract::error(
+                code: $exception->errorCode,
+                message: $exception->getMessage(),
+                status: 422,
+                details: ['request_key' => trim((string) $data['request_key'])],
+                states: ['google_review_not_ready'],
+                recoveryStates: ['retry_after_fix']
+            );
+        }
+
+        $this->logStorefrontEvent($request, 'widget_google_business_review_start', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_google_business_review',
+            'source_id' => (string) ($result['location_id'] ?? ''),
+            'request_key' => trim((string) $data['request_key']),
+            'meta' => [
+                'location_id' => $result['location_id'] ?? null,
+                'location_title' => $result['location_title'] ?? null,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => (int) $profile->id,
+            'state' => 'google_review_started',
+            'review_url' => (string) ($result['review_url'] ?? ''),
+            'location_id' => $result['location_id'] ?? null,
+            'location_title' => $result['location_title'] ?? null,
+        ], $this->contractMeta($request), ['google_review_started']);
     }
 
     public function customerStatus(

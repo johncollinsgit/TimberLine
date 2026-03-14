@@ -1,0 +1,161 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! Schema::hasTable('google_business_profile_connections')) {
+            Schema::create('google_business_profile_connections', function (Blueprint $table): void {
+                $table->id();
+                $table->string('provider_key', 120)->unique();
+                $table->string('connection_status', 40)->default('disconnected')->index();
+                $table->foreignId('connected_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('google_subject')->nullable()->index();
+                $table->string('google_account_label')->nullable();
+                $table->text('access_token')->nullable();
+                $table->text('refresh_token')->nullable();
+                $table->string('token_type', 40)->nullable();
+                $table->timestamp('expires_at')->nullable()->index();
+                $table->json('granted_scopes')->nullable();
+                $table->string('linked_account_name')->nullable();
+                $table->string('linked_account_id')->nullable()->index();
+                $table->string('linked_account_display_name')->nullable();
+                $table->string('linked_location_name')->nullable();
+                $table->string('linked_location_id')->nullable()->index();
+                $table->string('linked_location_title')->nullable();
+                $table->string('linked_location_place_id')->nullable();
+                $table->string('linked_location_maps_uri')->nullable();
+                $table->string('project_approval_status', 40)->default('unknown')->index();
+                $table->timestamp('connected_at')->nullable()->index();
+                $table->timestamp('last_synced_at')->nullable()->index();
+                $table->string('last_error_code', 120)->nullable()->index();
+                $table->text('last_error_message')->nullable();
+                $table->timestamp('last_error_at')->nullable()->index();
+                $table->json('metadata')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('google_business_profile_locations')) {
+            Schema::create('google_business_profile_locations', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('google_business_profile_connection_id')->constrained('google_business_profile_connections')->cascadeOnDelete();
+                $table->string('account_name');
+                $table->string('account_id')->index();
+                $table->string('account_display_name')->nullable();
+                $table->string('location_name');
+                $table->string('location_id')->index();
+                $table->string('title')->nullable();
+                $table->string('store_code')->nullable();
+                $table->string('website_uri')->nullable();
+                $table->string('place_id')->nullable();
+                $table->string('maps_uri')->nullable();
+                $table->json('storefront_address')->nullable();
+                $table->boolean('is_selected')->default(false)->index();
+                $table->timestamp('selected_at')->nullable()->index();
+                $table->timestamp('last_seen_at')->nullable()->index();
+                $table->json('metadata')->nullable();
+                $table->timestamps();
+
+                $table->unique(['google_business_profile_connection_id', 'location_name'], 'gbp_locations_connection_location_unique');
+            });
+        }
+
+        if (! Schema::hasTable('google_business_profile_sync_runs')) {
+            Schema::create('google_business_profile_sync_runs', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('google_business_profile_connection_id')->constrained('google_business_profile_connections')->cascadeOnDelete();
+                $table->foreignId('triggered_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('trigger_type', 40)->default('manual')->index();
+                $table->string('status', 40)->default('running')->index();
+                $table->unsignedInteger('fetched_reviews_count')->default(0);
+                $table->unsignedInteger('new_reviews_count')->default(0);
+                $table->unsignedInteger('updated_reviews_count')->default(0);
+                $table->unsignedInteger('matched_reviews_count')->default(0);
+                $table->unsignedInteger('awarded_reviews_count')->default(0);
+                $table->unsignedInteger('duplicate_reviews_count')->default(0);
+                $table->unsignedInteger('unmatched_reviews_count')->default(0);
+                $table->string('error_code', 120)->nullable()->index();
+                $table->text('error_message')->nullable();
+                $table->timestamp('started_at')->nullable()->index();
+                $table->timestamp('finished_at')->nullable()->index();
+                $table->json('metadata')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('google_business_profile_reviews')) {
+            Schema::create('google_business_profile_reviews', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('google_business_profile_connection_id')->constrained('google_business_profile_connections')->cascadeOnDelete();
+                $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
+                $table->foreignId('candle_cash_task_event_id')->nullable()->constrained('candle_cash_task_events')->nullOnDelete();
+                $table->foreignId('candle_cash_task_completion_id')->nullable()->constrained('candle_cash_task_completions')->nullOnDelete();
+                $table->foreignId('marketing_storefront_event_id')->nullable()->constrained('marketing_storefront_events')->nullOnDelete();
+                $table->string('external_review_id', 190);
+                $table->string('review_name')->nullable();
+                $table->string('account_id')->nullable()->index();
+                $table->string('account_name')->nullable();
+                $table->string('location_id')->nullable()->index();
+                $table->string('location_name')->nullable();
+                $table->unsignedTinyInteger('star_rating')->nullable();
+                $table->string('reviewer_name')->nullable()->index();
+                $table->string('reviewer_profile_photo_url')->nullable();
+                $table->boolean('reviewer_is_anonymous')->default(false)->index();
+                $table->text('comment')->nullable();
+                $table->text('review_reply_comment')->nullable();
+                $table->timestamp('created_time')->nullable()->index();
+                $table->timestamp('updated_time')->nullable()->index();
+                $table->string('sync_status', 40)->default('synced')->index();
+                $table->timestamp('matched_at')->nullable()->index();
+                $table->timestamp('awarded_at')->nullable()->index();
+                $table->json('metadata')->nullable();
+                $table->json('raw_payload')->nullable();
+                $table->timestamps();
+
+                $table->unique(['google_business_profile_connection_id', 'external_review_id'], 'gbp_reviews_connection_external_unique');
+            });
+        }
+
+        $integrationConfig = (array) optional(DB::table('marketing_settings')->where('key', 'candle_cash_integration_config')->first())->value;
+        if (is_string($integrationConfig)) {
+            $decoded = json_decode($integrationConfig, true);
+            $integrationConfig = is_array($decoded) ? $decoded : [];
+        }
+
+        $integrationConfig = array_merge([
+            'google_review_enabled' => false,
+            'google_review_url' => null,
+            'google_business_location_id' => null,
+            'google_review_matching_strategy' => 'recent_click_name_match',
+            'google_business_qna_deprecated' => true,
+        ], $integrationConfig);
+        $integrationConfig['google_business_qna_deprecated'] = true;
+        if (blank($integrationConfig['google_review_matching_strategy'] ?? null)) {
+            $integrationConfig['google_review_matching_strategy'] = 'recent_click_name_match';
+        }
+
+        DB::table('marketing_settings')->updateOrInsert(
+            ['key' => 'candle_cash_integration_config'],
+            [
+                'value' => json_encode($integrationConfig),
+                'description' => 'Integration and verification settings for automatic-first Candle Cash tasks.',
+                'updated_at' => now(),
+                'created_at' => optional(DB::table('marketing_settings')->where('key', 'candle_cash_integration_config')->first())->created_at ?? now(),
+            ]
+        );
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('google_business_profile_reviews');
+        Schema::dropIfExists('google_business_profile_sync_runs');
+        Schema::dropIfExists('google_business_profile_locations');
+        Schema::dropIfExists('google_business_profile_connections');
+    }
+};

@@ -395,6 +395,12 @@
                 <div class="mt-4">{{ $referrals->links() }}</div>
             </section>
         @elseif($sectionKey === 'settings')
+            @php
+                $googleBusinessStatus = $googleBusinessStatus ?? [];
+                $googleConnection = data_get($googleBusinessStatus, 'connection');
+                $googleLocations = collect(data_get($googleBusinessStatus, 'locations', []));
+                $googleLastRun = data_get($googleBusinessStatus, 'last_sync_run');
+            @endphp
             <section class="grid gap-4 xl:grid-cols-3">
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Program</div>
@@ -453,6 +459,99 @@
                 </article>
 
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Google Business Profile</div>
+                    <h2 class="mt-2 text-lg font-semibold text-white">Verified Google review sync</h2>
+                    <div class="mt-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Connection status</div>
+                                <div class="mt-2 text-lg font-semibold text-white">{{ str_replace('_', ' ', (string) data_get($googleBusinessStatus, 'connection_status', 'not_configured')) }}</div>
+                                <div class="mt-2 text-sm text-white/60">
+                                    @if(! data_get($googleBusinessStatus, 'oauth_ready', false))
+                                        Google Business OAuth is not configured yet. Add the GBP env values first.
+                                    @elseif(data_get($googleBusinessStatus, 'linked_location_title'))
+                                        Linked to {{ data_get($googleBusinessStatus, 'linked_location_title') }}.
+                                    @elseif($googleConnection)
+                                        Connected. Pick a location below to start syncing reviews.
+                                    @else
+                                        Connect the business owner or manager account, then pick the location to sync.
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                @if(data_get($googleBusinessStatus, 'oauth_ready', false))
+                                    <a href="{{ route('marketing.candle-cash.google-business.connect') }}" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">
+                                        {{ $googleConnection ? 'Reconnect' : 'Connect Google Business Profile' }}
+                                    </a>
+                                @endif
+                                @if($googleConnection)
+                                    <form method="POST" action="{{ route('marketing.candle-cash.google-business.sync') }}">
+                                        @csrf
+                                        <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-white">Sync now</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('marketing.candle-cash.google-business.disconnect') }}">
+                                        @csrf
+                                        <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Disconnect</button>
+                                    </form>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-3 md:grid-cols-2">
+                            <div class="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/70">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Project approval</div>
+                                <div class="mt-2 font-medium text-white">{{ str_replace('_', ' ', (string) data_get($googleBusinessStatus, 'project_approval_status', 'unknown')) }}</div>
+                                <div class="mt-2 text-xs text-white/50">If the Google My Business review API is still hidden or quota is 0 QPM, treat the project as not approved yet.</div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/70">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Linked source</div>
+                                <div class="mt-2 font-medium text-white">{{ data_get($googleBusinessStatus, 'linked_account_display_name') ?: 'No account linked yet' }}</div>
+                                <div class="mt-2 text-xs text-white/50">{{ data_get($googleBusinessStatus, 'linked_location_title') ?: 'No location selected' }}</div>
+                                @if(data_get($googleBusinessStatus, 'review_url'))
+                                    <a href="{{ data_get($googleBusinessStatus, 'review_url') }}" target="_blank" rel="noopener" class="mt-3 inline-flex text-xs font-semibold text-amber-100/80 underline decoration-white/20 underline-offset-4">Open current review link</a>
+                                @endif
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/70">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Scopes granted</div>
+                                <div class="mt-2 text-xs text-white/60">{{ collect(data_get($googleBusinessStatus, 'granted_scopes', []))->join(', ') ?: 'No scopes stored yet' }}</div>
+                                <div class="mt-3 text-xs text-white/50">Required scope: https://www.googleapis.com/auth/business.manage</div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/70">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Latest sync</div>
+                                <div class="mt-2 font-medium text-white">{{ optional(data_get($googleBusinessStatus, 'last_sync_at'))->format('Y-m-d H:i') ?: 'Not synced yet' }}</div>
+                                @if($googleLastRun)
+                                    <div class="mt-2 text-xs text-white/50">{{ strtoupper((string) $googleLastRun->status) }} · {{ number_format((int) $googleLastRun->fetched_reviews_count) }} fetched · {{ number_format((int) $googleLastRun->awarded_reviews_count) }} awarded</div>
+                                @endif
+                            </div>
+                        </div>
+
+                        @if(data_get($googleBusinessStatus, 'last_error_message'))
+                            <div class="mt-4 rounded-2xl border border-rose-300/25 bg-rose-500/10 p-4 text-sm text-rose-100">
+                                <div class="font-semibold">Last API issue</div>
+                                <div class="mt-2">{{ data_get($googleBusinessStatus, 'last_error_message') }}</div>
+                                @if(data_get($googleBusinessStatus, 'last_error_code'))
+                                    <div class="mt-1 text-xs text-rose-100/75">Code: {{ data_get($googleBusinessStatus, 'last_error_code') }}</div>
+                                @endif
+                            </div>
+                        @endif
+
+                        @if($googleLocations->isNotEmpty())
+                            <form method="POST" action="{{ route('marketing.candle-cash.google-business.select-location') }}" class="mt-4 space-y-3">
+                                @csrf
+                                <label class="block text-sm text-white/75">Linked location
+                                    <select name="location_id" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white">
+                                        @foreach($googleLocations as $location)
+                                            <option value="{{ $location->id }}" @selected($location->is_selected)>{{ $location->account_display_name ?: 'Account' }} · {{ $location->title ?: $location->location_id }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Save linked location</button>
+                            </form>
+                        @endif
+                    </div>
+                </article>
+
+                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Integrations</div>
                     <h2 class="mt-2 text-lg font-semibold text-white">Verification hooks</h2>
                     <form method="POST" action="{{ route('marketing.candle-cash.settings.save') }}" class="mt-4 space-y-3">
@@ -460,14 +559,15 @@
                         <input type="hidden" name="scope" value="integrations" />
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="google_review_enabled" value="1" @checked(data_get($integrationConfig, 'google_review_enabled', false)) /> Google review matching enabled</label>
                         <label class="block text-sm text-white/75">Google review URL<input type="text" name="google_review_url" value="{{ data_get($integrationConfig, 'google_review_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
-                        <label class="block text-sm text-white/75">Google Business location id<input type="text" name="google_business_location_id" value="{{ data_get($integrationConfig, 'google_business_location_id') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
-                        <label class="block text-sm text-white/75">Google matching strategy<input type="text" name="google_review_matching_strategy" value="{{ data_get($integrationConfig, 'google_review_matching_strategy', 'email_phone_or_profile') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <input type="hidden" name="google_business_location_id" value="{{ data_get($integrationConfig, 'google_business_location_id') }}" />
+                        <label class="block text-sm text-white/75">Google matching strategy<input type="text" name="google_review_matching_strategy" value="{{ data_get($integrationConfig, 'google_review_matching_strategy', 'recent_click_name_match') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_enabled" value="1" @checked(data_get($integrationConfig, 'product_review_enabled', false)) /> Product review integration enabled</label>
                         <label class="block text-sm text-white/75">Product review platform<input type="text" name="product_review_platform" value="{{ data_get($integrationConfig, 'product_review_platform') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Product review matching strategy<input type="text" name="product_review_matching_strategy" value="{{ data_get($integrationConfig, 'product_review_matching_strategy', 'profile_or_external_customer') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="email_signup_enabled" value="1" @checked(data_get($integrationConfig, 'email_signup_enabled', true)) /> Email signup task enabled</label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="sms_signup_enabled" value="1" @checked(data_get($integrationConfig, 'sms_signup_enabled', true)) /> SMS signup task enabled</label>
                         <label class="block text-sm text-white/75">Candle Club locked CTA URL<input type="text" name="vote_locked_join_url" value="{{ data_get($integrationConfig, 'vote_locked_join_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <div class="rounded-2xl border border-amber-300/25 bg-amber-500/10 p-4 text-sm text-amber-100">Google Business Q&amp;A is intentionally excluded here. The Q&amp;A API is discontinued, so it is not part of the active Candle Cash rewards program.</div>
                         <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Save integration settings</button>
                     </form>
                 </article>
