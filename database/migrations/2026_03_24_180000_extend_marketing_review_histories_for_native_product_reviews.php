@@ -192,6 +192,7 @@ return new class extends Migration
             ->update([
                 'reward_amount' => 3.00,
                 'enabled' => 1,
+                'action_url' => 'https://g.page/r/CTucm4R1-wmOEAI/review',
                 'button_text' => 'Leave a Google review',
                 'updated_at' => now(),
             ]);
