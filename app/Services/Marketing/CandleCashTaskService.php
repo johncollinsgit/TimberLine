@@ -68,7 +68,19 @@ class CandleCashTaskService
 
     public function integrationConfig(): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', 'candle_cash_integration_config')->first())->value;
+        $value = optional(MarketingSetting::query()->where('key', 'candle_cash_integration_config')->first())->value;
+        $config = is_array($value) ? $value : [];
+
+        $nested = $config[0] ?? null;
+        if (is_string($nested)) {
+            $decoded = json_decode($nested, true);
+            if (is_array($decoded)) {
+                unset($config[0]);
+                $config = array_merge($decoded, $config);
+            }
+        }
+
+        return $config;
     }
 
     public function taskByHandle(string $handle): ?CandleCashTask
