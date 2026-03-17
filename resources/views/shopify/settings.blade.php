@@ -10,18 +10,18 @@
 >
     <style>
         .settings-panel {
-            border-radius: 24px;
+            border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 32px 36px;
-            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+            background: #ffffff;
+            padding: 26px 28px;
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.04);
             max-width: 760px;
         }
 
         .settings-panel h2 {
             margin: 0 0 10px;
-            font-family: "Fraunces", ui-serif, Georgia, serif;
-            font-size: 2rem;
+            font-size: 1.6rem;
+            font-weight: 650;
             color: #111827;
         }
 

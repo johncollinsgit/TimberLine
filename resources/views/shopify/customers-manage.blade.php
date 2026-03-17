@@ -34,6 +34,23 @@
 
         $labelFor = static fn (bool $state): string => $state ? 'Completed' : 'Not completed';
         $indicatorClassFor = static fn (bool $state): string => $state ? 'is-yes' : 'is-no';
+        $embeddedHost = filled($host ?? null) ? $host : (string) request()->query('host', '');
+        $withHost = static function (string $url) use ($embeddedHost): string {
+            if ($embeddedHost === '') {
+                return $url;
+            }
+
+            if (str_contains($url, 'host=')) {
+                return $url;
+            }
+
+            if (str_starts_with($url, 'http')) {
+                return $url;
+            }
+
+            $separator = str_contains($url, '?') ? '&' : '?';
+            return $url . $separator . 'host=' . urlencode($embeddedHost);
+        };
     @endphp
 
     <style>
@@ -471,7 +488,7 @@
                     <tbody>
                         @forelse($customers as $row)
                             @php
-                                $detailUrl = route('shopify.embedded.customers.detail', ['marketingProfile' => $row['id']], false);
+                                $detailUrl = $withHost(route('shopify.embedded.customers.detail', ['marketingProfile' => $row['id']], false));
                             @endphp
                             <tr
                                 class="customers-row--clickable"

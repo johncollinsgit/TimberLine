@@ -151,6 +151,29 @@
         }
     </style>
 
+    @php
+        $embeddedHost = filled($host ?? null) ? $host : (string) request()->query('host', '');
+        $withHost = static function (string $url) use ($embeddedHost): string {
+            if ($embeddedHost === '') {
+                return $url;
+            }
+
+            if (str_contains($url, 'host=')) {
+                return $url;
+            }
+
+            if (str_starts_with($url, 'http')) {
+                return $url;
+            }
+
+            $separator = str_contains($url, '?') ? '&' : '?';
+            return $url . $separator . 'host=' . urlencode($embeddedHost);
+        };
+        $dashboardLinks = collect($dashboardLinks ?? [])
+            ->map(fn (array $link) => array_merge($link, ['href' => $withHost((string) ($link['href'] ?? ''))]))
+            ->all();
+    @endphp
+
     @if(filled($setupNote))
         <section class="dashboard-setup-note">
             {{ $setupNote }}

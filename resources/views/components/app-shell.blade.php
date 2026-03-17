@@ -5,25 +5,28 @@
     'subnav' => [],
     'actions' => [],
     'storeLabel' => null,
+    'host' => null,
     'showSidebar' => true,
 ])
 
 <style>
     .app-shell {
-        --app-shell-bg: #eef2ed;
-        --app-main-bg: rgba(255, 255, 255, 0.52);
+        --app-shell-bg: #f4f6f3;
+        --app-main-bg: #f4f6f3;
+        --app-content-width: 1240px;
 
-        display: grid;
+        display: block;
         min-height: 100vh;
-        background: linear-gradient(180deg, #f7faf6 0%, var(--app-shell-bg) 100%);
+        background: var(--app-shell-bg);
     }
 
     .app-shell--with-sidebar {
+        display: grid;
         grid-template-columns: 270px minmax(0, 1fr);
     }
 
     .app-shell--no-sidebar {
-        grid-template-columns: minmax(0, 1fr);
+        display: block;
     }
 
     .app-shell-main {
@@ -48,15 +51,15 @@
     .app-shell-content {
         flex: 1;
         box-sizing: border-box;
-        padding: 28px 34px 50px;
-        max-width: 1240px;
-        width: 100%;
+        padding: 28px 28px 60px;
+        width: min(100%, var(--app-content-width));
+        margin: 0 auto;
     }
 
     @media (max-width: 900px) {
         .app-shell--with-sidebar,
         .app-shell--no-sidebar {
-            grid-template-columns: 1fr;
+            display: block;
         }
 
         .app-shell-sidebar {
@@ -68,13 +71,13 @@
         }
 
         .app-shell-content {
-            padding: 24px;
+            padding: 24px 20px 48px;
         }
     }
 
     @media (max-width: 640px) {
         .app-shell-content {
-            padding: 16px 14px 30px;
+            padding: 18px 16px 40px;
         }
     }
 </style>
@@ -91,6 +94,9 @@
     @endif
     <div class="app-shell-main">
         <x-app-topbar
+            :navigation="$navigation['items'] ?? []"
+            :active="$navigation['activeSection'] ?? null"
+            :host="$host"
             :title="$pageTitle"
             :subtitle="$pageSubtitle"
             :subnav="$subnav"

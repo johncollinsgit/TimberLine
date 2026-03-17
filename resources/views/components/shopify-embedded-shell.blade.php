@@ -63,7 +63,8 @@
         :subnav="$pageSubnav"
         :actions="$pageActions"
         :store-label="$storeLabel"
-        :show-sidebar="! ($authorized && filled($shopifyApiKey) && filled($host))"
+        :host="$host"
+        :show-sidebar="false"
     >
         {{ $slot }}
     </x-app-shell>

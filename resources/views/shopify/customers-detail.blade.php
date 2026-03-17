@@ -24,6 +24,23 @@
         $smsPhoneDisplay = (string) ($smsInfo['phone_display'] ?? 'No phone on file');
         $smsConsentLabel = (string) ($smsInfo['consent_label'] ?? 'Consent needed');
         $notice = session('customer_detail_notice');
+        $embeddedHost = filled($host ?? null) ? $host : (string) request()->query('host', '');
+        $withHost = static function (string $url) use ($embeddedHost): string {
+            if ($embeddedHost === '') {
+                return $url;
+            }
+
+            if (str_contains($url, 'host=')) {
+                return $url;
+            }
+
+            if (str_starts_with($url, 'http')) {
+                return $url;
+            }
+
+            $separator = str_contains($url, '?') ? '&' : '?';
+            return $url . $separator . 'host=' . urlencode($embeddedHost);
+        };
     @endphp
 
     <style>
@@ -246,7 +263,7 @@
     <section class="customers-surface customers-detail-header">
         <div class="customers-detail-header-row">
             <div>
-                <a class="customers-detail-back" href="{{ route('shopify.embedded.customers.manage', [], false) }}">Back to Manage customers</a>
+                <a class="customers-detail-back" href="{{ $withHost(route('shopify.embedded.customers.manage', [], false)) }}">Back to Manage customers</a>
                 <h2 class="customers-detail-name">{{ $customerDisplayName }}</h2>
                 <div class="customers-detail-meta">
                     {{ $marketingProfile->email ?: 'Email not set' }}
