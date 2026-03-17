@@ -110,6 +110,12 @@ Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, '
 Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.embedded.customers.detail');
 Route::patch('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.embedded.customers.update');
 Route::post('/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.embedded.customers.update-consent');
+Route::post('/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
+    ->name('shopify.embedded.customers.candle-cash.adjust');
+Route::post('/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessage'])
+    ->name('shopify.embedded.customers.message');
+Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
+    ->name('shopify.embedded.customers.candle-cash.send');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -659,6 +665,12 @@ Route::prefix('shopify')->group(function () {
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
     Route::patch('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.app.customers.update');
     Route::post('/app/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.app.customers.update-consent');
+    Route::post('/app/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
+        ->name('shopify.app.customers.candle-cash.adjust');
+    Route::post('/app/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessage'])
+        ->name('shopify.app.customers.message');
+    Route::post('/app/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
+        ->name('shopify.app.customers.candle-cash.send');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');

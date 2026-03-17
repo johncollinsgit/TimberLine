@@ -12,7 +12,9 @@ use App\Models\CandleCashTransaction;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingConsentEvent;
+use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 
 function seedEmbeddedCustomerDetailFixture(): MarketingProfile
@@ -154,6 +156,8 @@ test('customer detail renders identity and summary data', function () {
         ->assertSeeText('Customer Detail')
         ->assertSeeText($profile->email)
         ->assertSeeText('Candle Cash')
+        ->assertSeeText('Candle Cash Adjustment')
+        ->assertSeeText('Message Customer')
         ->assertSeeText('Recent Activity')
         ->assertSeeText('Consent');
 });
@@ -281,4 +285,391 @@ test('consent update alias route resolves with embedded context', function () {
     );
 
     $response->assertRedirect();
+});
+
+test('candle cash adjustment adds balance and records transaction', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $user = User::factory()->create([
+        'name' => 'Alex Admin',
+        'email' => 'alex.admin@example.com',
+    ]);
+
+    CandleCashBalance::query()->updateOrCreate(
+        ['marketing_profile_id' => $profile->id],
+        ['balance' => 10]
+    );
+
+    $token = csrf_token();
+
+    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'direction' => 'add',
+            'amount' => 25,
+            'reason' => 'Manual adjustment for support',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $profile->refresh();
+    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
+
+    expect((int) ($balance?->balance ?? 0))->toBe(35);
+
+    $transaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->orderByDesc('id')
+        ->first();
+
+    expect($transaction)->not->toBeNull()
+        ->and($transaction->type)->toBe('adjust')
+        ->and((int) $transaction->points)->toBe(25)
+        ->and($transaction->source)->toBe('shopify_embedded_admin')
+        ->and((int) $transaction->source_id)->toBe($user->id)
+        ->and($transaction->description)->toBe('Manual adjustment for support');
+
+    $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $detailResponse->assertOk()
+        ->assertSeeText('Manual Adjustment')
+        ->assertSeeText('Alex Admin');
+});
+
+test('candle cash adjustment subtracts balance when allowed', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    CandleCashBalance::query()->updateOrCreate(
+        ['marketing_profile_id' => $profile->id],
+        ['balance' => 50]
+    );
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'direction' => 'subtract',
+            'amount' => 20,
+            'reason' => 'Manual correction',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
+    expect((int) ($balance?->balance ?? 0))->toBe(30);
+});
+
+test('invalid candle cash adjustment is rejected', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'direction' => 'invalid',
+            'amount' => 0,
+            'reason' => '',
+        ]
+    );
+
+    $response->assertSessionHasErrors(['direction', 'amount', 'reason']);
+});
+
+test('candle cash adjustment alias route resolves with embedded context', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'direction' => 'add',
+            'amount' => 5,
+            'reason' => 'Alias adjustment',
+        ]
+    );
+
+    $response->assertRedirect();
+});
+
+test('manual adjustment falls back to Admin actor label when user is not resolved', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'adjust',
+        'points' => 5,
+        'source' => 'shopify_embedded_admin',
+        'source_id' => null,
+        'description' => 'Legacy adjustment',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $response = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+
+    $response->assertOk()
+        ->assertSeeText('Manual Adjustment')
+        ->assertSeeText('Admin');
+});
+
+test('sms message send succeeds when consented', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-222-3333',
+        'normalized_phone' => '15552223333',
+        'accepts_sms_marketing' => true,
+    ])->save();
+
+    $user = User::factory()->create([
+        'name' => 'Morgan Admin',
+        'email' => 'morgan@example.com',
+    ]);
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'channel' => 'sms',
+            'message' => 'Hello from embedded admin.',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $delivery = MarketingMessageDelivery::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    expect($delivery)->not->toBeNull()
+        ->and($delivery->channel)->toBe('sms')
+        ->and((int) $delivery->created_by)->toBe($user->id);
+
+    $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $detailResponse->assertOk()
+        ->assertSeeText('SMS Message')
+        ->assertSeeText('Morgan Admin');
+});
+
+test('sms message send is rejected when consent is missing', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-111-0000',
+        'normalized_phone' => '15551110000',
+        'accepts_sms_marketing' => false,
+    ])->save();
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'channel' => 'sms',
+            'message' => 'Consent required test.',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    expect(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
+});
+
+test('invalid message input is rejected', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'channel' => 'email',
+            'message' => '',
+        ]
+    );
+
+    $response->assertSessionHasErrors(['channel', 'message']);
+});
+
+test('message send alias route resolves with embedded context', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-333-4444',
+        'normalized_phone' => '15553334444',
+        'accepts_sms_marketing' => true,
+    ])->save();
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'channel' => 'sms',
+            'message' => 'Alias route send.',
+        ]
+    );
+
+    $response->assertRedirect();
+});
+
+test('send candle cash succeeds and records gift transaction', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $user = User::factory()->create([
+        'name' => 'Casey Admin',
+        'email' => 'casey@example.com',
+    ]);
+
+    $token = csrf_token();
+
+    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'amount' => 15,
+            'reason' => 'Welcome gift',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $transaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->orderByDesc('id')
+        ->first();
+
+    expect($transaction)->not->toBeNull()
+        ->and($transaction->type)->toBe('gift')
+        ->and((int) $transaction->points)->toBe(15)
+        ->and($transaction->description)->toBe('Welcome gift')
+        ->and((int) $transaction->source_id)->toBe($user->id);
+
+    $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $detailResponse->assertOk()
+        ->assertSeeText('Candle Cash Sent')
+        ->assertSeeText('Casey Admin');
+});
+
+test('send candle cash rejects invalid input', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'amount' => 0,
+            'reason' => '',
+        ]
+    );
+
+    $response->assertSessionHasErrors(['amount', 'reason']);
+});
+
+test('send candle cash alias route resolves with embedded context', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'amount' => 5,
+            'reason' => 'Alias send',
+        ]
+    );
+
+    $response->assertRedirect();
+});
+
+test('send candle cash continues even when optional message cannot send', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-999-0000',
+        'normalized_phone' => '15559990000',
+        'accepts_sms_marketing' => false,
+    ])->save();
+
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'amount' => 8,
+            'reason' => 'Send with optional message',
+            'message' => 'Hello!',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $transaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->orderByDesc('id')
+        ->first();
+
+    expect($transaction)->not->toBeNull()
+        ->and($transaction->type)->toBe('gift')
+        ->and((int) $transaction->points)->toBe(8);
 });

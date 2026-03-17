@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\MarketingProfile;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
+use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
+use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
@@ -207,6 +210,143 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'message' => $changed
                     ? 'Consent updated.'
                     : 'Consent already set to that value.',
+            ]);
+    }
+
+    public function adjustCandleCash(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
+        MarketingProfile $marketingProfile
+    ): RedirectResponse {
+        $context = $contextService->resolvePageContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return redirect()
+                ->back()
+                ->with('customer_detail_notice', [
+                    'style' => 'warning',
+                    'message' => 'Candle Cash adjustment failed: store context could not be verified.',
+                ]);
+        }
+
+        $data = $request->validate([
+            'direction' => ['required', 'in:add,subtract'],
+            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $direction = (string) $data['direction'];
+        $amount = (int) $data['amount'];
+        $reason = trim((string) $data['reason']);
+
+        $result = $adjustmentService->adjust(
+            profile: $marketingProfile,
+            direction: $direction,
+            amount: $amount,
+            reason: $reason,
+            actorId: (string) (auth()->id() ?? 'embedded')
+        );
+
+        $balance = (int) ($result['balance'] ?? 0);
+
+        return redirect()
+            ->back()
+            ->with('customer_detail_notice', [
+                'style' => 'success',
+                'message' => 'Candle Cash adjusted. New balance: ' . number_format($balance) . ' pts.',
+            ]);
+    }
+
+    public function sendMessage(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        MarketingProfile $marketingProfile
+    ): RedirectResponse {
+        $context = $contextService->resolvePageContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return redirect()
+                ->back()
+                ->with('customer_detail_notice', [
+                    'style' => 'warning',
+                    'message' => 'Message send failed: store context could not be verified.',
+                ]);
+        }
+
+        $data = $request->validate([
+            'channel' => ['required', 'in:sms'],
+            'message' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $channel = (string) $data['channel'];
+        $message = trim((string) $data['message']);
+
+        $result = match ($channel) {
+            'sms' => $messagingService->sendSms($marketingProfile, $message, auth()->id()),
+            default => [
+                'ok' => false,
+                'message' => 'Message channel is not supported.',
+            ],
+        };
+
+        return redirect()
+            ->back()
+            ->with('customer_detail_notice', [
+                'style' => $result['ok'] ? 'success' : 'warning',
+                'message' => $result['message'],
+            ]);
+    }
+
+    public function sendCandleCash(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerSendCandleCashService $sendService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        MarketingProfile $marketingProfile
+    ): RedirectResponse {
+        $context = $contextService->resolvePageContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return redirect()
+                ->back()
+                ->with('customer_detail_notice', [
+                    'style' => 'warning',
+                    'message' => 'Send Candle Cash failed: store context could not be verified.',
+                ]);
+        }
+
+        $data = $request->validate([
+            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
+            'reason' => ['required', 'string', 'max:500'],
+            'message' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $amount = (int) $data['amount'];
+        $reason = trim((string) $data['reason']);
+        $message = trim((string) ($data['message'] ?? ''));
+
+        $result = $sendService->send(
+            profile: $marketingProfile,
+            amount: $amount,
+            reason: $reason,
+            actorId: (string) (auth()->id() ?? 'embedded')
+        );
+
+        $noticeMessage = 'Candle Cash sent. New balance: ' . number_format((int) ($result['balance'] ?? 0));
+        $noticeStyle = 'success';
+
+        if ($message !== '') {
+            $smsResult = $messagingService->sendSms($marketingProfile, $message, auth()->id());
+            if (! $smsResult['ok']) {
+                $noticeStyle = 'warning';
+                $noticeMessage .= ' (Message not sent: ' . $smsResult['message'] . ')';
+            }
+        }
+
+        return redirect()
+            ->back()
+            ->with('customer_detail_notice', [
+                'style' => $noticeStyle,
+                'message' => $noticeMessage,
             ]);
     }
 

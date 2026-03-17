@@ -16,6 +16,13 @@
         $activity = (array) ($detail['activity'] ?? []);
         $externalProfiles = $detail['external_profiles'] ?? collect();
         $consent = (array) ($detail['consent'] ?? []);
+        $messaging = (array) ($detail['messaging'] ?? []);
+        $smsInfo = (array) ($messaging['sms'] ?? []);
+        $smsSupported = (bool) ($smsInfo['supported'] ?? false);
+        $smsHasPhone = (bool) ($smsInfo['has_phone'] ?? false);
+        $smsConsented = (bool) ($smsInfo['consented'] ?? false);
+        $smsPhoneDisplay = (string) ($smsInfo['phone_display'] ?? 'No phone on file');
+        $smsConsentLabel = (string) ($smsInfo['consent_label'] ?? 'Consent needed');
         $notice = session('customer_detail_notice');
     @endphp
 
@@ -174,6 +181,15 @@
             font-size: 12px;
         }
 
+        .customers-detail-form textarea {
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            padding: 8px 10px;
+            font-size: 12px;
+            font-family: inherit;
+            resize: vertical;
+        }
+
         .customers-detail-form select {
             border-radius: 8px;
             border: 1px solid rgba(15, 23, 42, 0.14);
@@ -252,7 +268,7 @@
     <section class="customers-detail-summary" aria-label="Customer summary">
         <article class="customers-detail-metric">
             <h4>Candle Cash</h4>
-            <p>{{ $summary['candle_cash_display'] ?? '0' }} pts</p>
+            <p>{{ $summary['candle_cash_display'] ?? '0' }}</p>
         </article>
         <article class="customers-detail-metric">
             <h4>Candle Club</h4>
@@ -298,11 +314,68 @@
         <article class="customers-detail-card">
             <h3>Loyalty Profile</h3>
             <p>
-                Candle Cash balance: {{ $summary['candle_cash_display'] ?? '0' }} pts<br>
+                Candle Cash balance: {{ $summary['candle_cash_display'] ?? '0' }}<br>
                 Candle Club: {{ ! empty($statuses['candle_club']) ? 'Active' : 'Not active' }}<br>
                 Wholesale: {{ ! empty($statuses['wholesale']) ? 'Eligible' : 'Not eligible' }}<br>
                 Birthday tracked: {{ ! empty($summary['birthday_tracked']) ? 'Yes' : 'No' }}
             </p>
+        </article>
+
+        <article class="customers-detail-card">
+            <h3>Candle Cash Adjustment</h3>
+            <p>
+                Current balance: {{ $summary['candle_cash_display'] ?? '0' }}<br>
+                Manual adjustments are recorded in the activity log and require a reason.
+            </p>
+
+            <form method="POST" action="{{ route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], false) }}" class="customers-detail-form">
+                @csrf
+                <label>Adjustment type</label>
+                <select name="direction">
+                    <option value="add" @selected(old('direction') === 'add')>Add Candle Cash</option>
+                    <option value="subtract" @selected(old('direction') === 'subtract')>Subtract Candle Cash</option>
+                </select>
+                <label>Amount (Candle Cash)</label>
+                <input type="number" name="amount" min="1" step="1" value="{{ old('amount') }}" placeholder="Amount" />
+                <label>Reason</label>
+                <input type="text" name="reason" value="{{ old('reason') }}" placeholder="Reason for adjustment" />
+                <button type="submit" class="customers-detail-button is-primary">Apply adjustment</button>
+                @if($errors->has('direction') || $errors->has('amount') || $errors->has('reason'))
+                    <div class="customers-detail-notice is-warning">
+                        {{ $errors->first('direction') ?: $errors->first('amount') ?: $errors->first('reason') }}
+                    </div>
+                @endif
+            </form>
+        </article>
+
+        <article class="customers-detail-card">
+            <h3>Send Candle Cash</h3>
+            <p>
+                Send Candle Cash to the customer as a reward action. This is distinct from a manual adjustment and will be labeled separately in activity.
+            </p>
+
+            <form method="POST" action="{{ route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], false) }}" class="customers-detail-form">
+                @csrf
+                <label>Amount (Candle Cash)</label>
+                <input type="number" name="amount" min="1" step="1" value="{{ old('amount') }}" placeholder="Amount" />
+                <label>Reason</label>
+                <input type="text" name="reason" value="{{ old('reason') }}" placeholder="Reason for sending" />
+                <label>Optional message (SMS)</label>
+                <textarea name="message" rows="3" placeholder="Optional message to send after crediting Candle Cash">{{ old('message') }}</textarea>
+                @if(! $smsSupported)
+                    <div class="customers-detail-meta">SMS messaging is disabled in this environment.</div>
+                @elseif(! $smsHasPhone)
+                    <div class="customers-detail-meta">SMS message will not send because there is no phone on file.</div>
+                @elseif(! $smsConsented)
+                    <div class="customers-detail-meta">SMS message will not send because the customer has not consented.</div>
+                @endif
+                <button type="submit" class="customers-detail-button is-primary">Send Candle Cash</button>
+                @if($errors->has('amount') || $errors->has('reason') || $errors->has('message'))
+                    <div class="customers-detail-notice is-warning">
+                        {{ $errors->first('amount') ?: $errors->first('reason') ?: $errors->first('message') }}
+                    </div>
+                @endif
+            </form>
         </article>
 
         <article class="customers-detail-card">
@@ -357,6 +430,37 @@
                 <button type="submit" class="customers-detail-button is-primary">Save consent</button>
             </form>
         </article>
+
+        <article class="customers-detail-card">
+            <h3>Message Customer</h3>
+            <p>
+                SMS: {{ $smsPhoneDisplay }}<br>
+                Consent: {{ $smsConsentLabel }}
+                @if(! $smsSupported)
+                    <br>SMS sending is not enabled in this environment.
+                @elseif(! $smsHasPhone)
+                    <br>Add a phone number to send SMS.
+                @elseif(! $smsConsented)
+                    <br>SMS consent is required before messages can be sent.
+                @endif
+            </p>
+
+            <form method="POST" action="{{ route('shopify.embedded.customers.message', ['marketingProfile' => $marketingProfile->id], false) }}" class="customers-detail-form">
+                @csrf
+                <label>Channel</label>
+                <select name="channel">
+                    <option value="sms" @selected(old('channel', 'sms') === 'sms')>SMS</option>
+                </select>
+                <label>Message</label>
+                <textarea name="message" rows="3" placeholder="Write a direct message">{{ old('message') }}</textarea>
+                <button type="submit" class="customers-detail-button is-primary" @disabled(! $smsSupported || ! $smsHasPhone)>Send message</button>
+                @if($errors->has('channel') || $errors->has('message'))
+                    <div class="customers-detail-notice is-warning">
+                        {{ $errors->first('channel') ?: $errors->first('message') }}
+                    </div>
+                @endif
+            </form>
+        </article>
     </section>
 
     <section class="customers-detail-card" aria-label="Recent activity">
@@ -368,7 +472,8 @@
                         <th>Date</th>
                         <th>Type</th>
                         <th>Label</th>
-                        <th>Points</th>
+                        <th>Candle Cash</th>
+                        <th>Actor</th>
                         <th>Status</th>
                         <th>Detail</th>
                     </tr>
@@ -386,12 +491,13 @@
                                     —
                                 @endif
                             </td>
+                            <td>{{ $row['actor'] ?? '—' }}</td>
                             <td>{{ $row['status'] ?? '—' }}</td>
                             <td>{{ $row['detail'] ?? '—' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="text-align: center; color: rgba(15, 23, 42, 0.6); padding: 18px;">
+                            <td colspan="7" style="text-align: center; color: rgba(15, 23, 42, 0.6); padding: 18px;">
                                 No recent activity recorded yet.
                             </td>
                         </tr>

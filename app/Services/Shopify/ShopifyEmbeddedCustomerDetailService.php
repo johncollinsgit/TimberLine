@@ -8,11 +8,14 @@ use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingConsentEvent;
+use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class ShopifyEmbeddedCustomerDetailService
 {
@@ -61,6 +64,7 @@ class ShopifyEmbeddedCustomerDetailService
             'activity' => $this->activityFeed($profile),
             'external_profiles' => $profile->externalProfiles,
             'consent' => $this->consentSnapshot($profile),
+            'messaging' => $this->messagingSnapshot($profile),
         ];
     }
 
@@ -270,6 +274,8 @@ class ShopifyEmbeddedCustomerDetailService
     protected function activityFeed(MarketingProfile $profile): array
     {
         $entries = collect();
+        $transactions = collect();
+        $messageDeliveries = collect();
 
         if (Schema::hasTable('candle_cash_transactions')) {
             $transactions = CandleCashTransaction::query()
@@ -277,15 +283,76 @@ class ShopifyEmbeddedCustomerDetailService
                 ->orderByDesc('id')
                 ->limit(18)
                 ->get();
+        }
 
-            $entries = $entries->merge($transactions->map(function (CandleCashTransaction $transaction): array {
+        if (Schema::hasTable('marketing_message_deliveries')) {
+            $messageDeliveries = MarketingMessageDelivery::query()
+                ->where('marketing_profile_id', $profile->id)
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get();
+        }
+
+        $actorLabels = $this->resolveActorLabels(
+            $transactions
+                ->filter(fn (CandleCashTransaction $transaction): bool => $this->isManualAdjustment($transaction) || $this->isCandleCashSend($transaction))
+                ->pluck('source_id')
+                ->merge($messageDeliveries->pluck('created_by'))
+                ->all()
+        );
+
+        if ($transactions->isNotEmpty()) {
+            $entries = $entries->merge($transactions->map(function (CandleCashTransaction $transaction) use ($actorLabels): array {
+                $source = (string) ($transaction->source ?: 'internal');
+                $type = 'Transaction';
+                $label = strtoupper((string) $transaction->type);
+                $status = $source;
+                $actor = null;
+
+                if ($this->isManualAdjustment($transaction)) {
+                    $type = 'Manual Adjustment';
+                    $label = 'Candle Cash';
+                    $status = 'Admin';
+                    $actor = $this->resolveActorLabel($transaction->source_id, $actorLabels);
+                } elseif ($this->isCandleCashSend($transaction)) {
+                    $type = 'Candle Cash Sent';
+                    $label = 'Candle Cash';
+                    $status = 'Admin';
+                    $actor = $this->resolveActorLabel($transaction->source_id, $actorLabels);
+                } elseif ($transaction->type === 'earn') {
+                    $type = 'Reward Earned';
+                    $label = $transaction->description ?: 'Candle Cash';
+                } elseif ($transaction->type === 'redeem') {
+                    $type = 'Redemption';
+                    $label = $transaction->description ?: 'Candle Cash';
+                }
+
                 return [
                     'occurred_at' => $transaction->created_at,
-                    'type' => 'Transaction',
-                    'label' => strtoupper((string) $transaction->type),
+                    'type' => $type,
+                    'label' => $label,
                     'points' => (int) $transaction->points,
-                    'status' => (string) ($transaction->source ?: 'internal'),
+                    'status' => $status,
                     'detail' => $transaction->description ?: '—',
+                    'actor' => $actor,
+                ];
+            }));
+        }
+
+        if ($messageDeliveries->isNotEmpty()) {
+            $entries = $entries->merge($messageDeliveries->map(function (MarketingMessageDelivery $delivery) use ($actorLabels): array {
+                $actor = $this->resolveActorLabel($delivery->created_by ? (string) $delivery->created_by : null, $actorLabels);
+                $channel = strtolower((string) ($delivery->channel ?: 'message'));
+                $type = $channel === 'sms' ? 'SMS Message' : strtoupper($channel);
+
+                return [
+                    'occurred_at' => $delivery->sent_at ?: $delivery->created_at,
+                    'type' => $type,
+                    'label' => 'Direct message',
+                    'points' => null,
+                    'status' => (string) ($delivery->send_status ?: 'sent'),
+                    'detail' => Str::limit((string) ($delivery->rendered_message ?: '—'), 120),
+                    'actor' => $actor,
                 ];
             }));
         }
@@ -306,6 +373,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'points' => -1 * (int) ($redemption->points_spent ?? 0),
                     'status' => (string) ($redemption->status ?: 'issued'),
                     'detail' => $redemption->redemption_code ?: '—',
+                    'actor' => null,
                 ];
             }));
         }
@@ -321,14 +389,18 @@ class ShopifyEmbeddedCustomerDetailService
             $entries = $entries->merge($referrals->map(function (CandleCashReferral $referral): array {
                 $points = $referral->referrerTransaction?->points;
                 $status = (string) ($referral->status ?: $referral->referrer_reward_status ?: 'captured');
+                $type = in_array($status, ['qualified', 'rewarded', 'completed'], true) || $referral->rewarded_at
+                    ? 'Referral Reward'
+                    : 'Referral';
 
                 return [
                     'occurred_at' => $referral->rewarded_at ?: $referral->qualified_at ?: $referral->created_at,
-                    'type' => 'Referral',
-                    'label' => strtoupper($status),
+                    'type' => $type,
+                    'label' => $referral->referral_code ? strtoupper($referral->referral_code) : strtoupper($status),
                     'points' => $points !== null ? (int) $points : null,
                     'status' => $status,
                     'detail' => $referral->referral_code ?: '—',
+                    'actor' => null,
                 ];
             }));
         }
@@ -343,15 +415,28 @@ class ShopifyEmbeddedCustomerDetailService
 
             $entries = $entries->merge($completions->map(function (CandleCashTaskCompletion $completion): array {
                 $occurredAt = $completion->awarded_at ?: $completion->reviewed_at ?: $completion->submitted_at ?: $completion->created_at;
+                $handle = strtolower((string) ($completion->task?->handle ?? ''));
                 $label = $completion->task?->title ?: ($completion->task?->handle ?: 'Reward action');
+                $type = 'Reward Action';
+
+                if ($handle !== '') {
+                    if (str_contains($handle, 'birthday')) {
+                        $type = 'Birthday Reward';
+                    } elseif (str_contains($handle, 'review')) {
+                        $type = 'Review Reward';
+                    } elseif (str_contains($handle, 'refer')) {
+                        $type = 'Referral Reward';
+                    }
+                }
 
                 return [
                     'occurred_at' => $occurredAt,
-                    'type' => 'Reward action',
+                    'type' => $type,
                     'label' => $label,
                     'points' => $completion->reward_points !== null ? (int) $completion->reward_points : null,
                     'status' => (string) ($completion->status ?: 'submitted'),
                     'detail' => $completion->task?->handle ?: '—',
+                    'actor' => null,
                 ];
             }));
         }
@@ -362,6 +447,7 @@ class ShopifyEmbeddedCustomerDetailService
             ->take(20)
             ->map(function (array $row): array {
                 $row['occurred_at_display'] = $this->formatTimestamp($row['occurred_at']);
+                $row['actor'] = $row['actor'] ?? '—';
 
                 return $row;
             })
@@ -434,5 +520,86 @@ class ShopifyEmbeddedCustomerDetailService
                 'last_event' => $lastEvents['sms'],
             ],
         ];
+    }
+
+    /**
+     * @return array{
+     *   sms:array{supported:bool,consented:bool,has_phone:bool,phone_display:string,consent_label:string},
+     *   email:array{supported:bool}
+     * }
+     */
+    protected function messagingSnapshot(MarketingProfile $profile): array
+    {
+        $phone = trim((string) ($profile->normalized_phone ?: $profile->phone));
+        $hasPhone = $phone !== '';
+        $consented = (bool) $profile->accepts_sms_marketing;
+        $smsSupported = (bool) config('marketing.sms.enabled') && (bool) config('marketing.twilio.enabled');
+
+        return [
+            'sms' => [
+                'supported' => $smsSupported,
+                'consented' => $consented,
+                'has_phone' => $hasPhone,
+                'phone_display' => $hasPhone ? $phone : 'No phone on file',
+                'consent_label' => $consented ? 'Consented' : 'Consent needed',
+            ],
+            'email' => [
+                'supported' => false,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<int|string|null> $sourceIds
+     * @return array<int,string>
+     */
+    protected function resolveActorLabels(array $sourceIds): array
+    {
+        if (! Schema::hasTable('users')) {
+            return [];
+        }
+
+        $ids = collect($sourceIds)
+            ->filter(fn ($value): bool => $value !== null && $value !== '')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return User::query()
+            ->whereIn('id', $ids->all())
+            ->get(['id', 'name', 'email'])
+            ->mapWithKeys(function (User $user): array {
+                $label = trim((string) $user->name);
+                if ($label === '') {
+                    $label = trim((string) $user->email);
+                }
+
+                return [$user->id => ($label !== '' ? $label : 'Admin')];
+            })
+            ->all();
+    }
+
+    protected function resolveActorLabel(?string $sourceId, array $labels): string
+    {
+        $id = (int) ($sourceId ?? 0);
+
+        return $labels[$id] ?? 'Admin';
+    }
+
+    protected function isManualAdjustment(CandleCashTransaction $transaction): bool
+    {
+        return $transaction->type === 'adjust'
+            && in_array((string) $transaction->source, ['admin', 'shopify_embedded_admin'], true);
+    }
+
+    protected function isCandleCashSend(CandleCashTransaction $transaction): bool
+    {
+        return $transaction->type === 'gift'
+            && in_array((string) $transaction->source, ['admin', 'shopify_embedded_admin'], true);
     }
 }
