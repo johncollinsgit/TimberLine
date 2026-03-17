@@ -23,6 +23,9 @@ use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
+use App\Http\Controllers\ShopifyEmbeddedCustomersController;
+use App\Http\Controllers\ShopifyEmbeddedRewardsController;
+use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WikiAdminController;
@@ -65,7 +68,9 @@ use App\Livewire\Shipping\Orders as ShippingOrders;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
+use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Shopify\ShopifyClient;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
 use App\Support\Auth\HomeRedirect;
 use App\Support\Wiki\WikiRepository;
@@ -74,13 +79,32 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
+Route::get('/', function (
+    Request $request,
+    ShopifyEmbeddedAppContext $contextService,
+    ShopifyEmbeddedAppController $controller,
+    BirthdayReportingService $birthdayReporting
+) {
+    if ($contextService->hasPageContext($request)) {
+        return $controller->show($request, $contextService, $birthdayReporting);
+    }
+
     if (auth()->check()) {
         return redirect()->to(HomeRedirect::pathFor(auth()->user()));
     }
 
     return redirect()->route('login');
 })->name('home');
+
+Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.embedded.rewards');
+Route::get('/rewards/earn', [ShopifyEmbeddedRewardsController::class, 'earn'])->name('shopify.embedded.rewards.earn');
+Route::get('/rewards/redeem', [ShopifyEmbeddedRewardsController::class, 'redeem'])->name('shopify.embedded.rewards.redeem');
+Route::get('/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'referrals'])->name('shopify.embedded.rewards.referrals');
+Route::get('/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.embedded.rewards.birthdays');
+Route::get('/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.embedded.rewards.vip');
+Route::get('/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.embedded.rewards.notifications');
+Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'show'])->name('shopify.embedded.customers');
+Route::get('/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.embedded.settings');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -209,6 +233,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->defaults('section', 'overview')
                 ->name('overview');
             Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
+            Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
             Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
             Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
             Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
@@ -621,6 +646,18 @@ Route::prefix('shopify/marketing/v1')
 
 Route::prefix('shopify')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
+    Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
+    Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'show'])->name('shopify.app.customers');
+    Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
+    Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
+        Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
+        Route::patch('/rewards/earn/{task}', [ShopifyEmbeddedRewardsController::class, 'updateEarnRule'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.earn.update');
+        Route::patch('/rewards/redeem/{reward}', [ShopifyEmbeddedRewardsController::class, 'updateRedeemRule'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.redeem.update');
+    });
     Route::get('/auth/{store}', [ShopifyAuthController::class, 'auth'])->name('shopify.auth');
     Route::get('/reinstall/{store}', [ShopifyAuthController::class, 'reinstall'])->name('shopify.reinstall');
     Route::get('/callback/{store}', [ShopifyAuthController::class, 'callback'])->name('shopify.callback');

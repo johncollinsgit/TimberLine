@@ -1,0 +1,1 @@
+@include('shopify.embedded-app')

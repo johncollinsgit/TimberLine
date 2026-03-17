@@ -4,23 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\ShopifyStore;
 use App\Services\Marketing\BirthdayReportingService;
-use App\Services\Shopify\ShopifyHmacVerifier;
-use App\Services\Shopify\ShopifyStores;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class ShopifyEmbeddedAppController extends Controller
 {
+    use HandlesShopifyEmbeddedNavigation;
+
     public function show(
         Request $request,
-        ShopifyHmacVerifier $hmacVerifier,
+        ShopifyEmbeddedAppContext $contextService,
         BirthdayReportingService $birthdayReporting
     ): Response {
-        $context = $this->resolveContext($request, $hmacVerifier);
+        $context = $contextService->resolvePageContext($request);
 
         if (($context['status'] ?? '') === 'open_from_shopify') {
             return $this->embeddedResponse(
-                response()->view('shopify.embedded-app', [
+                response()->view('shopify.dashboard', [
                     'authorized' => false,
                     'status' => 'open_from_shopify',
                     'shopifyApiKey' => null,
@@ -29,8 +30,9 @@ class ShopifyEmbeddedAppController extends Controller
                     'storeLabel' => 'Shopify Admin',
                     'headline' => 'Open this app from Shopify Admin',
                     'subheadline' => 'This page is meant to load inside your Shopify admin so it can verify the store context.',
+                    'appNavigation' => $this->embeddedAppNavigation('dashboard'),
+                    'pageActions' => [],
                     'cards' => [],
-                    'quickLinks' => [],
                     'setupNote' => 'If you still need the dedicated rewards page on the storefront, create a page named Your Rewards with the page.forestry-rewards template and publish it.',
                 ])
             );
@@ -38,7 +40,7 @@ class ShopifyEmbeddedAppController extends Controller
 
         if (! ($context['ok'] ?? false)) {
             return $this->embeddedResponse(
-                response()->view('shopify.embedded-app', [
+                response()->view('shopify.dashboard', [
                     'authorized' => false,
                     'status' => 'invalid_request',
                     'shopifyApiKey' => null,
@@ -47,8 +49,9 @@ class ShopifyEmbeddedAppController extends Controller
                     'storeLabel' => 'Shopify Admin',
                     'headline' => 'We could not verify this Shopify request',
                     'subheadline' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
+                    'appNavigation' => $this->embeddedAppNavigation('dashboard'),
+                    'pageActions' => [],
                     'cards' => [],
-                    'quickLinks' => [],
                     'setupNote' => null,
                 ]),
                 401
@@ -61,8 +64,6 @@ class ShopifyEmbeddedAppController extends Controller
         $rewardSummary = $birthdayReporting->rewardSummary();
         $storeRecord = ShopifyStore::query()->where('store_key', $store['key'])->first();
         $hasProxySecret = trim((string) config('marketing.shopify.app_proxy_secret', '')) !== ''
-            || trim((string) config('services.shopify.stores.' . $store['key'] . '.client_secret', '')) !== '';
-        $hasSigningSecret = trim((string) config('marketing.shopify.signing_secret', '')) !== ''
             || trim((string) config('services.shopify.stores.' . $store['key'] . '.client_secret', '')) !== '';
 
         $cards = [
@@ -111,7 +112,7 @@ class ShopifyEmbeddedAppController extends Controller
         ];
 
         return $this->embeddedResponse(
-            response()->view('shopify.embedded-app', [
+            response()->view('shopify.dashboard', [
                 'authorized' => true,
                 'status' => 'ok',
                 'shopifyApiKey' => (string) ($store['client_id'] ?? ''),
@@ -120,8 +121,12 @@ class ShopifyEmbeddedAppController extends Controller
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')) . ' Store',
                 'headline' => 'Forestry rewards are connected',
                 'subheadline' => 'Backstage manages the reward logic. Your storefront shows it to shoppers. This page is the quick health view for the Shopify side.',
-                'cards' => $cards,
-                'quickLinks' => [
+                'appNavigation' => $this->embeddedAppNavigation('dashboard'),
+                'pageActions' => [
+                    [
+                        'label' => 'Open Rewards Admin',
+                        'href' => route('shopify.embedded.rewards', [], false),
+                    ],
                     [
                         'label' => 'Open Birthdays in Backstage',
                         'href' => route('birthdays.customers'),
@@ -135,65 +140,10 @@ class ShopifyEmbeddedAppController extends Controller
                         'href' => route('birthdays.rewards'),
                     ],
                 ],
+                'cards' => $cards,
                 'setupNote' => 'The storefront helper is already live in account, cart, and cart drawer. The only remaining storefront setup step is publishing the dedicated rewards page if you want that page in navigation.',
             ])
         );
-    }
-
-    /**
-     * @return array{ok:bool,status:string,shop_domain:?string,host:?string,store?:array<string,mixed>}
-     */
-    protected function resolveContext(Request $request, ShopifyHmacVerifier $hmacVerifier): array
-    {
-        $shopDomain = $this->normalizeShopDomain((string) $request->query('shop', ''));
-        $host = trim((string) $request->query('host', ''));
-        $hmac = trim((string) $request->query('hmac', ''));
-
-        if ($shopDomain === '' && $host === '' && $hmac === '') {
-            return [
-                'ok' => false,
-                'status' => 'open_from_shopify',
-                'shop_domain' => null,
-                'host' => null,
-            ];
-        }
-
-        if ($shopDomain === '') {
-            return [
-                'ok' => false,
-                'status' => 'missing_shop',
-                'shop_domain' => null,
-                'host' => $host !== '' ? $host : null,
-            ];
-        }
-
-        $store = ShopifyStores::findByShopDomain($shopDomain);
-        if ($store === null) {
-            return [
-                'ok' => false,
-                'status' => 'unknown_shop',
-                'shop_domain' => $shopDomain,
-                'host' => $host !== '' ? $host : null,
-            ];
-        }
-
-        $secret = trim((string) ($store['secret'] ?? ''));
-        if (! $hmacVerifier->verifyQuery($request->query(), $secret)) {
-            return [
-                'ok' => false,
-                'status' => 'invalid_hmac',
-                'shop_domain' => $shopDomain,
-                'host' => $host !== '' ? $host : null,
-            ];
-        }
-
-        return [
-            'ok' => true,
-            'status' => 'ok',
-            'shop_domain' => $shopDomain,
-            'host' => $host !== '' ? $host : null,
-            'store' => $store,
-        ];
     }
 
     protected function embeddedResponse(Response $response, int $status = 200): Response
@@ -208,10 +158,4 @@ class ShopifyEmbeddedAppController extends Controller
         return $response;
     }
 
-    protected function normalizeShopDomain(string $shopDomain): string
-    {
-        $normalized = strtolower((string) preg_replace('#^https?://#', '', trim($shopDomain)));
-
-        return rtrim($normalized, '/');
-    }
 }
