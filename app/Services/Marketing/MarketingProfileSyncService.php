@@ -14,7 +14,8 @@ class MarketingProfileSyncService
     public function __construct(
         protected MarketingIdentityExtractor $extractor,
         protected MarketingProfileMatcher $matcher,
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
     ) {
     }
 
@@ -401,7 +402,10 @@ class MarketingProfileSyncService
                         ],
                         [
                             'marketing_profile_id' => $profile->id,
-                            'source_meta' => $linkData['source_meta'],
+                            'source_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                                is_array($existing?->source_meta ?? null) ? $existing->source_meta : [],
+                                is_array($linkData['source_meta'] ?? null) ? $linkData['source_meta'] : []
+                            ),
                             'match_method' => $matchMethod,
                             'confidence' => $confidence,
                         ]

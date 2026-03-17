@@ -49,6 +49,8 @@ class ShopifyEmbeddedDashboardConfig
                 'facebook',
                 'google',
                 'other',
+                'direct',
+                'unknown',
             ],
             'widgetRegistry' => [
                 'metricCards' => ['title' => 'Top metrics'],

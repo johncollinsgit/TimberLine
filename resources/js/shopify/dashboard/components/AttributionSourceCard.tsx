@@ -8,6 +8,9 @@ interface AttributionSourceCardProps {
 export function AttributionSourceCard({ source }: AttributionSourceCardProps) {
   const tone =
     source.tone === "positive" ? "success" : source.tone === "negative" ? "critical" : "info";
+  const badgeTone = source.live ? tone : "attention";
+  const badgeLabel =
+    source.orders === 0 ? "No data" : source.live ? (source.deltaPct === null ? "Live" : source.deltaLabel) : "Pending";
 
   return (
     <Card>
@@ -21,8 +24,11 @@ export function AttributionSourceCard({ source }: AttributionSourceCardProps) {
               {source.formattedRevenue}
             </Text>
           </BlockStack>
-          <Badge tone={source.live ? tone : "attention"}>{source.live ? source.deltaLabel : "Unmapped"}</Badge>
+          <Badge tone={badgeTone}>{badgeLabel}</Badge>
         </InlineStack>
+        <Text as="p" variant="bodySm" tone="subdued">
+          {source.orders} order{source.orders === 1 ? "" : "s"}
+        </Text>
         <Text as="p" variant="bodySm" tone="subdued">
           {source.description}
         </Text>

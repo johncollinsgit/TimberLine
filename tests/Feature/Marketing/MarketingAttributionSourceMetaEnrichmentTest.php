@@ -1,0 +1,406 @@
+<?php
+
+use App\Models\BirthdayRewardIssuance;
+use App\Models\CandleCashRedemption;
+use App\Models\CandleCashReferral;
+use App\Models\CustomerBirthdayProfile;
+use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
+use App\Models\Order;
+use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
+use App\Services\Marketing\MarketingProfileSyncService;
+use App\Services\Shopify\ShopifyOrderIngestor;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Queue;
+
+test('attribution source meta builder captures shopify payload source fields and utm signals', function () {
+    Carbon::setTestNow('2026-03-17 10:30:00');
+
+    $meta = app(MarketingAttributionSourceMetaBuilder::class)->fromShopifyOrderPayload([
+        'landing_site' => 'https://theforestrystudio.com/pages/rewards?utm_source=instagram&utm_medium=social&utm_campaign=spring-launch',
+        'referring_site' => 'https://l.instagram.com/?u=https%3A%2F%2Ftheforestrystudio.com',
+        'source_name' => 'web',
+        'source_identifier' => 'instagram-ad-42',
+        'note_attributes' => [
+            ['name' => 'utm_content', 'value' => 'story-1'],
+            ['name' => 'utm_term', 'value' => 'forest-candle'],
+            ['name' => 'landing_page', 'value' => 'https://theforestrystudio.com/pages/rewards'],
+        ],
+    ], 'retail');
+
+    expect($meta['utm_source'])->toBe('instagram')
+        ->and($meta['utm_medium'])->toBe('social')
+        ->and($meta['utm_campaign'])->toBe('spring-launch')
+        ->and($meta['utm_content'])->toBe('story-1')
+        ->and($meta['utm_term'])->toBe('forest-candle')
+        ->and($meta['referrer'])->toContain('instagram.com')
+        ->and($meta['referring_site'])->toContain('instagram.com')
+        ->and($meta['landing_page'])->toBe('https://theforestrystudio.com/pages/rewards')
+        ->and($meta['shopify_store_key'])->toBe('retail')
+        ->and($meta['capture_context'])->toBe('shopify_order_payload')
+        ->and($meta['last_enriched_at'])->toBe(now()->toIso8601String());
+
+    Carbon::setTestNow();
+});
+
+test('source meta merge preserves stronger values and is idempotent', function () {
+    Carbon::setTestNow('2026-03-17 09:00:00');
+
+    $builder = app(MarketingAttributionSourceMetaBuilder::class);
+
+    $existing = [
+        'utm_source' => 'klaviyo',
+        'source_system' => 'orders',
+        'field_confidence' => ['utm_source' => 'high'],
+        'capture_context' => 'existing_link',
+        'capture_contexts' => ['existing_link'],
+        'confidence' => 'high',
+        'last_enriched_at' => now()->toIso8601String(),
+    ];
+
+    Carbon::setTestNow('2026-03-17 09:05:00');
+
+    $candidate = [
+        'utm_source' => 'google',
+        'utm_medium' => 'cpc',
+        'field_confidence' => [
+            'utm_source' => 'medium',
+            'utm_medium' => 'medium',
+        ],
+        'capture_context' => 'shopify_order_payload',
+        'capture_contexts' => ['shopify_order_payload'],
+        'confidence' => 'medium',
+    ];
+
+    $merged = $builder->mergeSourceMeta($existing, $candidate);
+
+    expect($merged['utm_source'])->toBe('klaviyo')
+        ->and($merged['utm_medium'])->toBe('cpc')
+        ->and($merged['source_system'])->toBe('orders')
+        ->and($merged['capture_contexts'])->toContain('existing_link', 'shopify_order_payload')
+        ->and($merged['last_enriched_at'])->toBe(now()->toIso8601String());
+
+    Carbon::setTestNow('2026-03-17 09:10:00');
+
+    expect($builder->mergeSourceMeta($merged, $candidate))->toBe($merged);
+
+    Carbon::setTestNow();
+});
+
+test('marketing profile sync persists attribution source meta across order links', function () {
+    $order = Order::factory()->create([
+        'source' => 'shopify_retail',
+        'order_type' => 'retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 4101,
+        'shopify_customer_id' => '8101',
+        'email' => 'attribution-sync@example.com',
+    ]);
+
+    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
+        'identity_context' => [
+            'email' => 'attribution-sync@example.com',
+            'attribution_meta' => [
+                'utm_source' => 'google',
+                'utm_medium' => 'cpc',
+                'referrer' => 'https://www.google.com/search?q=forest+candle',
+                'field_confidence' => [
+                    'utm_source' => 'high',
+                    'utm_medium' => 'high',
+                    'referrer' => 'high',
+                ],
+                'capture_context' => 'shopify_order_payload',
+                'capture_contexts' => ['shopify_order_payload'],
+                'confidence' => 'high',
+            ],
+        ],
+    ]);
+
+    expect($result['profiles_created'])->toBe(1);
+
+    $links = MarketingProfileLink::query()
+        ->whereIn('source_type', ['order', 'shopify_order', 'shopify_customer'])
+        ->get()
+        ->keyBy('source_type');
+
+    expect($links['order']->source_meta['utm_source'])->toBe('google')
+        ->and($links['order']->source_meta['utm_medium'])->toBe('cpc')
+        ->and($links['order']->source_meta['source_system'])->toBe('orders')
+        ->and($links['shopify_order']->source_meta['shopify_order_id'])->toBe('4101')
+        ->and($links['shopify_order']->source_meta['utm_source'])->toBe('google')
+        ->and($links['shopify_customer']->source_meta['shopify_customer_id'])->toBe('8101')
+        ->and($links['shopify_customer']->source_meta['utm_source'])->toBe('google');
+});
+
+test('shopify order ingest persists raw attribution meta on orders and downstream sync prefers it', function () {
+    Queue::fake();
+
+    $store = ['key' => 'retail', 'source' => 'shopify_retail'];
+    $orderData = [
+        'id' => 4301,
+        'name' => '#4301',
+        'created_at' => '2026-03-17T12:00:00Z',
+        'email' => 'order-attribution@example.com',
+        'phone' => '+1 (555) 123-4567',
+        'source_name' => 'web',
+        'source_identifier' => 'online-store',
+        'landing_site' => 'https://theforestrystudio.com/pages/rewards?utm_source=google&utm_medium=cpc&utm_campaign=spring-launch',
+        'source_url' => 'https://theforestrystudio.com/pages/rewards?utm_source=google&utm_medium=cpc&utm_campaign=spring-launch',
+        'referring_site' => 'https://www.google.com/search?q=the+forestry+studio',
+        'browser_ip' => '203.0.113.42',
+        'client_details' => [
+            'user_agent' => 'Mozilla/5.0',
+            'accept_language' => 'en-US',
+        ],
+        'tags' => 'vip, repeat',
+        'note_attributes' => [
+            ['name' => 'utm_content', 'value' => 'hero-banner'],
+            ['name' => 'utm_term', 'value' => 'forest-candle'],
+        ],
+        'customer' => [
+            'id' => 8301,
+            'first_name' => 'River',
+            'last_name' => 'Stone',
+            'email' => 'order-attribution@example.com',
+            'phone' => '+1 (555) 123-4567',
+        ],
+        'line_items' => [],
+    ];
+
+    app(ShopifyOrderIngestor::class)->ingest($store, $orderData);
+
+    $order = Order::query()->sole();
+
+    expect($order->attribution_meta['utm_source'])->toBe('google')
+        ->and($order->attribution_meta['utm_medium'])->toBe('cpc')
+        ->and($order->attribution_meta['utm_campaign'])->toBe('spring-launch')
+        ->and($order->attribution_meta['utm_content'])->toBe('hero-banner')
+        ->and($order->attribution_meta['utm_term'])->toBe('forest-candle')
+        ->and($order->attribution_meta['source_name'])->toBe('web')
+        ->and($order->attribution_meta['source_identifier'])->toBe('online-store')
+        ->and($order->attribution_meta['browser_ip'])->toBe('203.0.113.42')
+        ->and($order->attribution_meta['user_agent'])->toBe('Mozilla/5.0')
+        ->and($order->attribution_meta['order_tags'])->toContain('vip', 'repeat')
+        ->and($order->attribution_meta['shopify_store_key'])->toBe('retail')
+        ->and($order->attribution_meta['ingested_attribution_version'])->toBe(1);
+
+    $result = app(MarketingProfileSyncService::class)->syncOrder($order, [
+        'identity_context' => [
+            'email' => 'order-attribution@example.com',
+            'shopify_customer_id' => '8301',
+        ],
+    ]);
+
+    expect($result['profiles_created'])->toBe(1);
+
+    $links = MarketingProfileLink::query()
+        ->whereIn('source_type', ['order', 'shopify_order', 'shopify_customer'])
+        ->get()
+        ->keyBy('source_type');
+
+    expect($links['order']->source_meta['utm_source'])->toBe('google')
+        ->and($links['shopify_order']->source_meta['utm_source'])->toBe('google')
+        ->and($links['shopify_customer']->source_meta['utm_source'])->toBe('google');
+});
+
+test('attribution backfill command is dry run safe and enriches order linked records when executed', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Ari',
+        'email' => 'ari@example.com',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 5101,
+        'shopify_customer_id' => '9101',
+        'ordered_at' => now()->subDay(),
+        'order_number' => '#5101',
+        'status' => 'complete',
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+        'source_meta' => [
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'referrer' => 'https://l.facebook.com/l.php?u=https%3A%2F%2Ftheforestrystudio.com',
+            'field_confidence' => [
+                'utm_source' => 'high',
+                'utm_medium' => 'high',
+                'referrer' => 'high',
+            ],
+            'capture_context' => 'shopify_order_payload',
+            'capture_contexts' => ['shopify_order_payload'],
+            'confidence' => 'high',
+        ],
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_order',
+        'source_id' => 'retail:5101',
+        'source_meta' => [],
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:9101',
+        'source_meta' => [],
+    ]);
+
+    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 3,
+        'birth_day' => 17,
+        'source' => 'import',
+    ]);
+
+    $referral = CandleCashReferral::query()->create([
+        'referrer_marketing_profile_id' => $profile->id,
+        'referred_marketing_profile_id' => $profile->id,
+        'referral_code' => 'FOREST-TEST',
+        'referred_identity_key' => 'profile:' . $profile->id,
+        'status' => 'qualified',
+        'qualifying_order_source' => 'shopify_order',
+        'qualifying_order_id' => (string) $order->id,
+        'qualified_at' => now()->subDay(),
+        'metadata' => [],
+    ]);
+
+    $issuance = BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => (int) now()->format('Y'),
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday reward',
+        'status' => 'redeemed',
+        'reward_value' => 10,
+        'issued_at' => now()->subDays(2),
+        'redeemed_at' => now()->subDay(),
+        'order_id' => $order->id,
+        'order_number' => '#5101',
+        'order_total' => 125.50,
+        'attributed_revenue' => 125.50,
+        'metadata' => [],
+    ]);
+
+    $redemption = CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => 1,
+        'points_spent' => 200,
+        'platform' => 'shopify',
+        'redemption_code' => 'CC-BACKFILL-5101',
+        'status' => 'redeemed',
+        'issued_at' => now()->subDays(2),
+        'redeemed_at' => now()->subDay(),
+        'external_order_source' => 'order',
+        'external_order_id' => (string) $order->id,
+        'redemption_context' => [],
+    ]);
+
+    $this->artisan('marketing:backfill-attribution-source-meta --dry-run --chunk=50')
+        ->assertExitCode(0);
+
+    expect($referral->fresh()->metadata)->toBe([])
+        ->and($issuance->fresh()->metadata)->toBe([])
+        ->and($redemption->fresh()->redemption_context)->toBe([]);
+
+    $this->artisan('marketing:backfill-attribution-source-meta --chunk=50')
+        ->assertExitCode(0);
+
+    expect($referral->fresh()->metadata['utm_source'])->toBe('facebook')
+        ->and($issuance->fresh()->metadata['utm_source'])->toBe('facebook')
+        ->and($redemption->fresh()->redemption_context['attribution_meta']['utm_source'])->toBe('facebook')
+        ->and(MarketingProfileLink::query()
+            ->where('source_type', 'shopify_order')
+            ->where('source_id', 'retail:5101')
+            ->firstOrFail()
+            ->source_meta['utm_source'])->toBe('facebook');
+});
+
+test('attribution backfill command is a no-op when no stronger source metadata exists', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Nora',
+        'email' => 'nora@example.com',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 5201,
+        'ordered_at' => now()->subDay(),
+        'order_number' => '#5201',
+        'status' => 'complete',
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+        'source_meta' => [],
+    ]);
+
+    $this->artisan('marketing:backfill-attribution-source-meta --chunk=50')
+        ->assertExitCode(0);
+
+    expect(MarketingProfileLink::query()->sole()->source_meta)->toBe([]);
+});
+
+test('order attribution backfill command is dry run safe and fills missing order attribution meta', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Moss',
+        'email' => 'moss@example.com',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 5301,
+        'shopify_customer_id' => '9301',
+        'ordered_at' => now()->subDay(),
+        'order_number' => '#5301',
+        'status' => 'complete',
+        'attribution_meta' => null,
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+        'source_meta' => [
+            'utm_source' => 'instagram',
+            'utm_medium' => 'social',
+            'field_confidence' => [
+                'utm_source' => 'high',
+                'utm_medium' => 'high',
+            ],
+            'capture_context' => 'shopify_order_payload',
+            'capture_contexts' => ['shopify_order_payload'],
+            'confidence' => 'high',
+        ],
+    ]);
+
+    $this->artisan('marketing:backfill-order-attribution-meta --dry-run --chunk=50')
+        ->assertExitCode(0);
+
+    expect($order->fresh()->attribution_meta)->toBeNull();
+
+    $this->artisan('marketing:backfill-order-attribution-meta --chunk=50')
+        ->assertExitCode(0);
+
+    expect($order->fresh()->attribution_meta['utm_source'])->toBe('instagram')
+        ->and($order->fresh()->attribution_meta['utm_medium'])->toBe('social');
+
+    $this->artisan('marketing:backfill-order-attribution-meta --chunk=50')
+        ->assertExitCode(0);
+
+    expect($order->fresh()->attribution_meta['utm_source'])->toBe('instagram');
+});

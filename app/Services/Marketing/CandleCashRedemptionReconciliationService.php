@@ -10,7 +10,8 @@ use App\Models\SquareOrder;
 class CandleCashRedemptionReconciliationService
 {
     public function __construct(
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
     ) {
     }
 
@@ -42,6 +43,7 @@ class CandleCashRedemptionReconciliationService
                 'order_id' => (int) $order->id,
                 'order_number' => (string) ($order->order_number ?? ''),
                 'shopify_order_id' => $order->shopify_order_id ? (string) $order->shopify_order_id : null,
+                'attribution_meta' => (array) ($options['attribution_meta'] ?? []),
             ],
             dryRun: $dryRun
         );
@@ -296,7 +298,15 @@ class CandleCashRedemptionReconciliationService
                     'external_order_source' => $externalOrderSource,
                     'external_order_id' => $externalOrderId,
                     'redeemed_at' => $redemption->redeemed_at ?: now(),
-                    'redemption_context' => $this->mergeContext((array) $redemption->redemption_context, $context),
+                    'redemption_context' => $this->mergeContext((array) $redemption->redemption_context, array_merge(
+                        $context,
+                        [
+                            'attribution_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                                (array) (($redemption->redemption_context ?? [])['attribution_meta'] ?? []),
+                                is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : []
+                            ),
+                        ]
+                    )),
                 ])->save();
             }
 

@@ -13,6 +13,11 @@ use Illuminate\Support\Collection;
 
 class MarketingConversionAttributionService
 {
+    public function __construct(
+        protected MarketingCampaignConversionAttributionSnapshotBuilder $snapshotBuilder
+    ) {
+    }
+
     /**
      * @param array<string,mixed> $options
      * @return array<string,int>
@@ -225,6 +230,20 @@ class MarketingConversionAttributionService
                 'notes' => $notes,
             ]
         );
+
+        $snapshot = $this->snapshotBuilder->build(
+            campaignId: $campaignId,
+            profileId: $profileId,
+            sourceType: $sourceType,
+            sourceId: $sourceId,
+            existingSnapshot: is_array($model->attribution_snapshot ?? null) ? $model->attribution_snapshot : []
+        );
+
+        if ($snapshot !== (is_array($model->attribution_snapshot ?? null) ? $model->attribution_snapshot : [])) {
+            $model->forceFill([
+                'attribution_snapshot' => $snapshot,
+            ])->save();
+        }
 
         if ($recipientId) {
             $recipient = $model->recipient;

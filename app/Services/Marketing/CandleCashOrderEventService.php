@@ -32,6 +32,7 @@ class CandleCashOrderEventService
         if ($referralCode !== '') {
             $this->referralService->qualifyFromOrder($order, $profile, [
                 'referral_code' => $referralCode,
+                'attribution_meta' => (array) ($identityContext['attribution_meta'] ?? []),
             ]);
         }
     }

@@ -7,7 +7,7 @@ use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
-use App\Models\OrderLine;
+use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Reporting\AnalyticsComparisonService;
 use Carbon\CarbonImmutable;
@@ -22,8 +22,11 @@ class ShopifyEmbeddedDashboardDataService
         protected ShopifyEmbeddedDashboardQuery $query,
         protected ShopifyEmbeddedDashboardCandleCashValueProvider $candleCashProvider,
         protected ShopifyEmbeddedDashboardProfitEstimator $profitEstimator,
+        protected ShopifyEmbeddedDashboardAttributionClassifier $attributionClassifier,
+        protected ShopifyEmbeddedDashboardAttributionAggregator $attributionAggregator,
         protected AnalyticsComparisonService $comparisonService,
-        protected CandleCashService $candleCashService
+        protected CandleCashService $candleCashService,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
     ) {
     }
 
@@ -140,8 +143,12 @@ class ShopifyEmbeddedDashboardDataService
         $birthdayRows = $this->birthdayRows($from, $to);
         $referralRows = $this->referralRows($from, $to);
         $revenueRows = $this->normalizedRevenueRows($conversionRows, $birthdayRows, $referralRows);
+        $classifiedAttribution = $this->classifyAttributionRows(
+            $revenueRows,
+            (array) $this->config->payload()['visibleAttributionSources']
+        );
+        $revenueRows = $classifiedAttribution['rows'];
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
-        $attributionRows = $this->attributionRows($conversionRows, $configVisibleSources = $this->config->payload()['visibleAttributionSources']);
         $candleCash = $this->candleCashProvider->snapshot($from, $to);
         $returningCustomerRate = $this->returningCustomerRate($from, $to);
         $profit = $this->profitEstimator->estimate([
@@ -152,7 +159,8 @@ class ShopifyEmbeddedDashboardDataService
         return [
             'revenueRows' => $revenueRows,
             'locationRows' => $locationRows,
-            'attributionRows' => $attributionRows,
+            'attributionRows' => $classifiedAttribution['rowsForSection'],
+            'attributionSummary' => $classifiedAttribution['summary'],
             'candleCash' => $candleCash,
             'rewardSales' => round((float) $revenueRows->sum('revenue'), 2),
             'rewardsOrderCount' => (int) $revenueRows->count(),
@@ -167,7 +175,7 @@ class ShopifyEmbeddedDashboardDataService
             ],
             'flags' => [
                 'has_any_data' => $revenueRows->isNotEmpty() || $candleCash['used']['count'] > 0,
-                'attribution_partial' => collect($attributionRows)->contains(fn (array $row): bool => (bool) ($row['partial'] ?? false)),
+                'attribution_partial' => (bool) data_get($classifiedAttribution, 'summary.has_unknown_rows', false),
                 'location_partial' => $locationRows->isNotEmpty()
                     ? $locationRows->contains(fn (array $row): bool => (bool) ($row['partial'] ?? false))
                     : true,
@@ -189,16 +197,27 @@ class ShopifyEmbeddedDashboardDataService
                     'email' => 'email',
                     default => 'other',
                 };
+                $snapshot = is_array($conversion->attribution_snapshot ?? null) ? $conversion->attribution_snapshot : [];
 
                 return [
                     'sourceKey' => $this->revenueKey((string) $conversion->source_type, (string) $conversion->source_id, (int) $conversion->id),
                     'sourceType' => (string) $conversion->source_type,
                     'sourceId' => (string) $conversion->source_id,
+                    'orderId' => is_numeric($conversion->source_id) ? (int) $conversion->source_id : null,
                     'occurredAt' => optional($conversion->converted_at)->toIso8601String(),
                     'date' => optional($conversion->converted_at)?->toImmutable() ?: now()->toImmutable(),
                     'revenue' => round((float) ($conversion->order_total ?? 0), 2),
                     'profileId' => (int) $conversion->marketing_profile_id,
-                    'channel' => $channel,
+                    'channel' => $snapshot['channel'] ?? $channel,
+                    'attributionExplicitChannel' => in_array($channel, ['text', 'email'], true) ? $channel : null,
+                    'attributionSnapshot' => $snapshot,
+                    'attributionSignalData' => [
+                        'source_type' => (string) $conversion->source_type,
+                        'source_id' => (string) $conversion->source_id,
+                        'campaign_channel' => $conversion->campaign?->channel,
+                        'attribution_type' => $conversion->attribution_type,
+                        'notes' => $conversion->notes,
+                    ],
                     'country' => trim((string) ($conversion->profile?->country ?? '')),
                     'state' => trim((string) ($conversion->profile?->state ?? '')),
                     'city' => trim((string) ($conversion->profile?->city ?? '')),
@@ -209,7 +228,10 @@ class ShopifyEmbeddedDashboardDataService
     protected function birthdayRows(CarbonImmutable $from, CarbonImmutable $to): Collection
     {
         return BirthdayRewardIssuance::query()
-            ->with(['marketingProfile:id,country,state,city'])
+            ->with([
+                'marketingProfile:id,country,state,city',
+                'birthdayProfile:id,signup_source,source,metadata',
+            ])
             ->whereBetween('redeemed_at', [$from, $to])
             ->get()
             ->map(function (BirthdayRewardIssuance $issuance): array {
@@ -223,11 +245,21 @@ class ShopifyEmbeddedDashboardDataService
                         : 'birthday:' . $issuance->id,
                     'sourceType' => 'birthday_reward',
                     'sourceId' => (string) $issuance->id,
+                    'orderId' => $issuance->order_id ? (int) $issuance->order_id : null,
                     'occurredAt' => optional($issuance->redeemed_at)->toIso8601String(),
                     'date' => optional($issuance->redeemed_at)?->toImmutable() ?: now()->toImmutable(),
                     'revenue' => round($revenue, 2),
                     'profileId' => (int) $issuance->marketing_profile_id,
                     'channel' => 'other',
+                    'attributionExplicitChannel' => null,
+                    'attributionSignalData' => [
+                        'source_type' => 'birthday_reward',
+                        'campaign_type' => $issuance->campaign_type,
+                        'signup_source' => $issuance->birthdayProfile?->signup_source,
+                        'source' => $issuance->birthdayProfile?->source,
+                        'metadata' => is_array($issuance->metadata) ? $issuance->metadata : [],
+                        'birthday_profile_metadata' => is_array($issuance->birthdayProfile?->metadata) ? $issuance->birthdayProfile?->metadata : [],
+                    ],
                     'country' => trim((string) ($issuance->marketingProfile?->country ?? '')),
                     'state' => trim((string) ($issuance->marketingProfile?->state ?? '')),
                     'city' => trim((string) ($issuance->marketingProfile?->city ?? '')),
@@ -251,11 +283,19 @@ class ShopifyEmbeddedDashboardDataService
                     ),
                     'sourceType' => 'referral',
                     'sourceId' => (string) $referral->id,
+                    'orderId' => $referral->qualifying_order_id ? (int) $referral->qualifying_order_id : null,
                     'occurredAt' => optional($referral->qualified_at)->toIso8601String(),
                     'date' => optional($referral->qualified_at)?->toImmutable() ?: now()->toImmutable(),
                     'revenue' => round((float) ($referral->qualifying_order_total ?? 0), 2),
                     'profileId' => (int) ($referral->referred_marketing_profile_id ?? 0),
                     'channel' => 'other',
+                    'attributionExplicitChannel' => null,
+                    'attributionSignalData' => [
+                        'source_type' => 'referral',
+                        'qualifying_order_source' => $referral->qualifying_order_source,
+                        'referral_code' => $referral->referral_code,
+                        'metadata' => is_array($referral->metadata) ? $referral->metadata : [],
+                    ],
                     'country' => trim((string) ($referral->referredProfile?->country ?? '')),
                     'state' => trim((string) ($referral->referredProfile?->state ?? '')),
                     'city' => trim((string) ($referral->referredProfile?->city ?? '')),
@@ -300,46 +340,91 @@ class ShopifyEmbeddedDashboardDataService
             ->values();
     }
 
-    protected function attributionRows(Collection $conversionRows, array $visibleSources): array
+    /**
+     * @param  Collection<int,array<string,mixed>>  $revenueRows
+     * @param  array<int,string>  $visibleSources
+     * @return array{rows:Collection<int,array<string,mixed>>,rowsForSection:array<int,array<string,mixed>>,summary:array<string,mixed>}
+     */
+    protected function classifyAttributionRows(Collection $revenueRows, array $visibleSources): array
     {
-        $grouped = $conversionRows
-            ->groupBy('channel')
-            ->map(function (Collection $rows, string $channel): array {
-                return [
-                    'key' => $channel,
-                    'label' => $this->attributionLabel($channel),
-                    'revenue' => round((float) $rows->sum('revenue'), 2),
-                    'orders' => (int) $rows->count(),
-                    'partial' => false,
-                ];
-            })
-            ->all();
+        if ($revenueRows->isEmpty()) {
+            $empty = $this->attributionAggregator->aggregate(collect(), $visibleSources);
 
-        $rows = [];
-        foreach ($visibleSources as $source) {
-            $existing = $grouped[$source] ?? null;
-            $rows[] = $existing ?: [
-                'key' => $source,
-                'label' => $this->attributionLabel($source),
-                'revenue' => 0.0,
-                'orders' => 0,
-                'partial' => true,
+            return [
+                'rows' => collect(),
+                'rowsForSection' => $empty['rows'],
+                'summary' => $empty['summary'],
             ];
         }
 
-        return $rows;
+        $orderSignals = $this->orderAttributionSignals($revenueRows);
+
+        $classifiedRows = $revenueRows
+            ->map(function (array $row) use ($orderSignals): array {
+                $snapshot = is_array($row['attributionSnapshot'] ?? null) ? $row['attributionSnapshot'] : [];
+                if (($snapshot['channel'] ?? null) !== null) {
+                    return [
+                        ...$row,
+                        'channel' => (string) $snapshot['channel'],
+                        'attributionConfidence' => $snapshot['confidence'] ?? 'medium',
+                        'attributionMatchedBy' => $snapshot['matched_by'] ?? 'conversion_snapshot',
+                        'attributionMatchedValue' => $snapshot['matched_value'] ?? ($snapshot['channel'] ?? null),
+                    ];
+                }
+
+                $orderId = (int) ($row['orderId'] ?? 0);
+                $orderSignal = $orderId > 0 ? (array) ($orderSignals[$orderId] ?? []) : [];
+                $sourceMeta = $this->normalizedAttributionSourceMeta(
+                    (array) ($row['attributionSignalData'] ?? []),
+                    (array) ($orderSignal['sourceMeta'] ?? [])
+                );
+
+                $classification = $this->attributionClassifier->classify([
+                    'explicitChannel' => $row['attributionExplicitChannel'] ?? null,
+                    'sourceType' => $row['sourceType'] ?? null,
+                    'sourceId' => $row['sourceId'] ?? null,
+                    'source' => $orderSignal['orderSource'] ?? null,
+                    'sourceMeta' => $sourceMeta,
+                    'campaignType' => data_get($row, 'attributionSignalData.campaign_type'),
+                    'signupSource' => data_get($row, 'attributionSignalData.signup_source'),
+                ]);
+
+                return [
+                    ...$row,
+                    'channel' => $classification['channel'],
+                    'attributionConfidence' => $classification['confidence'],
+                    'attributionMatchedBy' => $classification['matchedBy'],
+                    'attributionMatchedValue' => $classification['matchedValue'],
+                ];
+            })
+            ->values();
+
+        $aggregated = $this->attributionAggregator->aggregate($classifiedRows, $visibleSources);
+
+        return [
+            'rows' => $classifiedRows,
+            'rowsForSection' => $aggregated['rows'],
+            'summary' => $aggregated['summary'],
+        ];
     }
 
-    protected function attributionLabel(string $source): string
+    /**
+     * @param  array<string,mixed>  $signalData
+     * @param  array<string,mixed>  $orderSourceMeta
+     * @return array<string,mixed>
+     */
+    protected function normalizedAttributionSourceMeta(array $signalData, array $orderSourceMeta): array
     {
-        return match ($source) {
-            'text' => 'Text',
-            'email' => 'Email',
-            'instagram' => 'Instagram',
-            'facebook' => 'Facebook',
-            'google' => 'Google',
-            default => 'Other',
-        };
+        $flatSignalData = collect($signalData)
+            ->reject(fn ($value) => is_array($value))
+            ->all();
+
+        return array_filter([
+            ...$flatSignalData,
+            ...((array) ($signalData['metadata'] ?? [])),
+            ...((array) ($signalData['birthday_profile_metadata'] ?? [])),
+            ...$orderSourceMeta,
+        ], fn ($value) => $value !== null && $value !== '' && ! is_array($value));
     }
 
     protected function locationRows(Collection $revenueRows, string $grouping): Collection
@@ -662,8 +747,89 @@ class ShopifyEmbeddedDashboardDataService
         return match ($key) {
             'text' => 'Attributed from SMS campaign conversions and reward follow-up flows.',
             'email' => 'Attributed from email campaign conversions recorded in the local marketing domain.',
-            default => 'Attributed from normalized campaign and rewards activity.',
+            'instagram' => 'Normalized from Instagram-style referral domains and UTM source patterns found on linked order metadata.',
+            'facebook' => 'Normalized from Facebook and Meta referral domains plus conservative paid-social source patterns.',
+            'google' => 'Normalized from Google referral/search signals without treating unrelated Google-owned surfaces as acquisition.',
+            'direct' => 'Reserved for records with a clear direct or no-referrer style signal rather than inferred traffic.',
+            'unknown' => 'Used when the local order and link metadata do not provide enough trustworthy source detail yet.',
+            default => 'Attributed from recognized non-priority sources that do not belong to a named channel.',
         };
+    }
+
+    /**
+     * @param  Collection<int,array<string,mixed>>  $revenueRows
+     * @return array<int,array<string,mixed>>
+     */
+    protected function orderAttributionSignals(Collection $revenueRows): array
+    {
+        $orderIds = $revenueRows
+            ->pluck('orderId')
+            ->filter(fn ($value): bool => is_numeric($value) && (int) $value > 0)
+            ->map(fn ($value): int => (int) $value)
+            ->unique()
+            ->values();
+
+        if ($orderIds->isEmpty()) {
+            return [];
+        }
+
+        $orders = Order::query()
+            ->whereIn('id', $orderIds->all())
+            ->get(['id', 'source', 'attribution_meta', 'shopify_store_key', 'shopify_store', 'shopify_order_id'])
+            ->keyBy('id');
+
+        $pairs = [];
+        foreach ($orders as $order) {
+            $pairs[] = ['source_type' => 'order', 'source_id' => (string) $order->id];
+
+            if ($order->shopify_order_id) {
+                $storeKey = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown');
+                $pairs[] = [
+                    'source_type' => 'shopify_order',
+                    'source_id' => $storeKey . ':' . $order->shopify_order_id,
+                ];
+            }
+        }
+
+        $pairs = collect($pairs)->unique(fn (array $pair): string => $pair['source_type'] . '|' . $pair['source_id'])->values();
+
+        $links = MarketingProfileLink::query()
+            ->where(function ($query) use ($pairs): void {
+                foreach ($pairs as $pair) {
+                    $query->orWhere(function ($nested) use ($pair): void {
+                        $nested
+                            ->where('source_type', $pair['source_type'])
+                            ->where('source_id', $pair['source_id']);
+                    });
+                }
+            })
+            ->get(['source_type', 'source_id', 'source_meta']);
+
+        $linkMeta = [];
+        foreach ($links as $link) {
+            $linkMeta[strtolower(trim((string) $link->source_type)) . '|' . trim((string) $link->source_id)] = (array) ($link->source_meta ?? []);
+        }
+
+        $signals = [];
+        foreach ($orders as $order) {
+            $sourceMeta = is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [];
+            $orderMeta = $linkMeta['order|' . $order->id] ?? [];
+            $shopifyMeta = [];
+            if ($order->shopify_order_id) {
+                $storeKey = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown');
+                $shopifyMeta = $linkMeta['shopify_order|' . $storeKey . ':' . $order->shopify_order_id] ?? [];
+            }
+
+            $sourceMeta = $this->attributionSourceMetaBuilder->mergeSourceMeta($sourceMeta, $shopifyMeta);
+            $sourceMeta = $this->attributionSourceMetaBuilder->mergeSourceMeta($sourceMeta, $orderMeta);
+
+            $signals[(int) $order->id] = [
+                'orderSource' => $order->source,
+                'sourceMeta' => $sourceMeta,
+            ];
+        }
+
+        return $signals;
     }
 
     /**

@@ -21,6 +21,7 @@ class Order extends Model
         'due_at' => 'datetime',
         'ship_by_at' => 'datetime',
         'published_at' => 'datetime',
+        'attribution_meta' => 'array',
     ];
 
     public function lines(): HasMany

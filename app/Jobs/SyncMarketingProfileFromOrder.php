@@ -39,23 +39,33 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
     ): void
     {
         $order = Order::query()->find($this->orderId);
-        if (!$order) {
+        if (! $order) {
             return;
         }
 
+        $attributionMeta = is_array($this->identityContext['attribution_meta'] ?? null)
+            ? $this->identityContext['attribution_meta']
+            : (is_array($order->attribution_meta ?? null) ? $order->attribution_meta : []);
+
         $syncService->syncOrder($order, [
-            'identity_context' => $this->identityContext,
+            'identity_context' => array_replace($this->identityContext, [
+                'attribution_meta' => $attributionMeta,
+            ]),
         ]);
 
-        $candleCashOrderEventService->handle($order, $this->identityContext);
+        $candleCashOrderEventService->handle($order, array_replace($this->identityContext, [
+            'attribution_meta' => $attributionMeta,
+        ]));
 
         $rewardSummary = $reconciliationService->reconcileShopifyOrder($order, [
             'codes' => (array) ($this->identityContext['applied_reward_codes'] ?? []),
+            'attribution_meta' => $attributionMeta,
         ]);
 
         $birthdayRewardSummary = $birthdayReconciliationService->reconcileShopifyOrder($order, [
             'codes' => (array) ($this->identityContext['coupon_signals'] ?? []),
             'order_total' => $this->identityContext['order_total'] ?? null,
+            'attribution_meta' => $attributionMeta,
         ]);
 
         $conversionAttributionService->attributeForOrder($order, [

@@ -11,7 +11,8 @@ class BirthdayRewardRedemptionReconciliationService
 {
     public function __construct(
         protected BirthdayProfileService $birthdayProfileService,
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
     ) {
     }
 
@@ -43,6 +44,7 @@ class BirthdayRewardRedemptionReconciliationService
                 'order_number' => (string) ($order->order_number ?: $order->shopify_name ?: ''),
                 'shopify_order_id' => $order->shopify_order_id ? (string) $order->shopify_order_id : null,
                 'order_total' => $orderTotal,
+                'attribution_meta' => (array) ($options['attribution_meta'] ?? []),
             ]
         );
     }
@@ -174,6 +176,10 @@ class BirthdayRewardRedemptionReconciliationService
                     'attributed_revenue' => $orderTotal !== null ? $orderTotal : $locked->attributed_revenue,
                     'discount_sync_status' => $locked->resolvedDiscountSyncStatus() === 'failed' ? 'synced' : $locked->resolvedDiscountSyncStatus(),
                     'discount_sync_error' => null,
+                    'metadata' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                        is_array($locked->metadata ?? null) ? $locked->metadata : [],
+                        is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : []
+                    ),
                 ])->save();
 
                 return $locked->fresh();

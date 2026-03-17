@@ -17,11 +17,13 @@ class MarketingCampaignConversion extends Model
         'converted_at',
         'order_total',
         'notes',
+        'attribution_snapshot',
     ];
 
     protected $casts = [
         'converted_at' => 'datetime',
         'order_total' => 'decimal:2',
+        'attribution_snapshot' => 'array',
     ];
 
     public function campaign(): BelongsTo

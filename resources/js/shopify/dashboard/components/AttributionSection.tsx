@@ -24,7 +24,7 @@ export function AttributionSection({ section }: AttributionSectionProps) {
             No attributable rewards-linked revenue was found for the selected timeframe yet.
           </Text>
         ) : (
-          <InlineGrid columns={{ xs: 1, sm: 2, md: 5 }} gap="300">
+          <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="300">
             {section.sources.map((source) => (
             <AttributionSourceCard key={source.key} source={source} />
             ))}

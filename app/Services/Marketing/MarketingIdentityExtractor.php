@@ -8,7 +8,8 @@ use App\Support\Marketing\MarketingIdentityNormalizer;
 class MarketingIdentityExtractor
 {
     public function __construct(
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
     ) {
     }
 
@@ -136,11 +137,12 @@ class MarketingIdentityExtractor
     protected function buildSourceLinks(Order $order, array $context = []): array
     {
         $links = [];
+        $attributionMeta = $this->attributionSourceMetaBuilder->sourceMetaForOrderLink($order, $context);
 
         $links[] = [
             'source_type' => 'order',
             'source_id' => (string) $order->id,
-            'source_meta' => [
+            'source_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta($attributionMeta, [
                 'source_system' => 'orders',
                 'order_id' => (int) $order->id,
                 'order_number' => $order->order_number,
@@ -148,7 +150,7 @@ class MarketingIdentityExtractor
                 'source' => $order->source,
                 'shopify_store_key' => $order->shopify_store_key,
                 'ordered_at' => optional($order->ordered_at)->toIso8601String(),
-            ],
+            ]),
         ];
 
         $shopifyOrderId = $order->shopify_order_id;
@@ -157,14 +159,14 @@ class MarketingIdentityExtractor
             $links[] = [
                 'source_type' => 'shopify_order',
                 'source_id' => $storeKey . ':' . $shopifyOrderId,
-                'source_meta' => [
+                'source_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta($attributionMeta, [
                     'source_system' => 'shopify',
                     'order_id' => (int) $order->id,
                     'shopify_store_key' => $storeKey,
                     'shopify_order_id' => (string) $shopifyOrderId,
                     'order_number' => $order->order_number,
                     'ordered_at' => optional($order->ordered_at)->toIso8601String(),
-                ],
+                ]),
             ];
         }
 
@@ -181,11 +183,11 @@ class MarketingIdentityExtractor
             $links[] = [
                 'source_type' => 'shopify_customer',
                 'source_id' => $sourceId,
-                'source_meta' => [
+                'source_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta($attributionMeta, [
                     'source_system' => 'shopify',
                     'shopify_customer_id' => $shopifyCustomerId,
                     'shopify_store_key' => $storeKey !== '' ? $storeKey : null,
-                ],
+                ]),
             ];
         }
 
@@ -203,7 +205,10 @@ class MarketingIdentityExtractor
             $links[] = [
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
-                'source_meta' => is_array($link['source_meta'] ?? null) ? $link['source_meta'] : [],
+                'source_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                    $attributionMeta,
+                    is_array($link['source_meta'] ?? null) ? $link['source_meta'] : []
+                ),
             ];
         }
 

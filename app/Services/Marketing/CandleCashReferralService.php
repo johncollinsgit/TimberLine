@@ -15,7 +15,8 @@ class CandleCashReferralService
         protected CandleCashService $candleCashService,
         protected CandleCashTaskService $taskService,
         protected MarketingIdentityNormalizer $normalizer,
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
     ) {
     }
 
@@ -101,7 +102,13 @@ class CandleCashReferralService
             'normalized_phone' => $this->normalizer->normalizePhone($identity['phone'] ?? $referredProfile?->phone),
             'status' => 'captured',
             'first_seen_at' => $referral->first_seen_at ?: now(),
-            'metadata' => is_array($context['metadata'] ?? null) ? $context['metadata'] : $referral->metadata,
+            'metadata' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                is_array($referral->metadata ?? null) ? $referral->metadata : [],
+                array_merge(
+                    is_array($context['metadata'] ?? null) ? $context['metadata'] : [],
+                    is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : []
+                )
+            ),
         ])->save();
 
         return $referral->fresh();
@@ -171,6 +178,10 @@ class CandleCashReferralService
             'qualifying_order_id' => (string) $order->id,
             'qualifying_order_number' => (string) ($order->order_number ?: $order->shopify_name ?: ''),
             'qualifying_order_total' => $order->current_total_price ?? $order->total_price ?? $referral->qualifying_order_total,
+            'metadata' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                is_array($referral->metadata ?? null) ? $referral->metadata : [],
+                is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : []
+            ),
         ])->save();
 
         if (! $this->qualifiesOnCurrentOrder($order, $referredProfile)) {

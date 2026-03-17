@@ -9,6 +9,7 @@ use App\Models\OrderLine;
 use App\Models\Scent;
 use App\Models\ShopifyImportException;
 use App\Models\WholesaleCustomScent;
+use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Shipping\BusinessDayCalculator;
 use App\Support\Shopify\InfiniteOptionsParser;
 use Carbon\CarbonImmutable;
@@ -16,8 +17,10 @@ use Illuminate\Support\Facades\DB;
 
 class ShopifyOrderIngestor
 {
-    public function __construct(protected BusinessDayCalculator $calculator)
-    {
+    public function __construct(
+        protected BusinessDayCalculator $calculator,
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
+    ) {
     }
 
     /**
@@ -50,6 +53,11 @@ class ShopifyOrderIngestor
                 ->where('shopify_store_key', $store['key'])
                 ->where('shopify_order_id', $shopifyOrderId)
                 ->first() ?? new Order();
+
+            $payloadAttributionMeta = $this->attributionSourceMetaBuilder->fromShopifyOrderPayload(
+                $orderData,
+                (string) ($store['key'] ?? '')
+            );
 
             $order->shopify_store_key = $store['key'];
             $order->shopify_order_id = $shopifyOrderId;
@@ -110,6 +118,10 @@ class ShopifyOrderIngestor
             $order->shipping_phone = $orderData['shipping_address']['phone'] ?? null;
             $order->billing_email = $orderData['billing_address']['email'] ?? ($orderData['email'] ?? null);
             $order->billing_phone = $orderData['billing_address']['phone'] ?? null;
+            $order->attribution_meta = $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [],
+                $payloadAttributionMeta
+            );
 
             if (empty($order->status)) {
                 $order->status = 'new';
@@ -1161,6 +1173,7 @@ class ShopifyOrderIngestor
             'coupon_signals' => $couponSignals,
             'applied_reward_codes' => $redemptionCodes,
             'referral_code' => $referralCode,
+            'attribution_meta' => $this->attributionSourceMetaBuilder->fromShopifyOrderPayload($orderData, $storeKey),
             'order_total' => $orderTotal !== null && $orderTotal !== '' ? number_format((float) $orderTotal, 2, '.', '') : null,
         ];
     }
