@@ -4,10 +4,10 @@
     <style>
         .rewards-note {
             margin-bottom: 18px;
-            border-radius: 18px;
-            border: 1px solid rgba(15, 107, 146, 0.12);
-            background: rgba(15, 107, 146, 0.08);
-            color: #0f6b92;
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: #ffffff;
+            color: rgba(15, 23, 42, 0.78);
             padding: 14px 16px;
             font-size: 14px;
             line-height: 1.6;
@@ -23,14 +23,14 @@
         .rewards-links a {
             display: inline-flex;
             align-items: center;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 143, 97, 0.14);
-            background: rgba(15, 143, 97, 0.08);
-            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            background: #ffffff;
+            padding: 8px 12px;
             font-size: 13px;
             font-weight: 700;
             text-decoration: none;
-            color: #0d6b4a;
+            color: rgba(15, 23, 42, 0.82);
         }
 
         .rewards-root {
@@ -45,11 +45,11 @@
         }
 
         .rewards-summary-card {
-            border-radius: 20px;
+            border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.72);
+            background: #ffffff;
             padding: 18px;
-            box-shadow: 0 16px 34px rgba(41, 60, 44, 0.06);
+            box-shadow: 0 12px 24px rgba(41, 60, 44, 0.04);
         }
 
         .rewards-summary-card span {
@@ -64,8 +64,8 @@
         .rewards-summary-card strong {
             display: block;
             margin-top: 12px;
-            font-family: "Fraunces", ui-serif, Georgia, serif;
-            font-size: 2rem;
+            font-size: 1.8rem;
+            font-weight: 650;
             line-height: 1;
             color: #12241d;
         }
@@ -83,11 +83,11 @@
         }
 
         .rewards-panel {
-            border-radius: 24px;
+            border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.74);
+            background: #ffffff;
             padding: 20px;
-            box-shadow: 0 16px 34px rgba(41, 60, 44, 0.06);
+            box-shadow: 0 12px 24px rgba(41, 60, 44, 0.04);
         }
 
         .rewards-panel-head {
@@ -101,8 +101,8 @@
 
         .rewards-panel-head h2 {
             margin: 0;
-            font-family: "Fraunces", ui-serif, Georgia, serif;
-            font-size: 1.7rem;
+            font-size: 1.5rem;
+            font-weight: 650;
             line-height: 1.1;
         }
 
@@ -123,10 +123,10 @@
         .rewards-chip {
             display: inline-flex;
             align-items: center;
-            border-radius: 999px;
+            border-radius: 6px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.68);
-            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 6px 10px;
             font-size: 12px;
             font-weight: 700;
             color: rgba(22, 34, 29, 0.72);
@@ -134,10 +134,10 @@
 
         .rewards-state,
         .rewards-empty {
-            border-radius: 18px;
-            border: 1px dashed rgba(15, 23, 42, 0.14);
-            background: rgba(247, 249, 246, 0.9);
-            padding: 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            background: rgba(247, 248, 246, 0.96);
+            padding: 16px;
             font-size: 14px;
             line-height: 1.6;
             color: rgba(22, 34, 29, 0.7);
@@ -153,9 +153,9 @@
         }
 
         .rewards-row {
-            border-radius: 20px;
+            border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.9);
+            background: #ffffff;
             padding: 18px;
         }
 
@@ -185,19 +185,19 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 143, 97, 0.16);
-            background: rgba(15, 143, 97, 0.1);
-            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.16);
+            background: #ffffff;
+            padding: 9px 12px;
             font-size: 13px;
             font-weight: 700;
-            color: #0d6b4a;
+            color: rgba(15, 23, 42, 0.82);
             cursor: pointer;
         }
 
         .rewards-button--secondary {
             border-color: rgba(15, 23, 42, 0.1);
-            background: rgba(255, 255, 255, 0.72);
+            background: rgba(255, 255, 255, 0.9);
             color: rgba(22, 34, 29, 0.76);
         }
 
@@ -215,8 +215,8 @@
         }
 
         .rewards-meta div {
-            border-radius: 16px;
-            background: rgba(245, 247, 242, 0.95);
+            border-radius: 10px;
+            background: rgba(248, 249, 247, 0.96);
             border: 1px solid rgba(15, 23, 42, 0.06);
             padding: 12px;
         }
@@ -311,8 +311,8 @@
 
         .rewards-dialog-head h3 {
             margin: 6px 0 0;
-            font-family: "Fraunces", ui-serif, Georgia, serif;
-            font-size: 1.8rem;
+            font-size: 1.6rem;
+            font-weight: 650;
             line-height: 1.05;
         }
 

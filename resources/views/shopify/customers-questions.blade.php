@@ -13,16 +13,16 @@
     <style>
         .customers-questions-grid {
             display: grid;
-            gap: 14px;
+            gap: 16px;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         }
 
         .customers-question-card {
             border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 16px 16px 14px;
-            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+            background: #ffffff;
+            padding: 18px 18px 16px;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
         }
 
         .customers-question-card h3 {

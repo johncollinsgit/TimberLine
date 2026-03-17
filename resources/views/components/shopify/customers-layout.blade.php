@@ -26,15 +26,15 @@
     <style>
         .customers-stack {
             display: grid;
-            gap: 16px;
+            gap: 18px;
         }
 
         .customers-surface {
-            border-radius: 14px;
+            border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.92);
-            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
-            padding: 18px 20px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+            padding: 20px 22px;
         }
 
         .customers-surface h2 {

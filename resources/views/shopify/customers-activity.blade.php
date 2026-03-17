@@ -14,8 +14,9 @@
         .customers-activity-shell {
             border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.95);
+            background: #ffffff;
             overflow: hidden;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
         }
 
         .customers-activity-shell table {
@@ -38,7 +39,7 @@
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: rgba(15, 23, 42, 0.5);
-            background: rgba(246, 249, 245, 0.92);
+            background: rgba(247, 248, 246, 0.96);
             font-weight: 640;
         }
     </style>
