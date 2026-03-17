@@ -18,10 +18,10 @@ export function AttributionSourceCard({ source }: AttributionSourceCardProps) {
               {source.label}
             </Text>
             <Text as="span" variant="headingLg">
-              {source.revenue}
+              {source.formattedRevenue}
             </Text>
           </BlockStack>
-          <Badge tone={tone}>{source.change}</Badge>
+          <Badge tone={source.live ? tone : "attention"}>{source.live ? source.deltaLabel : "Unmapped"}</Badge>
         </InlineStack>
         <Text as="p" variant="bodySm" tone="subdued">
           {source.description}

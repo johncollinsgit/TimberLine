@@ -1,32 +1,31 @@
 import { BlockStack, Card, Divider, InlineGrid, Text } from "@shopify/polaris";
-import type { DashboardFinancialSummaryItem } from "../types";
+import type { DashboardPayload } from "../types";
 
 interface FinancialSummarySectionProps {
-  items: DashboardFinancialSummaryItem[];
+  section: DashboardPayload["financialSummary"];
 }
 
-export function FinancialSummarySection({ items }: FinancialSummarySectionProps) {
+export function FinancialSummarySection({ section }: FinancialSummarySectionProps) {
   return (
     <Card>
       <BlockStack gap="400">
         <BlockStack gap="100">
           <Text as="h3" variant="headingMd">
-            Financial summary
+            {section.title}
           </Text>
           <Text as="p" variant="bodySm" tone="subdued">
-            A mocked financial rollup so we can settle the final Candle Cash and profit model
-            layout before backend aggregation arrives.
+            {section.subtitle}
           </Text>
         </BlockStack>
         <Divider />
         <InlineGrid columns={{ xs: 1, md: 3 }} gap="400">
-          {items.map((item) => (
+          {section.items.map((item) => (
             <BlockStack key={item.label} gap="100">
               <Text as="span" variant="bodySm" tone="subdued">
                 {item.label}
               </Text>
               <Text as="p" variant="headingLg">
-                {item.value}
+                {item.formattedValue}
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
                 {item.detail}
@@ -34,6 +33,15 @@ export function FinancialSummarySection({ items }: FinancialSummarySectionProps)
             </BlockStack>
           ))}
         </InlineGrid>
+        <Divider />
+        <BlockStack gap="100">
+          <Text as="span" variant="bodySm" tone="subdued">
+            Estimated net profit created
+          </Text>
+          <Text as="p" variant="headingLg">
+            {section.netProfit.formattedValue}
+          </Text>
+        </BlockStack>
       </BlockStack>
     </Card>
   );

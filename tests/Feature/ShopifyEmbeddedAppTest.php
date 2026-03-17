@@ -41,6 +41,7 @@ test('shopify embedded app route renders verified admin shell for configured sto
         ->assertSeeText('Dashboard')
         ->assertSee('id="shopify-dashboard-root"', false)
         ->assertSee('shopify-dashboard-bootstrap', false)
+        ->assertSee('shopify\\/app\\/api\\/dashboard', false)
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();

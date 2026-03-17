@@ -18,10 +18,10 @@ export function MetricCard({ metric }: MetricCardProps) {
               {metric.label}
             </Text>
             <Text as="p" variant="headingLg">
-              {metric.value}
+              {metric.formattedValue}
             </Text>
           </BlockStack>
-          <Badge tone={badgeTone}>{metric.delta}</Badge>
+          <Badge tone={badgeTone}>{metric.deltaLabel}</Badge>
         </InlineStack>
         <Box minHeight="40px">
           <Text as="p" variant="bodySm" tone="subdued">

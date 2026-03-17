@@ -1,12 +1,32 @@
 import { BlockStack, Box, Card, InlineStack, Text } from "@shopify/polaris";
-import type { DashboardData } from "../types";
+import type { DashboardPayload } from "../types";
 
 interface PerformanceChartCardProps {
-  chart: DashboardData["chart"];
+  chart: DashboardPayload["chart"];
+  loading?: boolean;
 }
 
-export function PerformanceChartCard({ chart }: PerformanceChartCardProps) {
-  const peak = Math.max(...chart.series.map((point) => point.value), 1);
+export function PerformanceChartCard({ chart, loading = false }: PerformanceChartCardProps) {
+  const peak = Math.max(
+    1,
+    ...chart.series.flatMap((point) => [point.primary, point.comparison ?? 0]),
+  );
+  const linePoints = chart.series
+    .map((point, index) => {
+      const x = chart.series.length === 1 ? 0 : (index / Math.max(1, chart.series.length - 1)) * 100;
+      const y = 100 - (point.primary / peak) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const comparisonPoints = chart.series
+    .filter((point) => point.comparison !== null)
+    .map((point, index) => {
+      const x = chart.series.length === 1 ? 0 : (index / Math.max(1, chart.series.length - 1)) * 100;
+      const value = point.comparison ?? 0;
+      const y = 100 - (value / peak) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
     <Card>
@@ -30,24 +50,60 @@ export function PerformanceChartCard({ chart }: PerformanceChartCardProps) {
           </BlockStack>
         </InlineStack>
 
-        <div className="sf-dashboard-chart">
-          {chart.series.map((point) => (
-            <div key={point.label} className="sf-dashboard-chart__column">
-              <div
-                className="sf-dashboard-chart__bar"
-                style={{ height: `${Math.max(14, (point.value / peak) * 100)}%` }}
-              />
-              <Text as="span" variant="bodySm" tone="subdued">
-                {point.label}
-              </Text>
+        {chart.empty ? (
+          <Box>
+            <Text as="p" variant="bodySm" tone="subdued">
+              No rewards-linked revenue has landed in the selected timeframe yet.
+            </Text>
+          </Box>
+        ) : chart.visualization === "grouped_bar" ? (
+          <div className="sf-dashboard-chart sf-dashboard-chart--bars">
+            {chart.series.map((point) => (
+              <div key={point.label} className="sf-dashboard-chart__column">
+                <div className="sf-dashboard-chart__bar-group">
+                  <div
+                    className="sf-dashboard-chart__bar"
+                    style={{ height: `${Math.max(12, (point.primary / peak) * 100)}%` }}
+                  />
+                  {point.comparison !== null ? (
+                    <div
+                      className="sf-dashboard-chart__bar sf-dashboard-chart__bar--comparison"
+                      style={{ height: `${Math.max(12, ((point.comparison ?? 0) / peak) * 100)}%` }}
+                    />
+                  ) : null}
+                </div>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  {point.label}
+                </Text>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="sf-dashboard-chart sf-dashboard-chart--line">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="sf-dashboard-chart__svg">
+              <polyline className="sf-dashboard-chart__line sf-dashboard-chart__line--primary" points={linePoints} />
+              {comparisonPoints ? (
+                <polyline
+                  className="sf-dashboard-chart__line sf-dashboard-chart__line--comparison"
+                  points={comparisonPoints}
+                />
+              ) : null}
+            </svg>
+            <div className="sf-dashboard-chart__labels">
+              {chart.series.map((point) => (
+                <Text key={point.label} as="span" variant="bodySm" tone="subdued">
+                  {point.label}
+                </Text>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
         <Box>
           <Text as="p" variant="bodySm" tone="subdued">
-            Placeholder chart visuals are mocked for Slice 1. Slice 3 will swap this into live
-            historical series and real timeframe comparisons.
+            {loading
+              ? "Refreshing the chart and top-line metrics for the selected controls."
+              : "The chart reuses the same timeframe and comparison window as the metric cards above."}
           </Text>
         </Box>
       </BlockStack>

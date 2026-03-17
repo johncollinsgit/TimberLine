@@ -19,15 +19,54 @@
 }
 
 .sf-dashboard-chart {
-  align-items: end;
   background: linear-gradient(180deg, rgba(15, 143, 97, 0.06), rgba(15, 23, 42, 0.015));
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
-  display: grid;
-  gap: 0.875rem;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
   min-height: 280px;
   padding: 1rem;
+}
+
+.sf-dashboard-chart--bars {
+  align-items: end;
+  display: grid;
+  gap: 0.875rem;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+}
+
+.sf-dashboard-chart--line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  justify-content: end;
+}
+
+.sf-dashboard-chart__svg {
+  min-height: 230px;
+  overflow: visible;
+  width: 100%;
+}
+
+.sf-dashboard-chart__line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.sf-dashboard-chart__line--primary {
+  stroke: #15803d;
+}
+
+.sf-dashboard-chart__line--comparison {
+  opacity: 0.55;
+  stroke: #0f172a;
+  stroke-dasharray: 4 4;
+}
+
+.sf-dashboard-chart__labels {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
 }
 
 .sf-dashboard-chart__column {
@@ -39,11 +78,23 @@
   justify-content: end;
 }
 
+.sf-dashboard-chart__bar-group {
+  align-items: end;
+  display: flex;
+  gap: 0.35rem;
+  height: 100%;
+  width: 100%;
+}
+
 .sf-dashboard-chart__bar {
   background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
   border-radius: 999px 999px 12px 12px;
   min-height: 1.25rem;
   width: 100%;
+}
+
+.sf-dashboard-chart__bar--comparison {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.35));
 }
 
 .sf-dashboard-control {

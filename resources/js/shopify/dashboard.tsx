@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { DashboardApp } from "./dashboard/DashboardApp";
+import { dashboardConfig } from "./dashboard/dashboardConfig";
 import type { DashboardBootstrap } from "./dashboard/types";
 
 function readBootstrap(): DashboardBootstrap {
@@ -11,6 +12,10 @@ function readBootstrap(): DashboardBootstrap {
       status: "invalid_request",
       storeLabel: "Shopify Admin",
       links: [],
+      contextToken: null,
+      dataEndpoint: null,
+      config: dashboardConfig,
+      initialData: null,
     };
   }
 
@@ -24,6 +29,10 @@ function readBootstrap(): DashboardBootstrap {
       status: "invalid_request",
       storeLabel: "Shopify Admin",
       links: [],
+      contextToken: null,
+      dataEndpoint: null,
+      config: dashboardConfig,
+      initialData: null,
     };
   }
 }

@@ -82,11 +82,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function (
     Request $request,
     ShopifyEmbeddedAppContext $contextService,
-    ShopifyEmbeddedAppController $controller,
-    BirthdayReportingService $birthdayReporting
+    ShopifyEmbeddedAppController $controller
 ) {
     if ($contextService->hasPageContext($request)) {
-        return $controller->show($request, $contextService, $birthdayReporting);
+        return $controller->show($request, $contextService);
     }
 
     if (auth()->check()) {
@@ -674,6 +673,7 @@ Route::prefix('shopify')->group(function () {
         ->name('shopify.app.customers.candle-cash.send');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
+        Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
         Route::patch('/rewards/earn/{task}', [ShopifyEmbeddedRewardsController::class, 'updateEarnRule'])
             ->withoutMiddleware([VerifyCsrfToken::class])
