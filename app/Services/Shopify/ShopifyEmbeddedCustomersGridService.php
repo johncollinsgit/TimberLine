@@ -1,0 +1,562 @@
+<?php
+
+namespace App\Services\Shopify;
+
+use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+class ShopifyEmbeddedCustomersGridService
+{
+    /**
+     * @return array{
+     *   paginator:LengthAwarePaginator,
+     *   filters:array<string,string|int>,
+     *   sort_options:array<int,array{value:string,label:string}>,
+     *   active_filter_count:int
+     * }
+     */
+    public function resolve(Request $request): array
+    {
+        $filters = $this->normalizeFilters($request);
+        $query = $this->baseQuery();
+
+        $this->applySearch($query, (string) $filters['search']);
+        $this->applyFilters($query, $filters);
+        $this->applySort($query, (string) $filters['sort'], (string) $filters['direction']);
+
+        $paginator = $query
+            ->paginate((int) $filters['per_page'])
+            ->withQueryString();
+
+        $mapped = $paginator->getCollection()
+            ->map(fn (object $row): array => $this->mapRow($row));
+
+        $paginator->setCollection($mapped);
+
+        return [
+            'paginator' => $paginator,
+            'filters' => $filters,
+            'sort_options' => $this->sortOptions(),
+            'active_filter_count' => $this->activeFilterCount($filters),
+        ];
+    }
+
+    /**
+     * @return array<string,string|int>
+     */
+    protected function normalizeFilters(Request $request): array
+    {
+        $sort = (string) $request->query('sort', 'last_activity');
+        $direction = strtolower((string) $request->query('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $perPage = (int) $request->query('per_page', 25);
+        $perPage = in_array($perPage, [25, 50, 100], true) ? $perPage : 25;
+
+        $filters = [
+            'search' => trim((string) $request->query('search', '')),
+            'sort' => in_array($sort, ['last_activity', 'name', 'email', 'candle_cash', 'rewards_actions'], true)
+                ? $sort
+                : 'last_activity',
+            'direction' => $direction,
+            'per_page' => $perPage,
+            'candle_club' => $this->normalizeTriState((string) $request->query('candle_club', 'all')),
+            'candle_cash' => $this->normalizeTriState((string) $request->query('candle_cash', 'all')),
+            'referral' => $this->normalizeTriState((string) $request->query('referral', 'all')),
+            'review' => $this->normalizeTriState((string) $request->query('review', 'all')),
+            'birthday' => $this->normalizeTriState((string) $request->query('birthday', 'all')),
+            'wholesale' => $this->normalizeTriState((string) $request->query('wholesale', 'all')),
+        ];
+
+        return $filters;
+    }
+
+    protected function normalizeTriState(string $value): string
+    {
+        $value = strtolower(trim($value));
+
+        return in_array($value, ['all', 'yes', 'no'], true) ? $value : 'all';
+    }
+
+    /**
+     * @return Builder
+     */
+    protected function baseQuery(): Builder
+    {
+        $lastActivityExpression = $this->lastActivityExpression();
+
+        return DB::table('marketing_profiles as mp')
+            ->leftJoinSub($this->balanceSubquery(), 'balance_stats', function ($join): void {
+                $join->on('balance_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->taskStatsSubquery(), 'task_stats', function ($join): void {
+                $join->on('task_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->referralStatsSubquery(), 'referral_stats', function ($join): void {
+                $join->on('referral_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->reviewStatsSubquery(), 'review_stats', function ($join): void {
+                $join->on('review_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->externalProfileStatsSubquery(), 'external_stats', function ($join): void {
+                $join->on('external_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->wholesaleLinkStatsSubquery(), 'wholesale_link_stats', function ($join): void {
+                $join->on('wholesale_link_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->groupStatsSubquery(), 'group_stats', function ($join): void {
+                $join->on('group_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->birthdayIssuanceStatsSubquery(), 'birthday_issuance_stats', function ($join): void {
+                $join->on('birthday_issuance_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoinSub($this->transactionStatsSubquery(), 'transaction_stats', function ($join): void {
+                $join->on('transaction_stats.marketing_profile_id', '=', 'mp.id');
+            })
+            ->leftJoin('customer_birthday_profiles as birthday_profiles', 'birthday_profiles.marketing_profile_id', '=', 'mp.id')
+            ->select([
+                'mp.id',
+                'mp.first_name',
+                'mp.last_name',
+                'mp.email',
+                'mp.normalized_email',
+                'mp.updated_at',
+            ])
+            ->selectRaw('coalesce(balance_stats.candle_cash_balance, 0) as candle_cash_balance')
+            ->selectRaw('coalesce(task_stats.rewards_actions_count, 0) as rewards_actions_count')
+            ->selectRaw($this->candleClubExpression() . ' as candle_club_active')
+            ->selectRaw($this->referralExpression() . ' as referral_completed')
+            ->selectRaw($this->reviewExpression() . ' as review_completed')
+            ->selectRaw($this->birthdayExpression() . ' as birthday_completed')
+            ->selectRaw($this->wholesaleExpression() . ' as wholesale_eligible')
+            ->selectRaw($lastActivityExpression . ' as last_activity_at');
+    }
+
+    protected function applySearch(Builder $query, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $searchLike = '%' . $search . '%';
+        $prefixLike = $search . '%';
+        $terms = collect(preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY))
+            ->map(fn (string $term): string => trim($term))
+            ->filter();
+
+        $query->where(function ($nested) use ($searchLike, $prefixLike, $terms): void {
+            $nested
+                ->where('mp.normalized_email', 'like', strtolower($prefixLike))
+                ->orWhere('mp.email', 'like', $searchLike)
+                ->orWhere('mp.first_name', 'like', $searchLike)
+                ->orWhere('mp.last_name', 'like', $searchLike);
+
+            if ($terms->count() >= 2) {
+                $first = (string) $terms->first();
+                $last = (string) $terms->last();
+
+                $nested->orWhere(function ($nameQuery) use ($first, $last): void {
+                    $nameQuery
+                        ->where('mp.first_name', 'like', $first . '%')
+                        ->where('mp.last_name', 'like', $last . '%');
+                });
+
+                $nested->orWhere(function ($nameQuery) use ($first, $last): void {
+                    $nameQuery
+                        ->where('mp.first_name', 'like', $last . '%')
+                        ->where('mp.last_name', 'like', $first . '%');
+                });
+            }
+        });
+    }
+
+    /**
+     * @param array<string,string|int> $filters
+     */
+    protected function applyFilters(Builder $query, array $filters): void
+    {
+        $this->applyTriStateFilter(
+            $query,
+            (string) $filters['candle_club'],
+            $this->candleClubExpression()
+        );
+
+        $this->applyTriStateFilter(
+            $query,
+            (string) $filters['referral'],
+            $this->referralExpression()
+        );
+
+        $this->applyTriStateFilter(
+            $query,
+            (string) $filters['review'],
+            $this->reviewExpression()
+        );
+
+        $this->applyTriStateFilter(
+            $query,
+            (string) $filters['birthday'],
+            $this->birthdayExpression()
+        );
+
+        $this->applyTriStateFilter(
+            $query,
+            (string) $filters['wholesale'],
+            $this->wholesaleExpression()
+        );
+
+        $candleCash = (string) ($filters['candle_cash'] ?? 'all');
+        if ($candleCash === 'yes') {
+            $query->whereRaw('coalesce(balance_stats.candle_cash_balance, 0) > 0');
+        }
+        if ($candleCash === 'no') {
+            $query->whereRaw('coalesce(balance_stats.candle_cash_balance, 0) = 0');
+        }
+    }
+
+    protected function applyTriStateFilter(Builder $query, string $value, string $expression): void
+    {
+        if ($value === 'yes') {
+            $query->whereRaw($expression . ' = 1');
+        }
+
+        if ($value === 'no') {
+            $query->whereRaw($expression . ' = 0');
+        }
+    }
+
+    protected function applySort(Builder $query, string $sort, string $direction): void
+    {
+        if ($sort === 'name') {
+            $query->orderByRaw("coalesce(mp.last_name, '') " . $direction)
+                ->orderByRaw("coalesce(mp.first_name, '') " . $direction)
+                ->orderBy('mp.id', 'asc');
+
+            return;
+        }
+
+        if ($sort === 'email') {
+            $query->orderByRaw("coalesce(mp.normalized_email, mp.email, '') " . $direction)
+                ->orderBy('mp.id', 'asc');
+
+            return;
+        }
+
+        if ($sort === 'candle_cash') {
+            $query->orderByRaw('coalesce(balance_stats.candle_cash_balance, 0) ' . $direction)
+                ->orderBy('mp.id', 'asc');
+
+            return;
+        }
+
+        if ($sort === 'rewards_actions') {
+            $query->orderByRaw('coalesce(task_stats.rewards_actions_count, 0) ' . $direction)
+                ->orderBy('mp.id', 'asc');
+
+            return;
+        }
+
+        $query->orderByRaw('last_activity_at is null asc')
+            ->orderBy('last_activity_at', $direction)
+            ->orderBy('mp.id', 'asc');
+    }
+
+    protected function mapRow(object $row): array
+    {
+        $displayName = trim((string) (($row->first_name ?? '') . ' ' . ($row->last_name ?? '')));
+        if ($displayName === '') {
+            $displayName = (string) ($row->email ?: ('Customer #' . $row->id));
+        }
+
+        return [
+            'id' => (int) $row->id,
+            'name' => $displayName,
+            'email' => (string) ($row->email ?: '—'),
+            'candle_cash_balance' => (int) ($row->candle_cash_balance ?? 0),
+            'candle_club_active' => ((int) ($row->candle_club_active ?? 0)) === 1,
+            'referral_completed' => ((int) ($row->referral_completed ?? 0)) === 1,
+            'review_completed' => ((int) ($row->review_completed ?? 0)) === 1,
+            'birthday_completed' => ((int) ($row->birthday_completed ?? 0)) === 1,
+            'wholesale_eligible' => ((int) ($row->wholesale_eligible ?? 0)) === 1,
+            'rewards_actions_count' => (int) ($row->rewards_actions_count ?? 0),
+            'last_activity_at' => $row->last_activity_at,
+            'last_activity_display' => $this->formatTimestamp($row->last_activity_at),
+        ];
+    }
+
+    /**
+     * @return array<int,array{value:string,label:string}>
+     */
+    protected function sortOptions(): array
+    {
+        return [
+            ['value' => 'last_activity', 'label' => 'Last Activity'],
+            ['value' => 'name', 'label' => 'Name'],
+            ['value' => 'email', 'label' => 'Email'],
+            ['value' => 'candle_cash', 'label' => 'Candle Cash'],
+            ['value' => 'rewards_actions', 'label' => 'Rewards Actions'],
+        ];
+    }
+
+    /**
+     * @param array<string,string|int> $filters
+     */
+    protected function activeFilterCount(array $filters): int
+    {
+        return collect(['candle_club', 'candle_cash', 'referral', 'review', 'birthday', 'wholesale'])
+            ->filter(fn (string $key): bool => (($filters[$key] ?? 'all') !== 'all'))
+            ->count();
+    }
+
+    protected function formatTimestamp(mixed $value): string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return '—';
+        }
+
+        try {
+            return CarbonImmutable::parse((string) $value)->format('M j, Y g:i A');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    protected function candleClubExpression(): string
+    {
+        return "case
+            when coalesce(task_stats.candle_club_completed, 0) = 1
+              or coalesce(group_stats.candle_club_member, 0) = 1
+            then 1 else 0 end";
+    }
+
+    protected function referralExpression(): string
+    {
+        return "case
+            when coalesce(task_stats.referral_completed, 0) = 1
+              or coalesce(referral_stats.referral_completed, 0) = 1
+            then 1 else 0 end";
+    }
+
+    protected function reviewExpression(): string
+    {
+        return "case
+            when coalesce(task_stats.review_completed, 0) = 1
+              or coalesce(review_stats.review_completed, 0) = 1
+            then 1 else 0 end";
+    }
+
+    protected function birthdayExpression(): string
+    {
+        return "case
+            when coalesce(task_stats.birthday_completed, 0) = 1
+              or coalesce(birthday_issuance_stats.birthday_completed, 0) = 1
+              or (
+                    birthday_profiles.birth_month is not null
+                and birthday_profiles.birth_day is not null
+                and birthday_profiles.reward_last_issued_at is not null
+              )
+            then 1 else 0 end";
+    }
+
+    protected function wholesaleExpression(): string
+    {
+        return "case
+            when coalesce(external_stats.wholesale_eligible, 0) = 1
+              or coalesce(wholesale_link_stats.wholesale_eligible, 0) = 1
+            then 1 else 0 end";
+    }
+
+    protected function lastActivityExpression(): string
+    {
+        $columns = [
+            'coalesce(mp.updated_at, mp.created_at)',
+            'coalesce(transaction_stats.last_transaction_at, mp.updated_at, mp.created_at)',
+            'coalesce(task_stats.last_task_activity_at, mp.updated_at, mp.created_at)',
+            'coalesce(referral_stats.last_referral_activity_at, mp.updated_at, mp.created_at)',
+            'coalesce(review_stats.last_review_activity_at, mp.updated_at, mp.created_at)',
+            'coalesce(external_stats.last_external_activity_at, mp.updated_at, mp.created_at)',
+            'coalesce(birthday_profiles.reward_last_issued_at, mp.updated_at, mp.created_at)',
+            'coalesce(birthday_issuance_stats.last_birthday_activity_at, mp.updated_at, mp.created_at)',
+        ];
+
+        $driver = DB::connection()->getDriverName();
+        if (in_array($driver, ['mysql', 'mariadb', 'pgsql'], true)) {
+            return 'greatest(' . implode(', ', $columns) . ')';
+        }
+
+        return 'max(' . implode(', ', $columns) . ')';
+    }
+
+    protected function balanceSubquery(): Builder
+    {
+        if (! Schema::hasTable('candle_cash_balances')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as candle_cash_balance',
+            ]);
+        }
+
+        return DB::table('candle_cash_balances')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw('max(balance) as candle_cash_balance')
+            ->groupBy('marketing_profile_id');
+    }
+
+    protected function taskStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('candle_cash_task_completions') || ! Schema::hasTable('candle_cash_tasks')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as rewards_actions_count',
+                '0 as candle_club_completed',
+                '0 as referral_completed',
+                '0 as review_completed',
+                '0 as birthday_completed',
+                'null as last_task_activity_at',
+            ]);
+        }
+
+        return DB::table('candle_cash_task_completions as completions')
+            ->join('candle_cash_tasks as tasks', 'tasks.id', '=', 'completions.candle_cash_task_id')
+            ->selectRaw('completions.marketing_profile_id')
+            ->selectRaw('count(*) as rewards_actions_count')
+            ->selectRaw("max(case when tasks.handle = 'candle-club-join' and completions.status in ('awarded', 'approved', 'completed') then 1 else 0 end) as candle_club_completed")
+            ->selectRaw("max(case when tasks.handle in ('refer-a-friend', 'referred-friend-bonus') and completions.status in ('awarded', 'approved', 'completed') then 1 else 0 end) as referral_completed")
+            ->selectRaw("max(case when tasks.handle in ('google-review', 'product-review', 'photo-review') and completions.status in ('awarded', 'approved', 'completed') then 1 else 0 end) as review_completed")
+            ->selectRaw("max(case when tasks.handle = 'birthday-signup' and completions.status in ('awarded', 'approved', 'completed') then 1 else 0 end) as birthday_completed")
+            ->selectRaw('max(completions.created_at) as last_task_activity_at')
+            ->groupBy('completions.marketing_profile_id');
+    }
+
+    protected function referralStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('candle_cash_referrals')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as referral_completed',
+                'null as last_referral_activity_at',
+            ]);
+        }
+
+        return DB::table('candle_cash_referrals')
+            ->selectRaw('referrer_marketing_profile_id as marketing_profile_id')
+            ->selectRaw("max(case when status in ('qualified', 'rewarded', 'completed') or rewarded_at is not null then 1 else 0 end) as referral_completed")
+            ->selectRaw('max(coalesce(rewarded_at, qualified_at, updated_at, created_at)) as last_referral_activity_at')
+            ->groupBy('referrer_marketing_profile_id');
+    }
+
+    protected function reviewStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('marketing_review_summaries')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as review_completed',
+                'null as last_review_activity_at',
+            ]);
+        }
+
+        return DB::table('marketing_review_summaries')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw("max(case when review_count > 0 then 1 else 0 end) as review_completed")
+            ->selectRaw('max(coalesce(last_reviewed_at, source_synced_at, updated_at, created_at)) as last_review_activity_at')
+            ->whereNotNull('marketing_profile_id')
+            ->groupBy('marketing_profile_id');
+    }
+
+    protected function externalProfileStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('customer_external_profiles')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as wholesale_eligible',
+                'null as last_external_activity_at',
+            ]);
+        }
+
+        return DB::table('customer_external_profiles')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw("max(case when lower(coalesce(store_key, '')) = 'wholesale' or lower(coalesce(integration, '')) = 'wholesale' or lower(coalesce(provider, '')) = 'wholesale' then 1 else 0 end) as wholesale_eligible")
+            ->selectRaw('max(coalesce(last_activity_at, synced_at, updated_at, created_at)) as last_external_activity_at')
+            ->whereNotNull('marketing_profile_id')
+            ->groupBy('marketing_profile_id');
+    }
+
+    protected function wholesaleLinkStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('marketing_profile_links')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as wholesale_eligible',
+            ]);
+        }
+
+        return DB::table('marketing_profile_links')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw("max(case when lower(coalesce(source_type, '')) like 'wholesale%' then 1 else 0 end) as wholesale_eligible")
+            ->groupBy('marketing_profile_id');
+    }
+
+    protected function groupStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('marketing_group_members') || ! Schema::hasTable('marketing_groups')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as candle_club_member',
+            ]);
+        }
+
+        return DB::table('marketing_group_members as members')
+            ->join('marketing_groups as groups', 'groups.id', '=', 'members.marketing_group_id')
+            ->selectRaw('members.marketing_profile_id')
+            ->selectRaw("max(case when lower(coalesce(groups.name, '')) like '%candle club%' then 1 else 0 end) as candle_club_member")
+            ->groupBy('members.marketing_profile_id');
+    }
+
+    protected function birthdayIssuanceStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('birthday_reward_issuances')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                '0 as birthday_completed',
+                'null as last_birthday_activity_at',
+            ]);
+        }
+
+        return DB::table('birthday_reward_issuances')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw("max(case when status in ('issued', 'claimed', 'redeemed') or claimed_at is not null then 1 else 0 end) as birthday_completed")
+            ->selectRaw('max(coalesce(claimed_at, issued_at, updated_at, created_at)) as last_birthday_activity_at')
+            ->groupBy('marketing_profile_id');
+    }
+
+    protected function transactionStatsSubquery(): Builder
+    {
+        if (! Schema::hasTable('candle_cash_transactions')) {
+            return $this->emptySubquery([
+                '0 as marketing_profile_id',
+                'null as last_transaction_at',
+            ]);
+        }
+
+        return DB::table('candle_cash_transactions')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw('max(created_at) as last_transaction_at')
+            ->groupBy('marketing_profile_id');
+    }
+
+    /**
+     * @param array<int,string> $columns
+     */
+    protected function emptySubquery(array $columns): Builder
+    {
+        $query = DB::table('marketing_profiles as profiles')->whereRaw('1 = 0');
+
+        foreach ($columns as $column) {
+            $query->selectRaw($column);
+        }
+
+        return $query;
+    }
+}
