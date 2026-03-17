@@ -674,6 +674,3 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
-
-// Register the embedded /settings route after settings.php so Fortify's redirect does not hijack Shopify context.
-Route::get('/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.embedded.settings');

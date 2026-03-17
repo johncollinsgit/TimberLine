@@ -1,11 +1,28 @@
 <?php
 
+use App\Http\Controllers\ShopifyEmbeddedSettingsController;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
-Route::middleware(['auth'])->group(function () {
-    Route::redirect('settings', 'settings/profile');
+Route::get('settings', function (
+    Request $request,
+    ShopifyEmbeddedAppContext $contextService,
+    ShopifyEmbeddedSettingsController $controller
+) {
+    if ($contextService->hasPageContext($request)) {
+        return $controller->show($request, $contextService);
+    }
 
+    if (! auth()->check()) {
+        return redirect()->route('login');
+    }
+
+    return redirect('settings/profile');
+})->name('shopify.embedded.settings');
+
+Route::middleware(['auth'])->group(function () {
     Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');
 });
 
