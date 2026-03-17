@@ -20,6 +20,8 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 
+const SEARCH_INPUT_ID = "marketing-customers-search";
+
 type SortOption = {
     value: string;
     label: string;
@@ -307,6 +309,14 @@ function primaryButtonClass(): string {
     return "inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25";
 }
 
+function paginationButtonClass(): string {
+    return "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
+}
+
+function pageSizeSelectClass(): string {
+    return "h-9 min-w-[80px] rounded-xl border border-white/10 bg-black/25 px-2 text-xs text-white outline-none transition focus:border-emerald-300/25 focus:bg-black/35";
+}
+
 function formatCellValue(column: ColumnMeta | null, rawValue: unknown): string {
     if (rawValue == null || rawValue === "") {
         return "—";
@@ -340,7 +350,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const [error, setError] = useState("");
     const [searchInput, setSearchInput] = useState(props.initialFilters.search);
     const deferredSearch = useDeferredValue(searchInput);
-    const search = useDebouncedValue(deferredSearch, 300);
+    const search = useDebouncedValue(deferredSearch, 250);
     const [source, setSource] = useState(props.initialFilters.source);
     const [hasPoints, setHasPoints] = useState(props.initialFilters.has_points);
     const [hasPhone, setHasPhone] = useState(props.initialFilters.has_phone);
@@ -393,7 +403,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
     }, [birthdayFilter, hasPhone, hasPoints, page, perPage, search, sortDir, sortField, source]);
 
     useEffect(() => {
-        let cancelled = false;
+        const controller = new AbortController();
 
         async function loadRows() {
             setLoading(true);
@@ -401,6 +411,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
 
             try {
                 const response = await axios.get(props.endpoint, {
+                    signal: controller.signal,
                     params: {
                         page,
                         per_page: perPage,
@@ -414,14 +425,14 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     },
                 });
 
-                if (cancelled) {
+                if (controller.signal.aborted) {
                     return;
                 }
 
                 setRows(Array.isArray(response.data?.data) ? (response.data.data as RowData[]) : []);
                 setMeta((response.data?.meta ?? null) as ResponseMeta | null);
             } catch (requestError) {
-                if (cancelled) {
+                if (axios.isAxiosError(requestError) && requestError.code === "ERR_CANCELED") {
                     return;
                 }
 
@@ -433,7 +444,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                 setMeta(null);
                 setError(message);
             } finally {
-                if (!cancelled) {
+                if (!controller.signal.aborted) {
                     setLoading(false);
                 }
             }
@@ -442,7 +453,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         void loadRows();
 
         return () => {
-            cancelled = true;
+            controller.abort();
         };
     }, [birthdayFilter, hasPhone, hasPoints, page, perPage, props.endpoint, reloadToken, search, sortDir, sortField, source]);
 
@@ -546,7 +557,11 @@ function MarketingCustomersGridApp(props: RootDataset) {
 
                 <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-8">
                     <div className="xl:col-span-2">
+                        <label htmlFor={SEARCH_INPUT_ID} className="sr-only">
+                            Search customers
+                        </label>
                         <input
+                            id={SEARCH_INPUT_ID}
                             type="search"
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
@@ -591,13 +606,6 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         <select value={sortDir} onChange={(event) => setSortDir(event.target.value === "asc" ? "asc" : "desc")} className={fieldClass()}>
                             <option value="desc">Descending</option>
                             <option value="asc">Ascending</option>
-                        </select>
-                        <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value) || 25)} className={fieldClass()}>
-                            {[25, 50, 100].map((value) => (
-                                <option key={value} value={value}>
-                                    {value} rows
-                                </option>
-                            ))}
                         </select>
                     </div>
                 </div>
@@ -652,22 +660,36 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             Loading customer grid…
                         </div>
                     )}
+                    {loading ? (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white/90">
+                            Loading customers…
+                        </div>
+                    ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-sm text-white/65">
-                        Click any row to open the full customer record.
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-white/5 px-4 py-3">
+                    <div className="flex flex-col gap-1">
+                        <div className="text-sm font-semibold text-white">
+                            {loading
+                                ? "Loading customers…"
+                                : pagination
+                                    ? `Showing ${resultStart.toLocaleString()}-${resultEnd.toLocaleString()} of ${pagination.total.toLocaleString()} customers`
+                                    : "Showing 0 customers"}
+                        </div>
+                        <div className="text-xs text-white/60">
+                            Click any row to open the full customer record.
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <button
                             type="button"
                             onClick={() => setPage((current) => Math.max(1, current - 1))}
                             disabled={!pagination || pagination.page <= 1}
-                            className={buttonClass() + " disabled:cursor-not-allowed disabled:opacity-40"}
+                            className={paginationButtonClass()}
                         >
                             Previous
                         </button>
-                        <div className="min-w-[8rem] text-center text-sm text-white/70">
+                        <div className="text-sm text-white/70">
                             {pagination ? `Page ${pagination.page} of ${pagination.last_page}` : "Page 1"}
                         </div>
                         <button
@@ -677,10 +699,20 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 return pagination ? Math.min(pagination.last_page, nextPage) : nextPage;
                             })}
                             disabled={!pagination || pagination.page >= pagination.last_page}
-                            className={buttonClass() + " disabled:cursor-not-allowed disabled:opacity-40"}
+                            className={paginationButtonClass()}
                         >
                             Next
                         </button>
+                        <label className="ml-2 flex items-center gap-2 text-xs text-white/60">
+                            Rows
+                            <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value) || 25)} className={pageSizeSelectClass()}>
+                                {[25, 50, 100].map((value) => (
+                                    <option key={value} value={value}>
+                                        {value}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                     </div>
                 </div>
             </section>

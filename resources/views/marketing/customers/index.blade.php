@@ -51,89 +51,6 @@
                     </a>
                 </div>
 
-                <form method="GET" action="{{ route('marketing.customers') }}" class="grid gap-3 md:grid-cols-12">
-                    <div class="md:col-span-4">
-                        <label for="search" class="text-xs uppercase tracking-[0.2em] text-white/55">Search</label>
-                        <input
-                            id="search"
-                            type="text"
-                            name="search"
-                            value="{{ $search }}"
-                            placeholder="Name, email, phone, source ID"
-                            class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35"
-                        />
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="source" class="text-xs uppercase tracking-[0.2em] text-white/55">Source</label>
-                        <select id="source" name="source" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            <option value="all" @selected(($sourceFilter ?? 'all') === 'all')>All</option>
-                            <option value="shopify" @selected(($sourceFilter ?? 'all') === 'shopify')>Shopify</option>
-                            <option value="growave" @selected(($sourceFilter ?? 'all') === 'growave')>Growave</option>
-                            <option value="square" @selected(($sourceFilter ?? 'all') === 'square')>Square</option>
-                            <option value="wholesale" @selected(($sourceFilter ?? 'all') === 'wholesale')>Wholesale</option>
-                            <option value="event" @selected(($sourceFilter ?? 'all') === 'event')>Event</option>
-                            <option value="manual" @selected(($sourceFilter ?? 'all') === 'manual')>Manual</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="has_points" class="text-xs uppercase tracking-[0.2em] text-white/55">Has Points</label>
-                        <select id="has_points" name="has_points" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            <option value="all" @selected(($hasPointsFilter ?? 'all') === 'all')>All</option>
-                            <option value="yes" @selected(($hasPointsFilter ?? 'all') === 'yes')>Yes</option>
-                            <option value="no" @selected(($hasPointsFilter ?? 'all') === 'no')>No</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="has_phone" class="text-xs uppercase tracking-[0.2em] text-white/55">Has Phone</label>
-                        <select id="has_phone" name="has_phone" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            <option value="all" @selected(($hasPhoneFilter ?? 'all') === 'all')>All</option>
-                            <option value="yes" @selected(($hasPhoneFilter ?? 'all') === 'yes')>Yes</option>
-                            <option value="no" @selected(($hasPhoneFilter ?? 'all') === 'no')>No</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="birthday_filter" class="text-xs uppercase tracking-[0.2em] text-white/55">Birthday</label>
-                        <select id="birthday_filter" name="birthday_filter" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            <option value="all" @selected(($birthdayFilter ?? 'all') === 'all')>All</option>
-                            <option value="today" @selected(($birthdayFilter ?? 'all') === 'today')>Today</option>
-                            <option value="week" @selected(($birthdayFilter ?? 'all') === 'week')>This week</option>
-                            <option value="month" @selected(($birthdayFilter ?? 'all') === 'month')>This month</option>
-                            <option value="missing" @selected(($birthdayFilter ?? 'all') === 'missing')>Missing</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="sort" class="text-xs uppercase tracking-[0.2em] text-white/55">Sort</label>
-                        <select id="sort" name="sort" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            <option value="updated_at" @selected($sort === 'updated_at')>Updated</option>
-                            <option value="created_at" @selected($sort === 'created_at')>Created</option>
-                            <option value="candle_cash_balance" @selected($sort === 'candle_cash_balance')>Candle Cash</option>
-                            <option value="email" @selected($sort === 'email')>Email</option>
-                            <option value="first_name" @selected($sort === 'first_name')>First</option>
-                            <option value="last_name" @selected($sort === 'last_name')>Last</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-1">
-                        <label for="dir" class="text-xs uppercase tracking-[0.2em] text-white/55">Dir</label>
-                        <select id="dir" name="dir" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            <option value="desc" @selected($dir === 'desc')>Desc</option>
-                            <option value="asc" @selected($dir === 'asc')>Asc</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-1">
-                        <label for="per_page" class="text-xs uppercase tracking-[0.2em] text-white/55">Rows</label>
-                        <select id="per_page" name="per_page" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
-                            @foreach([25, 50, 100] as $rowCount)
-                                <option value="{{ $rowCount }}" @selected($perPage === $rowCount)>{{ $rowCount }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="md:col-span-1 flex items-end">
-                        <button type="submit" class="w-full rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white">
-                            Apply
-                        </button>
-                    </div>
-                </form>
-
                 <div class="overflow-x-auto rounded-2xl border border-white/10">
                     <table class="min-w-[1820px] text-sm">
                         <thead class="bg-white/5 text-white/65">
@@ -233,9 +150,6 @@
                             @endforelse
                         </tbody>
                     </table>
-                </div>
-                <div class="pt-2">
-                    {{ $profiles->links() }}
                 </div>
             </div>
         </section>
