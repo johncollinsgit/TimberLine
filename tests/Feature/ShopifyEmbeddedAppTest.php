@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
+
 use App\Models\ShopifyStore;
 
 test('shopify embedded app route shows helpful launch message when opened outside shopify admin', function () {
@@ -56,16 +58,58 @@ test('shopify embedded app route rejects invalid hmac', function () {
         ->assertSeeText('We could not verify this Shopify request');
 });
 
-/**
- * @param  array<string,string>  $query
- * @return array<string,string>
- */
-function shopifyEmbeddedSignedQuery(array $query, string $secret): array
-{
-    $payload = $query;
-    ksort($payload);
+test('shopify embedded session lets root-style home route resolve after signed app entry', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
+    config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
 
-    $payload['hmac'] = hash_hmac('sha256', http_build_query($payload, '', '&', PHP_QUERY_RFC3986), $secret);
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'modernforestry.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
 
-    return $payload;
-}
+    $query = shopifyEmbeddedSignedQuery([
+        'shop' => 'modernforestry.myshopify.com',
+        'host' => 'admin-host-token',
+        'embedded' => '1',
+        'timestamp' => (string) time(),
+    ], 'shopify-client-secret');
+
+    $this->get(route('shopify.app', $query))->assertOk();
+
+    $this->get('/')
+        ->assertOk()
+        ->assertSeeText('Forestry rewards are connected');
+});
+
+test('shopify embedded session lets root-style rewards and customers routes resolve after signed app entry', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
+    config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
+
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'modernforestry.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+
+    $query = shopifyEmbeddedSignedQuery([
+        'shop' => 'modernforestry.myshopify.com',
+        'host' => 'admin-host-token',
+        'embedded' => '1',
+        'timestamp' => (string) time(),
+    ], 'shopify-client-secret');
+
+    $this->get(route('shopify.app', $query))->assertOk();
+
+    $this->get('/rewards')
+        ->assertOk()
+        ->assertSeeText('Manage Candle Cash rewards and program settings.');
+
+    $this->get('/customers')
+        ->assertOk()
+        ->assertSeeText('Customer management');
+});

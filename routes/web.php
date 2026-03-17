@@ -104,7 +104,6 @@ Route::get('/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birt
 Route::get('/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.embedded.rewards.vip');
 Route::get('/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.embedded.rewards.notifications');
 Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'show'])->name('shopify.embedded.customers');
-Route::get('/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.embedded.settings');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -675,3 +674,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+// Register the embedded /settings route after settings.php so Fortify's redirect does not hijack Shopify context.
+Route::get('/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.embedded.settings');
