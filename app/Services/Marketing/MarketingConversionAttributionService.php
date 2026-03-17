@@ -300,6 +300,13 @@ class MarketingConversionAttributionService
                         $nested->where('source_type', 'shopify_order')->where('source_id', $shopifySourceId);
                     });
                 }
+
+                if ($order->shopify_customer_id) {
+                    $shopifyCustomerSourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown') . ':' . $order->shopify_customer_id;
+                    $query->orWhere(function ($nested) use ($shopifyCustomerSourceId): void {
+                        $nested->where('source_type', 'shopify_customer')->where('source_id', $shopifyCustomerSourceId);
+                    });
+                }
             })
             ->pluck('marketing_profile_id')
             ->map(fn ($id) => (int) $id)

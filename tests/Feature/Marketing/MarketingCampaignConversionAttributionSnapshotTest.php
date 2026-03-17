@@ -159,6 +159,120 @@ test('conversion attribution snapshot can be built directly from persisted order
         ->and($conversion->attribution_snapshot['ingested_attribution_version'])->toBe(1);
 });
 
+test('conversion attribution resolves profile via shopify customer link when direct order link is missing', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Elm',
+        'email' => 'elm.snapshot@example.com',
+    ]);
+
+    makeAttributionTouch($profile, 'push');
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 6106,
+        'shopify_customer_id' => '8106',
+        'ordered_at' => now(),
+        'order_number' => '#6106',
+        'status' => 'complete',
+        'attribution_meta' => [
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'field_confidence' => [
+                'utm_source' => 'high',
+                'utm_medium' => 'high',
+            ],
+            'capture_context' => 'shopify_order_payload',
+            'capture_contexts' => ['shopify_order_payload'],
+            'confidence' => 'high',
+        ],
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:8106',
+        'source_meta' => [
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'field_confidence' => [
+                'utm_source' => 'high',
+                'utm_medium' => 'high',
+            ],
+            'capture_context' => 'shopify_customer_sync',
+            'capture_contexts' => ['shopify_customer_sync'],
+            'confidence' => 'medium',
+        ],
+    ]);
+
+    app(MarketingConversionAttributionService::class)->attributeForOrder($order);
+
+    $conversion = MarketingCampaignConversion::query()->sole();
+
+    expect($conversion->attribution_snapshot['channel'])->toBe('facebook')
+        ->and($conversion->attribution_snapshot['utm_source'])->toBe('facebook')
+        ->and($conversion->attribution_snapshot['source_id'])->toBe((string) $order->id);
+});
+
+test('conversion attribution does not let weaker shopify customer metadata overwrite stronger order truth', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Ash',
+        'email' => 'ash.snapshot@example.com',
+    ]);
+
+    makeAttributionTouch($profile, 'push');
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 6107,
+        'shopify_customer_id' => '8107',
+        'ordered_at' => now(),
+        'order_number' => '#6107',
+        'status' => 'complete',
+        'attribution_meta' => [
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'referrer' => 'https://www.google.com/search?q=forest+candle',
+            'field_confidence' => [
+                'utm_source' => 'high',
+                'utm_medium' => 'high',
+                'referrer' => 'high',
+            ],
+            'capture_context' => 'shopify_order_payload',
+            'capture_contexts' => ['shopify_order_payload'],
+            'confidence' => 'high',
+        ],
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:8107',
+        'source_meta' => [
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'field_confidence' => [
+                'utm_source' => 'low',
+                'utm_medium' => 'low',
+            ],
+            'capture_context' => 'legacy_link',
+            'capture_contexts' => ['legacy_link'],
+            'confidence' => 'low',
+        ],
+    ]);
+
+    app(MarketingConversionAttributionService::class)->attributeForOrder($order);
+
+    $conversion = MarketingCampaignConversion::query()->sole();
+
+    expect($conversion->attribution_snapshot['channel'])->toBe('google')
+        ->and($conversion->attribution_snapshot['utm_source'])->toBe('google')
+        ->and($conversion->attribution_snapshot['utm_medium'])->toBe('cpc');
+});
+
 test('conversion attribution snapshot is unchanged on rerun when no better data appears', function () {
     Carbon::setTestNow('2026-03-17 08:00:00');
 
