@@ -33,8 +33,8 @@
     <style>
         body {
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", "Inter", system-ui, sans-serif;
-            background: #f5f6f4;
+            font-family: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #eef1ec;
             min-height: 100vh;
         }
 
@@ -63,7 +63,7 @@
         :subnav="$pageSubnav"
         :actions="$pageActions"
         :store-label="$storeLabel"
-        :show-sidebar="false"
+        :show-sidebar="! ($authorized && filled($shopifyApiKey) && filled($host))"
     >
         {{ $slot }}
     </x-app-shell>

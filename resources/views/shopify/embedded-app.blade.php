@@ -12,41 +12,47 @@
 >
     <style>
         .dashboard-setup-note {
-            border-radius: 12px;
+            border-radius: 14px;
             border: 1px solid rgba(15, 23, 42, 0.1);
-            background: #ffffff;
-            padding: 18px 20px;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 16px 18px;
             font-size: 14px;
             line-height: 1.6;
             color: rgba(15, 23, 42, 0.8);
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
         }
 
         .dashboard-links {
-            margin-top: 6px;
-            padding: 10px 0 18px;
-            border-top: 1px solid rgba(15, 23, 42, 0.08);
-            display: flex;
-            justify-content: center;
+            margin-top: 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 14px 16px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+        }
+
+        .dashboard-links h2 {
+            margin: 0;
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.52);
         }
 
         .dashboard-links ul {
-            margin: 0;
+            margin: 10px 0 0;
             padding: 0;
             list-style: none;
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            gap: 18px 26px;
-            max-width: 820px;
+            gap: 14px;
         }
 
         .dashboard-links a {
             text-decoration: none;
             color: rgba(15, 23, 42, 0.74);
-            font-size: 15px;
+            font-size: 13px;
             font-weight: 600;
-            font-family: "Fraunces", "Iowan Old Style", "Palatino", ui-serif, Georgia, serif;
             border-bottom: 1px solid transparent;
             padding-bottom: 1px;
             transition: color 0.18s ease, border-color 0.18s ease;
@@ -65,11 +71,11 @@
         }
 
         .dashboard-card {
-            border-radius: 12px;
+            border-radius: 16px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.9);
             padding: 20px;
-            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
             min-height: 220px;
             display: flex;
             flex-direction: column;
@@ -79,13 +85,12 @@
         .dashboard-card-status {
             display: inline-flex;
             align-items: center;
-            border-radius: 6px;
-            padding: 5px 10px;
+            border-radius: 999px;
+            padding: 6px 14px;
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.2em;
             text-transform: uppercase;
-            border: 1px solid rgba(15, 23, 42, 0.08);
         }
 
         .dashboard-card-status.ok {
@@ -105,8 +110,8 @@
 
         .dashboard-card h3 {
             margin: 0;
-            font-size: 1.35rem;
-            font-weight: 640;
+            font-family: 'Fraunces', ui-serif, Georgia, serif;
+            font-size: 1.5rem;
             color: #111827;
         }
 
@@ -125,9 +130,9 @@
         }
 
         .dashboard-card-meta div {
-            border-radius: 10px;
+            border-radius: 14px;
             border: 1px solid rgba(15, 23, 42, 0.06);
-            background: rgba(248, 249, 247, 0.96);
+            background: rgba(245, 247, 242, 0.94);
             padding: 10px 12px;
         }
 
@@ -154,6 +159,7 @@
 
     @if(! empty($dashboardLinks))
         <section class="dashboard-links" aria-label="Dashboard links">
+            <h2>Quick Links</h2>
             <ul>
                 @foreach($dashboardLinks as $link)
                     <li>

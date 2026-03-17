@@ -39,15 +39,15 @@
     <style>
         .customers-manage-root {
             display: grid;
-            gap: 16px;
+            gap: 14px;
         }
 
         .customers-toolbar {
             border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: #ffffff;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
-            padding: 16px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+            padding: 14px;
             display: grid;
             gap: 12px;
         }
@@ -89,7 +89,7 @@
         .customers-field label {
             font-size: 10px;
             font-weight: 700;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.14em;
             text-transform: uppercase;
             color: rgba(15, 23, 42, 0.5);
         }
@@ -100,7 +100,7 @@
             box-sizing: border-box;
             border-radius: 8px;
             border: 1px solid rgba(15, 23, 42, 0.14);
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.95);
             padding: 8px 10px;
             font-size: 12px;
             color: rgba(15, 23, 42, 0.78);
@@ -131,7 +131,7 @@
             justify-content: center;
             border-radius: 8px;
             border: 1px solid rgba(15, 23, 42, 0.14);
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.9);
             color: rgba(15, 23, 42, 0.78);
             text-decoration: none;
             padding: 8px 11px;
@@ -149,15 +149,15 @@
 
         .customers-button.is-primary {
             border-color: rgba(15, 143, 97, 0.32);
-            background: rgba(15, 143, 97, 0.08);
+            background: rgba(15, 143, 97, 0.12);
             color: #0d6f4d;
         }
 
         .customers-table-wrap {
             border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: #ffffff;
-            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 14px 26px rgba(15, 23, 42, 0.05);
             overflow: hidden;
         }
 
@@ -172,11 +172,11 @@
             padding: 10px 12px;
             font-size: 10px;
             font-weight: 700;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.11em;
             text-transform: uppercase;
             color: rgba(15, 23, 42, 0.56);
             border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(247, 248, 246, 0.96);
+            background: rgba(247, 250, 246, 0.94);
             white-space: nowrap;
         }
 

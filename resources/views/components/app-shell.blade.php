@@ -5,30 +5,29 @@
     'subnav' => [],
     'actions' => [],
     'storeLabel' => null,
-    'showSidebar' => false,
+    'showSidebar' => true,
 ])
 
 <style>
     .app-shell {
-        --app-shell-bg: #f5f6f4;
-        --app-main-bg: #f5f6f4;
-        --app-content-width: 1160px;
+        --app-shell-bg: #eef2ed;
+        --app-main-bg: rgba(255, 255, 255, 0.52);
 
-        display: block;
+        display: grid;
         min-height: 100vh;
-        background: var(--app-shell-bg);
+        background: linear-gradient(180deg, #f7faf6 0%, var(--app-shell-bg) 100%);
     }
 
     .app-shell--with-sidebar {
-        display: grid;
-        grid-template-columns: 260px minmax(0, 1fr);
+        grid-template-columns: 270px minmax(0, 1fr);
     }
 
     .app-shell--no-sidebar {
-        display: block;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .app-shell-main {
+        padding: 0;
         min-width: 0;
         background: var(--app-main-bg);
         display: flex;
@@ -49,15 +48,15 @@
     .app-shell-content {
         flex: 1;
         box-sizing: border-box;
-        padding: 28px 28px 64px;
-        width: min(100%, var(--app-content-width));
-        margin: 0 auto;
+        padding: 28px 34px 50px;
+        max-width: 1240px;
+        width: 100%;
     }
 
     @media (max-width: 900px) {
         .app-shell--with-sidebar,
         .app-shell--no-sidebar {
-            display: block;
+            grid-template-columns: 1fr;
         }
 
         .app-shell-sidebar {
@@ -69,13 +68,13 @@
         }
 
         .app-shell-content {
-            padding: 24px 20px 48px;
+            padding: 24px;
         }
     }
 
     @media (max-width: 640px) {
         .app-shell-content {
-            padding: 18px 16px 40px;
+            padding: 16px 14px 30px;
         }
     }
 </style>
@@ -92,8 +91,6 @@
     @endif
     <div class="app-shell-main">
         <x-app-topbar
-            :navigation="$navigation['items'] ?? []"
-            :active="$navigation['activeSection'] ?? null"
             :title="$pageTitle"
             :subtitle="$pageSubtitle"
             :subnav="$subnav"

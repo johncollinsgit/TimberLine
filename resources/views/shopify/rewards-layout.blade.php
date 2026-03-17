@@ -23,41 +23,19 @@
         .rewards-root {
             display: flex;
             flex-direction: column;
-            gap: 22px;
-            margin-top: 4px;
+            gap: 24px;
+            margin-top: 8px;
         }
 
         .rewards-note {
-            border-radius: 12px;
+            border-radius: 20px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: #ffffff;
-            padding: 18px 20px;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 18px 22px;
             font-size: 14px;
             line-height: 1.6;
             color: rgba(15, 23, 42, 0.8);
-            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
-        }
-
-        .rewards-placeholder {
-            border-radius: 12px;
-            padding: 22px;
-            background: #ffffff;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.04);
-        }
-
-        .rewards-placeholder h2 {
-            margin-top: 0;
-            font-size: 1.6rem;
-            font-weight: 640;
-            color: #0f172a;
-        }
-
-        .rewards-placeholder p {
-            margin: 12px 0 0;
-            color: rgba(15, 23, 42, 0.7);
-            line-height: 1.65;
-            font-size: 15px;
+            box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
         }
     </style>
 

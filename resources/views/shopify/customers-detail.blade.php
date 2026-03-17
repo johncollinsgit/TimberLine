@@ -29,7 +29,7 @@
     <style>
         .customers-detail-header {
             display: grid;
-            gap: 16px;
+            gap: 14px;
         }
 
         .customers-detail-header-row {
@@ -52,8 +52,8 @@
 
         .customers-detail-name {
             margin: 6px 0 0;
-            font-size: clamp(1.5rem, 2vw, 2.1rem);
-            font-weight: 660;
+            font-size: 1.4rem;
+            font-weight: 650;
             letter-spacing: -0.02em;
             color: #0f172a;
         }
@@ -71,9 +71,9 @@
         }
 
         .customers-detail-metric {
-            border-radius: 10px;
+            border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.98);
+            background: rgba(255, 255, 255, 0.94);
             padding: 12px 14px;
         }
 
@@ -94,15 +94,15 @@
 
         .customers-detail-grid {
             display: grid;
-            gap: 16px;
+            gap: 14px;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         }
 
         .customers-detail-card {
             border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.98);
-            padding: 18px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 16px;
         }
 
         .customers-detail-card h3 {
@@ -126,7 +126,7 @@
             align-items: center;
             justify-content: center;
             padding: 4px 8px;
-            border-radius: 6px;
+            border-radius: 999px;
             font-size: 11px;
             font-weight: 620;
             border: 1px solid rgba(15, 23, 42, 0.12);
@@ -157,7 +157,7 @@
             text-transform: uppercase;
             color: rgba(15, 23, 42, 0.5);
             border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(247, 248, 246, 0.92);
+            background: rgba(247, 250, 246, 0.9);
         }
 
         .customers-detail-table td {
@@ -210,7 +210,7 @@
             justify-content: center;
             border-radius: 8px;
             border: 1px solid rgba(15, 23, 42, 0.14);
-            background: rgba(255, 255, 255, 0.98);
+            background: rgba(255, 255, 255, 0.95);
             padding: 8px 12px;
             font-size: 12px;
             font-weight: 620;
@@ -220,7 +220,7 @@
 
         .customers-detail-button.is-primary {
             border-color: rgba(15, 143, 97, 0.32);
-            background: rgba(15, 143, 97, 0.12);
+            background: rgba(15, 143, 97, 0.14);
             color: #0d6f4d;
         }
 
