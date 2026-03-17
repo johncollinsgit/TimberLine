@@ -36,7 +36,6 @@ test('shopify embedded app route renders verified admin shell for configured sto
         ->assertSeeText('Forestry rewards are connected')
         ->assertSeeText('Storefront Rewards')
         ->assertSeeText('Birthday Rewards')
-        ->assertSeeText('Store Page')
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();

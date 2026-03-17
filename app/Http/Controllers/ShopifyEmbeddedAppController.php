@@ -102,17 +102,6 @@ class ShopifyEmbeddedAppController extends Controller
                     'Redeemed rewards' => number_format((int) ($rewardSummary['redeemed'] ?? 0)),
                 ],
             ],
-            [
-                'label' => 'Store Page',
-                'status' => 'Check page publish',
-                'tone' => 'info',
-                'body' => 'If the dedicated rewards page is not live yet, publish a Shopify page named Your Rewards and assign the page.forestry-rewards template.',
-                'meta' => [
-                    'Page title' => 'Your Rewards',
-                    'Handle' => 'rewards',
-                    'Template' => 'page.forestry-rewards',
-                ],
-            ],
         ];
 
         return $this->embeddedResponse(
@@ -151,7 +140,7 @@ class ShopifyEmbeddedAppController extends Controller
                     ],
                 ],
                 'cards' => $cards,
-                'setupNote' => 'The storefront helper is already live in account, cart, and cart drawer. The only remaining storefront setup step is publishing the dedicated rewards page if you want that page in navigation.',
+                'setupNote' => null,
             ])
         );
     }
