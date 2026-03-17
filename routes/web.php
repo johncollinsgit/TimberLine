@@ -103,7 +103,13 @@ Route::get('/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'refe
 Route::get('/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.embedded.rewards.birthdays');
 Route::get('/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.embedded.rewards.vip');
 Route::get('/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.embedded.rewards.notifications');
-Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'show'])->name('shopify.embedded.customers');
+Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.embedded.customers');
+Route::get('/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.embedded.customers.manage');
+Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.embedded.customers.activity');
+Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.embedded.customers.questions');
+Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.embedded.customers.detail');
+Route::patch('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.embedded.customers.update');
+Route::post('/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.embedded.customers.update-consent');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -646,7 +652,13 @@ Route::prefix('shopify/marketing/v1')
 Route::prefix('shopify')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
-    Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'show'])->name('shopify.app.customers');
+    Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
+    Route::get('/app/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers.manage');
+    Route::get('/app/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.app.customers.activity');
+    Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.app.customers.questions');
+    Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
+    Route::patch('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.app.customers.update');
+    Route::post('/app/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.app.customers.update-consent');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
