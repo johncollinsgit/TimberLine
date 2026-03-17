@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CustomerBirthdayProfile;
@@ -36,6 +37,7 @@ use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Carbon\CarbonInterface;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -66,6 +68,100 @@ class MarketingCustomersController extends Controller
 
     public function index(Request $request): View
     {
+        $today = now();
+        $filters = $this->normalizeIndexFilters($request);
+        $profiles = $this->customerIndexQuery($filters)
+            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
+            ->withCount('links')
+            ->paginate((int) $filters['per_page'])
+            ->withQueryString();
+
+        $derivedStats = $this->buildDerivedStats($profiles->getCollection());
+        $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
+        $birthdayReporting = $this->birthdayReportingService->summary($today);
+        $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics((int) $profiles->total());
+        $quickStats = $this->buildIndexQuickStats((int) $profiles->total());
+
+        return view('marketing.customers.index', [
+            'section' => MarketingSectionRegistry::section('customers'),
+            'sections' => $this->navigationItems(),
+            'profiles' => $profiles,
+            'search' => (string) $filters['search'],
+            'sort' => (string) $filters['sort'],
+            'dir' => (string) $filters['dir'],
+            'perPage' => (int) $filters['per_page'],
+            'birthdayFilter' => (string) $filters['birthday_filter'],
+            'sourceFilter' => (string) $filters['source'],
+            'hasPointsFilter' => (string) $filters['has_points'],
+            'hasPhoneFilter' => (string) $filters['has_phone'],
+            'derivedStats' => $derivedStats,
+            'loyaltyStats' => $loyaltyStats,
+            'birthdayReporting' => $birthdayReporting,
+            'emptyStateDiagnostics' => $emptyStateDiagnostics,
+            'quickStats' => $quickStats,
+            'customerGrid' => [
+                'endpoint' => route('marketing.customers.data'),
+                'detail_base_url' => url('/marketing/customers'),
+                'filters' => $filters,
+                'sort_options' => $this->customerIndexSortOptions(),
+            ],
+        ]);
+    }
+
+    public function data(Request $request): JsonResponse
+    {
+        $filters = $this->normalizeIndexFilters($request);
+        $profiles = $this->customerIndexQuery($filters)
+            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
+            ->withCount('links')
+            ->paginate((int) $filters['per_page'])
+            ->withQueryString();
+
+        $derivedStats = $this->buildDerivedStats($profiles->getCollection());
+        $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
+
+        $rows = $profiles->getCollection()
+            ->map(function (MarketingProfile $profile) use ($derivedStats, $loyaltyStats): array {
+                return $this->serializeCustomerGridRow(
+                    $profile,
+                    $derivedStats[(int) $profile->id] ?? null,
+                    $loyaltyStats[(int) $profile->id] ?? null
+                );
+            })
+            ->values()
+            ->all();
+
+        return response()->json([
+            'data' => $rows,
+            'rows' => $rows,
+            'meta' => [
+                'columns' => $this->customerGridColumns(),
+                'pagination' => [
+                    'page' => $profiles->currentPage(),
+                    'per_page' => $profiles->perPage(),
+                    'total' => $profiles->total(),
+                    'last_page' => $profiles->lastPage(),
+                ],
+                'filters' => $filters,
+                'sort_options' => $this->customerIndexSortOptions(),
+            ],
+        ]);
+    }
+
+    /**
+     * @return array{
+     *   search:string,
+     *   sort:string,
+     *   dir:string,
+     *   per_page:int,
+     *   birthday_filter:string,
+     *   source:string,
+     *   has_points:string,
+     *   has_phone:string
+     * }
+     */
+    protected function normalizeIndexFilters(Request $request): array
+    {
         $search = trim((string) $request->query('search', ''));
         $sort = (string) $request->query('sort', 'updated_at');
         $dir = strtolower((string) $request->query('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -88,18 +184,43 @@ class MarketingCustomersController extends Controller
             $hasPhoneFilter = 'all';
         }
 
-        if (! in_array($sort, ['updated_at', 'created_at', 'email', 'first_name', 'last_name'], true)) {
+        if (! in_array($sort, ['updated_at', 'created_at', 'email', 'first_name', 'last_name', 'candle_cash_balance'], true)) {
             $sort = 'updated_at';
         }
+
+        return [
+            'search' => $search,
+            'sort' => $sort,
+            'dir' => $dir,
+            'per_page' => $perPage,
+            'birthday_filter' => $birthdayFilter,
+            'source' => $sourceFilter,
+            'has_points' => $hasPointsFilter,
+            'has_phone' => $hasPhoneFilter,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $filters
+     */
+    protected function customerIndexQuery(array $filters): Builder
+    {
+        $search = (string) ($filters['search'] ?? '');
+        $sort = (string) ($filters['sort'] ?? 'updated_at');
+        $dir = strtolower((string) ($filters['dir'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $birthdayFilter = (string) ($filters['birthday_filter'] ?? 'all');
+        $sourceFilter = (string) ($filters['source'] ?? 'all');
+        $hasPointsFilter = (string) ($filters['has_points'] ?? 'all');
+        $hasPhoneFilter = (string) ($filters['has_phone'] ?? 'all');
 
         $today = now();
         $weekTuples = $this->birthdayWeekTuples($today);
         $supportsCandleCashBalances = Schema::hasTable('candle_cash_balances');
-        $searchLike = '%'.$search.'%';
+        $searchLike = '%' . $search . '%';
 
-        $profiles = MarketingProfile::query()
-            ->when($search !== '', function ($query) use ($searchLike): void {
-                $query->where(function ($nested) use ($searchLike): void {
+        $query = MarketingProfile::query()
+            ->when($search !== '', function ($builder) use ($searchLike): void {
+                $builder->where(function ($nested) use ($searchLike): void {
                     $nested->where('first_name', 'like', $searchLike)
                         ->orWhere('last_name', 'like', $searchLike)
                         ->orWhere('email', 'like', $searchLike)
@@ -118,17 +239,17 @@ class MarketingCustomersController extends Controller
                         });
                 });
             })
-            ->when($sourceFilter !== 'all', function ($query) use ($sourceFilter): void {
-                $this->applySourceFilter($query, $sourceFilter);
+            ->when($sourceFilter !== 'all', function ($builder) use ($sourceFilter): void {
+                $this->applySourceFilter($builder, $sourceFilter);
             })
-            ->when($hasPhoneFilter === 'yes', function ($query): void {
-                $query->whereNotNull('normalized_phone');
+            ->when($hasPhoneFilter === 'yes', function ($builder): void {
+                $builder->whereNotNull('normalized_phone');
             })
-            ->when($hasPhoneFilter === 'no', function ($query): void {
-                $query->whereNull('normalized_phone');
+            ->when($hasPhoneFilter === 'no', function ($builder): void {
+                $builder->whereNull('normalized_phone');
             })
-            ->when($hasPointsFilter === 'yes', function ($query) use ($supportsCandleCashBalances): void {
-                $query->where(function ($pointsQuery) use ($supportsCandleCashBalances): void {
+            ->when($hasPointsFilter === 'yes', function ($builder) use ($supportsCandleCashBalances): void {
+                $builder->where(function ($pointsQuery) use ($supportsCandleCashBalances): void {
                     $pointsQuery->whereHas('externalProfiles', function ($externalQuery): void {
                         $externalQuery
                             ->where('integration', 'growave')
@@ -142,28 +263,28 @@ class MarketingCustomersController extends Controller
                     }
                 });
             })
-            ->when($hasPointsFilter === 'no', function ($query) use ($supportsCandleCashBalances): void {
-                $query->whereDoesntHave('externalProfiles', function ($externalQuery): void {
+            ->when($hasPointsFilter === 'no', function ($builder) use ($supportsCandleCashBalances): void {
+                $builder->whereDoesntHave('externalProfiles', function ($externalQuery): void {
                     $externalQuery
                         ->where('integration', 'growave')
                         ->where('points_balance', '>', 0);
                 });
 
                 if ($supportsCandleCashBalances) {
-                    $query->whereDoesntHave('candleCashBalance', function ($balanceQuery): void {
+                    $builder->whereDoesntHave('candleCashBalance', function ($balanceQuery): void {
                         $balanceQuery->where('balance', '>', 0);
                     });
                 }
             })
-            ->when($birthdayFilter === 'today', function ($query) use ($today): void {
-                $query->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
+            ->when($birthdayFilter === 'today', function ($builder) use ($today): void {
+                $builder->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
                     $birthdayQuery
                         ->where('birth_month', (int) $today->month)
                         ->where('birth_day', (int) $today->day);
                 });
             })
-            ->when($birthdayFilter === 'week', function ($query) use ($weekTuples): void {
-                $query->whereHas('birthdayProfile', function ($birthdayQuery) use ($weekTuples): void {
+            ->when($birthdayFilter === 'week', function ($builder) use ($weekTuples): void {
+                $builder->whereHas('birthdayProfile', function ($birthdayQuery) use ($weekTuples): void {
                     $birthdayQuery->where(function ($tupleQuery) use ($weekTuples): void {
                         foreach ($weekTuples as [$month, $day]) {
                             $tupleQuery->orWhere(function ($dayQuery) use ($month, $day): void {
@@ -173,13 +294,13 @@ class MarketingCustomersController extends Controller
                     });
                 });
             })
-            ->when($birthdayFilter === 'month', function ($query) use ($today): void {
-                $query->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
+            ->when($birthdayFilter === 'month', function ($builder) use ($today): void {
+                $builder->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
                     $birthdayQuery->where('birth_month', (int) $today->month);
                 });
             })
-            ->when($birthdayFilter === 'missing', function ($query): void {
-                $query->where(function ($missingQuery): void {
+            ->when($birthdayFilter === 'missing', function ($builder): void {
+                $builder->where(function ($missingQuery): void {
                     $missingQuery->whereDoesntHave('birthdayProfile')
                         ->orWhereHas('birthdayProfile', function ($birthdayQuery): void {
                             $birthdayQuery
@@ -187,37 +308,125 @@ class MarketingCustomersController extends Controller
                                 ->orWhereNull('birth_day');
                         });
                 });
-            })
-            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
-            ->withCount('links')
-            ->orderBy($sort, $dir)
-            ->paginate($perPage)
-            ->withQueryString();
+            });
 
-        $derivedStats = $this->buildDerivedStats($profiles->getCollection());
-        $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
-        $birthdayReporting = $this->birthdayReportingService->summary($today);
-        $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics((int) $profiles->total());
-        $quickStats = $this->buildIndexQuickStats((int) $profiles->total());
+        if ($sort === 'candle_cash_balance' && $supportsCandleCashBalances) {
+            $query->orderBy(
+                CandleCashBalance::query()
+                    ->select('balance')
+                    ->whereColumn('marketing_profile_id', 'marketing_profiles.id')
+                    ->limit(1),
+                $dir
+            )->orderBy('updated_at', 'desc');
 
-        return view('marketing.customers.index', [
-            'section' => MarketingSectionRegistry::section('customers'),
-            'sections' => $this->navigationItems(),
-            'profiles' => $profiles,
-            'search' => $search,
-            'sort' => $sort,
-            'dir' => $dir,
-            'perPage' => $perPage,
-            'birthdayFilter' => $birthdayFilter,
-            'sourceFilter' => $sourceFilter,
-            'hasPointsFilter' => $hasPointsFilter,
-            'hasPhoneFilter' => $hasPhoneFilter,
-            'derivedStats' => $derivedStats,
-            'loyaltyStats' => $loyaltyStats,
-            'birthdayReporting' => $birthdayReporting,
-            'emptyStateDiagnostics' => $emptyStateDiagnostics,
-            'quickStats' => $quickStats,
-        ]);
+            return $query;
+        }
+
+        return $query->orderBy($sort, $dir);
+    }
+
+    /**
+     * @return array<int,array{value:string,label:string}>
+     */
+    protected function customerIndexSortOptions(): array
+    {
+        return [
+            ['value' => 'updated_at', 'label' => 'Updated'],
+            ['value' => 'created_at', 'label' => 'Created'],
+            ['value' => 'candle_cash_balance', 'label' => 'Candle Cash balance'],
+            ['value' => 'email', 'label' => 'Email'],
+            ['value' => 'first_name', 'label' => 'First name'],
+            ['value' => 'last_name', 'label' => 'Last name'],
+        ];
+    }
+
+    /**
+     * @return array<int,array{key:string,label:string,type:string}>
+     */
+    protected function customerGridColumns(): array
+    {
+        return [
+            ['key' => 'customer', 'label' => 'Customer', 'type' => 'text'],
+            ['key' => 'email', 'label' => 'Email', 'type' => 'text'],
+            ['key' => 'phone', 'label' => 'Phone', 'type' => 'text'],
+            ['key' => 'candle_cash_points', 'label' => 'Candle Cash', 'type' => 'number'],
+            ['key' => 'candle_cash_amount', 'label' => 'Value ($)', 'type' => 'number'],
+            ['key' => 'legacy_growave_points', 'label' => 'Legacy Growave', 'type' => 'number'],
+            ['key' => 'tier', 'label' => 'Tier', 'type' => 'text'],
+            ['key' => 'referrals', 'label' => 'Referrals', 'type' => 'number'],
+            ['key' => 'review_count', 'label' => 'Reviews', 'type' => 'number'],
+            ['key' => 'average_rating', 'label' => 'Avg Rating', 'type' => 'number'],
+            ['key' => 'order_count', 'label' => 'Orders', 'type' => 'number'],
+            ['key' => 'last_order_at', 'label' => 'Last Order', 'type' => 'text'],
+            ['key' => 'birthday', 'label' => 'Birthday', 'type' => 'text'],
+            ['key' => 'sources', 'label' => 'Sources', 'type' => 'text'],
+            ['key' => 'updated_at', 'label' => 'Updated', 'type' => 'text'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed>|null $stats
+     * @param array<string,mixed>|null $loyalty
+     * @return array<string,mixed>
+     */
+    protected function serializeCustomerGridRow(MarketingProfile $profile, ?array $stats, ?array $loyalty): array
+    {
+        $stats = $stats ?? ['order_count' => 0, 'last_order_at' => null, 'source_badges' => []];
+        $loyalty = $loyalty ?? [
+            'candle_cash_points' => 0,
+            'candle_cash_amount' => 0.0,
+            'legacy_growave_points' => 0,
+            'tier' => null,
+            'referrals' => 0,
+            'review_count' => 0,
+            'average_rating' => null,
+        ];
+
+        $displayName = trim((string) ($profile->first_name . ' ' . $profile->last_name));
+        if ($displayName === '') {
+            $displayName = $profile->email ?: ($profile->phone ?: 'Profile #' . $profile->id);
+        }
+
+        $birthday = 'Missing';
+        if ($profile->birthdayProfile) {
+            if ($profile->birthdayProfile->birthday_full_date) {
+                $birthday = (string) $profile->birthdayProfile->birthday_full_date;
+            } elseif ($profile->birthdayProfile->birth_month && $profile->birthdayProfile->birth_day) {
+                $birthday = sprintf('%02d/%02d', (int) $profile->birthdayProfile->birth_month, (int) $profile->birthdayProfile->birth_day);
+            }
+        }
+
+        $sources = collect(array_merge(
+            (array) ($stats['source_badges'] ?? []),
+            array_map(
+                static fn ($channel): string => ucwords(str_replace('_', ' ', (string) $channel)),
+                (array) ($profile->source_channels ?? [])
+            )
+        ))
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode(', ');
+
+        return [
+            'id' => (int) $profile->id,
+            'customer' => $displayName,
+            'email' => $profile->email ?: '—',
+            'phone' => $profile->phone ?: '—',
+            'candle_cash_points' => (int) ($loyalty['candle_cash_points'] ?? 0),
+            'candle_cash_amount' => (float) ($loyalty['candle_cash_amount'] ?? 0),
+            'legacy_growave_points' => (int) ($loyalty['legacy_growave_points'] ?? 0),
+            'tier' => (string) ($loyalty['tier'] ?? '—'),
+            'referrals' => (int) ($loyalty['referrals'] ?? 0),
+            'review_count' => (int) ($loyalty['review_count'] ?? 0),
+            'average_rating' => $loyalty['average_rating'] !== null ? (float) $loyalty['average_rating'] : null,
+            'order_count' => (int) ($stats['order_count'] ?? 0),
+            'last_order_at' => (string) ($stats['last_order_at'] ?? '—'),
+            'birthday' => $birthday,
+            'sources' => $sources !== '' ? $sources : '—',
+            'updated_at' => optional($profile->updated_at)->format('Y-m-d') ?: '—',
+            'profile_url' => route('marketing.customers.show', $profile),
+        ];
     }
 
     public function create(Request $request): View
@@ -1258,9 +1467,10 @@ class MarketingCustomersController extends Controller
             $profileId = (int) $profile->id;
             $external = $latestExternal[$profileId] ?? null;
             $reviewSummary = $latestReviewSummary[$profileId] ?? null;
-            $points = $external?->points_balance !== null
+            $legacyPoints = $external?->points_balance !== null
                 ? (int) $external->points_balance
-                : (int) ($candleBalances[$profileId] ?? 0);
+                : 0;
+            $candleCashPoints = (int) ($candleBalances[$profileId] ?? 0);
 
             $referrals = 0;
             if ($external) {
@@ -1276,7 +1486,9 @@ class MarketingCustomersController extends Controller
             ])->filter()->max();
 
             $rows[$profileId] = [
-                'points' => $points,
+                'legacy_growave_points' => $legacyPoints,
+                'candle_cash_points' => $candleCashPoints,
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints($candleCashPoints),
                 'tier' => $external?->vip_tier ? (string) $external->vip_tier : null,
                 'referrals' => $referrals,
                 'has_growave' => $external !== null,
@@ -1312,10 +1524,16 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @return array{total_customers:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int}
+     * @return array{total_customers:int,candle_cash_holders:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int}
      */
     protected function buildIndexQuickStats(int $totalProfiles): array
     {
+        $candleCashHolders = Schema::hasTable('candle_cash_balances')
+            ? (int) CandleCashBalance::query()
+                ->where('balance', '>', 0)
+                ->count()
+            : 0;
+
         $growaveLinked = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
                 ->where('integration', 'growave')
@@ -1340,6 +1558,7 @@ class MarketingCustomersController extends Controller
 
         return [
             'total_customers' => $totalProfiles,
+            'candle_cash_holders' => $candleCashHolders,
             'growave_linked' => $growaveLinked,
             'shopify_or_order_linked' => $shopifyOrOrderLinked,
             'missing_contact' => $missingContact,

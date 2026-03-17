@@ -7,18 +7,60 @@
     :headline="$headline"
     :subheadline="$subheadline"
     :app-navigation="$appNavigation"
+    :page-subnav="$pageSubnav ?? []"
     :page-actions="$pageActions"
 >
     <style>
         .dashboard-setup-note {
-            border-radius: 20px;
+            border-radius: 14px;
             border: 1px solid rgba(15, 23, 42, 0.1);
             background: rgba(255, 255, 255, 0.85);
-            padding: 20px 24px;
+            padding: 16px 18px;
             font-size: 14px;
             line-height: 1.6;
             color: rgba(15, 23, 42, 0.8);
-            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        }
+
+        .dashboard-links {
+            margin-top: 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 14px 16px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+        }
+
+        .dashboard-links h2 {
+            margin: 0;
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.52);
+        }
+
+        .dashboard-links ul {
+            margin: 10px 0 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .dashboard-links a {
+            text-decoration: none;
+            color: rgba(15, 23, 42, 0.74);
+            font-size: 13px;
+            font-weight: 600;
+            border-bottom: 1px solid transparent;
+            padding-bottom: 1px;
+            transition: color 0.18s ease, border-color 0.18s ease;
+        }
+
+        .dashboard-links a:hover {
+            color: rgba(15, 23, 42, 0.96);
+            border-color: rgba(15, 143, 97, 0.6);
         }
 
         .dashboard-card-grid {
@@ -29,11 +71,11 @@
         }
 
         .dashboard-card {
-            border-radius: 22px;
+            border-radius: 16px;
             border: 1px solid rgba(15, 23, 42, 0.08);
             background: rgba(255, 255, 255, 0.9);
-            padding: 24px;
-            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.1);
+            padding: 20px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
             min-height: 220px;
             display: flex;
             flex-direction: column;
@@ -69,7 +111,7 @@
         .dashboard-card h3 {
             margin: 0;
             font-family: 'Fraunces', ui-serif, Georgia, serif;
-            font-size: 1.7rem;
+            font-size: 1.5rem;
             color: #111827;
         }
 
@@ -112,6 +154,25 @@
     @if(filled($setupNote))
         <section class="dashboard-setup-note">
             {{ $setupNote }}
+        </section>
+    @endif
+
+    @if(! empty($dashboardLinks))
+        <section class="dashboard-links" aria-label="Dashboard links">
+            <h2>Quick Links</h2>
+            <ul>
+                @foreach($dashboardLinks as $link)
+                    <li>
+                        <a
+                            href="{{ $link['href'] }}"
+                            target="{{ str_starts_with($link['href'] ?? '', 'http') ? '_blank' : '_self' }}"
+                            rel="{{ str_starts_with($link['href'] ?? '', 'http') ? 'noreferrer noopener' : 'noopener' }}"
+                        >
+                            {{ $link['label'] }}
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
         </section>
     @endif
 

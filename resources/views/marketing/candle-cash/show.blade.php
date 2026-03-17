@@ -1,4 +1,6 @@
 @php
+    use Illuminate\Support\Str;
+
     $section = $section ?? \App\Support\Marketing\CandleCashSectionRegistry::section($sectionKey ?? 'dashboard');
     $sections = $sections ?? [];
 @endphp
@@ -8,13 +10,50 @@
         <x-marketing.partials.candle-cash-shell :section="$section" :sections="$sections" />
 
         @if($sectionKey === 'dashboard')
+            <section class="rounded-[1.8rem] border border-emerald-300/15 bg-emerald-500/10 p-5">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-emerald-100/70">Balance clarity</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">Current liability and historical issuance are not the same number</h2>
+                        <p class="mt-2 max-w-3xl text-sm text-emerald-50/80">
+                            Outstanding liability is based on live customer balances. Lifetime issued includes historical grants before the legacy rebase and should not be read as today’s open exposure.
+                        </p>
+                    </div>
+                    <div class="rounded-2xl border border-emerald-200/20 bg-black/20 px-4 py-3 text-sm text-emerald-50/80">
+                        {{ number_format((int) data_get($dashboard, 'points_per_dollar', 10)) }} points = $1.00
+                    </div>
+                </div>
+                @if(data_get($dashboard, 'latest_rebase_run'))
+                    <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
+                        Last legacy rebase completed {{ optional(data_get($dashboard, 'latest_rebase_run.finished_at'))->format('Y-m-d H:i') ?: 'recently' }}.
+                        Removed {{ number_format((int) data_get($dashboard, 'latest_rebase_run.summary.reduced_points', data_get($dashboard, 'legacy_rebase_points', 0))) }} points from old balances.
+                    </div>
+                @endif
+            </section>
+
             <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 @foreach([
-                    ['label' => 'Issued', 'value' => '$' . number_format((float) data_get($dashboard, 'total_issued_amount', 0), 2), 'detail' => 'Total Candle Cash awarded across the program.'],
-                    ['label' => 'Pending events', 'value' => number_format((int) data_get($dashboard, 'pending_events', 0)), 'detail' => 'Events waiting on a final verification step or fallback handling.'],
+                    ['label' => 'Outstanding liability', 'value' => '$' . number_format((float) data_get($dashboard, 'current_outstanding_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'current_outstanding_points', 0)) . ' live points still sitting in customer balances.'],
+                    ['label' => 'Balance holders', 'value' => number_format((int) data_get($dashboard, 'active_balance_holders', 0)), 'detail' => 'Customers who still hold a positive Candle Cash balance right now.'],
+                    ['label' => 'Lifetime issued', 'value' => '$' . number_format((float) data_get($dashboard, 'total_issued_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'total_issued_points', 0)) . ' total points ever granted across the program.'],
+                    ['label' => 'Lifetime redeemed', 'value' => '$' . number_format((float) data_get($dashboard, 'lifetime_redeemed_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'lifetime_redeemed_points', 0)) . ' points customers have actually spent.'],
+                    ['label' => 'Legacy rebase reduction', 'value' => '$' . number_format((float) data_get($dashboard, 'legacy_rebase_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'legacy_rebase_points', 0)) . ' points removed from old balances during the liability reset.'],
+                    ['label' => 'Pending events', 'value' => number_format((int) data_get($dashboard, 'pending_events', 0)), 'detail' => 'Events still waiting on a final verification step or fallback handling.'],
+                ] as $card)
+                    <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
+                        <div class="mt-3 text-4xl font-semibold text-white">{{ $card['value'] }}</div>
+                        <p class="mt-2 text-sm text-white/65">{{ $card['detail'] }}</p>
+                    </article>
+                @endforeach
+            </section>
+
+            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                @foreach([
                     ['label' => 'Referrals', 'value' => number_format((int) data_get($dashboard, 'total_referrals', 0)), 'detail' => 'Captured friend referrals in the system.'],
-                    ['label' => 'Active tasks', 'value' => number_format((int) data_get($dashboard, 'active_tasks', 0)), 'detail' => 'Tasks currently visible to customers.'],
                     ['label' => 'Referral conversions', 'value' => number_format((int) data_get($dashboard, 'referral_conversions', 0)), 'detail' => 'Verified referral rewards triggered by qualifying orders.'],
+                    ['label' => 'Active tasks', 'value' => number_format((int) data_get($dashboard, 'active_tasks', 0)), 'detail' => 'Tasks currently visible to customers.'],
+                    ['label' => 'Review rewards', 'value' => number_format((int) data_get($dashboard, 'reviews_generated', 0)), 'detail' => 'Google + product review tasks that have already awarded Candle Cash.'],
                     ['label' => 'Avg cost', 'value' => '$' . number_format((float) data_get($dashboard, 'avg_reward_cost', 0), 2), 'detail' => 'Average reward cost per awarded task.'],
                 ] as $card)
                     <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
@@ -530,6 +569,211 @@
                     </table>
                 </div>
                 <div class="mt-4">{{ $referrals->links() }}</div>
+            </section>
+        @elseif($sectionKey === 'gifts-report')
+            @php
+                $giftReport = $giftReport ?? ['totals' => [], 'breakdowns' => [], 'transactions' => [], 'conversion' => [], 'range' => ['from' => null, 'to' => null]];
+                $reportFilters = $reportFilters ?? ['from' => '', 'to' => ''];
+            @endphp
+            <section class="space-y-6 rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gifts</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">Gift Attribution & Post-Gift Revenue</h2>
+                        <p class="mt-2 text-sm text-white/65">Track why Candle Cash gifts were sent, how notifications performed, and whether those recipients later converted.</p>
+                    </div>
+                    <form method="GET" action="{{ route('marketing.candle-cash.gifts-report') }}" class="flex flex-wrap items-center gap-2">
+                        <input type="date" name="from" value="{{ $reportFilters['from'] ?? '' }}" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white" />
+                        <input type="date" name="to" value="{{ $reportFilters['to'] ?? '' }}" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white" />
+                        <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80">Refresh</button>
+                    </form>
+                </div>
+                <div class="grid gap-4 md:grid-cols-4">
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift transactions</div>
+                        <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) data_get($giftReport, 'totals.gift_transactions', 0)) }}</div>
+                        <p class="mt-2 text-xs text-white/60">Total gifts in the selected range.</p>
+                    </article>
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift points</div>
+                        <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) data_get($giftReport, 'totals.gift_points', 0)) }}</div>
+                        <p class="mt-2 text-xs text-white/60">Points granted via gift send activity.</p>
+                    </article>
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift amount</div>
+                        <div class="mt-2 text-3xl font-semibold text-white">${{ number_format((float) data_get($giftReport, 'totals.gift_amount', 0), 2) }}</div>
+                        <p class="mt-2 text-xs text-white/60">Approximate Candle Cash liability from gifts.</p>
+                    </article>
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gifted customers with orders</div>
+                        <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) data_get($giftReport, 'conversion.gifted_customers_with_orders', 0)) }}</div>
+                        <p class="mt-2 text-xs text-white/60">Customers who placed an order after receiving a gift.</p>
+                    </article>
+                </div>
+                <div class="grid gap-4 lg:grid-cols-3">
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Breakdown by intent</div>
+                        <div class="-mx-2 mt-3 overflow-hidden rounded-[1.3rem] border border-white/5">
+                            <table class="min-w-full text-left text-xs uppercase tracking-[0.18em] text-white/45">
+                                <thead class="bg-white/5">
+                                    <tr>
+                                        <th class="px-3 py-2">Intent</th>
+                                        <th class="px-3 py-2">Gifts</th>
+                                        <th class="px-3 py-2">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-white/70">
+                                    @forelse(data_get($giftReport, 'breakdowns.intent', []) as $intent)
+                                        <tr class="border-t border-white/5">
+                                            <td class="px-3 py-2 font-medium text-white">{{ $intent['label'] ?? 'Unspecified' }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($intent['count'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($intent['points'] ?? 0)) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="px-3 py-3 text-xs text-white/55">No intent data yet.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Breakdown by origin</div>
+                        <div class="-mx-2 mt-3 overflow-hidden rounded-[1.3rem] border border-white/5">
+                            <table class="min-w-full text-left text-xs uppercase tracking-[0.18em] text-white/45">
+                                <thead class="bg-white/5">
+                                    <tr>
+                                        <th class="px-3 py-2">Origin</th>
+                                        <th class="px-3 py-2">Gifts</th>
+                                        <th class="px-3 py-2">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-white/70">
+                                    @forelse(data_get($giftReport, 'breakdowns.origin', []) as $origin)
+                                        <tr class="border-t border-white/5">
+                                            <td class="px-3 py-2 font-medium text-white">{{ $origin['label'] ?? 'Unspecified' }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($origin['count'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($origin['points'] ?? 0)) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="px-3 py-3 text-xs text-white/55">No origin data yet.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Breakdown by notification</div>
+                        <div class="-mx-2 mt-3 overflow-hidden rounded-[1.3rem] border border-white/5">
+                            <table class="min-w-full text-left text-xs uppercase tracking-[0.18em] text-white/45">
+                                <thead class="bg-white/5">
+                                    <tr>
+                                        <th class="px-3 py-2">Status</th>
+                                        <th class="px-3 py-2">Gifts</th>
+                                        <th class="px-3 py-2">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-white/70">
+                                    @forelse(data_get($giftReport, 'breakdowns.notification', []) as $notification)
+                                        <tr class="border-t border-white/5">
+                                            <td class="px-3 py-2 font-medium text-white">{{ $notification['label'] ?? 'Unspecified' }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($notification['count'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($notification['points'] ?? 0)) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="px-3 py-3 text-xs text-white/55">No notification data yet.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                </div>
+                <div class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr),minmax(0,0.9fr)]">
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Actor breakdown</div>
+                        </div>
+                        <div class="mt-3 overflow-x-auto rounded-[1.3rem] border border-white/5">
+                            <table class="min-w-full text-left text-sm text-white/70">
+                                <thead class="bg-white/5 text-xs uppercase tracking-[0.18em] text-white/45">
+                                    <tr>
+                                        <th class="px-3 py-2">Actor</th>
+                                        <th class="px-3 py-2">Gifts</th>
+                                        <th class="px-3 py-2">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse(data_get($giftReport, 'breakdowns.actor', []) as $actor)
+                                        <tr class="border-t border-white/5 text-white/70">
+                                            <td class="px-3 py-2 font-medium text-white">{{ $actor['label'] ?? 'Admin' }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($actor['count'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">{{ number_format((int) ($actor['points'] ?? 0)) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="3" class="px-3 py-3 text-xs text-white/55">No actor data yet.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                    <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Conversions</div>
+                        <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) data_get($giftReport, 'conversion.converted_orders', 0)) }}</div>
+                        <p class="text-xs text-white/60">Orders found after gifts.</p>
+                        <div class="mt-4 text-sm text-white/70">
+                            <div>Gifted customers with orders: {{ number_format((int) data_get($giftReport, 'conversion.gifted_customers_with_orders', 0)) }}</div>
+                            <div class="mt-2">Revenue after gifts: ${{ number_format((float) data_get($giftReport, 'conversion.revenue_after_gifts', 0), 2) }}</div>
+                        </div>
+                    </article>
+                </div>
+                <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <div>
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift transactions</div>
+                            <div class="text-xs text-white/60">{{ data_get($giftReport, 'range.from') ?? 'Beginning' }} – {{ data_get($giftReport, 'range.to') ?? 'Now' }}</div>
+                        </div>
+                        <span class="text-xs text-white/50">Showing {{ number_format(count(data_get($giftReport, 'transactions', []))) }} rows</span>
+                    </div>
+                    <div class="mt-3 overflow-x-auto rounded-[1.3rem] border border-white/5">
+                        <table class="min-w-full text-left text-sm text-white/70">
+                            <thead class="bg-white/5 text-xs uppercase tracking-[0.18em] text-white/45">
+                                <tr>
+                                    <th class="px-3 py-2">Date</th>
+                                    <th class="px-3 py-2">Points</th>
+                                    <th class="px-3 py-2">Intent</th>
+                                    <th class="px-3 py-2">Origin</th>
+                                    <th class="px-3 py-2">Notification</th>
+                                    <th class="px-3 py-2">Campaign</th>
+                                    <th class="px-3 py-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse(data_get($giftReport, 'transactions', []) as $transaction)
+                                    <tr class="border-t border-white/5">
+                                        <td class="px-3 py-2 text-xs text-white/60">{{ $transaction['created_at'] ?? '—' }}</td>
+                                        <td class="px-3 py-2 font-semibold text-white">{{ number_format((int) ($transaction['points'] ?? 0)) }}</td>
+                                        <td class="px-3 py-2">{{ Str::headline(str_replace('_', ' ', (string) ($transaction['gift_intent'] ?? '')) ?: '—') }}</td>
+                                        <td class="px-3 py-2">{{ Str::headline(str_replace('_', ' ', (string) ($transaction['gift_origin'] ?? '')) ?: '—') }}</td>
+                                        <td class="px-3 py-2">{{ Str::headline(str_replace('_', ' ', (string) ($transaction['notification_status'] ?? '')) ?: '—') }}</td>
+                                        <td class="px-3 py-2">{{ $transaction['campaign_key'] ?? '—' }}</td>
+                                        <td class="px-3 py-2">{{ $transaction['description'] ?: '—' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="7" class="px-3 py-6 text-center text-xs text-white/55">No gift transactions to display.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
             </section>
         @elseif($sectionKey === 'settings')
             @php

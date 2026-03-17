@@ -10,11 +10,13 @@ use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
 use App\Models\MarketingReviewHistory;
 use App\Models\CandleCashTransaction;
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use App\Models\Order;
 use App\Services\Marketing\CandleCashReferralService;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashGiftReportService;
 use App\Services\Marketing\CandleCashTaskEligibilityService;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
@@ -25,6 +27,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Carbon\CarbonImmutable;
 
 class CandleCashPagesController extends Controller
 {
@@ -37,9 +40,31 @@ class CandleCashPagesController extends Controller
             ->selectRaw("sum(case when duplicate_hits > 0 then duplicate_hits else 0 end) as duplicate_hits")
             ->first();
 
-        $positivePoints = (int) (CandleCashTransaction::query()
+        $positivePoints = (int) CandleCashTransaction::query()
             ->where('points', '>', 0)
+            ->sum('points');
+
+        $currentOutstandingPoints = (int) CandleCashBalance::query()
+            ->where('balance', '>', 0)
+            ->sum('balance');
+
+        $activeBalanceHolders = (int) CandleCashBalance::query()
+            ->where('balance', '>', 0)
+            ->count();
+
+        $redeemedPoints = abs((int) CandleCashTransaction::query()
+            ->where('type', 'redeem')
             ->sum('points'));
+
+        $legacyRebasePoints = abs((int) CandleCashTransaction::query()
+            ->where('source', 'legacy_rebase')
+            ->sum('points'));
+
+        $latestRebaseRun = MarketingImportRun::query()
+            ->where('type', 'candle_cash_balance_rebase')
+            ->where('status', 'completed')
+            ->latest('finished_at')
+            ->first();
 
         $topTasks = CandleCashTask::query()
             ->leftJoin('candle_cash_task_completions as completions', 'completions.candle_cash_task_id', '=', 'candle_cash_tasks.id')
@@ -110,8 +135,17 @@ class CandleCashPagesController extends Controller
             'section' => CandleCashSectionRegistry::section('dashboard'),
             'sections' => $this->navigationItems(),
             'dashboard' => [
+                'points_per_dollar' => $candleCashService->pointsPerDollar(),
+                'current_outstanding_points' => $currentOutstandingPoints,
+                'current_outstanding_amount' => $candleCashService->amountFromPoints($currentOutstandingPoints),
+                'active_balance_holders' => $activeBalanceHolders,
                 'total_issued_points' => $positivePoints,
                 'total_issued_amount' => $candleCashService->amountFromPoints($positivePoints),
+                'lifetime_redeemed_points' => $redeemedPoints,
+                'lifetime_redeemed_amount' => $candleCashService->amountFromPoints($redeemedPoints),
+                'legacy_rebase_points' => $legacyRebasePoints,
+                'legacy_rebase_amount' => $candleCashService->amountFromPoints($legacyRebasePoints),
+                'latest_rebase_run' => $latestRebaseRun,
                 'pending_events' => (int) ($taskSummary?->pending_events ?? 0),
                 'total_referrals' => (int) CandleCashReferral::query()->count(),
                 'referral_conversions' => $referralConversions,
@@ -470,6 +504,24 @@ class CandleCashPagesController extends Controller
         ]);
     }
 
+    public function giftsReport(Request $request, CandleCashGiftReportService $giftReportService): View
+    {
+        $from = $this->parseGiftReportDate($request->query('from'));
+        $to = $this->parseGiftReportDate($request->query('to'));
+        $report = $giftReportService->generate($from, $to);
+
+        return view('marketing.candle-cash.show', [
+            'sectionKey' => 'gifts-report',
+            'section' => CandleCashSectionRegistry::section('gifts-report'),
+            'sections' => $this->navigationItems(),
+            'giftReport' => $report,
+            'reportFilters' => [
+                'from' => $request->query('from'),
+                'to' => $request->query('to'),
+            ],
+        ]);
+    }
+
     public function reprocessReferral(CandleCashReferral $referral, CandleCashReferralService $referralService): RedirectResponse
     {
         $orderId = (int) $referral->qualifying_order_id;
@@ -635,6 +687,20 @@ class CandleCashPagesController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function parseGiftReportDate(?string $value): ?CarbonImmutable
+    {
+        $normalized = trim((string) ($value ?? ''));
+        if ($normalized === '') {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($normalized);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

@@ -70,7 +70,7 @@ class GoogleBusinessProfileConnectionService
     public function buildConnectUrl(User $user): string
     {
         $state = Str::random(48);
-        Cache::store('file')->put($this->stateCacheKey($state), [
+        $this->oauthStateCache()->put($this->stateCacheKey($state), [
             'user_id' => (int) $user->id,
             'created_at' => now()->toIso8601String(),
         ], now()->addMinutes(15));
@@ -83,7 +83,7 @@ class GoogleBusinessProfileConnectionService
      */
     public function connectFromCallback(string $code, string $state): array
     {
-        $cached = Cache::store('file')->pull($this->stateCacheKey($state));
+        $cached = $this->oauthStateCache()->pull($this->stateCacheKey($state));
         if (! is_array($cached) || (int) ($cached['user_id'] ?? 0) <= 0) {
             throw new GoogleBusinessProfileException('invalid_oauth_state', 'Google Business connection state expired. Start the connection again.');
         }
@@ -352,6 +352,13 @@ class GoogleBusinessProfileConnectionService
     protected function stateCacheKey(string $state): string
     {
         return 'google_gbp_oauth_state_' . $state;
+    }
+
+    protected function oauthStateCache(): \Illuminate\Contracts\Cache\Repository
+    {
+        $store = trim((string) data_get(config('services.google_gbp', []), 'oauth_state_cache_store', config('cache.default', 'file')));
+
+        return Cache::store($store !== '' ? $store : config('cache.default', 'file'));
     }
 
     /**

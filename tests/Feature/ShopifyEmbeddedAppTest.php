@@ -111,5 +111,5 @@ test('shopify embedded session lets root-style rewards and customers routes reso
 
     $this->get('/customers')
         ->assertOk()
-        ->assertSeeText('Customer management');
+        ->assertSeeText('Manage customers');
 });

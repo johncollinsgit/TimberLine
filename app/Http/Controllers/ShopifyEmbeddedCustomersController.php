@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
@@ -18,6 +19,24 @@ use Illuminate\Http\Response;
 class ShopifyEmbeddedCustomersController extends Controller
 {
     use HandlesShopifyEmbeddedNavigation;
+
+    private const GIFT_INTENT_OPTIONS = [
+        'retention' => 'Retention',
+        'apology' => 'Apology',
+        'vip' => 'VIP',
+        'winback' => 'Win back',
+        'delight' => 'Delight',
+        'review_recovery' => 'Review recovery',
+        'support' => 'Support',
+    ];
+
+    private const GIFT_ORIGIN_OPTIONS = [
+        'support' => 'Support',
+        'marketing' => 'Marketing',
+        'wholesale' => 'Wholesale',
+        'founder' => 'Founder',
+        'ops' => 'Ops',
+    ];
 
     public function show(
         Request $request,
@@ -104,19 +123,21 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'marketingProfile' => $marketingProfile,
                 'customerDisplayName' => $displayName,
                 'detail' => $detail,
-                'pageActions' => [
-                    [
-                        'label' => 'Back to Customers',
-                        'href' => route('shopify.embedded.customers.manage', [], false),
-                    ],
-                    [
-                        'label' => 'Open in Backstage',
-                        'href' => route('marketing.customers.show', $marketingProfile),
-                    ],
+            'pageActions' => [
+                [
+                    'label' => 'Back to Customers',
+                    'href' => route('shopify.embedded.customers.manage', [], false),
                 ],
-            ]
-        );
-    }
+                [
+                    'label' => 'Open in Backstage',
+                    'href' => route('marketing.customers.show', $marketingProfile),
+                ],
+            ],
+            'giftIntentOptions' => self::giftIntentOptions(),
+            'giftOriginOptions' => self::giftOriginOptions(),
+        ]
+    );
+}
 
     public function update(
         Request $request,
@@ -314,28 +335,56 @@ class ShopifyEmbeddedCustomersController extends Controller
                 ]);
         }
 
+        $intentValues = implode(',', array_keys(self::giftIntentOptions()));
+        $originValues = implode(',', array_keys(self::giftOriginOptions()));
+
         $data = $request->validate([
             'amount' => ['required', 'integer', 'min:1', 'max:100000'],
             'reason' => ['required', 'string', 'max:500'],
             'message' => ['nullable', 'string', 'max:1000'],
+            'gift_intent' => ['nullable', 'string', 'in:' . $intentValues],
+            'gift_origin' => ['nullable', 'string', 'in:' . $originValues],
+            'campaign_key' => ['nullable', 'string', 'max:100'],
         ]);
 
         $amount = (int) $data['amount'];
         $reason = trim((string) $data['reason']);
         $message = trim((string) ($data['message'] ?? ''));
+        $giftIntent = self::normalizeNullableString($data['gift_intent'] ?? null);
+        $giftOrigin = self::normalizeNullableString($data['gift_origin'] ?? null);
+        $campaignKey = self::normalizeNullableString($data['campaign_key'] ?? null);
+
+        $metadata = [
+            'gift_intent' => $giftIntent,
+            'gift_origin' => $giftOrigin,
+            'campaign_key' => $campaignKey,
+            'notified_via' => 'none',
+            'notification_status' => 'skipped',
+        ];
 
         $result = $sendService->send(
             profile: $marketingProfile,
             amount: $amount,
             reason: $reason,
-            actorId: (string) (auth()->id() ?? 'embedded')
+            actorId: (string) (auth()->id() ?? 'embedded'),
+            metadata: $metadata
         );
 
         $noticeMessage = 'Candle Cash sent. New balance: ' . number_format((int) ($result['balance'] ?? 0));
         $noticeStyle = 'success';
+        $transactionId = $result['transaction_id'] ?? null;
 
         if ($message !== '') {
             $smsResult = $messagingService->sendSms($marketingProfile, $message, auth()->id());
+            $metadataUpdate = [
+                'notified_via' => 'sms',
+                'notification_status' => $smsResult['ok'] ? 'sent' : 'failed',
+            ];
+            if ($transactionId !== null) {
+                CandleCashTransaction::query()
+                    ->whereKey($transactionId)
+                    ->update($metadataUpdate);
+            }
             if (! $smsResult['ok']) {
                 $noticeStyle = 'warning';
                 $noticeMessage .= ' (Message not sent: ' . $smsResult['message'] . ')';
@@ -430,5 +479,22 @@ class ShopifyEmbeddedCustomersController extends Controller
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
             default => $defaultSubheadline,
         };
+    }
+
+    private static function giftIntentOptions(): array
+    {
+        return self::GIFT_INTENT_OPTIONS;
+    }
+
+    private static function giftOriginOptions(): array
+    {
+        return self::GIFT_ORIGIN_OPTIONS;
+    }
+
+    private static function normalizeNullableString(?string $value): ?string
+    {
+        $normalized = trim((string) ($value ?? ''));
+
+        return $normalized === '' ? null : $normalized;
     }
 }

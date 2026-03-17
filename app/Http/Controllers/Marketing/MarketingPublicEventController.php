@@ -236,14 +236,28 @@ class MarketingPublicEventController extends Controller
             'eventSlug' => $eventContext['slug'] ?? $eventSlug,
             'profile' => $profile,
             'lookupState' => $lookupState,
-            'balance' => $profile ? $candleCashService->currentBalance($profile) : null,
-            'availableRewards' => CandleCashReward::query()
-                ->where('is_active', true)
-                ->orderBy('points_cost')
-                ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value']),
+            'balance' => $profile ? $candleCashService->balancePayloadFromPoints($candleCashService->currentBalance($profile)) : null,
+            'availableRewards' => array_values(array_filter([
+                $candleCashService->storefrontRewardPayload(
+                    $candleCashService->storefrontReward(),
+                    $profile ? $candleCashService->currentBalance($profile) : null
+                ),
+            ])),
             'redemptions' => $profile
                 ? $profile->candleCashRedemptions()->with('reward:id,name,reward_type,reward_value')->orderByDesc('id')->limit(10)->get()
-                : collect(),
+                    ->map(fn ($row): array => [
+                        'id' => (int) $row->id,
+                        'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward)
+                            ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
+                            : (string) ($row->reward?->name ?: 'Candle Cash'),
+                        'status' => (string) ($row->status ?: 'issued'),
+                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points_spent),
+                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->points_spent)),
+                        'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
+                        'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
+                    ])->all()
+                : [],
+            'redemptionRules' => $candleCashService->redemptionRulesPayload(),
         ]);
     }
 
@@ -284,6 +298,7 @@ class MarketingPublicEventController extends Controller
             'reviewRewardStatus' => $reviewRewardStatus,
             'lastGrowaveSyncAt' => $lastGrowaveSyncAt,
             'redeemResult' => session('redeem_result'),
+            'redemptionRules' => $candleCashService->redemptionRulesPayload(),
         ]);
     }
 
@@ -326,8 +341,19 @@ class MarketingPublicEventController extends Controller
                 ]);
         }
 
-        /** @var CandleCashReward $reward */
-        $reward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
+        /** @var CandleCashReward $requestedReward */
+        $requestedReward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
+        $reward = $candleCashService->storefrontReward();
+        if (! $reward || (int) $requestedReward->id !== (int) $reward->id) {
+            return redirect()
+                ->route('marketing.public.rewards-lookup', $query)
+                ->with('redeem_result', [
+                    'ok' => false,
+                    'state' => 'reward_unavailable',
+                    'message' => 'That Candle Cash redemption is not available right now.',
+                ]);
+        }
+
         $result = $candleCashService->requestStorefrontRedemption(
             profile: $profile,
             reward: $reward,
@@ -363,18 +389,19 @@ class MarketingPublicEventController extends Controller
                 'ok' => $ok,
                 'state' => $state,
                 'message' => $message,
-                'balance' => (int) ($result['balance'] ?? 0),
-                'reward_name' => (string) $reward->name,
+                'balance' => $candleCashService->balancePayloadFromPoints((int) ($result['balance'] ?? 0)),
+                'reward_name' => 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash',
                 'redemption_code' => $ok ? (string) ($result['code'] ?? '') : null,
                 'redemption_id' => $ok ? (int) ($result['redemption_id'] ?? 0) : null,
             ]);
     }
 
-    public function showConsentConfirm(Request $request): View
+    public function showConsentConfirm(Request $request, CandleCashService $candleCashService): View
     {
         $eventSlug = trim((string) $request->query('event', ''));
         $profileId = (int) $request->query('profile', 0);
         $eventContext = $eventSlug !== '' ? $this->eventContextResolver->resolve($eventSlug) : null;
+        $bonusPoints = max(0, (int) $request->query('bonus', 0));
 
         $this->eventLogger->log('public_consent_confirm_view', [
             'status' => 'ok',
@@ -391,7 +418,9 @@ class MarketingPublicEventController extends Controller
             'eventContext' => $eventContext,
             'eventSlug' => $eventContext['slug'] ?? $eventSlug,
             'profile' => $profileId > 0 ? MarketingProfile::query()->find($profileId) : null,
-            'bonus' => max(0, (int) $request->query('bonus', 0)),
+            'bonus' => $bonusPoints,
+            'bonusAmount' => $candleCashService->amountFromPoints($bonusPoints),
+            'bonusFormatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($bonusPoints)),
         ]);
     }
 
@@ -438,9 +467,9 @@ class MarketingPublicEventController extends Controller
 
     /**
      * @return array{
-     *   0:?int,
-     *   1:Collection<int,CandleCashReward>,
-     *   2:Collection<int,\App\Models\CandleCashRedemption>,
+     *   0:?array<string,mixed>,
+     *   1:array<int,array<string,mixed>>,
+     *   2:array<int,array<string,mixed>>,
      *   3:Collection<int,array<string,mixed>>,
      *   4:?CustomerExternalProfile,
      *   5:?MarketingReviewSummary,
@@ -450,10 +479,9 @@ class MarketingPublicEventController extends Controller
      */
     protected function rewardsLookupData(?MarketingProfile $profile, CandleCashService $candleCashService): array
     {
-        $availableRewards = CandleCashReward::query()
-            ->where('is_active', true)
-            ->orderBy('points_cost')
-            ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value']);
+        $availableRewards = array_values(array_filter([
+            $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward()),
+        ]));
 
         if (! $profile) {
             return [
@@ -468,23 +496,42 @@ class MarketingPublicEventController extends Controller
             ];
         }
 
-        $balance = $candleCashService->currentBalance($profile);
+        $balancePoints = $candleCashService->currentBalance($profile);
+        $balance = $candleCashService->balancePayloadFromPoints($balancePoints);
+        $availableRewards = array_values(array_filter([
+            $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward(), $balancePoints),
+        ]));
         $redemptions = $profile->candleCashRedemptions()
             ->with('reward:id,name,reward_type,reward_value')
             ->orderByDesc('id')
             ->limit(20)
-            ->get();
+            ->get()
+            ->map(fn ($row): array => [
+                'id' => (int) $row->id,
+                'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward)
+                    ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
+                    : (string) ($row->reward?->name ?: 'Candle Cash'),
+                'status' => (string) ($row->status ?: 'issued'),
+                'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
+                'issued_at' => optional($row->issued_at)->toDateTimeString(),
+                'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points_spent),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->points_spent)),
+            ])->all();
 
         $transactionRows = $profile->candleCashTransactions()
             ->orderByDesc('id')
             ->limit(40)
             ->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at']);
 
-        $transactions = $transactionRows->map(function (CandleCashTransaction $transaction): array {
+        $transactions = $transactionRows->map(function (CandleCashTransaction $transaction) use ($candleCashService): array {
             return [
                 'id' => (int) $transaction->id,
                 'category' => $this->transactionCategoryLabel($transaction),
-                'points' => (int) $transaction->points,
+                'raw_points' => (int) $transaction->points,
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $transaction->points),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $transaction->points))),
+                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $transaction->points, true),
                 'description' => trim((string) ($transaction->description ?? '')) ?: null,
                 'source' => (string) $transaction->source,
                 'occurred_at' => optional($transaction->created_at)->toDateTimeString(),
@@ -568,9 +615,9 @@ class MarketingPublicEventController extends Controller
     protected function redemptionMessageForState(string $state): string
     {
         return match ($state) {
-            'code_issued' => 'Reward redeemed successfully. Your code is ready to use.',
-            'already_has_active_code' => 'You already have an active code for this reward.',
-            'insufficient_points' => 'Not enough points for this reward yet.',
+            'code_issued' => 'Candle Cash redeemed successfully. Your $10 reward code is ready to use.',
+            'already_has_active_code' => 'You already have a $10 Candle Cash reward waiting for you.',
+            'insufficient_points' => 'You need a little more Candle Cash before the $10 redemption is ready.',
             'reward_unavailable' => 'This reward is currently unavailable.',
             'redemption_blocked' => 'Redemption is temporarily blocked. Please try again later.',
             default => 'Could not process redemption right now. Please try again shortly.',

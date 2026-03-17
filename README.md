@@ -49,3 +49,8 @@ Deploy proof: Mon Feb 23 14:04:21 EST 2026
 - Enable provider flags:
   - `MARKETING_SMS_ENABLED=true`
   - `MARKETING_TWILIO_ENABLED=true`
+
+## Candle Cash Gift Reporting
+- Gift transactions now persist `gift_intent`, `gift_origin`, `notified_via`, `notification_status`, and `campaign_key` in `candle_cash_transactions`.
+- Backstage surfaces a `Gift insights` tab under Candle Cash (`/marketing/candle-cash/gifts-report`) that summarizes total gifts, intent/origin/notification breakdowns, actor attribution, recent gift rows, and a simple post-gift conversion proxy.
+- Use the date filters on that page to focus on a specific window and understand whether gifted customers later placed orders.

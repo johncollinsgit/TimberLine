@@ -97,6 +97,17 @@ return [
     'candle_cash' => [
         'code_expiry_days' => (int) env('MARKETING_CANDLE_CASH_CODE_EXPIRY_DAYS', 30),
         'storefront_base_url' => env('MARKETING_CANDLE_CASH_STOREFRONT_BASE_URL', 'https://theforestrystudio.com'),
+        'points_per_dollar' => (int) env('MARKETING_CANDLE_CASH_POINTS_PER_DOLLAR', 30),
+        'redeem_increment_dollars' => (float) env('MARKETING_CANDLE_CASH_REDEEM_INCREMENT_DOLLARS', 10),
+        'max_redeemable_per_order_dollars' => (float) env('MARKETING_CANDLE_CASH_MAX_REDEEMABLE_PER_ORDER_DOLLARS', 10),
+        'max_open_codes' => (int) env('MARKETING_CANDLE_CASH_MAX_OPEN_CODES', 1),
+        'storefront_reward_type' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_TYPE', 'coupon'),
+        'storefront_reward_value' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_VALUE', '10USD'),
+        'password_protection' => [
+            'enabled' => (bool) env('MARKETING_CANDLE_CASH_PASSWORD_ENABLED', true),
+            'password' => env('MARKETING_CANDLE_CASH_PASSWORD', 'johnnycash'),
+            'unlock_ttl_minutes' => (int) env('MARKETING_CANDLE_CASH_PASSWORD_TTL_MINUTES', 480),
+        ],
     ],
 
     'birthday_rewards' => [

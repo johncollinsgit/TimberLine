@@ -52,6 +52,7 @@ return [
         'redirect_uri' => env('GOOGLE_GBP_REDIRECT_URI'),
         'enabled' => env('GOOGLE_GBP_ENABLED', false),
         'scopes' => env('GOOGLE_GBP_SCOPES', 'https://www.googleapis.com/auth/business.manage'),
+        'oauth_state_cache_store' => env('GOOGLE_GBP_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
     ],
 
     'square' => [
@@ -93,7 +94,7 @@ return [
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
-            'read_orders,read_products,read_customers'
+            'read_orders,read_products,read_customers,write_customers,read_discounts,write_discounts'
         ),
 
         'stores' => [

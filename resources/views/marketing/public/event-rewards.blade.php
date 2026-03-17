@@ -10,7 +10,7 @@
 <main class="mx-auto max-w-3xl px-4 py-8 space-y-5">
     <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
         <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine Event Rewards</div>
-        <h1 class="mt-2 text-2xl font-semibold text-white">Event Rewards Lookup</h1>
+        <h1 class="mt-2 text-2xl font-semibold text-white">Event Candle Cash Lookup</h1>
         <p class="mt-2 text-sm text-zinc-300">
             @if($eventContext)
                 {{ $eventContext['title'] }}{{ $eventContext['date'] ? ' · ' . $eventContext['date'] : '' }}
@@ -19,7 +19,7 @@
             @endif
         </p>
         <p class="mt-2 text-sm text-zinc-300">
-            Lightweight public utility for event customers to check Candle Cash balance and recent reward redemptions.
+            Lightweight public utility for event customers to check Candle Cash balance and the current $10 redemption status.
         </p>
     </section>
 
@@ -52,15 +52,16 @@
         <section class="grid gap-4 lg:grid-cols-2">
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
                 <h2 class="text-sm font-semibold text-white">Current Balance</h2>
-                <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) $balance) }} pts</div>
+                <div class="mt-2 text-3xl font-semibold text-white">{{ data_get($balance, 'candle_cash_amount_formatted', '$0.00') }}</div>
+                <div class="mt-2 text-xs text-zinc-400">Redeem $10 Candle Cash at a time. Limit $10 Candle Cash per order.</div>
                 <div class="mt-2 text-xs text-zinc-400">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <h2 class="text-sm font-semibold text-white">Available Rewards</h2>
+                <h2 class="text-sm font-semibold text-white">Redeem Candle Cash</h2>
                 <div class="mt-2 space-y-2">
                     @forelse($availableRewards as $reward)
                         <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
-                            {{ $reward->name }} · {{ (int) $reward->points_cost }} pts
+                            {{ data_get($reward, 'name', 'Redeem $10 Candle Cash') }} · {{ data_get($reward, 'candle_cash_amount_formatted', '$10.00') }} off this order
                         </div>
                     @empty
                         <div class="text-sm text-zinc-400">No active rewards right now.</div>
@@ -74,10 +75,10 @@
             <div class="mt-2 space-y-2 text-sm text-white/80">
                 @forelse($redemptions as $redemption)
                     <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                        {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
-                        · {{ (int) $redemption->points_spent }} pts
-                        · {{ strtoupper((string) ($redemption->status ?: 'issued')) }}
-                        · {{ optional($redemption->redeemed_at)->format('Y-m-d H:i') ?: '—' }}
+                        {{ data_get($redemption, 'name', 'Redeem $10 Candle Cash') }}
+                        · {{ data_get($redemption, 'candle_cash_amount_formatted', '$0.00') }}
+                        · {{ strtoupper((string) data_get($redemption, 'status', 'issued')) }}
+                        · {{ data_get($redemption, 'redeemed_at', '—') ?: '—' }}
                     </div>
                 @empty
                     <div class="text-sm text-zinc-400">No redemptions found.</div>

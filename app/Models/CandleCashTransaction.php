@@ -14,6 +14,11 @@ class CandleCashTransaction extends Model
         'source',
         'source_id',
         'description',
+        'gift_intent',
+        'gift_origin',
+        'notified_via',
+        'notification_status',
+        'campaign_key',
     ];
 
     protected $casts = [

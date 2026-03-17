@@ -356,10 +356,30 @@
 
             <form method="POST" action="{{ route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], false) }}" class="customers-detail-form">
                 @csrf
+                @php
+                    $giftIntentOptions = $giftIntentOptions ?? [];
+                    $giftOriginOptions = $giftOriginOptions ?? [];
+                @endphp
                 <label>Amount (Candle Cash)</label>
                 <input type="number" name="amount" min="1" step="1" value="{{ old('amount') }}" placeholder="Amount" />
                 <label>Reason</label>
                 <input type="text" name="reason" value="{{ old('reason') }}" placeholder="Reason for sending" />
+                <label>Gift intent (optional)</label>
+                <select name="gift_intent">
+                    <option value="">Select an intent</option>
+                    @foreach($giftIntentOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(old('gift_intent') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <label>Gift origin (optional)</label>
+                <select name="gift_origin">
+                    <option value="">Select an origin</option>
+                    @foreach($giftOriginOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(old('gift_origin') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <label>Campaign key (optional)</label>
+                <input type="text" name="campaign_key" value="{{ old('campaign_key') }}" placeholder="Campaign key" />
                 <label>Optional message (SMS)</label>
                 <textarea name="message" rows="3" placeholder="Optional message to send after crediting Candle Cash">{{ old('message') }}</textarea>
                 @if(! $smsSupported)
@@ -370,9 +390,14 @@
                     <div class="customers-detail-meta">SMS message will not send because the customer has not consented.</div>
                 @endif
                 <button type="submit" class="customers-detail-button is-primary">Send Candle Cash</button>
-                @if($errors->has('amount') || $errors->has('reason') || $errors->has('message'))
+                @if($errors->has('amount') || $errors->has('reason') || $errors->has('message') || $errors->has('gift_intent') || $errors->has('gift_origin') || $errors->has('campaign_key'))
                     <div class="customers-detail-notice is-warning">
-                        {{ $errors->first('amount') ?: $errors->first('reason') ?: $errors->first('message') }}
+                        {{ $errors->first('amount')
+                            ?: $errors->first('reason')
+                            ?: $errors->first('gift_intent')
+                            ?: $errors->first('gift_origin')
+                            ?: $errors->first('campaign_key')
+                            ?: $errors->first('message') }}
                     </div>
                 @endif
             </form>

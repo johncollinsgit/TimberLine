@@ -16,6 +16,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Schema;
 
 function seedEmbeddedCustomerDetailFixture(): MarketingProfile
 {
@@ -139,6 +140,14 @@ function seedEmbeddedCustomerDetailFixture(): MarketingProfile
 
     return $profile;
 }
+
+test('candle cash transactions include gift metadata columns', function () {
+    expect(Schema::hasColumn('candle_cash_transactions', 'gift_intent'))->toBeTrue()
+        ->and(Schema::hasColumn('candle_cash_transactions', 'gift_origin'))->toBeTrue()
+        ->and(Schema::hasColumn('candle_cash_transactions', 'notified_via'))->toBeTrue()
+        ->and(Schema::hasColumn('candle_cash_transactions', 'notification_status'))->toBeTrue()
+        ->and(Schema::hasColumn('candle_cash_transactions', 'campaign_key'))->toBeTrue();
+});
 
 function startEmbeddedCustomersDetailSession(\Illuminate\Foundation\Testing\TestCase $testCase): void
 {
@@ -590,6 +599,11 @@ test('send candle cash succeeds and records gift transaction', function () {
         ->and((int) $transaction->points)->toBe(15)
         ->and($transaction->description)->toBe('Welcome gift')
         ->and((int) $transaction->source_id)->toBe($user->id);
+    expect($transaction)->and($transaction->gift_intent)->toBeNull()
+        ->and($transaction->gift_origin)->toBeNull()
+        ->and($transaction->campaign_key)->toBeNull()
+        ->and($transaction->notified_via)->toBe('none')
+        ->and($transaction->notification_status)->toBe('skipped');
 
     $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
     $detailResponse->assertOk()
@@ -635,6 +649,52 @@ test('send candle cash alias route resolves with embedded context', function () 
     $response->assertRedirect();
 });
 
+test('send candle cash records gift metadata and sms notification status', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-222-1111',
+        'normalized_phone' => '15552221111',
+        'accepts_sms_marketing' => true,
+    ])->save();
+
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $user = User::factory()->create(['name' => 'Gift Admin']);
+    $token = csrf_token();
+
+    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'amount' => 12,
+            'reason' => 'VIP thank you',
+            'gift_intent' => 'vip',
+            'gift_origin' => 'marketing',
+            'campaign_key' => 'spring-royalty',
+            'message' => 'Enjoy a little extra Candle Cash!',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $transaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    expect($transaction)->not->toBeNull()
+        ->and($transaction->gift_intent)->toBe('vip')
+        ->and($transaction->gift_origin)->toBe('marketing')
+        ->and($transaction->campaign_key)->toBe('spring-royalty')
+        ->and($transaction->notified_via)->toBe('sms')
+        ->and($transaction->notification_status)->toBe('sent');
+});
+
 test('send candle cash continues even when optional message cannot send', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
@@ -671,5 +731,7 @@ test('send candle cash continues even when optional message cannot send', functi
 
     expect($transaction)->not->toBeNull()
         ->and($transaction->type)->toBe('gift')
-        ->and((int) $transaction->points)->toBe(8);
+        ->and((int) $transaction->points)->toBe(8)
+        ->and($transaction->notified_via)->toBe('sms')
+        ->and($transaction->notification_status)->toBe('failed');
 });

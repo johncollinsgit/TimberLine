@@ -374,7 +374,7 @@ test('storefront google review start route records a verified start and returns 
         ->postJson(route('marketing.shopify.v1.google-business.review.start'), $payload)
         ->assertOk()
         ->assertJsonPath('data.state', 'google_review_started')
-        ->assertJsonPath('data.review_url', 'https://search.google.com/local/writereview?placeid=place-123');
+        ->assertJsonPath('data.review_url', 'https://g.page/r/CTucm4R1-wmOEAI/review');
 
     $this->assertDatabaseHas('marketing_storefront_events', [
         'event_type' => 'google_business_review_start',

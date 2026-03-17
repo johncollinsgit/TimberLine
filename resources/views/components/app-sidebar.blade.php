@@ -5,17 +5,18 @@
 ])
 
 <style>
-    .app-shell-sidebar {
+    .app-sidebar-panel {
         position: relative;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 251, 248, 0.92) 100%);
-        box-shadow: 10px 0 34px rgba(15, 23, 42, 0.08);
-        padding: 26px 20px 24px 22px;
+        min-height: 100%;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 250, 246, 0.92) 100%);
+        box-shadow: 8px 0 26px rgba(15, 23, 42, 0.05);
+        padding: 24px 16px 20px;
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: 18px;
     }
 
-    .app-shell-sidebar::after {
+    .app-sidebar-panel::after {
         content: "";
         position: absolute;
         top: 18px;
@@ -35,19 +36,19 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
-        padding: 0 6px 8px;
+        padding: 0 8px 10px;
     }
 
     .app-sidebar-brand strong {
-        font-size: 1.03rem;
-        letter-spacing: 0.18em;
+        font-size: 1rem;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: rgba(15, 23, 42, 0.72);
+        color: rgba(15, 23, 42, 0.68);
     }
 
     .app-sidebar-brand span {
-        font-size: 13px;
-        color: rgba(15, 23, 42, 0.5);
+        font-size: 12px;
+        color: rgba(15, 23, 42, 0.48);
     }
 
     .app-sidebar-list {
@@ -61,17 +62,20 @@
 
     .app-sidebar-link {
         display: block;
-        padding: 10px 14px;
-        border-radius: 12px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        border: 1px solid transparent;
         text-decoration: none;
-        font-weight: 600;
+        font-size: 14px;
+        font-weight: 590;
         color: rgba(15, 23, 42, 0.72);
-        transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     }
 
     .app-sidebar-link:hover {
-        background: rgba(15, 23, 42, 0.05);
+        background: rgba(15, 23, 42, 0.045);
         color: rgba(15, 23, 42, 0.9);
+        border-color: rgba(15, 23, 42, 0.08);
     }
 
     .app-sidebar-link:focus-visible,
@@ -81,17 +85,17 @@
     }
 
     .app-sidebar-link.is-active {
-        background: linear-gradient(135deg, #157d61 0%, #1c9972 100%);
-        color: #ffffff;
+        background: rgba(15, 23, 42, 0.05);
+        border-color: rgba(15, 23, 42, 0.1);
+        color: rgba(15, 23, 42, 0.94);
         box-shadow:
-            inset 0 0 0 1px rgba(255, 255, 255, 0.26),
-            0 10px 20px rgba(15, 143, 97, 0.2);
+            inset 2px 0 0 #0f8f61;
     }
 
     .app-sidebar-children {
         list-style: none;
-        margin: 8px 0 10px 12px;
-        padding: 4px 0 0 12px;
+        margin: 6px 0 8px 10px;
+        padding: 2px 0 0 10px;
         border-left: 1px solid rgba(15, 23, 42, 0.12);
         display: flex;
         flex-direction: column;
@@ -100,33 +104,33 @@
 
     .app-sidebar-child-link {
         display: block;
-        padding: 7px 10px;
-        border-radius: 10px;
-        font-size: 0.92rem;
-        font-weight: 550;
+        padding: 6px 9px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 540;
         text-decoration: none;
-        color: rgba(15, 23, 42, 0.62);
+        color: rgba(15, 23, 42, 0.6);
         transition: background 0.2s ease, color 0.2s ease;
     }
 
     .app-sidebar-child-link:hover {
-        background: rgba(15, 23, 42, 0.04);
+        background: rgba(15, 23, 42, 0.035);
         color: rgba(15, 23, 42, 0.9);
     }
 
     .app-sidebar-child-link.is-active {
-        background: rgba(15, 143, 97, 0.14);
-        color: #0f8f61;
-        font-weight: 600;
+        background: rgba(15, 143, 97, 0.1);
+        color: #0d6f4d;
+        font-weight: 620;
     }
 
     @media (max-width: 900px) {
-        .app-shell-sidebar {
-            box-shadow: 0 8px 25px rgba(15, 23, 42, 0.08);
-            padding: 14px 16px;
+        .app-sidebar-panel {
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+            padding: 13px 14px;
         }
 
-        .app-shell-sidebar::after {
+        .app-sidebar-panel::after {
             top: auto;
             bottom: 0;
             width: calc(100% - 32px);
@@ -144,7 +148,7 @@
     }
 </style>
 
-<nav class="app-sidebar" aria-label="App navigation">
+<nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
     <div class="app-sidebar-brand">
         <strong>Backstage</strong>
         <span>Forestry APP</span>

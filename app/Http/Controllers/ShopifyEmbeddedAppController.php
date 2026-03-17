@@ -32,6 +32,8 @@ class ShopifyEmbeddedAppController extends Controller
                     'subheadline' => 'This page is meant to load inside your Shopify admin so it can verify the store context.',
                     'appNavigation' => $this->embeddedAppNavigation('dashboard'),
                     'pageActions' => [],
+                    'pageSubnav' => [],
+                    'dashboardLinks' => [],
                     'cards' => [],
                     'setupNote' => 'If you still need the dedicated rewards page on the storefront, create a page named Your Rewards with the page.forestry-rewards template and publish it.',
                 ])
@@ -51,6 +53,8 @@ class ShopifyEmbeddedAppController extends Controller
                     'subheadline' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
                     'appNavigation' => $this->embeddedAppNavigation('dashboard'),
                     'pageActions' => [],
+                    'pageSubnav' => [],
+                    'dashboardLinks' => [],
                     'cards' => [],
                     'setupNote' => null,
                 ]),
@@ -122,22 +126,28 @@ class ShopifyEmbeddedAppController extends Controller
                 'headline' => 'Forestry rewards are connected',
                 'subheadline' => 'Backstage manages the reward logic. Your storefront shows it to shoppers. This page is the quick health view for the Shopify side.',
                 'appNavigation' => $this->embeddedAppNavigation('dashboard'),
-                'pageActions' => [
+                'pageActions' => [],
+                'pageSubnav' => [],
+                'dashboardLinks' => [
                     [
-                        'label' => 'Open Rewards Admin',
+                        'label' => 'Rewards Admin',
                         'href' => route('shopify.embedded.rewards', [], false),
                     ],
                     [
-                        'label' => 'Open Birthdays in Backstage',
+                        'label' => 'Customers',
+                        'href' => route('shopify.embedded.customers.manage', [], false),
+                    ],
+                    [
+                        'label' => 'Program Settings',
+                        'href' => route('shopify.embedded.settings', [], false),
+                    ],
+                    [
+                        'label' => 'Birthdays in Backstage',
                         'href' => route('birthdays.customers'),
                     ],
                     [
-                        'label' => 'Open Marketing Overview',
+                        'label' => 'Marketing Overview',
                         'href' => route('marketing.overview'),
-                    ],
-                    [
-                        'label' => 'Open Birthday Rewards',
-                        'href' => route('birthdays.rewards'),
                     ],
                 ],
                 'cards' => $cards,

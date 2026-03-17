@@ -74,7 +74,7 @@ test('public rewards account lookup shows balance, referral, reviews, and transa
         'phone' => $profile->phone,
     ]))
         ->assertOk()
-        ->assertSeeText('Rewards Lookup')
+        ->assertSeeText('Candle Cash Account Lookup')
         ->assertSeeText('Transaction History')
         ->assertSeeText('Review Status')
         ->assertSeeText('https://refrr.app/example/12345');
@@ -90,18 +90,12 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'normalized_phone' => '+15553023333',
     ]);
 
-    app(CandleCashService::class)->addPoints($profile, 90, 'earn', 'admin', 'seed', 'Seed points');
+    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed points');
 
-    $rewardAffordable = CandleCashReward::query()->create([
-        'name' => 'Free Wick Trimmer',
-        'description' => null,
-        'points_cost' => 50,
-        'reward_type' => 'product',
-        'reward_value' => 'wick-trimmer',
-        'is_active' => true,
-    ]);
+    $storefrontReward = app(CandleCashService::class)->storefrontReward();
+    expect($storefrontReward)->not->toBeNull();
 
-    $rewardTooExpensive = CandleCashReward::query()->create([
+    $nonStorefrontReward = CandleCashReward::query()->create([
         'name' => 'Large Gift Set',
         'description' => null,
         'points_cost' => 500,
@@ -113,7 +107,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
     $this->post(route('marketing.public.account-rewards.redeem'), [
         'email' => $profile->email,
         'phone' => $profile->phone,
-        'reward_id' => $rewardAffordable->id,
+        'reward_id' => $storefrontReward->id,
     ])->assertRedirect(route('marketing.public.rewards-lookup', [
         'email' => $profile->email,
         'phone' => $profile->phone,
@@ -121,14 +115,40 @@ test('public rewards account redeem route issues and rejects redemptions with cl
 
     expect(CandleCashRedemption::query()
         ->where('marketing_profile_id', $profile->id)
-        ->where('reward_id', $rewardAffordable->id)
+        ->where('reward_id', $storefrontReward->id)
         ->exists())->toBeTrue()
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(40);
+        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(0);
+
+    $insufficientProfile = MarketingProfile::query()->create([
+        'first_name' => 'Short',
+        'last_name' => 'Balance',
+        'email' => 'rewards.short@example.com',
+        'normalized_email' => 'rewards.short@example.com',
+        'phone' => '5553024444',
+        'normalized_phone' => '+15553024444',
+    ]);
+
+    app(CandleCashService::class)->addPoints($insufficientProfile, 299, 'earn', 'admin', 'seed', 'Seed points');
+
+    $this->post(route('marketing.public.account-rewards.redeem'), [
+        'email' => $insufficientProfile->email,
+        'phone' => $insufficientProfile->phone,
+        'reward_id' => $storefrontReward->id,
+    ])->assertRedirect(route('marketing.public.rewards-lookup', [
+        'email' => $insufficientProfile->email,
+        'phone' => $insufficientProfile->phone,
+    ]));
+
+    expect(CandleCashRedemption::query()
+        ->where('marketing_profile_id', $insufficientProfile->id)
+        ->where('reward_id', $storefrontReward->id)
+        ->exists())->toBeFalse()
+        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $insufficientProfile->id)->value('balance'))->toBe(299);
 
     $this->post(route('marketing.public.account-rewards.redeem'), [
         'email' => $profile->email,
         'phone' => $profile->phone,
-        'reward_id' => $rewardTooExpensive->id,
+        'reward_id' => $nonStorefrontReward->id,
     ])->assertRedirect(route('marketing.public.rewards-lookup', [
         'email' => $profile->email,
         'phone' => $profile->phone,
@@ -136,9 +156,8 @@ test('public rewards account redeem route issues and rejects redemptions with cl
 
     expect(CandleCashRedemption::query()
         ->where('marketing_profile_id', $profile->id)
-        ->where('reward_id', $rewardTooExpensive->id)
-        ->exists())->toBeFalse()
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(40);
+        ->where('reward_id', $nonStorefrontReward->id)
+        ->exists())->toBeFalse();
 });
 
 test('public rewards account prefers data-rich Growave projection when duplicate rows exist', function () {

@@ -20,14 +20,12 @@ class ProductReviewSubmittedMail extends Mailable
     public function build(): self
     {
         $productTitle = $this->review->product_title ?: 'Product';
-        $statusLabel = $this->review->status === 'approved' ? 'Live now' : 'Pending review';
 
-        return $this->subject('New product review: ' . $productTitle)
+        return $this->subject('New review on Modern Forestry: ' . $productTitle)
             ->view('emails.product-review-submitted')
             ->with([
                 'review' => $this->review,
                 'productTitle' => $productTitle,
-                'statusLabel' => $statusLabel,
                 'productUrl' => $this->review->product_url,
                 'adminUrl' => route('marketing.candle-cash.reviews', [
                     'review' => $this->review->id,

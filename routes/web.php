@@ -344,6 +344,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::post('/reviews/{review}/delete', [CandleCashPagesController::class, 'deleteReview'])->name('reviews.delete');
                     Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');
                     Route::post('/customers/{marketingProfile}/adjust', [CandleCashPagesController::class, 'adjustCustomer'])->name('customers.adjust');
+                    Route::get('/gifts-report', [CandleCashPagesController::class, 'giftsReport'])->name('gifts-report');
                     Route::get('/referrals', [CandleCashPagesController::class, 'referrals'])->name('referrals');
                     Route::post('/referrals/{referral}/reprocess', [CandleCashPagesController::class, 'reprocessReferral'])->name('referrals.reprocess');
                     Route::get('/settings', [CandleCashPagesController::class, 'settings'])->name('settings');

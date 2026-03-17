@@ -70,6 +70,12 @@ class CandleCashSectionRegistry
                 'description' => 'Track referrers, referred customers, qualifying orders, and reprocessing needs.',
                 'group' => 'growth',
             ],
+            'gifts-report' => [
+                'label' => 'Gift insights',
+                'route' => 'marketing.candle-cash.gifts-report',
+                'description' => 'Surface Candle Cash send intent, notification status, and post-gift conversions.',
+                'group' => 'growth',
+            ],
             'settings' => [
                 'label' => 'Settings',
                 'route' => 'marketing.candle-cash.settings',

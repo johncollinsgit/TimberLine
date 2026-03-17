@@ -73,7 +73,7 @@
                 </label>
                 <label class="flex items-center gap-2">
                     <input type="checkbox" name="award_bonus" value="1" class="rounded border-white/20 bg-white/10" checked>
-                    Award optional consent bonus points (if enabled)
+                    Award optional Candle Cash signup bonus (if enabled)
                 </label>
             </div>
 

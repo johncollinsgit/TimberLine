@@ -27,7 +27,7 @@
             <h2 class="text-lg font-semibold">Thanks, you're in.</h2>
             <p class="mt-2 text-sm">{{ session('status') }}</p>
             @if($bonus > 0)
-                <p class="mt-2 text-sm">Bonus awarded: {{ $bonus }} Candle Cash points.</p>
+                <p class="mt-2 text-sm">Bonus awarded: {{ $bonusFormatted }} Candle Cash.</p>
             @endif
             @if($profile)
                 <p class="mt-2 text-xs text-emerald-100/80">Profile reference: #{{ $profile->id }}</p>
@@ -60,4 +60,3 @@
 </main>
 </body>
 </html>
-

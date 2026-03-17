@@ -16,6 +16,8 @@ use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
+use App\Services\Marketing\CandleCashAccessGate;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Services\Marketing\GoogleBusinessProfileException;
 use App\Services\Marketing\MarketingConsentCaptureService;
@@ -57,9 +59,11 @@ class MarketingShopifyIntegrationController extends Controller
 
         $profile = $resolved['profile'];
         $balance = $candleCashService->currentBalance($profile);
-        $rewards = $this->activeRewards();
+        $rewards = $this->activeStorefrontRewards($candleCashService);
         $redemptions = $this->recentRedemptions($profile);
         $states = $this->widgetService->rewardWidgetStates($profile, $balance, $rewards, $redemptions);
+        $balancePayload = $this->storefrontBalancePayload($candleCashService, $balance);
+        $storefrontReward = $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward(), $balance);
 
         $this->logStorefrontEvent($request, 'widget_balance_lookup', [
             'status' => 'ok',
@@ -74,7 +78,12 @@ class MarketingShopifyIntegrationController extends Controller
 
         return MarketingStorefrontContract::success([
             'profile_id' => (int) $profile->id,
-            'balance' => $balance,
+            'raw_points' => $balance,
+            'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
+            'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
+            'balance' => $balancePayload,
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
+            'storefront_reward' => $storefrontReward,
             'state' => $states[0] ?? 'linked_customer',
             'consent' => [
                 'sms' => (bool) $profile->accepts_sms_marketing,
@@ -95,10 +104,12 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         $profile = $resolved['profile'] ?? null;
-        $rewards = $this->activeRewards();
+        $rewards = $this->activeStorefrontRewards($candleCashService);
         $redemptions = $profile ? $this->recentRedemptions($profile) : collect();
         $balance = $profile ? $candleCashService->currentBalance($profile) : 0;
         $states = $this->widgetService->rewardWidgetStates($profile, $balance, $rewards, $redemptions);
+        $rewardRows = $this->storefrontRewardRows($candleCashService, $profile ? $balance : null);
+        $balancePayload = $profile ? $this->storefrontBalancePayload($candleCashService, $balance) : null;
 
         $this->logStorefrontEvent($request, 'widget_rewards_lookup', [
             'status' => $profile ? 'ok' : 'pending',
@@ -106,23 +117,21 @@ class MarketingShopifyIntegrationController extends Controller
             'profile' => $profile,
             'source_type' => 'shopify_widget_rewards_available',
             'meta' => [
-                'reward_count' => $rewards->count(),
+                'reward_count' => count($rewardRows),
             ],
             'resolution_status' => $profile ? 'resolved' : 'open',
         ]);
 
         return MarketingStorefrontContract::success([
             'profile_id' => $profile ? (int) $profile->id : null,
-            'balance' => $profile ? $balance : null,
+            'raw_points' => $profile ? $balance : null,
+            'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
+            'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
+            'balance' => $balancePayload,
             'state' => $states[0] ?? ($profile ? 'linked_customer' : 'unknown_customer'),
-            'rewards' => $rewards->map(fn (CandleCashReward $reward): array => [
-                'id' => (int) $reward->id,
-                'name' => (string) $reward->name,
-                'description' => $reward->description ? (string) $reward->description : null,
-                'points_cost' => (int) $reward->points_cost,
-                'reward_type' => (string) $reward->reward_type,
-                'reward_value' => $reward->reward_value ? (string) $reward->reward_value : null,
-            ])->all(),
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
+            'rewards' => $rewardRows,
+            'storefront_reward' => $rewardRows[0] ?? null,
         ], $this->contractMeta($request), $states);
     }
 
@@ -146,7 +155,8 @@ class MarketingShopifyIntegrationController extends Controller
             ->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at']);
         $redemptions = $this->recentRedemptions($profile);
         $balance = $candleCashService->currentBalance($profile);
-        $states = $this->widgetService->rewardWidgetStates($profile, $balance, $this->activeRewards(), $redemptions);
+        $states = $this->widgetService->rewardWidgetStates($profile, $balance, $this->activeStorefrontRewards($candleCashService), $redemptions);
+        $balancePayload = $this->storefrontBalancePayload($candleCashService, $balance);
 
         $this->logStorefrontEvent($request, 'widget_reward_history_lookup', [
             'status' => 'ok',
@@ -162,12 +172,20 @@ class MarketingShopifyIntegrationController extends Controller
 
         return MarketingStorefrontContract::success([
             'profile_id' => (int) $profile->id,
-            'balance' => $balance,
+            'raw_points' => $balance,
+            'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
+            'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
+            'balance' => $balancePayload,
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
             'state' => $states[0] ?? 'linked_customer',
             'transactions' => $transactions->map(fn ($row): array => [
                 'id' => (int) $row->id,
                 'type' => (string) $row->type,
+                'raw_points' => (int) $row->points,
                 'points' => (int) $row->points,
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $row->points))),
+                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $row->points, true),
                 'source' => (string) $row->source,
                 'source_id' => $row->source_id ? (string) $row->source_id : null,
                 'description' => $row->description ? (string) $row->description : null,
@@ -175,7 +193,10 @@ class MarketingShopifyIntegrationController extends Controller
             ])->all(),
             'redemptions' => $redemptions->map(fn ($row): array => [
                 'id' => (int) $row->id,
+                'raw_points_spent' => (int) $row->points_spent,
                 'points_spent' => (int) $row->points_spent,
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points_spent),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->points_spent)),
                 'status' => (string) ($row->status ?: 'issued'),
                 'platform' => $row->platform ? (string) $row->platform : null,
                 'redemption_code' => (string) $row->redemption_code,
@@ -184,7 +205,9 @@ class MarketingShopifyIntegrationController extends Controller
                 'expires_at' => optional($row->expires_at)->toIso8601String(),
                 'reward' => [
                     'id' => (int) $row->reward_id,
-                    'name' => (string) ($row->reward?->name ?: ''),
+                    'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward)
+                        ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
+                        : (string) ($row->reward?->name ?: 'Candle Cash'),
                     'reward_type' => (string) ($row->reward?->reward_type ?: ''),
                     'reward_value' => $row->reward?->reward_value ? (string) $row->reward->reward_value : null,
                 ],
@@ -192,7 +215,11 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), $states);
     }
 
-    public function requestRedemption(Request $request, CandleCashService $candleCashService): JsonResponse
+    public function requestRedemption(
+        Request $request,
+        CandleCashService $candleCashService,
+        CandleCashShopifyDiscountService $discountSyncService
+    ): JsonResponse
     {
         $data = $request->validate([
             'reward_id' => ['required', 'integer', 'exists:candle_cash_rewards,id'],
@@ -215,7 +242,21 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         $profile = $resolved['profile'];
-        $reward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
+        $requestedReward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
+        $reward = $candleCashService->storefrontReward();
+        if (! $reward || (int) $requestedReward->id !== (int) $reward->id) {
+            return MarketingStorefrontContract::error(
+                code: 'reward_unavailable',
+                message: 'This Candle Cash redemption is not available right now.',
+                status: 422,
+                details: [
+                    'state' => 'reward_unavailable',
+                ],
+                states: ['reward_unavailable'],
+                recoveryStates: $this->widgetService->recoveryStatesForError('reward_unavailable')
+            );
+        }
+
         $result = $candleCashService->requestStorefrontRedemption(
             profile: $profile,
             reward: $reward,
@@ -252,12 +293,68 @@ class MarketingShopifyIntegrationController extends Controller
                 message: 'Reward redemption request could not be completed.',
                 status: 422,
                 details: [
-                    'balance' => (int) ($result['balance'] ?? 0),
+                    'raw_points' => (int) ($result['balance'] ?? 0),
+                    'balance' => $this->storefrontBalancePayload($candleCashService, (int) ($result['balance'] ?? 0)),
+                    'candle_cash_amount' => $candleCashService->amountFromPoints((int) ($result['balance'] ?? 0)),
+                    'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) ($result['balance'] ?? 0))),
                     'state' => $state,
+                    'redemption_rules' => $candleCashService->redemptionRulesPayload(),
                 ],
                 states: $states,
                 recoveryStates: $recoveryStates
             );
+        }
+
+        $balancePayload = $this->storefrontBalancePayload($candleCashService, (int) ($result['balance'] ?? 0));
+        $applyPath = null;
+        $syncState = 'synced';
+
+        if ($redemption) {
+            try {
+                $this->ensureShopifyDiscountForCandleCashRedemption($discountSyncService, $redemption);
+                $applyPath = ($result['code'] ?? null)
+                    ? $this->candleCashApplyPath((string) $result['code'])
+                    : null;
+            } catch (\Throwable $e) {
+                $syncState = 'sync_failed';
+                $restore = $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
+                    $redemption,
+                    'Canceled automatically because Shopify could not prepare the Candle Cash discount yet.'
+                );
+                $restoredBalance = (int) ($restore['balance'] ?? $candleCashService->currentBalance($profile));
+                $balancePayload = $this->storefrontBalancePayload($candleCashService, $restoredBalance);
+
+                $this->logStorefrontEvent($request, 'widget_redeem_request', [
+                    'status' => 'error',
+                    'issue_type' => 'shopify_discount_sync_failed',
+                    'profile' => $profile,
+                    'candle_cash_redemption_id' => $redemption->id,
+                    'source_type' => 'shopify_widget_redeem_request',
+                    'source_id' => (string) $reward->id,
+                    'meta' => [
+                        'reward_id' => (int) $reward->id,
+                        'state' => 'sync_failed',
+                        'balance' => $restoredBalance,
+                        'error' => $e->getMessage(),
+                    ],
+                ]);
+
+                return MarketingStorefrontContract::error(
+                    code: 'discount_not_ready',
+                    message: 'Candle Cash is not ready to apply automatically yet.',
+                    status: 422,
+                    details: [
+                        'raw_points' => $restoredBalance,
+                        'balance' => $balancePayload,
+                        'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
+                        'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
+                        'state' => 'sync_failed',
+                        'redemption_rules' => $candleCashService->redemptionRulesPayload(),
+                    ],
+                    states: ['sync_failed'],
+                    recoveryStates: $this->widgetService->recoveryStatesForError('redemption_failed')
+                );
+            }
         }
 
         $this->logStorefrontEvent($request, 'widget_redeem_request', [
@@ -268,7 +365,7 @@ class MarketingShopifyIntegrationController extends Controller
             'source_id' => (string) $reward->id,
             'meta' => [
                 'reward_id' => (int) $reward->id,
-                'state' => $state,
+                'state' => $syncState === 'synced' ? $state : 'sync_failed',
                 'balance' => (int) ($result['balance'] ?? 0),
             ],
             'resolution_status' => 'resolved',
@@ -279,10 +376,17 @@ class MarketingShopifyIntegrationController extends Controller
             'reward_id' => (int) $reward->id,
             'redemption_id' => (int) ($result['redemption_id'] ?? 0),
             'redemption_code' => (string) ($result['code'] ?? ''),
-            'state' => $state,
+            'apply_path' => $applyPath,
+            'state' => $syncState === 'synced' ? $state : 'sync_failed',
             'status' => $redemption?->status ?: 'issued',
             'expires_at' => optional($redemption?->expires_at)->toIso8601String(),
-            'balance' => (int) ($result['balance'] ?? 0),
+            'raw_points' => (int) ($result['balance'] ?? 0),
+            'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
+            'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
+            'balance' => $balancePayload,
+            'reward' => $candleCashService->storefrontRewardPayload($reward, (int) ($result['balance'] ?? 0)),
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
+            'discount_sync_status' => $syncState,
         ], $this->contractMeta($request), $states);
     }
 
@@ -981,7 +1085,8 @@ class MarketingShopifyIntegrationController extends Controller
         CandleCashService $candleCashService,
         CandleCashTaskService $taskService,
         CandleCashReferralService $referralService,
-        BirthdayRewardEngineService $birthdayRewardEngine
+        BirthdayRewardEngineService $birthdayRewardEngine,
+        CandleCashShopifyDiscountService $discountSyncService
     ): JsonResponse {
         $resolved = $this->resolveProfile($request, scope: 'candle_cash_status', allowCreate: false);
         $profile = $resolved['profile'] ?? null;
@@ -1030,6 +1135,10 @@ class MarketingShopifyIntegrationController extends Controller
                 ->latest('id')
                 ->limit(12)
                 ->get()
+                ->filter(function (CandleCashRedemption $row) use ($candleCashService): bool {
+                    return $candleCashService->storefrontRedemptionMatchesCurrentRules($row, $row->reward);
+                })
+                ->values()
             : collect();
         $referrals = $profile
             ? $profile->candleCashReferralsMade()->with('referredProfile:id,first_name,last_name,email')->latest('id')->limit(12)->get()
@@ -1039,8 +1148,71 @@ class MarketingShopifyIntegrationController extends Controller
         $integrationConfig = $taskService->integrationConfig();
         $googleReviewUrl = trim((string) data_get($integrationConfig, 'google_review_url', '')) ?: null;
         $voteLockedJoinUrl = trim((string) data_get($integrationConfig, 'vote_locked_join_url', '')) ?: null;
+        $rewardCodeRows = [];
+        $restoredFailedSyncRedemption = false;
+
+        foreach ($activeCodes as $row) {
+            $platform = trim((string) ($row->platform ?? ''));
+            $isShopify = $platform === '' || $platform === 'shopify';
+            $discountSyncStatus = 'not_required';
+            $applyPath = null;
+
+            if ($isShopify) {
+                try {
+                    $this->ensureShopifyDiscountForCandleCashRedemption($discountSyncService, $row);
+                    $discountSyncStatus = 'synced';
+                    $applyPath = $this->candleCashApplyPath((string) $row->redemption_code);
+                } catch (\Throwable $e) {
+                    $discountSyncStatus = 'sync_failed';
+                    $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
+                        $row,
+                        'Canceled automatically because Shopify could not prepare the Candle Cash discount yet.'
+                    );
+                    $restoredFailedSyncRedemption = true;
+                    continue;
+                }
+            }
+
+            $rewardCodeRows[] = [
+                'id' => (int) $row->id,
+                'status' => (string) ($row->status ?: 'issued'),
+                'platform' => $platform !== '' ? $platform : null,
+                'redemption_code' => (string) $row->redemption_code,
+                'issued_at' => optional($row->issued_at)->toIso8601String(),
+                'expires_at' => optional($row->expires_at)->toIso8601String(),
+                'is_usable' => (string) ($row->status ?: '') === 'issued'
+                    && (! $row->expires_at || $row->expires_at->isFuture())
+                    && $discountSyncStatus !== 'sync_failed',
+                'apply_path' => $applyPath,
+                'discount_sync_status' => $discountSyncStatus,
+                'raw_points_spent' => (int) $row->points_spent,
+                'candle_cash_amount' => $candleCashService->redemptionAmountForIssuedCode($row, $row->reward),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->redemptionAmountForIssuedCode($row, $row->reward)),
+                'reward' => [
+                    'id' => (int) $row->reward_id,
+                    'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward)
+                        ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
+                        : (string) ($row->reward?->name ?: 'Candle Cash'),
+                    'reward_type' => (string) ($row->reward?->reward_type ?: ''),
+                    'reward_value' => $row->reward?->reward_value !== null ? (string) $row->reward->reward_value : null,
+                ],
+            ];
+        }
+
+        if ($restoredFailedSyncRedemption && $profile) {
+            $summary = array_merge($summary, [
+                'current_balance_points' => $candleCashService->currentBalance($profile),
+                'current_balance_amount' => $candleCashService->amountFromPoints($candleCashService->currentBalance($profile)),
+            ]);
+        }
+
+        $currentBalancePoints = (int) ($summary['current_balance_points'] ?? 0);
+        $storefrontRewardRows = $this->storefrontRewardRows($candleCashService, $profile ? $currentBalancePoints : null);
+        $balancePayload = $this->storefrontBalancePayload($candleCashService, $currentBalancePoints, [
+            'expires_at' => null,
+        ]);
         $states = $profile ? ['linked_customer'] : ['unknown_customer', 'verification_required'];
-        if ($profile && ((int) ($summary['current_balance_points'] ?? 0)) > 0) {
+        if ($profile && $currentBalancePoints > 0) {
             $states[] = 'known_customer_has_balance';
         }
         if ($taskRows->contains(fn (array $row): bool => data_get($row, 'eligibility.state') === 'pending')) {
@@ -1077,36 +1249,15 @@ class MarketingShopifyIntegrationController extends Controller
                 'faq_verification_copy' => (string) data_get($frontendConfig, 'faq_verification_copy', ''),
             ],
             'summary' => $summary,
-            'balance' => [
-                'points' => (int) ($summary['current_balance_points'] ?? 0),
-                'amount' => (float) ($summary['current_balance_amount'] ?? 0),
-            ],
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
+            'balance' => $balancePayload,
+            'storefront_reward' => $storefrontRewardRows[0] ?? null,
+            'available_rewards' => $storefrontRewardRows,
             'consent' => [
                 'sms' => (bool) ($profile?->accepts_sms_marketing ?? false),
                 'email' => (bool) ($profile?->accepts_email_marketing ?? false),
             ],
-            'reward_codes' => $activeCodes->map(function (CandleCashRedemption $row): array {
-                $platform = trim((string) ($row->platform ?? ''));
-                $isShopify = $platform === '' || $platform === 'shopify';
-
-                return [
-                    'id' => (int) $row->id,
-                    'status' => (string) ($row->status ?: 'issued'),
-                    'platform' => $platform !== '' ? $platform : null,
-                    'redemption_code' => (string) $row->redemption_code,
-                    'issued_at' => optional($row->issued_at)->toIso8601String(),
-                    'expires_at' => optional($row->expires_at)->toIso8601String(),
-                    'is_usable' => (string) ($row->status ?: '') === 'issued'
-                        && (! $row->expires_at || $row->expires_at->isFuture()),
-                    'apply_path' => $isShopify ? $this->candleCashApplyPath((string) $row->redemption_code) : null,
-                    'reward' => [
-                        'id' => (int) $row->reward_id,
-                        'name' => (string) ($row->reward?->name ?: 'Candle Cash'),
-                        'reward_type' => (string) ($row->reward?->reward_type ?: ''),
-                        'reward_value' => $row->reward?->reward_value !== null ? (string) $row->reward->reward_value : null,
-                    ],
-                ];
-            })->all(),
+            'reward_codes' => $rewardCodeRows,
             'referral' => [
                 'enabled' => $referralService->isEnabled(),
                 'code' => $profile ? $referralService->referralCodeForProfile($profile) : null,
@@ -1183,11 +1334,16 @@ class MarketingShopifyIntegrationController extends Controller
                         'awarded_at' => optional($row->awarded_at)->toIso8601String(),
                     ];
                 })->all(),
-                'ledger' => $recentTransactions->map(function ($row): array {
+                'ledger' => $recentTransactions->map(function ($row) use ($candleCashService): array {
                     return [
                         'id' => (int) $row->id,
                         'type' => (string) $row->type,
+                        'raw_points' => (int) $row->points,
                         'points' => (int) $row->points,
+                        'amount' => $candleCashService->amountFromPoints((int) $row->points),
+                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points),
+                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $row->points))),
+                        'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $row->points, true),
                         'description' => $row->description ? (string) $row->description : null,
                         'created_at' => optional($row->created_at)->toIso8601String(),
                     ];
@@ -1474,15 +1630,18 @@ class MarketingShopifyIntegrationController extends Controller
                 'resolution_status' => 'open',
             ]);
 
-            return MarketingStorefrontContract::success([
-                'profile_id' => null,
-                'state' => $states[0] ?? 'unknown_customer',
-                'consent' => ['sms' => false, 'email' => false],
-                'source_channels' => [],
-                'candle_cash_balance' => 0,
-                'groups' => [],
-                'eligibility' => [
-                    'winback' => false,
+        return MarketingStorefrontContract::success([
+            'profile_id' => null,
+            'state' => $states[0] ?? 'unknown_customer',
+            'consent' => ['sms' => false, 'email' => false],
+            'source_channels' => [],
+            'candle_cash_balance' => 0,
+            'candle_cash_balance_amount' => 0,
+            'candle_cash_balance_formatted' => $candleCashService->formatCurrency(0),
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
+            'groups' => [],
+            'eligibility' => [
+                'winback' => false,
                     'reward_nudge' => false,
                 ],
                 'birthday' => [
@@ -1498,9 +1657,7 @@ class MarketingShopifyIntegrationController extends Controller
         $birthdayProfile = $profile->birthdayProfile;
         $birthdayStatus = $birthdayRewardEngine->statusForProfile($birthdayProfile);
         $balance = $candleCashService->currentBalance($profile);
-        $minRewardPoints = (int) (CandleCashReward::query()
-            ->where('is_active', true)
-            ->min('points_cost') ?? 0);
+        $minRewardPoints = $candleCashService->fixedRedemptionPoints();
         $states = $this->widgetService->customerStatusStates($profile, (string) $resolved['status'], [
             'candle_cash_balance' => $balance,
             'min_reward_points' => $minRewardPoints,
@@ -1530,6 +1687,9 @@ class MarketingShopifyIntegrationController extends Controller
             ],
             'source_channels' => array_values(array_filter((array) $profile->source_channels)),
             'candle_cash_balance' => $balance,
+            'candle_cash_balance_amount' => $candleCashService->amountFromPoints($balance),
+            'candle_cash_balance_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($balance)),
+            'redemption_rules' => $candleCashService->redemptionRulesPayload(),
             'groups' => $profile->groups->where('is_internal', false)->values()->map(fn ($group): array => [
                 'id' => (int) $group->id,
                 'name' => (string) $group->name,
@@ -1899,6 +2059,18 @@ class MarketingShopifyIntegrationController extends Controller
         return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
     }
 
+    protected function ensureShopifyDiscountForCandleCashRedemption(
+        CandleCashShopifyDiscountService $discountSyncService,
+        CandleCashRedemption $redemption
+    ): void {
+        $platform = strtolower(trim((string) ($redemption->platform ?? '')));
+        if ($platform !== '' && $platform !== 'shopify') {
+            return;
+        }
+
+        $discountSyncService->ensureDiscountForRedemption($redemption, 'retail');
+    }
+
     protected function preferredBirthdayStoreKey(MarketingProfile $profile): ?string
     {
         $shopifyLinks = $profile->links()
@@ -1928,6 +2100,41 @@ class MarketingShopifyIntegrationController extends Controller
         $value = trim((string) $value);
 
         return $value !== '' ? $value : null;
+    }
+
+    protected function storefrontBalancePayload(
+        CandleCashService $candleCashService,
+        int $points,
+        array $extra = []
+    ): array {
+        return array_merge($candleCashService->balancePayloadFromPoints($points), $extra);
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function storefrontRewardRows(CandleCashService $candleCashService, ?int $balancePoints = null): array
+    {
+        $row = $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward(), $balancePoints);
+
+        return $row ? [$row] : [];
+    }
+
+    /**
+     * @return Collection<int,CandleCashReward>
+     */
+    protected function activeStorefrontRewards(CandleCashService $candleCashService): Collection
+    {
+        $reward = $candleCashService->storefrontReward();
+
+        if (! $reward) {
+            return collect();
+        }
+
+        $storefrontReward = clone $reward;
+        $storefrontReward->points_cost = $candleCashService->storefrontRewardPointsCost($reward);
+
+        return collect([$storefrontReward]);
     }
 
     /**

@@ -2,12 +2,13 @@
 
 namespace App\Services\Marketing;
 
-use App\Mail\ProductReviewSubmittedMail;
+use App\Models\CustomerExternalProfile;
+use App\Models\MappingException;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
+use App\Models\Order;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 
 class ProductReviewService
@@ -206,39 +207,36 @@ class ProductReviewService
         $status = $moderationEnabled ? 'pending' : 'approved';
         $now = now();
 
-        $review = MarketingReviewHistory::query()->updateOrCreate(
-            $reviewLookup,
-            [
-                'marketing_profile_id' => $profile?->id,
-                'marketing_review_summary_id' => null,
-                'external_customer_id' => $this->externalCustomerId($profile, $normalizedEmail),
-                'rating' => $rating,
-                'title' => $title,
-                'body' => $body,
-                'reviewer_name' => $reviewerName,
-                'reviewer_email' => $reviewerEmail,
-                'is_published' => ! $moderationEnabled,
-                'status' => $status,
-                'submission_source' => 'native_storefront',
-                'is_verified_buyer' => $profile ? $this->hasOrderLink($profile) : false,
-                'product_id' => (string) $product['product_id'],
-                'product_handle' => $this->nullableString($product['product_handle'] ?? null),
-                'product_url' => $this->canonicalProductUrl($product),
-                'product_title' => $this->nullableString($product['product_title'] ?? null),
-                'submitted_at' => $existing?->submitted_at ?: $now,
-                'reviewed_at' => ! $moderationEnabled ? $now : null,
-                'approved_at' => ! $moderationEnabled ? $now : null,
-                'rejected_at' => null,
-                'moderated_by' => null,
-                'moderation_notes' => null,
-                'source_synced_at' => $now,
-                'raw_payload' => [
-                    'request_key' => $requestKey !== '' ? $requestKey : null,
-                    'source_surface' => $sourceSurface,
-                    'submitted_via' => 'storefront',
-                ],
-            ]
-        );
+        [$review, $created] = $this->persistReview($reviewLookup, [
+            'marketing_profile_id' => $profile?->id,
+            'marketing_review_summary_id' => null,
+            'external_customer_id' => $this->externalCustomerId($profile, $normalizedEmail),
+            'rating' => $rating,
+            'title' => $title,
+            'body' => $body,
+            'reviewer_name' => $reviewerName,
+            'reviewer_email' => $reviewerEmail,
+            'is_published' => ! $moderationEnabled,
+            'status' => $status,
+            'submission_source' => 'native_storefront',
+            'is_verified_buyer' => $profile ? $this->hasOrderLink($profile) : false,
+            'product_id' => (string) $product['product_id'],
+            'product_handle' => $this->nullableString($product['product_handle'] ?? null),
+            'product_url' => $this->canonicalProductUrl($product),
+            'product_title' => $this->nullableString($product['product_title'] ?? null),
+            'submitted_at' => $existing?->submitted_at ?: $now,
+            'reviewed_at' => ! $moderationEnabled ? $now : null,
+            'approved_at' => ! $moderationEnabled ? $now : null,
+            'rejected_at' => null,
+            'moderated_by' => null,
+            'moderation_notes' => null,
+            'source_synced_at' => $now,
+            'raw_payload' => [
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'source_surface' => $sourceSurface,
+                'submitted_via' => 'storefront',
+            ],
+        ]);
 
         $award = null;
         if ($profile) {
@@ -257,10 +255,6 @@ class ProductReviewService
             ])->save();
         }
 
-        if (! $existing) {
-            $this->sendNotification($review);
-        }
-
         $this->eventLogger->log('product_review_submitted', [
             'status' => 'ok',
             'profile' => $profile,
@@ -273,17 +267,155 @@ class ProductReviewService
                 'product_handle' => $product['product_handle'] ?? null,
                 'status' => $review->status,
                 'award_state' => $award['state'] ?? null,
-                'created' => ! $existing,
+                'created' => $created,
             ],
             'resolution_status' => 'resolved',
         ]);
 
         return [
             'ok' => true,
-            'state' => ! $existing ? ($moderationEnabled ? 'review_pending' : 'review_live') : 'review_updated',
+            'state' => $created ? ($moderationEnabled ? 'review_pending' : 'review_live') : 'review_updated',
             'review' => $review->fresh(['profile']),
             'award' => $award,
-            'created' => ! $existing,
+            'created' => $created,
+        ];
+    }
+
+    /**
+     * @param array{
+     *   reviewer_name:string,
+     *   product_title:string,
+     *   rating:int,
+     *   title:?string,
+     *   body:string,
+     *   submitted_at:string|\DateTimeInterface,
+     *   store_key?:?string,
+     *   submission_source?:?string,
+     *   product_id?:?string,
+     *   product_handle?:?string,
+     *   product_url?:?string
+     * } $payload
+     * @return array{
+     *   ok:bool,
+     *   created:bool,
+     *   review:\App\Models\MarketingReviewHistory,
+     *   match:array<string,mixed>,
+     *   product:array<string,mixed>
+     * }
+     */
+    public function importReview(array $payload): array
+    {
+        $reviewerName = $this->sanitizeLine($payload['reviewer_name'] ?? null);
+        $productTitle = $this->sanitizeLine($payload['product_title'] ?? null);
+        $title = $this->sanitizeLine($payload['title'] ?? null);
+        $body = $this->sanitizeBody((string) ($payload['body'] ?? ''));
+        $rating = max(1, min(5, (int) ($payload['rating'] ?? 0)));
+
+        if ($reviewerName === null || $productTitle === null || $body === '' || $rating < 1 || $rating > 5) {
+            throw new \InvalidArgumentException('Imported review payload is missing required review fields.');
+        }
+
+        $submittedAt = $this->importTimestamp($payload['submitted_at'] ?? null);
+        $submissionSource = $this->nullableString($payload['submission_source'] ?? null) ?: 'growave_import';
+        $product = $this->resolveImportedProduct([
+            'product_title' => $productTitle,
+            'product_id' => $payload['product_id'] ?? null,
+            'product_handle' => $payload['product_handle'] ?? null,
+            'product_url' => $payload['product_url'] ?? null,
+            'store_key' => $payload['store_key'] ?? null,
+        ]);
+        $match = $this->matchImportedProfile($reviewerName, $product);
+
+        $existing = $this->findExistingImportedReview(
+            reviewerName: $reviewerName,
+            product: $product,
+            rating: $rating,
+            title: $title,
+            body: $body,
+            submittedAt: $submittedAt
+        );
+
+        if ($existing) {
+            $review = $this->refreshImportedReview(
+                review: $existing,
+                reviewerName: $reviewerName,
+                product: $product,
+                title: $title,
+                body: $body,
+                rating: $rating,
+                submittedAt: $submittedAt,
+                submissionSource: $submissionSource,
+                match: $match
+            );
+
+            if ($match['profile'] ?? null) {
+                $this->recordImportProfileLink($review, $match);
+            }
+
+            return [
+                'ok' => true,
+                'created' => false,
+                'review' => $review->fresh(['profile']),
+                'match' => $match,
+                'product' => $product,
+            ];
+        }
+
+        $lookup = [
+            'provider' => 'backstage',
+            'integration' => 'native',
+            'store_key' => (string) $product['store_key'],
+            'external_review_id' => $this->importExternalReviewId($reviewerName, $product, $submittedAt, $title, $body),
+        ];
+
+        [$review, $created] = $this->persistReview($lookup, [
+            'marketing_profile_id' => $match['profile']?->id,
+            'marketing_review_summary_id' => null,
+            'external_customer_id' => $this->resolvedExternalCustomerId($match, $reviewerName),
+            'rating' => $rating,
+            'title' => $title,
+            'body' => $body,
+            'reviewer_name' => $reviewerName,
+            'reviewer_email' => $match['reviewer_email'],
+            'is_published' => true,
+            'status' => 'approved',
+            'submission_source' => $submissionSource,
+            'is_verified_buyer' => (bool) ($match['verified_buyer'] ?? false),
+            'product_id' => $product['product_id'],
+            'product_handle' => $product['product_handle'],
+            'product_url' => $product['product_url'],
+            'product_title' => $product['product_title'],
+            'submitted_at' => $submittedAt,
+            'reviewed_at' => $submittedAt,
+            'approved_at' => $submittedAt,
+            'rejected_at' => null,
+            'moderated_by' => null,
+            'moderation_notes' => null,
+            'source_synced_at' => now(),
+            'raw_payload' => [
+                'import' => [
+                    'source' => 'growave_replacement_migration',
+                    'reviewer_name' => $reviewerName,
+                    'rating' => $rating,
+                    'title' => $title,
+                    'body' => $body,
+                    'submitted_at' => $submittedAt->toIso8601String(),
+                    'match' => $this->matchSummary($match),
+                    'product' => $this->productSummary($product),
+                ],
+            ],
+        ]);
+
+        if ($match['profile'] ?? null) {
+            $this->recordImportProfileLink($review, $match);
+        }
+
+        return [
+            'ok' => true,
+            'created' => $created,
+            'review' => $review->fresh(['profile']),
+            'match' => $match,
+            'product' => $product,
         ];
     }
 
@@ -339,6 +471,675 @@ class ProductReviewService
     public function notificationEmail(): ?string
     {
         return $this->nullableString(data_get($this->taskService->integrationConfig(), 'product_review_notification_email', 'info@theforestrystudio.com'));
+    }
+
+    /**
+     * @param array<string,mixed> $lookup
+     * @param array<string,mixed> $attributes
+     * @return array{0:\App\Models\MarketingReviewHistory,1:bool}
+     */
+    protected function persistReview(array $lookup, array $attributes): array
+    {
+        /** @var MarketingReviewHistory|null $existing */
+        $existing = MarketingReviewHistory::query()->where($lookup)->first();
+        $review = MarketingReviewHistory::query()->updateOrCreate($lookup, $attributes);
+        $created = ! $existing;
+
+        return [$review, $created];
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     * @return array<string,mixed>
+     */
+    protected function matchImportedProfile(string $reviewerName, array $product): array
+    {
+        [$firstName, $lastName] = $this->splitName($reviewerName);
+        $storeKey = $this->nullableString($product['store_key'] ?? null) ?: 'retail';
+        $empty = [
+            'matched' => false,
+            'profile' => null,
+            'external_profile' => null,
+            'reviewer_email' => null,
+            'verified_buyer' => false,
+            'method' => 'unmatched',
+            'confidence' => 0.0,
+            'evidence' => ['No confident customer match was found.'],
+        ];
+
+        if ($firstName === null || $lastName === null) {
+            return $empty;
+        }
+
+        $profileMatches = MarketingProfile::query()
+            ->whereRaw('lower(first_name) = ?', [$firstName])
+            ->whereRaw('lower(last_name) = ?', [$lastName])
+            ->get(['id', 'first_name', 'last_name', 'email', 'normalized_email']);
+        $exactProfile = $profileMatches->count() === 1 ? $profileMatches->first() : null;
+
+        $externalMatches = CustomerExternalProfile::query()
+            ->whereRaw('lower(first_name) = ?', [$firstName])
+            ->whereRaw('lower(last_name) = ?', [$lastName])
+            ->whereNotNull('marketing_profile_id')
+            ->when($storeKey !== '', fn ($query) => $query->where('store_key', $storeKey))
+            ->get([
+                'id',
+                'marketing_profile_id',
+                'integration',
+                'store_key',
+                'external_customer_id',
+                'email',
+                'normalized_email',
+                'first_name',
+                'last_name',
+                'full_name',
+            ]);
+        $exactExternalProfileIds = $externalMatches->pluck('marketing_profile_id')->filter()->unique()->values();
+        $exactExternal = $exactExternalProfileIds->count() === 1
+            ? $externalMatches->firstWhere('marketing_profile_id', (int) $exactExternalProfileIds->first())
+            : null;
+
+        $orderMatch = $this->orderBackedProfileMatch($reviewerName, $product, $exactProfile, $exactExternal, $storeKey);
+        if ($orderMatch['matched']) {
+            return $orderMatch;
+        }
+
+        if ($exactProfile && (! $exactExternal || (int) $exactExternal->marketing_profile_id === (int) $exactProfile->id)) {
+            $externalProfile = $exactExternal ?: $this->preferredExternalProfile($exactProfile, $storeKey);
+
+            return [
+                'matched' => true,
+                'profile' => $exactProfile,
+                'external_profile' => $externalProfile,
+                'reviewer_email' => $this->nullableString($exactProfile->normalized_email ?: $exactProfile->email ?: $externalProfile?->normalized_email ?: $externalProfile?->email),
+                'verified_buyer' => false,
+                'method' => 'exact_full_name_unique',
+                'confidence' => 0.94,
+                'evidence' => array_values(array_filter([
+                    'Exact full-name match to a single marketing profile.',
+                    $externalProfile ? 'Matching external customer profile confirms the same customer identity.' : null,
+                ])),
+            ];
+        }
+
+        if ($exactExternal) {
+            $profile = $exactProfile && (int) $exactProfile->id === (int) $exactExternal->marketing_profile_id
+                ? $exactProfile
+                : MarketingProfile::query()->find((int) $exactExternal->marketing_profile_id);
+
+            if ($profile) {
+                return [
+                    'matched' => true,
+                    'profile' => $profile,
+                    'external_profile' => $exactExternal,
+                    'reviewer_email' => $this->nullableString($profile->normalized_email ?: $profile->email ?: $exactExternal->normalized_email ?: $exactExternal->email),
+                    'verified_buyer' => false,
+                    'method' => 'exact_external_profile_name',
+                    'confidence' => 0.9,
+                    'evidence' => [
+                        'Exact full-name match to a single linked external customer profile.',
+                    ],
+                ];
+            }
+        }
+
+        $closeMatch = $this->closeProfileMatch($reviewerName, $lastName, $storeKey);
+        if ($closeMatch !== null) {
+            return $closeMatch;
+        }
+
+        return $empty;
+    }
+
+    /**
+     * @param array{product_title:?string,product_id:?string,product_handle:?string,product_url:?string,store_key:?string} $payload
+     * @return array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>}
+     */
+    protected function resolveImportedProduct(array $payload): array
+    {
+        $title = $this->sanitizeLine($payload['product_title'] ?? null);
+        if ($title === null) {
+            throw new \InvalidArgumentException('Imported review payload is missing a product title.');
+        }
+
+        $product = [
+            'product_id' => $this->nullableString($payload['product_id'] ?? null),
+            'product_handle' => $this->nullableString($payload['product_handle'] ?? null),
+            'product_title' => $title,
+            'product_url' => $this->nullableString($payload['product_url'] ?? null),
+            'store_key' => $this->nullableString($payload['store_key'] ?? null) ?: 'retail',
+            'match_evidence' => [],
+        ];
+
+        $mappingCandidates = MappingException::query()
+            ->where('raw_title', $title)
+            ->orderByDesc('id')
+            ->get(['shopify_order_id', 'shopify_line_item_id', 'payload_json']);
+
+        foreach ($mappingCandidates as $candidate) {
+            $candidateId = $this->nullableString((string) data_get($candidate->payload_json, 'product_id'));
+            if ($candidateId && ! $product['product_id']) {
+                $product['product_id'] = $candidateId;
+                $product['match_evidence'][] = 'Matched Shopify product id from imported order line data.';
+            }
+        }
+
+        $handleGuess = Str::slug($title);
+        $reviewCandidates = MarketingReviewHistory::query()
+            ->where(function ($query) use ($title, $handleGuess, $product): void {
+                $query->where('product_title', $title);
+
+                if ($product['product_id']) {
+                    $query->orWhere('product_id', $product['product_id'])
+                        ->orWhere('raw_payload', 'like', '%' . $product['product_id'] . '%');
+                }
+
+                if ($handleGuess !== '') {
+                    $query->orWhere('product_handle', $handleGuess)
+                        ->orWhere('raw_payload', 'like', '%"handle":"' . $handleGuess . '"%');
+                }
+            })
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get(['id', 'product_id', 'product_handle', 'product_url', 'product_title', 'raw_payload']);
+
+        foreach ($reviewCandidates as $candidate) {
+            $metadata = $this->productMetadataFromReview($candidate);
+
+            if (! $product['product_handle'] && $metadata['product_handle']) {
+                $product['product_handle'] = $metadata['product_handle'];
+                $product['match_evidence'][] = 'Matched product handle from existing review data.';
+            }
+
+            if (! $product['product_id'] && $metadata['product_id']) {
+                $product['product_id'] = $metadata['product_id'];
+                $product['match_evidence'][] = 'Matched Shopify product id from existing review data.';
+            }
+
+            if (! $product['product_url'] && $metadata['product_url']) {
+                $product['product_url'] = $metadata['product_url'];
+            }
+        }
+
+        $product['product_url'] = $product['product_url'] ?: $this->canonicalProductUrl($product);
+
+        return $product;
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     */
+    protected function findExistingImportedReview(
+        string $reviewerName,
+        array $product,
+        int $rating,
+        ?string $title,
+        string $body,
+        CarbonInterface $submittedAt
+    ): ?MarketingReviewHistory {
+        $start = $submittedAt->copy()->startOfDay();
+        $end = $submittedAt->copy()->endOfDay();
+        $normalizedReviewerName = $this->normalizedName($reviewerName);
+
+        $candidates = MarketingReviewHistory::query()
+            ->with('profile:id,first_name,last_name,email')
+            ->where('rating', $rating)
+            ->where('body', $body)
+            ->where(function ($query) use ($title): void {
+                if ($title === null) {
+                    $query->whereNull('title')->orWhere('title', '');
+
+                    return;
+                }
+
+                $query->where('title', $title);
+            })
+            ->where(function ($query) use ($start, $end): void {
+                $query->whereBetween('submitted_at', [$start, $end])
+                    ->orWhere(function ($fallback) use ($start, $end): void {
+                        $fallback->whereNull('submitted_at')
+                            ->whereBetween('created_at', [$start, $end]);
+                    });
+            })
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if ($this->normalizedName($candidate->displayReviewerName()) !== $normalizedReviewerName) {
+                continue;
+            }
+
+            if (! $this->reviewMatchesImportedProduct($candidate, $product)) {
+                continue;
+            }
+
+            return $candidate;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     * @param array<string,mixed> $match
+     */
+    protected function refreshImportedReview(
+        MarketingReviewHistory $review,
+        string $reviewerName,
+        array $product,
+        ?string $title,
+        string $body,
+        int $rating,
+        CarbonInterface $submittedAt,
+        string $submissionSource,
+        array $match
+    ): MarketingReviewHistory {
+        $review->forceFill([
+            'marketing_profile_id' => $review->marketing_profile_id ?: $match['profile']?->id,
+            'external_customer_id' => $review->external_customer_id ?: $this->resolvedExternalCustomerId($match, $reviewerName),
+            'rating' => $review->rating ?: $rating,
+            'title' => $review->title ?: $title,
+            'body' => $review->body ?: $body,
+            'reviewer_name' => $review->reviewer_name ?: $reviewerName,
+            'reviewer_email' => $review->reviewer_email ?: ($match['reviewer_email'] ?? null),
+            'is_published' => $review->is_published ?? true,
+            'status' => $review->status ?: 'approved',
+            'submission_source' => $review->submission_source ?: $submissionSource,
+            'is_verified_buyer' => (bool) $review->is_verified_buyer || (bool) ($match['verified_buyer'] ?? false),
+            'product_id' => $review->product_id ?: $product['product_id'],
+            'product_handle' => $review->product_handle ?: $product['product_handle'],
+            'product_url' => $review->product_url ?: $product['product_url'],
+            'product_title' => $review->product_title ?: $product['product_title'],
+            'submitted_at' => $this->preferredTimestamp($review->submitted_at, $submittedAt),
+            'reviewed_at' => $review->reviewed_at ?: $submittedAt,
+            'approved_at' => $review->approved_at ?: $submittedAt,
+        ])->save();
+
+        return $review->fresh(['profile']);
+    }
+
+    /**
+     * @param array<string,mixed> $match
+     */
+    protected function recordImportProfileLink(MarketingReviewHistory $review, array $match): void
+    {
+        $profile = $match['profile'] ?? null;
+        if (! $profile instanceof MarketingProfile) {
+            return;
+        }
+
+        MarketingProfileLink::query()->updateOrCreate(
+            [
+                'marketing_profile_id' => $profile->id,
+                'source_type' => 'product_review_import',
+                'source_id' => $this->importLinkSourceId($review),
+            ],
+            [
+                'source_meta' => [
+                    'review_id' => $review->id,
+                    'product_title' => $review->product_title,
+                    'submitted_at' => optional($review->submitted_at)->toIso8601String(),
+                    'match_method' => $match['method'] ?? null,
+                    'match_evidence' => $match['evidence'] ?? [],
+                ],
+                'match_method' => (string) ($match['method'] ?? 'exact_review_import'),
+                'confidence' => (float) ($match['confidence'] ?? 1),
+            ]
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $match
+     * @return array<string,mixed>
+     */
+    protected function matchSummary(array $match): array
+    {
+        return [
+            'matched' => (bool) ($match['matched'] ?? false),
+            'profile_id' => $match['profile']?->id,
+            'method' => $match['method'] ?? null,
+            'confidence' => $match['confidence'] ?? null,
+            'evidence' => $match['evidence'] ?? [],
+        ];
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     * @return array<string,mixed>
+     */
+    protected function productSummary(array $product): array
+    {
+        return [
+            'product_id' => $product['product_id'],
+            'product_handle' => $product['product_handle'],
+            'product_title' => $product['product_title'],
+            'product_url' => $product['product_url'],
+            'match_evidence' => $product['match_evidence'],
+        ];
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     * @param \App\Models\MarketingProfile|null $exactProfile
+     * @param \App\Models\CustomerExternalProfile|null $exactExternal
+     * @return array<string,mixed>
+     */
+    protected function orderBackedProfileMatch(
+        string $reviewerName,
+        array $product,
+        ?MarketingProfile $exactProfile,
+        ?CustomerExternalProfile $exactExternal,
+        string $storeKey
+    ): array {
+        $candidateEmails = collect([
+            $this->nullableString($exactProfile?->normalized_email ?: $exactProfile?->email),
+            $this->nullableString($exactExternal?->normalized_email ?: $exactExternal?->email),
+        ])->filter()->map(fn (string $email) => Str::lower($email))->unique()->values();
+
+        $orders = Order::query()
+            ->select([
+                'orders.id',
+                'orders.shopify_customer_id',
+                'orders.customer_name',
+                'orders.first_name',
+                'orders.last_name',
+                'orders.email',
+                'orders.customer_email',
+                'orders.shipping_email',
+                'orders.billing_email',
+                'orders.ordered_at',
+            ])
+            ->join('order_lines', 'order_lines.order_id', '=', 'orders.id')
+            ->where('order_lines.raw_title', $product['product_title'])
+            ->orderByDesc('orders.ordered_at')
+            ->get();
+
+        $matchingOrders = $orders->filter(function (Order $order) use ($candidateEmails, $reviewerName): bool {
+            $nameMatch = $this->normalizedName($this->orderName($order)) === $this->normalizedName($reviewerName);
+            $email = $this->nullableString($this->orderEmail($order));
+            $emailMatch = $email !== null && $candidateEmails->contains(Str::lower($email));
+
+            return $nameMatch || $emailMatch;
+        })->values();
+
+        if ($matchingOrders->isEmpty()) {
+            return ['matched' => false];
+        }
+
+        $shopifyCustomerIds = $matchingOrders->pluck('shopify_customer_id')->filter()->unique()->values();
+        if ($shopifyCustomerIds->isEmpty()) {
+            return ['matched' => false];
+        }
+
+        $externalProfiles = CustomerExternalProfile::query()
+            ->where('integration', 'shopify_customer')
+            ->when($storeKey !== '', fn ($query) => $query->where('store_key', $storeKey))
+            ->whereIn('external_customer_id', $shopifyCustomerIds->all())
+            ->get([
+                'id',
+                'marketing_profile_id',
+                'store_key',
+                'external_customer_id',
+                'email',
+                'normalized_email',
+                'first_name',
+                'last_name',
+                'full_name',
+            ]);
+
+        $profileIds = $externalProfiles->pluck('marketing_profile_id')->filter()->unique()->values();
+        if ($profileIds->count() !== 1) {
+            return ['matched' => false];
+        }
+
+        $profile = $exactProfile && (int) $exactProfile->id === (int) $profileIds->first()
+            ? $exactProfile
+            : MarketingProfile::query()->find((int) $profileIds->first());
+
+        if (! $profile) {
+            return ['matched' => false];
+        }
+
+        $externalProfile = $externalProfiles->firstWhere('marketing_profile_id', $profile->id);
+
+        return [
+            'matched' => true,
+            'profile' => $profile,
+            'external_profile' => $externalProfile,
+            'reviewer_email' => $this->nullableString($profile->normalized_email ?: $profile->email ?: $externalProfile?->normalized_email ?: $externalProfile?->email),
+            'verified_buyer' => true,
+            'method' => 'exact_order_product_match',
+            'confidence' => 1.0,
+            'evidence' => [
+                'Exact product order history matched the reviewer name/email and a single linked Shopify customer.',
+            ],
+        ];
+    }
+
+    protected function closeProfileMatch(string $reviewerName, string $lastName, string $storeKey): ?array
+    {
+        $candidates = MarketingProfile::query()
+            ->whereRaw('lower(last_name) = ?', [$lastName])
+            ->get(['id', 'first_name', 'last_name', 'email', 'normalized_email']);
+
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        $scores = $candidates->map(function (MarketingProfile $profile) use ($reviewerName): array {
+            $profileName = trim((string) ($profile->first_name . ' ' . $profile->last_name));
+            similar_text($this->normalizedName($reviewerName), $this->normalizedName($profileName), $score);
+
+            return [
+                'profile' => $profile,
+                'score' => $score / 100,
+            ];
+        })->sortByDesc('score')->values();
+
+        $top = $scores->first();
+        $runnerUp = $scores->get(1);
+
+        if (! $top || (float) $top['score'] < 0.93 || ($runnerUp && ((float) $top['score'] - (float) $runnerUp['score']) < 0.05)) {
+            return null;
+        }
+
+        /** @var MarketingProfile $profile */
+        $profile = $top['profile'];
+        $externalProfile = $this->preferredExternalProfile($profile, $storeKey);
+
+        return [
+            'matched' => true,
+            'profile' => $profile,
+            'external_profile' => $externalProfile,
+            'reviewer_email' => $this->nullableString($profile->normalized_email ?: $profile->email ?: $externalProfile?->normalized_email ?: $externalProfile?->email),
+            'verified_buyer' => false,
+            'method' => 'close_name_unique',
+            'confidence' => round((float) $top['score'], 2),
+            'evidence' => [
+                'Single high-confidence close-name match after exact match checks came back empty.',
+            ],
+        ];
+    }
+
+    protected function preferredExternalProfile(MarketingProfile $profile, string $storeKey): ?CustomerExternalProfile
+    {
+        return CustomerExternalProfile::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->when($storeKey !== '', fn ($query) => $query->where('store_key', $storeKey))
+            ->orderByRaw("case when integration = 'shopify_customer' then 0 when integration = 'growave' then 1 else 2 end")
+            ->orderBy('id')
+            ->first([
+                'id',
+                'marketing_profile_id',
+                'integration',
+                'store_key',
+                'external_customer_id',
+                'email',
+                'normalized_email',
+                'first_name',
+                'last_name',
+                'full_name',
+            ]);
+    }
+
+    protected function resolvedExternalCustomerId(array $match, string $reviewerName): string
+    {
+        $externalProfile = $match['external_profile'] ?? null;
+        if ($externalProfile instanceof CustomerExternalProfile && filled($externalProfile->external_customer_id)) {
+            return (string) $externalProfile->external_customer_id;
+        }
+
+        $reviewerEmail = $this->nullableString($match['reviewer_email'] ?? null);
+        if ($reviewerEmail !== null) {
+            return 'email:' . sha1(Str::lower($reviewerEmail));
+        }
+
+        return 'importer:' . sha1($this->normalizedName($reviewerName));
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     */
+    protected function importExternalReviewId(
+        string $reviewerName,
+        array $product,
+        CarbonInterface $submittedAt,
+        ?string $title,
+        string $body
+    ): string {
+        return 'import:' . sha1(implode('|', [
+            (string) $product['store_key'],
+            (string) ($product['product_id'] ?? ''),
+            (string) ($product['product_handle'] ?? ''),
+            $this->normalizedName($reviewerName),
+            $submittedAt->toDateString(),
+            trim((string) ($title ?? '')),
+            trim($body),
+        ]));
+    }
+
+    protected function importLinkSourceId(MarketingReviewHistory $review): string
+    {
+        return 'product-review-import:' . sha1(implode('|', [
+            (string) $review->id,
+            (string) ($review->product_id ?? ''),
+            (string) ($review->product_handle ?? ''),
+            (string) ($review->submitted_at?->toDateString() ?? $review->created_at?->toDateString() ?? ''),
+        ]));
+    }
+
+    /**
+     * @param array{product_id:?string,product_handle:?string,product_title:string,product_url:?string,store_key:string,match_evidence:array<int,string>} $product
+     */
+    protected function reviewMatchesImportedProduct(MarketingReviewHistory $review, array $product): bool
+    {
+        $existing = $this->productMetadataFromReview($review);
+
+        if (($product['product_id'] ?? null) && ($existing['product_id'] ?? null) && (string) $product['product_id'] === (string) $existing['product_id']) {
+            return true;
+        }
+
+        if (($product['product_handle'] ?? null) && ($existing['product_handle'] ?? null) && (string) $product['product_handle'] === (string) $existing['product_handle']) {
+            return true;
+        }
+
+        return $this->normalizedName((string) ($product['product_title'] ?? '')) === $this->normalizedName((string) ($existing['product_title'] ?? ''));
+    }
+
+    /**
+     * @return array{product_id:?string,product_handle:?string,product_title:?string,product_url:?string}
+     */
+    protected function productMetadataFromReview(MarketingReviewHistory $review): array
+    {
+        $payload = is_array($review->raw_payload) ? $review->raw_payload : [];
+        $fromPayload = $this->productMetadataFromPayload($payload);
+
+        return [
+            'product_id' => $this->nullableString($review->product_id ?: ($fromPayload['product_id'] ?? null)),
+            'product_handle' => $this->nullableString($review->product_handle ?: ($fromPayload['product_handle'] ?? null)),
+            'product_title' => $this->nullableString($review->product_title ?: ($fromPayload['product_title'] ?? null)),
+            'product_url' => $this->nullableString($review->product_url ?: ($fromPayload['product_url'] ?? null)),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array{product_id:?string,product_handle:?string,product_title:?string,product_url:?string}
+     */
+    protected function productMetadataFromPayload(array $payload): array
+    {
+        $product = is_array($payload['product'] ?? null) ? $payload['product'] : [];
+        $handle = $this->nullableString(data_get($product, 'handle'));
+
+        return [
+            'product_id' => $this->nullableString((string) data_get($product, 'id')),
+            'product_handle' => $handle,
+            'product_title' => $this->nullableString(data_get($product, 'title')),
+            'product_url' => $handle ? '/products/' . ltrim($handle, '/') : null,
+        ];
+    }
+
+    protected function importTimestamp(mixed $value): CarbonInterface
+    {
+        if ($value instanceof CarbonInterface) {
+            return $value->copy();
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return now()->setDate((int) $value->format('Y'), (int) $value->format('m'), (int) $value->format('d'))->startOfDay();
+        }
+
+        $parsed = trim((string) $value);
+        if ($parsed === '') {
+            throw new \InvalidArgumentException('Imported review payload is missing a submitted_at value.');
+        }
+
+        return now()->parse($parsed)->startOfDay();
+    }
+
+    protected function preferredTimestamp(?CarbonInterface $existing, CarbonInterface $imported): CarbonInterface
+    {
+        if ($existing === null) {
+            return $imported;
+        }
+
+        return $existing->toDateString() === $imported->toDateString()
+            ? $existing
+            : $imported;
+    }
+
+    protected function normalizedName(string $value): string
+    {
+        return trim(mb_strtolower(preg_replace('/\s+/', ' ', $value) ?? ''));
+    }
+
+    /**
+     * @return array{0:?string,1:?string}
+     */
+    protected function splitName(string $value): array
+    {
+        $normalized = $this->normalizedName($value);
+        if ($normalized === '' || ! str_contains($normalized, ' ')) {
+            return [null, null];
+        }
+
+        $parts = explode(' ', $normalized);
+        $first = array_shift($parts);
+        $last = array_pop($parts);
+
+        return [$first ?: null, $last ?: null];
+    }
+
+    protected function orderName(Order $order): string
+    {
+        $name = trim((string) ($order->customer_name ?: trim(($order->first_name ?? '') . ' ' . ($order->last_name ?? ''))));
+
+        return $name !== '' ? $name : trim((string) ($order->first_name ?? '') . ' ' . ($order->last_name ?? ''));
+    }
+
+    protected function orderEmail(Order $order): ?string
+    {
+        return $this->nullableString($order->customer_email ?: $order->email ?: $order->shipping_email ?: $order->billing_email);
     }
 
     /**
@@ -504,23 +1305,4 @@ class ProductReviewService
             ->exists();
     }
 
-    protected function sendNotification(MarketingReviewHistory $review): void
-    {
-        $email = $this->notificationEmail();
-        if (! $email) {
-            return;
-        }
-
-        try {
-            Mail::to($email)->send(new ProductReviewSubmittedMail($review));
-            $review->forceFill([
-                'notification_sent_at' => now(),
-            ])->save();
-        } catch (\Throwable $exception) {
-            Log::warning('product review notification failed', [
-                'review_id' => $review->id,
-                'error' => $exception->getMessage(),
-            ]);
-        }
-    }
 }

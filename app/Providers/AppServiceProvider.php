@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\MarketingReviewHistory;
+use App\Observers\MarketingReviewHistoryObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +30,8 @@ class AppServiceProvider extends ServiceProvider
 
     protected function configureDefaults(): void
     {
+        MarketingReviewHistory::observe(MarketingReviewHistoryObserver::class);
+
         Date::use(CarbonImmutable::class);
 
         DB::prohibitDestructiveCommands(

@@ -10,9 +10,9 @@
 <main class="mx-auto max-w-5xl px-4 py-8 space-y-5">
     <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
         <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine Rewards Account</div>
-        <h1 class="mt-2 text-2xl font-semibold text-white">Rewards Lookup Account</h1>
+        <h1 class="mt-2 text-2xl font-semibold text-white">Candle Cash Account Lookup</h1>
         <p class="mt-2 text-sm text-zinc-300">
-            Check your Candle Cash balance, activity history, referral details, review status, and available rewards.
+            Check your Candle Cash balance, recent activity, referral details, and your current $10 redemption status.
         </p>
     </section>
 
@@ -46,8 +46,8 @@
             @endif
             <div class="mt-2 text-xs opacity-90">
                 State: {{ strtoupper((string) ($redeemResult['state'] ?? 'unknown')) }}
-                @if(isset($redeemResult['balance']))
-                    · Balance: {{ number_format((int) $redeemResult['balance']) }} pts
+                @if(data_get($redeemResult, 'balance.candle_cash_amount_formatted'))
+                    · Balance: {{ data_get($redeemResult, 'balance.candle_cash_amount_formatted') }}
                 @endif
             </div>
         </section>
@@ -61,7 +61,8 @@
         <section class="grid gap-4 lg:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
                 <h2 class="text-sm font-semibold text-white">Balance</h2>
-                <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) $balance) }} pts</div>
+                <div class="mt-2 text-3xl font-semibold text-white">{{ data_get($balance, 'candle_cash_amount_formatted', '$0.00') }}</div>
+                <div class="mt-2 text-xs text-zinc-400">Redeem $10 Candle Cash at a time. Limit $10 Candle Cash per order.</div>
                 <div class="mt-2 text-xs text-zinc-400">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
@@ -95,30 +96,31 @@
 
         <section class="grid gap-4 lg:grid-cols-2">
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <h2 class="text-sm font-semibold text-white">Redeemable Rewards</h2>
+                <h2 class="text-sm font-semibold text-white">Redeem Candle Cash</h2>
+                <p class="mt-2 text-xs text-zinc-400">Candle Cash is redeemed in $10 increments, with a limit of $10 per order.</p>
                 <div class="mt-3 space-y-3">
                     @forelse($availableRewards as $reward)
                         @php
-                            $canRedeem = ((int) $balance) >= ((int) $reward->points_cost);
+                            $canRedeem = (bool) data_get($reward, 'is_redeemable_now', false);
                         @endphp
                         <div class="rounded-xl border border-white/10 bg-white/5 p-3">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div>
-                                    <div class="text-sm font-semibold text-white">{{ $reward->name }}</div>
-                                    <div class="text-xs text-zinc-400">{{ (int) $reward->points_cost }} pts · {{ strtoupper((string) $reward->reward_type) }}</div>
+                                    <div class="text-sm font-semibold text-white">{{ data_get($reward, 'name', 'Redeem $10 Candle Cash') }}</div>
+                                    <div class="text-xs text-zinc-400">{{ data_get($reward, 'candle_cash_amount_formatted', '$10.00') }} off this order · Limit $10 per order</div>
                                 </div>
                                 <form method="POST" action="{{ route('marketing.public.account-rewards.redeem') }}" class="shrink-0">
                                     @csrf
                                     <input type="hidden" name="email" value="{{ request('email') }}">
                                     <input type="hidden" name="phone" value="{{ request('phone') }}">
-                                    <input type="hidden" name="reward_id" value="{{ (int) $reward->id }}">
+                                    <input type="hidden" name="reward_id" value="{{ (int) data_get($reward, 'id', 0) }}">
                                     <button type="submit" class="rounded-lg border px-3 py-1.5 text-xs font-semibold {{ $canRedeem ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100' : 'border-zinc-500/40 bg-zinc-700/30 text-zinc-300' }}" {{ $canRedeem ? '' : 'disabled' }}>
-                                        {{ $canRedeem ? 'Redeem' : 'Need More Points' }}
+                                        {{ $canRedeem ? 'Redeem $10 Candle Cash' : 'Need More Candle Cash' }}
                                     </button>
                                 </form>
                             </div>
-                            @if($reward->description)
-                                <div class="mt-2 text-xs text-zinc-400">{{ $reward->description }}</div>
+                            @if(data_get($reward, 'description'))
+                                <div class="mt-2 text-xs text-zinc-400">{{ data_get($reward, 'description') }}</div>
                             @endif
                         </div>
                     @empty
@@ -132,11 +134,11 @@
                 <div class="mt-3 space-y-2 text-sm text-white/80">
                     @forelse($redemptions as $redemption)
                         <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                            {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
-                            · {{ (int) $redemption->points_spent }} pts
-                            · {{ strtoupper((string) ($redemption->status ?: 'issued')) }}
-                            @if($redemption->redemption_code)
-                                · <span class="font-mono text-xs">{{ $redemption->redemption_code }}</span>
+                            {{ data_get($redemption, 'name', 'Redeem $10 Candle Cash') }}
+                            · {{ data_get($redemption, 'candle_cash_amount_formatted', '$0.00') }}
+                            · {{ strtoupper((string) data_get($redemption, 'status', 'issued')) }}
+                            @if(data_get($redemption, 'redemption_code'))
+                                · <span class="font-mono text-xs">{{ data_get($redemption, 'redemption_code') }}</span>
                             @endif
                         </div>
                     @empty
@@ -151,20 +153,20 @@
             <div class="mt-3 overflow-x-auto">
                 <table class="min-w-full text-left text-sm text-white/85">
                     <thead class="text-xs uppercase tracking-wide text-zinc-400">
-                    <tr>
-                        <th class="py-2 pr-4">When</th>
-                        <th class="py-2 pr-4">Category</th>
-                        <th class="py-2 pr-4">Points</th>
-                        <th class="py-2">Details</th>
-                    </tr>
+                        <tr>
+                            <th class="py-2 pr-4">When</th>
+                            <th class="py-2 pr-4">Category</th>
+                            <th class="py-2 pr-4">Candle Cash</th>
+                            <th class="py-2">Details</th>
+                        </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5">
                     @forelse($transactions as $row)
                         <tr>
                             <td class="py-2 pr-4 whitespace-nowrap">{{ $row['occurred_at'] ? \Illuminate\Support\Carbon::parse((string) $row['occurred_at'])->format('Y-m-d H:i') : '—' }}</td>
                             <td class="py-2 pr-4">{{ $row['category'] }}</td>
-                            <td class="py-2 pr-4 font-semibold {{ ((int) $row['points']) >= 0 ? 'text-emerald-300' : 'text-rose-300' }}">
-                                {{ ((int) $row['points']) >= 0 ? '+' : '' }}{{ (int) $row['points'] }}
+                            <td class="py-2 pr-4 font-semibold {{ ((float) data_get($row, 'candle_cash_amount', 0)) >= 0 ? 'text-emerald-300' : 'text-rose-300' }}">
+                                {{ data_get($row, 'signed_candle_cash_amount_formatted', '$0.00') }}
                             </td>
                             <td class="py-2">{{ $row['description'] ?: '—' }}</td>
                         </tr>

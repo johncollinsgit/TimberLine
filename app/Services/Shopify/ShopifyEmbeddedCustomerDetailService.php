@@ -308,6 +308,7 @@ class ShopifyEmbeddedCustomerDetailService
                 $label = strtoupper((string) $transaction->type);
                 $status = $source;
                 $actor = null;
+                $giftDetailParts = null;
 
                 if ($this->isManualAdjustment($transaction)) {
                     $type = 'Manual Adjustment';
@@ -319,6 +320,21 @@ class ShopifyEmbeddedCustomerDetailService
                     $label = 'Candle Cash';
                     $status = 'Admin';
                     $actor = $this->resolveActorLabel($transaction->source_id, $actorLabels);
+                    $giftDetailParts = [$transaction->description ?: 'Gifted Candle Cash'];
+                    if ($transaction->gift_intent !== null && trim((string) $transaction->gift_intent) !== '') {
+                        $giftDetailParts[] = 'Intent: ' . Str::headline(str_replace('_', ' ', (string) $transaction->gift_intent));
+                    }
+                    if ($transaction->gift_origin !== null && trim((string) $transaction->gift_origin) !== '') {
+                        $giftDetailParts[] = 'Origin: ' . Str::headline(str_replace('_', ' ', (string) $transaction->gift_origin));
+                    }
+                    if ($transaction->campaign_key !== null && trim((string) $transaction->campaign_key) !== '') {
+                        $giftDetailParts[] = 'Campaign: ' . $transaction->campaign_key;
+                    }
+                    if ($transaction->notification_status !== null && trim((string) $transaction->notification_status) !== '') {
+                        $notificationLabel = Str::headline(str_replace('_', ' ', (string) $transaction->notification_status));
+                        $via = $transaction->notified_via ? ' via ' . Str::headline(str_replace('_', ' ', (string) $transaction->notified_via)) : '';
+                        $giftDetailParts[] = 'Notification: ' . $notificationLabel . $via;
+                    }
                 } elseif ($transaction->type === 'earn') {
                     $type = 'Reward Earned';
                     $label = $transaction->description ?: 'Candle Cash';
@@ -327,13 +343,15 @@ class ShopifyEmbeddedCustomerDetailService
                     $label = $transaction->description ?: 'Candle Cash';
                 }
 
+                $detailText = $giftDetailParts !== null ? implode(' · ', $giftDetailParts) : ($transaction->description ?: '—');
+
                 return [
                     'occurred_at' => $transaction->created_at,
                     'type' => $type,
                     'label' => $label,
                     'points' => (int) $transaction->points,
                     'status' => $status,
-                    'detail' => $transaction->description ?: '—',
+                    'detail' => $detailText,
                     'actor' => $actor,
                 ];
             }));
