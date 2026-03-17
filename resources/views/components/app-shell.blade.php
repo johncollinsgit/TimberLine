@@ -2,20 +2,28 @@
     'navigation' => [],
     'pageTitle' => null,
     'pageSubtitle' => null,
+    'subnav' => [],
     'actions' => [],
     'storeLabel' => null,
+    'showSidebar' => true,
 ])
 
 <style>
     .app-shell {
         --app-shell-bg: #eef2ed;
-        --app-surface: rgba(255, 255, 255, 0.88);
-        --app-main-bg: rgba(255, 255, 255, 0.55);
+        --app-main-bg: rgba(255, 255, 255, 0.52);
 
         display: grid;
-        grid-template-columns: 284px minmax(0, 1fr);
         min-height: 100vh;
         background: linear-gradient(180deg, #f7faf6 0%, var(--app-shell-bg) 100%);
+    }
+
+    .app-shell--with-sidebar {
+        grid-template-columns: 270px minmax(0, 1fr);
+    }
+
+    .app-shell--no-sidebar {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .app-shell-main {
@@ -34,18 +42,20 @@
         min-height: 100vh;
         height: 100vh;
         overflow-y: auto;
+        border-right: 1px solid rgba(15, 23, 42, 0.06);
     }
 
     .app-shell-content {
         flex: 1;
         box-sizing: border-box;
-        padding: 32px 38px 52px;
+        padding: 28px 34px 50px;
         max-width: 1240px;
         width: 100%;
     }
 
     @media (max-width: 900px) {
-        .app-shell {
+        .app-shell--with-sidebar,
+        .app-shell--no-sidebar {
             grid-template-columns: 1fr;
         }
 
@@ -64,23 +74,26 @@
 
     @media (max-width: 640px) {
         .app-shell-content {
-            padding: 18px 16px 32px;
+            padding: 16px 14px 30px;
         }
     }
 </style>
 
-<div class="app-shell">
-    <aside class="app-shell-sidebar">
-        <x-app-sidebar
-            :items="$navigation['items'] ?? []"
-            :active="$navigation['activeSection'] ?? null"
-            :active-child="$navigation['activeChild'] ?? null"
-        />
-    </aside>
+<div class="app-shell {{ $showSidebar ? 'app-shell--with-sidebar' : 'app-shell--no-sidebar' }}">
+    @if($showSidebar)
+        <aside class="app-shell-sidebar">
+            <x-app-sidebar
+                :items="$navigation['items'] ?? []"
+                :active="$navigation['activeSection'] ?? null"
+                :active-child="$navigation['activeChild'] ?? null"
+            />
+        </aside>
+    @endif
     <div class="app-shell-main">
         <x-app-topbar
             :title="$pageTitle"
             :subtitle="$pageSubtitle"
+            :subnav="$subnav"
             :actions="$actions"
             :store-label="$storeLabel"
         />

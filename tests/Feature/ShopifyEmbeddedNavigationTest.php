@@ -2,29 +2,103 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
-test('embedded app navigation metadata matches each sidebar route', function (string $routeName, string $expectedSection, ?string $expectedChild, string $visibleText, bool $shouldHaveActions) {
+use App\Models\MarketingProfile;
+
+test('embedded app navigation metadata matches each top-level section route', function (string $routeName, string $expectedSection, ?string $expectedChild, string $visibleText) {
     configureEmbeddedRetailStore();
 
     $response = $this->get(route($routeName, retailEmbeddedSignedQuery()));
 
     $response->assertOk()
         ->assertSeeText($visibleText)
-        ->assertViewHas('appNavigation', function (array $navigation) use ($expectedSection, $expectedChild) {
+        ->assertViewHas('appNavigation', function (array $navigation) use ($expectedSection, $expectedChild): bool {
             return ($navigation['activeSection'] ?? null) === $expectedSection
                 && ($navigation['activeChild'] ?? null) === $expectedChild;
         })
-        ->assertViewHas('pageActions', function (array $actions) use ($shouldHaveActions) {
-            return $shouldHaveActions ? count($actions) > 0 : count($actions) === 0;
+        ->assertViewHas('pageActions', fn (array $actions): bool => count($actions) === 0);
+})->with([
+    'dashboard' => ['home', 'dashboard', null, 'Forestry rewards are connected'],
+    'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview', 'Manage Candle Cash rewards and program settings.'],
+    'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn', 'Ways to Earn'],
+    'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem', 'Ways to Redeem'],
+    'rewards referrals' => ['shopify.embedded.rewards.referrals', 'rewards', 'referrals', 'Referrals coming soon'],
+    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays', 'Birthday rewards coming soon'],
+    'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip', 'VIP experiences coming soon'],
+    'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications', 'Notifications coming soon'],
+    'customers' => ['shopify.embedded.customers', 'customers', null, 'Manage customers'],
+    'settings' => ['shopify.embedded.settings', 'settings', null, 'Program settings are coming into view'],
+]);
+
+test('customers routes and aliases keep customers section active with correct subnav tab', function (string $routeName, string $activeTab, string $visibleText) {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route($routeName, retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSeeText($visibleText)
+        ->assertViewHas('appNavigation', fn (array $navigation): bool => ($navigation['activeSection'] ?? null) === 'customers')
+        ->assertViewHas('pageSubnav', function (array $subnav) use ($activeTab): bool {
+            return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === $activeTab && ! empty($item['active']));
         });
 })->with([
-    'dashboard' => ['home', 'dashboard', null, 'Forestry rewards are connected', true],
-    'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview', 'Manage Candle Cash rewards and program settings.', false],
-    'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn', 'Ways to Earn', false],
-    'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem', 'Ways to Redeem', false],
-    'rewards referrals' => ['shopify.embedded.rewards.referrals', 'rewards', 'referrals', 'Referrals coming soon', false],
-    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays', 'Birthday rewards coming soon', false],
-    'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip', 'VIP experiences coming soon', false],
-    'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications', 'Notifications coming soon', false],
-    'customers' => ['shopify.embedded.customers', 'customers', null, 'Customer intelligence is arriving', false],
-    'settings' => ['shopify.embedded.settings', 'settings', null, 'Program settings are coming into view', false],
+    'customers root manage' => ['shopify.embedded.customers', 'manage', 'Manage customers'],
+    'customers manage' => ['shopify.embedded.customers.manage', 'manage', 'Manage customers'],
+    'customers activity' => ['shopify.embedded.customers.activity', 'activity', 'Activity'],
+    'customers questions' => ['shopify.embedded.customers.questions', 'questions', 'Questions'],
+    'customers alias root manage' => ['shopify.app.customers', 'manage', 'Manage customers'],
+    'customers alias manage' => ['shopify.app.customers.manage', 'manage', 'Manage customers'],
+    'customers alias activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
+    'customers alias questions' => ['shopify.app.customers.questions', 'questions', 'Questions'],
 ]);
+
+test('customers detail route and alias resolve with manage tab active', function (string $routeName) {
+    configureEmbeddedRetailStore();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Avery',
+        'last_name' => 'Stone',
+        'email' => 'avery@example.com',
+        'normalized_email' => 'avery@example.com',
+    ]);
+
+    $response = $this->get(route($routeName, array_merge(
+        ['marketingProfile' => $profile->id],
+        retailEmbeddedSignedQuery()
+    )));
+
+    $response->assertOk()
+        ->assertSeeText('Customer Detail')
+        ->assertSeeText('Marketing profile ID: '.$profile->id)
+        ->assertViewHas('appNavigation', fn (array $navigation): bool => ($navigation['activeSection'] ?? null) === 'customers')
+        ->assertViewHas('pageSubnav', function (array $subnav): bool {
+            return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'manage' && ! empty($item['active']));
+        });
+})->with([
+    'customers detail root route' => ['shopify.embedded.customers.detail'],
+    'customers detail alias route' => ['shopify.app.customers.detail'],
+]);
+
+test('dashboard no longer shows oversized legacy action labels', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('home', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertDontSeeText('Open Rewards Admin')
+        ->assertDontSeeText('Open Birthdays in Backstage')
+        ->assertDontSeeText('Open Marketing Overview')
+        ->assertDontSeeText('Open Birthday Rewards');
+});
+
+test('embedded shell renders shopify app nav with top-level links', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('home', retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSee('<s-app-nav>', false)
+        ->assertSee('rel="home"', false)
+        ->assertSee('<s-link href="/">Dashboard</s-link>', false)
+        ->assertSee('<s-link href="/rewards">Rewards</s-link>', false)
+        ->assertSee('<s-link href="/customers">Customers</s-link>', false)
+        ->assertSee('<s-link href="/settings">Settings</s-link>', false);
+});

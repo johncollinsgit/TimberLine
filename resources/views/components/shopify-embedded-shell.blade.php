@@ -7,6 +7,7 @@
     'headline' => null,
     'subheadline' => null,
     'appNavigation' => [],
+    'pageSubnav' => [],
     'pageActions' => [],
 ])
 
@@ -46,12 +47,23 @@
     </style>
 </head>
 <body>
+    @if($authorized && filled($shopifyApiKey) && filled($host))
+        <s-app-nav>
+            <s-link href="/" rel="home">Home</s-link>
+            <s-link href="/">Dashboard</s-link>
+            <s-link href="/rewards">Rewards</s-link>
+            <s-link href="/customers">Customers</s-link>
+            <s-link href="/settings">Settings</s-link>
+        </s-app-nav>
+    @endif
     <x-app-shell
         :navigation="$appNavigation"
         :page-title="$headline"
         :page-subtitle="$subheadline"
+        :subnav="$pageSubnav"
         :actions="$pageActions"
         :store-label="$storeLabel"
+        :show-sidebar="! ($authorized && filled($shopifyApiKey) && filled($host))"
     >
         {{ $slot }}
     </x-app-shell>
