@@ -7,18 +7,33 @@
 
 <style>
     .app-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 24px;
-        padding: 24px 32px;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        background: rgba(255, 255, 255, 0.92);
-        position: sticky;
-        top: 0;
-        z-index: 5;
-        backdrop-filter: blur(12px);
-        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+        padding: 22px 34px 18px;
+        background: rgba(248, 251, 247, 0.82);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    .app-topbar::after {
+        content: "";
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        bottom: 0;
+        height: 1px;
+        background: linear-gradient(
+            90deg,
+            rgba(15, 23, 42, 0) 0%,
+            rgba(15, 23, 42, 0.18) 14%,
+            rgba(15, 23, 42, 0.18) 86%,
+            rgba(15, 23, 42, 0) 100%
+        );
     }
 
     .app-topbar-text {
@@ -29,15 +44,17 @@
 
     .app-topbar-caption {
         font-size: 11px;
-        letter-spacing: 0.24em;
+        letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: rgba(15, 23, 42, 0.45);
+        color: rgba(15, 23, 42, 0.48);
     }
 
     .app-topbar-title {
         margin: 0;
-        font-family: "Fraunces", ui-serif, Georgia, serif;
-        font-size: clamp(1.7rem, 2.2vw, 2.2rem);
+        font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: clamp(1.75rem, 2.2vw, 2.35rem);
+        font-weight: 640;
+        letter-spacing: -0.02em;
         color: #0f172a;
     }
 
@@ -57,24 +74,35 @@
 
     .app-topbar-action {
         border-radius: 999px;
-        padding: 10px 18px;
+        padding: 9px 16px;
         font-size: 13px;
         font-weight: 600;
         text-decoration: none;
-        border: 1px solid rgba(15, 143, 97, 0.2);
-        background: rgba(15, 143, 97, 0.1);
-        color: #0f8f61;
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        background: rgba(255, 255, 255, 0.74);
+        color: rgba(15, 23, 42, 0.8);
         transition: background 0.2s ease, border-color 0.2s ease;
     }
 
     .app-topbar-action:hover {
-        background: rgba(15, 143, 97, 0.16);
-        border-color: rgba(15, 143, 97, 0.4);
+        background: rgba(255, 255, 255, 0.94);
+        border-color: rgba(15, 23, 42, 0.24);
+    }
+
+    .app-topbar-action:focus-visible {
+        outline: 2px solid rgba(15, 143, 97, 0.5);
+        outline-offset: 2px;
     }
 
     @media (max-width: 768px) {
         .app-topbar {
             flex-direction: column;
+            padding: 16px 16px 14px;
+        }
+
+        .app-topbar::after {
+            left: 16px;
+            right: 16px;
         }
 
         .app-topbar-actions {

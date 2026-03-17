@@ -8,34 +8,63 @@
 
 <style>
     .app-shell {
+        --app-shell-bg: #eef2ed;
+        --app-surface: rgba(255, 255, 255, 0.88);
+        --app-main-bg: rgba(255, 255, 255, 0.55);
+
         display: grid;
-        grid-template-columns: 280px 1fr;
+        grid-template-columns: 284px minmax(0, 1fr);
         min-height: 100vh;
-        background: transparent;
+        background: linear-gradient(180deg, #f7faf6 0%, var(--app-shell-bg) 100%);
     }
 
     .app-shell-main {
         padding: 0;
-        background: transparent;
+        min-width: 0;
+        background: var(--app-main-bg);
         display: flex;
         flex-direction: column;
         min-height: 100vh;
     }
 
+    .app-shell-sidebar {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        min-height: 100vh;
+        height: 100vh;
+        overflow-y: auto;
+    }
+
     .app-shell-content {
         flex: 1;
-        padding: 32px 34px 48px;
-        max-width: 1200px;
+        box-sizing: border-box;
+        padding: 32px 38px 52px;
+        max-width: 1240px;
         width: 100%;
     }
 
-    @media (max-width: 1024px) {
+    @media (max-width: 900px) {
         .app-shell {
             grid-template-columns: 1fr;
         }
 
+        .app-shell-sidebar {
+            position: relative;
+            top: auto;
+            height: auto;
+            min-height: 0;
+            overflow-y: visible;
+        }
+
         .app-shell-content {
             padding: 24px;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .app-shell-content {
+            padding: 18px 16px 32px;
         }
     }
 </style>
