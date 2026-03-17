@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ShopifyStore;
-use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,8 +12,7 @@ class ShopifyEmbeddedAppController extends Controller
 
     public function show(
         Request $request,
-        ShopifyEmbeddedAppContext $contextService,
-        BirthdayReportingService $birthdayReporting
+        ShopifyEmbeddedAppContext $contextService
     ): Response {
         $context = $contextService->resolvePageContext($request);
 
@@ -28,14 +25,17 @@ class ShopifyEmbeddedAppController extends Controller
                     'shopDomain' => null,
                     'host' => null,
                     'storeLabel' => 'Shopify Admin',
-                    'headline' => 'Open this app from Shopify Admin',
-                    'subheadline' => 'This page is meant to load inside your Shopify admin so it can verify the store context.',
+                    'headline' => 'Dashboard',
+                    'subheadline' => 'Rewards performance snapshot',
                     'appNavigation' => $this->embeddedAppNavigation('dashboard'),
                     'pageActions' => [],
                     'pageSubnav' => [],
-                    'dashboardLinks' => [],
-                    'cards' => [],
-                    'setupNote' => 'If you still need the dedicated rewards page on the storefront, create a page named Your Rewards with the page.forestry-rewards template and publish it.',
+                    'dashboardBootstrap' => [
+                        'authorized' => false,
+                        'status' => 'open_from_shopify',
+                        'storeLabel' => 'Shopify Admin',
+                        'links' => [],
+                    ],
                 ])
             );
         }
@@ -49,14 +49,17 @@ class ShopifyEmbeddedAppController extends Controller
                     'shopDomain' => $context['shop_domain'] ?? null,
                     'host' => $context['host'] ?? null,
                     'storeLabel' => 'Shopify Admin',
-                    'headline' => 'We could not verify this Shopify request',
-                    'subheadline' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
+                    'headline' => 'Dashboard',
+                    'subheadline' => 'Rewards performance snapshot',
                     'appNavigation' => $this->embeddedAppNavigation('dashboard'),
                     'pageActions' => [],
                     'pageSubnav' => [],
-                    'dashboardLinks' => [],
-                    'cards' => [],
-                    'setupNote' => null,
+                    'dashboardBootstrap' => [
+                        'authorized' => false,
+                        'status' => 'invalid_request',
+                        'storeLabel' => 'Shopify Admin',
+                        'links' => [],
+                    ],
                 ]),
                 401
             );
@@ -64,43 +67,28 @@ class ShopifyEmbeddedAppController extends Controller
 
         /** @var array<string,mixed> $store */
         $store = $context['store'];
-        $summary = $birthdayReporting->summary();
-        $rewardSummary = $birthdayReporting->rewardSummary();
-        $storeRecord = ShopifyStore::query()->where('store_key', $store['key'])->first();
-        $hasProxySecret = trim((string) config('marketing.shopify.app_proxy_secret', '')) !== ''
-            || trim((string) config('services.shopify.stores.' . $store['key'] . '.client_secret', '')) !== '';
-
-        $cards = [
+        $dashboardLinks = [
             [
-                'label' => 'Storefront Rewards',
-                'status' => ($storeRecord !== null && (bool) config('marketing.shopify.app_proxy_enabled', true) && $hasProxySecret)
-                    ? 'Connected'
-                    : 'Needs attention',
-                'tone' => ($storeRecord !== null && (bool) config('marketing.shopify.app_proxy_enabled', true) && $hasProxySecret)
-                    ? 'ok'
-                    : 'warning',
-                'body' => ($storeRecord !== null && (bool) config('marketing.shopify.app_proxy_enabled', true) && $hasProxySecret)
-                    ? 'The storefront rewards endpoints are connected to this app and ready to answer live requests.'
-                    : 'The storefront connection is missing install or proxy config.',
-                'meta' => [
-                    'Proxy path' => '/apps/forestry/*',
-                    'Store install' => $storeRecord?->installed_at ? 'Installed' : 'Missing install record',
-                ],
+                'label' => 'Rewards Admin',
+                'href' => route('shopify.embedded.rewards', [], false),
             ],
             [
-                'label' => 'Birthday Rewards',
-                'status' => ((bool) config('marketing.birthday_rewards.enabled', true) && (int) ($summary['with_birthday'] ?? 0) > 0)
-                    ? 'Running'
-                    : 'Not ready',
-                'tone' => ((bool) config('marketing.birthday_rewards.enabled', true) && (int) ($summary['with_birthday'] ?? 0) > 0)
-                    ? 'ok'
-                    : 'warning',
-                'body' => 'Backstage is tracking birthdays, reward states, and order usage for this store.',
-                'meta' => [
-                    'Customers with birthdays' => number_format((int) ($summary['with_birthday'] ?? 0)),
-                    'Activated rewards' => number_format((int) ($rewardSummary['activated'] ?? 0)),
-                    'Redeemed rewards' => number_format((int) ($rewardSummary['redeemed'] ?? 0)),
-                ],
+                'label' => 'Customers',
+                'href' => route('shopify.embedded.customers.manage', [], false),
+            ],
+            [
+                'label' => 'Program Settings',
+                'href' => route('shopify.embedded.settings', [], false),
+            ],
+            [
+                'label' => 'Birthdays in Backstage',
+                'href' => route('birthdays.customers'),
+                'external' => true,
+            ],
+            [
+                'label' => 'Marketing Overview',
+                'href' => route('marketing.overview'),
+                'external' => true,
             ],
         ];
 
@@ -112,35 +100,17 @@ class ShopifyEmbeddedAppController extends Controller
                 'shopDomain' => (string) ($store['shop'] ?? ''),
                 'host' => (string) ($context['host'] ?? ''),
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')) . ' Store',
-                'headline' => 'Forestry rewards are connected',
-                'subheadline' => 'Backstage manages the reward logic. Your storefront shows it to shoppers. This page is the quick health view for the Shopify side.',
+                'headline' => 'Dashboard',
+                'subheadline' => 'Rewards performance snapshot',
                 'appNavigation' => $this->embeddedAppNavigation('dashboard'),
                 'pageActions' => [],
                 'pageSubnav' => [],
-                'dashboardLinks' => [
-                    [
-                        'label' => 'Rewards Admin',
-                        'href' => route('shopify.embedded.rewards', [], false),
-                    ],
-                    [
-                        'label' => 'Customers',
-                        'href' => route('shopify.embedded.customers.manage', [], false),
-                    ],
-                    [
-                        'label' => 'Program Settings',
-                        'href' => route('shopify.embedded.settings', [], false),
-                    ],
-                    [
-                        'label' => 'Birthdays in Backstage',
-                        'href' => route('birthdays.customers'),
-                    ],
-                    [
-                        'label' => 'Marketing Overview',
-                        'href' => route('marketing.overview'),
-                    ],
+                'dashboardBootstrap' => [
+                    'authorized' => true,
+                    'status' => 'ok',
+                    'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')) . ' Store',
+                    'links' => $dashboardLinks,
                 ],
-                'cards' => $cards,
-                'setupNote' => null,
             ])
         );
     }

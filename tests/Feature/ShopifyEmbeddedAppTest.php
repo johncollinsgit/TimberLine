@@ -4,10 +4,15 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\ShopifyStore;
 
+beforeEach(function () {
+    $this->withoutVite();
+});
+
 test('shopify embedded app route shows helpful launch message when opened outside shopify admin', function () {
     $this->get(route('shopify.app'))
         ->assertOk()
-        ->assertSeeText('Open this app from Shopify Admin')
+        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertSee('shopify-dashboard-bootstrap', false)
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 });
 
@@ -33,9 +38,9 @@ test('shopify embedded app route renders verified admin shell for configured sto
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Forestry rewards are connected')
-        ->assertSeeText('Storefront Rewards')
-        ->assertSeeText('Birthday Rewards')
+        ->assertSeeText('Dashboard')
+        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertSee('shopify-dashboard-bootstrap', false)
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
@@ -54,7 +59,8 @@ test('shopify embedded app route rejects invalid hmac', function () {
         'hmac' => 'bad-signature',
     ]))
         ->assertStatus(401)
-        ->assertSeeText('We could not verify this Shopify request');
+        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertSee('"status":"invalid_request"', false);
 });
 
 test('shopify embedded session lets root-style home route resolve after signed app entry', function () {
@@ -80,7 +86,8 @@ test('shopify embedded session lets root-style home route resolve after signed a
 
     $this->get('/')
         ->assertOk()
-        ->assertSeeText('Forestry rewards are connected');
+        ->assertSeeText('Dashboard')
+        ->assertSee('id="shopify-dashboard-root"', false);
 });
 
 test('shopify embedded session lets root-style rewards and customers routes resolve after signed app entry', function () {
