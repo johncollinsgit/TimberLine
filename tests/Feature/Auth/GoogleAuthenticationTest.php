@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
 
 beforeEach(function () {
@@ -55,6 +56,55 @@ test('google callback links an existing active user and signs them in', function
 
     Socialite::shouldReceive('driver')
         ->once()
+        ->with('google')
+        ->andReturn($provider);
+
+    $response = $this->get(route('auth.google.callback'));
+
+    $response->assertRedirect(route('pouring.index', absolute: false));
+
+    $user->refresh();
+
+    $this->assertAuthenticatedAs($user);
+    expect($user->google_id)->toBe('google-user-123')
+        ->and($user->google_avatar)->toBe('https://example.com/avatar.png');
+});
+
+test('google callback retries stateless when the session state expires', function () {
+    $user = User::factory()->create([
+        'email' => 'pouring@example.com',
+        'role' => 'pouring',
+        'is_active' => true,
+    ]);
+
+    $googleUser = (new SocialiteUser())
+        ->setRaw(['sub' => 'google-user-123'])
+        ->map([
+            'id' => 'google-user-123',
+            'email' => 'pouring@example.com',
+            'name' => 'Pouring User',
+            'avatar' => 'https://example.com/avatar.png',
+        ]);
+
+    $provider = \Mockery::mock();
+    $userCallCount = 0;
+    $provider->shouldReceive('user')
+        ->twice()
+        ->andReturnUsing(function () use (&$userCallCount, $googleUser) {
+            $userCallCount++;
+
+            if ($userCallCount === 1) {
+                throw new InvalidStateException('state mismatch');
+            }
+
+            return $googleUser;
+        });
+    $provider->shouldReceive('stateless')
+        ->once()
+        ->andReturnSelf();
+
+    Socialite::shouldReceive('driver')
+        ->twice()
         ->with('google')
         ->andReturn($provider);
 

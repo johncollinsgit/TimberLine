@@ -97,6 +97,15 @@ class OrderLineFactory extends Factory
 
         // Qty feels like wholesale-ish ordering
         $qty = $this->faker->randomElement([1, 3, 3, 6, 6, 9, 12, 12]);
+        $unitPrice = $size?->retail_price !== null
+            ? round((float) $size->retail_price, 2)
+            : match ($sizeCode) {
+                '16oz' => 32.00,
+                '8oz' => 24.00,
+                'Wax Melt' => 12.00,
+                'Room Spray' => 18.00,
+                default => 20.00,
+            };
 
         $pourStatus = $this->faker->randomElement([
             'queued','queued','queued',
@@ -119,6 +128,11 @@ class OrderLineFactory extends Factory
             // keep BOTH columns in sync while you’re in transition
             'ordered_qty' => $qty,
             'quantity'    => $qty,
+            'currency_code' => 'USD',
+            'unit_price' => $unitPrice,
+            'line_subtotal' => round($unitPrice * $qty, 2),
+            'discount_total' => 0.00,
+            'line_total' => round($unitPrice * $qty, 2),
 
             'pour_status' => $pourStatus,
         ];

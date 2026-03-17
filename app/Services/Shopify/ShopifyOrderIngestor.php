@@ -58,6 +58,7 @@ class ShopifyOrderIngestor
                 $orderData,
                 (string) ($store['key'] ?? '')
             );
+            $financials = $this->extractOrderFinancials($orderData);
 
             $order->shopify_store_key = $store['key'];
             $order->shopify_order_id = $shopifyOrderId;
@@ -118,6 +119,13 @@ class ShopifyOrderIngestor
             $order->shipping_phone = $orderData['shipping_address']['phone'] ?? null;
             $order->billing_email = $orderData['billing_address']['email'] ?? ($orderData['email'] ?? null);
             $order->billing_phone = $orderData['billing_address']['phone'] ?? null;
+            $order->currency_code = $financials['currency_code'];
+            $order->subtotal_price = $financials['subtotal_price'];
+            $order->discount_total = $financials['discount_total'];
+            $order->tax_total = $financials['tax_total'];
+            $order->shipping_total = $financials['shipping_total'];
+            $order->refund_total = $financials['refund_total'];
+            $order->total_price = $financials['total_price'];
             $order->attribution_meta = $this->attributionSourceMetaBuilder->mergeSourceMeta(
                 is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [],
                 $payloadAttributionMeta
@@ -188,7 +196,7 @@ class ShopifyOrderIngestor
     /**
      * @param array<int, array<string, mixed>> $lineItems
      * @param array<string, mixed> $orderData
-     * @return array<int, array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type: string, image_url: ?string, raw_title: ?string, raw_variant: ?string, scent_id: ?int, size_id?: ?int, external_key?: ?string, payload: array<string, mixed>}>
+     * @return array<int, array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type: string, image_url: ?string, raw_title: ?string, raw_variant: ?string, scent_id: ?int, size_id?: ?int, external_key?: ?string, shopify_product_id?: ?int, shopify_variant_id?: ?int, currency_code?: ?string, unit_price?: ?float, line_subtotal?: ?float, discount_total?: ?float, line_total?: ?float, payload: array<string, mixed>}>
      */
     public function mergeLineItems(array $lineItems, ?string $orderNote = null, array $orderData = [], ?string $storeKey = null): array
     {
@@ -290,8 +298,10 @@ class ShopifyOrderIngestor
                 (string) ($variant ?? ''),
                 (string) ($lineWick ?? ''),
             ]);
+            $lineFinancials = $this->extractLineFinancials($line);
+            $isNew = !isset($merged[$key]);
 
-            if (!isset($merged[$key])) {
+            if ($isNew) {
                 $sizeId = null;
                 if (!empty($variantRaw)) {
                     $normalizedVariant = $this->normalizeSize((string) $variantRaw);
@@ -367,6 +377,13 @@ class ShopifyOrderIngestor
                     'size_id' => $sizeId,
                     'raw_scent_name' => $rawScentName,
                     'account_name' => $accountName,
+                    'shopify_product_id' => $lineFinancials['shopify_product_id'],
+                    'shopify_variant_id' => $lineFinancials['shopify_variant_id'],
+                    'currency_code' => $lineFinancials['currency_code'],
+                    'unit_price' => $lineFinancials['unit_price'],
+                    'line_subtotal' => $lineFinancials['line_subtotal'],
+                    'discount_total' => $lineFinancials['discount_total'],
+                    'line_total' => $lineFinancials['line_total'],
                     'payload' => $payload,
                 ];
             }
@@ -378,6 +395,29 @@ class ShopifyOrderIngestor
             if (empty($merged[$key]['image_url']) && $imageUrl) {
                 $merged[$key]['image_url'] = $imageUrl;
             }
+            if (! $isNew) {
+                if (($merged[$key]['shopify_product_id'] ?? null) !== ($lineFinancials['shopify_product_id'] ?? null)) {
+                    $merged[$key]['shopify_product_id'] = null;
+                }
+                if (($merged[$key]['shopify_variant_id'] ?? null) !== ($lineFinancials['shopify_variant_id'] ?? null)) {
+                    $merged[$key]['shopify_variant_id'] = null;
+                }
+                if (empty($merged[$key]['currency_code']) && ! empty($lineFinancials['currency_code'])) {
+                    $merged[$key]['currency_code'] = $lineFinancials['currency_code'];
+                }
+                foreach (['line_subtotal', 'discount_total', 'line_total'] as $moneyField) {
+                    $merged[$key][$moneyField] = $this->sumMoney(
+                        $merged[$key][$moneyField] ?? null,
+                        $lineFinancials[$moneyField] ?? null
+                    );
+                }
+            }
+            $merged[$key]['unit_price'] = $this->deriveUnitPrice(
+                $merged[$key]['line_total'] ?? null,
+                $merged[$key]['line_subtotal'] ?? null,
+                (int) $merged[$key]['quantity'],
+                $lineFinancials['unit_price'] ?? null
+            );
         }
 
         return array_values($merged);
@@ -879,7 +919,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type?: string, image_url?: ?string, raw_title?: ?string, raw_variant?: ?string, scent_id?: ?int, size_id?: ?int, external_key?: ?string} $line
+     * @param array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type?: string, image_url?: ?string, raw_title?: ?string, raw_variant?: ?string, scent_id?: ?int, size_id?: ?int, external_key?: ?string, shopify_product_id?: ?int, shopify_variant_id?: ?int, currency_code?: ?string, unit_price?: ?float, line_subtotal?: ?float, discount_total?: ?float, line_total?: ?float} $line
      */
     protected function upsertLine(int $orderId, array $line): OrderLine
     {
@@ -887,6 +927,13 @@ class ShopifyOrderIngestor
             'ordered_qty' => $line['quantity'],
             'quantity' => $line['quantity'],
             'sku' => $line['sku'],
+            'shopify_product_id' => $line['shopify_product_id'] ?? null,
+            'shopify_variant_id' => $line['shopify_variant_id'] ?? null,
+            'currency_code' => $line['currency_code'] ?? null,
+            'unit_price' => $line['unit_price'] ?? null,
+            'line_subtotal' => $line['line_subtotal'] ?? null,
+            'discount_total' => $line['discount_total'] ?? null,
+            'line_total' => $line['line_total'] ?? null,
             'raw_title' => $line['raw_title'] ?? $line['title'],
             'raw_variant' => $line['raw_variant'] ?? $line['variant'],
             'image_url' => $line['image_url'] ?? null,
@@ -949,11 +996,18 @@ class ShopifyOrderIngestor
         return OrderLine::create([
             'order_id' => $orderId,
             'shopify_line_item_id' => $line['line_item_id'],
+            'shopify_product_id' => $line['shopify_product_id'] ?? null,
+            'shopify_variant_id' => $line['shopify_variant_id'] ?? null,
             'external_key' => $line['external_key'] ?? null,
             'ordered_qty' => $line['quantity'],
             'extra_qty' => 0,
             'quantity' => $line['quantity'],
             'sku' => $line['sku'],
+            'currency_code' => $line['currency_code'] ?? null,
+            'unit_price' => $line['unit_price'] ?? null,
+            'line_subtotal' => $line['line_subtotal'] ?? null,
+            'discount_total' => $line['discount_total'] ?? null,
+            'line_total' => $line['line_total'] ?? null,
             'raw_title' => $line['raw_title'] ?? $line['title'],
             'raw_variant' => $line['raw_variant'] ?? $line['variant'],
             'image_url' => $line['image_url'] ?? null,
@@ -1287,5 +1341,205 @@ class ShopifyOrderIngestor
             ->filter(fn (string $value): bool => str_starts_with($value, 'FOREST-'))
             ->unique()
             ->first();
+    }
+
+    /**
+     * @param  array<string,mixed>  $orderData
+     * @return array<string,mixed>
+     */
+    protected function extractOrderFinancials(array $orderData): array
+    {
+        return [
+            'currency_code' => $this->nullableString(
+                $orderData['presentment_currency']
+                    ?? $orderData['currency']
+                    ?? data_get($orderData, 'current_total_price_set.shop_money.currency_code')
+                    ?? data_get($orderData, 'total_price_set.shop_money.currency_code')
+            ),
+            'subtotal_price' => $this->moneyValue(
+                $orderData['current_subtotal_price'] ?? null,
+                $orderData['subtotal_price'] ?? null,
+                data_get($orderData, 'current_subtotal_price_set.shop_money.amount'),
+                data_get($orderData, 'subtotal_price_set.shop_money.amount')
+            ),
+            'discount_total' => $this->moneyValue(
+                $orderData['current_total_discounts'] ?? null,
+                $orderData['total_discounts'] ?? null,
+                data_get($orderData, 'current_total_discounts_set.shop_money.amount'),
+                data_get($orderData, 'total_discounts_set.shop_money.amount')
+            ) ?? 0.0,
+            'tax_total' => $this->moneyValue(
+                $orderData['current_total_tax'] ?? null,
+                $orderData['total_tax'] ?? null,
+                data_get($orderData, 'current_total_tax_set.shop_money.amount'),
+                data_get($orderData, 'total_tax_set.shop_money.amount')
+            ) ?? 0.0,
+            'shipping_total' => $this->moneyValue(
+                data_get($orderData, 'current_total_shipping_price_set.shop_money.amount'),
+                data_get($orderData, 'total_shipping_price_set.shop_money.amount'),
+                $this->sumShippingLines((array) ($orderData['shipping_lines'] ?? []))
+            ) ?? 0.0,
+            'refund_total' => $this->extractRefundTotal($orderData),
+            'total_price' => $this->moneyValue(
+                $orderData['current_total_price'] ?? null,
+                $orderData['total_price'] ?? null,
+                data_get($orderData, 'current_total_price_set.shop_money.amount'),
+                data_get($orderData, 'total_price_set.shop_money.amount')
+            ),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $line
+     * @return array<string,mixed>
+     */
+    protected function extractLineFinancials(array $line): array
+    {
+        $quantity = max(1, (int) ($line['quantity'] ?? 1));
+        $lineSubtotal = $this->moneyValue(
+            $line['original_line_price'] ?? null,
+            data_get($line, 'original_line_price_set.shop_money.amount'),
+            (is_numeric($line['price'] ?? null) ? ((float) $line['price'] * $quantity) : null)
+        );
+        $discountTotal = $this->moneyValue(
+            $line['total_discount'] ?? null,
+            data_get($line, 'total_discount_set.shop_money.amount')
+        ) ?? 0.0;
+        $lineTotal = $this->moneyValue(
+            $line['final_line_price'] ?? null,
+            $line['discounted_total'] ?? null,
+            data_get($line, 'final_line_price_set.shop_money.amount'),
+            $lineSubtotal !== null ? max(0, $lineSubtotal - $discountTotal) : null
+        );
+
+        return [
+            'shopify_product_id' => isset($line['product_id']) && is_numeric($line['product_id']) ? (int) $line['product_id'] : null,
+            'shopify_variant_id' => isset($line['variant_id']) && is_numeric($line['variant_id']) ? (int) $line['variant_id'] : null,
+            'currency_code' => $this->nullableString(
+                data_get($line, 'price_set.shop_money.currency_code')
+                    ?? data_get($line, 'discounted_price_set.shop_money.currency_code')
+                    ?? data_get($line, 'original_line_price_set.shop_money.currency_code')
+            ),
+            'unit_price' => $this->deriveUnitPrice(
+                $lineTotal,
+                $lineSubtotal,
+                $quantity,
+                $this->moneyValue(
+                    $line['current_price'] ?? null,
+                    $line['price'] ?? null,
+                    data_get($line, 'price_set.shop_money.amount'),
+                    data_get($line, 'discounted_price_set.shop_money.amount')
+                )
+            ),
+            'line_subtotal' => $lineSubtotal,
+            'discount_total' => $discountTotal,
+            'line_total' => $lineTotal,
+        ];
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $shippingLines
+     */
+    protected function sumShippingLines(array $shippingLines): ?float
+    {
+        $total = 0.0;
+        $found = false;
+
+        foreach ($shippingLines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $value = $this->moneyValue(
+                $line['discounted_price'] ?? null,
+                $line['price'] ?? null,
+                data_get($line, 'discounted_price_set.shop_money.amount'),
+                data_get($line, 'price_set.shop_money.amount')
+            );
+
+            if ($value !== null) {
+                $total += $value;
+                $found = true;
+            }
+        }
+
+        return $found ? round($total, 2) : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $orderData
+     */
+    protected function extractRefundTotal(array $orderData): float
+    {
+        $total = 0.0;
+
+        foreach ((array) ($orderData['refunds'] ?? []) as $refund) {
+            if (! is_array($refund)) {
+                continue;
+            }
+
+            $value = $this->moneyValue(
+                data_get($refund, 'total_refunded_set.shop_money.amount'),
+                $refund['subtotal'] ?? null,
+                data_get($refund, 'order_adjustments.0.amount_set.shop_money.amount'),
+                data_get($refund, 'transactions.0.amount')
+            );
+
+            if ($value !== null) {
+                $total += $value;
+            }
+        }
+
+        return round($total, 2);
+    }
+
+    protected function deriveUnitPrice(?float $lineTotal, ?float $lineSubtotal, int $quantity, ?float $preferred = null): ?float
+    {
+        if ($preferred !== null && $preferred > 0) {
+            return round($preferred, 2);
+        }
+
+        if ($quantity <= 0) {
+            return null;
+        }
+
+        $basis = $lineTotal ?? $lineSubtotal;
+
+        return $basis !== null ? round($basis / $quantity, 2) : null;
+    }
+
+    protected function sumMoney(?float $left, ?float $right): ?float
+    {
+        if ($left === null && $right === null) {
+            return null;
+        }
+
+        return round((float) ($left ?? 0) + (float) ($right ?? 0), 2);
+    }
+
+    protected function moneyValue(mixed ...$values): ?float
+    {
+        foreach ($values as $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (is_numeric($value)) {
+                return round((float) $value, 2);
+            }
+        }
+
+        return null;
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

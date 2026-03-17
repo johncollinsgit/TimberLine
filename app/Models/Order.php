@@ -22,6 +22,12 @@ class Order extends Model
         'ship_by_at' => 'datetime',
         'published_at' => 'datetime',
         'attribution_meta' => 'array',
+        'subtotal_price' => 'decimal:2',
+        'discount_total' => 'decimal:2',
+        'tax_total' => 'decimal:2',
+        'shipping_total' => 'decimal:2',
+        'refund_total' => 'decimal:2',
+        'total_price' => 'decimal:2',
     ];
 
     public function lines(): HasMany

@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Support\Auth\HomeRedirect;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\InvalidStateException;
 use Throwable;
 
 class GoogleAuthController extends Controller
@@ -27,12 +29,50 @@ class GoogleAuthController extends Controller
 
         try {
             $googleUser = Socialite::driver('google')->user();
+        } catch (InvalidStateException $stateException) {
+            Log::warning('Google callback invalid state', [
+                'exception' => get_class($stateException),
+                'message' => $stateException->getMessage(),
+                'state' => request('state'),
+                'session_id' => session()->getId(),
+            ]);
+            report($stateException);
+
+            try {
+                $googleUser = Socialite::driver('google')
+                    ->stateless()
+                    ->user();
+            } catch (Throwable $fallback) {
+                Log::warning('Google callback stateless retry failed', [
+                    'exception' => get_class($fallback),
+                    'message' => $fallback->getMessage(),
+                    'state' => request('state'),
+                    'session_id' => session()->getId(),
+                ]);
+                report($fallback);
+
+                return $this->redirectWithGoogleError();
+            }
         } catch (Throwable $e) {
+            Log::warning('Google callback failed', [
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'state' => request('state'),
+                'session_id' => session()->getId(),
+            ]);
             report($e);
 
-            return redirect()->route('login')
-                ->withErrors(['email' => 'Google sign-in failed. Please try again.']);
+            return $this->redirectWithGoogleError();
         }
+
+        Log::debug('Google callback payload', [
+            'email' => $googleUser->getEmail(),
+            'name' => $googleUser->getName(),
+            'avatar' => $googleUser->getAvatar(),
+            'email_verified' => $googleUser->getEmail(),
+            'state' => request('state'),
+            'session_id' => session()->getId(),
+        ]);
 
         $googleId = (string) ($googleUser->getId() ?? '');
         $email = Str::lower(trim((string) ($googleUser->getEmail() ?? '')));
@@ -94,6 +134,12 @@ class GoogleAuthController extends Controller
         request()->session()->regenerate();
 
         return redirect()->intended(HomeRedirect::pathFor($user));
+    }
+
+    protected function redirectWithGoogleError(): RedirectResponse
+    {
+        return redirect()->route('login')
+            ->withErrors(['email' => 'Google sign-in failed. Please try again.']);
     }
 
     protected function googleLoginEnabled(): bool
