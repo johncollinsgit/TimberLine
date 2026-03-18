@@ -241,13 +241,16 @@
 </style>
 
 @php
-    $embeddedHost = filled($host) ? $host : (string) request()->query('host', '');
-    $appendHost = static function (string $url) use ($embeddedHost): string {
-        if ($embeddedHost === '') {
-            return $url;
-        }
+    $embeddedContext = array_filter([
+        'shop' => trim((string) request()->query('shop', '')),
+        'host' => filled($host) ? (string) $host : trim((string) request()->query('host', '')),
+        'hmac' => trim((string) request()->query('hmac', '')),
+        'timestamp' => trim((string) request()->query('timestamp', '')),
+        'embedded' => trim((string) request()->query('embedded', '')),
+    ], static fn ($value): bool => $value !== '');
 
-        if (str_contains($url, 'host=')) {
+    $appendEmbeddedContext = static function (string $url) use ($embeddedContext): string {
+        if ($embeddedContext === []) {
             return $url;
         }
 
@@ -255,8 +258,28 @@
             return $url;
         }
 
-        $separator = str_contains($url, '?') ? '&' : '?';
-        return $url . $separator . 'host=' . urlencode($embeddedHost);
+        $parts = parse_url($url);
+        $path = (string) ($parts['path'] ?? $url);
+
+        parse_str((string) ($parts['query'] ?? ''), $query);
+
+        foreach ($embeddedContext as $key => $value) {
+            if (! array_key_exists($key, $query)) {
+                $query[$key] = $value;
+            }
+        }
+
+        $rebuilt = $path;
+
+        if ($query !== []) {
+            $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        }
+
+        if (! empty($parts['fragment'])) {
+            $rebuilt .= '#' . $parts['fragment'];
+        }
+
+        return $rebuilt;
     };
 @endphp
 
@@ -279,7 +302,7 @@
             <nav class="app-topbar-nav" aria-label="Primary navigation">
                 @foreach($navigation as $item)
                     <a
-                        href="{{ $appendHost($item['href']) }}"
+                        href="{{ $appendEmbeddedContext($item['href']) }}"
                         class="app-topbar-nav-link{{ ($active ?? null) === ($item['key'] ?? null) ? ' is-active' : '' }}"
                     >
                         {{ $item['label'] }}
@@ -310,7 +333,7 @@
                     <div class="app-topbar-actions">
                         @foreach($actions as $action)
                             <a
-                                href="{{ $appendHost($action['href']) }}"
+                                href="{{ $appendEmbeddedContext($action['href']) }}"
                                 class="app-topbar-action"
                                 target="{{ str_starts_with($action['href'] ?? '', 'http') ? '_blank' : '_self' }}"
                                 rel="{{ str_starts_with($action['href'] ?? '', 'http') ? 'noreferrer noopener' : 'noopener' }}"
@@ -326,7 +349,7 @@
                 <nav class="app-topbar-subnav" aria-label="Section navigation">
                     @foreach($subnav as $item)
                         <a
-                            href="{{ $appendHost($item['href']) }}"
+                            href="{{ $appendEmbeddedContext($item['href']) }}"
                             class="app-topbar-subnav-link{{ ! empty($item['active']) ? ' is-active' : '' }}"
                         >
                             {{ $item['label'] }}

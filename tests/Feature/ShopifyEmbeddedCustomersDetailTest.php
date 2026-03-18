@@ -232,6 +232,34 @@ test('customer identity update persists safe fields', function () {
         ->and($profile->normalized_email)->toBe('updated@example.com');
 });
 
+test('customer identity update alias route works without csrf session token in embedded app context', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->patch(
+        route('shopify.app.customers.update', array_merge([
+            'marketingProfile' => $profile->id,
+        ], retailEmbeddedSignedQuery()), false),
+        [
+            'first_name' => 'John',
+            'last_name' => 'Collinsretail',
+            'email' => 'johncollinsemail@gmail.com',
+            'phone' => '+18646165468',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $profile->refresh();
+
+    expect($profile->first_name)->toBe('John')
+        ->and($profile->last_name)->toBe('Collinsretail')
+        ->and($profile->email)->toBe('johncollinsemail@gmail.com')
+        ->and($profile->phone)->toBe('+18646165468')
+        ->and($profile->normalized_phone)->toBe('8646165468');
+});
+
 test('customer consent update succeeds and records events', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
@@ -544,6 +572,29 @@ test('embedded customer detail forms use helper-generated urls with Shopify quer
         $escaped = htmlspecialchars($expected, ENT_QUOTES, 'UTF-8');
         $this->assertStringContainsString('action="' . $escaped . '"', $content);
     }
+});
+
+test('embedded customer detail navigation links preserve Shopify query params', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $signature = retailEmbeddedSignedQuery();
+    $response = $this->get(
+        route('shopify.app.customers.detail', array_merge(['marketingProfile' => $profile->id], $signature))
+    );
+
+    $response->assertOk();
+    $content = $response->getContent();
+    $this->assertStringContainsString('href="/customers/manage?', $content);
+    $this->assertStringContainsString('href="/customers/activity?', $content);
+    $this->assertStringContainsString('href="/customers/questions?', $content);
+    $this->assertStringContainsString('shop=modernforestry.myshopify.com', $content);
+    $this->assertStringContainsString('host=admin-host-token', $content);
+    $this->assertStringContainsString('embedded=1', $content);
+    $this->assertStringContainsString('href="/?shop=', $content);
+    $this->assertStringContainsString('href="/settings?shop=', $content);
+    $this->assertStringContainsString('/marketing/customers/' . $profile->id, $content);
 });
 
 test('customer detail forms fall back to embedded routes without Shopify host', function () {

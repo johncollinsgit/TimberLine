@@ -683,13 +683,20 @@ Route::prefix('shopify')->group(function () {
     Route::get('/app/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.app.customers.activity');
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
-    Route::patch('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.app.customers.update');
-    Route::post('/app/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.app.customers.update-consent');
+    Route::patch('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.app.customers.update');
+    Route::post('/app/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.app.customers.update-consent');
     Route::post('/app/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.candle-cash.adjust');
     Route::post('/app/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessage'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.message');
     Route::post('/app/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.candle-cash.send');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
