@@ -62,6 +62,50 @@
                 Approved does not mean sent yet. Send actions execute Twilio attempts, and delivery states may update later from callbacks. Retries preserve attempt history.
             </x-admin.help-hint>
 
+            @php
+                $emailReadinessStatus = $emailReadiness['status'] ?? 'disabled';
+                $readinessLabel = match ($emailReadinessStatus) {
+                    'ready_for_live_send' => 'Email ready for live send',
+                    'dry_run_only' => 'Email configured (dry run mode)',
+                    'misconfigured' => 'Email misconfigured',
+                    default => 'Email sending disabled',
+                };
+                $readinessTone = match ($emailReadinessStatus) {
+                    'ready_for_live_send' => 'success',
+                    'dry_run_only' => 'warning',
+                    default => 'critical',
+                };
+                $readinessSubtitle = match ($emailReadinessStatus) {
+                    'ready_for_live_send' => 'SendGrid API key, sender name, and address are configured.',
+                    'dry_run_only' => 'SendGrid is configured but MARKETING_EMAIL_DRY_RUN is on. Sends will not reach recipients.',
+                    'misconfigured' => 'SendGrid sender info or API key is missing.',
+                    default => 'MARKETING_EMAIL_ENABLED is off.',
+                };
+                $missingReasons = $emailReadiness['missing_reasons'] ?? [];
+            @endphp
+
+            @if($campaign->channel === 'email')
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-xs uppercase tracking-[0.3em] text-white/50">Email readiness</div>
+                            <div class="mt-1 text-base font-semibold text-white">{{ $readinessLabel }}</div>
+                            <div class="mt-1 text-xs text-white/65">{{ $readinessSubtitle }}</div>
+                        </div>
+                        <span class="inline-flex items-center rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/90">
+                            {{ strtoupper($readinessTone) }}
+                        </span>
+                    </div>
+                    @if($missingReasons)
+                        <div class="mt-3 space-y-1">
+                            @foreach($missingReasons as $reason)
+                                <div class="text-xs text-white/60">- {{ $reason }}</div>
+                            @endforeach
+                        </div>
+                    @endif
+                </article>
+            @endif
+
             <div class="flex flex-wrap gap-2">
                 <form method="POST" action="{{ route('marketing.campaigns.prepare-recipients', $campaign) }}">
                     @csrf
@@ -75,14 +119,243 @@
                 <form method="POST" action="{{ $campaign->channel === 'email' ? route('marketing.campaigns.send-approved-email', $campaign) : route('marketing.campaigns.send-approved-sms', $campaign) }}" class="inline-flex items-center gap-2">
                     @csrf
                     <input type="hidden" name="limit" value="500" />
-                    <button type="submit" class="inline-flex rounded-full border border-sky-300/40 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100">
-                        Send Approved {{ strtoupper($campaign->channel) }}
-                    </button>
-                    <label class="inline-flex items-center gap-1 text-xs text-white/70">
-                        <input type="checkbox" name="dry_run" value="1" class="rounded border-white/20 bg-white/5" /> Dry run
-                    </label>
+                    @if($campaign->channel === 'email')
+                        @php
+                            $statusKey = $emailReadinessStatus;
+                            $buttonText = match ($statusKey) {
+                                'ready_for_live_send' => 'Send Approved Email',
+                                'dry_run_only' => 'Run Dry Run for Approved Email',
+                                'misconfigured' => 'Email misconfigured',
+                                default => 'Email disabled',
+                            };
+                            $buttonDisabled = in_array($statusKey, ['disabled', 'misconfigured'], true);
+                            $includeDryRunInput = $statusKey === 'dry_run_only';
+                        @endphp
+                        <button type="submit" class="inline-flex rounded-full border border-sky-300/40 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100 disabled:bg-white/10 disabled:text-slate-300" {{ $buttonDisabled ? 'disabled' : '' }}>
+                            {{ $buttonText }}
+                        </button>
+                        @if($includeDryRunInput)
+                            <input type="hidden" name="dry_run" value="1" />
+                        @else
+                            <label class="inline-flex items-center gap-1 text-xs text-white/70">
+                                <input type="checkbox" name="dry_run" value="1" class="rounded border-white/20 bg-white/5" /> Dry run
+                            </label>
+                        @endif
+                    @else
+                        <button type="submit" class="inline-flex rounded-full border border-sky-300/40 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100">
+                            Send Approved {{ strtoupper($campaign->channel) }}
+                        </button>
+                    @endif
                 </form>
             </div>
+
+            @if($campaign->channel === 'email')
+                @php
+                    $diag = $diagnostics ?? [];
+                    $tracking = (array) ($diag['recipient_tracking'] ?? []);
+                    $webhookHealth = (array) ($diag['webhook_health'] ?? []);
+                    $rows = collect((array) ($diag['deliveries'] ?? []))->take(14);
+                    $status = $diag['overall_status'] ?? 'ready';
+                    $statusLabel = match ($status) {
+                        'ready' => 'Ready',
+                        'needs_config' => 'Needs config',
+                        'awaiting_webhook' => 'Send attempted, awaiting webhook',
+                        'webhook_received' => 'Webhook received',
+                        'error' => 'Error / needs review',
+                        default => 'Unknown',
+                    };
+                    $statusClass = match ($status) {
+                        'ready' => 'border-sky-300/40 bg-sky-500/15 text-sky-100',
+                        'needs_config' => 'border-slate-300/40 bg-slate-500/20 text-slate-100',
+                        'awaiting_webhook' => 'border-amber-300/40 bg-amber-500/15 text-amber-100',
+                        'webhook_received' => 'border-emerald-300/40 bg-emerald-500/15 text-emerald-100',
+                        'error' => 'border-rose-300/40 bg-rose-500/15 text-rose-100',
+                        default => 'border-white/20 bg-white/5 text-white/80',
+                    };
+                    $healthIndicator = $webhookHealth['indicator'] ?? 'healthy';
+                    $healthLabel = match ($healthIndicator) {
+                        'healthy' => 'Healthy',
+                        'delayed' => 'Delayed',
+                        'missing_events' => 'Missing events',
+                        'failures_detected' => 'Failures detected',
+                        default => 'Unknown',
+                    };
+                    $healthClass = match ($healthIndicator) {
+                        'healthy' => 'border-emerald-300/35 bg-emerald-500/10 text-emerald-100',
+                        'delayed' => 'border-amber-300/35 bg-amber-500/10 text-amber-100',
+                        'missing_events' => 'border-sky-300/35 bg-sky-500/10 text-sky-100',
+                        'failures_detected' => 'border-rose-300/35 bg-rose-500/10 text-rose-100',
+                        default => 'border-white/20 bg-white/5 text-white/80',
+                    };
+                    $smokeConfigured = (bool) ($diag['smoke_test_configured'] ?? false);
+                    $smokeRecipient = (string) ($diag['smoke_test_recipient'] ?? '');
+                    $summaryCards = [
+                        ['label' => 'Smoke test configured', 'value' => $smokeConfigured ? 'Yes' : 'Missing'],
+                        ['label' => 'Last smoke test', 'value' => optional($diag['last_smoke_test_attempt_at'] ?? null)->format('Y-m-d H:i') ?? 'Never'],
+                        ['label' => 'Last webhook', 'value' => optional($diag['last_webhook_at'] ?? null)->format('Y-m-d H:i') ?? 'None'],
+                        ['label' => 'Last live send', 'value' => optional($diag['last_live_send_at'] ?? null)->format('Y-m-d H:i') ?? 'Never'],
+                        ['label' => 'Smoke recipient', 'value' => $smokeConfigured ? $smokeRecipient : 'Configure env'],
+                    ];
+                @endphp
+
+                <section class="mt-5 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.12] via-white/[0.04] to-black/20 p-5 sm:p-6 space-y-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold tracking-wide text-white">Delivery Diagnostics</h3>
+                            <p class="text-xs text-white/60">Readiness, smoke verification, SendGrid acceptance, webhook health, and recipient outcomes in one view.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $statusClass }}">{{ $statusLabel }}</span>
+                            <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $healthClass }}">{{ $healthLabel }}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        @foreach($summaryCards as $card)
+                            <article class="rounded-2xl border border-white/5 bg-white/5 p-3 text-sm text-white/70">
+                                <div class="text-[0.65rem] uppercase tracking-[0.3em] text-white/50">{{ $card['label'] }}</div>
+                                <div class="mt-1 text-base font-semibold text-white">{{ $card['value'] }}</div>
+                            </article>
+                        @endforeach
+                    </div>
+
+                    <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80">
+                        <div class="font-semibold text-white">Operator hint</div>
+                        <div class="mt-1 text-xs text-white/65">{{ $diag['overall_hint'] ?? 'No diagnostics hint available yet.' }}</div>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="flex items-center justify-between">
+                                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Recipient-level Tracking</div>
+                                <div class="text-xs text-white/60">{{ (int) ($tracking['total_deliveries'] ?? 0) }} deliveries</div>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-white/75">
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Delivered: <span class="font-semibold text-white">{{ (int) ($tracking['delivered_count'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Opened: <span class="font-semibold text-white">{{ (int) ($tracking['open_count'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Clicked: <span class="font-semibold text-white">{{ (int) ($tracking['click_count'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Failures: <span class="font-semibold text-white">{{ (int) ($tracking['failure_count'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Bounce/Drop/Deferred: <span class="font-semibold text-white">{{ (int) ($tracking['bounce_drop_deferred_count'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Unsub/Spam: <span class="font-semibold text-white">{{ (int) (($tracking['unsubscribe_count'] ?? 0) + ($tracking['spam_report_count'] ?? 0)) }}</span></div>
+                            </div>
+                        </article>
+
+                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="text-xs uppercase tracking-[0.2em] text-white/55">Webhook Health</div>
+                            <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-white/75">
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Last webhook: <span class="font-semibold text-white">{{ optional($webhookHealth['last_webhook_at'] ?? null)->format('Y-m-d H:i') ?? 'None' }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Recent webhook events: <span class="font-semibold text-white">{{ (int) ($webhookHealth['recent_webhook_count'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">With ID but no events: <span class="font-semibold text-white">{{ (int) ($webhookHealth['deliveries_with_message_id_no_events'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">Awaiting too long: <span class="font-semibold text-white">{{ (int) ($webhookHealth['deliveries_awaiting_webhook_overdue'] ?? 0) }}</span></div>
+                                <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2 col-span-2">Failure events: <span class="font-semibold text-white">{{ (int) ($webhookHealth['failure_event_count'] ?? 0) }}</span></div>
+                            </div>
+                            <p class="mt-3 text-xs text-white/60">{{ $webhookHealth['hint'] ?? 'No webhook diagnostics available yet.' }}</p>
+                        </article>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <form method="POST" action="{{ route('marketing.campaigns.send-smoke-test-email', $campaign) }}">
+                            @csrf
+                            <button
+                                type="submit"
+                                class="inline-flex rounded-full border border-amber-300/50 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:border-white/20 disabled:bg-white/10 disabled:text-white/45"
+                                {{ $smokeConfigured ? '' : 'disabled' }}
+                            >
+                                {{ $smokeConfigured ? 'Send Smoke Test to ' . $smokeRecipient : 'Smoke Test Unavailable' }}
+                            </button>
+                        </form>
+                        @if(! $smokeConfigured)
+                            <span class="text-xs text-white/60">Set <code class="font-mono text-[0.7rem]">MARKETING_EMAIL_SMOKE_TEST_RECIPIENT</code> to enable staging-safe smoke tests.</span>
+                        @else
+                            <span class="text-xs text-white/60">Smoke tests only target the configured recipient and never send to the full campaign audience.</span>
+                        @endif
+                    </div>
+
+                    <div class="space-y-2">
+                        @if($rows->isEmpty())
+                            <p class="text-sm text-white/60">No deliveries yet. Run a smoke test or approved send to populate diagnostics.</p>
+                        @else
+                            <div class="overflow-hidden rounded-2xl border border-white/15 bg-white/5">
+                                <table class="min-w-full text-left text-xs text-white/70">
+                                    <thead>
+                                        <tr class="border-b border-white/10 bg-white/10 text-[0.65rem] uppercase tracking-[0.2em] text-white/50">
+                                            <th class="px-3 py-2">Recipient</th>
+                                            <th class="px-3 py-2">Mode</th>
+                                            <th class="px-3 py-2">Status</th>
+                                            <th class="px-3 py-2">Sent At</th>
+                                            <th class="px-3 py-2">SendGrid ID</th>
+                                            <th class="px-3 py-2">Webhook</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($rows as $row)
+                                            @php
+                                                $statusTone = match ($row['status_tone'] ?? 'neutral') {
+                                                    'success' => 'border-emerald-300/35 bg-emerald-500/10 text-emerald-100',
+                                                    'warning' => 'border-amber-300/35 bg-amber-500/10 text-amber-100',
+                                                    'danger' => 'border-rose-300/35 bg-rose-500/10 text-rose-100',
+                                                    default => 'text-white/60',
+                                                };
+                                            @endphp
+                                            <tr class="border-b border-white/10 text-[0.78rem]">
+                                                <td class="px-3 py-2">
+                                                    <div class="font-semibold text-white">{{ $row['recipient_email'] }}</div>
+                                                    <div class="text-[0.65rem] text-white/50">{{ $row['recipient_phone'] ?: 'No phone on profile' }}</div>
+                                                </td>
+                                                <td class="px-3 py-2">
+                                                    <span class="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[0.65rem] uppercase tracking-[0.2em] text-white/75">
+                                                        {{ $row['mode_label'] }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-3 py-2">
+                                                    <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold {{ $statusTone }}">{{ $row['status_label'] }}</span>
+                                                </td>
+                                                <td class="px-3 py-2 text-[0.7rem] text-white/60">
+                                                    {{ optional($row['sent_at'] ?? null)->format('Y-m-d H:i') ?? 'Pending' }}
+                                                </td>
+                                                <td class="px-3 py-2 text-[0.7rem] text-white/60">
+                                                    @if($row['sendgrid_message_id'])
+                                                        <span title="{{ $row['sendgrid_message_id'] }}">{{ $row['sendgrid_message_id_short'] }}</span>
+                                                    @else
+                                                        —
+                                                    @endif
+                                                </td>
+                                                <td class="px-3 py-2 text-[0.7rem] text-white/60">
+                                                    @if($row['last_webhook_event'])
+                                                        <span class="font-semibold text-white/85">{{ \Illuminate\Support\Str::headline((string) $row['last_webhook_event']) }}</span>
+                                                        <div class="text-[0.65rem] text-white/45">{{ optional($row['last_webhook_at'] ?? null)->format('Y-m-d H:i') ?? '—' }}</div>
+                                                    @else
+                                                        none
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="6" class="bg-white/5 px-3 py-2 text-[0.65rem] text-white/60">
+                                                    <details>
+                                                        <summary class="cursor-pointer text-white/70">Details</summary>
+                                                        <div class="mt-1 space-y-1">
+                                                            <div>Delivery ID: {{ $row['id'] }}</div>
+                                                            <div>Mode: {{ $row['mode_label'] }}</div>
+                                                            <div>Provider accepted: {{ $row['provider_accepted'] ? 'Yes' : 'No' }}</div>
+                                                            <div>SendGrid message ID: {{ $row['sendgrid_message_id'] ?: 'none' }}</div>
+                                                            <div>Webhook events stored: {{ (int) ($row['webhook_event_count'] ?? 0) }}</div>
+                                                            <div>Last webhook event: {{ $row['last_webhook_event'] ? \Illuminate\Support\Str::headline((string) $row['last_webhook_event']) : 'none' }}</div>
+                                                            <div>Engagement: delivered {{ $row['delivered'] ? 'yes' : 'no' }}, opened {{ $row['opened'] ? 'yes' : 'no' }}, clicked {{ $row['clicked'] ? 'yes' : 'no' }}</div>
+                                                            @if($row['hint'])
+                                                                <div class="text-amber-200">{{ $row['hint'] }}</div>
+                                                            @endif
+                                                        </div>
+                                                    </details>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+                    </div>
+                </section>
+            @endif
         </section>
 
         <section class="grid gap-4 xl:grid-cols-2">

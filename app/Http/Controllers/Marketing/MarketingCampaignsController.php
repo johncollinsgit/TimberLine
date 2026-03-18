@@ -14,7 +14,9 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingSegment;
 use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingCampaignAudienceBuilder;
+use App\Services\Marketing\MarketingCampaignDeliveryDiagnostics;
 use App\Services\Marketing\MarketingEmailExecutionService;
+use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\MarketingPerformanceAnalyticsService;
 use App\Services\Marketing\MarketingRecommendationEngine;
 use App\Services\Marketing\MarketingSmsExecutionService;
@@ -127,7 +129,9 @@ class MarketingCampaignsController extends Controller
     public function show(
         MarketingCampaign $campaign,
         MarketingPerformanceAnalyticsService $performanceAnalyticsService,
-        MarketingTimingRecommendationService $timingRecommendationService
+        MarketingTimingRecommendationService $timingRecommendationService,
+        MarketingEmailReadiness $readinessService,
+        MarketingCampaignDeliveryDiagnostics $diagnosticsService
     ): View
     {
         $campaign->load([
@@ -166,6 +170,9 @@ class MarketingCampaignsController extends Controller
             ->orderByDesc('id')
             ->limit(200)
             ->get();
+
+        $emailReadiness = $readinessService->summary();
+        $diagnostics = $diagnosticsService->summarize($campaign, $emailReadiness, $emailDeliveryLog);
 
         $conversionSummary = [
             'count' => (int) $campaign->conversions()->count(),
@@ -213,6 +220,7 @@ class MarketingCampaignsController extends Controller
             'approvalQueue' => $approvalQueue,
             'deliveryLog' => $deliveryLog,
             'emailDeliveryLog' => $emailDeliveryLog,
+            'diagnostics' => $diagnostics,
             'conversionSummary' => $conversionSummary,
             'rewardConversionSummary' => $rewardConversionSummary,
             'performanceSummary' => $performanceSummary,
@@ -222,6 +230,7 @@ class MarketingCampaignsController extends Controller
                 ->where('channel', $campaign->channel)
                 ->orderBy('name')
                 ->get(['id', 'name']),
+            'emailReadiness' => $emailReadiness,
         ]);
     }
 
@@ -235,9 +244,11 @@ class MarketingCampaignsController extends Controller
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
+        $dryRun = (bool) ($data['dry_run'] ?? false);
+
         $summary = $executionService->sendApprovedForCampaign($campaign, [
             'limit' => (int) ($data['limit'] ?? 500),
-            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'dry_run' => $dryRun,
             'actor_id' => (int) auth()->id(),
         ]);
 
@@ -258,7 +269,8 @@ class MarketingCampaignsController extends Controller
     public function sendApprovedEmail(
         MarketingCampaign $campaign,
         Request $request,
-        MarketingEmailExecutionService $executionService
+        MarketingEmailExecutionService $executionService,
+        MarketingEmailReadiness $readinessService
     ): RedirectResponse {
         $data = $request->validate([
             'limit' => ['nullable', 'integer', 'min:1', 'max:2000'],
@@ -271,12 +283,18 @@ class MarketingCampaignsController extends Controller
             'actor_id' => (int) auth()->id(),
         ]);
 
+        $status = $readinessService->summary();
+        $modeLabel = ($summary['dry_run'] ?? false)
+            ? 'Dry run'
+            : ($status['status'] === 'ready_for_live_send' ? 'Live send' : 'Configured send');
+
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
             ->with('toast', [
                 'style' => 'success',
                 'message' => sprintf(
-                    'Email send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    '%s run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    $modeLabel,
                     (int) $summary['processed'],
                     (int) $summary['sent'],
                     (int) $summary['failed'],
@@ -288,7 +306,8 @@ class MarketingCampaignsController extends Controller
     public function sendSelectedEmail(
         MarketingCampaign $campaign,
         Request $request,
-        MarketingEmailExecutionService $executionService
+        MarketingEmailExecutionService $executionService,
+        MarketingEmailReadiness $readinessService
     ): RedirectResponse {
         $data = $request->validate([
             'recipient_ids' => ['required', 'array', 'min:1'],
@@ -296,24 +315,135 @@ class MarketingCampaignsController extends Controller
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
+        $dryRun = (bool) ($data['dry_run'] ?? false);
+        $readiness = $readinessService->summary();
+        $blocked = $this->blockEmailSend($readiness, $dryRun, $campaign);
+        if ($blocked) {
+            return $blocked;
+        }
+
         $summary = $executionService->sendApprovedForCampaign($campaign, [
             'recipient_ids' => array_map('intval', (array) $data['recipient_ids']),
-            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'dry_run' => $dryRun,
             'limit' => count((array) $data['recipient_ids']),
             'actor_id' => (int) auth()->id(),
         ]);
+
+        $modeLabel = ($summary['dry_run'] ?? false)
+            ? 'Dry run'
+            : ($readiness['status'] === 'ready_for_live_send' ? 'Live send' : 'Configured send');
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
             ->with('toast', [
                 'style' => 'success',
                 'message' => sprintf(
-                    'Selected email send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    '%s selected email send run complete. processed=%d sent=%d failed=%d skipped=%d',
+                    $modeLabel,
                     (int) $summary['processed'],
                     (int) $summary['sent'],
                     (int) $summary['failed'],
                     (int) $summary['skipped']
                 ),
+            ]);
+    }
+
+    public function sendSmokeTestEmail(
+        MarketingCampaign $campaign,
+        Request $request,
+        MarketingEmailExecutionService $executionService,
+        MarketingEmailReadiness $readinessService
+    ): RedirectResponse {
+        $readiness = $readinessService->summary();
+        $blocked = $this->blockEmailSend($readiness, false, $campaign);
+        if ($blocked) {
+            return $blocked;
+        }
+
+        $testEmail = trim((string) ($readiness['smoke_test_recipient_email'] ?? ''));
+        if ($testEmail === '') {
+            return redirect()
+                ->route('marketing.campaigns.show', $campaign)
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => 'Smoke test recipient not configured (set MARKETING_EMAIL_SMOKE_TEST_RECIPIENT).',
+                ]);
+        }
+
+        $profile = MarketingProfile::query()->firstOrCreate([
+            'normalized_email' => Str::lower($testEmail),
+        ], [
+            'email' => $testEmail,
+            'accepts_email_marketing' => true,
+        ]);
+
+        $recipient = $campaign->recipients()
+            ->where('channel', 'email')
+            ->where('marketing_profile_id', $profile->id)
+            ->first();
+
+        if (! $recipient) {
+            $variant = $campaign->variants()
+                ->whereIn('status', ['active', 'draft'])
+                ->orderByDesc('is_control')
+                ->orderByDesc('weight')
+                ->orderBy('id')
+                ->first();
+
+            $recipient = MarketingCampaignRecipient::query()->create([
+                'campaign_id' => $campaign->id,
+                'marketing_profile_id' => $profile->id,
+                'variant_id' => $variant?->id,
+                'channel' => 'email',
+                'status' => 'approved',
+                'scheduled_for' => now(),
+            ]);
+        } else {
+            $recipient->forceFill([
+                'status' => 'approved',
+                'send_attempt_count' => 0,
+                'reason_codes' => [],
+                'failed_at' => null,
+                'sent_at' => null,
+                'last_status_note' => null,
+            ])->save();
+        }
+
+        $summary = $executionService->sendApprovedForCampaign($campaign, [
+            'recipient_ids' => [$recipient->id],
+            'dry_run' => (bool) ($readiness['dry_run'] ?? false),
+            'limit' => 1,
+            'actor_id' => (int) auth()->id(),
+        ]);
+
+        $delivery = MarketingEmailDelivery::query()
+            ->where('marketing_campaign_recipient_id', $recipient->id)
+            ->orderByDesc('id')
+            ->first();
+
+        $modeLabel = ($summary['dry_run'] ?? false) || $readiness['dry_run']
+            ? 'Dry run smoke test'
+            : 'Live smoke test';
+
+        $message = sprintf(
+            '%s completed for %s. processed=%d sent=%d failed=%d skipped=%d',
+            $modeLabel,
+            $testEmail,
+            (int) $summary['processed'],
+            (int) $summary['sent'],
+            (int) $summary['failed'],
+            (int) $summary['skipped']
+        );
+
+        if ($delivery && $delivery->sendgrid_message_id) {
+            $message .= sprintf(' SendGrid ID: %s.', $delivery->sendgrid_message_id);
+        }
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => isset($summary['failed']) && (int) $summary['failed'] > 0 ? 'warning' : 'success',
+                'message' => $message,
             ]);
     }
 
@@ -343,6 +473,24 @@ class MarketingCampaignsController extends Controller
                     (string) ($result['outcome'] ?? 'unknown'),
                     (string) ($result['reason'] ?? 'n/a')
                 ),
+            ]);
+    }
+
+    protected function blockEmailSend(array $readiness, bool $dryRun, MarketingCampaign $campaign): ?RedirectResponse
+    {
+        if ($dryRun || $readiness['status'] === 'ready_for_live_send' || $readiness['status'] === 'dry_run_only') {
+            return null;
+        }
+
+        $reason = $readiness['status'] === 'disabled'
+            ? 'Email sending is currently disabled (MARKETING_EMAIL_ENABLED=false).'
+            : 'Email misconfigured: ' . implode(', ', $readiness['missing_reasons']);
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => 'warning',
+                'message' => $reason,
             ]);
     }
 
