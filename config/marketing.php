@@ -127,6 +127,13 @@ return [
             'password' => env('MARKETING_CANDLE_CASH_PASSWORD', 'johnnycash'),
             'unlock_ttl_minutes' => (int) env('MARKETING_CANDLE_CASH_PASSWORD_TTL_MINUTES', 480),
         ],
+        'lifecycle' => [
+            'earned_not_used_days' => (int) env('MARKETING_CANDLE_CASH_LIFECYCLE_EARNED_NOT_USED_DAYS', 14),
+            'reminder_cooldown_days' => (int) env('MARKETING_CANDLE_CASH_LIFECYCLE_REMINDER_COOLDOWN_DAYS', 14),
+            'lapsed_purchaser_days' => (int) env('MARKETING_CANDLE_CASH_LIFECYCLE_LAPSED_PURCHASER_DAYS', 60),
+            'default_channel' => env('MARKETING_CANDLE_CASH_LIFECYCLE_DEFAULT_CHANNEL', 'email'),
+            'preview_limit' => (int) env('MARKETING_CANDLE_CASH_LIFECYCLE_PREVIEW_LIMIT', 200),
+        ],
     ],
 
     'birthday_rewards' => [

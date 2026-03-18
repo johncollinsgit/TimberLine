@@ -245,20 +245,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'overview')
                 ->name('overview');
-            Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
-            Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
-            Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
-            Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
-            Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
-            Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
-            Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
-            Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
-            Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');
-            Route::post('/customers/{marketingProfile}/candle-cash/redeem', [MarketingCustomersController::class, 'redeemCandleCash'])->name('customers.candle-cash.redeem');
-            Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/mark-redeemed', [MarketingCustomersController::class, 'markCandleCashRedemptionRedeemed'])
-                ->name('customers.candle-cash.redemptions.mark-redeemed');
-            Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/cancel', [MarketingCustomersController::class, 'cancelCandleCashRedemption'])
-                ->name('customers.candle-cash.redemptions.cancel');
+            Route::middleware(['tenant.access'])->group(function (): void {
+                Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
+                Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
+                Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
+                Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
+                Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
+                Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
+                Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
+                Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
+                Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');
+                Route::post('/customers/{marketingProfile}/candle-cash/redeem', [MarketingCustomersController::class, 'redeemCandleCash'])->name('customers.candle-cash.redeem');
+                Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/mark-redeemed', [MarketingCustomersController::class, 'markCandleCashRedemptionRedeemed'])
+                    ->name('customers.candle-cash.redemptions.mark-redeemed');
+                Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/cancel', [MarketingCustomersController::class, 'cancelCandleCashRedemption'])
+                    ->name('customers.candle-cash.redemptions.cancel');
+            });
             Route::get('/messages', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'messages')
                 ->name('messages');
@@ -376,22 +378,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('settings');
             Route::post('/settings', [MarketingPagesController::class, 'saveSettings'])
                 ->name('settings.save');
-            Route::get('/providers-integrations', [MarketingProvidersIntegrationsController::class, 'index'])
-                ->name('providers-integrations');
-            Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
-                ->name('providers-integrations.shopify-customer-sync-health');
-            Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
-                ->name('providers-integrations.sync-square');
-            Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
-                ->name('providers-integrations.import-legacy');
-            Route::get('/providers-integrations/event-mappings/create', [MarketingProvidersIntegrationsController::class, 'createMapping'])
-                ->name('providers-integrations.mappings.create');
-            Route::post('/providers-integrations/event-mappings', [MarketingProvidersIntegrationsController::class, 'storeMapping'])
-                ->name('providers-integrations.mappings.store');
-            Route::get('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'editMapping'])
-                ->name('providers-integrations.mappings.edit');
-            Route::patch('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'updateMapping'])
-                ->name('providers-integrations.mappings.update');
+            Route::middleware(['tenant.access'])->group(function (): void {
+                Route::get('/providers-integrations', [MarketingProvidersIntegrationsController::class, 'index'])
+                    ->name('providers-integrations');
+                Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
+                    ->name('providers-integrations.shopify-customer-sync-health');
+                Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
+                    ->name('providers-integrations.sync-square');
+                Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
+                    ->name('providers-integrations.import-legacy');
+                Route::get('/providers-integrations/event-mappings/create', [MarketingProvidersIntegrationsController::class, 'createMapping'])
+                    ->name('providers-integrations.mappings.create');
+                Route::post('/providers-integrations/event-mappings', [MarketingProvidersIntegrationsController::class, 'storeMapping'])
+                    ->name('providers-integrations.mappings.store');
+                Route::get('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'editMapping'])
+                    ->name('providers-integrations.mappings.edit');
+                Route::patch('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'updateMapping'])
+                    ->name('providers-integrations.mappings.update');
+            });
             Route::get('/suppression-consent', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'suppression-consent')
                 ->name('suppression-consent');

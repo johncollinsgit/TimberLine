@@ -184,4 +184,9 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MarketingReviewHistory::class, 'marketing_profile_id');
     }
+
+    public function automationEvents(): HasMany
+    {
+        return $this->hasMany(MarketingAutomationEvent::class, 'marketing_profile_id');
+    }
 }

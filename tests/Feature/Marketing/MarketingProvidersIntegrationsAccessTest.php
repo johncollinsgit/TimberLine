@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\MarketingEventSourceMapping;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 
@@ -12,6 +13,11 @@ beforeEach(function () {
 });
 
 test('admin and marketing manager can access providers integrations tooling', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
     $mapping = MarketingEventSourceMapping::query()->create([
         'source_system' => 'square_tax_name',
         'raw_value' => 'county 7%',
@@ -27,6 +33,8 @@ test('admin and marketing manager can access providers integrations tooling', fu
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $admin->tenants()->syncWithoutDetaching([$tenant->id]);
+    $marketingManager->tenants()->syncWithoutDetaching([$tenant->id]);
 
     foreach ([$admin, $marketingManager] as $user) {
         $this->actingAs($user)
@@ -73,10 +81,16 @@ test('unauthorized roles cannot access providers integrations tooling', function
 });
 
 test('marketing manager can create mapping and run legacy import action', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
     $user = User::factory()->create([
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
 
     $this->actingAs($user)
         ->post(route('marketing.providers-integrations.mappings.store'), [

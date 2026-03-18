@@ -34,11 +34,12 @@ class ShopifyCustomerSyncHealthService
      *   recent_events:array<int,array<string,mixed>>
      * }
      */
-    public function report(bool $refreshWebhooks = false, int $lookbackHours = 72): array
+    public function report(bool $refreshWebhooks = false, int $lookbackHours = 72, ?int $tenantId = null): array
     {
         $windowHours = max(1, min(24 * 30, $lookbackHours));
         $windowStart = now()->subHours($windowHours)->toImmutable();
         $stores = ShopifyStore::query()
+            ->forTenantId($tenantId)
             ->orderBy('store_key')
             ->get();
 

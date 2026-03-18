@@ -36,6 +36,7 @@ class MarketingProvidersIntegrationsController extends Controller
         MarketingSourceOverlapReportService $sourceOverlapReportService
     ): View
     {
+        $tenantId = $this->currentTenantId($request);
         $search = trim((string) $request->query('search', ''));
         $sourceSystem = trim((string) $request->query('source_system', 'all'));
         $mapped = trim((string) $request->query('mapped', 'all'));
@@ -90,7 +91,8 @@ class MarketingProvidersIntegrationsController extends Controller
         $squareAudit = $this->squareContactAudit(
             filter: $squareProfileFilter,
             search: $squareProfileSearch,
-            minSpendCents: $squareMinSpendCents
+            minSpendCents: $squareMinSpendCents,
+            tenantId: $tenantId
         );
 
         $normalizedOverlapFilter = $sourceOverlapReportService->normalizeFilter($overlapFilter);
@@ -102,7 +104,7 @@ class MarketingProvidersIntegrationsController extends Controller
             'filters' => $sourceOverlapReportService->filterOptions(),
             'active_filter' => $normalizedOverlapFilter,
             'search' => $overlapSearch,
-            'total_profiles' => MarketingProfile::query()->count(),
+            'total_profiles' => MarketingProfile::query()->forTenantId($tenantId)->count(),
         ];
 
         return view('marketing/providers-integrations/index', [
@@ -135,7 +137,7 @@ class MarketingProvidersIntegrationsController extends Controller
     ): View {
         $windowHours = max(1, min(24 * 30, (int) $request->query('window_hours', 72)));
         $refresh = $request->boolean('refresh');
-        $report = $healthService->report($refresh, $windowHours);
+        $report = $healthService->report($refresh, $windowHours, $this->currentTenantId($request));
 
         return view('marketing/providers-integrations/shopify-customer-sync-health', [
             'section' => MarketingSectionRegistry::section('providers-integrations'),
@@ -327,14 +329,14 @@ class MarketingProvidersIntegrationsController extends Controller
      *   manual_follow_up_order_count:int
      * }
      */
-    protected function squareContactAudit(string $filter, string $search, int $minSpendCents): array
+    protected function squareContactAudit(string $filter, string $search, int $minSpendCents, ?int $tenantId = null): array
     {
-        $profiles = $this->squareContactProfilesQuery($filter, $search, $minSpendCents)
+        $profiles = $this->squareContactProfilesQuery($filter, $search, $minSpendCents, $tenantId)
             ->paginate(25, ['*'], 'square_page')
             ->withQueryString();
 
         return [
-            'summary' => $this->squareContactAuditSummary($minSpendCents),
+            'summary' => $this->squareContactAuditSummary($minSpendCents, $tenantId),
             'profiles' => $profiles,
             'filters' => [
                 ['value' => 'square_only_missing_contact', 'label' => 'Square-only + Missing Contact'],
@@ -350,10 +352,10 @@ class MarketingProvidersIntegrationsController extends Controller
         ];
     }
 
-    protected function squareContactProfilesQuery(string $filter, string $search, int $minSpendCents): QueryBuilder
+    protected function squareContactProfilesQuery(string $filter, string $search, int $minSpendCents, ?int $tenantId = null): QueryBuilder
     {
-        $squareLinkFlags = $this->sourceLinkFlagsSubquery();
-        $squareCustomerMetrics = $this->squareCustomerMetricsSubquery();
+        $squareLinkFlags = $this->sourceLinkFlagsSubquery($tenantId);
+        $squareCustomerMetrics = $this->squareCustomerMetricsSubquery($tenantId);
 
         $query = MarketingProfile::query()
             ->toBase()
@@ -364,6 +366,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 $join->on('square_customer_metrics.marketing_profile_id', '=', 'marketing_profiles.id');
             })
             ->whereRaw('coalesce(square_link_flags.has_square_link, 0) = 1')
+            ->when($tenantId !== null, fn (QueryBuilder $query) => $query->where('marketing_profiles.tenant_id', $tenantId))
             ->select([
                 'marketing_profiles.id',
                 'marketing_profiles.first_name',
@@ -437,11 +440,12 @@ class MarketingProvidersIntegrationsController extends Controller
         });
     }
 
-    protected function sourceLinkFlagsSubquery(): QueryBuilder
+    protected function sourceLinkFlagsSubquery(?int $tenantId = null): QueryBuilder
     {
         return MarketingProfileLink::query()
             ->toBase()
             ->select('marketing_profile_id')
+            ->when($tenantId !== null, fn (QueryBuilder $query) => $query->where('tenant_id', $tenantId))
             ->whereIn('source_type', [
                 'square_customer',
                 'square_order',
@@ -539,7 +543,7 @@ class MarketingProvidersIntegrationsController extends Controller
         return null;
     }
 
-    protected function squareCustomerMetricsSubquery(): QueryBuilder
+    protected function squareCustomerMetricsSubquery(?int $tenantId = null): QueryBuilder
     {
         $orderMetrics = SquareOrder::query()
             ->toBase()
@@ -571,6 +575,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 $join->on('square_payment_metrics.square_customer_id', '=', 'square_links.source_id');
             })
             ->where('square_links.source_type', 'square_customer')
+            ->when($tenantId !== null, fn (QueryBuilder $query) => $query->where('square_links.tenant_id', $tenantId))
             ->groupBy('square_links.marketing_profile_id')
             ->selectRaw('square_links.marketing_profile_id')
             ->selectRaw('count(distinct square_links.source_id) as square_customer_link_count')
@@ -586,9 +591,10 @@ class MarketingProvidersIntegrationsController extends Controller
     /**
      * @return array<string,int>
      */
-    protected function squareContactAuditSummary(int $minSpendCents): array
+    protected function squareContactAuditSummary(int $minSpendCents, ?int $tenantId = null): array
     {
         $profilesWithSquareLink = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -598,6 +604,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->count();
 
         $squareOnlyProfiles = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -609,6 +616,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->count();
 
         $squareOnlyMissingContact = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -626,6 +634,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->count();
 
         $noShopifyOrGrowave = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -637,14 +646,17 @@ class MarketingProvidersIntegrationsController extends Controller
             })
             ->count();
 
-        $highValueMissingContact = $this->squareContactProfilesQuery('high_value_missing_contact', '', $minSpendCents)->count();
+        $highValueMissingContact = $this->squareContactProfilesQuery('high_value_missing_contact', '', $minSpendCents, $tenantId)->count();
 
         return [
             'profiles_with_square_link' => $profilesWithSquareLink,
-            'square_customer_links' => MarketingProfileLink::query()->where('source_type', 'square_customer')->count(),
-            'square_order_links' => MarketingProfileLink::query()->where('source_type', 'square_order')->count(),
-            'square_payment_links' => MarketingProfileLink::query()->where('source_type', 'square_payment')->count(),
-            'square_identity_reviews' => MarketingIdentityReview::query()->whereIn('source_type', ['square_customer', 'square_order', 'square_payment'])->count(),
+            'square_customer_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_customer')->count(),
+            'square_order_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_order')->count(),
+            'square_payment_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_payment')->count(),
+            'square_identity_reviews' => MarketingIdentityReview::query()
+                ->when($tenantId !== null && Schema::hasColumn('marketing_identity_reviews', 'tenant_id'), fn ($query) => $query->where('tenant_id', $tenantId))
+                ->whereIn('source_type', ['square_customer', 'square_order', 'square_payment'])
+                ->count(),
             'square_only_profiles' => $squareOnlyProfiles,
             'square_only_missing_contact' => $squareOnlyMissingContact,
             'no_shopify_or_growave' => $noShopifyOrGrowave,
@@ -794,6 +806,13 @@ class MarketingProvidersIntegrationsController extends Controller
             })
             ->where('total_money_amount', '>=', $minSpendCents)
             ->count();
+    }
+
+    protected function currentTenantId(Request $request): ?int
+    {
+        $tenantId = $request->attributes->get('current_tenant_id');
+
+        return is_numeric($tenantId) ? (int) $tenantId : null;
     }
 
     protected function nullableString(mixed $value): ?string

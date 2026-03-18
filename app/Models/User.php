@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -98,5 +99,12 @@ class User extends Authenticatable
     public function canAccessMarketing(): bool
     {
         return $this->isAdmin() || $this->isMarketingManager();
+    }
+
+    public function tenants(): BelongsToMany
+    {
+        return $this->belongsToMany(Tenant::class, 'tenant_user')
+            ->withPivot(['role'])
+            ->withTimestamps();
     }
 }

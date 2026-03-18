@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,
             'marketing.storefront.verify' => \App\Http\Middleware\VerifyMarketingStorefrontRequest::class,
+            'tenant.access' => \App\Http\Middleware\EnsureTenantAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
