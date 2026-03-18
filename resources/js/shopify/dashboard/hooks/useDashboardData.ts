@@ -13,11 +13,17 @@ interface UseDashboardDataResult {
   data: DashboardPayload | null;
   error: string | null;
   loading: boolean;
+  reminderAction: {
+    loading: boolean;
+    message: string | null;
+    tone: "success" | "critical" | "subdued";
+  };
   query: DashboardQueryState;
   setTimeframe: (value: DashboardTimeframe) => void;
   setComparison: (value: DashboardComparison) => void;
   setLocationGrouping: (value: "country" | "state" | "city") => void;
   setCustomDates: (start: string | null, end: string | null) => void;
+  sendCandleCashReminders: () => Promise<void>;
 }
 
 export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDataResult {
@@ -28,6 +34,16 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
   const [data, setData] = useState<DashboardPayload | null>(bootstrap.initialData);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reloadSeed, setReloadSeed] = useState(0);
+  const [reminderAction, setReminderAction] = useState<{
+    loading: boolean;
+    message: string | null;
+    tone: "success" | "critical" | "subdued";
+  }>({
+    loading: false,
+    message: null,
+    tone: "subdued",
+  });
   const [query, setQuery] = useState<DashboardQueryState>({
     timeframe: initialQuery?.timeframe ?? config?.defaultTimeframe ?? "last_30_days",
     comparison: initialQuery?.comparison ?? config?.defaultComparison ?? "previous_period",
@@ -112,12 +128,13 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     void fetchData();
 
     return () => controller.abort();
-  }, [bootstrap.authorized, bootstrap.contextToken, bootstrap.dataEndpoint, bootstrap.initialData, queryString]);
+  }, [bootstrap.authorized, bootstrap.contextToken, bootstrap.dataEndpoint, bootstrap.initialData, queryString, reloadSeed]);
 
   return {
     data,
     error,
     loading,
+    reminderAction,
     query,
     setTimeframe: (value) =>
       setQuery((current) => ({
@@ -142,5 +159,55 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
         customStartDate: start,
         customEndDate: end,
       })),
+    sendCandleCashReminders: async () => {
+      if (!bootstrap.authorized || !bootstrap.reminderEndpoint) {
+        setReminderAction({
+          loading: false,
+          message: "Reminder endpoint is unavailable for this embedded session.",
+          tone: "critical",
+        });
+        return;
+      }
+
+      setReminderAction({
+        loading: true,
+        message: null,
+        tone: "subdued",
+      });
+
+      try {
+        const response = await fetch(bootstrap.reminderEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(bootstrap.contextToken
+              ? {
+                  "X-Forestry-Embedded-Context": bootstrap.contextToken,
+                }
+              : {}),
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({}),
+        });
+
+        const payload = (await response.json()) as { ok: boolean; message?: string };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.message ?? "Reminder send could not be started.");
+        }
+
+        setReminderAction({
+          loading: false,
+          message: payload.message ?? "Reminder send attempted.",
+          tone: "success",
+        });
+        setReloadSeed((current) => current + 1);
+      } catch (requestError) {
+        setReminderAction({
+          loading: false,
+          message: (requestError as Error).message,
+          tone: "critical",
+        });
+      }
+    },
   };
 }

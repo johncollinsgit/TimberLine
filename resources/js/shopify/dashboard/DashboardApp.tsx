@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { dashboardConfig } from "./dashboardConfig";
 import type { DashboardBootstrap } from "./types";
 import { AttributionSection } from "./components/AttributionSection";
+import { CandleCashEngagementSection } from "./components/CandleCashEngagementSection";
 import { ComparisonSelector } from "./components/ComparisonSelector";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardShell } from "./components/DashboardShell";
@@ -36,8 +37,18 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
     () => bootstrap.initialData?.config ?? bootstrap.config ?? dashboardConfig,
     [bootstrap],
   );
-  const { data, error, loading, query, setComparison, setCustomDates, setLocationGrouping, setTimeframe } =
-    useDashboardData(bootstrap);
+  const {
+    data,
+    error,
+    loading,
+    reminderAction,
+    query,
+    sendCandleCashReminders,
+    setComparison,
+    setCustomDates,
+    setLocationGrouping,
+    setTimeframe,
+  } = useDashboardData(bootstrap);
 
   return (
     <AppProvider i18n={enTranslations}>
@@ -121,6 +132,20 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
                 <MetricCardGroup metrics={data.topMetrics} />
               ) : (
                 <MetricCardGroupSkeleton />
+              )
+            ) : null
+          }
+          candleCashEngagement={
+            config.visibleWidgets.candleCashEngagement ? (
+              data ? (
+                <CandleCashEngagementSection
+                  section={data.candleCashEngagement}
+                  sendingReminders={reminderAction.loading}
+                  reminderFeedback={reminderAction.message ? reminderAction : null}
+                  onSendReminders={sendCandleCashReminders}
+                />
+              ) : (
+                <LoadingCard lines={5} />
               )
             ) : null
           }

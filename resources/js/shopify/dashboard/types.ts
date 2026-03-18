@@ -62,6 +62,18 @@ export interface DashboardFinancialSummaryItem {
   detail: string;
 }
 
+export interface DashboardCandleCashEarnBreakdownRow {
+  key: string;
+  label: string;
+  definition: string;
+  points: number;
+  amount: number;
+  formattedAmount: string;
+  sharePct: number;
+  eventCount: number;
+  customerCount: number;
+}
+
 export interface DashboardPayload {
   meta: {
     generatedAt: string;
@@ -137,6 +149,57 @@ export interface DashboardPayload {
       detail?: string;
     };
   };
+  candleCashEngagement: {
+    title: string;
+    subtitle: string;
+    earned: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+      eventCount: number;
+      customerCount: number;
+      sourceSummary: string;
+    };
+    breakdown: {
+      rows: DashboardCandleCashEarnBreakdownRow[];
+      sourceDefinitions: Record<string, { label: string; definition: string }>;
+    };
+    outstanding: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+      customerCount: number;
+      excludedGrandfatheredPoints: number;
+      excludedGrandfatheredAmount: number;
+      helperText: string;
+    };
+    timeToFirstRedemption: {
+      averageDays: number | null;
+      medianDays: number | null;
+      formattedAverageDays: string;
+      formattedMedianDays: string;
+      sampleCount: number;
+      approximation: string;
+    };
+    customersWithOutstandingEarned: {
+      count: number;
+    };
+    reminderEligibility: {
+      eligibleCustomers: number;
+      missingEmailCustomers: number;
+      expirationPolicy: string;
+      emailReadiness?: {
+        status: "ready_for_live_send" | "dry_run_only" | "disabled" | "misconfigured" | string;
+        enabled: boolean;
+        dryRun: boolean;
+        missingReasons: string[];
+      };
+    };
+    comparison?: {
+      earnedAmount?: number | null;
+      timeToFirstRedemptionAverageDays?: number | null;
+    };
+  };
   flags: {
     hasAnyData: boolean;
     usesFallbackAttribution: boolean;
@@ -154,6 +217,7 @@ export interface DashboardConfig {
   locationGroupingOptions: Array<{ label: string; value: "country" | "state" | "city" }>;
   visibleWidgets: {
     metricCards: boolean;
+    candleCashEngagement: boolean;
     performanceChart: boolean;
     locationOrigins: boolean;
     attribution: boolean;
@@ -174,6 +238,7 @@ export interface DashboardBootstrap {
   }>;
   contextToken: string | null;
   dataEndpoint: string | null;
+  reminderEndpoint: string | null;
   config: DashboardConfig | null;
   initialData: DashboardPayload | null;
 }

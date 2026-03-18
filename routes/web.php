@@ -5,20 +5,20 @@ use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
-use App\Http\Controllers\Marketing\MarketingCampaignsController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
+use App\Http\Controllers\Marketing\MarketingCampaignsController;
+use App\Http\Controllers\Marketing\MarketingConsentCaptureController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
 use App\Http\Controllers\Marketing\MarketingGroupsController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
 use App\Http\Controllers\Marketing\MarketingMessageTemplatesController;
 use App\Http\Controllers\Marketing\MarketingOperationsController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
-use App\Http\Controllers\Marketing\MarketingPublicEventController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
+use App\Http\Controllers\Marketing\MarketingPublicEventController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
-use App\Http\Controllers\Marketing\MarketingConsentCaptureController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\ShopifyAuthController;
@@ -31,8 +31,8 @@ use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Livewire\Admin\AdminHome;
-use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
 use App\Livewire\Admin\Catalog\CostsCrud as AdminCostsCrud;
+use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
 use App\Livewire\Admin\Catalog\SizesCrud as AdminSizesCrud;
 use App\Livewire\Admin\Catalog\WicksCrud as AdminWicksCrud;
 use App\Livewire\Admin\ImportRuns as AdminImportRuns;
@@ -69,7 +69,6 @@ use App\Livewire\Shipping\Orders as ShippingOrders;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
-use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
@@ -390,8 +389,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('suppression-consent');
         });
 
-Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
-    ->name('marketing.candle-cash.google-business.callback');
+    Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
+        ->name('marketing.candle-cash.google-business.callback');
 
     Route::middleware(['role:admin,marketing_manager'])
         ->prefix('birthdays')
@@ -572,91 +571,91 @@ Route::prefix('shopify/marketing')
     ->name('marketing.shopify.')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
-    Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
-    Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
-    Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
-    Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
-    Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
-    Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('rewards.redeem');
-    Route::post('/rewards/event', [MarketingShopifyIntegrationController::class, 'logRewardEvent'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('rewards.event');
-    Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
-    Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('consent.request');
-    Route::post('/consent/optin', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('consent.optin');
-    Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('consent.confirm');
-    Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
-    Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('birthday.capture');
-    Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('birthday.claim');
-    Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
-    Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('candle-cash.tasks.submit');
-    Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
-    Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('product-reviews.submit');
-    Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('google-business.review.start');
-});
+        Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
+        Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
+        Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
+        Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
+        Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.redeem');
+        Route::post('/rewards/event', [MarketingShopifyIntegrationController::class, 'logRewardEvent'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.event');
+        Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
+        Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('consent.request');
+        Route::post('/consent/optin', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('consent.optin');
+        Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('consent.confirm');
+        Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
+        Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('birthday.capture');
+        Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('birthday.claim');
+        Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
+        Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('candle-cash.tasks.submit');
+        Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
+        Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('product-reviews.submit');
+        Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('google-business.review.start');
+    });
 
 Route::prefix('shopify/marketing/v1')
     ->name('marketing.shopify.v1.')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
-    Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
-    Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
-    Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
-    Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
-    Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
-    Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('rewards.redeem');
-    Route::post('/rewards/event', [MarketingShopifyIntegrationController::class, 'logRewardEvent'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('rewards.event');
-    Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
-    Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('consent.request');
-    Route::post('/consent/optin', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('consent.optin');
-    Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('consent.confirm');
-    Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
-    Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('birthday.capture');
-    Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('birthday.claim');
-    Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
-    Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('candle-cash.tasks.submit');
-    Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
-    Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('product-reviews.submit');
-    Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
-        ->name('google-business.review.start');
-});
+        Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
+        Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
+        Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
+        Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
+        Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.redeem');
+        Route::post('/rewards/event', [MarketingShopifyIntegrationController::class, 'logRewardEvent'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.event');
+        Route::get('/consent/status', [MarketingShopifyIntegrationController::class, 'consentStatus'])->name('consent.status');
+        Route::post('/consent/request', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('consent.request');
+        Route::post('/consent/optin', [MarketingShopifyIntegrationController::class, 'requestConsentOptin'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('consent.optin');
+        Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('consent.confirm');
+        Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
+        Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('birthday.capture');
+        Route::post('/birthday/claim', [MarketingShopifyIntegrationController::class, 'claimBirthdayReward'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('birthday.claim');
+        Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
+        Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('candle-cash.tasks.submit');
+        Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
+        Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('product-reviews.submit');
+        Route::post('/google-business/review/start', [MarketingShopifyIntegrationController::class, 'startGoogleBusinessReview'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('google-business.review.start');
+    });
 
 Route::prefix('shopify')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
@@ -677,6 +676,9 @@ Route::prefix('shopify')->group(function () {
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
+        Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('dashboard.candle-cash-reminders');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
         Route::patch('/rewards/earn/{task}', [ShopifyEmbeddedRewardsController::class, 'updateEarnRule'])
             ->withoutMiddleware([VerifyCsrfToken::class])

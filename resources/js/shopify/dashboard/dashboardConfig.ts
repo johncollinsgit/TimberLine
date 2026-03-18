@@ -7,6 +7,7 @@ export const dashboardConfig: DashboardConfig = {
   locationGroupingPreference: "state",
   visibleWidgets: {
     metricCards: true,
+    candleCashEngagement: true,
     performanceChart: true,
     locationOrigins: true,
     attribution: true,
@@ -36,6 +37,7 @@ export const dashboardConfig: DashboardConfig = {
   ],
   widgetRegistry: {
     metricCards: { title: "Top metrics" },
+    candleCashEngagement: { title: "Candle Cash earn activity" },
     performanceChart: { title: "Performance chart" },
     locationOrigins: { title: "Location origins" },
     attribution: { title: "Attribution" },

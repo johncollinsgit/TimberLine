@@ -59,6 +59,10 @@ return [
         'from_email' => env('MARKETING_EMAIL_FROM_EMAIL'),
         'from_name' => env('MARKETING_EMAIL_FROM_NAME', 'TimberLine Marketing'),
         'smoke_test_recipient_email' => env('MARKETING_EMAIL_SMOKE_TEST_RECIPIENT'),
+        'candle_cash_reminder' => [
+            'cooldown_days' => (int) env('MARKETING_EMAIL_CANDLE_CASH_REMINDER_COOLDOWN_DAYS', 14),
+            'max_send_limit' => (int) env('MARKETING_EMAIL_CANDLE_CASH_REMINDER_MAX_SEND_LIMIT', 200),
+        ],
     ],
 
     'twilio' => [

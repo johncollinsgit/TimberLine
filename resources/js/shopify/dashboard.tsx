@@ -14,6 +14,7 @@ function readBootstrap(): DashboardBootstrap {
       links: [],
       contextToken: null,
       dataEndpoint: null,
+      reminderEndpoint: null,
       config: dashboardConfig,
       initialData: null,
     };
@@ -31,6 +32,7 @@ function readBootstrap(): DashboardBootstrap {
       links: [],
       contextToken: null,
       dataEndpoint: null,
+      reminderEndpoint: null,
       config: dashboardConfig,
       initialData: null,
     };

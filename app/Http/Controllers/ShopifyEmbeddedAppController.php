@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use Illuminate\Http\JsonResponse;
@@ -13,9 +14,9 @@ class ShopifyEmbeddedAppController extends Controller
     use HandlesShopifyEmbeddedNavigation;
 
     public function __construct(
-        protected ShopifyEmbeddedDashboardDataService $dashboardDataService
-    ) {
-    }
+        protected ShopifyEmbeddedDashboardDataService $dashboardDataService,
+        protected CandleCashEarnedReminderService $candleCashEarnedReminderService
+    ) {}
 
     public function show(
         Request $request,
@@ -44,6 +45,7 @@ class ShopifyEmbeddedAppController extends Controller
                         'links' => [],
                         'contextToken' => null,
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
+                        'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
                         'config' => $this->dashboardDataService->payload()['config'],
                     ],
@@ -72,6 +74,7 @@ class ShopifyEmbeddedAppController extends Controller
                         'links' => [],
                         'contextToken' => null,
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
+                        'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
                         'config' => $this->dashboardDataService->payload()['config'],
                     ],
@@ -115,7 +118,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'shopifyApiKey' => (string) ($store['client_id'] ?? ''),
                 'shopDomain' => (string) ($store['shop'] ?? ''),
                 'host' => (string) ($context['host'] ?? ''),
-                'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')) . ' Store',
+                'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                 'headline' => 'Dashboard',
                 'subheadline' => 'Rewards performance snapshot',
                 'appNavigation' => $this->embeddedAppNavigation('dashboard'),
@@ -124,10 +127,11 @@ class ShopifyEmbeddedAppController extends Controller
                 'dashboardBootstrap' => [
                     'authorized' => true,
                     'status' => 'ok',
-                    'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')) . ' Store',
+                    'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                     'links' => $dashboardLinks,
                     'contextToken' => $contextService->issueContextToken($context),
                     'dataEndpoint' => route('shopify.app.api.dashboard'),
+                    'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                     'initialData' => $dashboardData,
                     'config' => $dashboardData['config'],
                 ],
@@ -151,12 +155,47 @@ class ShopifyEmbeddedAppController extends Controller
         ]);
     }
 
+    public function sendCandleCashEarnedReminders(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService
+    ): JsonResponse {
+        $context = $contextService->resolveApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $data = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $result = $this->candleCashEarnedReminderService->sendManualBatch([
+            'limit' => $data['limit'] ?? null,
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => auth()->id(),
+        ]);
+
+        if ((bool) ($result['blocked'] ?? false)) {
+            return response()->json([
+                'ok' => false,
+                'message' => (string) ($result['message'] ?? 'Reminder send is blocked by email readiness state.'),
+                'data' => $result,
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => (string) ($result['message'] ?? 'Reminder send attempted.'),
+            'data' => $result,
+        ]);
+    }
+
     protected function embeddedResponse(Response $response, int $status = 200): Response
     {
         $response->setStatusCode($status);
         $response->headers->set(
             'Content-Security-Policy',
-            "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;"
+            'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;'
         );
         $response->headers->remove('X-Frame-Options');
 
@@ -181,5 +220,4 @@ class ShopifyEmbeddedAppController extends Controller
             'status' => $status,
         ], $status === 'open_from_shopify' ? 400 : 401);
     }
-
 }

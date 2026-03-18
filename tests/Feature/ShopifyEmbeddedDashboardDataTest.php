@@ -2,16 +2,18 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
-use App\Models\CatalogItemCost;
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashRedemption;
+use App\Models\CandleCashTransaction;
+use App\Models\CatalogItemCost;
+use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignConversion;
+use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Models\CustomerBirthdayProfile;
 use App\Models\Scent;
 use App\Models\Size;
 use App\Services\Marketing\CandleCashService;
@@ -200,12 +202,24 @@ test('embedded dashboard api returns a stable payload contract for an authorized
                 'attribution' => ['title', 'subtitle', 'sources', 'empty'],
                 'locationOrigins' => ['title', 'subtitle', 'grouping', 'items', 'empty'],
                 'financialSummary' => ['title', 'subtitle', 'items', 'netProfit'],
+                'candleCashEngagement' => [
+                    'title',
+                    'subtitle',
+                    'earned',
+                    'breakdown',
+                    'outstanding',
+                    'timeToFirstRedemption',
+                    'customersWithOutstandingEarned',
+                    'reminderEligibility',
+                ],
                 'flags' => ['hasAnyData', 'usesFallbackAttribution', 'usesEstimatedOrderRevenue'],
             ],
         ]);
 
-    expect($response->json('data.topMetrics'))->toHaveCount(4);
+    expect($response->json('data.topMetrics'))->toHaveCount(8);
     expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual(10.0);
+    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_earned'))->not->toBeNull();
+    expect($response->json('data.candleCashEngagement.outstanding.helperText'))->toContain('excludes imported');
     expect($response->json('data.chart.series'))->not->toBeEmpty();
     expect($response->json('data.financialSummary.netProfit.detail'))->toContain('confidence');
 });
@@ -464,4 +478,157 @@ test('performance trend falls back to birthday redemption count when revenue is 
         ->and($series)->toHaveCount(7)
         ->and($march5)->not->toBeNull()
         ->and($march5['primary'])->toBe(1);
+});
+
+test('candle cash earned analytics exclude imported opening balances and report defensible redemption lag', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Earn',
+        'last_name' => 'Tester',
+        'email' => 'earn-metrics@example.com',
+    ]);
+
+    $openingAt = now()->subDays(6)->startOfDay();
+    $earnedAt = now()->subDays(4)->startOfDay();
+    $redeemedAt = now()->subDays(2)->startOfDay();
+
+    $openingTransaction = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'import_opening_balance',
+        'points' => 900,
+        'source' => 'growave',
+        'source_id' => 'import-1',
+        'description' => 'Imported opening Growave balance',
+    ]);
+    $openingTransaction->forceFill([
+        'created_at' => $openingAt,
+        'updated_at' => $openingAt,
+    ])->saveQuietly();
+
+    $signupEarnTransaction = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'points' => 300,
+        'source' => 'consent',
+        'source_id' => 'sms-consent:1',
+        'description' => 'SMS welcome earn',
+    ]);
+    $signupEarnTransaction->forceFill([
+        'created_at' => $earnedAt,
+        'updated_at' => $earnedAt,
+    ])->saveQuietly();
+
+    $birthdayEarnTransaction = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'points' => 200,
+        'source' => 'birthday_reward',
+        'source_id' => 'birthday:1',
+        'description' => 'Birthday reward points',
+    ]);
+    $birthdayEarnTransaction->forceFill([
+        'created_at' => $earnedAt,
+        'updated_at' => $earnedAt,
+    ])->saveQuietly();
+
+    CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => 1,
+        'points_spent' => 100,
+        'platform' => 'shopify',
+        'redemption_code' => 'CC-EARN-1001',
+        'status' => 'redeemed',
+        'issued_at' => $redeemedAt->subDay(),
+        'redeemed_at' => $redeemedAt,
+        'external_order_source' => 'order',
+        'external_order_id' => '1001',
+    ]);
+
+    $redeemTransaction = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'redeem',
+        'points' => -100,
+        'source' => 'reward',
+        'source_id' => 'redeem:1001',
+        'description' => 'Redeemed reward',
+    ]);
+    $redeemTransaction->forceFill([
+        'created_at' => $redeemedAt,
+        'updated_at' => $redeemedAt,
+    ])->saveQuietly();
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_7_days',
+        'comparison' => 'none',
+    ]));
+
+    $expectedEarnedAmount = app(CandleCashService::class)->amountFromPoints(500);
+    $expectedExcludedAmount = app(CandleCashService::class)->amountFromPoints(800);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.candleCashEngagement.earned.points', 500)
+        ->assertJsonPath('data.candleCashEngagement.earned.amount', $expectedEarnedAmount)
+        ->assertJsonPath('data.candleCashEngagement.outstanding.points', 500)
+        ->assertJsonPath('data.candleCashEngagement.outstanding.excludedGrandfatheredPoints', 800)
+        ->assertJsonPath('data.candleCashEngagement.customersWithOutstandingEarned.count', 1);
+
+    expect((float) $response->json('data.candleCashEngagement.outstanding.excludedGrandfatheredAmount'))
+        ->toEqual($expectedExcludedAmount);
+
+    $averageDays = (float) $response->json('data.candleCashEngagement.timeToFirstRedemption.averageDays');
+
+    expect($averageDays)->toBeGreaterThanOrEqual(1.9)
+        ->and($averageDays)->toBeLessThanOrEqual(2.1);
+
+    $breakdownRows = collect($response->json('data.candleCashEngagement.breakdown.rows'))->keyBy('key');
+    expect((int) ($breakdownRows['signup_welcome_earn']['points'] ?? 0))->toBe(300)
+        ->and((int) ($breakdownRows['birthday_earn']['points'] ?? 0))->toBe(200);
+});
+
+test('manual candle cash reminder endpoint sends to eligible profiles once and respects cooldown dedupe', function () {
+    config()->set('marketing.email.enabled', true);
+    config()->set('marketing.email.dry_run', true);
+    config()->set('marketing.email.from_email', 'rewards@theforestrystudio.com');
+    config()->set('marketing.email.from_name', 'Modern Forestry');
+    config()->set('services.sendgrid.api_key', 'sg-test-key');
+    config()->set('marketing.email.candle_cash_reminder.cooldown_days', 14);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Reminder',
+        'last_name' => 'Customer',
+        'email' => 'reminder@example.com',
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'points' => 400,
+        'source' => 'consent',
+        'source_id' => 'sms-consent:reminder',
+        'description' => 'SMS welcome earn',
+        'created_at' => now()->subDays(3),
+        'updated_at' => now()->subDays(3),
+    ]);
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $first = $this->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
+    $first
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary.sent', 1)
+        ->assertJsonPath('data.summary.skipped_cooldown', 0);
+
+    expect(MarketingEmailDelivery::query()->count())->toBe(1);
+
+    $second = $this->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
+    $second
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary.sent', 0)
+        ->assertJsonPath('data.summary.skipped_cooldown', 1);
+
+    expect(MarketingEmailDelivery::query()->count())->toBe(1);
 });

@@ -6,8 +6,10 @@ use App\Models\BirthdayRewardIssuance;
 use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
-use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
+use App\Services\Marketing\CandleCashEarnedAnalyticsService;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
+use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Reporting\AnalyticsComparisonService;
 use Carbon\CarbonImmutable;
@@ -26,9 +28,10 @@ class ShopifyEmbeddedDashboardDataService
         protected ShopifyEmbeddedDashboardAttributionAggregator $attributionAggregator,
         protected AnalyticsComparisonService $comparisonService,
         protected CandleCashService $candleCashService,
-        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
-    ) {
-    }
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
+        protected CandleCashEarnedAnalyticsService $candleCashEarnedAnalyticsService,
+        protected MarketingEmailReadiness $marketingEmailReadiness
+    ) {}
 
     /**
      * @param  array<string,mixed>  $input
@@ -83,6 +86,7 @@ class ShopifyEmbeddedDashboardDataService
                 'attribution' => $this->attributionSection($primarySnapshot, $comparisonSnapshot, $config),
                 'locationOrigins' => $this->locationSection($primarySnapshot, $resolvedQuery),
                 'financialSummary' => $this->financialSummary($primarySnapshot, $comparisonSnapshot),
+                'candleCashEngagement' => $this->candleCashEngagementSection($primarySnapshot, $comparisonSnapshot),
                 'flags' => [
                     'hasAnyData' => (bool) $primarySnapshot['flags']['has_any_data'],
                     'usesFallbackAttribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
@@ -94,22 +98,22 @@ class ShopifyEmbeddedDashboardDataService
 
     protected function cacheKey(array $resolvedQuery): string
     {
-        return 'shopify:embedded-dashboard:' . sha1(json_encode($resolvedQuery));
+        return 'shopify:embedded-dashboard:'.sha1(json_encode($resolvedQuery));
     }
 
     protected function currency(float $value): string
     {
-        return '$' . number_format($value, 2);
+        return '$'.number_format($value, 2);
     }
 
     protected function integerCurrency(float $value): string
     {
-        return '$' . number_format(round($value));
+        return '$'.number_format(round($value));
     }
 
     protected function percentage(float $value, int $precision = 1): string
     {
-        return number_format($value, $precision) . '%';
+        return number_format($value, $precision).'%';
     }
 
     protected function toneForDelta(?float $delta): string
@@ -128,10 +132,10 @@ class ShopifyEmbeddedDashboardDataService
         }
 
         if ($kind === 'currency') {
-            return ($delta >= 0 ? '+' : '-') . $this->currency(abs($delta));
+            return ($delta >= 0 ? '+' : '-').$this->currency(abs($delta));
         }
 
-        return ($delta >= 0 ? '+' : '') . number_format($delta, 1) . '%';
+        return ($delta >= 0 ? '+' : '').number_format($delta, 1).'%';
     }
 
     /**
@@ -150,6 +154,8 @@ class ShopifyEmbeddedDashboardDataService
         $revenueRows = $classifiedAttribution['rows'];
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
         $candleCash = $this->candleCashProvider->snapshot($from, $to);
+        $candleCashEngagement = $this->candleCashEarnedAnalyticsService->snapshot($from, $to);
+        $emailReadiness = $this->marketingEmailReadiness->summary();
         $returningCustomerRate = $this->returningCustomerRate($from, $to);
         $realizedRewardCost = max(0.0, (float) data_get($candleCash, 'realizedRewardCost', 0));
         $birthdayRewardLiability = round((float) data_get($candleCash, 'issuedBirthdayValue', 0), 2);
@@ -161,6 +167,18 @@ class ShopifyEmbeddedDashboardDataService
             'attributionRows' => $classifiedAttribution['rowsForSection'],
             'attributionSummary' => $classifiedAttribution['summary'],
             'candleCash' => $candleCash,
+            'candleCashEngagement' => [
+                ...$candleCashEngagement,
+                'reminderEligibility' => [
+                    ...(array) data_get($candleCashEngagement, 'reminderEligibility', []),
+                    'emailReadiness' => [
+                        'status' => (string) ($emailReadiness['status'] ?? 'disabled'),
+                        'enabled' => (bool) ($emailReadiness['enabled'] ?? false),
+                        'dryRun' => (bool) ($emailReadiness['dry_run'] ?? false),
+                        'missingReasons' => (array) ($emailReadiness['missing_reasons'] ?? []),
+                    ],
+                ],
+            ],
             'rewardSales' => round((float) $revenueRows->sum('revenue'), 2),
             'rewardsOrderCount' => (int) $revenueRows->count(),
             'returningCustomerRate' => $returningCustomerRate,
@@ -175,7 +193,9 @@ class ShopifyEmbeddedDashboardDataService
                 'birthdayRewardLiability' => $birthdayRewardLiability,
             ],
             'flags' => [
-                'has_any_data' => $revenueRows->isNotEmpty() || $candleCash['used']['count'] > 0,
+                'has_any_data' => $revenueRows->isNotEmpty()
+                    || $candleCash['used']['count'] > 0
+                    || (int) data_get($candleCashEngagement, 'earned.eventCount', 0) > 0,
                 'attribution_partial' => (bool) data_get($classifiedAttribution, 'summary.has_unknown_rows', false),
                 'location_partial' => $locationRows->isNotEmpty()
                     ? $locationRows->contains(fn (array $row): bool => (bool) ($row['partial'] ?? false))
@@ -266,6 +286,7 @@ class ShopifyEmbeddedDashboardDataService
             if (! $order) {
                 $summary['unresolved_order_count']++;
                 $summary['unresolved_revenue'] += (float) $rows->sum('revenue');
+
                 continue;
             }
 
@@ -412,8 +433,8 @@ class ShopifyEmbeddedDashboardDataService
 
                 return [
                     'sourceKey' => $issuance->order_id
-                        ? 'order:' . $issuance->order_id
-                        : 'birthday:' . $issuance->id,
+                        ? 'order:'.$issuance->order_id
+                        : 'birthday:'.$issuance->id,
                     'sourceType' => 'birthday_reward',
                     'sourceId' => (string) $issuance->id,
                     'orderId' => $issuance->order_id ? (int) $issuance->order_id : null,
@@ -480,14 +501,14 @@ class ShopifyEmbeddedDashboardDataService
         $sourceId = trim($sourceId);
 
         if ($sourceType === 'order' && $sourceId !== '') {
-            return 'order:' . $sourceId;
+            return 'order:'.$sourceId;
         }
 
         if ($sourceId !== '') {
-            return $sourceType . ':' . $sourceId;
+            return $sourceType.':'.$sourceId;
         }
 
-        return $sourceType . ':row:' . $fallbackId;
+        return $sourceType.':row:'.$fallbackId;
     }
 
     protected function normalizedRevenueRows(Collection $conversionRows, Collection $birthdayRows, Collection $referralRows): Collection
@@ -680,17 +701,25 @@ class ShopifyEmbeddedDashboardDataService
                 'returning_customer_rate' => (float) $primarySnapshot['returningCustomerRate'],
                 'candle_cash_used' => (float) data_get($primarySnapshot, 'candleCash.used.amount', 0),
                 'net_profit' => (float) $primarySnapshot['netProfit'],
+                'candle_cash_earned' => (float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0),
+                'time_to_first_redemption_days' => $this->daysValue(data_get($primarySnapshot, 'candleCashEngagement.timeToFirstRedemption.averageDays')),
             ],
             $comparisonSnapshot ? [
                 'reward_sales' => (float) $comparisonSnapshot['rewardSales'],
                 'returning_customer_rate' => (float) $comparisonSnapshot['returningCustomerRate'],
                 'candle_cash_used' => (float) data_get($comparisonSnapshot, 'candleCash.used.amount', 0),
                 'net_profit' => (float) $comparisonSnapshot['netProfit'],
+                'candle_cash_earned' => (float) data_get($comparisonSnapshot, 'candleCashEngagement.earned.amount', 0),
+                'time_to_first_redemption_days' => $this->daysValue(data_get($comparisonSnapshot, 'candleCashEngagement.timeToFirstRedemption.averageDays')),
             ] : null,
-            ['reward_sales', 'returning_customer_rate', 'candle_cash_used', 'net_profit']
+            ['reward_sales', 'returning_customer_rate', 'candle_cash_used', 'net_profit', 'candle_cash_earned', 'time_to_first_redemption_days']
         );
 
         $metrics = $comparison['metrics'];
+        $timeToRedeemDelta = data_get($metrics, 'time_to_first_redemption_days.delta_pct');
+        $timeToRedeemCaption = 'Average '.data_get($primarySnapshot, 'candleCashEngagement.timeToFirstRedemption.formattedAverageDays', 'No redemptions yet')
+            .' · Median '.data_get($primarySnapshot, 'candleCashEngagement.timeToFirstRedemption.formattedMedianDays', 'No redemptions yet')
+            .'. Lower is better for conversion velocity.';
 
         return [
             [
@@ -736,6 +765,50 @@ class ShopifyEmbeddedDashboardDataService
                 'deltaLabel' => $this->formatDelta(data_get($metrics, 'net_profit.delta_pct')),
                 'tone' => $this->toneForDelta(data_get($metrics, 'net_profit.delta_pct')),
                 'caption' => 'Contribution from stored COGS and order-level costs, with confidence reduced when fallback assumptions still carry the period.',
+            ],
+            [
+                'key' => 'candle_cash_earned',
+                'label' => 'Candle Cash Earned',
+                'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0),
+                'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0)),
+                'comparisonValue' => data_get($metrics, 'candle_cash_earned.comparison'),
+                'deltaPct' => data_get($metrics, 'candle_cash_earned.delta_pct'),
+                'deltaLabel' => $this->formatDelta(data_get($metrics, 'candle_cash_earned.delta_pct')),
+                'tone' => $this->toneForDelta(data_get($metrics, 'candle_cash_earned.delta_pct')),
+                'caption' => (string) data_get($primarySnapshot, 'candleCashEngagement.earned.sourceSummary', 'No new program-earned Candle Cash events in this window.'),
+            ],
+            [
+                'key' => 'earned_candle_cash_outstanding',
+                'label' => 'Earned Candle Cash Outstanding',
+                'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.outstanding.amount', 0),
+                'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCashEngagement.outstanding.amount', 0)),
+                'comparisonValue' => null,
+                'deltaPct' => null,
+                'deltaLabel' => 'Point-in-time metric',
+                'tone' => 'neutral',
+                'caption' => (string) data_get($primarySnapshot, 'candleCashEngagement.outstanding.helperText', 'Currently outstanding earned Candle Cash excludes imported opening balances.'),
+            ],
+            [
+                'key' => 'time_to_first_redemption',
+                'label' => 'Time to First Redemption',
+                'value' => $this->daysValue(data_get($primarySnapshot, 'candleCashEngagement.timeToFirstRedemption.averageDays')),
+                'formattedValue' => $this->formatDays(data_get($primarySnapshot, 'candleCashEngagement.timeToFirstRedemption.averageDays')),
+                'comparisonValue' => data_get($metrics, 'time_to_first_redemption_days.comparison'),
+                'deltaPct' => $timeToRedeemDelta,
+                'deltaLabel' => $this->formatDelta($timeToRedeemDelta),
+                'tone' => $this->toneForDelta($timeToRedeemDelta !== null ? -1 * (float) $timeToRedeemDelta : null),
+                'caption' => $timeToRedeemCaption,
+            ],
+            [
+                'key' => 'customers_with_unredeemed_earned',
+                'label' => 'Customers With Unredeemed Earned Candle Cash',
+                'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.customersWithOutstandingEarned.count', 0),
+                'formattedValue' => number_format((float) data_get($primarySnapshot, 'candleCashEngagement.customersWithOutstandingEarned.count', 0)),
+                'comparisonValue' => null,
+                'deltaPct' => null,
+                'deltaLabel' => 'Point-in-time metric',
+                'tone' => 'neutral',
+                'caption' => 'Only customers with program-earned Candle Cash still outstanding are counted. Grandfathered-only balances are excluded.',
             ],
         ];
     }
@@ -807,7 +880,7 @@ class ShopifyEmbeddedDashboardDataService
             'benchmarkValue' => $bestPrimary
                 ? ($usesRevenue
                     ? $this->currency((float) $bestPrimary['primary'])
-                    : number_format((float) $bestPrimary['primary']) . ' redemption' . ((float) $bestPrimary['primary'] === 1.0 ? '' : 's'))
+                    : number_format((float) $bestPrimary['primary']).' redemption'.((float) $bestPrimary['primary'] === 1.0 ? '' : 's'))
                 : ($usesRevenue ? '$0.00' : '0 redemptions'),
             'empty' => empty($rows),
         ];
@@ -973,8 +1046,8 @@ class ShopifyEmbeddedDashboardDataService
                     'label' => $primary['label'] ?? $this->attributionLabel($key),
                     'revenue' => $primaryRevenue,
                     'formattedRevenue' => $this->currency($primaryRevenue),
-                    'profit' => (float) data_get($primarySnapshot, 'financials.profitBreakdown.channel_profit.' . $key . '.net_profit', 0),
-                    'formattedProfit' => $this->currency((float) data_get($primarySnapshot, 'financials.profitBreakdown.channel_profit.' . $key . '.net_profit', 0)),
+                    'profit' => (float) data_get($primarySnapshot, 'financials.profitBreakdown.channel_profit.'.$key.'.net_profit', 0),
+                    'formattedProfit' => $this->currency((float) data_get($primarySnapshot, 'financials.profitBreakdown.channel_profit.'.$key.'.net_profit', 0)),
                     'orders' => (int) ($primary['orders'] ?? 0),
                     'deltaPct' => $deltaPct,
                     'deltaLabel' => $this->formatDelta($deltaPct),
@@ -1041,12 +1114,12 @@ class ShopifyEmbeddedDashboardDataService
                 $storeKey = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown');
                 $pairs[] = [
                     'source_type' => 'shopify_order',
-                    'source_id' => $storeKey . ':' . $order->shopify_order_id,
+                    'source_id' => $storeKey.':'.$order->shopify_order_id,
                 ];
             }
         }
 
-        $pairs = collect($pairs)->unique(fn (array $pair): string => $pair['source_type'] . '|' . $pair['source_id'])->values();
+        $pairs = collect($pairs)->unique(fn (array $pair): string => $pair['source_type'].'|'.$pair['source_id'])->values();
 
         $links = MarketingProfileLink::query()
             ->where(function ($query) use ($pairs): void {
@@ -1062,17 +1135,17 @@ class ShopifyEmbeddedDashboardDataService
 
         $linkMeta = [];
         foreach ($links as $link) {
-            $linkMeta[strtolower(trim((string) $link->source_type)) . '|' . trim((string) $link->source_id)] = (array) ($link->source_meta ?? []);
+            $linkMeta[strtolower(trim((string) $link->source_type)).'|'.trim((string) $link->source_id)] = (array) ($link->source_meta ?? []);
         }
 
         $signals = [];
         foreach ($orders as $order) {
             $sourceMeta = is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [];
-            $orderMeta = $linkMeta['order|' . $order->id] ?? [];
+            $orderMeta = $linkMeta['order|'.$order->id] ?? [];
             $shopifyMeta = [];
             if ($order->shopify_order_id) {
                 $storeKey = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown');
-                $shopifyMeta = $linkMeta['shopify_order|' . $storeKey . ':' . $order->shopify_order_id] ?? [];
+                $shopifyMeta = $linkMeta['shopify_order|'.$storeKey.':'.$order->shopify_order_id] ?? [];
             }
 
             $sourceMeta = $this->attributionSourceMetaBuilder->mergeSourceMeta($sourceMeta, $shopifyMeta);
@@ -1167,14 +1240,14 @@ class ShopifyEmbeddedDashboardDataService
         $expected = (int) ($profitBreakdown['expected_order_count'] ?? 0);
         $unresolvedRevenue = (float) ($profitBreakdown['unresolved_revenue'] ?? 0);
 
-        $detail = ucfirst($confidence) . ' confidence';
+        $detail = ucfirst($confidence).' confidence';
 
         if ($expected > 0) {
-            $detail .= ' · ' . $resolved . ' of ' . $expected . ' attributed orders resolved from stored cost data.';
+            $detail .= ' · '.$resolved.' of '.$expected.' attributed orders resolved from stored cost data.';
         }
 
         if ($unresolvedRevenue > 0) {
-            $detail .= ' ' . $this->currency($unresolvedRevenue) . ' in attributed revenue still lacks an order-backed profit trace.';
+            $detail .= ' '.$this->currency($unresolvedRevenue).' in attributed revenue still lacks an order-backed profit trace.';
         }
 
         if (! empty($profitBreakdown['assumptions_used'])) {
@@ -1182,5 +1255,41 @@ class ShopifyEmbeddedDashboardDataService
         }
 
         return trim($detail);
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $comparisonSnapshot
+     * @return array<string,mixed>
+     */
+    protected function candleCashEngagementSection(array $primarySnapshot, ?array $comparisonSnapshot): array
+    {
+        $primary = (array) data_get($primarySnapshot, 'candleCashEngagement', []);
+        $comparison = (array) data_get($comparisonSnapshot, 'candleCashEngagement', []);
+
+        return [
+            ...$primary,
+            'comparison' => [
+                'earnedAmount' => data_get($comparison, 'earned.amount'),
+                'timeToFirstRedemptionAverageDays' => data_get($comparison, 'timeToFirstRedemption.averageDays'),
+            ],
+        ];
+    }
+
+    protected function daysValue(mixed $value): float
+    {
+        if (! is_numeric($value)) {
+            return 0.0;
+        }
+
+        return round((float) $value, 2);
+    }
+
+    protected function formatDays(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return 'No redemptions yet';
+        }
+
+        return number_format((float) $value, 2).' days';
     }
 }

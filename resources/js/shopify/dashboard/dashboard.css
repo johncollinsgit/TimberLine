@@ -110,6 +110,55 @@
   max-width: 42rem;
 }
 
+.sf-dashboard-engagement-pill {
+  background: linear-gradient(180deg, rgba(15, 143, 97, 0.08), rgba(15, 23, 42, 0.01));
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+}
+
+.sf-dashboard-breakdown-table {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.sf-dashboard-breakdown-table__head,
+.sf-dashboard-breakdown-table__row {
+  align-items: center;
+  column-gap: 0.75rem;
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(70px, 1fr));
+  padding: 0.62rem 0.85rem;
+}
+
+.sf-dashboard-breakdown-table__head {
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.78);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sf-dashboard-breakdown-table__row {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: 0.88rem;
+}
+
+.sf-dashboard-breakdown-details {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  padding: 0.65rem 0.85rem;
+}
+
+.sf-dashboard-breakdown-details summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+}
+
 @media (max-width: 900px) {
   .sf-dashboard-main-grid {
     grid-template-columns: 1fr;
@@ -119,5 +168,10 @@
   .sf-dashboard-control--comparison {
     min-width: 100%;
     width: 100%;
+  }
+
+  .sf-dashboard-breakdown-table__head,
+  .sf-dashboard-breakdown-table__row {
+    grid-template-columns: minmax(140px, 1.4fr) repeat(4, minmax(60px, 1fr));
   }
 }

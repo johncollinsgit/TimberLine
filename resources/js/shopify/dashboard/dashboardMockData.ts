@@ -40,6 +40,7 @@ export const dashboardMockData: DashboardPayload = {
     locationGroupingOptions: [],
     visibleWidgets: {
       metricCards: true,
+      candleCashEngagement: true,
       performanceChart: true,
       locationOrigins: true,
       attribution: true,
@@ -183,6 +184,74 @@ export const dashboardMockData: DashboardPayload = {
       label: "Net profit created",
       confidenceLevel: "medium",
       detail: "Medium confidence · fallback fixture uses stored-cost style data plus conservative fee assumptions.",
+    },
+  },
+  candleCashEngagement: {
+    title: "Candle Cash earn activity",
+    subtitle: "Fallback engagement section for local development.",
+    earned: {
+      points: 1260,
+      amount: 42,
+      formattedAmount: "$42.00",
+      eventCount: 18,
+      customerCount: 12,
+      sourceSummary: "Signup / Welcome earn $16.00 (38.1%) · Referral earn $14.00 (33.3%) · Birthday earn $8.00 (19.0%)",
+    },
+    breakdown: {
+      rows: [
+        {
+          key: "signup_welcome_earn",
+          label: "Signup / Welcome earn",
+          definition: "Fallback fixture.",
+          points: 480,
+          amount: 16,
+          formattedAmount: "$16.00",
+          sharePct: 38.1,
+          eventCount: 7,
+          customerCount: 7,
+        },
+      ],
+      sourceDefinitions: {
+        signup_welcome_earn: {
+          label: "Signup / Welcome earn",
+          definition: "Fallback fixture.",
+        },
+      },
+    },
+    outstanding: {
+      points: 2100,
+      amount: 70,
+      formattedAmount: "$70.00",
+      customerCount: 19,
+      excludedGrandfatheredPoints: 900,
+      excludedGrandfatheredAmount: 30,
+      helperText: "Fallback fixture for local development.",
+    },
+    timeToFirstRedemption: {
+      averageDays: 8.25,
+      medianDays: 6.5,
+      formattedAverageDays: "8.25 days",
+      formattedMedianDays: "6.50 days",
+      sampleCount: 11,
+      approximation: "Fallback approximation note.",
+    },
+    customersWithOutstandingEarned: {
+      count: 19,
+    },
+    reminderEligibility: {
+      eligibleCustomers: 17,
+      missingEmailCustomers: 2,
+      expirationPolicy: "No fixed expiration date is currently stored for earned Candle Cash buckets in this ledger.",
+      emailReadiness: {
+        status: "ready_for_live_send",
+        enabled: true,
+        dryRun: false,
+        missingReasons: [],
+      },
+    },
+    comparison: {
+      earnedAmount: 31,
+      timeToFirstRedemptionAverageDays: 9.8,
     },
   },
   flags: {

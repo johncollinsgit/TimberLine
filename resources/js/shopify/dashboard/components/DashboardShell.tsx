@@ -5,6 +5,7 @@ interface DashboardShellProps {
   header: ReactNode;
   controls: ReactNode;
   metrics: ReactNode;
+  candleCashEngagement: ReactNode;
   chart: ReactNode;
   locations: ReactNode;
   attribution: ReactNode;
@@ -15,6 +16,7 @@ export function DashboardShell({
   header,
   controls,
   metrics,
+  candleCashEngagement,
   chart,
   locations,
   attribution,
@@ -27,6 +29,7 @@ export function DashboardShell({
           <Layout.Section>{header}</Layout.Section>
           <Layout.Section>{controls}</Layout.Section>
           <Layout.Section>{metrics}</Layout.Section>
+          <Layout.Section>{candleCashEngagement}</Layout.Section>
           <Layout.Section>
             <div className="sf-dashboard-main-grid">
               <div>{chart}</div>
