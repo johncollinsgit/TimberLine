@@ -221,12 +221,17 @@ function startEmbeddedCustomersSession(\Illuminate\Foundation\Testing\TestCase $
     $testCase->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 }
 
+function shopifyAppCustomersManageUrl(array $query = []): string
+{
+    return route('shopify.app.customers.manage', array_merge($query, retailEmbeddedSignedQuery()));
+}
+
 test('/customers/manage renders real customer rows from local data', function () {
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage');
+    $response = $this->get(shopifyAppCustomersManageUrl());
 
     $response->assertOk()
         ->assertSeeText('Manage customers')
@@ -236,15 +241,15 @@ test('/customers/manage renders real customer rows from local data', function ()
         ->assertDontSeeText('Tier Name');
 });
 
-test('/customers resolves to the Manage page', function () {
+test('/customers without Shopify context shows the embedded context missing page', function () {
     configureEmbeddedRetailStore();
-    $fixtures = seedEmbeddedCustomersGridFixtures();
+    seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
     $this->get('/customers')
-        ->assertOk()
-        ->assertSeeText('Manage customers')
-        ->assertSeeText($fixtures['alice']->email);
+        ->assertStatus(400)
+        ->assertSeeText('Context Missing')
+        ->assertSeeText('This page must be opened from Shopify Admin');
 });
 
 test('/shopify/app/customers and /shopify/app/customers/manage match manage page output', function (string $routeName) {
@@ -265,7 +270,7 @@ test('search by name works for manage customers', function () {
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage?search=Alice');
+    $response = $this->get(shopifyAppCustomersManageUrl(['search' => 'Alice']));
 
     $response->assertOk()
         ->assertSeeText('alice@example.com')
@@ -277,7 +282,7 @@ test('search by email works for manage customers', function () {
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage?search=bob@example.com');
+    $response = $this->get(shopifyAppCustomersManageUrl(['search' => 'bob@example.com']));
 
     $response->assertOk()
         ->assertSeeText('bob@example.com')
@@ -289,7 +294,7 @@ test('sorting by last activity works', function () {
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage?sort=last_activity&direction=desc');
+    $response = $this->get(shopifyAppCustomersManageUrl(['sort' => 'last_activity', 'direction' => 'desc']));
 
     $response->assertOk()
         ->assertSeeTextInOrder(['bob@example.com', 'clara@example.com', 'alice@example.com']);
@@ -300,7 +305,7 @@ test('sorting by candle cash works', function () {
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage?sort=candle_cash&direction=desc');
+    $response = $this->get(shopifyAppCustomersManageUrl(['sort' => 'candle_cash', 'direction' => 'desc']));
 
     $response->assertOk()
         ->assertSeeTextInOrder(['alice@example.com', 'clara@example.com', 'bob@example.com']);
@@ -311,7 +316,7 @@ test('status filters work for candle club, referral, review, birthday, and whole
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage?' . http_build_query([$filter => 'yes']));
+    $response = $this->get(shopifyAppCustomersManageUrl([$filter => 'yes']));
 
     $response->assertOk()
         ->assertSeeText($expectedEmail)
@@ -338,7 +343,7 @@ test('pagination preserves query params', function () {
 
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get('/customers/manage?search=paginate&per_page=25');
+    $response = $this->get(shopifyAppCustomersManageUrl(['search' => 'paginate', 'per_page' => 25]));
 
     $response->assertOk()
         ->assertSee('search=paginate', false)
@@ -350,9 +355,9 @@ test('row view action links to customer detail and detail route resolves', funct
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
-    $detailUrl = route('shopify.embedded.customers.detail', ['marketingProfile' => $fixtures['alice']->id], false);
+    $detailUrl = route('shopify.app.customers.detail', ['marketingProfile' => $fixtures['alice']->id], false);
 
-    $this->get('/customers/manage')
+    $this->get(shopifyAppCustomersManageUrl())
         ->assertOk()
         ->assertSee($detailUrl, false);
 

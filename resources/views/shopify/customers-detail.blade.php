@@ -304,7 +304,7 @@
                 Marketing profile ID: {{ $marketingProfile->id }}
             </p>
 
-            <form method="POST" action="{{ $actionUrlGenerator->url('customers.update', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $customerFormActions['update'] ?? '#' }}" class="customers-detail-form">
                 @csrf
                 @method('PATCH')
                 <input type="text" name="first_name" value="{{ old('first_name', $marketingProfile->first_name) }}" placeholder="First name" />
@@ -333,7 +333,7 @@
                 Positive additions automatically text a Candle Cash rewards link when SMS consent and a phone number are available.
             </p>
 
-            <form method="POST" action="{{ $actionUrlGenerator->url('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $customerFormActions['candle_cash_adjust'] ?? '#' }}" class="customers-detail-form">
                 @csrf
                 <label>Adjustment type</label>
                 <select name="direction">
@@ -359,7 +359,7 @@
                 Send Candle Cash to the customer as a reward action. This is distinct from a manual adjustment and will be labeled separately in activity.
             </p>
 
-            <form method="POST" action="{{ $actionUrlGenerator->url('customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $customerFormActions['candle_cash_send'] ?? '#' }}" class="customers-detail-form">
                 @csrf
                 @php
                     $giftIntentOptions = $giftIntentOptions ?? [];

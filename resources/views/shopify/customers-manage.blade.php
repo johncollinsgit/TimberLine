@@ -60,9 +60,7 @@
 
             return $url . $separator . http_build_query($embeddedContext, '', '&', PHP_QUERY_RFC3986);
         };
-        $detailRouteName = $embeddedContext === []
-            ? 'shopify.embedded.customers.detail'
-            : 'shopify.app.customers.detail';
+        $detailRouteName = 'shopify.app.customers.detail';
         $withHost = static function (string $url) use ($withEmbeddedContext): string {
             if (str_starts_with($url, 'http')) {
                 return $url;

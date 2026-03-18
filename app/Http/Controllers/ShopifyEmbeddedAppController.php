@@ -90,14 +90,14 @@ class ShopifyEmbeddedAppController extends Controller
                 'label' => 'Rewards Admin',
                 'href' => route('shopify.embedded.rewards', [], false),
             ],
-            [
-                'label' => 'Customers',
-                'href' => route('shopify.embedded.customers.manage', [], false),
-            ],
-            [
-                'label' => 'Program Settings',
-                'href' => route('shopify.embedded.settings', [], false),
-            ],
+                [
+                    'label' => 'Customers',
+                    'href' => route('shopify.app.customers.manage', [], false),
+                ],
+                [
+                    'label' => 'Program Settings',
+                    'href' => route('shopify.app.settings', [], false),
+                ],
             [
                 'label' => 'Birthdays in Backstage',
                 'href' => route('birthdays.customers'),

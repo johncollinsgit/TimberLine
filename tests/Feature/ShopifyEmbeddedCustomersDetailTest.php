@@ -224,6 +224,9 @@ test('customer identity update persists safe fields', function () {
 
     $response->assertRedirect();
 
+    $location = $response->headers->get('Location');
+    $this->assertStringContainsString('/shopify/app/customers/manage/' . $profile->id, $location);
+
     $profile->refresh();
 
     expect($profile->first_name)->toBe('Updated')
@@ -242,6 +245,7 @@ test('customer identity update alias route now requires csrf token', function ()
             'marketingProfile' => $profile->id,
         ], retailEmbeddedSignedQuery()), false),
         [
+            '_token' => 'invalid-token',
             'first_name' => 'John',
             'last_name' => 'Collinsretail',
             'email' => 'johncollinsemail@gmail.com',
@@ -515,6 +519,26 @@ test('invalid candle cash adjustment is rejected', function () {
     $response->assertSessionHasErrors(['direction', 'amount', 'reason']);
 });
 
+test('candle cash adjustment requires csrf token', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $sessionToken = 'csrf-session-token';
+
+    $response = $this->withSession(['_token' => $sessionToken])->post(
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => 'invalid-token',
+            'direction' => 'add',
+            'amount' => 5,
+            'reason' => 'missing token',
+        ]
+    );
+
+    $response->assertStatus(419);
+});
+
 test('candle cash adjustment alias route resolves with embedded context', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
@@ -535,7 +559,7 @@ test('candle cash adjustment alias route resolves with embedded context', functi
     $response->assertRedirect();
 });
 
-test('customer identity app route does not require csrf token in embedded admin', function () {
+test('customer identity app route accepts embedded csrf token', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
@@ -545,6 +569,7 @@ test('customer identity app route does not require csrf token in embedded admin'
             'marketingProfile' => $profile->id,
         ], retailEmbeddedSignedQuery())),
         [
+            '_token' => csrf_token(),
             'first_name' => 'Embedded',
             'last_name' => 'Updated',
             'email' => 'embedded.updated@example.com',
@@ -568,7 +593,7 @@ test('customer identity app route does not require csrf token in embedded admin'
         ->and($profile->phone)->toBe('+18646165468');
 });
 
-test('candle cash adjustment app route does not require csrf token in embedded admin', function () {
+test('candle cash adjustment app route accepts embedded csrf token', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
@@ -578,11 +603,14 @@ test('candle cash adjustment app route does not require csrf token in embedded a
         ['balance' => 25]
     );
 
-    $response = $this->post(
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
         route('shopify.app.customers.candle-cash.adjust', array_merge([
             'marketingProfile' => $profile->id,
         ], retailEmbeddedSignedQuery())),
         [
+            '_token' => $token,
             'direction' => 'add',
             'amount' => 10,
             'reason' => 'Embedded app adjustment',
@@ -621,11 +649,14 @@ test('candle cash subtraction alias route updates balance without sending sms', 
 
     startEmbeddedCustomersDetailSession($this);
 
-    $response = $this->post(
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
         route('shopify.app.customers.candle-cash.adjust', array_merge([
             'marketingProfile' => $profile->id,
         ], retailEmbeddedSignedQuery()), false),
         [
+            '_token' => $token,
             'direction' => 'subtract',
             'amount' => 150,
             'reason' => 'Customer balance correction',
@@ -722,6 +753,14 @@ test('legacy detail route redirects to the embedded customers detail page', func
     $location = $response->headers->get('Location');
     $this->assertStringContainsString('/shopify/app/customers/manage/' . $profile->id, $location);
     $this->assertStringContainsString('host=admin-host-token', $location);
+});
+
+test('legacy manage route without signed context shows context missing notice', function () {
+    $response = $this->get(route('shopify.embedded.customers.manage'));
+
+    $response->assertStatus(400)
+        ->assertSeeText('Context Missing')
+        ->assertSeeText('This page must be opened from Shopify Admin');
 });
 
 test('customer detail forms fall back to embedded routes without Shopify host', function () {

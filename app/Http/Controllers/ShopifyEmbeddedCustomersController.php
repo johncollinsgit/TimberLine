@@ -170,6 +170,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingIdentityNormalizer $identityNormalizer,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
+        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'identity.update', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
@@ -218,6 +219,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingConsentService $consentService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
+        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'consent.update', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
@@ -281,6 +283,8 @@ class ShopifyEmbeddedCustomersController extends Controller
             'profile_id' => $marketingProfile->id,
             'query' => $request->query->all(),
         ]);
+
+        $this->requireValidCsrf($request);
 
         $context = $contextService->resolvePageContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust', (bool) ($context['ok'] ?? false));
@@ -455,6 +459,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
+        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'message.send', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
@@ -512,6 +517,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
+        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.send', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
@@ -705,6 +711,16 @@ class ShopifyEmbeddedCustomersController extends Controller
         ]);
 
         return redirect()->to($target);
+    }
+
+    protected function requireValidCsrf(Request $request): void
+    {
+        $token = (string) $request->input('_token', '');
+        $sessionToken = (string) $request->session()->token();
+
+        if ($token === '' || ! hash_equals($sessionToken, $token)) {
+            abort(419, 'CSRF token mismatch.');
+        }
     }
 
     /**

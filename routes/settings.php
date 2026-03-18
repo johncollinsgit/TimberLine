@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Marketing\TwilioSenderConfigService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -12,7 +13,7 @@ Route::get('settings', function (
     ShopifyEmbeddedSettingsController $controller
 ) {
     if ($contextService->hasPageContext($request)) {
-        return $controller->show($request, $contextService);
+        return $controller->show($request, $contextService, app(TwilioSenderConfigService::class));
     }
 
     if (! auth()->check()) {

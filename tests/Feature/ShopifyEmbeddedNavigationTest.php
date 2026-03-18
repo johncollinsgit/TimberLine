@@ -17,7 +17,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
         })
         ->assertViewHas('pageActions', fn (array $actions): bool => count($actions) === 0);
 })->with([
-    'dashboard' => ['home', 'dashboard', null, 'Forestry rewards are connected'],
+    'dashboard' => ['home', 'dashboard', null, 'Rewards performance snapshot'],
     'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview', 'Manage Candle Cash rewards and program settings.'],
     'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn', 'Ways to Earn'],
     'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem', 'Ways to Redeem'],
@@ -26,7 +26,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip', 'VIP experiences coming soon'],
     'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications', 'Notifications coming soon'],
     'customers' => ['shopify.app.customers', 'customers', null, 'Manage customers'],
-    'settings' => ['shopify.embedded.settings', 'settings', null, 'Program settings are coming into view'],
+'settings' => ['shopify.app.settings', 'settings', null, 'Candle Cash program controls and messaging settings are managed in Backstage. This page will expose them soon.'],
 ]);
 
 test('customers routes and aliases keep customers section active with correct subnav tab', function (string $routeName, string $activeTab, string $visibleText) {

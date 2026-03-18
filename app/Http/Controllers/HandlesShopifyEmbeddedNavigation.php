@@ -39,13 +39,13 @@ trait HandlesShopifyEmbeddedNavigation
             [
                 'key' => 'customers',
                 'label' => 'Customers',
-                'href' => route('shopify.embedded.customers', [], false),
+                'href' => route('shopify.app.customers', [], false),
                 'children' => [],
             ],
             [
                 'key' => 'settings',
                 'label' => 'Settings',
-                'href' => route('shopify.embedded.settings', [], false),
+                'href' => route('shopify.app.settings', [], false),
                 'children' => [],
             ],
         ];

@@ -45,3 +45,5 @@ function something()
 {
     // ..
 }
+
+require_once __DIR__.'/Support/Stage10Helpers.php';

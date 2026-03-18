@@ -75,7 +75,7 @@ class ShopifyEmbeddedAppContext
         }
 
         $secret = trim((string) ($store['secret'] ?? ''));
-        if (! $this->hmacVerifier->verifyQuery($request->query(), $secret)) {
+        if (! $this->hmacVerifier->verifyQuery($this->contextQuery($request), $secret)) {
             return [
                 'ok' => false,
                 'status' => 'invalid_hmac',
@@ -97,6 +97,27 @@ class ShopifyEmbeddedAppContext
         $this->storeSessionPageContext($request, $resolved);
 
         return $resolved;
+    }
+
+    private function contextQuery(Request $request): array
+    {
+        $query = [];
+
+        foreach (['shop', 'host', 'hmac', 'signature', 'timestamp', 'embedded'] as $key) {
+            if ($request->query->has($key)) {
+                $value = $request->query($key);
+
+                if (is_string($value)) {
+                    $value = trim($value);
+                }
+
+                if ($value !== null && $value !== '') {
+                    $query[$key] = $value;
+                }
+            }
+        }
+
+        return $query;
     }
 
     /**

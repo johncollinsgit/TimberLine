@@ -679,7 +679,7 @@ Route::prefix('shopify/marketing/v1')
             ->name('google-business.review.start');
     });
 
-Route::prefix('shopify')->group(function () {
+Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
