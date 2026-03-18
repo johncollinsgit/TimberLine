@@ -360,3 +360,22 @@ test('row view action links to customer detail and detail route resolves', funct
         ->assertOk()
         ->assertSeeText('Customer Detail');
 });
+
+test('embedded manage page preserves full Shopify context on customer detail links', function () {
+    configureEmbeddedRetailStore();
+    $fixtures = seedEmbeddedCustomersGridFixtures();
+
+    $response = $this->get(route('shopify.app.customers.manage', retailEmbeddedSignedQuery()));
+
+    $response->assertOk();
+
+    $content = $response->getContent();
+    $detailBase = route('shopify.app.customers.detail', ['marketingProfile' => $fixtures['alice']->id], false);
+
+    expect($content)->toContain($detailBase)
+        ->and($content)->toContain('shop=modernforestry.myshopify.com')
+        ->and($content)->toContain('host=admin-host-token')
+        ->and($content)->toContain('hmac=')
+        ->and($content)->toContain('timestamp=')
+        ->and($content)->toContain('embedded=1');
+});
