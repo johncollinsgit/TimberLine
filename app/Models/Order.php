@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,7 @@ use Carbon\CarbonImmutable;
 class Order extends Model
 {
     use HasFactory;
+    use HasTenantScope;
 
     protected $guarded = [];
     protected $appends = ['channel'];
@@ -28,6 +30,7 @@ class Order extends Model
         'shipping_total' => 'decimal:2',
         'refund_total' => 'decimal:2',
         'total_price' => 'decimal:2',
+        'tenant_id' => 'integer',
     ];
 
     public function lines(): HasMany
@@ -43,6 +46,11 @@ class Order extends Model
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     protected static function booted(): void

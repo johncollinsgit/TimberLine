@@ -11,6 +11,7 @@ use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\User;
+use App\Services\Marketing\TwilioSenderConfigService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,11 @@ use Illuminate\Support\Str;
 
 class ShopifyEmbeddedCustomerDetailService
 {
+    public function __construct(
+        protected TwilioSenderConfigService $senderConfigService
+    ) {
+    }
+
     /**
      * @return array{
      *   summary:array<string,mixed>,
@@ -542,7 +548,7 @@ class ShopifyEmbeddedCustomerDetailService
 
     /**
      * @return array{
-     *   sms:array{supported:bool,consented:bool,has_phone:bool,phone_display:string,consent_label:string},
+     *   sms:array{supported:bool,consented:bool,has_phone:bool,phone_display:string,consent_label:string,default_sender_key:?string,senders:array<int,array<string,mixed>>},
      *   email:array{supported:bool}
      * }
      */
@@ -551,7 +557,9 @@ class ShopifyEmbeddedCustomerDetailService
         $phone = trim((string) ($profile->normalized_phone ?: $profile->phone));
         $hasPhone = $phone !== '';
         $consented = (bool) $profile->accepts_sms_marketing;
-        $smsSupported = (bool) config('marketing.sms.enabled') && (bool) config('marketing.twilio.enabled');
+        $senders = $this->senderConfigService->all();
+        $defaultSender = $this->senderConfigService->defaultSender();
+        $smsSupported = $this->senderConfigService->smsSupported();
 
         return [
             'sms' => [
@@ -560,6 +568,8 @@ class ShopifyEmbeddedCustomerDetailService
                 'has_phone' => $hasPhone,
                 'phone_display' => $hasPhone ? $phone : 'No phone on file',
                 'consent_label' => $consented ? 'Consented' : 'Consent needed',
+                'default_sender_key' => $defaultSender['key'] ?? null,
+                'senders' => $senders,
             ],
             'email' => [
                 'supported' => false,

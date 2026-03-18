@@ -9,6 +9,7 @@ use App\Models\MarketingGroupMember;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\MarketingGroupDirectSendService;
 use App\Services\Marketing\MarketingGroupImportService;
+use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -266,7 +267,7 @@ class MarketingGroupsController extends Controller
             ]);
     }
 
-    public function sendForm(MarketingGroup $group): View
+    public function sendForm(MarketingGroup $group, TwilioSenderConfigService $senderConfigService): View
     {
         abort_unless($group->is_internal, 403);
 
@@ -277,6 +278,8 @@ class MarketingGroupsController extends Controller
             'sections' => $this->navigationItems(),
             'group' => $group,
             'memberCount' => $memberCount,
+            'smsSenders' => $senderConfigService->all(),
+            'defaultSmsSenderKey' => (string) ($senderConfigService->defaultSender()['key'] ?? ''),
         ]);
     }
 
@@ -292,6 +295,7 @@ class MarketingGroupsController extends Controller
             'subject' => ['nullable', 'string', 'max:255', 'required_if:channel,email'],
             'message' => ['required', 'string', 'max:2000'],
             'dry_run' => ['nullable', 'boolean'],
+            'sender_key' => ['nullable', 'string', 'max:80'],
         ]);
 
         $summary = $directSendService->sendToGroup(
@@ -302,6 +306,7 @@ class MarketingGroupsController extends Controller
             options: [
                 'dry_run' => (bool) ($data['dry_run'] ?? false),
                 'actor_id' => auth()->id(),
+                'sender_key' => trim((string) ($data['sender_key'] ?? '')) ?: null,
             ]
         );
 
@@ -351,4 +356,3 @@ class MarketingGroupsController extends Controller
         return null;
     }
 }
-

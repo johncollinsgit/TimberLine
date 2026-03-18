@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -10,7 +11,11 @@ class ShopifyEmbeddedSettingsController extends Controller
 {
     use HandlesShopifyEmbeddedNavigation;
 
-    public function show(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function show(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TwilioSenderConfigService $senderConfigService
+    ): Response
     {
         $context = $contextService->resolvePageContext($request);
 
@@ -32,6 +37,8 @@ class ShopifyEmbeddedSettingsController extends Controller
                 'subheadline' => $this->subheadlineForStatus($status),
                 'appNavigation' => $this->embeddedAppNavigation('settings'),
                 'pageActions' => [],
+                'smsSenders' => $senderConfigService->all(),
+                'defaultSmsSender' => $senderConfigService->defaultSender(),
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );

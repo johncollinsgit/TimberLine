@@ -43,7 +43,13 @@ Deploy proof: Mon Feb 23 14:04:21 EST 2026
 
 ## Twilio SMS Configuration
 - Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.
-- Configure one sender identity before live sends:
+- Preferred: configure `MARKETING_TWILIO_SENDERS` as a JSON array of sender objects.
+  - Example:
+    - `[{"key":"toll_free","label":"Toll-free","type":"toll_free","status":"active","enabled":true,"default":true,"phone_number_sid":"PN...","messaging_service_sid":"MG..."},{"key":"local","label":"Local","type":"local","status":"pending","enabled":false,"default":false,"phone_number_sid":"PN...","from_number":"+15555550123"}]`
+  - `phone_number_sid` is metadata for UI/reference only.
+  - Twilio sends still require either `messaging_service_sid` (`MG...`) or `from_number` (`+1...`) on any sender you want to use live.
+- Optional: set `MARKETING_TWILIO_DEFAULT_SENDER` to force the default sender key.
+- Backward-compatible migration fallback:
   - `TWILIO_MESSAGING_SERVICE_SID` (recommended, must start with `MG`), or
   - `TWILIO_FROM_NUMBER` (E.164 format like `+18339625949`).
 - Enable provider flags:

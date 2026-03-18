@@ -122,7 +122,10 @@ class MarketingAllOptedInSendService
             $results['sms'] = $this->twilioSmsService->sendSms(
                 $toPhone,
                 $this->renderPreviewText((string) ($payload['sms_body'] ?? ''), $previewProfile, (string) ($payload['cta_link'] ?? ''), 'sms'),
-                ['dry_run' => false]
+                [
+                    'dry_run' => false,
+                    'sender_key' => $this->nullableString($payload['sender_key'] ?? null),
+                ]
             );
         }
 
@@ -182,6 +185,7 @@ class MarketingAllOptedInSendService
                 ? $this->smsExecutionService->sendApprovedForCampaign($campaign, [
                     'limit' => $recipientCount,
                     'actor_id' => (int) $actor->id,
+                    'sender_key' => $this->nullableString($payload['sender_key'] ?? null),
                 ])
                 : $this->emailExecutionService->sendApprovedForCampaign($campaign, [
                     'limit' => $recipientCount,
@@ -276,6 +280,9 @@ class MarketingAllOptedInSendService
                         'recommendation_snapshot' => json_encode([
                             'created_via' => 'quick_send',
                             'email_subject' => $emailSubject !== '' ? $emailSubject : null,
+                            'sender_key' => $channel === 'sms'
+                                ? $this->nullableString($payload['sender_key'] ?? null)
+                                : null,
                         ], JSON_UNESCAPED_SLASHES),
                         'variant_id' => $variant->id,
                         'channel' => $channel,
@@ -448,5 +455,12 @@ class MarketingAllOptedInSendService
         }
 
         return implode(' ', $parts);
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

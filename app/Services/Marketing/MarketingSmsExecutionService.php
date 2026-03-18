@@ -106,6 +106,7 @@ class MarketingSmsExecutionService
         $forceRetry = (bool) ($options['force_retry'] ?? false);
         $overrideWindows = (bool) ($options['override_windows'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $senderKey = $this->nullableString($options['sender_key'] ?? null);
 
         $recipient->loadMissing(['campaign', 'profile', 'variant']);
         $campaign = $recipient->campaign;
@@ -205,6 +206,7 @@ class MarketingSmsExecutionService
 
         $sendResult = $this->twilioSmsService->sendSms($toPhone, $renderedMessage, [
             'dry_run' => $dryRun,
+            'sender_key' => $senderKey ?: $this->senderKeyFromRecipient($recipient),
             'status_callback_url' => $this->statusCallbackUrl(),
         ]);
 
@@ -218,8 +220,16 @@ class MarketingSmsExecutionService
             'error_code' => $sendResult['error_code'] ?? null,
             'error_message' => $sendResult['error_message'] ?? null,
             'provider_payload' => is_array($sendResult['payload'] ?? null)
-                ? $sendResult['payload']
-                : ['raw' => $sendResult['payload'] ?? null],
+                ? [
+                    ...$sendResult['payload'],
+                    'sender_key' => $sendResult['sender_key'] ?? ($senderKey ?: $this->senderKeyFromRecipient($recipient)),
+                    'sender_label' => $sendResult['sender_label'] ?? null,
+                ]
+                : [
+                    'raw' => $sendResult['payload'] ?? null,
+                    'sender_key' => $sendResult['sender_key'] ?? ($senderKey ?: $this->senderKeyFromRecipient($recipient)),
+                    'sender_label' => $sendResult['sender_label'] ?? null,
+                ],
             'sent_at' => $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)
                 ? now()
                 : null,
@@ -542,5 +552,17 @@ class MarketingSmsExecutionService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    protected function senderKeyFromRecipient(MarketingCampaignRecipient $recipient): ?string
+    {
+        return $this->nullableString(data_get($recipient->recommendation_snapshot, 'sender_key'));
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

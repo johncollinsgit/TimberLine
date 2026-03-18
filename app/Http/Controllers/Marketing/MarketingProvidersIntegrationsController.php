@@ -15,6 +15,7 @@ use App\Models\SquarePayment;
 use App\Services\Marketing\MarketingEventAttributionService;
 use App\Services\Marketing\MarketingLegacyImportService;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
+use App\Services\Marketing\ShopifyCustomerSyncHealthService;
 use App\Services\Marketing\SquareMarketingSyncService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
@@ -125,6 +126,21 @@ class MarketingProvidersIntegrationsController extends Controller
             'squareMinSpendDollars' => number_format($squareMinSpendCents / 100, 2, '.', ''),
             'sourceOverlap' => $sourceOverlap,
             'consentRules' => $this->consentRules(),
+        ]);
+    }
+
+    public function shopifyCustomerSyncHealth(
+        Request $request,
+        ShopifyCustomerSyncHealthService $healthService
+    ): View {
+        $windowHours = max(1, min(24 * 30, (int) $request->query('window_hours', 72)));
+        $refresh = $request->boolean('refresh');
+        $report = $healthService->report($refresh, $windowHours);
+
+        return view('marketing/providers-integrations/shopify-customer-sync-health', [
+            'section' => MarketingSectionRegistry::section('providers-integrations'),
+            'sections' => $this->navigationItems(),
+            'report' => $report,
         ]);
     }
 

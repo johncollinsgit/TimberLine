@@ -22,18 +22,24 @@ class MarketingProfileMatcher
      *   phone_matches:Collection<int,MarketingProfile>
      * }
      */
-    public function match(?string $normalizedEmail, ?string $normalizedPhone): array
+    public function match(?string $normalizedEmail, ?string $normalizedPhone, ?int $tenantId = null): array
     {
         /** @var Collection<int,MarketingProfile> $emailMatches */
         $emailMatches = $normalizedEmail
-            ? MarketingProfile::query()->where('normalized_email', $normalizedEmail)->get()
+            ? MarketingProfile::query()
+                ->forTenantId($tenantId)
+                ->where('normalized_email', $normalizedEmail)
+                ->get()
             : collect();
 
         $phoneCandidates = $this->normalizer->phoneMatchCandidates($normalizedPhone);
 
         /** @var Collection<int,MarketingProfile> $phoneMatches */
         $phoneMatches = $phoneCandidates !== []
-            ? MarketingProfile::query()->whereIn('normalized_phone', $phoneCandidates)->get()
+            ? MarketingProfile::query()
+                ->forTenantId($tenantId)
+                ->whereIn('normalized_phone', $phoneCandidates)
+                ->get()
             : collect();
 
         $emailCount = $emailMatches->count();

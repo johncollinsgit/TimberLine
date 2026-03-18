@@ -16,6 +16,7 @@ use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
+use App\Models\MarketingSetting;
 use App\Models\MarketingReviewSummary;
 use App\Models\MarketingSegment;
 use App\Models\MarketingStorefrontEvent;
@@ -27,15 +28,19 @@ use App\Models\SquarePayment;
 use App\Models\ShopifyImportRun;
 use App\Models\WholesaleCustomScent;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
+use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class MarketingPagesController extends Controller
 {
     public function __construct(
-        protected MarketingSourceOverlapReportService $sourceOverlapReportService
+        protected MarketingSourceOverlapReportService $sourceOverlapReportService,
+        protected TwilioSenderConfigService $senderConfigService
     ) {
     }
 
@@ -45,6 +50,15 @@ class MarketingPagesController extends Controller
         abort_unless(array_key_exists($section, $sections), 404);
 
         $sectionConfig = $sections[$section];
+
+        if ($section === 'settings') {
+            return view('marketing.settings', [
+                'currentSectionKey' => $section,
+                'currentSection' => $sectionConfig,
+                'sections' => $this->buildNavigation($sections),
+                'settingsDashboard' => $this->settingsDashboard(),
+            ]);
+        }
 
         return view('marketing.show', [
             'currentSectionKey' => $section,
@@ -56,6 +70,33 @@ class MarketingPagesController extends Controller
             'customersDiscoverySummary' => $section === 'customers' ? $this->customersDiscoverySummary() : [],
             'candleCashDashboard' => $section === 'candle-cash' ? $this->candleCashDashboard() : [],
         ]);
+    }
+
+    public function saveSettings(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'scope' => ['required', 'in:sms_senders'],
+            'default_sender_key' => ['required', 'string', 'max:80'],
+        ]);
+
+        $sender = collect($this->senderConfigService->sendable())
+            ->firstWhere('key', trim((string) $data['default_sender_key']));
+
+        if (! $sender) {
+            return back()->with('toast', [
+                'style' => 'warning',
+                'message' => 'Choose an enabled SMS sender before saving.',
+            ]);
+        }
+
+        $this->senderConfigService->updateDefaultSender((string) $sender['key']);
+
+        return redirect()
+            ->route('marketing.settings')
+            ->with('toast', [
+                'style' => 'success',
+                'message' => 'Default SMS sender updated.',
+            ]);
     }
 
     /**
@@ -301,6 +342,29 @@ class MarketingPagesController extends Controller
                     : 0,
                 'review_summaries' => $reviewSummaryCount,
             ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function settingsDashboard(): array
+    {
+        $senders = $this->senderConfigService->all();
+        $defaultSender = $this->senderConfigService->defaultSender();
+        $defaultSetting = Schema::hasTable('marketing_settings')
+            ? MarketingSetting::query()->where('key', 'sms_default_sender')->first()
+            : null;
+
+        return [
+            'sms_enabled' => (bool) config('marketing.sms.enabled'),
+            'twilio_enabled' => (bool) config('marketing.twilio.enabled'),
+            'verify_signature' => (bool) config('marketing.twilio.verify_signature'),
+            'status_callback_url' => trim((string) config('marketing.twilio.status_callback_url', '')) ?: route('marketing.webhooks.twilio-status'),
+            'test_number' => trim((string) config('marketing.sms.test_number', '')) ?: null,
+            'senders' => $senders,
+            'default_sender' => $defaultSender,
+            'default_source' => $defaultSetting ? 'marketing_settings' : 'config',
         ];
     }
 

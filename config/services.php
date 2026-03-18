@@ -94,7 +94,7 @@ return [
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
-            'read_orders,read_products,read_customers,write_customers,read_discounts,write_discounts'
+            'read_orders,read_products,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks'
         ),
 
         'stores' => [

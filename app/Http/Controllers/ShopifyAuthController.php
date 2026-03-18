@@ -6,6 +6,7 @@ use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyHmacVerifier;
 use App\Services\Shopify\ShopifyOAuth;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Shopify\ShopifyWebhookSubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -46,7 +47,13 @@ class ShopifyAuthController extends Controller
         return $this->auth($store, $oauth);
     }
 
-    public function callback(string $store, Request $request, ShopifyOAuth $oauth, ShopifyHmacVerifier $hmacVerifier)
+    public function callback(
+        string $store,
+        Request $request,
+        ShopifyOAuth $oauth,
+        ShopifyHmacVerifier $hmacVerifier,
+        ShopifyWebhookSubscriptionService $webhookSubscriptionService
+    )
     {
         $config = ShopifyStores::find($store, true);
         if (!$config) {
@@ -127,7 +134,29 @@ class ShopifyAuthController extends Controller
             'missing_requested_scopes' => $missingRequestedScopes,
         ]);
 
-        return redirect()->route('dashboard')->with('status', 'Shopify connected.');
+        $statusMessage = 'Shopify connected.';
+
+        $webhookResult = $webhookSubscriptionService->enforceStore([
+            'key' => $config['key'],
+            'shop' => $shopDomain,
+            'token' => $accessToken,
+            'api_version' => (string) ($config['api_version'] ?? config('services.shopify.api_version', '2026-01')),
+        ]);
+
+        if (($webhookResult['status'] ?? '') === 'failed') {
+            Log::error('shopify oauth callback webhook enforcement failed', [
+                'store_key' => $config['key'],
+                'shop' => $shopDomain,
+                'webhook_status' => $webhookResult['status'] ?? null,
+                'error' => $webhookResult['error'] ?? null,
+                'error_message' => $webhookResult['error_message'] ?? null,
+            ]);
+            $statusMessage = 'Shopify connected, but webhook registration needs review.';
+        } elseif (($webhookResult['status'] ?? '') === 'repaired') {
+            $statusMessage = 'Shopify connected and webhook subscriptions were synced.';
+        }
+
+        return redirect()->route('dashboard')->with('status', $statusMessage);
     }
 
     protected function matchesExpectedShop(array $config, string $shopDomain): bool

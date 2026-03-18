@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
@@ -18,9 +19,12 @@ use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Support\Marketing\MarketingEventContextResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -31,7 +35,8 @@ class MarketingPublicEventController extends Controller
         protected MarketingIdentityNormalizer $normalizer,
         protected MarketingStorefrontIdentityService $storefrontIdentityService,
         protected MarketingStorefrontEventLogger $eventLogger,
-        protected GrowaveProjectionService $growaveProjectionService
+        protected GrowaveProjectionService $growaveProjectionService,
+        protected TenantResolver $tenantResolver
     ) {
     }
 
@@ -77,6 +82,7 @@ class MarketingPublicEventController extends Controller
         ]);
 
         $eventContext = $this->eventContextResolver->resolve($eventSlug);
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
         $canonicalSlug = (string) ($eventContext['slug'] ?? Str::slug($eventSlug));
         $sourceId = $this->storefrontIdentityService->deterministicSourceId(
             prefix: 'event_public_optin:' . $canonicalSlug,
@@ -96,6 +102,8 @@ class MarketingPublicEventController extends Controller
                 'source_meta' => [
                     'event_slug' => $canonicalSlug,
                     'event_context' => $eventContext,
+                    'shopify_store_key' => $tenantContext['store_key'],
+                    'tenant_id' => $tenantContext['tenant_id'],
                 ],
             ]],
             'primary_source' => [
@@ -107,7 +115,9 @@ class MarketingPublicEventController extends Controller
                 'source_label' => 'event_public_optin',
                 'source_id' => $sourceId,
                 'event_slug' => $canonicalSlug,
+                'tenant_id' => $tenantContext['tenant_id'],
             ],
+            'tenant_id' => $tenantContext['tenant_id'],
         ]);
 
         $profile = null;
@@ -138,10 +148,18 @@ class MarketingPublicEventController extends Controller
                 ]);
         }
 
+        $this->queueShopifyCustomerProvisioning(
+            profile: $profile,
+            storeKey: $tenantContext['store_key'] ?? null,
+            tenantId: $tenantContext['tenant_id'] ?? $profile->tenant_id,
+            trigger: 'marketing_public_event_optin'
+        );
+
         if ((bool) ($data['consent_email'] ?? false)) {
             $consentService->setEmailConsent($profile, true, [
                 'source_type' => 'event_public_optin',
                 'source_id' => $sourceId,
+                'tenant_id' => $tenantContext['tenant_id'] ?: $profile->tenant_id,
                 'details' => ['event_slug' => $canonicalSlug, 'flow' => 'direct_confirmed'],
             ]);
 
@@ -159,6 +177,7 @@ class MarketingPublicEventController extends Controller
             $smsConsented = $consentService->setSmsConsent($profile, true, [
                 'source_type' => 'event_public_optin',
                 'source_id' => $sourceId,
+                'tenant_id' => $tenantContext['tenant_id'] ?: $profile->tenant_id,
                 'details' => ['event_slug' => $canonicalSlug, 'flow' => 'direct_confirmed'],
             ]);
         }
@@ -429,6 +448,7 @@ class MarketingPublicEventController extends Controller
      */
     protected function resolveProfileFromRequest(Request $request, string $scope, bool $allowBody = false): array
     {
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
         $rawEmail = trim((string) ($allowBody ? $request->input('email', $request->query('email', '')) : $request->query('email', '')));
         $rawPhone = trim((string) ($allowBody ? $request->input('phone', $request->query('phone', '')) : $request->query('phone', '')));
         $email = $this->normalizer->normalizeEmail($rawEmail);
@@ -442,7 +462,11 @@ class MarketingPublicEventController extends Controller
         $sourceId = $this->storefrontIdentityService->deterministicSourceId(
             prefix: $scope,
             email: $rawEmail,
-            phone: $rawPhone
+            phone: $rawPhone,
+            extra: [
+                (string) ($tenantContext['store_key'] ?? ''),
+                (string) ($tenantContext['tenant_id'] ?? ''),
+            ]
         );
 
         $resolved = $this->storefrontIdentityService->resolve([
@@ -453,8 +477,11 @@ class MarketingPublicEventController extends Controller
             'source_id' => $sourceId,
             'source_label' => $scope,
             'source_channels' => ['public_event'],
+            'tenant_id' => $tenantContext['tenant_id'],
             'source_meta' => [
                 'lookup' => true,
+                'shopify_store_key' => $tenantContext['store_key'],
+                'tenant_id' => $tenantContext['tenant_id'],
             ],
             'allow_create' => false,
         ]);
@@ -463,6 +490,63 @@ class MarketingPublicEventController extends Controller
             'profile' => $resolved['profile'],
             'state' => $resolved['profile'] ? 'linked_customer' : ($resolved['status'] === 'review_required' ? 'needs_verification' : 'unknown_customer'),
         ];
+    }
+
+    /**
+     * @return array{store_key:?string,tenant_id:?int}
+     */
+    protected function resolveTenantContext(Request $request, TenantResolver $tenantResolver): array
+    {
+        $storeKey = strtolower(trim((string) ($request->input('store_key', $request->query('store_key', '')))));
+        if ($storeKey === '') {
+            $shop = trim((string) ($request->input('shop', $request->query('shop', ''))));
+            $resolvedStore = $shop !== '' ? ShopifyStores::findByShopDomain($shop) : null;
+            $storeKey = strtolower(trim((string) ($resolvedStore['key'] ?? '')));
+        }
+
+        if ($storeKey === '') {
+            return [
+                'store_key' => null,
+                'tenant_id' => null,
+            ];
+        }
+
+        return [
+            'store_key' => $storeKey,
+            'tenant_id' => $tenantResolver->resolveTenantIdForStoreKey($storeKey),
+        ];
+    }
+
+    protected function queueShopifyCustomerProvisioning(
+        MarketingProfile $profile,
+        ?string $storeKey,
+        mixed $tenantId,
+        string $trigger
+    ): void {
+        $normalizedStoreKey = strtolower(trim((string) $storeKey));
+        $resolvedTenantId = is_numeric($tenantId)
+            ? (int) $tenantId
+            : (is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : 0);
+
+        if ($normalizedStoreKey === '' || $resolvedTenantId <= 0) {
+            return;
+        }
+
+        try {
+            ProvisionShopifyCustomerForMarketingProfile::dispatch(
+                marketingProfileId: (int) $profile->id,
+                storeKey: $normalizedStoreKey,
+                tenantId: $resolvedTenantId,
+                trigger: $trigger
+            )->afterCommit();
+        } catch (\Throwable $e) {
+            Log::warning('shopify customer provisioning dispatch failed', [
+                'marketing_profile_id' => (int) $profile->id,
+                'store_key' => $normalizedStoreKey,
+                'trigger' => $trigger,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

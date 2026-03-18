@@ -59,7 +59,88 @@ test('missing sender identity fails before provider request', function () {
 
     expect($result['success'])->toBeFalse()
         ->and($result['error_code'])->toBe('missing_sender_identity')
-        ->and((string) $result['error_message'])->toContain('TWILIO_MESSAGING_SERVICE_SID');
+        ->and((string) $result['error_message'])->toContain('Configure at least one enabled Twilio sender');
+});
+
+test('disabled sender cannot be selected for live sends', function () {
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', null);
+    config()->set('marketing.twilio.senders', [
+        [
+            'key' => 'toll_free',
+            'label' => 'Toll-free',
+            'type' => 'toll_free',
+            'status' => 'active',
+            'enabled' => true,
+            'default' => true,
+            'messaging_service_sid' => 'MG_TOLL_FREE',
+        ],
+        [
+            'key' => 'local',
+            'label' => 'Local',
+            'type' => 'local',
+            'status' => 'pending',
+            'enabled' => false,
+            'phone_number_sid' => 'PN_LOCAL',
+            'from_number' => '+15554443333',
+        ],
+    ]);
+
+    Http::fake();
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message', [
+        'sender_key' => 'local',
+    ]);
+
+    Http::assertNothingSent();
+
+    expect($result['success'])->toBeFalse()
+        ->and($result['error_code'])->toBe('sender_disabled')
+        ->and($result['sender_label'])->toBe('Local');
+});
+
+test('selected multi-number sender is used for twilio request payload', function () {
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', null);
+    config()->set('marketing.twilio.senders', [
+        [
+            'key' => 'toll_free',
+            'label' => 'Toll-free',
+            'type' => 'toll_free',
+            'status' => 'active',
+            'enabled' => true,
+            'default' => true,
+            'messaging_service_sid' => 'MG_TOLL_FREE',
+        ],
+        [
+            'key' => 'local',
+            'label' => 'Local',
+            'type' => 'local',
+            'status' => 'active',
+            'enabled' => true,
+            'from_number' => '+15554443333',
+        ],
+    ]);
+
+    Http::fake([
+        'https://api.twilio.com/*' => Http::response([
+            'sid' => 'SM_MULTI_1',
+            'status' => 'sent',
+        ], 201),
+    ]);
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message', [
+        'sender_key' => 'local',
+    ]);
+
+    Http::assertSent(function ($request) {
+        return $request['From'] === '+15554443333'
+            && ($request['MessagingServiceSid'] ?? null) === null;
+    });
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['sender_key'])->toBe('local')
+        ->and($result['from_identifier'])->toBe('+15554443333');
 });
 
 test('twilio provider errors redact sensitive configured values', function () {

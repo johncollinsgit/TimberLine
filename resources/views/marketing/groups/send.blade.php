@@ -1,4 +1,7 @@
 <x-layouts::app :title="'Send Internal Group Message'">
+    @php
+        $selectedSenderKey = old('sender_key', $defaultSmsSenderKey ?? '');
+    @endphp
     <div class="mx-auto w-full max-w-[1200px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
@@ -33,6 +36,17 @@
                     </div>
                 </div>
 
+                <div id="sms_sender_wrap">
+                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">SMS Sender</label>
+                    <select name="sender_key" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        @foreach($smsSenders as $sender)
+                            <option value="{{ $sender['key'] }}" @selected($selectedSenderKey === $sender['key']) @disabled(empty($sender['sendable']))>
+                                {{ $sender['label'] }} · {{ $sender['type'] }} · {{ $sender['status'] }}{{ empty($sender['sendable']) ? ' (not sendable yet)' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
                 <div>
                     <label class="text-xs uppercase tracking-[0.2em] text-white/55">Message</label>
                     <textarea name="message" rows="5" required class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">{{ old('message') }}</textarea>
@@ -58,11 +72,13 @@
             (() => {
                 const channel = document.getElementById('group_send_channel');
                 const subjectWrap = document.getElementById('email_subject_wrap');
-                if (!channel || !subjectWrap) return;
+                const senderWrap = document.getElementById('sms_sender_wrap');
+                if (!channel || !subjectWrap || !senderWrap) return;
 
                 const toggle = () => {
                     const isEmail = channel.value === 'email';
                     subjectWrap.style.display = isEmail ? '' : 'none';
+                    senderWrap.style.display = isEmail ? 'none' : '';
                 };
 
                 channel.addEventListener('change', toggle);
@@ -71,4 +87,3 @@
         </script>
     </div>
 </x-layouts::app>
-

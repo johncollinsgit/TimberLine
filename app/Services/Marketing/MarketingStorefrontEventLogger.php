@@ -20,6 +20,7 @@ class MarketingStorefrontEventLogger
         }
 
         $profileId = $this->profileIdFromContext($context);
+        $tenantId = $this->tenantIdFromContext($context);
         $meta = $this->sanitizeMeta((array) ($context['meta'] ?? []));
 
         $attributes = [
@@ -30,6 +31,7 @@ class MarketingStorefrontEventLogger
             'endpoint' => $this->nullableString($context['endpoint'] ?? null),
             'request_key' => $this->nullableString($context['request_key'] ?? null),
             'signature_mode' => $this->nullableString($context['signature_mode'] ?? null),
+            'tenant_id' => $tenantId,
             'marketing_profile_id' => $profileId > 0 ? $profileId : null,
             'event_instance_id' => $this->positiveInt($context['event_instance_id'] ?? null),
             'candle_cash_redemption_id' => $this->positiveInt($context['candle_cash_redemption_id'] ?? null),
@@ -104,6 +106,24 @@ class MarketingStorefrontEventLogger
         }
 
         return (int) ($context['marketing_profile_id'] ?? 0);
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    protected function tenantIdFromContext(array $context): ?int
+    {
+        $profile = $context['profile'] ?? null;
+        if ($profile instanceof MarketingProfile) {
+            $tenantId = (int) ($profile->tenant_id ?? 0);
+            if ($tenantId > 0) {
+                return $tenantId;
+            }
+        }
+
+        $tenantId = (int) ($context['tenant_id'] ?? 0);
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 
     protected function maskEmail(string $value): string

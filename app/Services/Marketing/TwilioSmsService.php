@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 class TwilioSmsService
 {
     public function __construct(
+        protected TwilioSenderConfigService $senderConfigService,
         protected ?string $accountSid = null,
         protected ?string $authToken = null,
         protected ?string $messagingServiceSid = null,
@@ -31,6 +32,8 @@ class TwilioSmsService
      *   status:string,
      *   error_code:?string,
      *   error_message:?string,
+     *   sender_key:?string,
+     *   sender_label:?string,
      *   from_identifier:?string,
      *   payload:array<string,mixed>,
      *   dry_run:bool
@@ -44,6 +47,8 @@ class TwilioSmsService
 
         $toPhone = trim($toPhone);
         $message = trim($message);
+        $senderResolution = $this->resolveSenderConfiguration($options);
+        $sender = $senderResolution['sender'] ?? null;
         if ($toPhone === '' || $message === '') {
             return [
                 'success' => false,
@@ -52,7 +57,25 @@ class TwilioSmsService
                 'status' => 'failed',
                 'error_code' => 'invalid_payload',
                 'error_message' => 'Missing destination phone or message body.',
-                'from_identifier' => $this->fromIdentifier(),
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
+                'payload' => [],
+                'dry_run' => $dryRun,
+            ];
+        }
+
+        if ($senderResolution['error'] !== null) {
+            return [
+                'success' => false,
+                'provider' => 'twilio',
+                'provider_message_id' => null,
+                'status' => 'failed',
+                'error_code' => $senderResolution['error']['code'],
+                'error_message' => $senderResolution['error']['message'],
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => [],
                 'dry_run' => $dryRun,
             ];
@@ -66,11 +89,14 @@ class TwilioSmsService
                 'status' => 'sent',
                 'error_code' => null,
                 'error_message' => null,
-                'from_identifier' => $this->fromIdentifier(),
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => [
                     'dry_run' => true,
                     'to' => $toPhone,
                     'body' => $message,
+                    'sender_key' => $sender['key'] ?? null,
                 ],
                 'dry_run' => true,
             ];
@@ -84,7 +110,9 @@ class TwilioSmsService
                 'status' => 'failed',
                 'error_code' => 'sms_disabled',
                 'error_message' => 'SMS sending is disabled by configuration.',
-                'from_identifier' => $this->fromIdentifier(),
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -98,13 +126,15 @@ class TwilioSmsService
                 'status' => 'failed',
                 'error_code' => 'missing_credentials',
                 'error_message' => 'Twilio credentials are not configured.',
-                'from_identifier' => $this->fromIdentifier(),
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => [],
                 'dry_run' => false,
             ];
         }
 
-        $senderValidation = $this->validateSenderConfiguration();
+        $senderValidation = $this->validateSenderConfiguration($sender);
         if ($senderValidation !== null) {
             return [
                 'success' => false,
@@ -113,7 +143,9 @@ class TwilioSmsService
                 'status' => 'failed',
                 'error_code' => $senderValidation['code'],
                 'error_message' => $senderValidation['message'],
-                'from_identifier' => $this->fromIdentifier(),
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -122,8 +154,8 @@ class TwilioSmsService
         $payload = array_filter([
             'To' => $toPhone,
             'Body' => $message,
-            'MessagingServiceSid' => $this->messagingServiceSid,
-            'From' => $this->messagingServiceSid ? null : $this->fromNumber,
+            'MessagingServiceSid' => $sender['messaging_service_sid'] ?? null,
+            'From' => ! empty($sender['messaging_service_sid']) ? null : ($sender['from_number'] ?? null),
             'StatusCallback' => $this->nullableString((string) ($options['status_callback_url'] ?? '')) ?: $this->statusCallbackUrl,
         ], fn ($value) => $value !== null && $value !== '');
 
@@ -138,8 +170,10 @@ class TwilioSmsService
                     'provider_message_id' => $this->nullableString($json['sid'] ?? null),
                     'status' => $this->normalizeTwilioStatus($json['status'] ?? 'failed'),
                     'error_code' => $this->nullableString($json['code'] ?? null) ?: (string) $response->status(),
-                    'error_message' => $this->sanitizeTwilioErrorMessage($json['message'] ?? null) ?: 'Twilio request failed.',
-                    'from_identifier' => $this->fromIdentifier(),
+                    'error_message' => $this->sanitizeTwilioErrorMessage($json['message'] ?? null, $sender) ?: 'Twilio request failed.',
+                    'sender_key' => $sender['key'] ?? null,
+                    'sender_label' => $sender['label'] ?? null,
+                    'from_identifier' => $this->fromIdentifier($sender),
                     'payload' => $json,
                     'dry_run' => false,
                 ];
@@ -152,7 +186,9 @@ class TwilioSmsService
                 'status' => $this->normalizeTwilioStatus($json['status'] ?? 'sent'),
                 'error_code' => null,
                 'error_message' => null,
-                'from_identifier' => $this->fromIdentifier(),
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => $json,
                 'dry_run' => false,
             ];
@@ -163,8 +199,10 @@ class TwilioSmsService
                 'provider_message_id' => null,
                 'status' => 'failed',
                 'error_code' => 'exception',
-                'error_message' => $this->sanitizeTwilioErrorMessage($e->getMessage()) ?: 'Twilio request exception.',
-                'from_identifier' => $this->fromIdentifier(),
+                'error_message' => $this->sanitizeTwilioErrorMessage($e->getMessage(), $sender) ?: 'Twilio request exception.',
+                'sender_key' => $sender['key'] ?? null,
+                'sender_label' => $sender['label'] ?? null,
+                'from_identifier' => $this->fromIdentifier($sender),
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -210,9 +248,14 @@ class TwilioSmsService
         return 'https://api.twilio.com/2010-04-01/Accounts/' . urlencode((string) $this->accountSid) . '/Messages.json';
     }
 
-    protected function fromIdentifier(): ?string
+    /**
+     * @param array<string,mixed>|null $sender
+     */
+    protected function fromIdentifier(?array $sender = null): ?string
     {
-        $identifier = $this->messagingServiceSid ?: $this->fromNumber;
+        $identifier = $this->nullableString($sender['from_identifier'] ?? null)
+            ?: $this->messagingServiceSid
+            ?: $this->fromNumber;
         if ($identifier === null) {
             return null;
         }
@@ -246,9 +289,20 @@ class TwilioSmsService
     }
 
     /**
+     * @param array<string,mixed> $options
+     * @return array{sender:?array,error:?array{code:string,message:string}}
+     */
+    protected function resolveSenderConfiguration(array $options): array
+    {
+        $requestedKey = $this->nullableString($options['sender_key'] ?? null);
+
+        return $this->senderConfigService->resolveForSend($requestedKey);
+    }
+
+    /**
      * @return array{code:string,message:string}|null
      */
-    protected function validateSenderConfiguration(): ?array
+    protected function validateSenderConfiguration(?array $sender): ?array
     {
         if (! $this->sidHasPrefix($this->accountSid, 'AC')) {
             return [
@@ -257,13 +311,16 @@ class TwilioSmsService
             ];
         }
 
-        if ($this->messagingServiceSid !== null) {
-            if (! $this->sidHasPrefix($this->messagingServiceSid, 'MG')) {
+        $messagingServiceSid = $this->nullableString($sender['messaging_service_sid'] ?? null);
+        $fromNumber = $this->nullableString($sender['from_number'] ?? null);
+
+        if ($messagingServiceSid !== null) {
+            if (! $this->sidHasPrefix($messagingServiceSid, 'MG')) {
                 $message = 'Twilio Messaging Service SID must start with MG.';
-                if ($this->looksLikeSidBody($this->messagingServiceSid)) {
+                if ($this->looksLikeSidBody($messagingServiceSid)) {
                     $message .= ' It looks like only the 32-character SID body was provided.';
                 }
-                if ($this->authToken !== null && hash_equals($this->authToken, $this->messagingServiceSid)) {
+                if ($this->authToken !== null && hash_equals($this->authToken, $messagingServiceSid)) {
                     $message .= ' The configured value matches TWILIO_AUTH_TOKEN.';
                 }
 
@@ -276,7 +333,7 @@ class TwilioSmsService
             return null;
         }
 
-        if ($this->fromNumber === null) {
+        if ($fromNumber === null) {
             return [
                 'code' => 'missing_sender_identity',
                 'message' => 'Configure TWILIO_MESSAGING_SERVICE_SID (preferred) or TWILIO_FROM_NUMBER before sending SMS.',
@@ -299,7 +356,10 @@ class TwilioSmsService
         return (bool) preg_match('/^[A-Fa-f0-9]{32}$/', trim($value));
     }
 
-    protected function sanitizeTwilioErrorMessage(mixed $value): ?string
+    /**
+     * @param array<string,mixed>|null $sender
+     */
+    protected function sanitizeTwilioErrorMessage(mixed $value, ?array $sender = null): ?string
     {
         $message = $this->nullableString($value);
         if ($message === null) {
@@ -310,6 +370,8 @@ class TwilioSmsService
             (string) $this->authToken => '[REDACTED_AUTH_TOKEN]',
             (string) $this->accountSid => '[REDACTED_ACCOUNT_SID]',
             (string) $this->messagingServiceSid => '[REDACTED_MESSAGING_SERVICE_SID]',
+            (string) ($sender['messaging_service_sid'] ?? '') => '[REDACTED_MESSAGING_SERVICE_SID]',
+            (string) ($sender['phone_number_sid'] ?? '') => '[REDACTED_PHONE_NUMBER_SID]',
         ];
 
         foreach ($sensitiveValues as $sensitive => $replacement) {

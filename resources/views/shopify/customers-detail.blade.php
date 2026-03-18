@@ -23,6 +23,9 @@
         $smsConsented = (bool) ($smsInfo['consented'] ?? false);
         $smsPhoneDisplay = (string) ($smsInfo['phone_display'] ?? 'No phone on file');
         $smsConsentLabel = (string) ($smsInfo['consent_label'] ?? 'Consent needed');
+        $smsSenders = (array) ($smsInfo['senders'] ?? []);
+        $smsDefaultSenderKey = (string) ($smsInfo['default_sender_key'] ?? '');
+        $selectedSmsSenderKey = old('sender_key', $smsDefaultSenderKey);
         $notice = session('customer_detail_notice');
         $actionUrlGenerator = app(\App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator::class);
     @endphp
@@ -381,6 +384,14 @@
                 </select>
                 <label>Campaign key (optional)</label>
                 <input type="text" name="campaign_key" value="{{ old('campaign_key') }}" placeholder="Campaign key" />
+                <label>SMS sender</label>
+                <select name="sender_key">
+                    @foreach($smsSenders as $sender)
+                        <option value="{{ $sender['key'] }}" @selected($selectedSmsSenderKey === $sender['key']) @disabled(empty($sender['sendable']))>
+                            {{ $sender['label'] }} · {{ $sender['type'] }} · {{ $sender['status'] }}{{ empty($sender['sendable']) ? ' (not sendable yet)' : '' }}
+                        </option>
+                    @endforeach
+                </select>
                 <label>Optional message (SMS)</label>
                 <textarea name="message" rows="3" placeholder="Optional message to send after crediting Candle Cash">{{ old('message') }}</textarea>
                 @if(! $smsSupported)
@@ -462,6 +473,12 @@
             <p>
                 SMS: {{ $smsPhoneDisplay }}<br>
                 Consent: {{ $smsConsentLabel }}
+                @if($smsSenders !== [])
+                    <br>Senders:
+                    @foreach($smsSenders as $index => $sender)
+                        {{ $index > 0 ? ' · ' : ' ' }}{{ $sender['label'] }} ({{ $sender['type'] }}, {{ $sender['status'] }}){{ !empty($sender['is_default']) ? ' default' : '' }}
+                    @endforeach
+                @endif
                 @if(! $smsSupported)
                     <br>SMS sending is not enabled in this environment.
                 @elseif(! $smsHasPhone)
@@ -476,6 +493,14 @@
                 <label>Channel</label>
                 <select name="channel">
                     <option value="sms" @selected(old('channel', 'sms') === 'sms')>SMS</option>
+                </select>
+                <label>SMS sender</label>
+                <select name="sender_key">
+                    @foreach($smsSenders as $sender)
+                        <option value="{{ $sender['key'] }}" @selected($selectedSmsSenderKey === $sender['key']) @disabled(empty($sender['sendable']))>
+                            {{ $sender['label'] }} · {{ $sender['type'] }} · {{ $sender['status'] }}{{ empty($sender['sendable']) ? ' (not sendable yet)' : '' }}
+                        </option>
+                    @endforeach
                 </select>
                 <label>Message</label>
                 <textarea name="message" rows="3" placeholder="Write a direct message">{{ old('message') }}</textarea>

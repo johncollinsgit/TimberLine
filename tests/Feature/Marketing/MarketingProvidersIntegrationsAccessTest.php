@@ -32,6 +32,9 @@ test('admin and marketing manager can access providers integrations tooling', fu
         $this->actingAs($user)
             ->get(route('marketing.providers-integrations'))
             ->assertOk();
+        $this->actingAs($user)
+            ->get(route('marketing.providers-integrations.shopify-customer-sync-health'))
+            ->assertOk();
 
         $this->actingAs($user)
             ->get(route('marketing.providers-integrations.mappings.create'))
@@ -57,6 +60,9 @@ test('unauthorized roles cannot access providers integrations tooling', function
 
     $this->actingAs($manager)
         ->get(route('marketing.providers-integrations'))
+        ->assertForbidden();
+    $this->actingAs($manager)
+        ->get(route('marketing.providers-integrations.shopify-customer-sync-health'))
         ->assertForbidden();
     $this->actingAs($manager)
         ->get(route('marketing.providers-integrations.mappings.create'))

@@ -372,8 +372,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/settings', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'settings')
                 ->name('settings');
+            Route::post('/settings', [MarketingPagesController::class, 'saveSettings'])
+                ->name('settings.save');
             Route::get('/providers-integrations', [MarketingProvidersIntegrationsController::class, 'index'])
                 ->name('providers-integrations');
+            Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
+                ->name('providers-integrations.shopify-customer-sync-health');
             Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
                 ->name('providers-integrations.sync-square');
             Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
@@ -520,13 +524,23 @@ if (app()->environment('local') && config('app.debug')) {
 
 Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/orders/create', [ShopifyWebhookController::class, 'ordersCreate'])
-        ->withoutMiddleware([VerifyCsrfToken::class]);
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.orders.create');
     Route::post('/orders/updated', [ShopifyWebhookController::class, 'ordersUpdated'])
-        ->withoutMiddleware([VerifyCsrfToken::class]);
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.orders.updated');
     Route::post('/orders/cancelled', [ShopifyWebhookController::class, 'ordersCancelled'])
-        ->withoutMiddleware([VerifyCsrfToken::class]);
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.orders.cancelled');
     Route::post('/refunds/create', [ShopifyWebhookController::class, 'refundsCreate'])
-        ->withoutMiddleware([VerifyCsrfToken::class]);
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.refunds.create');
+    Route::post('/customers/create', [ShopifyWebhookController::class, 'customersCreate'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customers.create');
+    Route::post('/customers/update', [ShopifyWebhookController::class, 'customersUpdated'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customers.update');
 });
 
 Route::prefix('webhooks/twilio')->group(function () {

@@ -20,6 +20,7 @@ class MarketingStorefrontIdentityService
     {
         $sourceType = trim((string) ($context['source_type'] ?? 'storefront'));
         $sourceId = trim((string) ($context['source_id'] ?? ''));
+        $tenantId = $this->positiveInt($context['tenant_id'] ?? null);
         if ($sourceId === '') {
             $seed = strtolower(trim((string) ($identity['email'] ?? ''))) . '|' . trim((string) ($identity['phone'] ?? ''));
             $sourceId = $sourceType . ':' . sha1($seed);
@@ -46,9 +47,11 @@ class MarketingStorefrontIdentityService
             'review_context' => [
                 'source_label' => (string) ($context['source_label'] ?? $sourceType),
                 'source_id' => $sourceId,
+                'tenant_id' => $tenantId,
                 ...((array) ($context['review_context'] ?? [])),
             ],
             'allow_create' => (bool) ($context['allow_create'] ?? false),
+            'tenant_id' => $tenantId,
         ]);
 
         $profile = null;
@@ -76,5 +79,16 @@ class MarketingStorefrontIdentityService
         ];
 
         return trim($prefix) . ':' . sha1(implode('|', $seed));
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 }

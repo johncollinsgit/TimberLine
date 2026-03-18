@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
 use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
+use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -42,7 +46,8 @@ class MarketingConsentCaptureController extends Controller
         Request $request,
         MarketingConsentCaptureService $captureService,
         MarketingConsentService $consentService,
-        CandleCashTaskService $taskService
+        CandleCashTaskService $taskService,
+        TenantResolver $tenantResolver
     ): RedirectResponse {
         $data = $request->validate([
             'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
@@ -53,6 +58,7 @@ class MarketingConsentCaptureController extends Controller
             'award_bonus' => ['nullable', 'boolean'],
         ]);
 
+        $tenantContext = $this->resolveTenantContext($request, $tenantResolver);
         $sourceId = 'storefront-optin:' . sha1(
             strtolower(trim((string) ($data['email'] ?? ''))) . '|' . trim((string) ($data['phone'] ?? ''))
         );
@@ -69,9 +75,12 @@ class MarketingConsentCaptureController extends Controller
             'source_channels' => ['storefront_optin'],
             'source_meta' => [
                 'entrypoint' => 'stage8_hardened',
+                'shopify_store_key' => $tenantContext['store_key'],
+                'tenant_id' => $tenantContext['tenant_id'],
             ],
             'flow' => 'verification',
             'allow_create' => true,
+            'tenant_id' => $tenantContext['tenant_id'],
             'award_bonus' => (bool) ($data['award_bonus'] ?? false),
             'request_meta' => [
                 'ip' => (string) $request->ip(),
@@ -99,10 +108,18 @@ class MarketingConsentCaptureController extends Controller
             ]);
         }
 
+        $this->queueShopifyCustomerProvisioning(
+            profile: $profile,
+            storeKey: $tenantContext['store_key'] ?? null,
+            tenantId: $tenantContext['tenant_id'] ?? $profile->tenant_id,
+            trigger: 'marketing_consent_optin'
+        );
+
         if ((bool) ($data['accepts_email'] ?? false)) {
             $consentService->setEmailConsent($profile, true, [
                 'source_type' => 'storefront_optin',
                 'source_id' => $sourceId,
+                'tenant_id' => $tenantContext['tenant_id'] ?: $profile->tenant_id,
                 'details' => ['stage' => 'optin_capture'],
             ]);
 
@@ -238,4 +255,62 @@ class MarketingConsentCaptureController extends Controller
             'bonus' => (int) ($result['bonus_awarded'] ?? 0),
         ])->with('status', 'SMS consent verified successfully.');
     }
+
+    /**
+     * @return array{store_key:?string,tenant_id:?int}
+     */
+    protected function resolveTenantContext(Request $request, TenantResolver $tenantResolver): array
+    {
+        $storeKey = strtolower(trim((string) ($request->input('store_key', $request->query('store_key', '')))));
+        if ($storeKey === '') {
+            $shop = trim((string) ($request->input('shop', $request->query('shop', ''))));
+            $resolvedStore = $shop !== '' ? ShopifyStores::findByShopDomain($shop) : null;
+            $storeKey = strtolower(trim((string) ($resolvedStore['key'] ?? '')));
+        }
+
+        if ($storeKey === '') {
+            return [
+                'store_key' => null,
+                'tenant_id' => null,
+            ];
+        }
+
+        return [
+            'store_key' => $storeKey,
+            'tenant_id' => $tenantResolver->resolveTenantIdForStoreKey($storeKey),
+        ];
+    }
+
+    protected function queueShopifyCustomerProvisioning(
+        MarketingProfile $profile,
+        ?string $storeKey,
+        mixed $tenantId,
+        string $trigger
+    ): void {
+        $normalizedStoreKey = strtolower(trim((string) $storeKey));
+        $resolvedTenantId = is_numeric($tenantId)
+            ? (int) $tenantId
+            : (is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : 0);
+
+        if ($normalizedStoreKey === '' || $resolvedTenantId <= 0) {
+            return;
+        }
+
+        try {
+            ProvisionShopifyCustomerForMarketingProfile::dispatch(
+                marketingProfileId: (int) $profile->id,
+                storeKey: $normalizedStoreKey,
+                tenantId: $resolvedTenantId,
+                trigger: $trigger
+            )->afterCommit();
+        } catch (\Throwable $e) {
+            Log::warning('shopify customer provisioning dispatch failed', [
+                'marketing_profile_id' => (int) $profile->id,
+                'store_key' => $normalizedStoreKey,
+                'trigger' => $trigger,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
 }

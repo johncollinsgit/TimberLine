@@ -37,6 +37,7 @@ class MarketingProfileSyncService
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $context = is_array($options['identity_context'] ?? null) ? $options['identity_context'] : [];
+        $tenantId = $this->resolveTenantId($options['tenant_id'] ?? ($context['tenant_id'] ?? $order->tenant_id ?? null));
 
         $identity = $this->extractor->extractFromOrder($order, $context);
         $reviewContext = [
@@ -45,12 +46,14 @@ class MarketingProfileSyncService
             'order_number' => (string) ($order->order_number ?? ''),
             'order_type' => (string) ($order->order_type ?? ''),
             'source' => (string) ($order->source ?? ''),
+            'tenant_id' => $tenantId,
         ];
 
         return $this->syncIdentity(
             identity: $identity,
             reviewContext: $reviewContext,
-            dryRun: $dryRun
+            dryRun: $dryRun,
+            tenantId: $tenantId
         );
     }
 
@@ -74,12 +77,17 @@ class MarketingProfileSyncService
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $reviewContext = is_array($options['review_context'] ?? null) ? $options['review_context'] : [];
         $allowCreate = (bool) ($options['allow_create'] ?? true);
+        $tenantId = $this->resolveTenantId($options['tenant_id'] ?? ($identity['tenant_id'] ?? null));
+        if ($tenantId !== null) {
+            $reviewContext['tenant_id'] = $tenantId;
+        }
 
         return $this->syncIdentity(
             identity: $this->normalizeIdentityPayload($identity),
             reviewContext: $reviewContext,
             dryRun: $dryRun,
-            allowCreate: $allowCreate
+            allowCreate: $allowCreate,
+            tenantId: $tenantId
         );
     }
 
@@ -98,9 +106,15 @@ class MarketingProfileSyncService
      *   records_skipped:int
      * }
      */
-    protected function syncIdentity(array $identity, array $reviewContext, bool $dryRun, bool $allowCreate = true): array
+    protected function syncIdentity(
+        array $identity,
+        array $reviewContext,
+        bool $dryRun,
+        bool $allowCreate = true,
+        ?int $tenantId = null
+    ): array
     {
-        $sourceLinkProfiles = $this->profilesFromSourceLinks($identity['source_links']);
+        $sourceLinkProfiles = $this->profilesFromSourceLinks($identity['source_links'], $tenantId);
         $sourceLinkedProfile = $sourceLinkProfiles->count() === 1 ? $sourceLinkProfiles->first() : null;
 
         if ($sourceLinkProfiles->count() > 1) {
@@ -127,7 +141,8 @@ class MarketingProfileSyncService
                         confidence: null,
                         createProfile: true,
                         reviewContext: $reviewContext,
-                        dryRun: $dryRun
+                        dryRun: $dryRun,
+                        tenantId: $tenantId
                     );
                 }
 
@@ -141,11 +156,12 @@ class MarketingProfileSyncService
                 confidence: null,
                 createProfile: false,
                 reviewContext: $reviewContext,
-                dryRun: $dryRun
+                dryRun: $dryRun,
+                tenantId: $tenantId
             );
         }
 
-        $match = $this->matcher->match($identity['normalized_email'], $identity['normalized_phone']);
+        $match = $this->matcher->match($identity['normalized_email'], $identity['normalized_phone'], $tenantId);
 
         if ($sourceLinkedProfile && $match['outcome'] === 'matched' && (int) $match['profile']?->id !== (int) $sourceLinkedProfile->id) {
             $reviewCreated = $this->createOrUpdateReview(
@@ -186,7 +202,8 @@ class MarketingProfileSyncService
                 confidence: null,
                 createProfile: false,
                 reviewContext: $reviewContext,
-                dryRun: $dryRun
+                dryRun: $dryRun,
+                tenantId: $tenantId
             );
         }
 
@@ -200,7 +217,8 @@ class MarketingProfileSyncService
                 confidence: $confidence,
                 createProfile: false,
                 reviewContext: $reviewContext,
-                dryRun: $dryRun
+                dryRun: $dryRun,
+                tenantId: $tenantId
             );
         }
 
@@ -218,7 +236,8 @@ class MarketingProfileSyncService
                 confidence: null,
                 createProfile: true,
                 reviewContext: $reviewContext,
-                dryRun: $dryRun
+                dryRun: $dryRun,
+                tenantId: $tenantId
             );
         }
 
@@ -233,13 +252,16 @@ class MarketingProfileSyncService
     ): MarketingIdentityReview {
         return DB::transaction(function () use ($review, $profile, $reviewedBy, $resolutionNotes): MarketingIdentityReview {
             $this->updateProfileFromReview($profile, $review);
+            $tenantId = $this->resolveTenantId($profile->tenant_id);
 
             MarketingProfileLink::query()->updateOrCreate(
                 [
+                    'tenant_id' => $tenantId,
                     'source_type' => $review->source_type,
                     'source_id' => $review->source_id,
                 ],
                 [
+                    'tenant_id' => $tenantId,
                     'marketing_profile_id' => $profile->id,
                     'source_meta' => [
                         'review_id' => $review->id,
@@ -282,6 +304,7 @@ class MarketingProfileSyncService
             $normalizedPhone = $this->normalizer->normalizePhone($phone);
 
             $profile = MarketingProfile::query()->create([
+                'tenant_id' => $this->resolveTenantId($profileData['tenant_id'] ?? null),
                 'first_name' => trim((string) ($profileData['first_name'] ?? $splitFirst ?? $review->raw_first_name)) ?: null,
                 'last_name' => trim((string) ($profileData['last_name'] ?? $splitLast ?? $review->raw_last_name)) ?: null,
                 'email' => $normalizedEmail ? trim($email) : null,
@@ -336,14 +359,15 @@ class MarketingProfileSyncService
         ?float $confidence,
         bool $createProfile,
         array $reviewContext,
-        bool $dryRun
+        bool $dryRun,
+        ?int $tenantId = null
     ): array {
         $profileCreated = 0;
         $profileUpdated = 0;
         $linksCreated = 0;
         $linksReused = 0;
 
-        $conflictingLink = $this->firstConflictingSourceLink($profile, $identity['source_links']);
+        $conflictingLink = $this->firstConflictingSourceLink($profile, $identity['source_links'], $tenantId);
         if ($conflictingLink) {
             $reviewCreated = $this->createOrUpdateReview(
                 $identity,
@@ -371,10 +395,12 @@ class MarketingProfileSyncService
                 $identity,
                 $matchMethod,
                 $confidence,
-                $createProfile
+                $createProfile,
+                $tenantId
             ): void {
                 if ($createProfile) {
                     $profile->fill([
+                        'tenant_id' => $tenantId,
                         'first_name' => $identity['first_name'],
                         'last_name' => $identity['last_name'],
                         'email' => $identity['raw_email'],
@@ -385,18 +411,20 @@ class MarketingProfileSyncService
                     ]);
                     $profile->save();
                     $profileCreated = 1;
-                } elseif ($this->applyConservativeProfileUpdates($profile, $identity)) {
+                } elseif ($this->applyConservativeProfileUpdates($profile, $identity, $tenantId)) {
                     $profileUpdated = 1;
                 }
 
                 foreach ($identity['source_links'] as $linkData) {
                     $existing = MarketingProfileLink::query()
+                        ->forTenantId($tenantId)
                         ->where('source_type', $linkData['source_type'])
                         ->where('source_id', $linkData['source_id'])
                         ->first();
 
                     MarketingProfileLink::query()->updateOrCreate(
                         [
+                            'tenant_id' => $tenantId,
                             'source_type' => $linkData['source_type'],
                             'source_id' => $linkData['source_id'],
                         ],
@@ -423,6 +451,7 @@ class MarketingProfileSyncService
             $profileUpdated = $createProfile ? 0 : 1;
             foreach ($identity['source_links'] as $linkData) {
                 $existing = MarketingProfileLink::query()
+                    ->forTenantId($tenantId)
                     ->where('source_type', $linkData['source_type'])
                     ->where('source_id', $linkData['source_id'])
                     ->exists();
@@ -451,9 +480,14 @@ class MarketingProfileSyncService
     /**
      * @param array<string,mixed> $identity
      */
-    protected function applyConservativeProfileUpdates(MarketingProfile $profile, array $identity): bool
+    protected function applyConservativeProfileUpdates(MarketingProfile $profile, array $identity, ?int $tenantId = null): bool
     {
         $changed = false;
+
+        if ($tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            $profile->tenant_id = $tenantId;
+            $changed = true;
+        }
 
         if (!$profile->first_name && !empty($identity['first_name'])) {
             $profile->first_name = $identity['first_name'];
@@ -572,13 +606,13 @@ class MarketingProfileSyncService
      * @param array<int,array{source_type:string,source_id:string,source_meta:array<string,mixed>}> $sourceLinks
      * @return \Illuminate\Support\Collection<int,MarketingProfile>
      */
-    protected function profilesFromSourceLinks(array $sourceLinks): \Illuminate\Support\Collection
+    protected function profilesFromSourceLinks(array $sourceLinks, ?int $tenantId = null): \Illuminate\Support\Collection
     {
         if ($sourceLinks === []) {
             return collect();
         }
 
-        $query = MarketingProfileLink::query();
+        $query = MarketingProfileLink::query()->forTenantId($tenantId);
         $query->where(function ($sub) use ($sourceLinks): void {
             foreach ($sourceLinks as $index => $linkData) {
                 if ($index === 0) {
@@ -601,16 +635,17 @@ class MarketingProfileSyncService
             return collect();
         }
 
-        return MarketingProfile::query()->whereIn('id', $profileIds)->get();
+        return MarketingProfile::query()->forTenantId($tenantId)->whereIn('id', $profileIds)->get();
     }
 
     /**
      * @param array<int,array{source_type:string,source_id:string,source_meta:array<string,mixed>}> $sourceLinks
      */
-    protected function firstConflictingSourceLink(MarketingProfile $profile, array $sourceLinks): ?MarketingProfileLink
+    protected function firstConflictingSourceLink(MarketingProfile $profile, array $sourceLinks, ?int $tenantId = null): ?MarketingProfileLink
     {
         foreach ($sourceLinks as $linkData) {
             $existing = MarketingProfileLink::query()
+                ->forTenantId($tenantId)
                 ->where('source_type', $linkData['source_type'])
                 ->where('source_id', $linkData['source_id'])
                 ->first();
@@ -702,6 +737,17 @@ class MarketingProfileSyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function resolveTenantId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $tenantId = (int) $value;
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 
     /**

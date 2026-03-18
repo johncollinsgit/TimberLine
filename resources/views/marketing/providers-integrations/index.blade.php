@@ -9,6 +9,12 @@
             hint-text="All imports and syncs are additive. Identity merges still follow exact email/phone rules, and ambiguous matches are routed to Identity Review."
         />
 
+        <div class="flex justify-end">
+            <a href="{{ route('marketing.providers-integrations.shopify-customer-sync-health') }}" wire:navigate class="inline-flex rounded-full border border-sky-300/35 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100">
+                Shopify Customer Sync Health
+            </a>
+        </div>
+
         <section class="grid gap-4 lg:grid-cols-2">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
                 <div>

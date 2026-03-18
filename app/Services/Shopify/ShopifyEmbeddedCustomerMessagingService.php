@@ -4,18 +4,20 @@ namespace App\Services\Shopify;
 
 use App\Models\MarketingProfile;
 use App\Services\Marketing\MarketingDirectMessagingService;
+use App\Services\Marketing\TwilioSenderConfigService;
 
 class ShopifyEmbeddedCustomerMessagingService
 {
     public function __construct(
-        protected MarketingDirectMessagingService $directMessagingService
+        protected MarketingDirectMessagingService $directMessagingService,
+        protected TwilioSenderConfigService $senderConfigService
     ) {
     }
 
     /**
      * @return array{ok:bool,message:string}
      */
-    public function sendSms(MarketingProfile $profile, string $message, ?int $actorId): array
+    public function sendSms(MarketingProfile $profile, string $message, ?int $actorId, ?string $senderKey = null): array
     {
         if (! $this->smsSupported()) {
             return [
@@ -51,6 +53,7 @@ class ShopifyEmbeddedCustomerMessagingService
         ], $message, [
             'actor_id' => $actorId,
             'source_label' => 'shopify_embedded_customer_detail',
+            'sender_key' => $senderKey,
         ]);
 
         if ((int) ($summary['sent'] ?? 0) > 0) {
@@ -77,6 +80,6 @@ class ShopifyEmbeddedCustomerMessagingService
 
     public function smsSupported(): bool
     {
-        return (bool) config('marketing.sms.enabled') && (bool) config('marketing.twilio.enabled');
+        return $this->senderConfigService->smsSupported();
     }
 }

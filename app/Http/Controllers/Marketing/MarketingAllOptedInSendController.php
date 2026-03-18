@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Marketing\MarketingAllOptedInSendService;
+use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +15,11 @@ use Illuminate\Validation\ValidationException;
 
 class MarketingAllOptedInSendController extends Controller
 {
-    public function show(Request $request, MarketingAllOptedInSendService $sendService): View
+    public function show(
+        Request $request,
+        MarketingAllOptedInSendService $sendService,
+        TwilioSenderConfigService $senderConfigService
+    ): View
     {
         return view('marketing/send/all-opted-in', [
             'section' => MarketingSectionRegistry::section('messages'),
@@ -25,6 +30,8 @@ class MarketingAllOptedInSendController extends Controller
             'confirmationToken' => $this->issueConfirmationToken($request),
             'testResult' => session('quick_send_all_opted_in_test_result'),
             'sendResult' => session('quick_send_all_opted_in_send_result'),
+            'smsSenders' => $senderConfigService->all(),
+            'defaultSmsSenderKey' => (string) ($senderConfigService->defaultSender()['key'] ?? ''),
         ]);
     }
 
@@ -77,6 +84,7 @@ class MarketingAllOptedInSendController extends Controller
             'email_subject' => ['nullable', 'string', 'max:255'],
             'email_body' => ['nullable', 'string', 'max:10000'],
             'cta_link' => ['nullable', 'url', 'max:2000'],
+            'sender_key' => ['nullable', 'string', 'max:80'],
             'test_phone' => ['nullable', 'string', 'max:50'],
             'test_email' => ['nullable', 'string', 'max:255'],
             'confirm_send' => ['nullable'],
@@ -113,6 +121,7 @@ class MarketingAllOptedInSendController extends Controller
             'email_subject' => trim((string) ($data['email_subject'] ?? '')),
             'email_body' => trim((string) ($data['email_body'] ?? '')),
             'cta_link' => trim((string) ($data['cta_link'] ?? '')),
+            'sender_key' => trim((string) ($data['sender_key'] ?? '')),
             'test_phone' => trim((string) ($data['test_phone'] ?? '')),
             'test_email' => trim((string) ($data['test_email'] ?? '')),
             'confirmation_token' => trim((string) ($data['confirmation_token'] ?? '')),

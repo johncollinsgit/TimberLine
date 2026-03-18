@@ -27,6 +27,7 @@ class MarketingConsentCaptureService
         $sourceId = trim((string) ($context['source_id'] ?? ('consent:' . Str::lower(Str::random(24)))));
         $sourceChannels = array_values(array_filter((array) ($context['source_channels'] ?? ['storefront'])));
         $expiresMinutes = max(5, min(240, (int) ($context['expires_minutes'] ?? 45)));
+        $tenantId = $this->resolveTenantId($context['tenant_id'] ?? null);
 
         $sync = $this->profileSyncService->syncExternalIdentity([
             'first_name' => trim((string) ($identity['first_name'] ?? '')) ?: null,
@@ -47,9 +48,11 @@ class MarketingConsentCaptureService
             'review_context' => [
                 'source_label' => (string) ($context['source_label'] ?? $sourceType),
                 'source_id' => $sourceId,
+                'tenant_id' => $tenantId,
                 ...((array) ($context['review_context'] ?? [])),
             ],
             'allow_create' => (bool) ($context['allow_create'] ?? true),
+            'tenant_id' => $tenantId,
         ]);
 
         $profile = null;
@@ -68,6 +71,7 @@ class MarketingConsentCaptureService
         }
 
         $existing = MarketingConsentRequest::query()
+            ->forTenantId($tenantId ?: $this->resolveTenantId($profile->tenant_id))
             ->where('marketing_profile_id', $profile->id)
             ->where('channel', 'sms')
             ->where('source_type', $sourceType)
@@ -90,6 +94,7 @@ class MarketingConsentCaptureService
 
         $token = Str::lower(Str::random(48));
         $request = MarketingConsentRequest::query()->create([
+            'tenant_id' => $tenantId ?: $this->resolveTenantId($profile->tenant_id),
             'marketing_profile_id' => $profile->id,
             'channel' => 'sms',
             'token' => $token,
@@ -107,6 +112,7 @@ class MarketingConsentCaptureService
         ]);
 
         MarketingConsentEvent::query()->create([
+            'tenant_id' => $tenantId ?: $this->resolveTenantId($profile->tenant_id),
             'marketing_profile_id' => $profile->id,
             'channel' => 'sms',
             'event_type' => 'requested',
@@ -210,6 +216,7 @@ class MarketingConsentCaptureService
         $this->consentService->setSmsConsent($profile, true, [
             'source_type' => $sourceType,
             'source_id' => $sourceId,
+            'tenant_id' => $this->resolveTenantId($request->tenant_id) ?: $this->resolveTenantId($profile->tenant_id),
             'details' => [
                 'request_id' => (int) $request->id,
                 'flow' => 'verification_confirm',
@@ -242,5 +249,16 @@ class MarketingConsentCaptureService
             'bonus_awarded' => $bonusAwarded,
             'error' => null,
         ];
+    }
+
+    protected function resolveTenantId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $tenantId = (int) $value;
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 }

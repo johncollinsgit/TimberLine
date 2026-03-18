@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CustomerExternalProfile extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'marketing_profile_id',
         'provider',
         'integration',
@@ -34,6 +38,7 @@ class CustomerExternalProfile extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'raw_metafields' => 'array',
         'accepts_marketing' => 'boolean',
         'order_count' => 'integer',
@@ -47,5 +52,10 @@ class CustomerExternalProfile extends Model
     public function marketingProfile(): BelongsTo
     {
         return $this->belongsTo(MarketingProfile::class);
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 }

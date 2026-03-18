@@ -45,6 +45,7 @@ class MarketingGroupDirectSendService
 
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $senderKey = $this->nullableString($options['sender_key'] ?? null);
         $subject = trim((string) $subject);
         $message = trim($message);
 
@@ -87,7 +88,7 @@ class MarketingGroupDirectSendService
             $summary['processed']++;
 
             $result = $channel === 'sms'
-                ? $this->sendSmsToProfile($group, $profile, $message, $dryRun, $actorId)
+                ? $this->sendSmsToProfile($group, $profile, $message, $dryRun, $actorId, $senderKey)
                 : $this->sendEmailToProfile($group, $profile, $subject, $message, $dryRun);
 
             if ($result === 'sent') {
@@ -111,7 +112,8 @@ class MarketingGroupDirectSendService
         MarketingProfile $profile,
         string $message,
         bool $dryRun,
-        ?int $actorId
+        ?int $actorId,
+        ?string $senderKey
     ): string {
         if (! (bool) $profile->accepts_sms_marketing) {
             return 'skipped';
@@ -138,6 +140,7 @@ class MarketingGroupDirectSendService
 
         $send = $this->twilioSmsService->sendSms($toPhone, $message, [
             'dry_run' => $dryRun,
+            'sender_key' => $senderKey,
             'status_callback_url' => $this->statusCallbackUrl(),
         ]);
 
@@ -153,6 +156,8 @@ class MarketingGroupDirectSendService
             'provider_payload' => [
                 'group_id' => $group->id,
                 'group_name' => $group->name,
+                'sender_key' => $send['sender_key'] ?? $senderKey,
+                'sender_label' => $send['sender_label'] ?? null,
                 'dry_run' => $dryRun,
                 'provider' => $send,
             ],
@@ -242,5 +247,12 @@ class MarketingGroupDirectSendService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

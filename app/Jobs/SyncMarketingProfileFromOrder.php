@@ -26,7 +26,8 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
      */
     public function __construct(
         public int $orderId,
-        public array $identityContext = []
+        public array $identityContext = [],
+        public ?int $tenantId = null
     ) {
     }
 
@@ -46,26 +47,34 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
         $attributionMeta = is_array($this->identityContext['attribution_meta'] ?? null)
             ? $this->identityContext['attribution_meta']
             : (is_array($order->attribution_meta ?? null) ? $order->attribution_meta : []);
+        $tenantId = $this->tenantId
+            ?: (is_numeric($this->identityContext['tenant_id'] ?? null) ? (int) $this->identityContext['tenant_id'] : null)
+            ?: (is_numeric($order->tenant_id ?? null) ? (int) $order->tenant_id : null);
 
         $syncService->syncOrder($order, [
             'identity_context' => array_replace($this->identityContext, [
                 'attribution_meta' => $attributionMeta,
+                'tenant_id' => $tenantId,
             ]),
+            'tenant_id' => $tenantId,
         ]);
 
         $candleCashOrderEventService->handle($order, array_replace($this->identityContext, [
             'attribution_meta' => $attributionMeta,
+            'tenant_id' => $tenantId,
         ]));
 
         $rewardSummary = $reconciliationService->reconcileShopifyOrder($order, [
             'codes' => (array) ($this->identityContext['applied_reward_codes'] ?? []),
             'attribution_meta' => $attributionMeta,
+            'tenant_id' => $tenantId,
         ]);
 
         $birthdayRewardSummary = $birthdayReconciliationService->reconcileShopifyOrder($order, [
             'codes' => (array) ($this->identityContext['coupon_signals'] ?? []),
             'order_total' => $this->identityContext['order_total'] ?? null,
             'attribution_meta' => $attributionMeta,
+            'tenant_id' => $tenantId,
         ]);
 
         $conversionAttributionService->attributeForOrder($order, [

@@ -2,14 +2,19 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MarketingProfile extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'first_name',
         'last_name',
         'email',
@@ -33,6 +38,7 @@ class MarketingProfile extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'accepts_email_marketing' => 'boolean',
         'accepts_sms_marketing' => 'boolean',
         'email_opted_out_at' => 'datetime',
@@ -41,6 +47,11 @@ class MarketingProfile extends Model
         'marketing_score' => 'decimal:2',
         'last_marketing_score_at' => 'datetime',
     ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 
     public function links(): HasMany
     {

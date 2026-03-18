@@ -235,6 +235,7 @@ class MarketingConsentService
         $details = is_array($context['details'] ?? null) ? $context['details'] : null;
 
         MarketingConsentEvent::query()->create([
+            'tenant_id' => $this->resolveTenantId($context['tenant_id'] ?? null) ?: $this->resolveTenantId($profile->tenant_id),
             'marketing_profile_id' => $profile->id,
             'channel' => strtolower(trim($channel)),
             'event_type' => strtolower(trim($eventType)),
@@ -243,6 +244,17 @@ class MarketingConsentService
             'details' => $details,
             'occurred_at' => $this->asNullableDate($context['occurred_at'] ?? null) ?: now(),
         ]);
+    }
+
+    protected function resolveTenantId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $tenantId = (int) $value;
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 
     protected function nullableBool(mixed $value): ?bool

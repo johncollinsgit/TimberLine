@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
@@ -29,9 +30,12 @@ use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MarketingStorefrontWidgetService;
+use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantResolver;
 use App\Support\Marketing\MarketingStorefrontContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -40,7 +44,8 @@ class MarketingShopifyIntegrationController extends Controller
     public function __construct(
         protected MarketingStorefrontIdentityService $identityService,
         protected MarketingStorefrontWidgetService $widgetService,
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected TenantResolver $tenantResolver
     ) {
     }
 
@@ -462,11 +467,16 @@ class MarketingShopifyIntegrationController extends Controller
 
         $flow = (string) ($data['flow'] ?? 'direct');
         $shopifyCustomerId = trim((string) ($data['shopify_customer_id'] ?? ''));
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
         $sourceId = $this->identityService->deterministicSourceId(
             prefix: 'shopify_widget_optin',
             email: (string) ($data['email'] ?? ''),
             phone: (string) ($data['phone'] ?? ''),
-            extra: [$shopifyCustomerId]
+            extra: [
+                $shopifyCustomerId,
+                (string) ($storeContext['store_key'] ?? ''),
+                (string) ($storeContext['tenant_id'] ?? ''),
+            ]
         );
 
         $identityPayload = [
@@ -480,8 +490,11 @@ class MarketingShopifyIntegrationController extends Controller
             'source_id' => $sourceId,
             'source_label' => 'shopify_widget_optin',
             'source_channels' => ['shopify', 'online', 'shopify_widget'],
+            'tenant_id' => $storeContext['tenant_id'],
             'source_meta' => [
                 'shopify_customer_id' => $shopifyCustomerId !== '' ? $shopifyCustomerId : null,
+                'shopify_store_key' => $storeContext['store_key'],
+                'tenant_id' => $storeContext['tenant_id'],
             ],
             'flow' => $flow === 'verification' ? 'verification' : 'direct_confirmed',
             'allow_create' => true,
@@ -514,8 +527,10 @@ class MarketingShopifyIntegrationController extends Controller
                 'review_context' => [
                     'source_label' => (string) ($syncContext['source_label'] ?? 'shopify_widget_contact'),
                     'source_id' => (string) $syncContext['source_id'],
+                    'tenant_id' => $storeContext['tenant_id'],
                 ],
                 'allow_create' => true,
+                'tenant_id' => $storeContext['tenant_id'],
             ]);
 
             $result = [
@@ -545,6 +560,13 @@ class MarketingShopifyIntegrationController extends Controller
 
         /** @var MarketingProfile $profile */
         $profile = $result['profile'];
+        $this->queueShopifyCustomerProvisioning(
+            profile: $profile,
+            storeKey: $storeContext['store_key'] ?? null,
+            tenantId: $storeContext['tenant_id'] ?? $profile->tenant_id,
+            trigger: 'shopify_widget_optin'
+        );
+
         $consentSms = (bool) ($data['consent_sms'] ?? false);
         $consentEmail = (bool) ($data['consent_email'] ?? false);
 
@@ -552,6 +574,7 @@ class MarketingShopifyIntegrationController extends Controller
             $consentService->setEmailConsent($profile, true, [
                 'source_type' => 'shopify_widget_optin',
                 'source_id' => $sourceId,
+                'tenant_id' => $storeContext['tenant_id'] ?: $profile->tenant_id,
             ]);
 
             $taskService->awardSystemTask($profile, 'email-signup', [
@@ -575,6 +598,7 @@ class MarketingShopifyIntegrationController extends Controller
             $consentService->setSmsConsent($profile, true, [
                 'source_type' => 'shopify_widget_optin',
                 'source_id' => $sourceId,
+                'tenant_id' => $storeContext['tenant_id'] ?: $profile->tenant_id,
                 'details' => ['flow' => 'direct_confirmed'],
             ]);
 
@@ -601,6 +625,7 @@ class MarketingShopifyIntegrationController extends Controller
             $consentService->setSmsConsent($profile, false, [
                 'source_type' => 'shopify_widget_optin',
                 'source_id' => $sourceId,
+                'tenant_id' => $storeContext['tenant_id'] ?: $profile->tenant_id,
                 'details' => ['flow' => 'explicit_revoke'],
             ]);
 
@@ -1747,9 +1772,15 @@ class MarketingShopifyIntegrationController extends Controller
         bool $allowCreate = false,
         bool $allowBody = false
     ): array {
+        $storeContext = $this->resolveStoreContext($request, $allowBody);
         $profileId = (int) ($request->query('marketing_profile_id', 0) ?: ($allowBody ? $request->input('marketing_profile_id', 0) : 0));
         if ($profileId > 0) {
-            $profile = MarketingProfile::query()->find($profileId);
+            $profileQuery = MarketingProfile::query();
+            if ((int) ($storeContext['tenant_id'] ?? 0) > 0) {
+                $profileQuery->forTenantId((int) $storeContext['tenant_id']);
+            }
+
+            $profile = $profileQuery->find($profileId);
 
             return [
                 'status' => $profile ? 'resolved' : 'not_found',
@@ -1774,7 +1805,11 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         if ($emailInput === '' && $phoneInput === '' && $shopifyCustomerId !== '') {
-            $externalProfile = $this->profileFromShopifyCustomerId($shopifyCustomerId);
+            $externalProfile = $this->profileFromShopifyCustomerId(
+                $shopifyCustomerId,
+                $storeContext['store_key'] ?? null,
+                is_numeric($storeContext['tenant_id'] ?? null) ? (int) $storeContext['tenant_id'] : null
+            );
             if ($externalProfile) {
                 return [
                     'status' => 'resolved',
@@ -1789,7 +1824,11 @@ class MarketingShopifyIntegrationController extends Controller
             prefix: $sourceType,
             email: $emailInput,
             phone: $phoneInput,
-            extra: [$shopifyCustomerId]
+            extra: [
+                $shopifyCustomerId,
+                (string) ($storeContext['store_key'] ?? ''),
+                (string) ($storeContext['tenant_id'] ?? ''),
+            ]
         );
 
         return $this->identityService->resolve([
@@ -1802,8 +1841,11 @@ class MarketingShopifyIntegrationController extends Controller
             'source_id' => $sourceId,
             'source_label' => 'shopify_widget_' . $scope,
             'source_channels' => ['shopify', 'online', 'shopify_widget'],
+            'tenant_id' => $storeContext['tenant_id'],
             'source_meta' => [
                 'shopify_customer_id' => $shopifyCustomerId !== '' ? $shopifyCustomerId : null,
+                'shopify_store_key' => $storeContext['store_key'],
+                'tenant_id' => $storeContext['tenant_id'],
                 'endpoint' => $scope,
             ],
             'allow_create' => $allowCreate,
@@ -1823,6 +1865,84 @@ class MarketingShopifyIntegrationController extends Controller
             'product_url' => $this->nullableString($data['product_url'] ?? null),
             'store_key' => 'retail',
         ];
+    }
+
+    /**
+     * @return array{store_key:?string,tenant_id:?int}
+     */
+    protected function resolveStoreContext(Request $request, bool $allowBody = false): array
+    {
+        $storeKey = $this->normalizeStoreKey(
+            $allowBody
+                ? ($request->input('store_key') ?? $request->input('store') ?? $request->query('store_key') ?? $request->query('store'))
+                : ($request->query('store_key') ?? $request->query('store'))
+        );
+
+        $resolvedStore = null;
+        if ($storeKey !== null) {
+            $resolvedStore = ShopifyStores::find($storeKey, true);
+            $storeKey = $this->normalizeStoreKey($resolvedStore['key'] ?? $storeKey);
+        }
+
+        if (! $resolvedStore) {
+            $shopDomain = $this->nullableString(
+                $allowBody
+                    ? ($request->input('shop') ?? $request->query('shop') ?? $request->header('X-Shopify-Shop-Domain'))
+                    : ($request->query('shop') ?? $request->header('X-Shopify-Shop-Domain'))
+            );
+            if ($shopDomain !== null) {
+                $resolvedStore = ShopifyStores::findByShopDomain($shopDomain);
+                $storeKey = $this->normalizeStoreKey($resolvedStore['key'] ?? $storeKey);
+            }
+        }
+
+        $tenantId = $resolvedStore
+            ? $this->tenantResolver->resolveTenantIdForStoreContext($resolvedStore)
+            : $this->tenantResolver->resolveTenantIdForStoreKey($storeKey);
+
+        return [
+            'store_key' => $storeKey,
+            'tenant_id' => $tenantId,
+        ];
+    }
+
+    protected function normalizeStoreKey(mixed $value): ?string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function queueShopifyCustomerProvisioning(
+        MarketingProfile $profile,
+        ?string $storeKey,
+        mixed $tenantId,
+        string $trigger
+    ): void {
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        $resolvedTenantId = is_numeric($tenantId)
+            ? (int) $tenantId
+            : (is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : 0);
+
+        if ($normalizedStoreKey === null || $resolvedTenantId <= 0) {
+            return;
+        }
+
+        try {
+            ProvisionShopifyCustomerForMarketingProfile::dispatch(
+                marketingProfileId: (int) $profile->id,
+                storeKey: $normalizedStoreKey,
+                tenantId: $resolvedTenantId,
+                trigger: $trigger
+            )->afterCommit();
+        } catch (\Throwable $e) {
+            Log::warning('shopify customer provisioning dispatch failed', [
+                'marketing_profile_id' => (int) $profile->id,
+                'store_key' => $normalizedStoreKey,
+                'trigger' => $trigger,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected function resolveShopifyCustomerId(Request $request, bool $allowBody = false): string
@@ -1858,12 +1978,23 @@ class MarketingShopifyIntegrationController extends Controller
         return $raw;
     }
 
-    protected function profileFromShopifyCustomerId(string $shopifyCustomerId): ?MarketingProfile
+    protected function profileFromShopifyCustomerId(string $shopifyCustomerId, ?string $storeKey = null, ?int $tenantId = null): ?MarketingProfile
     {
-        $external = CustomerExternalProfile::query()
+        $externalQuery = CustomerExternalProfile::query()
+            ->forTenantId($tenantId)
             ->where('provider', 'shopify')
             ->where('external_customer_id', $shopifyCustomerId)
-            ->whereNotNull('marketing_profile_id')
+            ->whereNotNull('marketing_profile_id');
+
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        if ($normalizedStoreKey !== null) {
+            $externalQuery->where(function ($query) use ($normalizedStoreKey): void {
+                $query->where('store_key', $normalizedStoreKey)
+                    ->orWhereNull('store_key');
+            });
+        }
+
+        $external = $externalQuery
             ->orderByDesc('synced_at')
             ->orderByDesc('id')
             ->first(['marketing_profile_id']);
@@ -1872,7 +2003,9 @@ class MarketingShopifyIntegrationController extends Controller
             return null;
         }
 
-        return MarketingProfile::query()->find((int) $external->marketing_profile_id);
+        $profileQuery = MarketingProfile::query()->forTenantId($tenantId);
+
+        return $profileQuery->find((int) $external->marketing_profile_id);
     }
 
     protected function identityErrorResponse(string $status, ?Request $request = null): JsonResponse

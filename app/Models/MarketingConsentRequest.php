@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MarketingConsentRequest extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'marketing_profile_id',
         'channel',
         'token',
@@ -24,6 +28,7 @@ class MarketingConsentRequest extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'payload' => 'array',
         'requested_at' => 'datetime',
         'confirmed_at' => 'datetime',
@@ -37,5 +42,9 @@ class MarketingConsentRequest extends Model
     {
         return $this->belongsTo(MarketingProfile::class, 'marketing_profile_id');
     }
-}
 
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+}

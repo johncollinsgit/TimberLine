@@ -331,13 +331,15 @@ class ShopifyEmbeddedCustomersController extends Controller
         $data = $request->validate([
             'channel' => ['required', 'in:sms'],
             'message' => ['required', 'string', 'max:1000'],
+            'sender_key' => ['nullable', 'string', 'max:80'],
         ]);
 
         $channel = (string) $data['channel'];
         $message = trim((string) $data['message']);
+        $senderKey = trim((string) ($data['sender_key'] ?? '')) ?: null;
 
         $result = match ($channel) {
-            'sms' => $messagingService->sendSms($marketingProfile, $message, auth()->id()),
+            'sms' => $messagingService->sendSms($marketingProfile, $message, auth()->id(), $senderKey),
             default => [
                 'ok' => false,
                 'message' => 'Message channel is not supported.',
@@ -391,6 +393,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             'amount' => ['required', 'integer', 'min:1', 'max:100000'],
             'reason' => ['required', 'string', 'max:500'],
             'message' => ['nullable', 'string', 'max:1000'],
+            'sender_key' => ['nullable', 'string', 'max:80'],
             'gift_intent' => ['nullable', 'string', 'in:' . $intentValues],
             'gift_origin' => ['nullable', 'string', 'in:' . $originValues],
             'campaign_key' => ['nullable', 'string', 'max:100'],
@@ -399,6 +402,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         $amount = (int) $data['amount'];
         $reason = trim((string) $data['reason']);
         $message = trim((string) ($data['message'] ?? ''));
+        $senderKey = trim((string) ($data['sender_key'] ?? '')) ?: null;
         $giftIntent = self::normalizeNullableString($data['gift_intent'] ?? null);
         $giftOrigin = self::normalizeNullableString($data['gift_origin'] ?? null);
         $campaignKey = self::normalizeNullableString($data['campaign_key'] ?? null);
@@ -434,7 +438,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         $transactionId = $result['transaction_id'] ?? null;
 
         if ($message !== '') {
-            $smsResult = $messagingService->sendSms($marketingProfile, $message, auth()->id());
+            $smsResult = $messagingService->sendSms($marketingProfile, $message, auth()->id(), $senderKey);
             $metadataUpdate = [
                 'notified_via' => 'sms',
                 'notification_status' => $smsResult['ok'] ? 'sent' : 'failed',

@@ -166,6 +166,7 @@ class ShopifyStores
                 'shop' => $shop,
                 'token' => $token,
                 'source' => $base['source'] ?? null,
+                'tenant_id' => $record?->tenant_id ? (int) $record->tenant_id : null,
                 'secret' => $secret !== '' ? $secret : null,
                 'client_id' => $clientId !== '' ? $clientId : null,
                 'api_version' => $base['api_version'] ?? config('services.shopify.api_version', '2026-01'),

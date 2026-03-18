@@ -59,6 +59,7 @@ class MarketingDirectMessagingService
         }
         $groupId = isset($options['group_id']) ? (int) $options['group_id'] : null;
         $sourceLabel = trim((string) ($options['source_label'] ?? 'direct_message_wizard'));
+        $senderKey = $this->nullableString($options['sender_key'] ?? null);
 
         $summary = [
             'processed' => 0,
@@ -110,12 +111,14 @@ class MarketingDirectMessagingService
                     'batch_id' => $batchId,
                     'source_label' => $sourceLabel,
                     'group_id' => $groupId,
+                    'sender_key' => $senderKey,
                     'source_type' => (string) ($recipient['source_type'] ?? 'profile'),
                 ],
             ]);
 
             $sendResult = $this->twilioSmsService->sendSms($toPhone, $message, [
                 'dry_run' => $dryRun,
+                'sender_key' => $senderKey,
                 'status_callback_url' => $this->statusCallbackUrl(),
             ]);
 
@@ -130,6 +133,8 @@ class MarketingDirectMessagingService
                 'error_message' => $sendResult['error_message'] ?? null,
                 'provider_payload' => [
                     ...((array) $delivery->provider_payload),
+                    'sender_key' => $sendResult['sender_key'] ?? $senderKey,
+                    'sender_label' => $sendResult['sender_label'] ?? null,
                     'twilio_response' => $sendResult['payload'] ?? [],
                 ],
                 'sent_at' => $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)
@@ -353,7 +358,7 @@ class MarketingDirectMessagingService
 
     protected function statusCallbackUrl(): string
     {
-        $configured = trim((string) (config('services.twilio.status_callback_url') ?: config('marketing.twilio.status_callback_url', '')));
+        $configured = trim((string) config('marketing.twilio.status_callback_url', ''));
         if ($configured !== '') {
             return $configured;
         }

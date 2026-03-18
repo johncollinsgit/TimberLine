@@ -35,3 +35,15 @@ Schedule::command('marketing:sync-profiles', [
     ->hourlyAt(20)
     ->withoutOverlapping(180)
     ->runInBackground();
+
+// Shopify webhook subscription drift audit (non-destructive; repair is manual).
+Schedule::command('shopify:webhooks:verify')
+    ->dailyAt('01:35')
+    ->withoutOverlapping(60)
+    ->runInBackground();
+
+// Bound integration-health event volume by pruning old resolved records.
+Schedule::command('integration-health:prune')
+    ->dailyAt('02:20')
+    ->withoutOverlapping(30)
+    ->runInBackground();

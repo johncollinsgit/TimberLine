@@ -1,5 +1,16 @@
 <?php
 
+$parseTwilioSenders = static function (): array {
+    $raw = trim((string) env('MARKETING_TWILIO_SENDERS', ''));
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+
+    return is_array($decoded) ? $decoded : [];
+};
+
 return [
     'square' => [
         'enabled' => (bool) env('MARKETING_SQUARE_ENABLED', false),
@@ -41,6 +52,7 @@ return [
         'enabled' => (bool) env('MARKETING_SMS_ENABLED', false),
         'dry_run' => (bool) env('MARKETING_SMS_DRY_RUN', false),
         'default_country' => strtoupper((string) env('MARKETING_SMS_DEFAULT_COUNTRY', 'US')),
+        'test_number' => env('MARKETING_SMS_TEST_NUMBER'),
         'send_window_fallback' => [
             'start' => (string) env('MARKETING_SMS_FALLBACK_SEND_WINDOW_START', '09:00'),
             'end' => (string) env('MARKETING_SMS_FALLBACK_SEND_WINDOW_END', '18:00'),
@@ -71,6 +83,8 @@ return [
         'auth_token' => env('TWILIO_AUTH_TOKEN'),
         'messaging_service_sid' => env('TWILIO_MESSAGING_SERVICE_SID'),
         'from_number' => env('TWILIO_FROM_NUMBER'),
+        'default_sender_key' => env('MARKETING_TWILIO_DEFAULT_SENDER'),
+        'senders' => $parseTwilioSenders(),
         'status_callback_url' => env('TWILIO_STATUS_CALLBACK_URL'),
         'verify_signature' => (bool) env('MARKETING_TWILIO_VERIFY_SIGNATURE', false),
     ],
@@ -123,5 +137,9 @@ return [
         'free_shipping_code_prefix' => env('MARKETING_BIRTHDAY_FREE_SHIPPING_CODE_PREFIX', 'BDAYSHIP'),
         'claim_window_days_before' => (int) env('MARKETING_BIRTHDAY_CLAIM_WINDOW_DAYS_BEFORE', 0),
         'claim_window_days_after' => (int) env('MARKETING_BIRTHDAY_CLAIM_WINDOW_DAYS_AFTER', 14),
+    ],
+
+    'integration_health' => [
+        'resolved_retention_days' => (int) env('MARKETING_INTEGRATION_HEALTH_RESOLVED_RETENTION_DAYS', 45),
     ],
 ];

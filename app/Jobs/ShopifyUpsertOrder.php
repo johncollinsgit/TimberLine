@@ -22,7 +22,8 @@ class ShopifyUpsertOrder implements ShouldQueue
      */
     public function __construct(
         public string $storeKey,
-        public array $orderData
+        public array $orderData,
+        public ?int $tenantId = null
     ) {
     }
 
@@ -33,6 +34,8 @@ class ShopifyUpsertOrder implements ShouldQueue
             return;
         }
 
-        $ingestor->ingest($store, $this->orderData);
+        $ingestor->ingest($store, $this->orderData, [
+            'tenant_id' => $this->tenantId ?: (isset($store['tenant_id']) ? (int) $store['tenant_id'] : null),
+        ]);
     }
 }

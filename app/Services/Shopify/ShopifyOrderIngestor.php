@@ -24,12 +24,15 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array{key: string, source: string} $store
+     * @param array{key: string, source: string, tenant_id?:?int} $store
      * @param array<string, mixed> $orderData
+     * @param array{tenant_id?:?int} $options
      * @return array{lines_count: int, merged_lines_count: int, mapping_exceptions_count: int}
      */
-    public function ingest(array $store, array $orderData): array
+    public function ingest(array $store, array $orderData, array $options = []): array
     {
+        $resolvedTenantId = $this->positiveInt($options['tenant_id'] ?? null)
+            ?? $this->positiveInt($store['tenant_id'] ?? null);
         $summary = [
             'lines_count' => 0,
             'merged_lines_count' => 0,
@@ -48,7 +51,7 @@ class ShopifyOrderIngestor
         $syncedOrderId = null;
         $identityContext = [];
 
-        DB::transaction(function () use ($store, $orderData, $mergedLines, $shopifyOrderId, &$summary, &$syncedOrderId, &$identityContext): void {
+        DB::transaction(function () use ($store, $orderData, $mergedLines, $shopifyOrderId, $resolvedTenantId, &$summary, &$syncedOrderId, &$identityContext): void {
             $order = Order::query()
                 ->where('shopify_store_key', $store['key'])
                 ->where('shopify_order_id', $shopifyOrderId)
@@ -62,6 +65,7 @@ class ShopifyOrderIngestor
 
             $order->shopify_store_key = $store['key'];
             $order->shopify_order_id = $shopifyOrderId;
+            $order->tenant_id = $resolvedTenantId;
             $order->shopify_name = $orderData['name'] ?? null;
             $order->source = $store['source'];
             $orderType = $store['key'] === 'wholesale' ? 'wholesale' : 'retail';
@@ -137,7 +141,11 @@ class ShopifyOrderIngestor
 
             $order->save();
             $syncedOrderId = (int) $order->id;
-            $identityContext = $this->buildMarketingIdentityContext($orderData, (string) ($store['key'] ?? ''));
+            $identityContext = $this->buildMarketingIdentityContext(
+                $orderData,
+                (string) ($store['key'] ?? ''),
+                $resolvedTenantId
+            );
 
             foreach ($mergedLines as $line) {
                 $lineModel = $this->upsertLine($order->id, $line);
@@ -186,7 +194,8 @@ class ShopifyOrderIngestor
         if ($syncedOrderId) {
             SyncMarketingProfileFromOrder::dispatch(
                 $syncedOrderId,
-                $identityContext
+                $identityContext,
+                $resolvedTenantId
             )->afterCommit();
         }
 
@@ -1163,7 +1172,7 @@ class ShopifyOrderIngestor
      * @param array<string,mixed> $orderData
      * @return array<string,mixed>
      */
-    protected function buildMarketingIdentityContext(array $orderData, ?string $storeKey = null): array
+    protected function buildMarketingIdentityContext(array $orderData, ?string $storeKey = null, ?int $tenantId = null): array
     {
         $email = trim((string) ($orderData['email'] ?? $orderData['customer']['email'] ?? ''));
         $phone = trim((string) (
@@ -1209,6 +1218,7 @@ class ShopifyOrderIngestor
             ?? null;
 
         return [
+            'tenant_id' => $tenantId,
             'email' => $email !== '' ? $email : null,
             'phone' => $phone !== '' ? $phone : null,
             'full_name' => $fullName !== '' ? $fullName : null,
@@ -1230,6 +1240,17 @@ class ShopifyOrderIngestor
             'attribution_meta' => $this->attributionSourceMetaBuilder->fromShopifyOrderPayload($orderData, $storeKey),
             'order_total' => $orderTotal !== null && $orderTotal !== '' ? number_format((float) $orderTotal, 2, '.', '') : null,
         ];
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 
     /**
