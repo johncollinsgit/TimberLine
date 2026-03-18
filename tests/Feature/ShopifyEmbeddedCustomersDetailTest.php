@@ -543,6 +543,45 @@ test('candle cash adjustment alias route resolves with embedded context', functi
     $response->assertRedirect();
 });
 
+test('candle cash subtraction alias route updates balance without sending sms', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-222-3333',
+        'normalized_phone' => '15552223333',
+        'accepts_sms_marketing' => true,
+    ])->save();
+
+    CandleCashBalance::query()->updateOrCreate(
+        ['marketing_profile_id' => $profile->id],
+        ['balance' => 150]
+    );
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->post(
+        route('shopify.app.customers.candle-cash.adjust', array_merge([
+            'marketingProfile' => $profile->id,
+        ], retailEmbeddedSignedQuery()), false),
+        [
+            'direction' => 'subtract',
+            'amount' => 150,
+            'reason' => 'Customer balance correction',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
+
+    expect((int) ($balance?->balance ?? 0))->toBe(0)
+        ->and(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
+});
+
 test('embedded customer detail forms use helper-generated urls with Shopify query params', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
