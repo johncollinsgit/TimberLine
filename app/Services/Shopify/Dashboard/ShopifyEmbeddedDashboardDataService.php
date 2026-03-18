@@ -151,7 +151,7 @@ class ShopifyEmbeddedDashboardDataService
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
         $candleCash = $this->candleCashProvider->snapshot($from, $to);
         $returningCustomerRate = $this->returningCustomerRate($from, $to);
-        $profit = $this->profitSummary($revenueRows, (float) $candleCash['rewardCostAmount']);
+        $profit = $this->profitSummary($revenueRows, (float) data_get($candleCash, 'realizedRewardCost', 0));
 
         return [
             'revenueRows' => $revenueRows,
@@ -186,7 +186,7 @@ class ShopifyEmbeddedDashboardDataService
      * @param  Collection<int,array<string,mixed>>  $revenueRows
      * @return array<string,mixed>
      */
-    protected function profitSummary(Collection $revenueRows, float $rewardCostAmount): array
+    protected function profitSummary(Collection $revenueRows, float $realizedRewardCost): array
     {
         $orderIds = $revenueRows
             ->pluck('orderId')
@@ -200,7 +200,7 @@ class ShopifyEmbeddedDashboardDataService
         if ($orderIds->isEmpty()) {
             $fallback = $this->profitEstimator->estimate([
                 'revenue' => $totalRevenue,
-                'discounts' => $rewardCostAmount,
+                'discounts' => $realizedRewardCost,
             ]);
 
             return [
@@ -750,18 +750,28 @@ class ShopifyEmbeddedDashboardDataService
         ?array $comparisonWindow,
         array $resolvedQuery
     ): array {
-        $primarySeries = $this->bucketRevenueSeries(
-            $primarySnapshot['revenueRows'],
+        $primaryDailySeries = $this->birthdayRedemptionDailySeries($from, $to);
+        $comparisonDailySeries = $comparisonWindow
+            ? $this->birthdayRedemptionDailySeries($comparisonWindow['from'], $comparisonWindow['to'])
+            : collect();
+        $seriesMetric = ($primaryDailySeries->sum('revenue') + $comparisonDailySeries->sum('revenue')) > 0.001
+            ? 'revenue'
+            : 'count';
+
+        $primarySeries = $this->bucketDailyMetricSeries(
+            $primaryDailySeries,
             $from,
             $to,
-            (string) data_get($resolvedQuery, 'interval.unit', 'day')
+            (string) data_get($resolvedQuery, 'interval.unit', 'day'),
+            $seriesMetric
         );
         $comparisonSeries = $comparisonWindow
-            ? $this->bucketRevenueSeries(
-                $comparisonSnapshot['revenueRows'] ?? collect(),
+            ? $this->bucketDailyMetricSeries(
+                $comparisonDailySeries,
                 $comparisonWindow['from'],
                 $comparisonWindow['to'],
-                (string) data_get($resolvedQuery, 'interval.unit', 'day')
+                (string) data_get($resolvedQuery, 'interval.unit', 'day'),
+                $seriesMetric
             )
             : [];
 
@@ -776,18 +786,25 @@ class ShopifyEmbeddedDashboardDataService
         }
 
         $bestPrimary = collect($rows)->sortByDesc('primary')->first();
+        $usesRevenue = $seriesMetric === 'revenue';
 
         return [
             'title' => 'Performance trend',
-            'subtitle' => 'Rewards-influenced revenue across the selected timeframe, synchronized with the top-line cards.',
+            'subtitle' => $usesRevenue
+                ? 'Birthday reward redemption revenue by redemption date across the selected timeframe, synchronized with the same timeframe and comparison controls.'
+                : 'Birthday reward redemptions by redemption date across the selected timeframe. Revenue was unavailable for the redeemed rewards in this window, so this chart is showing count instead.',
             'metric' => [
-                'key' => 'rewards_sales',
-                'label' => 'Rewards Sales',
+                'key' => $usesRevenue ? 'birthday_redemption_revenue' : 'birthday_redemption_count',
+                'label' => $usesRevenue ? 'Birthday Redemption Revenue' : 'Birthday Redemption Count',
             ],
             'visualization' => (string) $resolvedQuery['visualization'],
             'series' => $rows,
-            'benchmarkLabel' => 'Best period',
-            'benchmarkValue' => $bestPrimary ? $this->currency((float) $bestPrimary['primary']) : '$0.00',
+            'benchmarkLabel' => 'Peak redemption period',
+            'benchmarkValue' => $bestPrimary
+                ? ($usesRevenue
+                    ? $this->currency((float) $bestPrimary['primary'])
+                    : number_format((float) $bestPrimary['primary']) . ' redemption' . ((float) $bestPrimary['primary'] === 1.0 ? '' : 's'))
+                : ($usesRevenue ? '$0.00' : '0 redemptions'),
             'empty' => empty($rows),
         ];
     }
@@ -816,6 +833,71 @@ class ShopifyEmbeddedDashboardDataService
             }
 
             $buckets[$key]['value'] = round($buckets[$key]['value'] + (float) ($row['revenue'] ?? 0), 2);
+        }
+
+        return array_values($buckets);
+    }
+
+    protected function birthdayRedemptionDailySeries(CarbonImmutable $from, CarbonImmutable $to): Collection
+    {
+        $aggregated = BirthdayRewardIssuance::query()
+            ->where('status', 'redeemed')
+            ->whereNotNull('redeemed_at')
+            ->whereBetween('redeemed_at', [$from, $to])
+            ->selectRaw('DATE(redeemed_at) as redemption_day')
+            ->selectRaw('COUNT(DISTINCT id) as redemption_count')
+            ->selectRaw('SUM(COALESCE(attributed_revenue, order_total, 0)) as revenue_total')
+            ->groupByRaw('DATE(redeemed_at)')
+            ->get()
+            ->keyBy('redemption_day');
+
+        $rows = [];
+        $cursor = $from->startOfDay();
+
+        while ($cursor->lte($to)) {
+            $dayKey = $cursor->toDateString();
+            $daySummary = $aggregated->get($dayKey);
+            $rows[] = [
+                'date' => $cursor,
+                'label' => $cursor->format('M j'),
+                'count' => (int) ($daySummary->redemption_count ?? 0),
+                'revenue' => round((float) ($daySummary->revenue_total ?? 0), 2),
+            ];
+            $cursor = $cursor->addDay();
+        }
+
+        return collect($rows);
+    }
+
+    protected function bucketDailyMetricSeries(
+        Collection $rows,
+        CarbonImmutable $from,
+        CarbonImmutable $to,
+        string $unit,
+        string $metric
+    ): array {
+        $buckets = [];
+        $cursor = $this->bucketStart($from, $unit);
+
+        while ($cursor->lte($to)) {
+            $key = $this->bucketKey($cursor, $unit);
+            $buckets[$key] = [
+                'label' => $this->bucketLabel($cursor, $unit),
+                'value' => 0.0,
+            ];
+            $cursor = $this->nextBucket($cursor, $unit);
+        }
+
+        foreach ($rows as $row) {
+            $date = $row['date'] instanceof CarbonImmutable
+                ? $row['date']
+                : CarbonImmutable::parse((string) ($row['date'] ?? $row['occurredAt'] ?? 'now'));
+            $key = $this->bucketKey($this->bucketStart($date, $unit), $unit);
+            if (! array_key_exists($key, $buckets)) {
+                continue;
+            }
+
+            $buckets[$key]['value'] = round($buckets[$key]['value'] + (float) ($row[$metric] ?? 0), 2);
         }
 
         return array_values($buckets);

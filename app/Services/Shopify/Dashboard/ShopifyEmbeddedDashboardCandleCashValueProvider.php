@@ -48,6 +48,8 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
             return (float) ($issuance->reward_value ?? 0);
         }), 2);
 
+        $realizedRewardCost = $redeemedAmount;
+
         return [
             'provider' => [
                 'key' => 'discount_redemptions',
@@ -64,12 +66,15 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
                 'amount' => $redeemedAmount,
                 'count' => $redeemedRows->count(),
             ],
+            'redeemedAmount' => $redeemedAmount,
             'issued' => [
                 'giftPoints' => $giftPoints,
                 'giftAmount' => $giftAmount,
                 'giftCount' => $giftRows->count(),
                 'birthdayCost' => $birthdayCost,
             ],
+            'issuedBirthdayValue' => $birthdayCost,
+            'realizedRewardCost' => $realizedRewardCost,
             'rewardCostAmount' => round($redeemedAmount + $birthdayCost, 2),
         ];
     }

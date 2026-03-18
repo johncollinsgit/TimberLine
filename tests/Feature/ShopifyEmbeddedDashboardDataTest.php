@@ -14,12 +14,15 @@ use App\Models\OrderLine;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\Scent;
 use App\Models\Size;
+use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardQuery;
+use Illuminate\Support\Facades\Cache;
 
 beforeEach(function () {
     $this->withoutVite();
     configureEmbeddedRetailStore();
+    Cache::flush();
 });
 
 test('embedded dashboard api returns a stable payload contract for an authorized embedded session', function () {
@@ -121,6 +124,8 @@ test('embedded dashboard api returns a stable payload contract for an authorized
         'status' => 'redeemed',
         'issued_at' => now()->subDays(2),
         'redeemed_at' => now()->subDay(),
+        'external_order_source' => 'order',
+        'external_order_id' => (string) $order->id,
     ]);
 
     BirthdayRewardIssuance::query()->create([
@@ -200,8 +205,104 @@ test('embedded dashboard api returns a stable payload contract for an authorized
         ]);
 
     expect($response->json('data.topMetrics'))->toHaveCount(4);
+    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual(10.0);
     expect($response->json('data.chart.series'))->not->toBeEmpty();
     expect($response->json('data.financialSummary.netProfit.detail'))->toContain('confidence');
+});
+
+test('issued birthday rewards without linked orders do not reduce realized net profit', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Bri',
+        'last_name' => 'Day',
+        'email' => 'birthday-only@example.com',
+    ]);
+
+    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 3,
+        'birth_day' => 17,
+        'source' => 'import',
+    ]);
+
+    BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => (int) now()->format('Y'),
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday reward',
+        'status' => 'claimed',
+        'reward_value' => 10,
+        'issued_at' => now()->subDay(),
+    ]);
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'previous_period',
+        'location_grouping' => 'state',
+    ]));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.topMetrics.0.value', 0)
+        ->assertJsonPath('data.financialSummary.netProfit.value', 0);
+
+    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual(0.0);
+});
+
+test('only realized reward cost affects fallback profit when issued birthday rewards and redemptions coexist', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Mira',
+        'last_name' => 'Mix',
+        'email' => 'mixed-rewards@example.com',
+    ]);
+
+    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 3,
+        'birth_day' => 17,
+        'source' => 'import',
+    ]);
+
+    BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => (int) now()->format('Y'),
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday reward',
+        'status' => 'claimed',
+        'reward_value' => 10,
+        'issued_at' => now()->subDays(2),
+    ]);
+
+    CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => 1,
+        'points_spent' => 300,
+        'platform' => 'shopify',
+        'redemption_code' => 'CC-MIXED-1001',
+        'status' => 'redeemed',
+        'issued_at' => now()->subDays(2),
+        'redeemed_at' => now()->subDay(),
+    ]);
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'previous_period',
+        'location_grouping' => 'state',
+    ]));
+
+    $realizedAmount = app(CandleCashService::class)->amountFromPoints(300);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.topMetrics.0.value', 0);
+
+    expect($response->json('data.financialSummary.netProfit.value'))->toEqual(-$realizedAmount);
+    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual($realizedAmount);
 });
 
 test('embedded dashboard query normalizes invalid values back to safe defaults', function () {
@@ -245,4 +346,119 @@ test('embedded dashboard query resolves a previous-year comparison window for an
     $comparisonFrom = new DateTimeImmutable($query['comparisonWindow']['from']);
 
     expect((int) $comparisonFrom->format('Y'))->toBe((int) $primaryFrom->format('Y') - 1);
+});
+
+test('performance trend charts birthday redemption revenue on the redeemed day and supports comparison windows', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Birthday',
+        'email' => 'birthday-chart@example.com',
+    ]);
+
+    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 3,
+        'birth_day' => 3,
+        'source' => 'import',
+    ]);
+
+    BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => 2026,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday reward current',
+        'status' => 'redeemed',
+        'reward_value' => 10,
+        'redeemed_at' => '2026-03-03 13:15:00',
+        'order_total' => 42.00,
+        'attributed_revenue' => 42.00,
+    ]);
+
+    BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => 2025,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday reward comparison',
+        'status' => 'redeemed',
+        'reward_value' => 10,
+        'redeemed_at' => '2026-02-24 09:00:00',
+        'order_total' => 21.00,
+        'attributed_revenue' => 21.00,
+    ]);
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'custom',
+        'custom_start_date' => '2026-03-01',
+        'custom_end_date' => '2026-03-07',
+        'comparison' => 'previous_period',
+    ]));
+
+    $series = collect($response->json('data.chart.series'));
+    $march3 = $series->firstWhere('label', 'Mar 3');
+    $march4 = $series->firstWhere('label', 'Mar 4');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.chart.metric.key', 'birthday_redemption_revenue')
+        ->assertJsonPath('data.chart.metric.label', 'Birthday Redemption Revenue')
+        ->assertJsonPath('data.chart.benchmarkValue', '$42.00');
+
+    expect($response->json('data.chart.subtitle'))->toContain('Birthday reward redemption revenue')
+        ->and($march3)->not->toBeNull()
+        ->and($march3['primary'])->toBe(42)
+        ->and($march4)->not->toBeNull()
+        ->and($march4['comparison'])->toBe(21);
+});
+
+test('performance trend falls back to birthday redemption count when revenue is unavailable and keeps a zero-safe series', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Count',
+        'email' => 'birthday-count@example.com',
+    ]);
+
+    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 3,
+        'birth_day' => 5,
+        'source' => 'import',
+    ]);
+
+    BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => 2026,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday reward count only',
+        'status' => 'redeemed',
+        'reward_value' => 10,
+        'redeemed_at' => '2026-03-05 10:30:00',
+        'order_total' => null,
+        'attributed_revenue' => null,
+    ]);
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'custom',
+        'custom_start_date' => '2026-03-01',
+        'custom_end_date' => '2026-03-07',
+        'comparison' => 'none',
+    ]));
+
+    $series = collect($response->json('data.chart.series'));
+    $march5 = $series->firstWhere('label', 'Mar 5');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.chart.metric.key', 'birthday_redemption_count')
+        ->assertJsonPath('data.chart.benchmarkValue', '1 redemption')
+        ->assertJsonPath('data.chart.empty', false);
+
+    expect($response->json('data.chart.subtitle'))->toContain('showing count instead')
+        ->and($series)->toHaveCount(7)
+        ->and($march5)->not->toBeNull()
+        ->and($march5['primary'])->toBe(1);
 });
