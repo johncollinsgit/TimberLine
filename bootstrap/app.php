@@ -18,6 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->remove(FrameGuard::class);
+        $middleware->validateCsrfTokens(except: [
+            'shopify/app/customers/manage/*',
+            'shopify/app/api/dashboard/candle-cash-reminders',
+            'shopify/app/api/rewards/earn/*',
+            'shopify/app/api/rewards/redeem/*',
+        ]);
 
         $middleware->redirectUsersTo(function (Request $request): string {
             return HomeRedirect::pathFor($request->user());

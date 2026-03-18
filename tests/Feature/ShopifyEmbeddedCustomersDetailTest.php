@@ -543,6 +543,60 @@ test('candle cash adjustment alias route resolves with embedded context', functi
     $response->assertRedirect();
 });
 
+test('customer identity app route does not require csrf token in embedded admin', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->patch(
+        route('shopify.app.customers.update', array_merge([
+            'marketingProfile' => $profile->id,
+        ], retailEmbeddedSignedQuery())),
+        [
+            'first_name' => 'Embedded',
+            'last_name' => 'Updated',
+            'email' => 'embedded.updated@example.com',
+            'phone' => '+18646165468',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $profile->refresh();
+
+    expect($profile->first_name)->toBe('Embedded')
+        ->and($profile->last_name)->toBe('Updated')
+        ->and($profile->email)->toBe('embedded.updated@example.com')
+        ->and($profile->phone)->toBe('+18646165468');
+});
+
+test('candle cash adjustment app route does not require csrf token in embedded admin', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    CandleCashBalance::query()->updateOrCreate(
+        ['marketing_profile_id' => $profile->id],
+        ['balance' => 25]
+    );
+
+    $response = $this->post(
+        route('shopify.app.customers.candle-cash.adjust', array_merge([
+            'marketingProfile' => $profile->id,
+        ], retailEmbeddedSignedQuery())),
+        [
+            'direction' => 'add',
+            'amount' => 10,
+            'reason' => 'Embedded app adjustment',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
+    expect((int) ($balance?->balance ?? 0))->toBe(35);
+});
+
 test('candle cash subtraction alias route updates balance without sending sms', function () {
     configureEmbeddedRetailStore();
     config()->set('marketing.sms.enabled', true);
