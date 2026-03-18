@@ -49,11 +49,11 @@
 <body>
     @if($authorized && filled($shopifyApiKey) && filled($host))
         <s-app-nav>
-            <s-link href="/" rel="home">Home</s-link>
-            <s-link href="/">Dashboard</s-link>
-            <s-link href="/rewards">Rewards</s-link>
-            <s-link href="/customers">Customers</s-link>
-            <s-link href="/settings">Settings</s-link>
+            <s-link href="{{ route('home', [], false) }}" rel="home">Home</s-link>
+            <s-link href="{{ route('shopify.app', [], false) }}">Dashboard</s-link>
+            <s-link href="{{ route('shopify.app.rewards', [], false) }}">Rewards</s-link>
+            <s-link href="{{ route('shopify.app.customers.manage', [], false) }}">Customers</s-link>
+            <s-link href="{{ route('shopify.app.settings', [], false) }}">Settings</s-link>
         </s-app-nav>
     @endif
     <x-app-shell

@@ -25,7 +25,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays', 'Birthday rewards coming soon'],
     'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip', 'VIP experiences coming soon'],
     'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications', 'Notifications coming soon'],
-    'customers' => ['shopify.embedded.customers', 'customers', null, 'Manage customers'],
+    'customers' => ['shopify.app.customers', 'customers', null, 'Manage customers'],
     'settings' => ['shopify.embedded.settings', 'settings', null, 'Program settings are coming into view'],
 ]);
 
@@ -41,10 +41,10 @@ test('customers routes and aliases keep customers section active with correct su
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === $activeTab && ! empty($item['active']));
         });
 })->with([
-    'customers root manage' => ['shopify.embedded.customers', 'manage', 'Manage customers'],
-    'customers manage' => ['shopify.embedded.customers.manage', 'manage', 'Manage customers'],
-    'customers activity' => ['shopify.embedded.customers.activity', 'activity', 'Activity'],
-    'customers questions' => ['shopify.embedded.customers.questions', 'questions', 'Questions'],
+    'customers root manage' => ['shopify.app.customers', 'manage', 'Manage customers'],
+    'customers manage' => ['shopify.app.customers.manage', 'manage', 'Manage customers'],
+    'customers activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
+    'customers questions' => ['shopify.app.customers.questions', 'questions', 'Questions'],
     'customers alias root manage' => ['shopify.app.customers', 'manage', 'Manage customers'],
     'customers alias manage' => ['shopify.app.customers.manage', 'manage', 'Manage customers'],
     'customers alias activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
@@ -74,7 +74,7 @@ test('customers detail route and alias resolve with manage tab active', function
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'manage' && ! empty($item['active']));
         });
 })->with([
-    'customers detail root route' => ['shopify.embedded.customers.detail'],
+    'customers detail root route' => ['shopify.app.customers.detail'],
     'customers detail alias route' => ['shopify.app.customers.detail'],
 ]);
 
@@ -97,8 +97,8 @@ test('embedded shell renders shopify app nav with top-level links', function () 
     $response->assertOk()
         ->assertSee('<s-app-nav>', false)
         ->assertSee('rel="home"', false)
-        ->assertSee('<s-link href="/">Dashboard</s-link>', false)
-        ->assertSee('<s-link href="/rewards">Rewards</s-link>', false)
-        ->assertSee('<s-link href="/customers">Customers</s-link>', false)
-        ->assertSee('<s-link href="/settings">Settings</s-link>', false);
+        ->assertSee('<s-link href="/shopify/app">Dashboard</s-link>', false)
+        ->assertSee('<s-link href="/shopify/app/rewards">Rewards</s-link>', false)
+        ->assertSee('<s-link href="/shopify/app/customers/manage">Customers</s-link>', false)
+        ->assertSee('<s-link href="/shopify/app/settings">Settings</s-link>', false);
 });

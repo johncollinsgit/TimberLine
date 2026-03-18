@@ -30,7 +30,16 @@ class ShopifyEmbeddedCustomerActionUrlGenerator
 
     private function isEmbeddedRequest(Request $request): bool
     {
-        return filled(trim((string) $request->query('host', ''))) || (string) $request->query('embedded') === '1';
+        return $this->isShopifyAppRoute($request)
+            || filled(trim((string) $request->query('host', '')))
+            || (string) $request->query('embedded') === '1';
+    }
+
+    private function isShopifyAppRoute(Request $request): bool
+    {
+        $name = $request->route()?->getName();
+
+        return $name !== null && str_starts_with($name, 'shopify.app.');
     }
 
     private function embeddedContextQuery(Request $request): array

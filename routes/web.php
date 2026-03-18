@@ -103,11 +103,11 @@ Route::get('/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'refe
 Route::get('/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.embedded.rewards.birthdays');
 Route::get('/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.embedded.rewards.vip');
 Route::get('/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.embedded.rewards.notifications');
-Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.embedded.customers');
-Route::get('/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.embedded.customers.manage');
+Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToManage'])->name('shopify.embedded.customers');
+Route::get('/customers/manage', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToManage'])->name('shopify.embedded.customers.manage');
 Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.embedded.customers.activity');
 Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.embedded.customers.questions');
-Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.embedded.customers.detail');
+Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToDetail'])->name('shopify.embedded.customers.detail');
 Route::patch('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.embedded.customers.update');
 Route::post('/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.embedded.customers.update-consent');
 Route::post('/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
@@ -688,19 +688,14 @@ Route::prefix('shopify')->group(function () {
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
     Route::patch('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.update');
     Route::post('/app/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.update-consent');
     Route::post('/app/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.candle-cash.adjust');
     Route::post('/app/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessage'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.message');
     Route::post('/app/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
-        ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.app.customers.candle-cash.send');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {

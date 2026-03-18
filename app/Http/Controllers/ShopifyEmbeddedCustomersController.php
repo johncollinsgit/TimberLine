@@ -16,6 +16,7 @@ use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 
 class ShopifyEmbeddedCustomersController extends Controller
@@ -40,6 +41,8 @@ class ShopifyEmbeddedCustomersController extends Controller
         'ops' => 'Ops',
     ];
 
+    private const EMBEDDED_CONTEXT_KEYS = ['shop', 'host', 'hmac', 'timestamp', 'embedded'];
+
     public function show(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
@@ -54,6 +57,11 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomersGridService $gridService
     ): Response {
         $grid = $gridService->resolve($request);
+
+        Log::info('shopify.embedded.manage.render', [
+            'route' => $request->route()?->getName(),
+            'query' => $request->query->all(),
+        ]);
 
         return $this->renderPage(
             request: $request,
@@ -105,6 +113,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomerDetailService $detailService,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingProfile $marketingProfile
     ): Response {
         $displayName = trim((string) ($marketingProfile->first_name . ' ' . $marketingProfile->last_name));
@@ -113,6 +122,18 @@ class ShopifyEmbeddedCustomersController extends Controller
         }
 
         $detail = $detailService->build($marketingProfile);
+
+        $formActions = [
+            'update' => $actionUrlGenerator->url('customers.update', ['marketingProfile' => $marketingProfile->id], $request),
+            'candle_cash_adjust' => $actionUrlGenerator->url('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], $request),
+            'candle_cash_send' => $actionUrlGenerator->url('customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], $request),
+        ];
+
+        Log::info('shopify.embedded.detail.render', [
+            'route' => $request->route()?->getName(),
+            'profile_id' => $marketingProfile->id,
+            'form_actions' => $formActions,
+        ]);
 
         return $this->renderPage(
             request: $request,
@@ -125,20 +146,21 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'marketingProfile' => $marketingProfile,
                 'customerDisplayName' => $displayName,
                 'detail' => $detail,
-            'pageActions' => [
-                [
-                    'label' => 'Back to Customers',
-                    'href' => route('shopify.embedded.customers.manage', [], false),
+                'pageActions' => [
+                    [
+                        'label' => 'Back to Customers',
+                        'href' => $actionUrlGenerator->url('customers.manage', [], $request),
+                    ],
+                    [
+                        'label' => 'Open in Backstage',
+                        'href' => route('marketing.customers.show', $marketingProfile),
+                    ],
                 ],
-                [
-                    'label' => 'Open in Backstage',
-                    'href' => route('marketing.customers.show', $marketingProfile),
-                ],
-            ],
-            'giftIntentOptions' => self::giftIntentOptions(),
-            'giftOriginOptions' => self::giftOriginOptions(),
-        ]
-    );
+                'giftIntentOptions' => self::giftIntentOptions(),
+                'giftOriginOptions' => self::giftOriginOptions(),
+                'customerFormActions' => $formActions,
+            ]
+        );
 }
 
     public function update(
@@ -254,6 +276,12 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
+        Log::info('shopify.embedded.candle_cash.adjust.entry', [
+            'route' => $request->route()?->getName(),
+            'profile_id' => $marketingProfile->id,
+            'query' => $request->query->all(),
+        ]);
+
         $context = $contextService->resolvePageContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
@@ -336,6 +364,88 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'style' => $noticeStyle,
                 'message' => $noticeMessage,
             ]);
+    }
+
+    public function redirectLegacyToManage(Request $request): Response|RedirectResponse
+    {
+        Log::info('shopify.embedded.legacy.manage.access', [
+            'route' => $request->route()?->getName(),
+            'query' => $request->query->all(),
+        ]);
+
+        return $this->redirectToEmbeddedRoute($request, 'customers.manage');
+    }
+
+    public function redirectLegacyToDetail(
+        Request $request,
+        MarketingProfile $marketingProfile
+    ): Response|RedirectResponse {
+        Log::info('shopify.embedded.legacy.detail.access', [
+            'route' => $request->route()?->getName(),
+            'profile_id' => $marketingProfile->id,
+            'query' => $request->query->all(),
+        ]);
+
+        return $this->redirectToEmbeddedRoute(
+            $request,
+            'customers.detail',
+            ['marketingProfile' => $marketingProfile->id]
+        );
+    }
+
+    protected function redirectToEmbeddedRoute(
+        Request $request,
+        string $routeName,
+        array $routeParameters = []
+    ): Response|RedirectResponse {
+        $context = $this->embeddedContextQuery($request);
+
+        if ($context === []) {
+            return $this->embeddedContextMissingResponse();
+        }
+
+        $canonicalRoute = route('shopify.app.' . $routeName, $routeParameters, false);
+        $separator = str_contains($canonicalRoute, '?') ? '&' : '?';
+        $target = $canonicalRoute . $separator . http_build_query($context, '', '&', PHP_QUERY_RFC3986);
+
+        Log::info('shopify.embedded.legacy.redirect', [
+            'route' => $routeName,
+            'profile_id' => $routeParameters['marketingProfile'] ?? null,
+            'target' => $target,
+        ]);
+
+        return redirect()->to($target);
+    }
+
+    protected function embeddedContextQuery(Request $request): array
+    {
+        $query = [];
+
+        foreach (self::EMBEDDED_CONTEXT_KEYS as $key) {
+            if (! $request->query->has($key)) {
+                continue;
+            }
+
+            $value = $request->query($key);
+            if ($value === null || (is_string($value) && trim($value) === '')) {
+                continue;
+            }
+
+            $query[$key] = is_string($value) ? trim($value) : $value;
+        }
+
+        return Arr::only($query, self::EMBEDDED_CONTEXT_KEYS);
+    }
+
+    protected function embeddedContextMissingResponse(): Response
+    {
+        Log::warning('shopify.embedded.context_missing', [
+            'url' => request()->fullUrl(),
+        ]);
+
+        return response()->view('shopify.embedded-context-missing', [
+            'message' => 'This page must be opened from Shopify Admin with the Shopify context.',
+        ], 400);
     }
 
     public function sendMessage(
@@ -514,6 +624,12 @@ class ShopifyEmbeddedCustomersController extends Controller
     ): Response {
         $context = $contextService->resolvePageContext($request);
 
+        Log::info('shopify.embedded.manage.context', [
+            'route' => $request->route()?->getName(),
+            'ok' => (bool) ($context['ok'] ?? false),
+            'status' => $context['status'] ?? null,
+        ]);
+
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
@@ -580,9 +696,15 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
-        return redirect()->to(
-            $actionUrlGenerator->url('customers.detail', ['marketingProfile' => $marketingProfile->id], $request)
-        );
+        $target = $actionUrlGenerator->url('customers.detail', ['marketingProfile' => $marketingProfile->id], $request);
+
+        Log::info('shopify.embedded.customer_detail.redirect', [
+            'profile_id' => $marketingProfile->id,
+            'target' => $target,
+            'route' => $request->route()?->getName(),
+        ]);
+
+        return redirect()->to($target);
     }
 
     /**
@@ -591,9 +713,9 @@ class ShopifyEmbeddedCustomersController extends Controller
     protected function customerSubnav(string $activeKey): array
     {
         $items = [
-            ['key' => 'manage', 'label' => 'Manage customers', 'href' => route('shopify.embedded.customers.manage', [], false)],
-            ['key' => 'activity', 'label' => 'Activity', 'href' => route('shopify.embedded.customers.activity', [], false)],
-            ['key' => 'questions', 'label' => 'Questions', 'href' => route('shopify.embedded.customers.questions', [], false)],
+            ['key' => 'manage', 'label' => 'Manage customers', 'href' => route('shopify.app.customers.manage', [], false)],
+            ['key' => 'activity', 'label' => 'Activity', 'href' => route('shopify.app.customers.activity', [], false)],
+            ['key' => 'questions', 'label' => 'Questions', 'href' => route('shopify.app.customers.questions', [], false)],
         ];
 
         return array_map(

@@ -162,7 +162,7 @@ test('customer detail renders identity and summary data', function () {
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
 
-    $response = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
 
     $response->assertOk()
         ->assertSeeText('Customer Detail')
@@ -197,7 +197,7 @@ test('customer detail handles missing optional data gracefully', function () {
     ]);
     startEmbeddedCustomersDetailSession($this);
 
-    $response = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
 
     $response->assertOk()
         ->assertSeeText('Email not set')
@@ -212,7 +212,7 @@ test('customer identity update persists safe fields', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->patch(
-        route('shopify.embedded.customers.update', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.update', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'first_name' => 'Updated',
@@ -232,7 +232,7 @@ test('customer identity update persists safe fields', function () {
         ->and($profile->normalized_email)->toBe('updated@example.com');
 });
 
-test('customer identity update alias route works without csrf session token in embedded app context', function () {
+test('customer identity update alias route now requires csrf token', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
@@ -249,15 +249,7 @@ test('customer identity update alias route works without csrf session token in e
         ]
     );
 
-    $response->assertRedirect();
-
-    $profile->refresh();
-
-    expect($profile->first_name)->toBe('John')
-        ->and($profile->last_name)->toBe('Collinsretail')
-        ->and($profile->email)->toBe('johncollinsemail@gmail.com')
-        ->and($profile->phone)->toBe('+18646165468')
-        ->and($profile->normalized_phone)->toBe('8646165468');
+    $response->assertStatus(419);
 });
 
 test('customer consent update succeeds and records events', function () {
@@ -268,7 +260,7 @@ test('customer consent update succeeds and records events', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.update-consent', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'channel' => 'both',
@@ -296,7 +288,7 @@ test('invalid consent update is rejected', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.update-consent', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'channel' => 'invalid',
@@ -345,7 +337,7 @@ test('candle cash adjustment adds balance and records transaction', function () 
     $token = csrf_token();
 
     $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'direction' => 'add',
@@ -373,7 +365,7 @@ test('candle cash adjustment adds balance and records transaction', function () 
         ->and((int) $transaction->source_id)->toBe($user->id)
         ->and($transaction->description)->toBe('Manual adjustment for support');
 
-    $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $detailResponse = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
     $detailResponse->assertOk()
         ->assertSeeText('Manual Adjustment')
         ->assertSeeText('Alex Admin');
@@ -392,7 +384,7 @@ test('candle cash adjustment subtracts balance when allowed', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'direction' => 'subtract',
@@ -431,7 +423,7 @@ test('positive candle cash adjustment auto-sends rewards sms with shortened link
     $token = csrf_token();
 
     $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'direction' => 'add',
@@ -484,7 +476,7 @@ test('positive candle cash adjustment still succeeds when reward sms cannot send
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'direction' => 'add',
@@ -511,7 +503,7 @@ test('invalid candle cash adjustment is rejected', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'direction' => 'invalid',
@@ -691,15 +683,45 @@ test('embedded customer detail navigation links preserve Shopify query params', 
 
     $response->assertOk();
     $content = $response->getContent();
-    $this->assertStringContainsString('href="/customers/manage?', $content);
-    $this->assertStringContainsString('href="/customers/activity?', $content);
-    $this->assertStringContainsString('href="/customers/questions?', $content);
+    $this->assertStringContainsString('href="/shopify/app/customers/manage?', $content);
+    $this->assertStringContainsString('href="/shopify/app/customers/activity?', $content);
+    $this->assertStringContainsString('href="/shopify/app/customers/questions?', $content);
     $this->assertStringContainsString('shop=modernforestry.myshopify.com', $content);
     $this->assertStringContainsString('host=admin-host-token', $content);
     $this->assertStringContainsString('embedded=1', $content);
     $this->assertStringContainsString('href="/?shop=', $content);
-    $this->assertStringContainsString('href="/settings?shop=', $content);
+    $this->assertStringContainsString('href="/shopify/app/settings?shop=', $content);
     $this->assertStringContainsString('/marketing/customers/' . $profile->id, $content);
+});
+
+test('legacy manage route redirects to the embedded customers manage page', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.embedded.customers.manage', retailEmbeddedSignedQuery()));
+
+    $response->assertRedirect();
+
+    $location = $response->headers->get('Location');
+    $this->assertStringContainsString('/shopify/app/customers/manage', $location);
+    $this->assertStringContainsString('shop=modernforestry.myshopify.com', $location);
+});
+
+test('legacy detail route redirects to the embedded customers detail page', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $response = $this->get(
+        route('shopify.embedded.customers.detail', array_merge(
+            ['marketingProfile' => $profile->id],
+            retailEmbeddedSignedQuery()
+        ))
+    );
+
+    $response->assertRedirect();
+
+    $location = $response->headers->get('Location');
+    $this->assertStringContainsString('/shopify/app/customers/manage/' . $profile->id, $location);
+    $this->assertStringContainsString('host=admin-host-token', $location);
 });
 
 test('customer detail forms fall back to embedded routes without Shopify host', function () {
@@ -707,17 +729,17 @@ test('customer detail forms fall back to embedded routes without Shopify host', 
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
 
-    $response = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
 
     $response->assertOk();
     $content = $response->getContent();
 
     $expectedActions = [
-        route('shopify.embedded.customers.update', ['marketingProfile' => $profile->id], false),
-        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
-        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        route('shopify.embedded.customers.update-consent', ['marketingProfile' => $profile->id], false),
-        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.update', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
     ];
 
     foreach ($expectedActions as $action) {
@@ -741,7 +763,7 @@ test('manual adjustment falls back to Admin actor label when user is not resolve
         'updated_at' => now(),
     ]);
 
-    $response = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
 
     $response->assertOk()
         ->assertSeeText('Manual Adjustment')
@@ -771,7 +793,7 @@ test('sms message send succeeds when consented', function () {
     $token = csrf_token();
 
     $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'channel' => 'sms',
@@ -790,7 +812,7 @@ test('sms message send succeeds when consented', function () {
         ->and($delivery->channel)->toBe('sms')
         ->and((int) $delivery->created_by)->toBe($user->id);
 
-    $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $detailResponse = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
     $detailResponse->assertOk()
         ->assertSeeText('SMS Message')
         ->assertSeeText('Morgan Admin');
@@ -814,7 +836,7 @@ test('sms message send is rejected when consent is missing', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'channel' => 'sms',
@@ -835,7 +857,7 @@ test('invalid message input is rejected', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'channel' => 'email',
@@ -888,7 +910,7 @@ test('send candle cash succeeds and records gift transaction', function () {
     $token = csrf_token();
 
     $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'amount' => 15,
@@ -914,7 +936,7 @@ test('send candle cash succeeds and records gift transaction', function () {
         ->and($transaction->notified_via)->toBe('none')
         ->and($transaction->notification_status)->toBe('skipped');
 
-    $detailResponse = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+    $detailResponse = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
     $detailResponse->assertOk()
         ->assertSeeText('Candle Cash Sent')
         ->assertSeeText('Casey Admin');
@@ -928,7 +950,7 @@ test('send candle cash rejects invalid input', function () {
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'amount' => 0,
@@ -977,7 +999,7 @@ test('send candle cash records gift metadata and sms notification status', funct
     $token = csrf_token();
 
     $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'amount' => 12,
@@ -1022,7 +1044,7 @@ test('send candle cash continues even when optional message cannot send', functi
     $token = csrf_token();
 
     $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
         [
             '_token' => $token,
             'amount' => 8,

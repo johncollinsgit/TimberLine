@@ -2,6 +2,7 @@
 
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
 use Tests\TestCase;
 use function PHPUnit\Framework\assertSame;
 
@@ -38,6 +39,20 @@ test('returns embedded routes when context is missing', function () {
     $url = $generator->url('customers.message', ['marketingProfile' => 8], $request);
 
     expect($url)->toEqual(route('shopify.embedded.customers.message', ['marketingProfile' => 8], false));
+});
+
+test('treats named shopify app routes as embedded even without signed query', function () {
+    $request = Request::create('/', 'GET', []);
+    $route = new Route(['GET'], '/shopify/app/customers/message', function () {
+    });
+    $route->name('shopify.app.customers.message');
+
+    $request->setRouteResolver(fn () => $route);
+
+    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $url = $generator->url('customers.message', ['marketingProfile' => 8], $request);
+
+    expect($url)->toEqual(route('shopify.app.customers.message', ['marketingProfile' => 8], false));
 });
 
 test('treats partial context without host as non-embedded', function () {
