@@ -336,6 +336,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::patch('/tasks/{task}', [CandleCashPagesController::class, 'updateTask'])->name('tasks.update');
                     Route::post('/tasks/{task}/toggle', [CandleCashPagesController::class, 'toggleTask'])->name('tasks.toggle');
                     Route::post('/tasks/{task}/archive', [CandleCashPagesController::class, 'archiveTask'])->name('tasks.archive');
+                    Route::get('/redeem', [CandleCashPagesController::class, 'redeem'])->name('redeem');
+                    Route::patch('/redeem/{reward}', [CandleCashPagesController::class, 'updateReward'])->name('redeem.update');
                     Route::get('/queue', [CandleCashPagesController::class, 'queue'])->name('queue');
                     Route::post('/queue/{completion}/approve', [CandleCashPagesController::class, 'approveCompletion'])->name('queue.approve');
                     Route::post('/queue/{completion}/reject', [CandleCashPagesController::class, 'rejectCompletion'])->name('queue.reject');

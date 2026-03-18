@@ -11,13 +11,13 @@ class CandleCashSectionRegistry
     {
         return [
             'command' => [
-                'label' => 'Overview',
-                'description' => 'Program health, costs, and task performance.',
+                'label' => 'Program',
+                'description' => 'Simple overview of how Candle Cash is currently structured.',
                 'accent' => 'amber',
             ],
             'work' => [
-                'label' => 'Tasks & Events',
-                'description' => 'Tasks, verified events, and customer reward operations.',
+                'label' => 'Live Rules',
+                'description' => 'Review the live earn and redeem rows already maintained in Backstage.',
                 'accent' => 'emerald',
             ],
             'growth' => [
@@ -35,15 +35,21 @@ class CandleCashSectionRegistry
     {
         return [
             'dashboard' => [
-                'label' => 'Dashboard',
+                'label' => 'Rewards',
                 'route' => 'marketing.candle-cash',
-                'description' => 'See balances issued, top tasks, pending approvals, and referral growth at a glance.',
+                'description' => 'Manage Candle Cash rewards and program settings.',
                 'group' => 'command',
             ],
             'tasks' => [
-                'label' => 'Tasks',
+                'label' => 'Ways to Earn',
                 'route' => 'marketing.candle-cash.tasks',
-                'description' => 'Control which Candle Cash tasks are live, how much they pay, and how they are completed.',
+                'description' => 'Review and manage the live earn rules already powering Candle Cash.',
+                'group' => 'work',
+            ],
+            'redeem' => [
+                'label' => 'Ways to Redeem',
+                'route' => 'marketing.candle-cash.redeem',
+                'description' => 'Review and manage the live reward rows customers can currently redeem.',
                 'group' => 'work',
             ],
             'queue' => [

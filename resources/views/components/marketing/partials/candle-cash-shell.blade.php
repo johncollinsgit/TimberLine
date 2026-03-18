@@ -32,7 +32,7 @@
             <p class="mt-2 max-w-3xl text-sm text-white/70">{{ $section['description'] }}</p>
         </div>
         <a href="{{ route('marketing.candle-cash') }}" wire:navigate class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
-            Open Dashboard
+            Open Rewards
         </a>
     </div>
 </section>
@@ -41,7 +41,7 @@
     <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
             <div class="text-[11px] uppercase tracking-[0.28em] text-white/50">Pages</div>
-            <div class="mt-1 text-sm text-white/68">Run the task engine, keep balances clean, and drive repeat purchases from one place.</div>
+            <div class="mt-1 text-sm text-white/68">Start with the overview, then move into the live earn and redeem rows when you need detail.</div>
         </div>
         <div class="text-[11px] uppercase tracking-[0.22em] text-white/35">Menu</div>
     </div>

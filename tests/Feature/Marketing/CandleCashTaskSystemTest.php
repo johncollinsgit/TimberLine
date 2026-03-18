@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\CandleCashReferral;
+use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
@@ -26,7 +27,9 @@ test('marketing manager can load candle cash dashboard via stable base route nam
         ->get(route('marketing.candle-cash'))
         ->assertOk()
         ->assertSeeText('Candle Cash')
-        ->assertSeeText('Pending events');
+        ->assertSeeText('Rewards')
+        ->assertSeeText('Ways to Earn')
+        ->assertSeeText('Ways to Redeem');
 });
 
 test('marketing manager can load candle cash management sections', function () {
@@ -38,7 +41,12 @@ test('marketing manager can load candle cash management sections', function () {
     $this->actingAs($user)
         ->get(route('marketing.candle-cash.tasks'))
         ->assertOk()
-        ->assertSeeText('Task manager');
+        ->assertSeeText('Ways to Earn');
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.redeem'))
+        ->assertOk()
+        ->assertSeeText('Ways to Redeem');
 
     $this->actingAs($user)
         ->get(route('marketing.candle-cash.queue'))
@@ -59,6 +67,34 @@ test('marketing manager can load candle cash management sections', function () {
         ->get(route('marketing.candle-cash.settings'))
         ->assertOk()
         ->assertSeeText('Verification hooks');
+});
+
+test('marketing manager can update an existing candle cash redeem rule from backstage', function () {
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $reward = CandleCashReward::query()->where('name', 'Free wax melt')->firstOrFail();
+
+    $this->actingAs($user)
+        ->from(route('marketing.candle-cash.redeem'))
+        ->patch(route('marketing.candle-cash.redeem.update', $reward), [
+            'title' => 'Free Wax Melt Duo',
+            'description' => 'Updated from the Backstage rewards page.',
+            'points_cost' => 90,
+            'reward_value' => 'wax_melt_duo',
+            'enabled' => '0',
+        ])
+        ->assertRedirect(route('marketing.candle-cash.redeem'));
+
+    $reward->refresh();
+
+    expect((string) $reward->name)->toBe('Free Wax Melt Duo')
+        ->and((string) $reward->description)->toBe('Updated from the Backstage rewards page.')
+        ->and((int) $reward->points_cost)->toBe(90)
+        ->and((string) $reward->reward_value)->toBe('wax_melt_duo')
+        ->and((bool) $reward->is_active)->toBeFalse();
 });
 
 test('non candle club members are blocked from candle club voting reward', function () {

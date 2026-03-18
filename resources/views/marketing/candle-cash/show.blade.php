@@ -10,115 +10,121 @@
         <x-marketing.partials.candle-cash-shell :section="$section" :sections="$sections" />
 
         @if($sectionKey === 'dashboard')
-            <section class="rounded-[1.8rem] border border-emerald-300/15 bg-emerald-500/10 p-5">
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
+                <div class="max-w-3xl space-y-4">
                     <div>
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-emerald-100/70">Balance clarity</div>
-                        <h2 class="mt-2 text-lg font-semibold text-white">Current liability and historical issuance are not the same number</h2>
-                        <p class="mt-2 max-w-3xl text-sm text-emerald-50/80">
-                            Outstanding liability is based on live customer balances. Lifetime issued includes historical grants before the legacy rebase and should not be read as today’s open exposure.
-                        </p>
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Program overview</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">Rewards</h2>
                     </div>
-                    <div class="rounded-2xl border border-emerald-200/20 bg-black/20 px-4 py-3 text-sm text-emerald-50/80">
+                    <p class="text-sm leading-7 text-white/72">
+                        This page reflects the live Candle Cash tasks and reward rows currently managed by Backstage.
+                    </p>
+                    <p class="text-sm leading-7 text-white/72">
+                        Use it to quickly review how the Candle Cash program is currently structured, including how customers earn points and what rewards are available.
+                    </p>
+                    <p class="text-sm leading-7 text-white/72">
+                        For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
+                    </p>
+                </div>
+            </section>
+
+            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="max-w-2xl">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Overview</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">How Candle Cash works today</h2>
+                        <p class="mt-3 text-sm leading-7 text-white/70">{{ data_get($dashboard, 'program_summary') }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
                         {{ number_format((int) data_get($dashboard, 'points_per_dollar', 10)) }} points = $1.00
                     </div>
                 </div>
-                @if(data_get($dashboard, 'latest_rebase_run'))
-                    <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
-                        Last legacy rebase completed {{ optional(data_get($dashboard, 'latest_rebase_run.finished_at'))->format('Y-m-d H:i') ?: 'recently' }}.
-                        Removed {{ number_format((int) data_get($dashboard, 'latest_rebase_run.summary.reduced_points', data_get($dashboard, 'legacy_rebase_points', 0))) }} points from old balances.
-                    </div>
-                @endif
+
+                <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    @foreach([
+                        ['label' => 'Point name', 'value' => data_get($dashboard, 'point_name', 'Candle Cash'), 'detail' => 'The live point label customers see across the program.'],
+                        ['label' => 'Ways to earn', 'value' => data_get($dashboard, 'earning_rules_active') ? 'Active' : 'Not active', 'detail' => number_format((int) data_get($dashboard, 'earning_rule_count', 0)) . ' live earn rules currently configured.'],
+                        ['label' => 'Ways to redeem', 'value' => data_get($dashboard, 'redeem_rules_active') ? 'Active' : 'Not active', 'detail' => number_format((int) data_get($dashboard, 'redeem_rule_count', 0)) . ' live reward rows currently available.'],
+                        ['label' => 'Program structure', 'value' => data_get($dashboard, 'earning_modes') ? data_get($dashboard, 'earning_modes')->take(2)->implode(' + ') : 'Task-based', 'detail' => 'Customers earn through configured tasks, then spend points on available rewards.'],
+                    ] as $card)
+                        <article class="rounded-[1.6rem] border border-white/10 bg-white/5 p-5">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
+                            <div class="mt-3 text-2xl font-semibold text-white">{{ $card['value'] }}</div>
+                            <p class="mt-2 text-sm leading-6 text-white/62">{{ $card['detail'] }}</p>
+                        </article>
+                    @endforeach
+                </div>
             </section>
 
-            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                @foreach([
-                    ['label' => 'Outstanding liability', 'value' => '$' . number_format((float) data_get($dashboard, 'current_outstanding_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'current_outstanding_points', 0)) . ' live points still sitting in customer balances.'],
-                    ['label' => 'Balance holders', 'value' => number_format((int) data_get($dashboard, 'active_balance_holders', 0)), 'detail' => 'Customers who still hold a positive Candle Cash balance right now.'],
-                    ['label' => 'Lifetime issued', 'value' => '$' . number_format((float) data_get($dashboard, 'total_issued_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'total_issued_points', 0)) . ' total points ever granted across the program.'],
-                    ['label' => 'Lifetime redeemed', 'value' => '$' . number_format((float) data_get($dashboard, 'lifetime_redeemed_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'lifetime_redeemed_points', 0)) . ' points customers have actually spent.'],
-                    ['label' => 'Legacy rebase reduction', 'value' => '$' . number_format((float) data_get($dashboard, 'legacy_rebase_amount', 0), 2), 'detail' => number_format((int) data_get($dashboard, 'legacy_rebase_points', 0)) . ' points removed from old balances during the liability reset.'],
-                    ['label' => 'Pending events', 'value' => number_format((int) data_get($dashboard, 'pending_events', 0)), 'detail' => 'Events still waiting on a final verification step or fallback handling.'],
-                ] as $card)
-                    <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
-                        <div class="mt-3 text-4xl font-semibold text-white">{{ $card['value'] }}</div>
-                        <p class="mt-2 text-sm text-white/65">{{ $card['detail'] }}</p>
-                    </article>
-                @endforeach
-            </section>
-
-            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                @foreach([
-                    ['label' => 'Referrals', 'value' => number_format((int) data_get($dashboard, 'total_referrals', 0)), 'detail' => 'Captured friend referrals in the system.'],
-                    ['label' => 'Referral conversions', 'value' => number_format((int) data_get($dashboard, 'referral_conversions', 0)), 'detail' => 'Verified referral rewards triggered by qualifying orders.'],
-                    ['label' => 'Active tasks', 'value' => number_format((int) data_get($dashboard, 'active_tasks', 0)), 'detail' => 'Tasks currently visible to customers.'],
-                    ['label' => 'Review rewards', 'value' => number_format((int) data_get($dashboard, 'reviews_generated', 0)), 'detail' => 'Google + product review tasks that have already awarded Candle Cash.'],
-                    ['label' => 'Avg cost', 'value' => '$' . number_format((float) data_get($dashboard, 'avg_reward_cost', 0), 2), 'detail' => 'Average reward cost per awarded task.'],
-                ] as $card)
-                    <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
-                        <div class="mt-3 text-4xl font-semibold text-white">{{ $card['value'] }}</div>
-                        <p class="mt-2 text-sm text-white/65">{{ $card['detail'] }}</p>
-                    </article>
-                @endforeach
-            </section>
-
-            <section class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr),minmax(360px,0.85fr)]">
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
-                    <div class="flex items-end justify-between gap-3">
-                        <div>
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Top tasks</div>
-                            <h2 class="mt-2 text-lg font-semibold text-white">What is driving Candle Cash</h2>
+            <section class="grid gap-4 xl:grid-cols-2">
+                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="max-w-xl">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Earn</div>
+                            <h2 class="mt-2 text-lg font-semibold text-white">Live earn rules</h2>
+                            <p class="mt-3 text-sm leading-7 text-white/70">
+                                Review the live Candle Cash tasks customers can currently complete to earn points.
+                            </p>
                         </div>
-                        <a href="{{ route('marketing.candle-cash.tasks') }}" wire:navigate class="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">Open tasks</a>
+                        <a href="{{ route('marketing.candle-cash.tasks') }}" wire:navigate class="inline-flex shrink-0 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80">
+                            Open Ways to Earn
+                        </a>
                     </div>
-                    <div class="mt-4 space-y-3">
-                        @foreach(data_get($dashboard, 'top_tasks', collect()) as $task)
-                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                <div class="flex items-start justify-between gap-3">
-                                    <div>
-                                        <div class="font-semibold text-white">{{ $task->title }}</div>
-                                        <div class="mt-1 text-xs text-white/55">{{ $task->handle }} · {{ $task->task_type }}</div>
-                                    </div>
-                                    <div class="text-right text-sm text-white/70">
-                                        <div>{{ number_format((int) $task->awarded_count) }} awarded</div>
-                                        <div class="mt-1 text-xs text-white/45">{{ number_format((int) $task->pending_count) }} pending</div>
-                                    </div>
+
+                    @if(collect(data_get($dashboard, 'earn_preview', []))->isNotEmpty())
+                        <div class="mt-5 space-y-3">
+                            @foreach(data_get($dashboard, 'earn_preview', []) as $row)
+                                <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                    <div class="font-medium text-white">{{ $row['title'] }}</div>
+                                    <div class="mt-1 text-sm text-white/55">{{ $row['detail'] }}</div>
                                 </div>
-                                <div class="mt-3 text-sm text-white/65">{{ $task->description }}</div>
-                            </div>
-                        @endforeach
-                    </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </article>
 
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Fresh activity</div>
-                    <h2 class="mt-2 text-lg font-semibold text-white">Latest task outcomes</h2>
-                    <div class="mt-4 space-y-3">
-                        @forelse(data_get($dashboard, 'recent_completions', collect()) as $completion)
-                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                <div class="flex items-start justify-between gap-3">
-                                    <div>
-                                        <div class="font-semibold text-white">{{ $completion->task?->title ?: 'Task' }}</div>
-                                        <div class="mt-1 text-xs text-white/55">{{ trim(($completion->profile->first_name ?? '') . ' ' . ($completion->profile->last_name ?? '')) ?: ($completion->profile->email ?? 'Unknown customer') }}</div>
-                                    </div>
-                                    <div class="rounded-full border border-white/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/65">{{ $completion->status }}</div>
-                                </div>
-                                <div class="mt-3 text-xs text-white/45">{{ optional($completion->created_at)->format('Y-m-d H:i') }}</div>
-                            </div>
-                        @empty
-                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">No task activity yet.</div>
-                        @endforelse
+                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="max-w-xl">
+                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Redeem</div>
+                            <h2 class="mt-2 text-lg font-semibold text-white">Live reward rows</h2>
+                            <p class="mt-3 text-sm leading-7 text-white/70">
+                                Review the reward rows customers can currently redeem with their Candle Cash points.
+                            </p>
+                        </div>
+                        <a href="{{ route('marketing.candle-cash.redeem') }}" wire:navigate class="inline-flex shrink-0 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80">
+                            Open Ways to Redeem
+                        </a>
                     </div>
+
+                    @if(collect(data_get($dashboard, 'redeem_preview', []))->isNotEmpty())
+                        <div class="mt-5 space-y-3">
+                            @foreach(data_get($dashboard, 'redeem_preview', []) as $row)
+                                <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                    <div class="font-medium text-white">{{ $row['title'] }}</div>
+                                    <div class="mt-1 text-sm text-white/55">{{ $row['detail'] }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </article>
+            </section>
+
+            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
+                <div class="max-w-3xl">
+                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Note</div>
+                    <p class="mt-2 text-sm leading-7 text-white/68">
+                        This page is meant to stay simple. Use the linked rule editors when you need to review or update the detailed earn and redeem rows.
+                    </p>
+                </div>
             </section>
         @elseif($sectionKey === 'tasks')
             <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Task manager</div>
-                        <h2 class="mt-2 text-lg font-semibold text-white">Create and tune verified growth tasks</h2>
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Earn</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">Review and manage live earn rules</h2>
+                        <p class="mt-2 max-w-2xl text-sm text-white/65">These are the live Candle Cash tasks currently powering how customers earn points.</p>
                     </div>
                     <form method="GET" action="{{ route('marketing.candle-cash.tasks') }}" class="grid gap-3 sm:grid-cols-3">
                         <select name="filter" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
@@ -195,6 +201,92 @@
                         </div>
                     @endforeach
                 </article>
+            </section>
+        @elseif($sectionKey === 'redeem')
+            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div class="max-w-2xl">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Redeem</div>
+                        <h2 class="mt-2 text-lg font-semibold text-white">Review and manage live reward rows</h2>
+                        <p class="mt-2 text-sm leading-7 text-white/65">
+                            These are the live Candle Cash reward rows customers can currently redeem against.
+                        </p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+                        {{ number_format((int) data_get($redeemSummary, 'enabled', 0)) }} active · {{ number_format((int) data_get($redeemSummary, 'total', 0)) }} total
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid gap-4 md:grid-cols-3">
+                @foreach([
+                    ['label' => 'Active rewards', 'value' => number_format((int) data_get($redeemSummary, 'enabled', 0)), 'detail' => 'Reward rows currently available to customers.'],
+                    ['label' => 'Inactive rewards', 'value' => number_format((int) data_get($redeemSummary, 'disabled', 0)), 'detail' => 'Rows kept in Backstage but not currently active.'],
+                    ['label' => 'Reward rows', 'value' => number_format((int) data_get($redeemSummary, 'total', 0)), 'detail' => 'Total redeem options currently stored in Candle Cash.'],
+                ] as $card)
+                    <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
+                        <div class="mt-3 text-3xl font-semibold text-white">{{ $card['value'] }}</div>
+                        <p class="mt-2 text-sm text-white/62">{{ $card['detail'] }}</p>
+                    </article>
+                @endforeach
+            </section>
+
+            <section class="space-y-4">
+                @forelse(($redeemRules ?? []) as $reward)
+                    <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="max-w-2xl">
+                                <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $reward['reward_type_label'] ?? 'Reward' }}</div>
+                                <h3 class="mt-2 text-lg font-semibold text-white">{{ $reward['title'] }}</h3>
+                                <p class="mt-2 text-sm leading-7 text-white/65">{{ $reward['description'] ?: 'No description yet.' }}</p>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+                                {{ $reward['enabled'] ? 'Active' : 'Inactive' }}
+                            </div>
+                        </div>
+
+                        <form method="POST" action="{{ route('marketing.candle-cash.redeem.update', $reward['id']) }}" class="mt-5 grid gap-3 md:grid-cols-2">
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="enabled" value="0" />
+
+                            <label class="block text-sm text-white/75">
+                                Title
+                                <input type="text" name="title" value="{{ old('title', $reward['title']) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" />
+                            </label>
+
+                            <label class="block text-sm text-white/75">
+                                Points cost
+                                <input type="number" min="0" max="50000" name="points_cost" value="{{ old('points_cost', $reward['points_cost']) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" />
+                            </label>
+
+                            <label class="block text-sm text-white/75 md:col-span-2">
+                                Description
+                                <textarea name="description" rows="3" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white">{{ old('description', $reward['description']) }}</textarea>
+                            </label>
+
+                            <label class="block text-sm text-white/75">
+                                Reward value
+                                <input type="text" name="reward_value" value="{{ old('reward_value', $reward['reward_value']) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" />
+                                <span class="mt-2 block text-xs text-white/45">Current display: {{ $reward['value_display'] ?: 'No value set' }}</span>
+                            </label>
+
+                            <label class="flex items-center gap-2 self-end rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75">
+                                <input type="checkbox" name="enabled" value="1" @checked(old('enabled', $reward['enabled'])) />
+                                Active reward row
+                            </label>
+
+                            <div class="md:col-span-2">
+                                <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Save reward</button>
+                            </div>
+                        </form>
+                    </article>
+                @empty
+                    <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5 text-sm text-white/60">
+                        No redeem rules are currently configured.
+                    </article>
+                @endforelse
             </section>
         @elseif($sectionKey === 'queue')
             <section class="grid gap-4 md:grid-cols-5">

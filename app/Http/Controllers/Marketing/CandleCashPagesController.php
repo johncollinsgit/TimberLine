@@ -5,12 +5,11 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashReferral;
+use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
 use App\Models\MarketingReviewHistory;
-use App\Models\CandleCashTransaction;
-use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use App\Models\Order;
@@ -21,11 +20,13 @@ use App\Services\Marketing\CandleCashTaskEligibilityService;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Services\Marketing\ProductReviewService;
+use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Support\Marketing\CandleCashSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Collection;
 use Carbon\CarbonImmutable;
 
@@ -33,135 +34,87 @@ class CandleCashPagesController extends Controller
 {
     public function dashboard(CandleCashService $candleCashService): View
     {
-        $taskSummary = CandleCashTaskEvent::query()
-            ->selectRaw('count(*) as total_events')
-            ->selectRaw("sum(case when reward_awarded = 1 then 1 else 0 end) as awarded_events")
-            ->selectRaw("sum(case when status = 'pending' then 1 else 0 end) as pending_events")
-            ->selectRaw("sum(case when duplicate_hits > 0 then duplicate_hits else 0 end) as duplicate_hits")
-            ->first();
-
-        $positivePoints = (int) CandleCashTransaction::query()
-            ->where('points', '>', 0)
-            ->sum('points');
-
-        $currentOutstandingPoints = (int) CandleCashBalance::query()
-            ->where('balance', '>', 0)
-            ->sum('balance');
-
-        $activeBalanceHolders = (int) CandleCashBalance::query()
-            ->where('balance', '>', 0)
-            ->count();
-
-        $redeemedPoints = abs((int) CandleCashTransaction::query()
-            ->where('type', 'redeem')
-            ->sum('points'));
-
-        $legacyRebasePoints = abs((int) CandleCashTransaction::query()
-            ->where('source', 'legacy_rebase')
-            ->sum('points'));
-
-        $latestRebaseRun = MarketingImportRun::query()
-            ->where('type', 'candle_cash_balance_rebase')
-            ->where('status', 'completed')
-            ->latest('finished_at')
-            ->first();
-
-        $topTasks = CandleCashTask::query()
-            ->leftJoin('candle_cash_task_completions as completions', 'completions.candle_cash_task_id', '=', 'candle_cash_tasks.id')
-            ->select('candle_cash_tasks.*')
-            ->selectRaw("sum(case when completions.status = 'awarded' then 1 else 0 end) as awarded_count")
-            ->selectRaw("sum(case when completions.status in ('pending','submitted','started') then 1 else 0 end) as pending_count")
-            ->groupBy('candle_cash_tasks.id')
-            ->orderByDesc('awarded_count')
-            ->orderBy('display_order')
-            ->limit(6)
-            ->get();
-
-        $reviewHandles = ['google-review', 'product-review'];
-        $reviewGenerated = (int) CandleCashTaskEvent::query()
-            ->where('reward_awarded', true)
-            ->whereHas('task', fn (Builder $builder) => $builder->whereIn('handle', $reviewHandles))
-            ->count();
-
-        $secondOrderRewards = (int) CandleCashTaskEvent::query()
-            ->where('reward_awarded', true)
-            ->whereHas('task', fn (Builder $builder) => $builder->where('handle', 'second-order'))
-            ->count();
-
-        $googleReviewsMatched = (int) CandleCashTaskEvent::query()
-            ->where('reward_awarded', true)
-            ->whereHas('task', fn (Builder $builder) => $builder->where('handle', 'google-review'))
-            ->count();
-
-        $productReviewsMatched = (int) CandleCashTaskEvent::query()
-            ->where('reward_awarded', true)
-            ->whereHas('task', fn (Builder $builder) => $builder->where('handle', 'product-review'))
-            ->count();
-
-        $candleClubParticipation = (int) CandleCashTaskEvent::query()
-            ->where('reward_awarded', true)
-            ->whereHas('task', fn (Builder $builder) => $builder->whereIn('handle', ['candle-club-join', 'candle-club-vote']))
-            ->count();
-
-        $referralConversions = (int) CandleCashTaskEvent::query()
-            ->where('reward_awarded', true)
-            ->whereHas('task', fn (Builder $builder) => $builder->whereIn('handle', ['refer-a-friend', 'referred-friend-bonus']))
-            ->count();
-
-        $avgRewardAmount = (float) CandleCashTaskCompletion::query()
-            ->where('status', 'awarded')
-            ->avg('reward_amount');
-
-        $activeTasksCount = CandleCashTask::query()
-            ->where('enabled', true)
-            ->whereNull('archived_at')
-            ->count();
-
         $activeTasks = CandleCashTask::query()
             ->where('enabled', true)
             ->whereNull('archived_at')
             ->orderBy('display_order')
-            ->limit(8)
             ->get(['id', 'title', 'handle', 'verification_mode', 'reward_amount']);
 
-        $recentCompletions = CandleCashTaskEvent::query()
-            ->with(['task:id,title,handle', 'profile:id,first_name,last_name,email'])
-            ->latest('id')
-            ->limit(12)
-            ->get();
+        $rewards = CandleCashReward::query()
+            ->orderBy('points_cost')
+            ->orderBy('id')
+            ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value', 'is_active']);
+
+        $activeRewards = $rewards->where('is_active', true)->values();
+        $earningModes = $activeTasks
+            ->pluck('verification_mode')
+            ->filter()
+            ->map(fn (?string $value): string => str($value)->replace('_', ' ')->headline()->toString())
+            ->unique()
+            ->values();
+
+        $primaryReward = $activeRewards->first();
+        $programSummary = $primaryReward
+            ? 'Customers earn Candle Cash through live tasks, then redeem points for rewards like ' . $primaryReward->name . '.'
+            : 'Customers earn Candle Cash through live tasks and can redeem it against the reward rows configured in Backstage.';
 
         return view('marketing.candle-cash.show', [
             'sectionKey' => 'dashboard',
             'section' => CandleCashSectionRegistry::section('dashboard'),
             'sections' => $this->navigationItems(),
             'dashboard' => [
+                'point_name' => 'Candle Cash',
                 'points_per_dollar' => $candleCashService->pointsPerDollar(),
-                'current_outstanding_points' => $currentOutstandingPoints,
-                'current_outstanding_amount' => $candleCashService->amountFromPoints($currentOutstandingPoints),
-                'active_balance_holders' => $activeBalanceHolders,
-                'total_issued_points' => $positivePoints,
-                'total_issued_amount' => $candleCashService->amountFromPoints($positivePoints),
-                'lifetime_redeemed_points' => $redeemedPoints,
-                'lifetime_redeemed_amount' => $candleCashService->amountFromPoints($redeemedPoints),
-                'legacy_rebase_points' => $legacyRebasePoints,
-                'legacy_rebase_amount' => $candleCashService->amountFromPoints($legacyRebasePoints),
-                'latest_rebase_run' => $latestRebaseRun,
-                'pending_events' => (int) ($taskSummary?->pending_events ?? 0),
-                'total_referrals' => (int) CandleCashReferral::query()->count(),
-                'referral_conversions' => $referralConversions,
-                'active_tasks' => (int) $activeTasksCount,
-                'reviews_generated' => $reviewGenerated,
-                'google_reviews_matched' => $googleReviewsMatched,
-                'product_reviews_matched' => $productReviewsMatched,
-                'second_order_rewards' => $secondOrderRewards,
-                'candle_club_participation' => $candleClubParticipation,
-                'duplicate_hits' => (int) ($taskSummary?->duplicate_hits ?? 0),
-                'avg_reward_cost' => round($avgRewardAmount, 2),
-                'top_tasks' => $topTasks,
-                'active_task_rows' => $activeTasks,
-                'recent_completions' => $recentCompletions,
+                'earning_rules_active' => $activeTasks->isNotEmpty(),
+                'earning_rule_count' => $activeTasks->count(),
+                'redeem_rules_active' => $activeRewards->isNotEmpty(),
+                'redeem_rule_count' => $activeRewards->count(),
+                'program_summary' => $programSummary,
+                'earning_modes' => $earningModes,
+                'earn_preview' => $activeTasks->take(3)->map(fn (CandleCashTask $task): array => [
+                    'title' => (string) $task->title,
+                    'detail' => $candleCashService->pointsFromAmount((float) $task->reward_amount) . ' points',
+                ])->values(),
+                'redeem_preview' => $activeRewards->take(3)->map(fn (CandleCashReward $reward): array => [
+                    'title' => (string) $reward->name,
+                    'detail' => number_format((int) $reward->points_cost) . ' points',
+                ])->values(),
             ],
         ]);
+    }
+
+    public function redeem(ShopifyEmbeddedRewardsService $rewardsService): View
+    {
+        $payload = $rewardsService->payload();
+
+        return view('marketing.candle-cash.show', [
+            'sectionKey' => 'redeem',
+            'section' => CandleCashSectionRegistry::section('redeem'),
+            'sections' => $this->navigationItems(),
+            'redeemRules' => data_get($payload, 'redeem.items', []),
+            'redeemSummary' => data_get($payload, 'redeem.summary', [
+                'total' => 0,
+                'enabled' => 0,
+                'disabled' => 0,
+            ]),
+        ]);
+    }
+
+    public function updateReward(
+        Request $request,
+        CandleCashReward $reward,
+        ShopifyEmbeddedRewardsService $rewardsService
+    ): RedirectResponse {
+        try {
+            $rewardsService->updateRedeemRule($reward, $this->validateRedeemPayload($request));
+        } catch (ValidationException $exception) {
+            return back()
+                ->withErrors($exception->errors())
+                ->withInput()
+                ->with('toast', ['style' => 'danger', 'message' => 'Reward rule could not be saved.']);
+        }
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Redeem rule updated.']);
     }
 
     public function tasks(Request $request): View
@@ -701,6 +654,20 @@ class CandleCashPagesController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function validateRedeemPayload(Request $request): array
+    {
+        return $request->validate([
+            'title' => ['required', 'string', 'max:160'],
+            'description' => ['nullable', 'string', 'max:500'],
+            'points_cost' => ['required', 'integer', 'min:0', 'max:50000'],
+            'reward_value' => ['nullable', 'string', 'max:120'],
+            'enabled' => ['required', 'boolean'],
+        ]);
     }
 
     /**
