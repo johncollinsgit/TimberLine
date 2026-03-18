@@ -43,11 +43,14 @@ Deploy proof: Mon Feb 23 14:04:21 EST 2026
 
 ## Twilio SMS Configuration
 - Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.
-- Preferred: configure `MARKETING_TWILIO_SENDERS` as a JSON array of sender objects.
-  - Example:
+- Preferred: configure `MARKETING_TWILIO_SENDERS` as a JSON array of sender objects. All senders share the same `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.
+  - MG sender:
+    - `[{"key":"toll_free","label":"Toll-free","type":"toll_free","status":"active","enabled":true,"default":true,"phone_number_sid":"PN...","messaging_service_sid":"MG..."}]`
+  - Direct sender:
+    - `[{"key":"local","label":"Local","type":"local","status":"active","enabled":true,"phone_number_sid":"PN...","from_number":"+15555550123"}]`
+  - Mixed sender config:
     - `[{"key":"toll_free","label":"Toll-free","type":"toll_free","status":"active","enabled":true,"default":true,"phone_number_sid":"PN...","messaging_service_sid":"MG..."},{"key":"local","label":"Local","type":"local","status":"pending","enabled":false,"default":false,"phone_number_sid":"PN...","from_number":"+15555550123"}]`
-  - `phone_number_sid` is metadata for UI/reference only.
-  - Twilio sends still require either `messaging_service_sid` (`MG...`) or `from_number` (`+1...`) on any sender you want to use live.
+  - `phone_number_sid` is metadata only.
 - Optional: set `MARKETING_TWILIO_DEFAULT_SENDER` to force the default sender key.
 - Backward-compatible migration fallback:
   - `TWILIO_MESSAGING_SERVICE_SID` (recommended, must start with `MG`), or
@@ -55,6 +58,8 @@ Deploy proof: Mon Feb 23 14:04:21 EST 2026
 - Enable provider flags:
   - `MARKETING_SMS_ENABLED=true`
   - `MARKETING_TWILIO_ENABLED=true`
+- Operational verification:
+  - `php artisan marketing:send-test-sms +15551234567 "Test message" --sender=toll_free`
 
 ## Candle Cash Gift Reporting
 - Gift transactions now persist `gift_intent`, `gift_origin`, `notified_via`, `notification_status`, and `campaign_key` in `candle_cash_transactions`.

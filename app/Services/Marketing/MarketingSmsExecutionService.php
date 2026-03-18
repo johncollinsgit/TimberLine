@@ -29,6 +29,7 @@ class MarketingSmsExecutionService
         $limit = max(1, (int) ($options['limit'] ?? 250));
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $senderKey = $this->nullableString($options['sender_key'] ?? null);
         $recipientIds = collect((array) ($options['recipient_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id) => $id > 0)
@@ -64,6 +65,7 @@ class MarketingSmsExecutionService
             $result = $this->sendRecipient($recipient, [
                 'dry_run' => $dryRun,
                 'actor_id' => $actorId,
+                'sender_key' => $senderKey,
             ]);
             $summary['processed']++;
 

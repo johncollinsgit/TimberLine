@@ -99,6 +99,77 @@ test('disabled sender cannot be selected for live sends', function () {
         ->and($result['sender_label'])->toBe('Local');
 });
 
+test('enabled sender without a live twilio identity fails clearly', function () {
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', null);
+    config()->set('marketing.twilio.senders', [
+        [
+            'key' => 'local',
+            'label' => 'Local',
+            'type' => 'local',
+            'status' => 'active',
+            'enabled' => true,
+            'default' => true,
+            'phone_number_sid' => 'PN_LOCAL',
+        ],
+    ]);
+
+    Http::fake();
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message', [
+        'sender_key' => 'local',
+    ]);
+
+    Http::assertNothingSent();
+
+    expect($result['success'])->toBeFalse()
+        ->and($result['error_code'])->toBe('sender_not_ready')
+        ->and($result['sender_label'])->toBe('Local')
+        ->and((string) $result['error_message'])->toContain('does not have a live Twilio send identity');
+});
+
+test('default messaging service sender is used when available', function () {
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', null);
+    config()->set('marketing.twilio.senders', [
+        [
+            'key' => 'toll_free',
+            'label' => 'Toll-free',
+            'type' => 'toll_free',
+            'status' => 'active',
+            'enabled' => true,
+            'default' => true,
+            'messaging_service_sid' => 'MG_TOLL_FREE',
+        ],
+        [
+            'key' => 'local',
+            'label' => 'Local',
+            'type' => 'local',
+            'status' => 'active',
+            'enabled' => true,
+            'from_number' => '+15554443333',
+        ],
+    ]);
+
+    Http::fake([
+        'https://api.twilio.com/*' => Http::response([
+            'sid' => 'SM_MG_1',
+            'status' => 'sent',
+        ], 201),
+    ]);
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Test message');
+
+    Http::assertSent(function ($request) {
+        return $request['MessagingServiceSid'] === 'MG_TOLL_FREE'
+            && ($request['From'] ?? null) === null;
+    });
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['sender_key'])->toBe('toll_free')
+        ->and($result['from_identifier'])->toBe('MG_TOLL_FREE');
+});
+
 test('selected multi-number sender is used for twilio request payload', function () {
     config()->set('marketing.twilio.messaging_service_sid', null);
     config()->set('marketing.twilio.from_number', null);
@@ -141,6 +212,31 @@ test('selected multi-number sender is used for twilio request payload', function
     expect($result['success'])->toBeTrue()
         ->and($result['sender_key'])->toBe('local')
         ->and($result['from_identifier'])->toBe('+15554443333');
+});
+
+test('legacy fallback sender uses configured from number', function () {
+    config()->set('marketing.twilio.senders', []);
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', '+15556667777');
+
+    Http::fake([
+        'https://api.twilio.com/*' => Http::response([
+            'sid' => 'SM_LEGACY_1',
+            'status' => 'sent',
+        ], 201),
+    ]);
+
+    $result = app(TwilioSmsService::class)->sendSms('+15552229988', 'Legacy send');
+
+    Http::assertSent(function ($request) {
+        return $request['From'] === '+15556667777'
+            && ($request['MessagingServiceSid'] ?? null) === null;
+    });
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['sender_key'])->toBe('legacy_default')
+        ->and($result['sender_label'])->toBe('Primary SMS Number')
+        ->and($result['from_identifier'])->toBe('+15556667777');
 });
 
 test('twilio provider errors redact sensitive configured values', function () {
@@ -227,6 +323,59 @@ test('approved sms recipient sends successfully and stores delivery metadata', f
         ->and($delivery->send_status)->toBe('sent')
         ->and($delivery->sent_at)->not->toBeNull()
         ->and(MarketingDeliveryEvent::query()->where('marketing_message_delivery_id', $delivery->id)->exists())->toBeTrue();
+});
+
+test('campaign approved send respects explicit sender key option', function () {
+    config()->set('marketing.twilio.messaging_service_sid', null);
+    config()->set('marketing.twilio.from_number', null);
+    config()->set('marketing.twilio.senders', [
+        [
+            'key' => 'toll_free',
+            'label' => 'Toll-free',
+            'type' => 'toll_free',
+            'status' => 'active',
+            'enabled' => true,
+            'default' => true,
+            'messaging_service_sid' => 'MG_TOLL_FREE',
+        ],
+        [
+            'key' => 'local',
+            'label' => 'Local',
+            'type' => 'local',
+            'status' => 'active',
+            'enabled' => true,
+            'from_number' => '+15554443333',
+        ],
+    ]);
+
+    Http::fake([
+        'https://api.twilio.com/*' => Http::response([
+            'sid' => 'SM_CAMPAIGN_LOCAL_1',
+            'status' => 'sent',
+        ], 201),
+    ]);
+
+    $recipient = makeSmsRecipient();
+
+    $summary = app(MarketingSmsExecutionService::class)->sendApprovedForCampaign($recipient->campaign, [
+        'limit' => 1,
+        'sender_key' => 'local',
+    ]);
+
+    $delivery = MarketingMessageDelivery::query()
+        ->where('campaign_recipient_id', $recipient->id)
+        ->latest('id')
+        ->firstOrFail();
+
+    Http::assertSent(function ($request) {
+        return $request['From'] === '+15554443333'
+            && ($request['MessagingServiceSid'] ?? null) === null;
+    });
+
+    expect($summary['processed'])->toBe(1)
+        ->and($summary['sent'])->toBe(1)
+        ->and(data_get($delivery->provider_payload, 'sender_key'))->toBe('local')
+        ->and($delivery->from_identifier)->toBe('+15554443333');
 });
 
 test('dry run mode does not call twilio provider', function () {
