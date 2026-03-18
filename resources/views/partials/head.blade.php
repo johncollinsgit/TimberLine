@@ -4,7 +4,7 @@
 
 @php
     $mfPageTitle = $title ? $title.' · Modern Forestry Backstage' : 'Modern Forestry Backstage';
-    $mfOgImage = asset('apple-touch-icon.png').'?v=mf2';
+    $mfOgImage = asset('apple-touch-icon.png').'?v=bs4';
 @endphp
 
 <title>{{ $mfPageTitle }}</title>
@@ -19,10 +19,10 @@
 <meta name="twitter:title" content="{{ $mfPageTitle }}">
 <meta name="twitter:image" content="{{ $mfOgImage }}">
 
-<link rel="icon" href="{{ asset('favicon.ico') }}?v=mf2" sizes="any">
-<link rel="icon" href="{{ asset('favicon.svg') }}?v=mf2" type="image/svg+xml">
-<link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=mf2">
-<link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=mf2">
+<link rel="icon" href="{{ asset('favicon.svg') }}?v=bs4" type="image/svg+xml">
+<link rel="icon" href="{{ asset('favicon.png') }}?v=bs4" type="image/png" sizes="512x512">
+<link rel="shortcut icon" href="{{ asset('favicon.png') }}?v=bs4">
+<link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=bs4">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600&family=fraunces:400,500,600,700" rel="stylesheet" />

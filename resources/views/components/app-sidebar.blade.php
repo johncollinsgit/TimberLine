@@ -34,19 +34,34 @@
 
     .app-sidebar-brand {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
+        align-items: center;
+        gap: 12px;
         padding: 0 8px 10px;
     }
 
-    .app-sidebar-brand strong {
+    .app-sidebar-brand-mark {
+        width: 38px;
+        height: 38px;
+        flex: none;
+        display: block;
+        object-fit: contain;
+        border-radius: 12px;
+    }
+
+    .app-sidebar-brand-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .app-sidebar-brand-copy strong {
         font-size: 1rem;
         letter-spacing: 0.16em;
         text-transform: uppercase;
         color: rgba(15, 23, 42, 0.68);
     }
 
-    .app-sidebar-brand span {
+    .app-sidebar-brand-copy span {
         font-size: 12px;
         color: rgba(15, 23, 42, 0.48);
     }
@@ -150,8 +165,17 @@
 
 <nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
     <div class="app-sidebar-brand">
-        <strong>Backstage</strong>
-        <span>Forestry APP</span>
+        <img
+            src="{{ asset('favicon.svg') }}?v=bs4"
+            alt="Backstage"
+            class="app-sidebar-brand-mark"
+            loading="eager"
+            decoding="async"
+        />
+        <div class="app-sidebar-brand-copy">
+            <strong>Backstage</strong>
+            <span>Forestry APP</span>
+        </div>
     </div>
     <ul class="app-sidebar-list">
         @foreach($items as $item)

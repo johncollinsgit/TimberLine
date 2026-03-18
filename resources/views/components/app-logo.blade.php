@@ -1,11 +1,11 @@
 @props([
     'sidebar' => false,
     'logoSrc' => null,
-    'logoAlt' => 'Modern Forestry Backstage',
+    'logoAlt' => 'Backstage',
 ])
 
 @php
-    $brandLogoSrc = $logoSrc ?: asset('favicon.svg');
+    $brandLogoSrc = $logoSrc ?: asset('favicon.svg').'?v=bs4';
 @endphp
 
 @if($sidebar)

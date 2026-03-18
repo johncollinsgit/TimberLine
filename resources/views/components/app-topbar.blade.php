@@ -40,19 +40,34 @@
 
     .app-topbar-brand {
         display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 150px;
+        align-items: center;
+        gap: 12px;
+        min-width: 190px;
     }
 
-    .app-topbar-brand strong {
+    .app-topbar-brand-mark {
+        width: 38px;
+        height: 38px;
+        flex: none;
+        display: block;
+        object-fit: contain;
+        border-radius: 12px;
+    }
+
+    .app-topbar-brand-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .app-topbar-brand-copy strong {
         font-size: 12px;
         letter-spacing: 0.24em;
         text-transform: uppercase;
         color: rgba(15, 23, 42, 0.62);
     }
 
-    .app-topbar-brand span {
+    .app-topbar-brand-copy span {
         font-size: 12px;
         color: rgba(15, 23, 42, 0.5);
     }
@@ -249,8 +264,17 @@
     <div class="app-topbar-bar">
         <div class="app-topbar-shell">
             <div class="app-topbar-brand">
-                <strong>Backstage</strong>
-                <span>Forestry APP</span>
+                <img
+                    src="{{ asset('favicon.svg') }}?v=bs4"
+                    alt="Backstage"
+                    class="app-topbar-brand-mark"
+                    loading="eager"
+                    decoding="async"
+                />
+                <div class="app-topbar-brand-copy">
+                    <strong>Backstage</strong>
+                    <span>Forestry APP</span>
+                </div>
             </div>
             <nav class="app-topbar-nav" aria-label="Primary navigation">
                 @foreach($navigation as $item)

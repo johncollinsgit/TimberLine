@@ -1,21 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
   <defs>
-    <linearGradient id="bg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0f2a21"/>
-      <stop offset="1" stop-color="#091611"/>
+    <linearGradient id="backstage-gold" x1="18" y1="18" x2="104" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD45F"/>
+      <stop offset="0.52" stop-color="#FFC43A"/>
+      <stop offset="1" stop-color="#E8A611"/>
     </linearGradient>
-    <linearGradient id="leaf" x1="10" y1="12" x2="54" y2="50" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#34d399"/>
-      <stop offset="1" stop-color="#10b981"/>
-    </linearGradient>
-    <linearGradient id="leaf2" x1="36" y1="14" x2="56" y2="44" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fbbf24"/>
-      <stop offset="1" stop-color="#f59e0b"/>
-    </linearGradient>
+    <filter id="backstage-shadow" x="10" y="9" width="107" height="113" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.2"/>
+    </filter>
   </defs>
-  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#bg)"/>
-  <path d="M18 16l-8 13h5l-6 9h9l-2 3h12l-2-3h9l-6-9h5l-8-13h-8z" fill="url(#leaf)" opacity=".96"/>
-  <path d="M35 12l-9 12h5l-7 10h10l-3 4h12l-3-4h10l-7-10h5l-9-12h-4z" fill="#ecfdf5" opacity=".85"/>
-  <path d="M48 20l-6 9h4l-4 6h5l-2 3h8l-2-3h5l-4-6h4l-6-9h-2z" fill="url(#leaf2)" opacity=".88"/>
-  <path d="M22 42h20" stroke="rgba(255,255,255,.08)" stroke-linecap="round"/>
+
+  <rect x="6" y="6" width="116" height="116" rx="28" fill="#140D1F"/>
+
+  <g filter="url(#backstage-shadow)">
+    <text
+      x="18"
+      y="104"
+      fill="url(#backstage-gold)"
+      font-family="Arial Black, Arial, sans-serif"
+      font-size="112"
+      font-weight="900"
+      letter-spacing="-8"
+    >B</text>
+  </g>
+
+  <path
+    d="M26 97C39 71 60 57 95 45"
+    stroke="url(#backstage-gold)"
+    stroke-width="12"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M24 95L38 87L33 104L24 95Z"
+    fill="url(#backstage-gold)"
+  />
+
+  <path
+    d="M50 30C59 24 73 24 82 30L86 53C81 67 69 78 56 81L47 75L43 40C45 36 47 33 50 30Z"
+    fill="url(#backstage-gold)"
+  />
+  <path
+    d="M71 33C77 29 87 31 93 36L93 59C89 69 82 76 73 79L64 74L63 45C65 40 67 36 71 33Z"
+    fill="#FFFDF8"
+  />
+
+  <path d="M53 47C56 44 61 44 65 46" stroke="#140D1F" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M66 46C69 43 74 42 78 44" stroke="#140D1F" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M54 60C58 68 68 69 74 60" stroke="#140D1F" stroke-width="6" stroke-linecap="round"/>
+
+  <path d="M72 50C75 52 80 52 83 50" stroke="#140D1F" stroke-width="4" stroke-linecap="round"/>
+  <path d="M80 65C76 62 71 62 68 65" stroke="#140D1F" stroke-width="5" stroke-linecap="round"/>
+
+  <path d="M30 44L33 35L36 44L45 47L36 50L33 59L30 50L21 47L30 44Z" fill="#FFD45F"/>
 </svg>

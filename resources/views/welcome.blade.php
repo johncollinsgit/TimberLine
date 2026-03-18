@@ -9,14 +9,14 @@
     <meta property="og:title" content="Modern Forestry Backstage">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ url('/') }}">
-    <meta property="og:image" content="{{ asset('apple-touch-icon.png') }}?v=mf2">
+    <meta property="og:image" content="{{ asset('apple-touch-icon.png') }}?v=bs4">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Modern Forestry Backstage">
-    <meta name="twitter:image" content="{{ asset('apple-touch-icon.png') }}?v=mf2">
-    <link rel="icon" href="{{ asset('favicon.ico') }}?v=mf2" sizes="any">
-    <link rel="icon" href="{{ asset('favicon.svg') }}?v=mf2" type="image/svg+xml">
-    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=mf2">
-    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=mf2">
+    <meta name="twitter:image" content="{{ asset('apple-touch-icon.png') }}?v=bs4">
+    <link rel="icon" href="{{ asset('favicon.svg') }}?v=bs4" type="image/svg+xml">
+    <link rel="icon" href="{{ asset('favicon.png') }}?v=bs4" type="image/png" sizes="512x512">
+    <link rel="shortcut icon" href="{{ asset('favicon.png') }}?v=bs4">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=bs4">
     <style>
         :root {
             color-scheme: dark;
