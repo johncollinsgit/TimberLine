@@ -10,114 +10,13 @@
         <x-marketing.partials.candle-cash-shell :section="$section" :sections="$sections" />
 
         @if($sectionKey === 'dashboard')
-            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
-                <div class="max-w-3xl space-y-4">
-                    <div>
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Program overview</div>
-                        <h2 class="mt-2 text-lg font-semibold text-white">Rewards</h2>
-                    </div>
-                    <p class="text-sm leading-7 text-white/72">
-                        This page reflects the live Candle Cash tasks and reward rows currently managed by Backstage.
-                    </p>
-                    <p class="text-sm leading-7 text-white/72">
-                        Use it to quickly review how the Candle Cash program is currently structured, including how customers earn points and what rewards are available.
-                    </p>
-                    <p class="text-sm leading-7 text-white/72">
-                        For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
-                    </p>
-                </div>
-            </section>
-
-            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="max-w-2xl">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Overview</div>
-                        <h2 class="mt-2 text-lg font-semibold text-white">How Candle Cash works today</h2>
-                        <p class="mt-3 text-sm leading-7 text-white/70">{{ data_get($dashboard, 'program_summary') }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-                        {{ number_format((int) data_get($dashboard, 'points_per_dollar', 10)) }} points = $1.00
-                    </div>
-                </div>
-
-                <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    @foreach([
-                        ['label' => 'Point name', 'value' => data_get($dashboard, 'point_name', 'Candle Cash'), 'detail' => 'The live point label customers see across the program.'],
-                        ['label' => 'Ways to earn', 'value' => data_get($dashboard, 'earning_rules_active') ? 'Active' : 'Not active', 'detail' => number_format((int) data_get($dashboard, 'earning_rule_count', 0)) . ' live earn rules currently configured.'],
-                        ['label' => 'Ways to redeem', 'value' => data_get($dashboard, 'redeem_rules_active') ? 'Active' : 'Not active', 'detail' => number_format((int) data_get($dashboard, 'redeem_rule_count', 0)) . ' live reward rows currently available.'],
-                        ['label' => 'Program structure', 'value' => data_get($dashboard, 'earning_modes') ? data_get($dashboard, 'earning_modes')->take(2)->implode(' + ') : 'Task-based', 'detail' => 'Customers earn through configured tasks, then spend points on available rewards.'],
-                    ] as $card)
-                        <article class="rounded-[1.6rem] border border-white/10 bg-white/5 p-5">
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
-                            <div class="mt-3 text-2xl font-semibold text-white">{{ $card['value'] }}</div>
-                            <p class="mt-2 text-sm leading-6 text-white/62">{{ $card['detail'] }}</p>
-                        </article>
-                    @endforeach
-                </div>
-            </section>
-
-            <section class="grid gap-4 xl:grid-cols-2">
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
-                    <div class="flex items-start justify-between gap-4">
-                        <div class="max-w-xl">
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Earn</div>
-                            <h2 class="mt-2 text-lg font-semibold text-white">Live earn rules</h2>
-                            <p class="mt-3 text-sm leading-7 text-white/70">
-                                Review the live Candle Cash tasks customers can currently complete to earn points.
-                            </p>
-                        </div>
-                        <a href="{{ route('marketing.candle-cash.tasks') }}" wire:navigate class="inline-flex shrink-0 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80">
-                            Open Ways to Earn
-                        </a>
-                    </div>
-
-                    @if(collect(data_get($dashboard, 'earn_preview', []))->isNotEmpty())
-                        <div class="mt-5 space-y-3">
-                            @foreach(data_get($dashboard, 'earn_preview', []) as $row)
-                                <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                                    <div class="font-medium text-white">{{ $row['title'] }}</div>
-                                    <div class="mt-1 text-sm text-white/55">{{ $row['detail'] }}</div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </article>
-
-                <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
-                    <div class="flex items-start justify-between gap-4">
-                        <div class="max-w-xl">
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Redeem</div>
-                            <h2 class="mt-2 text-lg font-semibold text-white">Live reward rows</h2>
-                            <p class="mt-3 text-sm leading-7 text-white/70">
-                                Review the reward rows customers can currently redeem with their Candle Cash points.
-                            </p>
-                        </div>
-                        <a href="{{ route('marketing.candle-cash.redeem') }}" wire:navigate class="inline-flex shrink-0 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80">
-                            Open Ways to Redeem
-                        </a>
-                    </div>
-
-                    @if(collect(data_get($dashboard, 'redeem_preview', []))->isNotEmpty())
-                        <div class="mt-5 space-y-3">
-                            @foreach(data_get($dashboard, 'redeem_preview', []) as $row)
-                                <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                                    <div class="font-medium text-white">{{ $row['title'] }}</div>
-                                    <div class="mt-1 text-sm text-white/55">{{ $row['detail'] }}</div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </article>
-            </section>
-
-            <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-6">
-                <div class="max-w-3xl">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Note</div>
-                    <p class="mt-2 text-sm leading-7 text-white/68">
-                        This page is meant to stay simple. Use the linked rule editors when you need to review or update the detailed earn and redeem rows.
-                    </p>
-                </div>
-            </section>
+            @include('shared.candle-cash.rewards-overview', [
+                'overview' => $dashboard ?? [],
+                'earnUrl' => route('marketing.candle-cash.tasks'),
+                'redeemUrl' => route('marketing.candle-cash.redeem'),
+                'wireNavigate' => true,
+                'theme' => 'backstage',
+            ])
         @elseif($sectionKey === 'tasks')
             <section class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

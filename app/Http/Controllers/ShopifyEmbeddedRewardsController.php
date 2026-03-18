@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
+use App\Services\Marketing\CandleCashRewardsOverviewService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use Illuminate\Http\JsonResponse;
@@ -25,13 +26,21 @@ class ShopifyEmbeddedRewardsController extends Controller
         'notifications' => 'Notifications',
     ];
 
-    public function index(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function index(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        CandleCashRewardsOverviewService $overviewService
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
             'overview',
-            'shopify.rewards-overview'
+            'shopify.rewards-overview',
+            [
+                'dashboard' => $overviewService->build(),
+                'setupNote' => null,
+            ]
         );
     }
 

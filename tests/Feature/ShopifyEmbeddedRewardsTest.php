@@ -12,9 +12,13 @@ test('shopify embedded rewards route renders verified rewards admin page', funct
     $response = $this->get(route('shopify.app.rewards', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
+        ->assertSeeText('Rewards')
         ->assertSeeText('Manage Candle Cash rewards and program settings.')
+        ->assertSeeText('This page reflects the live Candle Cash tasks and reward rows currently managed by Backstage.')
+        ->assertSeeText('How Candle Cash works today')
         ->assertSeeText('Ways to Earn')
         ->assertSeeText('Ways to Redeem')
+        ->assertDontSeeText('This page will surface the current Candle Cash program health')
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 });
 
