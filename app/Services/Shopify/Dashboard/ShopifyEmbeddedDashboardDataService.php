@@ -151,7 +151,9 @@ class ShopifyEmbeddedDashboardDataService
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
         $candleCash = $this->candleCashProvider->snapshot($from, $to);
         $returningCustomerRate = $this->returningCustomerRate($from, $to);
-        $profit = $this->profitSummary($revenueRows, (float) data_get($candleCash, 'realizedRewardCost', 0));
+        $realizedRewardCost = max(0.0, (float) data_get($candleCash, 'realizedRewardCost', 0));
+        $birthdayRewardLiability = round((float) data_get($candleCash, 'issuedBirthdayValue', 0), 2);
+        $profit = $this->profitSummary($revenueRows, $realizedRewardCost);
 
         return [
             'revenueRows' => $revenueRows,
@@ -169,6 +171,8 @@ class ShopifyEmbeddedDashboardDataService
                 'incrementalRetainedRevenue' => round(max(0, (float) $revenueRows->sum('revenue') - (float) $candleCash['rewardCostAmount']), 2),
                 'netProfit' => (float) $profit['net_profit'],
                 'profitBreakdown' => $profit,
+                'realizedRewardCost' => $realizedRewardCost,
+                'birthdayRewardLiability' => $birthdayRewardLiability,
             ],
             'flags' => [
                 'has_any_data' => $revenueRows->isNotEmpty() || $candleCash['used']['count'] > 0,
@@ -1148,6 +1152,8 @@ class ShopifyEmbeddedDashboardDataService
                 'confidenceLevel' => (string) data_get($primarySnapshot, 'financials.profitBreakdown.confidence_level', 'low'),
                 'detail' => $this->profitConfidenceDetail((array) data_get($primarySnapshot, 'financials.profitBreakdown', [])),
             ],
+            'realizedRewardCost' => (float) data_get($primarySnapshot, 'financials.realizedRewardCost', 0),
+            'birthdayRewardLiability' => (float) data_get($primarySnapshot, 'financials.birthdayRewardLiability', 0),
         ];
     }
 

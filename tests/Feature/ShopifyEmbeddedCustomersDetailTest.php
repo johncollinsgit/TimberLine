@@ -416,6 +416,27 @@ test('candle cash adjustment alias route resolves with embedded context', functi
     $response->assertRedirect();
 });
 
+test('embedded customer detail uses app-prefixed actions when host is provided', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $signature = retailEmbeddedSignedQuery();
+    $response = $this->get(
+        route('shopify.app.customers.detail', array_merge(['marketingProfile' => $profile->id], $signature))
+    );
+
+    $response->assertOk();
+    $content = $response->getContent();
+
+    $this->assertStringContainsString(
+        '/shopify/app/customers/manage/' . $profile->id . '/candle-cash',
+        $content
+    );
+    $this->assertStringContainsString('host=admin-host-token', $content);
+    $this->assertStringContainsString('shop=modernforestry.myshopify.com', $content);
+});
+
 test('manual adjustment falls back to Admin actor label when user is not resolved', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();

@@ -15,6 +15,7 @@ use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class ShopifyEmbeddedCustomersController extends Controller
 {
@@ -146,13 +147,19 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'identity.update', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
+            Log::warning('Shopify embedded customer identity update blocked', [
+                'profile_id' => $marketingProfile->id,
+                'route' => $request->route()?->getName(),
+                'status' => $context['status'] ?? 'unknown',
+            ]);
             return redirect()
                 ->back()
-                ->with('customer_detail_notice', [
-                    'style' => 'warning',
-                    'message' => 'Customer update failed: store context could not be verified.',
-                ]);
+            ->with('customer_detail_notice', [
+                'style' => 'warning',
+                'message' => 'Customer update failed: store context could not be verified.',
+            ]);
         }
 
         $data = $request->validate([
@@ -189,7 +196,13 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'consent.update', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
+            Log::warning('Shopify embedded customer consent update blocked', [
+                'profile_id' => $marketingProfile->id,
+                'route' => $request->route()?->getName(),
+                'status' => $context['status'] ?? 'unknown',
+            ]);
             return redirect()
                 ->back()
                 ->with('customer_detail_notice', [
@@ -241,7 +254,13 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
+            Log::warning('Shopify embedded Candle Cash adjustment blocked', [
+                'profile_id' => $marketingProfile->id,
+                'route' => $request->route()?->getName(),
+                'status' => $context['status'] ?? 'unknown',
+            ]);
             return redirect()
                 ->back()
                 ->with('customer_detail_notice', [
@@ -270,6 +289,15 @@ class ShopifyEmbeddedCustomersController extends Controller
 
         $balance = (int) ($result['balance'] ?? 0);
 
+        Log::info('Shopify embedded Candle Cash adjustment applied', [
+            'profile_id' => $marketingProfile->id,
+            'direction' => $direction,
+            'amount' => $amount,
+            'reason' => $reason,
+            'balance' => $balance,
+            'transaction_id' => $result['transaction_id'] ?? null,
+        ]);
+
         return redirect()
             ->back()
             ->with('customer_detail_notice', [
@@ -285,7 +313,13 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'message.send', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
+            Log::warning('Shopify embedded customer message blocked', [
+                'profile_id' => $marketingProfile->id,
+                'route' => $request->route()?->getName(),
+                'status' => $context['status'] ?? 'unknown',
+            ]);
             return redirect()
                 ->back()
                 ->with('customer_detail_notice', [
@@ -310,6 +344,15 @@ class ShopifyEmbeddedCustomersController extends Controller
             ],
         };
 
+        if (! $result['ok']) {
+            Log::warning('Shopify embedded customer message failed', [
+                'profile_id' => $marketingProfile->id,
+                'channel' => $channel,
+                'failure_message' => $result['message'] ?? 'unknown',
+                'context_status' => $context['status'] ?? 'unknown',
+            ]);
+        }
+
         return redirect()
             ->back()
             ->with('customer_detail_notice', [
@@ -326,7 +369,13 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'candle_cash.send', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
+            Log::warning('Shopify embedded Candle Cash send blocked', [
+                'profile_id' => $marketingProfile->id,
+                'route' => $request->route()?->getName(),
+                'status' => $context['status'] ?? 'unknown',
+            ]);
             return redirect()
                 ->back()
                 ->with('customer_detail_notice', [
@@ -370,6 +419,16 @@ class ShopifyEmbeddedCustomersController extends Controller
             metadata: $metadata
         );
 
+        Log::info('Shopify embedded Candle Cash sent', [
+            'profile_id' => $marketingProfile->id,
+            'amount' => $amount,
+            'reason' => $reason,
+            'actor_id' => auth()->id(),
+            'balance' => (int) ($result['balance'] ?? 0),
+            'transaction_id' => $result['transaction_id'] ?? null,
+            'metadata' => $metadata,
+        ]);
+
         $noticeMessage = 'Candle Cash sent. New balance: ' . number_format((int) ($result['balance'] ?? 0));
         $noticeStyle = 'success';
         $transactionId = $result['transaction_id'] ?? null;
@@ -388,6 +447,17 @@ class ShopifyEmbeddedCustomersController extends Controller
             if (! $smsResult['ok']) {
                 $noticeStyle = 'warning';
                 $noticeMessage .= ' (Message not sent: ' . $smsResult['message'] . ')';
+                Log::warning('Shopify embedded Candle Cash notification failed', [
+                    'profile_id' => $marketingProfile->id,
+                    'transaction_id' => $transactionId,
+                    'failure_message' => $smsResult['message'] ?? 'unknown',
+                ]);
+            }
+            else {
+                Log::info('Shopify embedded Candle Cash notification sent', [
+                    'profile_id' => $marketingProfile->id,
+                    'transaction_id' => $transactionId,
+                ]);
             }
         }
 
@@ -444,6 +514,31 @@ class ShopifyEmbeddedCustomersController extends Controller
         $response->headers->remove('X-Frame-Options');
 
         return $response;
+    }
+
+    protected function logCustomerAction(Request $request, MarketingProfile $profile, string $action, bool $contextOk): void
+    {
+        Log::info('shopify.embedded.customer_action', [
+            'action' => $action,
+            'profile_id' => $profile->id,
+            'route' => $request->route()?->getName(),
+            'method' => $request->method(),
+            'action_context_ok' => $contextOk,
+            'payload' => $this->sanitizeCustomerActionPayload($request),
+        ]);
+    }
+
+    protected function sanitizeCustomerActionPayload(Request $request): array
+    {
+        $payload = $request->except(['_token', '_method']);
+
+        return collect($payload)
+            ->map(fn ($value) => is_string($value)
+                ? mb_strlen($value) > 220
+                    ? mb_substr($value, 0, 220) . '…'
+                    : trim($value)
+                : $value)
+            ->all();
     }
 
     /**

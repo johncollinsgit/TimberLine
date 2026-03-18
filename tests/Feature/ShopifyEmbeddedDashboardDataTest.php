@@ -246,7 +246,9 @@ test('issued birthday rewards without linked orders do not reduce realized net p
     $response
         ->assertOk()
         ->assertJsonPath('data.topMetrics.0.value', 0)
-        ->assertJsonPath('data.financialSummary.netProfit.value', 0);
+        ->assertJsonPath('data.financialSummary.netProfit.value', 0)
+        ->assertJsonPath('data.financialSummary.realizedRewardCost', 0)
+        ->assertJsonPath('data.financialSummary.birthdayRewardLiability', 10);
 
     expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual(0.0);
 });
@@ -302,6 +304,7 @@ test('only realized reward cost affects fallback profit when issued birthday rew
         ->assertJsonPath('data.topMetrics.0.value', 0);
 
     expect($response->json('data.financialSummary.netProfit.value'))->toEqual(-$realizedAmount);
+    expect($response->json('data.financialSummary.realizedRewardCost'))->toEqual($realizedAmount);
     expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual($realizedAmount);
 });
 
