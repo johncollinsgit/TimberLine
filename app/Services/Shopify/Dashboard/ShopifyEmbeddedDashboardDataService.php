@@ -4,16 +4,15 @@ namespace App\Services\Shopify\Dashboard;
 
 use App\Models\BirthdayRewardIssuance;
 use App\Models\MarketingCampaignConversion;
-use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Reporting\AnalyticsComparisonService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class ShopifyEmbeddedDashboardDataService
 {
@@ -22,6 +21,7 @@ class ShopifyEmbeddedDashboardDataService
         protected ShopifyEmbeddedDashboardQuery $query,
         protected ShopifyEmbeddedDashboardCandleCashValueProvider $candleCashProvider,
         protected ShopifyEmbeddedDashboardProfitEstimator $profitEstimator,
+        protected OrderProfitCalculator $orderProfitCalculator,
         protected ShopifyEmbeddedDashboardAttributionClassifier $attributionClassifier,
         protected ShopifyEmbeddedDashboardAttributionAggregator $attributionAggregator,
         protected AnalyticsComparisonService $comparisonService,
@@ -66,7 +66,7 @@ class ShopifyEmbeddedDashboardDataService
                     'partialData' => [
                         'attribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
                         'locations' => (bool) $primarySnapshot['flags']['location_partial'],
-                        'profit' => (bool) $primarySnapshot['flags']['profit_estimated'],
+                        'profit' => (bool) $primarySnapshot['flags']['profit_partial'],
                     ],
                 ],
                 'query' => $resolvedQuery,
@@ -86,7 +86,7 @@ class ShopifyEmbeddedDashboardDataService
                 'flags' => [
                     'hasAnyData' => (bool) $primarySnapshot['flags']['has_any_data'],
                     'usesFallbackAttribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
-                    'usesEstimatedOrderRevenue' => true,
+                    'usesEstimatedOrderRevenue' => (bool) $primarySnapshot['flags']['profit_used_estimator_fallback'],
                 ],
             ];
         });
@@ -151,10 +151,7 @@ class ShopifyEmbeddedDashboardDataService
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
         $candleCash = $this->candleCashProvider->snapshot($from, $to);
         $returningCustomerRate = $this->returningCustomerRate($from, $to);
-        $profit = $this->profitEstimator->estimate([
-            'revenue' => (float) $revenueRows->sum('revenue'),
-            'discounts' => (float) $candleCash['rewardCostAmount'],
-        ]);
+        $profit = $this->profitSummary($revenueRows, (float) $candleCash['rewardCostAmount']);
 
         return [
             'revenueRows' => $revenueRows,
@@ -165,12 +162,12 @@ class ShopifyEmbeddedDashboardDataService
             'rewardSales' => round((float) $revenueRows->sum('revenue'), 2),
             'rewardsOrderCount' => (int) $revenueRows->count(),
             'returningCustomerRate' => $returningCustomerRate,
-            'netProfit' => (float) $profit['netProfit'],
+            'netProfit' => (float) $profit['net_profit'],
             'financials' => [
                 'grossRevenueTouched' => round((float) $revenueRows->sum('revenue'), 2),
                 'rewardCostAbsorbed' => round((float) $candleCash['rewardCostAmount'], 2),
                 'incrementalRetainedRevenue' => round(max(0, (float) $revenueRows->sum('revenue') - (float) $candleCash['rewardCostAmount']), 2),
-                'netProfit' => (float) $profit['netProfit'],
+                'netProfit' => (float) $profit['net_profit'],
                 'profitBreakdown' => $profit,
             ],
             'flags' => [
@@ -179,9 +176,179 @@ class ShopifyEmbeddedDashboardDataService
                 'location_partial' => $locationRows->isNotEmpty()
                     ? $locationRows->contains(fn (array $row): bool => (bool) ($row['partial'] ?? false))
                     : true,
-                'profit_estimated' => true,
+                'profit_partial' => (bool) ($profit['confidence_level'] !== 'high' || ($profit['unresolved_revenue'] ?? 0) > 0),
+                'profit_used_estimator_fallback' => (bool) ($profit['used_estimator_fallback'] ?? false),
             ],
         ];
+    }
+
+    /**
+     * @param  Collection<int,array<string,mixed>>  $revenueRows
+     * @return array<string,mixed>
+     */
+    protected function profitSummary(Collection $revenueRows, float $rewardCostAmount): array
+    {
+        $orderIds = $revenueRows
+            ->pluck('orderId')
+            ->filter(fn ($value): bool => is_numeric($value) && (int) $value > 0)
+            ->map(fn ($value): int => (int) $value)
+            ->unique()
+            ->values();
+
+        $totalRevenue = round((float) $revenueRows->sum('revenue'), 2);
+
+        if ($orderIds->isEmpty()) {
+            $fallback = $this->profitEstimator->estimate([
+                'revenue' => $totalRevenue,
+                'discounts' => $rewardCostAmount,
+            ]);
+
+            return [
+                'revenue' => (float) $fallback['revenue'],
+                'product_cost_total' => (float) $fallback['productCost'],
+                'discount_total' => (float) $fallback['discounts'],
+                'refund_total' => (float) $fallback['refunds'],
+                'shipping_revenue' => 0.0,
+                'shipping_cost' => (float) $fallback['shippingCost'],
+                'payment_fee' => 0.0,
+                'candle_cash_cost' => 0.0,
+                'net_profit' => (float) $fallback['netProfit'],
+                'confidence_level' => 'low',
+                'assumptions_used' => array_keys(array_filter((array) ($fallback['assumptions'] ?? []), fn ($value) => $value !== null)),
+                'resolved_order_count' => 0,
+                'expected_order_count' => 0,
+                'unresolved_order_count' => 0,
+                'unresolved_revenue' => 0.0,
+                'confidence_mix' => ['high' => 0, 'medium' => 0, 'low' => $totalRevenue > 0 ? 1 : 0],
+                'used_estimator_fallback' => $totalRevenue > 0,
+                'channel_profit' => [],
+            ];
+        }
+
+        $orders = Order::query()
+            ->with(['lines.size'])
+            ->whereIn('id', $orderIds->all())
+            ->get()
+            ->keyBy('id');
+
+        $summary = [
+            'revenue' => 0.0,
+            'product_cost_total' => 0.0,
+            'discount_total' => 0.0,
+            'refund_total' => 0.0,
+            'shipping_revenue' => 0.0,
+            'shipping_cost' => 0.0,
+            'payment_fee' => 0.0,
+            'candle_cash_cost' => 0.0,
+            'net_profit' => 0.0,
+            'resolved_order_count' => 0,
+            'expected_order_count' => $orderIds->count(),
+            'unresolved_order_count' => 0,
+            'unresolved_revenue' => 0.0,
+            'confidence_mix' => ['high' => 0, 'medium' => 0, 'low' => 0],
+            'assumptions_used' => [],
+            'used_estimator_fallback' => false,
+            'channel_profit' => [],
+        ];
+
+        $rowsByOrder = $revenueRows
+            ->filter(fn (array $row): bool => is_numeric($row['orderId'] ?? null) && (int) ($row['orderId'] ?? 0) > 0)
+            ->groupBy(fn (array $row): int => (int) $row['orderId']);
+
+        foreach ($rowsByOrder as $orderId => $rows) {
+            /** @var Order|null $order */
+            $order = $orders->get((int) $orderId);
+
+            if (! $order) {
+                $summary['unresolved_order_count']++;
+                $summary['unresolved_revenue'] += (float) $rows->sum('revenue');
+                continue;
+            }
+
+            $profit = $this->orderProfitCalculator->calculate($order);
+            $summary['resolved_order_count']++;
+            $summary['confidence_mix'][$profit['confidence_level']]++;
+            $summary['assumptions_used'] = array_values(array_unique([
+                ...$summary['assumptions_used'],
+                ...array_keys((array) ($profit['assumptions_used'] ?? [])),
+            ]));
+
+            foreach ([
+                'revenue',
+                'product_cost_total',
+                'discount_total',
+                'refund_total',
+                'shipping_revenue',
+                'shipping_cost',
+                'payment_fee',
+                'candle_cash_cost',
+                'net_profit',
+            ] as $field) {
+                $summary[$field] += (float) $profit[$field];
+            }
+
+            $channel = strtolower(trim((string) ($rows->sortByDesc('revenue')->first()['channel'] ?? 'unknown'))) ?: 'unknown';
+            if (! isset($summary['channel_profit'][$channel])) {
+                $summary['channel_profit'][$channel] = [
+                    'net_profit' => 0.0,
+                    'revenue' => 0.0,
+                    'resolved_order_count' => 0,
+                    'confidence_mix' => ['high' => 0, 'medium' => 0, 'low' => 0],
+                ];
+            }
+
+            $summary['channel_profit'][$channel]['net_profit'] += (float) $profit['net_profit'];
+            $summary['channel_profit'][$channel]['revenue'] += (float) $profit['revenue'];
+            $summary['channel_profit'][$channel]['resolved_order_count']++;
+            $summary['channel_profit'][$channel]['confidence_mix'][$profit['confidence_level']]++;
+        }
+
+        foreach ([
+            'revenue',
+            'product_cost_total',
+            'discount_total',
+            'refund_total',
+            'shipping_revenue',
+            'shipping_cost',
+            'payment_fee',
+            'candle_cash_cost',
+            'net_profit',
+            'unresolved_revenue',
+        ] as $field) {
+            $summary[$field] = round((float) $summary[$field], 2);
+        }
+
+        foreach ($summary['channel_profit'] as $channel => $channelProfit) {
+            $summary['channel_profit'][$channel]['net_profit'] = round((float) $channelProfit['net_profit'], 2);
+            $summary['channel_profit'][$channel]['revenue'] = round((float) $channelProfit['revenue'], 2);
+        }
+
+        $summary['confidence_level'] = $this->profitConfidenceLevel($summary);
+
+        return $summary;
+    }
+
+    /**
+     * @param  array<string,mixed>  $summary
+     */
+    protected function profitConfidenceLevel(array $summary): string
+    {
+        if ((int) ($summary['resolved_order_count'] ?? 0) === 0) {
+            return 'low';
+        }
+
+        if (
+            (float) ($summary['unresolved_revenue'] ?? 0) > 0
+            || (int) data_get($summary, 'confidence_mix.low', 0) > 0
+        ) {
+            return 'low';
+        }
+
+        if ((int) data_get($summary, 'confidence_mix.medium', 0) > 0) {
+            return 'medium';
+        }
+
+        return 'high';
     }
 
     protected function conversionRows(CarbonImmutable $from, CarbonImmutable $to): Collection
@@ -564,7 +731,7 @@ class ShopifyEmbeddedDashboardDataService
                 'deltaPct' => data_get($metrics, 'net_profit.delta_pct'),
                 'deltaLabel' => $this->formatDelta(data_get($metrics, 'net_profit.delta_pct')),
                 'tone' => $this->toneForDelta(data_get($metrics, 'net_profit.delta_pct')),
-                'caption' => 'Estimated contribution after reward cost and conservative fulfillment-cost assumptions.',
+                'caption' => 'Contribution from stored COGS and order-level costs, with confidence reduced when fallback assumptions still carry the period.',
             ],
         ];
     }
@@ -705,7 +872,7 @@ class ShopifyEmbeddedDashboardDataService
         $comparisonRows = collect($comparisonSnapshot['attributionRows'] ?? [])->keyBy('key');
 
         $sources = collect((array) $config['visibleAttributionSources'])
-            ->map(function (string $key) use ($primaryRows, $comparisonRows): array {
+            ->map(function (string $key) use ($primaryRows, $comparisonRows, $primarySnapshot): array {
                 $primary = (array) ($primaryRows->get($key) ?? []);
                 $comparison = (array) ($comparisonRows->get($key) ?? []);
                 $primaryRevenue = (float) ($primary['revenue'] ?? 0);
@@ -720,6 +887,8 @@ class ShopifyEmbeddedDashboardDataService
                     'label' => $primary['label'] ?? $this->attributionLabel($key),
                     'revenue' => $primaryRevenue,
                     'formattedRevenue' => $this->currency($primaryRevenue),
+                    'profit' => (float) data_get($primarySnapshot, 'financials.profitBreakdown.channel_profit.' . $key . '.net_profit', 0),
+                    'formattedProfit' => $this->currency((float) data_get($primarySnapshot, 'financials.profitBreakdown.channel_profit.' . $key . '.net_profit', 0)),
                     'orders' => (int) ($primary['orders'] ?? 0),
                     'deltaPct' => $deltaPct,
                     'deltaLabel' => $this->formatDelta($deltaPct),
@@ -887,13 +1056,43 @@ class ShopifyEmbeddedDashboardDataService
 
         return [
             'title' => 'Financial summary',
-            'subtitle' => 'Net contribution is estimated conservatively so the dashboard can stay honest before deeper cost modeling lands.',
+            'subtitle' => 'Net contribution now uses stored COGS where Backstage has them and degrades confidence conservatively when cost coverage is incomplete.',
             'items' => $items,
             'netProfit' => [
                 'value' => (float) data_get($primarySnapshot, 'financials.netProfit', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'financials.netProfit', 0)),
                 'comparisonValue' => $comparisonSnapshot ? (float) data_get($comparisonSnapshot, 'financials.netProfit', 0) : null,
+                'label' => 'Net profit created',
+                'confidenceLevel' => (string) data_get($primarySnapshot, 'financials.profitBreakdown.confidence_level', 'low'),
+                'detail' => $this->profitConfidenceDetail((array) data_get($primarySnapshot, 'financials.profitBreakdown', [])),
             ],
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $profitBreakdown
+     */
+    protected function profitConfidenceDetail(array $profitBreakdown): string
+    {
+        $confidence = strtolower(trim((string) ($profitBreakdown['confidence_level'] ?? 'low'))) ?: 'low';
+        $resolved = (int) ($profitBreakdown['resolved_order_count'] ?? 0);
+        $expected = (int) ($profitBreakdown['expected_order_count'] ?? 0);
+        $unresolvedRevenue = (float) ($profitBreakdown['unresolved_revenue'] ?? 0);
+
+        $detail = ucfirst($confidence) . ' confidence';
+
+        if ($expected > 0) {
+            $detail .= ' · ' . $resolved . ' of ' . $expected . ' attributed orders resolved from stored cost data.';
+        }
+
+        if ($unresolvedRevenue > 0) {
+            $detail .= ' ' . $this->currency($unresolvedRevenue) . ' in attributed revenue still lacks an order-backed profit trace.';
+        }
+
+        if (! empty($profitBreakdown['assumptions_used'])) {
+            $detail .= ' Conservative fallback assumptions still cover the remaining gaps.';
+        }
+
+        return trim($detail);
     }
 }

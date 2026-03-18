@@ -45,6 +45,8 @@ export interface DashboardAttributionSource {
   label: string;
   revenue: number;
   formattedRevenue: string;
+  profit?: number;
+  formattedProfit?: string;
   orders: number;
   deltaPct: number | null;
   deltaLabel: string;
@@ -130,6 +132,9 @@ export interface DashboardPayload {
       value: number;
       formattedValue: string;
       comparisonValue: number | null;
+      label?: string;
+      confidenceLevel?: "high" | "medium" | "low";
+      detail?: string;
     };
   };
   flags: {

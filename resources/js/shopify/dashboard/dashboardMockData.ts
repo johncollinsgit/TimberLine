@@ -125,6 +125,8 @@ export const dashboardMockData: DashboardPayload = {
         label: "Text",
         revenue: 12460,
         formattedRevenue: "$12,460.00",
+        profit: 4130,
+        formattedProfit: "$4,130.00",
         orders: 84,
         deltaPct: 14.8,
         deltaLabel: "+14.8%",
@@ -178,6 +180,9 @@ export const dashboardMockData: DashboardPayload = {
       value: 17940,
       formattedValue: "$17,940.00",
       comparisonValue: 0,
+      label: "Net profit created",
+      confidenceLevel: "medium",
+      detail: "Medium confidence · fallback fixture uses stored-cost style data plus conservative fee assumptions.",
     },
   },
   flags: {

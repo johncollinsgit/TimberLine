@@ -36,11 +36,16 @@ export function FinancialSummarySection({ section }: FinancialSummarySectionProp
         <Divider />
         <BlockStack gap="100">
           <Text as="span" variant="bodySm" tone="subdued">
-            Estimated net profit created
+            {section.netProfit.label ?? "Net profit created"}
           </Text>
           <Text as="p" variant="headingLg">
             {section.netProfit.formattedValue}
           </Text>
+          {section.netProfit.detail ? (
+            <Text as="p" variant="bodySm" tone="subdued">
+              {section.netProfit.detail}
+            </Text>
+          ) : null}
         </BlockStack>
       </BlockStack>
     </Card>

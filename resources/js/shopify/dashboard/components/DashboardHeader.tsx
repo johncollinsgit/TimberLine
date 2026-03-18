@@ -27,7 +27,7 @@ export function DashboardHeader({
     ? [
         partialData.attribution ? "Attribution still has partial coverage." : null,
         partialData.locations ? "Location groupings are best-effort from local profile addresses." : null,
-        partialData.profit ? "Net profit remains estimated until deeper cost inputs are available." : null,
+        partialData.profit ? "Profit now uses stored COGS where available and conservative fallbacks where cost coverage is still incomplete." : null,
       ]
         .filter(Boolean)
         .join(" ")

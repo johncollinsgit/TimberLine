@@ -2,6 +2,7 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
+use App\Models\CatalogItemCost;
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashRedemption;
 use App\Models\MarketingCampaign;
@@ -9,7 +10,11 @@ use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\CustomerBirthdayProfile;
+use App\Models\Scent;
+use App\Models\Size;
+use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardQuery;
 
 beforeEach(function () {
@@ -42,6 +47,46 @@ test('embedded dashboard api returns a stable payload contract for an authorized
         'ordered_at' => now()->subDay(),
         'order_number' => '#1001',
         'status' => 'complete',
+        'currency_code' => 'USD',
+        'subtotal_price' => 125.50,
+        'shipping_total' => 0.00,
+        'total_price' => 125.50,
+    ]);
+
+    $scent = Scent::query()->create([
+        'name' => 'evergreen dusk',
+        'display_name' => 'Evergreen Dusk',
+        'is_active' => true,
+    ]);
+
+    $size = Size::query()->create([
+        'code' => '8oz',
+        'label' => '8oz',
+        'retail_price' => 24.00,
+        'wholesale_price' => 14.00,
+        'is_active' => true,
+    ]);
+
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'scent_id' => $scent->id,
+        'size_id' => $size->id,
+        'shopify_variant_id' => 1001001,
+        'sku' => 'EVERGREEN-8OZ',
+        'ordered_qty' => 2,
+        'quantity' => 2,
+        'currency_code' => 'USD',
+        'unit_price' => 62.75,
+        'line_subtotal' => 125.50,
+        'line_total' => 125.50,
+    ]);
+
+    CatalogItemCost::query()->create([
+        'shopify_store_key' => 'retail',
+        'shopify_variant_id' => 1001001,
+        'cost_amount' => 18.00,
+        'currency_code' => 'USD',
+        'is_active' => true,
     ]);
 
     MarketingProfileLink::query()->create([
@@ -102,12 +147,17 @@ test('embedded dashboard api returns a stable payload contract for an authorized
         'location_grouping' => 'state',
     ]));
 
+    $expectedProfit = app(OrderProfitCalculator::class)->calculate($order);
+
     $response
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.query.timeframe', 'last_30_days')
         ->assertJsonPath('data.query.comparison', 'previous_period')
         ->assertJsonPath('data.query.locationGrouping', 'state')
+        ->assertJsonPath('data.financialSummary.netProfit.value', $expectedProfit['net_profit'])
+        ->assertJsonPath('data.financialSummary.netProfit.confidenceLevel', $expectedProfit['confidence_level'])
+        ->assertJsonPath('data.flags.usesEstimatedOrderRevenue', false)
         ->assertJsonStructure([
             'ok',
             'data' => [
@@ -151,6 +201,7 @@ test('embedded dashboard api returns a stable payload contract for an authorized
 
     expect($response->json('data.topMetrics'))->toHaveCount(4);
     expect($response->json('data.chart.series'))->not->toBeEmpty();
+    expect($response->json('data.financialSummary.netProfit.detail'))->toContain('confidence');
 });
 
 test('embedded dashboard query normalizes invalid values back to safe defaults', function () {

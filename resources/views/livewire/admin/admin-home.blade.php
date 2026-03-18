@@ -21,6 +21,7 @@
       @elseif($tab === 'catalog')
         <div class="grid gap-6">
           <livewire:admin.catalog.scents-crud />
+          <livewire:admin.catalog.costs-crud />
         </div>
       @elseif($tab === 'sizes-wicks')
         <div class="grid gap-6">

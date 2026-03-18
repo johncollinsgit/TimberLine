@@ -32,6 +32,7 @@ use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
+use App\Livewire\Admin\Catalog\CostsCrud as AdminCostsCrud;
 use App\Livewire\Admin\Catalog\SizesCrud as AdminSizesCrud;
 use App\Livewire\Admin\Catalog\WicksCrud as AdminWicksCrud;
 use App\Livewire\Admin\ImportRuns as AdminImportRuns;
@@ -181,6 +182,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Optional direct module routes
         Route::get('/admin/users', AdminUsersIndex::class)->name('admin.users');
         Route::get('/admin/catalog/scents', AdminScentsCrud::class)->name('admin.catalog.scents');
+        Route::get('/admin/catalog/costs', AdminCostsCrud::class)->name('admin.catalog.costs');
         Route::get('/admin/catalog/sizes', AdminSizesCrud::class)->name('admin.catalog.sizes');
         Route::get('/admin/catalog/wicks', AdminWicksCrud::class)->name('admin.catalog.wicks');
         Route::get('/admin/wholesale/custom-scents', AdminWholesaleCustomScentsCrud::class)->name('admin.wholesale.custom-scents');

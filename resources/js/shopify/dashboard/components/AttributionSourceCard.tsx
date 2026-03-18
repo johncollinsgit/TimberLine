@@ -29,6 +29,11 @@ export function AttributionSourceCard({ source }: AttributionSourceCardProps) {
         <Text as="p" variant="bodySm" tone="subdued">
           {source.orders} order{source.orders === 1 ? "" : "s"}
         </Text>
+        {source.profit && source.profit > 0 && source.formattedProfit ? (
+          <Text as="p" variant="bodySm" tone="subdued">
+            Net profit {source.formattedProfit}
+          </Text>
+        ) : null}
         <Text as="p" variant="bodySm" tone="subdued">
           {source.description}
         </Text>
