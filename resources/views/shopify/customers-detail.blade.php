@@ -24,25 +24,7 @@
         $smsPhoneDisplay = (string) ($smsInfo['phone_display'] ?? 'No phone on file');
         $smsConsentLabel = (string) ($smsInfo['consent_label'] ?? 'Consent needed');
         $notice = session('customer_detail_notice');
-        $embeddedHost = filled($host ?? null) ? $host : (string) request()->query('host', '');
-        $routePrefix = filled($host ?? null) ? 'shopify.app.' : 'shopify.embedded.';
-        $shopifyRoute = static function (string $name, array $params = []) use ($routePrefix): string {
-            return route($routePrefix . $name, $params, false);
-        };
-        $embeddedQuery = $embeddedHost === ''
-            ? []
-            : collect(request()->query())
-                ->filter(static fn ($value) => is_scalar($value) || $value === null)
-                ->map(static fn ($value) => is_string($value) ? trim($value) : $value)
-                ->all();
-        $withEmbeddedQuery = static function (string $url) use ($embeddedQuery): string {
-            if ($embeddedQuery === [] || str_contains($url, '?') && collect($embeddedQuery)->every(fn ($value, $key) => str_contains($url, $key . '='))) {
-                return $url;
-            }
-
-            $separator = str_contains($url, '?') ? '&' : '?';
-            return $url . $separator . http_build_query($embeddedQuery, '', '&', PHP_QUERY_RFC3986);
-        };
+        $actionUrlGenerator = app(\App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator::class);
     @endphp
 
     <style>
@@ -265,7 +247,7 @@
     <section class="customers-surface customers-detail-header">
         <div class="customers-detail-header-row">
             <div>
-                    <a class="customers-detail-back" href="{{ $withEmbeddedQuery($shopifyRoute('customers.manage')) }}">Back to Manage customers</a>
+                <a class="customers-detail-back" href="{{ $actionUrlGenerator->url('customers.manage', [], request()) }}">Back to Manage customers</a>
                 <h2 class="customers-detail-name">{{ $customerDisplayName }}</h2>
                 <div class="customers-detail-meta">
                     {{ $marketingProfile->email ?: 'Email not set' }}
@@ -319,7 +301,7 @@
                 Marketing profile ID: {{ $marketingProfile->id }}
             </p>
 
-            <form method="POST" action="{{ $withEmbeddedQuery($shopifyRoute('customers.update', ['marketingProfile' => $marketingProfile->id])) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $actionUrlGenerator->url('customers.update', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
                 @csrf
                 @method('PATCH')
                 <input type="text" name="first_name" value="{{ old('first_name', $marketingProfile->first_name) }}" placeholder="First name" />
@@ -347,7 +329,7 @@
                 Manual adjustments are recorded in the activity log and require a reason.
             </p>
 
-            <form method="POST" action="{{ $withEmbeddedQuery($shopifyRoute('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id])) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $actionUrlGenerator->url('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
                 @csrf
                 <label>Adjustment type</label>
                 <select name="direction">
@@ -373,7 +355,7 @@
                 Send Candle Cash to the customer as a reward action. This is distinct from a manual adjustment and will be labeled separately in activity.
             </p>
 
-            <form method="POST" action="{{ $withEmbeddedQuery($shopifyRoute('customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id])) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $actionUrlGenerator->url('customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
                 @csrf
                 @php
                     $giftIntentOptions = $giftIntentOptions ?? [];
@@ -457,7 +439,7 @@
                 @endif
             </p>
 
-            <form method="POST" action="{{ $withEmbeddedQuery($shopifyRoute('customers.update-consent', ['marketingProfile' => $marketingProfile->id])) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $actionUrlGenerator->url('customers.update-consent', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
                 @csrf
                 <label>Channel</label>
                 <select name="channel">
@@ -489,7 +471,7 @@
                 @endif
             </p>
 
-            <form method="POST" action="{{ $withEmbeddedQuery($shopifyRoute('customers.message', ['marketingProfile' => $marketingProfile->id])) }}" class="customers-detail-form">
+            <form method="POST" action="{{ $actionUrlGenerator->url('customers.message', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
                 @csrf
                 <label>Channel</label>
                 <select name="channel">

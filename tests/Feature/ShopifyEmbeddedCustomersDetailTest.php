@@ -15,7 +15,9 @@ use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\User;
+use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 function seedEmbeddedCustomerDetailFixture(): MarketingProfile
@@ -416,7 +418,7 @@ test('candle cash adjustment alias route resolves with embedded context', functi
     $response->assertRedirect();
 });
 
-test('embedded customer detail uses app-prefixed actions when host is provided', function () {
+test('embedded customer detail forms use helper-generated urls with Shopify query params', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
@@ -429,12 +431,45 @@ test('embedded customer detail uses app-prefixed actions when host is provided',
     $response->assertOk();
     $content = $response->getContent();
 
-    $this->assertStringContainsString(
-        '/shopify/app/customers/manage/' . $profile->id . '/candle-cash',
-        $content
-    );
-    $this->assertStringContainsString('host=admin-host-token', $content);
-    $this->assertStringContainsString('shop=modernforestry.myshopify.com', $content);
+    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $signedRequest = Request::create('/', 'GET', $signature);
+
+    $expectedActions = [
+        'customers.update',
+        'customers.candle-cash.adjust',
+        'customers.candle-cash.send',
+        'customers.update-consent',
+        'customers.message',
+    ];
+
+    foreach ($expectedActions as $routeName) {
+        $expected = $generator->url($routeName, ['marketingProfile' => $profile->id], $signedRequest);
+        $escaped = htmlspecialchars($expected, ENT_QUOTES, 'UTF-8');
+        $this->assertStringContainsString('action="' . $escaped . '"', $content);
+    }
+});
+
+test('customer detail forms fall back to embedded routes without Shopify host', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->get(route('shopify.embedded.customers.detail', ['marketingProfile' => $profile->id], false));
+
+    $response->assertOk();
+    $content = $response->getContent();
+
+    $expectedActions = [
+        route('shopify.embedded.customers.update', ['marketingProfile' => $profile->id], false),
+        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.embedded.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.embedded.customers.update-consent', ['marketingProfile' => $profile->id], false),
+        route('shopify.embedded.customers.message', ['marketingProfile' => $profile->id], false),
+    ];
+
+    foreach ($expectedActions as $action) {
+        $this->assertStringContainsString('action="' . $action . '"', $content);
+    }
 });
 
 test('manual adjustment falls back to Admin actor label when user is not resolved', function () {
