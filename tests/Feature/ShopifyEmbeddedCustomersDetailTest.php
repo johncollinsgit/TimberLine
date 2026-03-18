@@ -14,6 +14,7 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
+use App\Models\MarketingShortLink;
 use App\Models\User;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
 use Carbon\CarbonImmutable;
@@ -376,6 +377,102 @@ test('candle cash adjustment subtracts balance when allowed', function () {
 
     $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
     expect((int) ($balance?->balance ?? 0))->toBe(30);
+    expect(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
+});
+
+test('positive candle cash adjustment auto-sends rewards sms with shortened link', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-222-3333',
+        'normalized_phone' => '15552223333',
+        'accepts_sms_marketing' => true,
+    ])->save();
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $user = User::factory()->create([
+        'name' => 'Taylor Admin',
+        'email' => 'taylor.admin@example.com',
+    ]);
+
+    $token = csrf_token();
+
+    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'direction' => 'add',
+            'amount' => 25,
+            'reason' => 'Support recovery gift',
+        ]
+    );
+
+    $response->assertRedirect();
+
+    $delivery = MarketingMessageDelivery::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    $shortLink = MarketingShortLink::query()->latest('id')->first();
+
+    expect($delivery)->not->toBeNull()
+        ->and($delivery->channel)->toBe('sms')
+        ->and($delivery->rendered_message)->toContain('Modern Forestry Just Rewarded you $25 in Candle Cash!')
+        ->and($delivery->rendered_message)->toContain('Click To Redeem!')
+        ->and($delivery->rendered_message)->toContain('Stop to Opt out')
+        ->and($delivery->rendered_message)->not->toContain('https://theforestrystudio.com/pages/rewards');
+
+    expect($shortLink)->not->toBeNull()
+        ->and($shortLink->destination_url)->toBe('https://theforestrystudio.com/pages/rewards')
+        ->and($delivery->rendered_message)->toContain((string) $shortLink->code);
+});
+
+test('positive candle cash adjustment still succeeds when reward sms cannot send', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile->forceFill([
+        'phone' => '555-222-3333',
+        'normalized_phone' => '15552223333',
+        'accepts_sms_marketing' => false,
+    ])->save();
+
+    CandleCashBalance::query()->updateOrCreate(
+        ['marketing_profile_id' => $profile->id],
+        ['balance' => 10]
+    );
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $token = csrf_token();
+
+    $response = $this->withSession(['_token' => $token])->post(
+        route('shopify.embedded.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        [
+            '_token' => $token,
+            'direction' => 'add',
+            'amount' => 5,
+            'reason' => 'Manual adjustment with blocked sms',
+        ]
+    );
+
+    $response->assertRedirect();
+    $response->assertSessionHas('customer_detail_notice', function (array $notice): bool {
+        return ($notice['style'] ?? null) === 'warning'
+            && str_contains((string) ($notice['message'] ?? ''), 'Reward message not sent');
+    });
+
+    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
+    expect((int) ($balance?->balance ?? 0))->toBe(15);
 });
 
 test('invalid candle cash adjustment is rejected', function () {

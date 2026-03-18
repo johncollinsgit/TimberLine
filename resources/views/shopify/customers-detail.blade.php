@@ -329,7 +329,8 @@
             <h3>Candle Cash Adjustment</h3>
             <p>
                 Current balance: {{ $summary['candle_cash_display'] ?? '0' }}<br>
-                Manual adjustments are recorded in the activity log and require a reason.
+                Manual adjustments are recorded in the activity log and require a reason.<br>
+                Positive additions automatically text a Candle Cash rewards link when SMS consent and a phone number are available.
             </p>
 
             <form method="POST" action="{{ $actionUrlGenerator->url('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">

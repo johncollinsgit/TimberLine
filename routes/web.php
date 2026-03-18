@@ -18,6 +18,7 @@ use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\Marketing\MarketingPublicEventController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
+use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
@@ -115,6 +116,7 @@ Route::post('/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCust
     ->name('shopify.embedded.customers.message');
 Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
     ->name('shopify.embedded.customers.candle-cash.send');
+Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 

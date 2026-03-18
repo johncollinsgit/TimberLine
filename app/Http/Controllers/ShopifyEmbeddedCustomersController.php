@@ -251,6 +251,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
@@ -288,6 +289,8 @@ class ShopifyEmbeddedCustomersController extends Controller
         );
 
         $balance = (int) ($result['balance'] ?? 0);
+        $noticeStyle = 'success';
+        $noticeMessage = 'Candle Cash adjusted. New balance: ' . number_format($balance) . ' pts.';
 
         Log::info('Shopify embedded Candle Cash adjustment applied', [
             'profile_id' => $marketingProfile->id,
@@ -298,11 +301,38 @@ class ShopifyEmbeddedCustomersController extends Controller
             'transaction_id' => $result['transaction_id'] ?? null,
         ]);
 
+        if ($direction === 'add' && $messagingService->smsSupported()) {
+            $smsResult = $messagingService->sendCandleCashAdjustmentAwardedSms(
+                $marketingProfile,
+                $amount,
+                auth()->id()
+            );
+
+            if (! $smsResult['ok']) {
+                $noticeStyle = 'warning';
+                $noticeMessage .= ' (Reward message not sent: ' . $smsResult['message'] . ')';
+
+                Log::warning('Shopify embedded Candle Cash adjustment reward notification failed', [
+                    'profile_id' => $marketingProfile->id,
+                    'transaction_id' => $result['transaction_id'] ?? null,
+                    'failure_message' => $smsResult['message'] ?? 'unknown',
+                ]);
+            } else {
+                $noticeMessage .= ' Reward message sent.';
+
+                Log::info('Shopify embedded Candle Cash adjustment reward notification sent', [
+                    'profile_id' => $marketingProfile->id,
+                    'transaction_id' => $result['transaction_id'] ?? null,
+                    'amount' => $amount,
+                ]);
+            }
+        }
+
         return redirect()
             ->back()
             ->with('customer_detail_notice', [
-                'style' => 'success',
-                'message' => 'Candle Cash adjusted. New balance: ' . number_format($balance) . ' pts.',
+                'style' => $noticeStyle,
+                'message' => $noticeMessage,
             ]);
     }
 

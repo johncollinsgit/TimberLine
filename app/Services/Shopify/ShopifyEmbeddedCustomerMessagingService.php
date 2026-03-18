@@ -4,13 +4,16 @@ namespace App\Services\Shopify;
 
 use App\Models\MarketingProfile;
 use App\Services\Marketing\MarketingDirectMessagingService;
+use App\Services\Marketing\MarketingLinkShortenerService;
 use App\Services\Marketing\TwilioSenderConfigService;
+use Throwable;
 
 class ShopifyEmbeddedCustomerMessagingService
 {
     public function __construct(
         protected MarketingDirectMessagingService $directMessagingService,
-        protected TwilioSenderConfigService $senderConfigService
+        protected TwilioSenderConfigService $senderConfigService,
+        protected MarketingLinkShortenerService $linkShortenerService
     ) {
     }
 
@@ -78,8 +81,48 @@ class ShopifyEmbeddedCustomerMessagingService
         ];
     }
 
+    /**
+     * @return array{ok:bool,message:string}
+     */
+    public function sendCandleCashAdjustmentAwardedSms(
+        MarketingProfile $profile,
+        int $amount,
+        ?int $actorId,
+        ?string $senderKey = null
+    ): array {
+        if (! $this->smsSupported()) {
+            return [
+                'ok' => false,
+                'message' => 'SMS sending is currently disabled for this app.',
+            ];
+        }
+
+        try {
+            $message = $this->buildCandleCashAdjustmentAwardedMessage($amount, $actorId);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [
+                'ok' => false,
+                'message' => 'SMS not sent: the Candle Cash rewards link could not be prepared.',
+            ];
+        }
+
+        return $this->sendSms($profile, $message, $actorId, $senderKey);
+    }
+
     public function smsSupported(): bool
     {
         return $this->senderConfigService->smsSupported();
+    }
+
+    protected function buildCandleCashAdjustmentAwardedMessage(int $amount, ?int $actorId): string
+    {
+        $rewardValue = '$' . number_format(max(0, $amount));
+        $destinationUrl = rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+            . '/pages/rewards';
+        $shortened = $this->linkShortenerService->shortenUrl($destinationUrl, $actorId);
+
+        return "Modern Forestry Just Rewarded you {$rewardValue} in Candle Cash! Click To Redeem! {$shortened['short_url']} Stop to Opt out";
     }
 }
