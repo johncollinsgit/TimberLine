@@ -43,7 +43,7 @@
                         <h2 class="mt-2 text-lg font-semibold text-white">Manage Customers</h2>
                         <div class="mt-1 text-sm text-white/65">
                             {{ number_format((int) ($profiles->total() ?? 0)) }} result{{ (int) ($profiles->total() ?? 0) === 1 ? '' : 's' }}.
-                            Candle Cash and legacy Growave points are shown separately.
+                            Candle Cash and legacy Growave balances are shown separately.
                         </div>
                     </div>
                     <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
@@ -59,7 +59,7 @@
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[180px]">Email</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[150px]">Phone</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Candle Cash</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Value</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Display</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Legacy Growave</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Tier</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[100px]">Referrals</th>
@@ -96,8 +96,8 @@
                                     </td>
                                     <td class="px-4 py-3 text-white/80">{{ $profile->email ?: '—' }}</td>
                                     <td class="px-4 py-3 text-white/80">{{ $profile->phone ?: '—' }}</td>
-                                    <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['candle_cash_points'] ?? 0)) }}</td>
                                     <td class="px-4 py-3 text-white/80">${{ number_format((float) ($loyalty['candle_cash_amount'] ?? 0), 2) }}</td>
+                                    <td class="px-4 py-3 text-white/80">{{ number_format((float) ($loyalty['candle_cash_amount'] ?? 0), 2) }} Candle Cash</td>
                                     <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['legacy_growave_points'] ?? 0)) }}</td>
                                     <td class="px-4 py-3 text-white/80">{{ $loyalty['tier'] ?: '—' }}</td>
                                     <td class="px-4 py-3 text-white/80">{{ number_format((int) ($loyalty['referrals'] ?? 0)) }}</td>

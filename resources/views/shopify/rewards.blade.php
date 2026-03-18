@@ -475,7 +475,7 @@
                     <div class="rewards-panel-head">
                         <div>
                             <h2>Ways to Earn</h2>
-                            <p>Live Candle Cash earn rules from Backstage. Edit titles, points, descriptions, status, and order without recreating rows.</p>
+                            <p>Live Candle Cash earn rules from Backstage. Edit titles, Candle Cash values, descriptions, status, and order without recreating rows.</p>
                         </div>
                         <div id="earn-summary" class="rewards-panel-summary"></div>
                     </div>
@@ -538,10 +538,10 @@
                         </div>
 
                         <div class="rewards-field" data-earn-only>
-                            <label for="rule-points-value">Points Value</label>
-                            <input id="rule-points-value" name="points_value" type="number" min="0" max="50000" step="1" />
-                            <p class="rewards-field-note">Stored internally as reward amount and converted through the live point rate.</p>
-                            <p class="rewards-field-error" data-error-for="points_value"></p>
+                            <label for="rule-candle-cash-value">Candle Cash Value</label>
+                            <input id="rule-candle-cash-value" name="candle_cash_value" type="number" min="0" max="50000" step="0.01" />
+                            <p class="rewards-field-note">Displayed to staff and customers as direct Candle Cash value.</p>
+                            <p class="rewards-field-error" data-error-for="candle_cash_value"></p>
                         </div>
 
                         <div class="rewards-field" data-earn-only>
@@ -551,10 +551,10 @@
                         </div>
 
                         <div class="rewards-field" data-redeem-only>
-                            <label for="rule-points-cost">Points Cost</label>
-                            <input id="rule-points-cost" name="points_cost" type="number" min="0" max="50000" step="1" />
-                            <p class="rewards-field-note" id="rule-points-cost-note">Points cost is stored directly on the reward row.</p>
-                            <p class="rewards-field-error" data-error-for="points_cost"></p>
+                            <label for="rule-candle-cash-cost">Candle Cash Cost</label>
+                            <input id="rule-candle-cash-cost" name="candle_cash_cost" type="number" min="0" max="50000" step="0.01" />
+                            <p class="rewards-field-note" id="rule-candle-cash-cost-note">Displayed as direct Candle Cash cost everywhere in the app.</p>
+                            <p class="rewards-field-error" data-error-for="candle_cash_cost"></p>
                         </div>
 
                         <div class="rewards-field" data-redeem-only>
@@ -742,9 +742,9 @@
                             `${formatNumber(redeemSummary.enabled || 0)} enabled and ${formatNumber(redeemSummary.disabled || 0)} disabled.`
                         ),
                         summaryCardMarkup(
-                            "Point Rate",
-                            `${formatNumber(program.points_per_dollar || 0)} pts`,
-                            "Current live points-per-dollar conversion used by Candle Cash."
+                            "Measurement",
+                            escapeHtml(program.measurement_label || "1 Candle Cash = 1 Candle Cash"),
+                            "Legacy storage values are normalized before display."
                         ),
                         summaryCardMarkup(
                             "Storefront Reward",
@@ -769,10 +769,12 @@
                 }
 
                 function rewardRowMarkup(kind, item) {
-                    const pointsLabel = kind === "earn" ? formatNumber(item.points_value) : formatNumber(item.points_cost);
-                    const pointsCaption = kind === "earn"
-                        ? `${escapeHtml(item.reward_amount_formatted || "$0")} stored reward amount`
-                        : (item.is_storefront_reward ? "Storefront rule" : "Stored points cost");
+                    const candleCashLabel = kind === "earn"
+                        ? escapeHtml(item.candle_cash_value_formatted || item.reward_amount_formatted || "$0")
+                        : escapeHtml(item.candle_cash_cost_formatted || "$0");
+                    const candleCashCaption = kind === "earn"
+                        ? "Displayed as direct Candle Cash value."
+                        : (item.is_storefront_reward ? "Storefront rule" : "Displayed as direct Candle Cash cost.");
                     const typeLabel = kind === "earn"
                         ? (item.action_type_label || item.task_type_label || "Earn rule")
                         : (item.reward_type_label || "Reward");
@@ -803,9 +805,9 @@
                                     <small>${escapeHtml(typeNote)}</small>
                                 </div>
                                 <div>
-                                    <span>${kind === "earn" ? "Points Value" : "Points Cost"}</span>
-                                    <strong>${escapeHtml(pointsLabel)}</strong>
-                                    <small>${escapeHtml(pointsCaption)}</small>
+                                    <span>${kind === "earn" ? "Candle Cash Value" : "Candle Cash Cost"}</span>
+                                    <strong>${candleCashLabel}</strong>
+                                    <small>${escapeHtml(candleCashCaption)}</small>
                                 </div>
                                 <div>
                                     <span>${kind === "earn" ? "Customer Status" : "Value Display"}</span>
@@ -880,21 +882,21 @@
                     });
 
                     if (kind === "earn") {
-                        form.elements.points_value.value = String(rule.points_value ?? 0);
+                        form.elements.candle_cash_value.value = String(rule.candle_cash_value ?? 0);
                         form.elements.sort_order.value = String(rule.sort_order ?? 0);
                     } else {
-                        form.elements.points_cost.value = String(rule.points_cost ?? 0);
+                        form.elements.candle_cash_cost.value = String(rule.candle_cash_cost ?? 0);
                         form.elements.reward_value.value = rule.reward_value || "";
 
                         const rewardValueNote = document.getElementById("rule-reward-value-note");
-                        const pointsCostNote = document.getElementById("rule-points-cost-note");
+                        const pointsCostNote = document.getElementById("rule-candle-cash-cost-note");
 
                         if (rule.is_storefront_reward) {
                             rewardValueNote.textContent = "This row is the live storefront Candle Cash reward. Keep the discount value numeric, like 10USD.";
-                            pointsCostNote.textContent = "Storefront cost is derived from the discount value and the current point rate.";
+                            pointsCostNote.textContent = "Storefront cost is derived from the discount value and the current Candle Cash value.";
                         } else {
                             rewardValueNote.textContent = "Use the current value format already stored on the reward.";
-                            pointsCostNote.textContent = "Points cost is stored directly on the reward row.";
+                            pointsCostNote.textContent = "Displayed as direct Candle Cash cost everywhere in the app.";
                         }
                     }
                 }
@@ -940,7 +942,7 @@
                             title: form.elements.title.value.trim(),
                             description: form.elements.description.value.trim(),
                             enabled,
-                            points_value: Number(form.elements.points_value.value || 0),
+                            candle_cash_value: Number(form.elements.candle_cash_value.value || 0),
                             sort_order: Number(form.elements.sort_order.value || 0),
                         };
                     }
@@ -950,7 +952,7 @@
                         title: form.elements.title.value.trim(),
                         description: form.elements.description.value.trim(),
                         enabled,
-                        points_cost: Number(form.elements.points_cost.value || 0),
+                        candle_cash_cost: Number(form.elements.candle_cash_cost.value || 0),
                         reward_value: form.elements.reward_value.value.trim(),
                     };
                 }
@@ -963,16 +965,16 @@
                     }
 
                     if (payload.kind === "earn") {
-                        if (!Number.isInteger(payload.points_value) || payload.points_value < 0) {
-                            errors.points_value = ["Points value must be a whole number of zero or more."];
+                        if (Number.isNaN(payload.candle_cash_value) || payload.candle_cash_value < 0) {
+                            errors.candle_cash_value = ["Candle Cash value must be zero or more."];
                         }
 
                         if (!Number.isInteger(payload.sort_order) || payload.sort_order < 0) {
                             errors.sort_order = ["Sort order must be a whole number of zero or more."];
                         }
                     } else {
-                        if (!Number.isInteger(payload.points_cost) || payload.points_cost < 0) {
-                            errors.points_cost = ["Points cost must be a whole number of zero or more."];
+                        if (Number.isNaN(payload.candle_cash_cost) || payload.candle_cash_cost < 0) {
+                            errors.candle_cash_cost = ["Candle Cash cost must be zero or more."];
                         }
                     }
 

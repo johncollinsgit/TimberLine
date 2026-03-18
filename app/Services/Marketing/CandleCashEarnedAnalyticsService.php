@@ -12,9 +12,9 @@ use Illuminate\Support\Collection;
 class CandleCashEarnedAnalyticsService
 {
     /**
-     * @var array<string,mixed>|null
+     * @var array<string,array<string,mixed>>
      */
-    protected ?array $currentLedgerState = null;
+    protected array $currentLedgerStateByScope = [];
 
     public function __construct(
         protected CandleCashService $candleCashService,
@@ -24,9 +24,9 @@ class CandleCashEarnedAnalyticsService
     /**
      * @return array<string,mixed>
      */
-    public function snapshot(CarbonImmutable $from, CarbonImmutable $to): array
+    public function snapshot(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId = null): array
     {
-        $state = $this->currentLedgerState();
+        $state = $this->currentLedgerState($tenantId);
         $sourceDefinitions = $this->normalizer->sourceDefinitions();
 
         $windowEvents = collect((array) ($state['program_earn_events'] ?? []))
@@ -126,7 +126,7 @@ class CandleCashEarnedAnalyticsService
             (array) ($state['debit_at_by_profile'] ?? [])
         );
 
-        $reminderCandidates = $this->reminderCandidates();
+        $reminderCandidates = $this->reminderCandidates($tenantId);
 
         return [
             'title' => 'Candle Cash earn activity',
@@ -171,9 +171,9 @@ class CandleCashEarnedAnalyticsService
     /**
      * @return array<string,mixed>
      */
-    public function reminderCandidates(): array
+    public function reminderCandidates(?int $tenantId = null): array
     {
-        $state = $this->currentLedgerState();
+        $state = $this->currentLedgerState($tenantId);
         $outstandingByProfile = (array) ($state['outstanding_by_profile'] ?? []);
         $profileIds = collect(array_keys($outstandingByProfile))
             ->map(fn ($value): int => (int) $value)
@@ -189,6 +189,7 @@ class CandleCashEarnedAnalyticsService
         }
 
         $profiles = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->whereIn('id', $profileIds->all())
             ->get(['id', 'first_name', 'last_name', 'email', 'normalized_email'])
             ->keyBy('id');
@@ -338,26 +339,29 @@ class CandleCashEarnedAnalyticsService
     /**
      * @return array<string,mixed>
      */
-    protected function currentLedgerState(): array
+    protected function currentLedgerState(?int $tenantId = null): array
     {
-        if ($this->currentLedgerState !== null) {
-            return $this->currentLedgerState;
+        $scopeKey = $tenantId !== null ? 'tenant:'.$tenantId : 'global';
+        if (array_key_exists($scopeKey, $this->currentLedgerStateByScope)) {
+            return $this->currentLedgerStateByScope[$scopeKey];
         }
 
         $transactions = CandleCashTransaction::query()
+            ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_transactions.marketing_profile_id')
+            ->when($tenantId !== null, fn ($query) => $query->where('mp.tenant_id', $tenantId))
             ->where('points', '!=', 0)
-            ->orderBy('marketing_profile_id')
-            ->orderBy('created_at')
-            ->orderBy('id')
+            ->orderBy('candle_cash_transactions.marketing_profile_id')
+            ->orderBy('candle_cash_transactions.created_at')
+            ->orderBy('candle_cash_transactions.id')
             ->get([
-                'id',
-                'marketing_profile_id',
-                'type',
-                'points',
-                'source',
-                'source_id',
-                'description',
-                'created_at',
+                'candle_cash_transactions.id',
+                'candle_cash_transactions.marketing_profile_id',
+                'candle_cash_transactions.type',
+                'candle_cash_transactions.points',
+                'candle_cash_transactions.source',
+                'candle_cash_transactions.source_id',
+                'candle_cash_transactions.description',
+                'candle_cash_transactions.created_at',
             ]);
 
         $taskHandlesByTransactionId = $this->taskHandlesByTransactionId($transactions);
@@ -471,15 +475,15 @@ class CandleCashEarnedAnalyticsService
             ];
         }
 
-        $this->currentLedgerState = [
+        $this->currentLedgerStateByScope[$scopeKey] = [
             'program_earn_events' => $programEarnEvents,
             'outstanding_by_profile' => $outstandingByProfile,
             'excluded_opening_points' => $excludedOpeningPoints,
-            'redeemed_at_by_profile' => $this->redeemedAtByProfile(),
+            'redeemed_at_by_profile' => $this->redeemedAtByProfile($tenantId),
             'debit_at_by_profile' => $debitAtByProfile,
         ];
 
-        return $this->currentLedgerState;
+        return $this->currentLedgerStateByScope[$scopeKey];
     }
 
     /**
@@ -520,14 +524,16 @@ class CandleCashEarnedAnalyticsService
     /**
      * @return array<int,array<int,CarbonImmutable>>
      */
-    protected function redeemedAtByProfile(): array
+    protected function redeemedAtByProfile(?int $tenantId = null): array
     {
         $rows = CandleCashRedemption::query()
+            ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_redemptions.marketing_profile_id')
+            ->when($tenantId !== null, fn ($query) => $query->where('mp.tenant_id', $tenantId))
             ->where('status', 'redeemed')
             ->whereNotNull('redeemed_at')
             ->orderBy('marketing_profile_id')
             ->orderBy('redeemed_at')
-            ->get(['marketing_profile_id', 'redeemed_at']);
+            ->get(['candle_cash_redemptions.marketing_profile_id', 'candle_cash_redemptions.redeemed_at']);
 
         $grouped = [];
         foreach ($rows as $row) {

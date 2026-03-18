@@ -37,8 +37,8 @@ test('shopify embedded rewards data route returns normalized earn and redeem sec
 
     expect($earnItems)->toBeArray()->not->toBeEmpty()
         ->and($redeemItems)->toBeArray()->not->toBeEmpty()
-        ->and(array_key_exists('points_value', $earnItems[0]))->toBeTrue()
-        ->and(array_key_exists('points_cost', $redeemItems[0]))->toBeTrue();
+        ->and(array_key_exists('candle_cash_value', $earnItems[0]))->toBeTrue()
+        ->and(array_key_exists('candle_cash_cost', $redeemItems[0]))->toBeTrue();
 });
 
 test('shopify embedded rewards earn update edits the existing task and syncs mapped program config', function () {
@@ -51,7 +51,7 @@ test('shopify embedded rewards earn update edits the existing task and syncs map
         [
             'title' => 'Email welcome reward',
             'description' => 'Updated from the embedded rewards admin.',
-            'points_value' => 180,
+            'candle_cash_value' => 6,
             'enabled' => false,
             'sort_order' => 12,
         ]
@@ -61,7 +61,7 @@ test('shopify embedded rewards earn update edits the existing task and syncs map
         ->assertJsonPath('ok', true)
         ->assertJsonPath('message', 'Earn rule saved.')
         ->assertJsonPath('rule.title', 'Email welcome reward')
-        ->assertJsonPath('rule.points_value', 180)
+        ->assertJsonPath('rule.candle_cash_value', 6)
         ->assertJsonPath('rule.enabled', false);
 
     $task->refresh();
@@ -87,7 +87,7 @@ test('shopify embedded rewards redeem update edits the existing reward row in pl
         [
             'title' => 'Free Wax Melt Duo',
             'description' => 'Updated reward description.',
-            'points_cost' => 90,
+            'candle_cash_cost' => 3,
             'reward_value' => 'wax_melt_duo',
             'enabled' => false,
         ]
@@ -97,7 +97,7 @@ test('shopify embedded rewards redeem update edits the existing reward row in pl
         ->assertJsonPath('ok', true)
         ->assertJsonPath('message', 'Redeem rule saved.')
         ->assertJsonPath('rule.title', 'Free Wax Melt Duo')
-        ->assertJsonPath('rule.points_cost', 90)
+        ->assertJsonPath('rule.candle_cash_cost', 3)
         ->assertJsonPath('rule.enabled', false);
 
     $reward->refresh();
@@ -122,12 +122,12 @@ test('shopify embedded rewards blocks inconsistent storefront reward cost edits'
         [
             'title' => $reward->name,
             'description' => 'Storefront reward',
-            'points_cost' => 301,
+            'candle_cash_cost' => 10.5,
             'reward_value' => '10USD',
             'enabled' => true,
         ]
     )
         ->assertStatus(422)
         ->assertJsonPath('ok', false)
-        ->assertJsonPath('errors.points_cost.0', 'Storefront Candle Cash cost is derived from the discount value and current points-per-dollar setting.');
+        ->assertJsonPath('errors.candle_cash_cost.0', 'Storefront Candle Cash cost is derived from the discount value and current Candle Cash value.');
 });

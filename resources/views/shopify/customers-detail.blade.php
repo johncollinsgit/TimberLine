@@ -537,8 +537,8 @@
                             <td>{{ $row['type'] ?? '—' }}</td>
                             <td>{{ $row['label'] ?? '—' }}</td>
                             <td>
-                                @if($row['points'] !== null)
-                                    {{ (int) $row['points'] > 0 ? '+' : '' }}{{ number_format((int) $row['points']) }}
+                                @if($row['candle_cash_display'] !== null)
+                                    {{ $row['candle_cash_display'] }}
                                 @else
                                     —
                                 @endif
@@ -570,7 +570,7 @@
                         <th>Store</th>
                         <th>External ID</th>
                         <th>Last Activity</th>
-                        <th>Points</th>
+                        <th>Legacy Growave Points</th>
                     </tr>
                 </thead>
                 <tbody>

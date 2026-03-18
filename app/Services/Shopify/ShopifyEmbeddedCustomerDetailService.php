@@ -12,6 +12,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\User;
 use App\Services\Marketing\TwilioSenderConfigService;
+use App\Services\Marketing\CandleCashService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,8 @@ use Illuminate\Support\Str;
 class ShopifyEmbeddedCustomerDetailService
 {
     public function __construct(
-        protected TwilioSenderConfigService $senderConfigService
+        protected TwilioSenderConfigService $senderConfigService,
+        protected CandleCashService $candleCashService
     ) {
     }
 
@@ -55,7 +57,7 @@ class ShopifyEmbeddedCustomerDetailService
 
         $summary = [
             'candle_cash' => $balancePoints,
-            'candle_cash_display' => number_format($balancePoints),
+            'candle_cash_display' => $this->candleCashService->formatRewardCurrency($this->candleCashService->amountFromPoints($balancePoints)),
             'candle_club_active' => $statuses['candle_club'],
             'rewards_actions_count' => $rewardsActions,
             'last_activity_at' => $lastActivityAt,
@@ -356,6 +358,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'type' => $type,
                     'label' => $label,
                     'points' => (int) $transaction->points,
+                    'candle_cash_display' => $this->candleCashService->candleCashAmountLabelFromPoints((int) $transaction->points, true),
                     'status' => $status,
                     'detail' => $detailText,
                     'actor' => $actor,
@@ -374,6 +377,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'type' => $type,
                     'label' => 'Direct message',
                     'points' => null,
+                    'candle_cash_display' => null,
                     'status' => (string) ($delivery->send_status ?: 'sent'),
                     'detail' => Str::limit((string) ($delivery->rendered_message ?: '—'), 120),
                     'actor' => $actor,
@@ -395,6 +399,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'type' => 'Redemption',
                     'label' => $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id),
                     'points' => -1 * (int) ($redemption->points_spent ?? 0),
+                    'candle_cash_display' => $this->candleCashService->candleCashAmountLabelFromPoints(-1 * (int) ($redemption->points_spent ?? 0), true),
                     'status' => (string) ($redemption->status ?: 'issued'),
                     'detail' => $redemption->redemption_code ?: '—',
                     'actor' => null,
@@ -422,6 +427,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'type' => $type,
                     'label' => $referral->referral_code ? strtoupper($referral->referral_code) : strtoupper($status),
                     'points' => $points !== null ? (int) $points : null,
+                    'candle_cash_display' => $points !== null ? $this->candleCashService->candleCashAmountLabelFromPoints((int) $points, true) : null,
                     'status' => $status,
                     'detail' => $referral->referral_code ?: '—',
                     'actor' => null,
@@ -458,6 +464,9 @@ class ShopifyEmbeddedCustomerDetailService
                     'type' => $type,
                     'label' => $label,
                     'points' => $completion->reward_points !== null ? (int) $completion->reward_points : null,
+                    'candle_cash_display' => $completion->reward_points !== null
+                        ? $this->candleCashService->candleCashAmountLabelFromPoints((int) $completion->reward_points, true)
+                        : ($completion->reward_amount !== null ? '+' . $this->candleCashService->formatRewardCurrency((float) $completion->reward_amount) : null),
                     'status' => (string) ($completion->status ?: 'submitted'),
                     'detail' => $completion->task?->handle ?: '—',
                     'actor' => null,

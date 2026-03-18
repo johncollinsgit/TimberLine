@@ -40,6 +40,7 @@ class CandleCashGiftReportService
                 return [
                     'id' => $transaction->id,
                     'points' => (int) $transaction->points,
+                    'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $transaction->points),
                     'description' => $transaction->description,
                     'gift_intent' => $transaction->gift_intent,
                     'gift_origin' => $transaction->gift_origin,
@@ -100,6 +101,7 @@ class CandleCashGiftReportService
                 'label' => $this->formatLabel($value, $key),
                 'count' => (int) $row->count,
                 'points' => (int) $row->points,
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->points),
             ]];
         })->all();
     }
@@ -137,6 +139,7 @@ class CandleCashGiftReportService
                 'label' => $label,
                 'count' => (int) $row->count,
                 'points' => (int) $row->points,
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->points),
             ]];
         })->all();
     }

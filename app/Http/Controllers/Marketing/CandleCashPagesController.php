@@ -355,7 +355,9 @@ class CandleCashPagesController extends Controller
                 'balance_points' => $candleCashService->currentBalance($selectedProfile),
                 'balance_amount' => $candleCashService->amountFromPoints($candleCashService->currentBalance($selectedProfile)),
                 'lifetime_earned_points' => (int) $selectedProfile->candleCashTransactions->where('points', '>', 0)->sum('points'),
+                'lifetime_earned_amount' => $candleCashService->amountFromPoints((int) $selectedProfile->candleCashTransactions->where('points', '>', 0)->sum('points')),
                 'lifetime_redeemed_points' => abs((int) $selectedProfile->candleCashTransactions->where('points', '<', 0)->sum('points')),
+                'lifetime_redeemed_amount' => $candleCashService->amountFromPoints(abs((int) $selectedProfile->candleCashTransactions->where('points', '<', 0)->sum('points'))),
                 'membership_status' => $eligibilityService->membershipStatusForProfile($selectedProfile),
                 'blocked_duplicate_attempts' => (int) $selectedProfile->candleCashTaskEvents()->where('duplicate_hits', '>', 0)->sum('duplicate_hits'),
             ] : null,
@@ -475,7 +477,6 @@ class CandleCashPagesController extends Controller
             $existing = $this->settingValue('candle_cash_program_config');
             $data = $request->validate([
                 'label' => ['required', 'string', 'max:120'],
-                'points_per_dollar' => ['required', 'integer', 'min:1', 'max:100'],
                 'email_signup_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
                 'sms_signup_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
                 'google_review_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
@@ -491,7 +492,7 @@ class CandleCashPagesController extends Controller
 
             $this->saveSetting('candle_cash_program_config', array_merge($existing, [
                 'label' => trim((string) $data['label']),
-                'points_per_dollar' => (int) $data['points_per_dollar'],
+                'points_per_dollar' => (int) data_get($existing, 'points_per_dollar', config('marketing.candle_cash.points_per_dollar', 30)),
                 'email_signup_reward_amount' => (float) $data['email_signup_reward_amount'],
                 'sms_signup_reward_amount' => (float) $data['sms_signup_reward_amount'],
                 'google_review_reward_amount' => (float) $data['google_review_reward_amount'],
@@ -624,7 +625,8 @@ class CandleCashPagesController extends Controller
         return $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:500'],
-            'points_cost' => ['required', 'integer', 'min:0', 'max:50000'],
+            'candle_cash_cost' => ['nullable', 'numeric', 'min:0', 'max:50000'],
+            'points_cost' => ['nullable', 'integer', 'min:0', 'max:50000'],
             'reward_value' => ['nullable', 'string', 'max:120'],
             'enabled' => ['required', 'boolean'],
         ]);

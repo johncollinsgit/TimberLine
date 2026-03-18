@@ -69,8 +69,9 @@ class MarketingCustomersController extends Controller
     public function index(Request $request): View
     {
         $today = now();
+        $tenantId = $this->currentTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
-        $profiles = $this->customerIndexQuery($filters)
+        $profiles = $this->customerIndexQuery($filters, $tenantId)
             ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
             ->withCount('links')
             ->paginate((int) $filters['per_page'])
@@ -110,8 +111,9 @@ class MarketingCustomersController extends Controller
 
     public function data(Request $request): JsonResponse
     {
+        $tenantId = $this->currentTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
-        $profiles = $this->customerIndexQuery($filters)
+        $profiles = $this->customerIndexQuery($filters, $tenantId)
             ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
             ->withCount('links')
             ->paginate((int) $filters['per_page'])
@@ -203,7 +205,7 @@ class MarketingCustomersController extends Controller
     /**
      * @param array<string,mixed> $filters
      */
-    protected function customerIndexQuery(array $filters): Builder
+    protected function customerIndexQuery(array $filters, ?int $tenantId = null): Builder
     {
         $search = (string) ($filters['search'] ?? '');
         $sort = (string) ($filters['sort'] ?? 'updated_at');
@@ -219,6 +221,7 @@ class MarketingCustomersController extends Controller
         $searchLike = '%' . $search . '%';
 
         $query = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->when($search !== '', function ($builder) use ($searchLike): void {
                 $builder->where(function ($nested) use ($searchLike): void {
                     $nested->where('first_name', 'like', $searchLike)
@@ -437,7 +440,10 @@ class MarketingCustomersController extends Controller
 
         $step = $this->normalizeCreateWizardStep((int) $request->query('step', 1));
         $wizardState = $this->customerCreateWizardState($request);
-        $duplicateCandidates = $this->buildDuplicateCandidates($wizardState);
+        $duplicateCandidates = $this->buildDuplicateCandidates(
+            $wizardState,
+            $this->currentTenantId($request)
+        );
 
         return view('marketing.customers.create', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -508,7 +514,10 @@ class MarketingCustomersController extends Controller
         }
 
         if ($step === 3) {
-            $duplicateCandidates = $this->buildDuplicateCandidates($wizardState);
+            $duplicateCandidates = $this->buildDuplicateCandidates(
+                $wizardState,
+                $this->currentTenantId($request)
+            );
             $candidateIds = $duplicateCandidates
                 ->map(fn (array $candidate): int => (int) $candidate['profile']->id)
                 ->all();
@@ -568,7 +577,11 @@ class MarketingCustomersController extends Controller
             'confirm_create' => ['required', 'accepted'],
         ]);
 
-        $profile = $this->finalizeCustomerCreateWizard($wizardState, auth()->id());
+        $profile = $this->finalizeCustomerCreateWizard(
+            wizardState: $wizardState,
+            actorId: auth()->id(),
+            tenantId: $this->currentTenantId($request)
+        );
         $request->session()->forget('marketing.customers.create_wizard');
 
         return redirect()
@@ -579,8 +592,9 @@ class MarketingCustomersController extends Controller
             ]);
     }
 
-    public function show(MarketingProfile $marketingProfile): View
+    public function show(MarketingProfile $marketingProfile, Request $request): View
     {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         $marketingProfile->load([
             'links' => fn ($query) => $query->orderByDesc('id'),
             'groups:id,name,is_internal',
@@ -857,6 +871,7 @@ class MarketingCustomersController extends Controller
 
     public function update(MarketingProfile $marketingProfile, Request $request): RedirectResponse
     {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         $data = $request->validate([
             'first_name' => ['nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
@@ -897,6 +912,7 @@ class MarketingCustomersController extends Controller
 
     public function updateBirthday(MarketingProfile $marketingProfile, Request $request): RedirectResponse
     {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         $data = $request->validate([
             'birth_month' => ['nullable', 'integer', 'between:1,12'],
             'birth_day' => ['nullable', 'integer', 'between:1,31'],
@@ -952,6 +968,7 @@ class MarketingCustomersController extends Controller
 
     public function updateConsent(MarketingProfile $marketingProfile, Request $request): RedirectResponse
     {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         $data = $request->validate([
             'channel' => ['required', 'in:sms,email,both'],
             'consented' => ['required', 'boolean'],
@@ -990,18 +1007,23 @@ class MarketingCustomersController extends Controller
 
     public function grantCandleCash(MarketingProfile $marketingProfile, Request $request): RedirectResponse
     {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         $data = $request->validate([
             'type' => ['required', 'in:earn,adjust'],
-            'points' => ['required', 'integer', 'not_in:0', 'min:-100000', 'max:100000'],
+            'amount' => ['required', 'numeric', 'not_in:0', 'min:-100000', 'max:100000'],
             'description' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $points = (int) $data['points'];
+        $amount = (float) $data['amount'];
+        $points = $this->candleCashService->pointsFromAmount(abs($amount));
+        if ($amount < 0) {
+            $points *= -1;
+        }
         $type = (string) $data['type'];
         if ($type === 'earn' && $points < 0) {
             return redirect()
                 ->route('marketing.customers.show', $marketingProfile)
-                ->with('toast', ['style' => 'warning', 'message' => 'Earn entries must use positive points.']);
+                ->with('toast', ['style' => 'warning', 'message' => 'Earn entries must use positive Candle Cash.']);
         }
 
         $result = $this->candleCashService->addPoints(
@@ -1023,6 +1045,7 @@ class MarketingCustomersController extends Controller
 
     public function redeemCandleCash(MarketingProfile $marketingProfile, Request $request): RedirectResponse
     {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         $data = $request->validate([
             'reward_id' => ['required', 'integer', 'exists:candle_cash_rewards,id'],
             'platform' => ['required', 'in:shopify,square'],
@@ -1061,6 +1084,7 @@ class MarketingCustomersController extends Controller
         CandleCashRedemption $redemption,
         Request $request
     ): RedirectResponse {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         abort_unless((int) $redemption->marketing_profile_id === (int) $marketingProfile->id, 404);
 
         $data = $request->validate([
@@ -1091,6 +1115,7 @@ class MarketingCustomersController extends Controller
         CandleCashRedemption $redemption,
         Request $request
     ): RedirectResponse {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
         abort_unless((int) $redemption->marketing_profile_id === (int) $marketingProfile->id, 404);
 
         $data = $request->validate([
@@ -1113,7 +1138,7 @@ class MarketingCustomersController extends Controller
     /**
      * @param array<string,mixed> $wizardState
      */
-    protected function finalizeCustomerCreateWizard(array $wizardState, ?int $actorId = null): MarketingProfile
+    protected function finalizeCustomerCreateWizard(array $wizardState, ?int $actorId = null, ?int $tenantId = null): MarketingProfile
     {
         $identity = is_array($wizardState['identity'] ?? null) ? $wizardState['identity'] : [];
         $context = is_array($wizardState['context'] ?? null) ? $wizardState['context'] : [];
@@ -1145,12 +1170,17 @@ class MarketingCustomersController extends Controller
             $contextChannel,
             $composedNotes,
             $additional,
-            $actorId
+            $actorId,
+            $tenantId
         ): MarketingProfile {
             $selectedProfileId = (int) ($duplicate['selected_profile_id'] ?? 0);
             if ((string) ($duplicate['decision'] ?? 'continue') === 'use_existing' && $selectedProfileId > 0) {
                 /** @var MarketingProfile $profile */
                 $profile = MarketingProfile::query()->lockForUpdate()->findOrFail($selectedProfileId);
+
+                if ($tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+                    abort(404);
+                }
 
                 $updates = [];
                 if (! $profile->first_name && ($identity['first_name'] ?? null)) {
@@ -1188,6 +1218,7 @@ class MarketingCustomersController extends Controller
 
                 MarketingProfileLink::query()->firstOrCreate(
                     [
+                        'tenant_id' => $tenantId,
                         'source_type' => 'manual_customer',
                         'source_id' => 'manual_profile:' . $profile->id,
                     ],
@@ -1207,6 +1238,7 @@ class MarketingCustomersController extends Controller
 
             /** @var MarketingProfile $profile */
             $profile = MarketingProfile::query()->create([
+                'tenant_id' => $tenantId,
                 'first_name' => trim((string) ($identity['first_name'] ?? '')) ?: null,
                 'last_name' => trim((string) ($identity['last_name'] ?? '')) ?: null,
                 'email' => ($identity['email'] ?? null) ? (string) $identity['email'] : null,
@@ -1224,6 +1256,7 @@ class MarketingCustomersController extends Controller
             ]);
 
             MarketingProfileLink::query()->create([
+                'tenant_id' => $tenantId,
                 'marketing_profile_id' => $profile->id,
                 'source_type' => 'manual_customer',
                 'source_id' => 'manual_profile:' . $profile->id,
@@ -1243,7 +1276,7 @@ class MarketingCustomersController extends Controller
      * @param array<string,mixed> $wizardState
      * @return Collection<int,array{profile:MarketingProfile,reasons:array<int,string>}>
      */
-    protected function buildDuplicateCandidates(array $wizardState): Collection
+    protected function buildDuplicateCandidates(array $wizardState, ?int $tenantId = null): Collection
     {
         $identity = is_array($wizardState['identity'] ?? null) ? $wizardState['identity'] : [];
         $normalizedEmail = $this->identityNormalizer->normalizeEmail((string) ($identity['email'] ?? ''));
@@ -1265,6 +1298,7 @@ class MarketingCustomersController extends Controller
 
         if ($normalizedEmail !== null) {
             MarketingProfile::query()
+                ->forTenantId($tenantId)
                 ->where('normalized_email', $normalizedEmail)
                 ->get(['id'])
                 ->each(fn (MarketingProfile $profile) => $appendReason((int) $profile->id, 'Exact email'));
@@ -1272,6 +1306,7 @@ class MarketingCustomersController extends Controller
 
         if ($normalizedPhone !== null) {
             MarketingProfile::query()
+                ->forTenantId($tenantId)
                 ->where('normalized_phone', $normalizedPhone)
                 ->get(['id'])
                 ->each(fn (MarketingProfile $profile) => $appendReason((int) $profile->id, 'Exact phone'));
@@ -1979,6 +2014,25 @@ class MarketingCustomersController extends Controller
         }
 
         return $tuples;
+    }
+
+    protected function currentTenantId(Request $request): ?int
+    {
+        $tenantId = $request->attributes->get('current_tenant_id');
+
+        return is_numeric($tenantId) ? (int) $tenantId : null;
+    }
+
+    protected function assertProfileInTenantScope(MarketingProfile $profile, Request $request): void
+    {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            return;
+        }
+
+        if ((int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            abort(404);
+        }
     }
 
     /**

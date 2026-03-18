@@ -14,8 +14,8 @@ class CandleCashRewardsOverviewService
 
     /**
      * @return array{
-     *     point_name:string,
-     *     points_per_dollar:int|float,
+     *     program_name:string,
+     *     legacy_points_per_candle_cash:int|float,
      *     earning_rules_active:bool,
      *     earning_rule_count:int,
      *     redeem_rules_active:bool,
@@ -49,12 +49,12 @@ class CandleCashRewardsOverviewService
 
         $primaryReward = $activeRewards->first();
         $programSummary = $primaryReward
-            ? 'Customers earn Candle Cash through live tasks, then redeem points for rewards like '.$primaryReward->name.'.'
+            ? 'Customers earn Candle Cash through live tasks, then redeem Candle Cash for rewards like '.$primaryReward->name.'.'
             : 'Customers earn Candle Cash through live tasks and can redeem it against the reward rows configured in Backstage.';
 
         return [
-            'point_name' => 'Candle Cash',
-            'points_per_dollar' => $this->candleCashService->pointsPerDollar(),
+            'program_name' => 'Candle Cash',
+            'legacy_points_per_candle_cash' => $this->candleCashService->legacyPointsPerCandleCash(),
             'earning_rules_active' => $activeTasks->isNotEmpty(),
             'earning_rule_count' => $activeTasks->count(),
             'redeem_rules_active' => $activeRewards->isNotEmpty(),
@@ -63,11 +63,11 @@ class CandleCashRewardsOverviewService
             'earning_modes' => $earningModes->all(),
             'earn_preview' => $activeTasks->take(3)->map(fn (CandleCashTask $task): array => [
                 'title' => (string) $task->title,
-                'detail' => $this->candleCashService->pointsFromAmount((float) $task->reward_amount).' points',
+                'detail' => $this->candleCashService->formatCandleCash((float) $task->reward_amount),
             ])->values()->all(),
             'redeem_preview' => $activeRewards->take(3)->map(fn (CandleCashReward $reward): array => [
                 'title' => (string) $reward->name,
-                'detail' => number_format((int) $reward->points_cost).' points',
+                'detail' => $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints((int) $reward->points_cost)),
             ])->values()->all(),
         ];
     }

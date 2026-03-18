@@ -38,7 +38,7 @@
                 <p class="mt-2 text-sm text-emerald-50/90">
                     SMS consent was confirmed and recorded for profile #{{ $profile?->id ?? '—' }}.
                     @if((int) request()->query('bonus', 0) > 0)
-                        Candle Cash bonus awarded: {{ (int) request()->query('bonus', 0) }} points.
+                        Candle Cash bonus awarded: ${{ number_format((float) app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) request()->query('bonus', 0)), 2) }}.
                     @endif
                 </p>
             </section>
@@ -65,4 +65,3 @@
     </main>
 </body>
 </html>
-

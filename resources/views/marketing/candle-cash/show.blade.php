@@ -23,7 +23,7 @@
                     <div>
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Earn</div>
                         <h2 class="mt-2 text-lg font-semibold text-white">Review and manage live earn rules</h2>
-                        <p class="mt-2 max-w-2xl text-sm text-white/65">These are the live Candle Cash tasks currently powering how customers earn points.</p>
+                        <p class="mt-2 max-w-2xl text-sm text-white/65">These are the live Candle Cash tasks currently powering how customers earn Candle Cash.</p>
                     </div>
                     <form method="GET" action="{{ route('marketing.candle-cash.tasks') }}" class="grid gap-3 sm:grid-cols-3">
                         <select name="filter" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
@@ -156,8 +156,8 @@
                             </label>
 
                             <label class="block text-sm text-white/75">
-                                Points cost
-                                <input type="number" min="0" max="50000" name="points_cost" value="{{ old('points_cost', $reward['points_cost']) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" />
+                                Candle Cash cost
+                                <input type="number" step="0.01" min="0" max="50000" name="candle_cash_cost" value="{{ old('candle_cash_cost', $reward['candle_cash_cost'] ?? 0) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" />
                             </label>
 
                             <label class="block text-sm text-white/75 md:col-span-2">
@@ -424,7 +424,7 @@
                                         <div class="mt-1 text-xs text-white/50">{{ $profile->email ?: ($profile->phone ?: 'No email or phone') }}</div>
                                     </div>
                                     <div class="text-right text-sm text-white/70">
-                                        <div>{{ number_format((int) ($profile->candleCashBalance->balance ?? 0)) }} pts</div>
+                                        <div>{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) ($profile->candleCashBalance->balance ?? 0))) }}</div>
                                         <div class="mt-1 text-xs text-white/45">{{ number_format((int) $profile->pending_task_count) }} pending · {{ number_format((int) $profile->referral_count) }} refs</div>
                                     </div>
                                 </div>
@@ -446,9 +446,9 @@
                         </div>
 
                         <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Balance</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'balance_points', 0)) }} pts</div></div>
-                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Lifetime earned</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'lifetime_earned_points', 0)) }} pts</div></div>
-                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Lifetime redeemed</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'lifetime_redeemed_points', 0)) }} pts</div></div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Balance</div><div class="mt-2 text-2xl font-semibold text-white">${{ number_format((float) data_get($selectedProfileSummary, 'balance_amount', 0), 2) }}</div></div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Lifetime earned</div><div class="mt-2 text-2xl font-semibold text-white">${{ number_format((float) data_get($selectedProfileSummary, 'lifetime_earned_amount', 0), 2) }}</div></div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Lifetime redeemed</div><div class="mt-2 text-2xl font-semibold text-white">${{ number_format((float) data_get($selectedProfileSummary, 'lifetime_redeemed_amount', 0), 2) }}</div></div>
                             <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Candle Club</div><div class="mt-2 text-lg font-semibold text-white">{{ data_get($selectedProfileSummary, 'membership_status') === 'active_candle_club_member' ? 'Active member' : 'Not active' }}</div></div>
                             <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><div class="text-xs uppercase tracking-[0.18em] text-white/45">Blocked duplicates</div><div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) data_get($selectedProfileSummary, 'blocked_duplicate_attempts', 0)) }}</div></div>
                         </div>
@@ -487,7 +487,7 @@
                                     @forelse($selectedProfile->candleCashTransactions as $transaction)
                                         <div class="rounded-2xl border border-white/10 bg-black/10 p-3">
                                             <div class="font-medium text-white">{{ $transaction->description ?: $transaction->source }}</div>
-                                            <div class="mt-1 text-xs text-white/50">{{ $transaction->points > 0 ? '+' : '' }}{{ $transaction->points }} pts · {{ optional($transaction->created_at)->format('Y-m-d H:i') }}</div>
+                                            <div class="mt-1 text-xs text-white/50">{{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->points, true) }} · {{ optional($transaction->created_at)->format('Y-m-d H:i') }}</div>
                                         </div>
                                     @empty
                                         <div class="text-sm text-white/55">No Candle Cash transactions yet.</div>
@@ -586,9 +586,9 @@
                         <p class="mt-2 text-xs text-white/60">Total gifts in the selected range.</p>
                     </article>
                     <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift points</div>
-                        <div class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) data_get($giftReport, 'totals.gift_points', 0)) }}</div>
-                        <p class="mt-2 text-xs text-white/60">Points granted via gift send activity.</p>
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift Candle Cash</div>
+                        <div class="mt-2 text-3xl font-semibold text-white">${{ number_format((float) data_get($giftReport, 'totals.gift_amount', 0), 2) }}</div>
+                        <p class="mt-2 text-xs text-white/60">Candle Cash granted via gift send activity.</p>
                     </article>
                     <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift amount</div>
@@ -610,7 +610,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Intent</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Points</th>
+                                        <th class="px-3 py-2">Candle Cash</th>
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm text-white/70">
@@ -618,7 +618,7 @@
                                         <tr class="border-t border-white/5">
                                             <td class="px-3 py-2 font-medium text-white">{{ $intent['label'] ?? 'Unspecified' }}</td>
                                             <td class="px-3 py-2">{{ number_format((int) ($intent['count'] ?? 0)) }}</td>
-                                            <td class="px-3 py-2">{{ number_format((int) ($intent['points'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">${{ number_format((float) ($intent['candle_cash_amount'] ?? 0), 2) }}</td>
                                         </tr>
                                     @empty
                                         <tr>
@@ -637,7 +637,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Origin</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Points</th>
+                                        <th class="px-3 py-2">Candle Cash</th>
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm text-white/70">
@@ -645,7 +645,7 @@
                                         <tr class="border-t border-white/5">
                                             <td class="px-3 py-2 font-medium text-white">{{ $origin['label'] ?? 'Unspecified' }}</td>
                                             <td class="px-3 py-2">{{ number_format((int) ($origin['count'] ?? 0)) }}</td>
-                                            <td class="px-3 py-2">{{ number_format((int) ($origin['points'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">${{ number_format((float) ($origin['candle_cash_amount'] ?? 0), 2) }}</td>
                                         </tr>
                                     @empty
                                         <tr>
@@ -664,7 +664,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Status</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Points</th>
+                                        <th class="px-3 py-2">Candle Cash</th>
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm text-white/70">
@@ -672,7 +672,7 @@
                                         <tr class="border-t border-white/5">
                                             <td class="px-3 py-2 font-medium text-white">{{ $notification['label'] ?? 'Unspecified' }}</td>
                                             <td class="px-3 py-2">{{ number_format((int) ($notification['count'] ?? 0)) }}</td>
-                                            <td class="px-3 py-2">{{ number_format((int) ($notification['points'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">${{ number_format((float) ($notification['candle_cash_amount'] ?? 0), 2) }}</td>
                                         </tr>
                                     @empty
                                         <tr>
@@ -695,7 +695,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Actor</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Points</th>
+                                        <th class="px-3 py-2">Candle Cash</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -703,7 +703,7 @@
                                         <tr class="border-t border-white/5 text-white/70">
                                             <td class="px-3 py-2 font-medium text-white">{{ $actor['label'] ?? 'Admin' }}</td>
                                             <td class="px-3 py-2">{{ number_format((int) ($actor['count'] ?? 0)) }}</td>
-                                            <td class="px-3 py-2">{{ number_format((int) ($actor['points'] ?? 0)) }}</td>
+                                            <td class="px-3 py-2">${{ number_format((float) ($actor['candle_cash_amount'] ?? 0), 2) }}</td>
                                         </tr>
                                     @empty
                                         <tr>
@@ -737,7 +737,7 @@
                             <thead class="bg-white/5 text-xs uppercase tracking-[0.18em] text-white/45">
                                 <tr>
                                     <th class="px-3 py-2">Date</th>
-                                    <th class="px-3 py-2">Points</th>
+                                    <th class="px-3 py-2">Candle Cash</th>
                                     <th class="px-3 py-2">Intent</th>
                                     <th class="px-3 py-2">Origin</th>
                                     <th class="px-3 py-2">Notification</th>
@@ -749,7 +749,7 @@
                                 @forelse(data_get($giftReport, 'transactions', []) as $transaction)
                                     <tr class="border-t border-white/5">
                                         <td class="px-3 py-2 text-xs text-white/60">{{ $transaction['created_at'] ?? '—' }}</td>
-                                        <td class="px-3 py-2 font-semibold text-white">{{ number_format((int) ($transaction['points'] ?? 0)) }}</td>
+                                        <td class="px-3 py-2 font-semibold text-white">${{ number_format((float) ($transaction['candle_cash_amount'] ?? 0), 2) }}</td>
                                         <td class="px-3 py-2">{{ Str::headline(str_replace('_', ' ', (string) ($transaction['gift_intent'] ?? '')) ?: '—') }}</td>
                                         <td class="px-3 py-2">{{ Str::headline(str_replace('_', ' ', (string) ($transaction['gift_origin'] ?? '')) ?: '—') }}</td>
                                         <td class="px-3 py-2">{{ Str::headline(str_replace('_', ' ', (string) ($transaction['notification_status'] ?? '')) ?: '—') }}</td>
@@ -781,7 +781,7 @@
                         @csrf
                         <input type="hidden" name="scope" value="program" />
                         <label class="block text-sm text-white/75">Label<input type="text" name="label" value="{{ data_get($programConfig, 'label', 'Candle Cash') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
-                        <label class="block text-sm text-white/75">Points per $1<input type="number" min="1" max="100" name="points_per_dollar" value="{{ data_get($programConfig, 'points_per_dollar', 10) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">Candle Cash is displayed 1:1 across the app. Legacy storage conversion remains internal for existing records.</div>
                         <label class="block text-sm text-white/75">Email signup reward<input type="number" step="0.01" min="0" max="50" name="email_signup_reward_amount" value="{{ data_get($programConfig, 'email_signup_reward_amount', 5) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">SMS signup reward<input type="number" step="0.01" min="0" max="50" name="sms_signup_reward_amount" value="{{ data_get($programConfig, 'sms_signup_reward_amount', 2) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Google review reward<input type="number" step="0.01" min="0" max="50" name="google_review_reward_amount" value="{{ data_get($programConfig, 'google_review_reward_amount', 3) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>

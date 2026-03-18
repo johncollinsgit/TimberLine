@@ -793,9 +793,9 @@
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 space-y-4">
                 <h3 class="text-sm font-semibold text-white">Candle Cash</h3>
-                <div class="text-2xl font-semibold text-white">{{ number_format((int) $candleBalance) }} pts</div>
+                <div class="text-2xl font-semibold text-white">{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $candleBalance)) }}</div>
                 <x-admin.help-hint tone="neutral" title="Rewards ledger behavior">
-                    All point changes are appended to the Candle Cash transaction ledger. Redemptions are issued first, then reconciled as redeemed/canceled/expired. Shopify code usage is validated during ingestion, while Square event usage can be staff-reconciled.
+                    All Candle Cash changes are appended to the transaction ledger. Redemptions are issued first, then reconciled as redeemed, canceled, or expired. Shopify code usage is validated during ingestion, while Square event usage can be staff-reconciled.
                 </x-admin.help-hint>
                 <div class="flex flex-wrap gap-2 text-xs">
                     <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-white/75">Issued: {{ (int) ($redemptionSummary['issued'] ?? 0) }}</span>
@@ -811,11 +811,11 @@
                             <option value="earn">Earn</option>
                             <option value="adjust">Adjust</option>
                         </select>
-                        <input type="number" name="points" required placeholder="Points (+/-)" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                        <input type="number" step="0.01" name="amount" required placeholder="Candle Cash (+/-)" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
                         <input type="text" name="description" placeholder="Description" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
                     </div>
                     <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-white">
-                        Save Points Entry
+                        Save Candle Cash Entry
                     </button>
                 </form>
 
@@ -824,7 +824,7 @@
                     <div class="grid gap-2 sm:grid-cols-3">
                         <select name="reward_id" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
                             @foreach($activeRewards as $reward)
-                                <option value="{{ $reward->id }}">{{ $reward->name }} ({{ (int) $reward->points_cost }} pts)</option>
+                                <option value="{{ $reward->id }}">{{ $reward->name }} ({{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $reward->points_cost)) }})</option>
                             @endforeach
                         </select>
                         <select name="platform" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
@@ -843,7 +843,7 @@
                         <div class="mt-2 space-y-1.5 text-xs text-white/75">
                             @forelse($candleTransactions as $transaction)
                                 <div>
-                                    {{ strtoupper($transaction->type) }} {{ $transaction->points > 0 ? '+' : '' }}{{ (int) $transaction->points }}
+                                    {{ strtoupper($transaction->type) }} {{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->points, true) }}
                                     · {{ $transaction->source }}
                                     <div class="text-white/55">{{ optional($transaction->created_at)->format('Y-m-d H:i') }} · {{ $transaction->description ?: '—' }}</div>
                                 </div>
@@ -861,7 +861,7 @@
                                         {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
                                         <span class="text-[10px] uppercase tracking-[0.18em] text-white/55">· {{ strtoupper((string) ($redemption->status ?: 'issued')) }}</span>
                                     </div>
-                                    <div class="text-white/65">{{ (int) $redemption->points_spent }} pts · <span class="font-mono">{{ $redemption->redemption_code }}</span></div>
+                                    <div class="text-white/65">{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $redemption->points_spent)) }} · <span class="font-mono">{{ $redemption->redemption_code }}</span></div>
                                     <div class="text-white/55">
                                         {{ strtoupper((string) ($redemption->platform ?: 'n/a')) }}
                                         · {{ optional($redemption->issued_at ?: $redemption->created_at)->format('Y-m-d H:i') ?: '—' }}

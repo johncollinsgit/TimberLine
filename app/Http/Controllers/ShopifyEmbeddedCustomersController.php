@@ -290,7 +290,11 @@ class ShopifyEmbeddedCustomersController extends Controller
 
         $balance = (int) ($result['balance'] ?? 0);
         $noticeStyle = 'success';
-        $noticeMessage = 'Candle Cash adjusted. New balance: ' . number_format($balance) . ' pts.';
+        $noticeMessage = 'Candle Cash adjusted. New balance: '
+            . app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(
+                app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints($balance)
+            )
+            . '.';
 
         Log::info('Shopify embedded Candle Cash adjustment applied', [
             'profile_id' => $marketingProfile->id,

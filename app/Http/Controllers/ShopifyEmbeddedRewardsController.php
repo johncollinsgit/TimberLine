@@ -275,7 +275,8 @@ class ShopifyEmbeddedRewardsController extends Controller
         return $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:500'],
-            'points_value' => ['required', 'integer', 'min:0', 'max:50000'],
+            'candle_cash_value' => ['nullable', 'numeric', 'min:0', 'max:50000'],
+            'points_value' => ['nullable', 'integer', 'min:0', 'max:50000'],
             'enabled' => ['required', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:9999'],
         ]);
@@ -286,7 +287,8 @@ class ShopifyEmbeddedRewardsController extends Controller
         return $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:500'],
-            'points_cost' => ['required', 'integer', 'min:0', 'max:50000'],
+            'candle_cash_cost' => ['nullable', 'numeric', 'min:0', 'max:50000'],
+            'points_cost' => ['nullable', 'integer', 'min:0', 'max:50000'],
             'reward_value' => ['nullable', 'string', 'max:120'],
             'enabled' => ['required', 'boolean'],
         ]);

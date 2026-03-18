@@ -13,8 +13,8 @@
     $cards = [
         [
             'label' => 'Program name',
-            'value' => data_get($overview, 'point_name', 'Candle Cash'),
-            'detail' => 'The live point label customers see across the program.',
+            'value' => data_get($overview, 'program_name', 'Candle Cash'),
+            'detail' => 'The live Candle Cash label customers see across the program.',
         ],
         [
             'label' => 'Ways to earn',
@@ -29,7 +29,7 @@
         [
             'label' => 'Program structure',
             'value' => $earningModes !== '' ? $earningModes : 'Task-based',
-            'detail' => 'Customers earn through configured tasks, then spend points on available rewards.',
+            'detail' => 'Customers earn through configured tasks, then spend Candle Cash on available rewards.',
         ],
     ];
 
@@ -101,7 +101,7 @@
                 This page reflects the live Candle Cash tasks and reward rows currently managed by Backstage.
             </p>
             <p class="{{ $classes['copy'] }}">
-                Use it to quickly review how the Candle Cash program is currently structured, including how customers earn points and what rewards are available.
+                Use it to quickly review how the Candle Cash program is currently structured, including how customers earn Candle Cash and what rewards are available.
             </p>
             <p class="{{ $classes['copy'] }}">
                 For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
@@ -134,7 +134,7 @@
                     <div class="{{ $classes['eyebrow'] }}">Ways to Earn</div>
                     <h2 class="{{ $classes['title'] }}">Live earn rules</h2>
                     <p class="{{ $classes['copy_spaced'] }}">
-                        Review the live Candle Cash tasks customers can currently complete to earn points.
+                        Review the live Candle Cash tasks customers can currently complete to earn Candle Cash.
                     </p>
                 </div>
                 <a href="{{ $earnUrl }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">
@@ -160,7 +160,7 @@
                     <div class="{{ $classes['eyebrow'] }}">Ways to Redeem</div>
                     <h2 class="{{ $classes['title'] }}">Live reward rows</h2>
                     <p class="{{ $classes['copy_spaced'] }}">
-                        Review the reward rows customers can currently redeem with their Candle Cash points.
+                        Review the reward rows customers can currently redeem with their Candle Cash balance.
                     </p>
                 </div>
                 <a href="{{ $redeemUrl }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">
