@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
 use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
@@ -143,6 +144,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     public function update(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingIdentityNormalizer $identityNormalizer,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
@@ -154,9 +156,8 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'route' => $request->route()?->getName(),
                 'status' => $context['status'] ?? 'unknown',
             ]);
-            return redirect()
-                ->back()
-            ->with('customer_detail_notice', [
+            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
+                ->with('customer_detail_notice', [
                 'style' => 'warning',
                 'message' => 'Customer update failed: store context could not be verified.',
             ]);
@@ -181,8 +182,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             'normalized_phone' => $phone !== '' ? $identityNormalizer->normalizePhone($phone) : null,
         ])->save();
 
-        return redirect()
-            ->back()
+        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
                 'style' => 'success',
                 'message' => 'Customer identity updated.',
@@ -192,6 +192,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     public function updateConsent(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingConsentService $consentService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
@@ -203,8 +204,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'route' => $request->route()?->getName(),
                 'status' => $context['status'] ?? 'unknown',
             ]);
-            return redirect()
-                ->back()
+            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
                 ->with('customer_detail_notice', [
                     'style' => 'warning',
                     'message' => 'Consent update failed: store context could not be verified.',
@@ -237,8 +237,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             $changed = $consentService->setEmailConsent($marketingProfile, $consented, $contextPayload) || $changed;
         }
 
-        return redirect()
-            ->back()
+        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
                 'style' => $changed ? 'success' : 'warning',
                 'message' => $changed
@@ -250,6 +249,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     public function adjustCandleCash(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
@@ -262,8 +262,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'route' => $request->route()?->getName(),
                 'status' => $context['status'] ?? 'unknown',
             ]);
-            return redirect()
-                ->back()
+            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
                 ->with('customer_detail_notice', [
                     'style' => 'warning',
                     'message' => 'Candle Cash adjustment failed: store context could not be verified.',
@@ -332,8 +331,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             }
         }
 
-        return redirect()
-            ->back()
+        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
                 'style' => $noticeStyle,
                 'message' => $noticeMessage,
@@ -343,6 +341,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     public function sendMessage(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
@@ -354,8 +353,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'route' => $request->route()?->getName(),
                 'status' => $context['status'] ?? 'unknown',
             ]);
-            return redirect()
-                ->back()
+            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
                 ->with('customer_detail_notice', [
                     'style' => 'warning',
                     'message' => 'Message send failed: store context could not be verified.',
@@ -389,8 +387,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             ]);
         }
 
-        return redirect()
-            ->back()
+        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
                 'style' => $result['ok'] ? 'success' : 'warning',
                 'message' => $result['message'],
@@ -400,6 +397,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     public function sendCandleCash(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerSendCandleCashService $sendService,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
@@ -412,8 +410,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'route' => $request->route()?->getName(),
                 'status' => $context['status'] ?? 'unknown',
             ]);
-            return redirect()
-                ->back()
+            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
                 ->with('customer_detail_notice', [
                     'style' => 'warning',
                     'message' => 'Send Candle Cash failed: store context could not be verified.',
@@ -499,8 +496,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             }
         }
 
-        return redirect()
-            ->back()
+        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
                 'style' => $noticeStyle,
                 'message' => $noticeMessage,
@@ -577,6 +573,16 @@ class ShopifyEmbeddedCustomersController extends Controller
                     : trim($value)
                 : $value)
             ->all();
+    }
+
+    protected function redirectToCustomerDetail(
+        Request $request,
+        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
+        MarketingProfile $marketingProfile
+    ): RedirectResponse {
+        return redirect()->to(
+            $actionUrlGenerator->url('customers.detail', ['marketingProfile' => $marketingProfile->id], $request)
+        );
     }
 
     /**

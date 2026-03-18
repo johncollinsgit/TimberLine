@@ -561,6 +561,12 @@ test('customer identity app route does not require csrf token in embedded admin'
     );
 
     $response->assertRedirect();
+    $location = $response->headers->get('Location');
+    expect($location)->not->toBeNull()
+        ->and($location)->toContain('/shopify/app/customers/manage/' . $profile->id)
+        ->and($location)->toContain('shop=modernforestry.myshopify.com')
+        ->and($location)->toContain('host=admin-host-token')
+        ->and($location)->toContain('embedded=1');
 
     $profile->refresh();
 
@@ -592,6 +598,12 @@ test('candle cash adjustment app route does not require csrf token in embedded a
     );
 
     $response->assertRedirect();
+    $location = $response->headers->get('Location');
+    expect($location)->not->toBeNull()
+        ->and($location)->toContain('/shopify/app/customers/manage/' . $profile->id)
+        ->and($location)->toContain('shop=modernforestry.myshopify.com')
+        ->and($location)->toContain('host=admin-host-token')
+        ->and($location)->toContain('embedded=1');
 
     $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
     expect((int) ($balance?->balance ?? 0))->toBe(35);
