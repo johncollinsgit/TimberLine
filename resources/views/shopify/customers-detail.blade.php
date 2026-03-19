@@ -110,6 +110,27 @@
             padding: 20px;
         }
 
+        .customers-detail-card strong {
+            font-weight: 600;
+        }
+
+        .customers-detail-shell {
+            display: grid;
+            gap: 24px;
+            background: #f4f6fb;
+            border-radius: 18px;
+            padding: 26px;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        .customers-detail-section {
+            background: #fff;
+            border-radius: 18px;
+            padding: 22px;
+            border: 1px solid rgba(15, 23, 42, 0.06);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+        }
+
         .customers-detail-card h3 {
             margin: 0;
             font-size: 12px;
@@ -278,10 +299,12 @@
         }
     </style>
 
+    <div class="customers-detail-shell">
+
     @if(! $authorized)
         <section class="customers-surface customers-detail-header">
             <div class="customers-detail-header-row">
-                <div>
+    <div class="customers-detail-shell">
                     <h2 class="customers-detail-name">Customer detail unavailable</h2>
                     <div class="customers-detail-meta">
                         Shopify context status: {{ str_replace('_', ' ', $status ?? 'unknown') }}
@@ -315,7 +338,7 @@
         >
             <section class="customers-surface customers-detail-header">
                 <div class="customers-detail-header-row">
-                    <div>
+    </div>
                         <a class="customers-detail-back" href="{{ $actionUrlGenerator->url('customers.manage', [], request()) }}">Back to Manage customers</a>
                         <h2 class="customers-detail-name" data-customer-display-name>{{ $customerDisplayName }}</h2>
                         <div class="customers-detail-meta">
@@ -963,4 +986,5 @@
             })();
         </script>
     @endif
+    </div>
 </x-shopify.customers-layout>
