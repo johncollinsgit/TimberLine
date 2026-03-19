@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
+use App\Services\Marketing\CandleCashService;
 use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
@@ -12,12 +13,15 @@ use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
+use App\Services\Tenancy\TenantResolver;
 use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use App\Services\Marketing\MarketingConsentService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
 class ShopifyEmbeddedCustomersController extends Controller
@@ -113,17 +117,22 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomerDetailService $detailService,
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
+        TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): Response {
         $context = $contextService->resolvePageContext($request);
         $authorized = (bool) ($context['ok'] ?? false);
 
+        if ($authorized) {
+            abort_unless(
+                $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
+                404
+            );
+        }
+
         $displayName = 'Customer detail unavailable';
         if ($authorized) {
-            $displayName = trim((string) ($marketingProfile->first_name . ' ' . $marketingProfile->last_name));
-            if ($displayName === '') {
-                $displayName = $marketingProfile->email ?: ($marketingProfile->phone ?: 'Customer #' . $marketingProfile->id);
-            }
+            $displayName = $this->customerDisplayName($marketingProfile);
         }
 
         $detail = $authorized ? $detailService->build($marketingProfile) : [
@@ -192,16 +201,23 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'giftIntentOptions' => self::giftIntentOptions(),
                 'giftOriginOptions' => self::giftOriginOptions(),
                 'customerFormActions' => $formActions,
+                'customerMutationBootstrap' => $authorized ? [
+                    'contextToken' => $contextService->issueContextToken($context),
+                    'identityEndpoint' => route('shopify.app.api.customers.update', ['marketingProfile' => $marketingProfile->id], false),
+                    'adjustmentEndpoint' => route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], false),
+                    'sendCandleCashEndpoint' => route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], false),
+                ] : null,
             ],
             resolvedContext: $context,
         );
-}
+    }
 
     public function update(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingIdentityNormalizer $identityNormalizer,
+        TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
@@ -221,24 +237,13 @@ class ShopifyEmbeddedCustomersController extends Controller
             ]);
         }
 
-        $data = $request->validate([
-            'first_name' => ['nullable', 'string', 'max:120'],
-            'last_name' => ['nullable', 'string', 'max:120'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:40'],
-        ]);
+        abort_unless(
+            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
+            404
+        );
 
-        $email = trim((string) ($data['email'] ?? ''));
-        $phone = trim((string) ($data['phone'] ?? ''));
-
-        $marketingProfile->forceFill([
-            'first_name' => trim((string) ($data['first_name'] ?? '')) ?: null,
-            'last_name' => trim((string) ($data['last_name'] ?? '')) ?: null,
-            'email' => $email !== '' ? $email : null,
-            'normalized_email' => $email !== '' ? $identityNormalizer->normalizeEmail($email) : null,
-            'phone' => $phone !== '' ? $phone : null,
-            'normalized_phone' => $phone !== '' ? $identityNormalizer->normalizePhone($phone) : null,
-        ])->save();
+        $data = $this->validatedIdentityData($request);
+        $this->applyIdentityUpdate($marketingProfile, $data, $identityNormalizer);
 
         return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
@@ -247,11 +252,48 @@ class ShopifyEmbeddedCustomersController extends Controller
             ]);
     }
 
+    public function updateJson(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        MarketingIdentityNormalizer $identityNormalizer,
+        TenantResolver $tenantResolver,
+        MarketingProfile $marketingProfile
+    ): JsonResponse {
+        $context = $contextService->resolveApiContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'identity.update.json', (bool) ($context['ok'] ?? false));
+
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        if (! $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver)) {
+            return $this->customerNotFoundResponse();
+        }
+
+        try {
+            $data = $this->validatedIdentityData($request);
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Customer identity could not be saved.', $exception);
+        }
+
+        $this->applyIdentityUpdate($marketingProfile, $data, $identityNormalizer);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Customer identity updated.',
+            'notice_style' => 'success',
+            'data' => [
+                'customer' => $this->customerIdentityPayload($marketingProfile->fresh()),
+            ],
+        ]);
+    }
+
     public function updateConsent(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingConsentService $consentService,
+        TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
@@ -270,6 +312,11 @@ class ShopifyEmbeddedCustomersController extends Controller
                     'message' => 'Consent update failed: store context could not be verified.',
                 ]);
         }
+
+        abort_unless(
+            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
+            404
+        );
 
         $data = $request->validate([
             'channel' => ['required', 'in:sms,email,both'],
@@ -312,6 +359,8 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
+        CandleCashService $candleCashService,
+        TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         Log::info('shopify.embedded.candle_cash.adjust.entry', [
@@ -337,73 +386,76 @@ class ShopifyEmbeddedCustomersController extends Controller
                 ]);
         }
 
-        $data = $request->validate([
-            'direction' => ['required', 'in:add,subtract'],
-            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
-
-        $direction = (string) $data['direction'];
-        $amount = (int) $data['amount'];
-        $reason = trim((string) $data['reason']);
-
-        $result = $adjustmentService->adjust(
-            profile: $marketingProfile,
-            direction: $direction,
-            amount: $amount,
-            reason: $reason,
-            actorId: (string) (auth()->id() ?? 'embedded')
+        abort_unless(
+            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
+            404
         );
 
-        $balance = (int) ($result['balance'] ?? 0);
-        $noticeStyle = 'success';
-        $noticeMessage = 'Candle Cash adjusted. New balance: '
-            . app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(
-                app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints($balance)
-            )
-            . '.';
-
-        Log::info('Shopify embedded Candle Cash adjustment applied', [
-            'profile_id' => $marketingProfile->id,
-            'direction' => $direction,
-            'amount' => $amount,
-            'reason' => $reason,
-            'balance' => $balance,
-            'transaction_id' => $result['transaction_id'] ?? null,
-        ]);
-
-        if ($direction === 'add' && $messagingService->smsSupported()) {
-            $smsResult = $messagingService->sendCandleCashAdjustmentAwardedSms(
-                $marketingProfile,
-                $amount,
-                auth()->id()
-            );
-
-            if (! $smsResult['ok']) {
-                $noticeStyle = 'warning';
-                $noticeMessage .= ' (Reward message not sent: ' . $smsResult['message'] . ')';
-
-                Log::warning('Shopify embedded Candle Cash adjustment reward notification failed', [
-                    'profile_id' => $marketingProfile->id,
-                    'transaction_id' => $result['transaction_id'] ?? null,
-                    'failure_message' => $smsResult['message'] ?? 'unknown',
-                ]);
-            } else {
-                $noticeMessage .= ' Reward message sent.';
-
-                Log::info('Shopify embedded Candle Cash adjustment reward notification sent', [
-                    'profile_id' => $marketingProfile->id,
-                    'transaction_id' => $result['transaction_id'] ?? null,
-                    'amount' => $amount,
-                ]);
-            }
-        }
+        $data = $this->validatedAdjustmentData($request);
+        $result = $this->applyCandleCashAdjustment(
+            profile: $marketingProfile,
+            data: $data,
+            adjustmentService: $adjustmentService,
+            messagingService: $messagingService,
+            candleCashService: $candleCashService
+        );
 
         return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
-                'style' => $noticeStyle,
-                'message' => $noticeMessage,
+                'style' => $result['notice_style'],
+                'message' => $result['notice_message'],
             ]);
+    }
+
+    public function adjustCandleCashJson(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        CandleCashService $candleCashService,
+        TenantResolver $tenantResolver,
+        MarketingProfile $marketingProfile
+    ): JsonResponse {
+        Log::info('shopify.embedded.candle_cash.adjust.json.entry', [
+            'route' => $request->route()?->getName(),
+            'profile_id' => $marketingProfile->id,
+        ]);
+
+        $context = $contextService->resolveApiContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust.json', (bool) ($context['ok'] ?? false));
+
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        if (! $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver)) {
+            return $this->customerNotFoundResponse();
+        }
+
+        try {
+            $data = $this->validatedAdjustmentData($request);
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Candle Cash adjustment could not be saved.', $exception);
+        }
+
+        $result = $this->applyCandleCashAdjustment(
+            profile: $marketingProfile,
+            data: $data,
+            adjustmentService: $adjustmentService,
+            messagingService: $messagingService,
+            candleCashService: $candleCashService
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => $result['notice_message'],
+            'notice_style' => $result['notice_style'],
+            'data' => [
+                'transaction_id' => $result['transaction_id'],
+                'balance' => $result['balance'],
+                'balance_display' => $result['balance_display'],
+            ],
+        ]);
     }
 
     public function redirectLegacyToManage(Request $request): Response|RedirectResponse
@@ -478,6 +530,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
+        TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
@@ -496,6 +549,11 @@ class ShopifyEmbeddedCustomersController extends Controller
                     'message' => 'Message send failed: store context could not be verified.',
                 ]);
         }
+
+        abort_unless(
+            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
+            404
+        );
 
         $data = $request->validate([
             'channel' => ['required', 'in:sms'],
@@ -537,6 +595,8 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerSendCandleCashService $sendService,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
+        CandleCashService $candleCashService,
+        TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
         $context = $contextService->resolvePageContext($request);
@@ -556,90 +616,71 @@ class ShopifyEmbeddedCustomersController extends Controller
                 ]);
         }
 
-        $intentValues = implode(',', array_keys(self::giftIntentOptions()));
-        $originValues = implode(',', array_keys(self::giftOriginOptions()));
-
-        $data = $request->validate([
-            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
-            'reason' => ['required', 'string', 'max:500'],
-            'message' => ['nullable', 'string', 'max:1000'],
-            'sender_key' => ['nullable', 'string', 'max:80'],
-            'gift_intent' => ['nullable', 'string', 'in:' . $intentValues],
-            'gift_origin' => ['nullable', 'string', 'in:' . $originValues],
-            'campaign_key' => ['nullable', 'string', 'max:100'],
-        ]);
-
-        $amount = (int) $data['amount'];
-        $reason = trim((string) $data['reason']);
-        $message = trim((string) ($data['message'] ?? ''));
-        $senderKey = trim((string) ($data['sender_key'] ?? '')) ?: null;
-        $giftIntent = self::normalizeNullableString($data['gift_intent'] ?? null);
-        $giftOrigin = self::normalizeNullableString($data['gift_origin'] ?? null);
-        $campaignKey = self::normalizeNullableString($data['campaign_key'] ?? null);
-
-        $metadata = [
-            'gift_intent' => $giftIntent,
-            'gift_origin' => $giftOrigin,
-            'campaign_key' => $campaignKey,
-            'notified_via' => 'none',
-            'notification_status' => 'skipped',
-        ];
-
-        $result = $sendService->send(
-            profile: $marketingProfile,
-            amount: $amount,
-            reason: $reason,
-            actorId: (string) (auth()->id() ?? 'embedded'),
-            metadata: $metadata
+        abort_unless(
+            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
+            404
         );
 
-        Log::info('Shopify embedded Candle Cash sent', [
-            'profile_id' => $marketingProfile->id,
-            'amount' => $amount,
-            'reason' => $reason,
-            'actor_id' => auth()->id(),
-            'balance' => (int) ($result['balance'] ?? 0),
-            'transaction_id' => $result['transaction_id'] ?? null,
-            'metadata' => $metadata,
-        ]);
-
-        $noticeMessage = 'Candle Cash sent. New balance: ' . number_format((int) ($result['balance'] ?? 0));
-        $noticeStyle = 'success';
-        $transactionId = $result['transaction_id'] ?? null;
-
-        if ($message !== '') {
-            $smsResult = $messagingService->sendSms($marketingProfile, $message, auth()->id(), $senderKey);
-            $metadataUpdate = [
-                'notified_via' => 'sms',
-                'notification_status' => $smsResult['ok'] ? 'sent' : 'failed',
-            ];
-            if ($transactionId !== null) {
-                CandleCashTransaction::query()
-                    ->whereKey($transactionId)
-                    ->update($metadataUpdate);
-            }
-            if (! $smsResult['ok']) {
-                $noticeStyle = 'warning';
-                $noticeMessage .= ' (Message not sent: ' . $smsResult['message'] . ')';
-                Log::warning('Shopify embedded Candle Cash notification failed', [
-                    'profile_id' => $marketingProfile->id,
-                    'transaction_id' => $transactionId,
-                    'failure_message' => $smsResult['message'] ?? 'unknown',
-                ]);
-            }
-            else {
-                Log::info('Shopify embedded Candle Cash notification sent', [
-                    'profile_id' => $marketingProfile->id,
-                    'transaction_id' => $transactionId,
-                ]);
-            }
-        }
+        $data = $this->validatedSendCandleCashData($request);
+        $result = $this->applySendCandleCash(
+            profile: $marketingProfile,
+            data: $data,
+            sendService: $sendService,
+            messagingService: $messagingService,
+            candleCashService: $candleCashService
+        );
 
         return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
             ->with('customer_detail_notice', [
-                'style' => $noticeStyle,
-                'message' => $noticeMessage,
+                'style' => $result['notice_style'],
+                'message' => $result['notice_message'],
             ]);
+    }
+
+    public function sendCandleCashJson(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerSendCandleCashService $sendService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        CandleCashService $candleCashService,
+        TenantResolver $tenantResolver,
+        MarketingProfile $marketingProfile
+    ): JsonResponse {
+        $context = $contextService->resolveApiContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'candle_cash.send.json', (bool) ($context['ok'] ?? false));
+
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        if (! $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver)) {
+            return $this->customerNotFoundResponse();
+        }
+
+        try {
+            $data = $this->validatedSendCandleCashData($request);
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Send Candle Cash could not be saved.', $exception);
+        }
+
+        $result = $this->applySendCandleCash(
+            profile: $marketingProfile,
+            data: $data,
+            sendService: $sendService,
+            messagingService: $messagingService,
+            candleCashService: $candleCashService
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => $result['notice_message'],
+            'notice_style' => $result['notice_style'],
+            'data' => [
+                'transaction_id' => $result['transaction_id'],
+                'balance' => $result['balance'],
+                'balance_display' => $result['balance_display'],
+            ],
+        ]);
     }
 
     protected function renderPage(
@@ -774,6 +815,360 @@ class ShopifyEmbeddedCustomersController extends Controller
 
             abort(419, 'CSRF token mismatch.');
         }
+    }
+
+    /**
+     * @return array{first_name:?string,last_name:?string,email:?string,phone:?string}
+     */
+    protected function validatedIdentityData(Request $request): array
+    {
+        /** @var array{first_name:?string,last_name:?string,email:?string,phone:?string} $data */
+        $data = validator($request->all(), [
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+        ])->validate();
+
+        return $data;
+    }
+
+    /**
+     * @param array{first_name:?string,last_name:?string,email:?string,phone:?string} $data
+     */
+    protected function applyIdentityUpdate(
+        MarketingProfile $marketingProfile,
+        array $data,
+        MarketingIdentityNormalizer $identityNormalizer
+    ): void {
+        $email = trim((string) ($data['email'] ?? ''));
+        $phone = trim((string) ($data['phone'] ?? ''));
+
+        $marketingProfile->forceFill([
+            'first_name' => trim((string) ($data['first_name'] ?? '')) ?: null,
+            'last_name' => trim((string) ($data['last_name'] ?? '')) ?: null,
+            'email' => $email !== '' ? $email : null,
+            'normalized_email' => $email !== '' ? $identityNormalizer->normalizeEmail($email) : null,
+            'phone' => $phone !== '' ? $phone : null,
+            'normalized_phone' => $phone !== '' ? $identityNormalizer->normalizePhone($phone) : null,
+        ])->save();
+    }
+
+    /**
+     * @return array{direction:string,amount:int,reason:string}
+     */
+    protected function validatedAdjustmentData(Request $request): array
+    {
+        /** @var array{direction:string,amount:int,reason:string} $data */
+        $data = validator($request->all(), [
+            'direction' => ['required', 'in:add,subtract'],
+            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
+            'reason' => ['required', 'string', 'max:500'],
+        ])->validate();
+
+        return $data;
+    }
+
+    /**
+     * @param array{direction:string,amount:int,reason:string} $data
+     * @return array{
+     *   balance:int,
+     *   balance_display:string,
+     *   transaction_id:int|null,
+     *   notice_style:string,
+     *   notice_message:string
+     * }
+     */
+    protected function applyCandleCashAdjustment(
+        MarketingProfile $profile,
+        array $data,
+        ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        CandleCashService $candleCashService
+    ): array {
+        $direction = (string) $data['direction'];
+        $amount = (int) $data['amount'];
+        $reason = trim((string) $data['reason']);
+
+        $result = $adjustmentService->adjust(
+            profile: $profile,
+            direction: $direction,
+            amount: $amount,
+            reason: $reason,
+            actorId: (string) (auth()->id() ?? 'embedded')
+        );
+
+        $balance = (int) ($result['balance'] ?? 0);
+        $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
+        $noticeStyle = 'success';
+        $noticeMessage = 'Candle Cash adjusted. New balance: ' . $balanceDisplay . '.';
+
+        Log::info('Shopify embedded Candle Cash adjustment applied', [
+            'profile_id' => $profile->id,
+            'direction' => $direction,
+            'amount' => $amount,
+            'reason' => $reason,
+            'balance' => $balance,
+            'transaction_id' => $result['transaction_id'] ?? null,
+        ]);
+
+        if ($direction === 'add' && $messagingService->smsSupported()) {
+            $smsResult = $messagingService->sendCandleCashAdjustmentAwardedSms(
+                $profile,
+                $amount,
+                auth()->id()
+            );
+
+            if (! $smsResult['ok']) {
+                $noticeStyle = 'warning';
+                $noticeMessage .= ' (Reward message not sent: ' . $smsResult['message'] . ')';
+
+                Log::warning('Shopify embedded Candle Cash adjustment reward notification failed', [
+                    'profile_id' => $profile->id,
+                    'transaction_id' => $result['transaction_id'] ?? null,
+                    'failure_message' => $smsResult['message'] ?? 'unknown',
+                ]);
+            } else {
+                $noticeMessage .= ' Reward message sent.';
+
+                Log::info('Shopify embedded Candle Cash adjustment reward notification sent', [
+                    'profile_id' => $profile->id,
+                    'transaction_id' => $result['transaction_id'] ?? null,
+                    'amount' => $amount,
+                ]);
+            }
+        }
+
+        return [
+            'balance' => $balance,
+            'balance_display' => $balanceDisplay,
+            'transaction_id' => isset($result['transaction_id']) ? (int) $result['transaction_id'] : null,
+            'notice_style' => $noticeStyle,
+            'notice_message' => $noticeMessage,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   amount:int,
+     *   reason:string,
+     *   message:?string,
+     *   sender_key:?string,
+     *   gift_intent:?string,
+     *   gift_origin:?string,
+     *   campaign_key:?string
+     * }
+     */
+    protected function validatedSendCandleCashData(Request $request): array
+    {
+        $intentValues = implode(',', array_keys(self::giftIntentOptions()));
+        $originValues = implode(',', array_keys(self::giftOriginOptions()));
+
+        /** @var array{
+         *   amount:int,
+         *   reason:string,
+         *   message:?string,
+         *   sender_key:?string,
+         *   gift_intent:?string,
+         *   gift_origin:?string,
+         *   campaign_key:?string
+         * } $data
+         */
+        $data = validator($request->all(), [
+            'amount' => ['required', 'integer', 'min:1', 'max:100000'],
+            'reason' => ['required', 'string', 'max:500'],
+            'message' => ['nullable', 'string', 'max:1000'],
+            'sender_key' => ['nullable', 'string', 'max:80'],
+            'gift_intent' => ['nullable', 'string', 'in:' . $intentValues],
+            'gift_origin' => ['nullable', 'string', 'in:' . $originValues],
+            'campaign_key' => ['nullable', 'string', 'max:100'],
+        ])->validate();
+
+        return $data;
+    }
+
+    /**
+     * @param array{
+     *   amount:int,
+     *   reason:string,
+     *   message:?string,
+     *   sender_key:?string,
+     *   gift_intent:?string,
+     *   gift_origin:?string,
+     *   campaign_key:?string
+     * } $data
+     * @return array{
+     *   balance:int,
+     *   balance_display:string,
+     *   transaction_id:int|null,
+     *   notice_style:string,
+     *   notice_message:string
+     * }
+     */
+    protected function applySendCandleCash(
+        MarketingProfile $profile,
+        array $data,
+        ShopifyEmbeddedCustomerSendCandleCashService $sendService,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        CandleCashService $candleCashService
+    ): array {
+        $amount = (int) $data['amount'];
+        $reason = trim((string) $data['reason']);
+        $message = trim((string) ($data['message'] ?? ''));
+        $senderKey = trim((string) ($data['sender_key'] ?? '')) ?: null;
+        $giftIntent = self::normalizeNullableString($data['gift_intent'] ?? null);
+        $giftOrigin = self::normalizeNullableString($data['gift_origin'] ?? null);
+        $campaignKey = self::normalizeNullableString($data['campaign_key'] ?? null);
+
+        $metadata = [
+            'gift_intent' => $giftIntent,
+            'gift_origin' => $giftOrigin,
+            'campaign_key' => $campaignKey,
+            'notified_via' => 'none',
+            'notification_status' => 'skipped',
+        ];
+
+        $result = $sendService->send(
+            profile: $profile,
+            amount: $amount,
+            reason: $reason,
+            actorId: (string) (auth()->id() ?? 'embedded'),
+            metadata: $metadata
+        );
+
+        Log::info('Shopify embedded Candle Cash sent', [
+            'profile_id' => $profile->id,
+            'amount' => $amount,
+            'reason' => $reason,
+            'actor_id' => auth()->id(),
+            'balance' => (int) ($result['balance'] ?? 0),
+            'transaction_id' => $result['transaction_id'] ?? null,
+            'metadata' => $metadata,
+        ]);
+
+        $balance = (int) ($result['balance'] ?? 0);
+        $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
+        $noticeMessage = 'Candle Cash sent. New balance: ' . $balanceDisplay . '.';
+        $noticeStyle = 'success';
+        $transactionId = isset($result['transaction_id']) ? (int) $result['transaction_id'] : null;
+
+        if ($message !== '') {
+            $smsResult = $messagingService->sendSms($profile, $message, auth()->id(), $senderKey);
+            $metadataUpdate = [
+                'notified_via' => 'sms',
+                'notification_status' => $smsResult['ok'] ? 'sent' : 'failed',
+            ];
+            if ($transactionId !== null) {
+                CandleCashTransaction::query()
+                    ->whereKey($transactionId)
+                    ->update($metadataUpdate);
+            }
+            if (! $smsResult['ok']) {
+                $noticeStyle = 'warning';
+                $noticeMessage .= ' (Message not sent: ' . $smsResult['message'] . ')';
+                Log::warning('Shopify embedded Candle Cash notification failed', [
+                    'profile_id' => $profile->id,
+                    'transaction_id' => $transactionId,
+                    'failure_message' => $smsResult['message'] ?? 'unknown',
+                ]);
+            } else {
+                Log::info('Shopify embedded Candle Cash notification sent', [
+                    'profile_id' => $profile->id,
+                    'transaction_id' => $transactionId,
+                ]);
+            }
+        }
+
+        return [
+            'balance' => $balance,
+            'balance_display' => $balanceDisplay,
+            'transaction_id' => $transactionId,
+            'notice_style' => $noticeStyle,
+            'notice_message' => $noticeMessage,
+        ];
+    }
+
+    protected function customerBelongsToEmbeddedContext(
+        MarketingProfile $marketingProfile,
+        array $context,
+        TenantResolver $tenantResolver
+    ): bool {
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        if ($tenantId === null) {
+            return true;
+        }
+
+        return (int) ($marketingProfile->tenant_id ?? 0) === $tenantId;
+    }
+
+    /**
+     * @return array{
+     *   id:int,
+     *   display_name:string,
+     *   email:?string,
+     *   email_display:string,
+     *   phone:?string,
+     *   phone_display:string,
+     *   updated_at_display:string
+     * }
+     */
+    protected function customerIdentityPayload(MarketingProfile $marketingProfile): array
+    {
+        return [
+            'id' => (int) $marketingProfile->id,
+            'display_name' => $this->customerDisplayName($marketingProfile),
+            'email' => $marketingProfile->email,
+            'email_display' => $marketingProfile->email ?: 'Email not set',
+            'phone' => $marketingProfile->phone,
+            'phone_display' => $marketingProfile->phone ?: 'Phone not set',
+            'updated_at_display' => optional($marketingProfile->updated_at)->format('Y-m-d H:i') ?: '—',
+        ];
+    }
+
+    protected function customerDisplayName(MarketingProfile $marketingProfile): string
+    {
+        $displayName = trim((string) ($marketingProfile->first_name . ' ' . $marketingProfile->last_name));
+
+        if ($displayName !== '') {
+            return $displayName;
+        }
+
+        return $marketingProfile->email ?: ($marketingProfile->phone ?: 'Customer #' . $marketingProfile->id);
+    }
+
+    protected function invalidApiContextResponse(array $context): JsonResponse
+    {
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $messages = [
+            'open_from_shopify' => 'Open the app from Shopify Admin to load this customer.',
+            'missing_shop' => 'The Shopify shop context is missing from this request.',
+            'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
+            'invalid_hmac' => 'This Shopify request could not be verified.',
+            'invalid_context_token' => 'This embedded admin session expired. Reload the app from Shopify Admin.',
+        ];
+
+        return response()->json([
+            'ok' => false,
+            'message' => $messages[$status] ?? 'This embedded Shopify request could not be verified.',
+            'status' => $status,
+        ], $status === 'open_from_shopify' ? 400 : 401);
+    }
+
+    protected function customerNotFoundResponse(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Customer not found for this Shopify store.',
+        ], 404);
+    }
+
+    protected function validationFailureResponse(string $message, ValidationException $exception): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => $message,
+            'errors' => $exception->errors(),
+        ], 422);
     }
 
     /**

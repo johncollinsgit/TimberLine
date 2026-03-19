@@ -15,17 +15,20 @@ use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingShortLink;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Marketing\CandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
-function seedEmbeddedCustomerDetailFixture(): MarketingProfile
+function seedEmbeddedCustomerDetailFixture(?int $tenantId = null): MarketingProfile
 {
     $now = CarbonImmutable::parse('2026-03-05 14:00:00');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenantId,
         'first_name' => 'Daria',
         'last_name' => 'Drift',
         'email' => 'daria@example.com',
@@ -129,6 +132,7 @@ function seedEmbeddedCustomerDetailFixture(): MarketingProfile
     ]);
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenantId,
         'marketing_profile_id' => $profile->id,
         'provider' => 'shopify',
         'integration' => 'shopify',
@@ -233,6 +237,67 @@ test('customer identity update persists safe fields', function () {
         ->and($profile->last_name)->toBe('Name')
         ->and($profile->email)->toBe('updated@example.com')
         ->and($profile->normalized_email)->toBe('updated@example.com');
+});
+
+test('customer identity json update succeeds with embedded context token', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->patchJson(
+            route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+            [
+                'first_name' => 'Json',
+                'last_name' => 'Updated',
+                'email' => 'json.updated@example.com',
+                'phone' => '555-000-9999',
+            ]
+        );
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'Customer identity updated.')
+        ->assertJsonPath('data.customer.display_name', 'Json Updated')
+        ->assertJsonPath('data.customer.email_display', 'json.updated@example.com')
+        ->assertJsonPath('data.customer.phone_display', '555-000-9999');
+
+    $profile->refresh();
+
+    expect($profile->first_name)->toBe('Json')
+        ->and($profile->last_name)->toBe('Updated')
+        ->and($profile->email)->toBe('json.updated@example.com')
+        ->and($profile->phone)->toBe('555-000-9999');
+});
+
+test('customer identity json returns validation errors', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->patchJson(
+            route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+            [
+                'email' => 'not-an-email',
+                'phone' => str_repeat('1', 41),
+            ]
+        );
+
+    $response->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Customer identity could not be saved.')
+        ->assertJsonValidationErrors(['email', 'phone']);
 });
 
 test('customer identity update alias route now requires csrf token', function () {
@@ -373,6 +438,81 @@ test('candle cash adjustment adds balance and records transaction', function () 
     $detailResponse->assertOk()
         ->assertSeeText('Manual Adjustment')
         ->assertSeeText('Alex Admin');
+});
+
+test('candle cash adjustment json succeeds with embedded context token', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+    $user = User::factory()->create([
+        'name' => 'Json Admin',
+        'email' => 'json.admin@example.com',
+    ]);
+
+    CandleCashBalance::query()->updateOrCreate(
+        ['marketing_profile_id' => $profile->id],
+        ['balance' => 10]
+    );
+
+    $expectedDisplay = app(CandleCashService::class)->formatRewardCurrency(
+        app(CandleCashService::class)->amountFromPoints(35)
+    );
+
+    $response = $this
+        ->actingAs($user)
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->postJson(
+            route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+            [
+                'direction' => 'add',
+                'amount' => 25,
+                'reason' => 'JSON support adjustment',
+            ]
+        );
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.balance', 35)
+        ->assertJsonPath('data.balance_display', $expectedDisplay);
+
+    $transaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    expect($transaction)->not->toBeNull()
+        ->and($transaction?->description)->toBe('JSON support adjustment')
+        ->and((int) $transaction?->source_id)->toBe($user->id);
+});
+
+test('candle cash adjustment json returns validation errors', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->postJson(
+            route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+            [
+                'direction' => 'invalid',
+                'amount' => 0,
+                'reason' => '',
+            ]
+        );
+
+    $response->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Candle Cash adjustment could not be saved.')
+        ->assertJsonValidationErrors(['direction', 'amount', 'reason']);
 });
 
 test('candle cash adjustment subtracts balance when allowed', function () {
@@ -1041,6 +1181,51 @@ test('send candle cash succeeds and records gift transaction', function () {
         ->assertSeeText('Casey Admin');
 });
 
+test('send candle cash json succeeds with embedded context token', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+    $user = User::factory()->create(['name' => 'Gift Json Admin']);
+
+    $expectedDisplay = app(CandleCashService::class)->formatRewardCurrency(
+        app(CandleCashService::class)->amountFromPoints(105)
+    );
+
+    $response = $this
+        ->actingAs($user)
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->postJson(
+            route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+            [
+                'amount' => 15,
+                'reason' => 'JSON welcome gift',
+                'gift_intent' => 'vip',
+                'gift_origin' => 'marketing',
+            ]
+        );
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.balance', 105)
+        ->assertJsonPath('data.balance_display', $expectedDisplay);
+
+    $transaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    expect($transaction)->not->toBeNull()
+        ->and($transaction?->type)->toBe('gift')
+        ->and($transaction?->description)->toBe('JSON welcome gift')
+        ->and((int) $transaction?->source_id)->toBe($user->id)
+        ->and($transaction?->gift_intent)->toBe('vip')
+        ->and($transaction?->gift_origin)->toBe('marketing');
+});
+
 test('send candle cash rejects invalid input', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
@@ -1164,4 +1349,37 @@ test('send candle cash continues even when optional message cannot send', functi
         ->and((int) $transaction->points)->toBe(8)
         ->and($transaction->notified_via)->toBe('sms')
         ->and($transaction->notification_status)->toBe('failed');
+});
+
+test('embedded customer detail mutations and page access are isolated by store tenant', function () {
+    $tenantOne = Tenant::query()->create([
+        'name' => 'Tenant One',
+        'slug' => 'tenant-one',
+    ]);
+    $tenantTwo = Tenant::query()->create([
+        'name' => 'Tenant Two',
+        'slug' => 'tenant-two',
+    ]);
+
+    configureEmbeddedRetailStore($tenantOne->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenantTwo->id);
+
+    $detailResponse = $this->get(route('shopify.app.customers.detail', array_merge([
+        'marketingProfile' => $profile->id,
+    ], retailEmbeddedSignedQuery())));
+
+    $detailResponse->assertNotFound();
+
+    $mutationResponse = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->patchJson(
+            route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+            [
+                'first_name' => 'Blocked',
+            ]
+        );
+
+    $mutationResponse->assertNotFound()
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Customer not found for this Shopify store.');
 });

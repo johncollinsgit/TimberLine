@@ -710,6 +710,15 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::patch('/rewards/redeem/{reward}', [ShopifyEmbeddedRewardsController::class, 'updateRedeemRule'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.redeem.update');
+        Route::patch('/customers/manage/{marketingProfile}/identity', [ShopifyEmbeddedCustomersController::class, 'updateJson'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.update');
+        Route::post('/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCashJson'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.candle-cash.adjust');
+        Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCashJson'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.candle-cash.send');
     });
     Route::get('/auth/{store}', [ShopifyAuthController::class, 'auth'])->name('shopify.auth');
     Route::get('/reinstall/{store}', [ShopifyAuthController::class, 'reinstall'])->name('shopify.reinstall');
