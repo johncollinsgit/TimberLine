@@ -71,7 +71,7 @@
 
         .customers-detail-summary {
             display: grid;
-            gap: 12px;
+            gap: 18px;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         }
 
@@ -99,7 +99,7 @@
 
         .customers-detail-grid {
             display: grid;
-            gap: 14px;
+            gap: 20px;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         }
 
@@ -107,7 +107,7 @@
             border-radius: 12px;
             border: 1px solid rgba(15, 23, 42, 0.08);
             background: rgba(255, 255, 255, 0.95);
-            padding: 16px;
+            padding: 20px;
         }
 
         .customers-detail-card h3 {
@@ -119,11 +119,20 @@
             font-weight: 650;
         }
 
+        .customers-detail-card h3 + * {
+            margin-top: 12px;
+        }
+
         .customers-detail-card p {
-            margin: 10px 0 0;
+            margin: 8px 0;
             font-size: 13px;
             color: rgba(15, 23, 42, 0.7);
-            line-height: 1.55;
+            line-height: 1.6;
+        }
+
+        .customers-detail-card .text-small {
+            margin-top: 8px;
+            color: rgba(15, 23, 42, 0.6);
         }
 
         .customers-detail-pill {
@@ -300,7 +309,6 @@
     @else
         <div
             id="shopify-customer-detail"
-            data-context-token="{{ $mutationBootstrap['contextToken'] ?? '' }}"
             data-identity-endpoint="{{ $mutationBootstrap['identityEndpoint'] ?? '' }}"
             data-adjustment-endpoint="{{ $mutationBootstrap['adjustmentEndpoint'] ?? '' }}"
             data-send-candle-cash-endpoint="{{ $mutationBootstrap['sendCandleCashEndpoint'] ?? '' }}"
@@ -708,11 +716,6 @@
                     return;
                 }
 
-                const contextToken = root.dataset.contextToken || "";
-                if (!contextToken) {
-                    return;
-                }
-
                 function setText(selector, value) {
                     root.querySelectorAll(selector).forEach((node) => {
                         node.textContent = value;
@@ -838,6 +841,52 @@
                     button.textContent = busy ? "Saving..." : button.dataset.originalLabel;
                 }
 
+                function authFailureMessage(status, fallbackMessage) {
+                    const messages = {
+                        missing_api_auth: "Shopify Admin verification is unavailable. Reload this customer from Shopify Admin and try again.",
+                        invalid_session_token: "Shopify Admin verification failed. Reload this customer from Shopify Admin and try again.",
+                        expired_session_token: "Your Shopify Admin session expired. Reload this customer from Shopify Admin and try again.",
+                    };
+
+                    return messages[status] || fallbackMessage || null;
+                }
+
+                async function resolveEmbeddedAuthHeaders() {
+                    if (!window.shopify || typeof window.shopify.idToken !== "function") {
+                        throw new Error(
+                            authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
+                        );
+                    }
+
+                    const headers = {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    };
+
+                    let sessionToken = null;
+
+                    try {
+                        sessionToken = await Promise.race([
+                            Promise.resolve(window.shopify.idToken()),
+                            new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
+                        ]);
+                    } catch (error) {
+                        throw new Error(
+                            authFailureMessage("invalid_session_token", "Shopify Admin verification failed."),
+                        );
+                    }
+
+                    if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
+                        throw new Error(
+                            authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
+                        );
+                    }
+
+                    headers.Authorization = `Bearer ${sessionToken.trim()}`;
+
+                    return headers;
+                }
+
                 async function submitMutationForm(event) {
                     event.preventDefault();
 
@@ -855,13 +904,10 @@
                     setButtonBusy(form, true);
 
                     try {
+                        const headers = await resolveEmbeddedAuthHeaders();
                         const response = await fetch(endpoint, {
                             method,
-                            headers: {
-                                "Accept": "application/json",
-                                "Content-Type": "application/json",
-                                "X-Forestry-Embedded-Context": contextToken,
-                            },
+                            headers,
                             credentials: "same-origin",
                             body: JSON.stringify(serializeForm(form)),
                         });
@@ -872,12 +918,16 @@
                         }));
 
                         if (!response.ok || !payload.ok) {
+                            const authMessage = authFailureMessage(payload.status, payload.message);
                             if (payload.errors) {
                                 setFieldErrors(form, payload.errors);
                             }
 
-                            const message = payload.message || firstErrorMessage(payload.errors) || "Request failed.";
+                            const message = authMessage || firstErrorMessage(payload.errors) || payload.message || "Request failed.";
                             setFormFeedback(form, "warning", message);
+                            if (authMessage) {
+                                window.ForestryEmbeddedApp?.showToast?.(message, "error");
+                            }
                             return;
                         }
 
@@ -897,7 +947,11 @@
                         setFormFeedback(form, tone, payload.message || "Saved.");
                         window.ForestryEmbeddedApp?.showToast?.(payload.message || "Saved.", tone === "success" ? "success" : "error");
                     } catch (error) {
-                        setFormFeedback(form, "warning", error instanceof Error ? error.message : "Request failed.");
+                        const message = error instanceof Error ? error.message : "Request failed.";
+                        setFormFeedback(form, "warning", message);
+                        if (message !== "Request failed.") {
+                            window.ForestryEmbeddedApp?.showToast?.(message, "error");
+                        }
                     } finally {
                         setButtonBusy(form, false);
                     }
