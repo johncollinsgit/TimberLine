@@ -6,7 +6,7 @@ use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use Illuminate\Support\Facades\Artisan;
 
-test('legacy candle cash rebase dry run reports aggressive option 3 totals without mutating balances', function () {
+test('legacy candle cash correction dry run previews corrected legacy totals without mutating balances', function () {
     $alpha = MarketingProfile::query()->create([
         'email' => 'alpha@example.com',
         'normalized_email' => 'alpha@example.com',
@@ -19,73 +19,135 @@ test('legacy candle cash rebase dry run reports aggressive option 3 totals witho
 
     CandleCashBalance::query()->create([
         'marketing_profile_id' => $alpha->id,
-        'balance' => 300,
+        'balance' => 100,
     ]);
 
     CandleCashBalance::query()->create([
         'marketing_profile_id' => $beta->id,
-        'balance' => 151,
+        'balance' => 50,
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $alpha->id,
+        'type' => 'import_opening_balance',
+        'points' => 100,
+        'source' => 'growave',
+        'source_id' => 'snapshot:alpha',
+        'description' => 'Imported legacy balance',
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $beta->id,
+        'type' => 'earn',
+        'points' => 20,
+        'source' => 'growave_activity',
+        'source_id' => 'retail:beta:7001',
+        'description' => 'Imported Growave activity',
     ]);
 
     $this->artisan('marketing:rebase-candle-cash-balances', [
-        '--factor' => '0.3333333333',
+        '--factor' => '0.003',
         '--dry-run' => true,
     ])
-        ->expectsOutput('processed=2')
-        ->expectsOutput('adjusted=2')
-        ->expectsOutput('unchanged=0')
-        ->expectsOutput('original_points=451')
-        ->expectsOutput('target_points=150')
-        ->expectsOutput('reduced_points=301')
+        ->expectsOutput('profiles=2')
+        ->expectsOutput('legacy_transactions=2')
+        ->expectsOutput('legacy_rebases=0')
+        ->expectsOutput('legacy_points_total=120')
+        ->expectsOutput('corrected_candle_cash_total=0.36')
         ->assertExitCode(0);
 
-    expect((int) CandleCashBalance::query()->where('marketing_profile_id', $alpha->id)->value('balance'))->toBe(300)
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $beta->id)->value('balance'))->toBe(151)
-        ->and(CandleCashTransaction::query()->where('source', 'legacy_rebase')->exists())->toBeFalse();
+    expect((float) CandleCashBalance::query()->where('marketing_profile_id', $alpha->id)->value('balance'))->toBe(100.0)
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $beta->id)->value('balance'))->toBe(50.0);
 });
 
-test('legacy candle cash rebase applies option 3 haircut once per run key', function () {
-    $profile = MarketingProfile::query()->create([
-        'email' => 'rebalance@example.com',
-        'normalized_email' => 'rebalance@example.com',
+test('legacy candle cash correction applies once per run key and leaves modern balances untouched', function () {
+    $legacyProfile = MarketingProfile::query()->create([
+        'email' => 'legacy@example.com',
+        'normalized_email' => 'legacy@example.com',
+    ]);
+
+    $modernProfile = MarketingProfile::query()->create([
+        'email' => 'modern@example.com',
+        'normalized_email' => 'modern@example.com',
     ]);
 
     CandleCashBalance::query()->create([
-        'marketing_profile_id' => $profile->id,
+        'marketing_profile_id' => $legacyProfile->id,
         'balance' => 300,
     ]);
 
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $modernProfile->id,
+        'balance' => 25,
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $legacyProfile->id,
+        'type' => 'import_opening_balance',
+        'points' => 100,
+        'source' => 'growave',
+        'source_id' => 'legacy-import',
+        'description' => 'Imported legacy balance',
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $legacyProfile->id,
+        'type' => 'adjustment',
+        'points' => -200,
+        'source' => 'legacy_rebase',
+        'source_id' => 'old-rebase',
+        'description' => 'Old proportional haircut',
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $modernProfile->id,
+        'type' => 'earn',
+        'points' => 25,
+        'source' => 'admin',
+        'source_id' => 'modern-seed',
+        'description' => 'Modern canonical Candle Cash',
+    ]);
+
     $exit = Artisan::call('marketing:rebase-candle-cash-balances', [
-        '--factor' => '0.3333333333',
-        '--run-key' => 'option3-aggressive-test',
+        '--factor' => '0.003',
+        '--run-key' => 'legacy-correction-test',
     ]);
 
     expect($exit)->toBe(0)
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(100);
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $legacyProfile->id)->value('balance'))->toBe(0.3)
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $modernProfile->id)->value('balance'))->toBe(25.0);
 
-    $transaction = CandleCashTransaction::query()
-        ->where('marketing_profile_id', $profile->id)
-        ->where('source', 'legacy_rebase')
-        ->where('source_id', 'option3-aggressive-test:' . $profile->id)
+    $legacyTransaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $legacyProfile->id)
+        ->where('source', 'growave')
+        ->where('type', 'import_opening_balance')
         ->sole();
 
-    expect((int) $transaction->candle_cash_delta)->toBe(-200);
+    $rebaseTransaction = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $legacyProfile->id)
+        ->where('source', 'legacy_rebase')
+        ->sole();
+
+    expect((float) $legacyTransaction->candle_cash_delta)->toBe(0.3)
+        ->and((bool) $legacyTransaction->legacy_points_origin)->toBeTrue()
+        ->and((int) $legacyTransaction->legacy_points_value)->toBe(100)
+        ->and((float) $rebaseTransaction->candle_cash_delta)->toBe(0.0);
 
     expect(MarketingImportRun::query()
-        ->where('type', 'candle_cash_balance_rebase')
-        ->where('source_label', 'option3-aggressive-test')
+        ->where('type', 'candle_cash_legacy_points_correction')
+        ->where('source_label', 'legacy-correction-test')
         ->where('status', 'completed')
         ->exists())->toBeTrue();
 
     $exitAgain = Artisan::call('marketing:rebase-candle-cash-balances', [
-        '--factor' => '0.3333333333',
-        '--run-key' => 'option3-aggressive-test',
+        '--factor' => '0.003',
+        '--run-key' => 'legacy-correction-test',
     ]);
 
     expect($exitAgain)->toBe(0)
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(100)
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $legacyProfile->id)->value('balance'))->toBe(0.3)
         ->and(CandleCashTransaction::query()
-            ->where('marketing_profile_id', $profile->id)
+            ->where('marketing_profile_id', $legacyProfile->id)
             ->where('source', 'legacy_rebase')
             ->count())->toBe(1);
 });

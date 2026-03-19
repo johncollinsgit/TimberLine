@@ -208,8 +208,8 @@ class CandleCashTaskService
     public function customerSummary(MarketingProfile $profile): array
     {
         $balance = $this->candleCashService->currentBalance($profile);
-        $lifetimeEarned = (int) $profile->candleCashTransactions()->where('candle_cash_delta', '>', 0)->sum('candle_cash_delta');
-        $lifetimeRedeemed = abs((int) $profile->candleCashTransactions()->where('candle_cash_delta', '<', 0)->sum('candle_cash_delta'));
+        $lifetimeEarned = round((float) $profile->candleCashTransactions()->where('candle_cash_delta', '>', 0)->sum('candle_cash_delta'), 3);
+        $lifetimeRedeemed = round(abs((float) $profile->candleCashTransactions()->where('candle_cash_delta', '<', 0)->sum('candle_cash_delta')), 3);
         $pendingRewards = (int) CandleCashTaskCompletion::query()
             ->where('marketing_profile_id', $profile->id)
             ->whereIn('status', ['pending', 'submitted', 'started'])

@@ -159,7 +159,7 @@ class MarketingPagesController extends Controller
             ? (int) CandleCashBalance::query()->where('balance', '>', 0)->count()
             : 0;
         $totalCandleCashBalance = Schema::hasTable('candle_cash_balances')
-            ? (int) CandleCashBalance::query()->sum('balance')
+            ? round((float) CandleCashBalance::query()->sum('balance'), 3)
             : 0;
         $growaveActivityCount = Schema::hasTable('candle_cash_transactions')
             ? (int) CandleCashTransaction::query()->where('source', 'growave_activity')->count()

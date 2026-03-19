@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use App\Models\Concerns\TracksLegacyCandleCashCompatibility;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MarketingConsentRequest extends Model
 {
     use HasTenantScope;
+    use TracksLegacyCandleCashCompatibility;
 
     protected $fillable = [
         'tenant_id',
@@ -46,6 +48,10 @@ class MarketingConsentRequest extends Model
             return (int) $value;
         }
 
+        if (array_key_exists('reward_awarded_points', $this->attributes) && $this->attributes['reward_awarded_points'] !== null) {
+            $this->recordLegacyCandleCashCompatibility('marketing_consent_requests.reward_awarded_points', 'fallback_read', __METHOD__);
+        }
+
         return (int) ($this->attributes['reward_awarded_points'] ?? 0);
     }
 
@@ -60,7 +66,13 @@ class MarketingConsentRequest extends Model
     public function getRewardAwardedPointsAttribute($value): int
     {
         if ($value !== null) {
+            $this->recordLegacyCandleCashCompatibility('marketing_consent_requests.reward_awarded_points', 'legacy_read', __METHOD__);
+
             return (int) $value;
+        }
+
+        if (array_key_exists('reward_awarded_candle_cash', $this->attributes) && $this->attributes['reward_awarded_candle_cash'] !== null) {
+            $this->recordLegacyCandleCashCompatibility('marketing_consent_requests.reward_awarded_points', 'legacy_read', __METHOD__);
         }
 
         return (int) ($this->attributes['reward_awarded_candle_cash'] ?? 0);
@@ -68,6 +80,8 @@ class MarketingConsentRequest extends Model
 
     public function setRewardAwardedPointsAttribute($value): void
     {
+        $this->recordLegacyCandleCashCompatibility('marketing_consent_requests.reward_awarded_points', 'legacy_write', __METHOD__);
+
         $normalized = max(0, (int) $value);
 
         $this->attributes['reward_awarded_points'] = $normalized;

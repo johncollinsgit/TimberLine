@@ -32,9 +32,11 @@ test('imports latest growave snapshot as candle cash opening balance entry', fun
         ->first();
 
     expect($balance)->not->toBeNull()
-        ->and((int) $balance->balance)->toBe(125)
+        ->and((float) $balance->balance)->toBe(0.375)
         ->and($transaction)->not->toBeNull()
-        ->and((int) $transaction->candle_cash_delta)->toBe(125)
+        ->and((float) $transaction->candle_cash_delta)->toBe(0.375)
+        ->and((bool) $transaction->legacy_points_origin)->toBeTrue()
+        ->and((int) $transaction->legacy_points_value)->toBe(125)
         ->and((string) $transaction->source_id)->toBe((string) CustomerExternalProfile::query()->sole()->id);
 });
 
@@ -110,7 +112,7 @@ test('uses latest growave snapshot per profile and remains idempotent', function
     $this->artisan('marketing:import-growave-opening-balances --limit=10')
         ->assertExitCode(0);
 
-    expect((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(170)
+    expect((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(0.51)
         ->and(CandleCashTransaction::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('type', 'import_opening_balance')

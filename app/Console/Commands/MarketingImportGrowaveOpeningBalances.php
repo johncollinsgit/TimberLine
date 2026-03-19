@@ -7,6 +7,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use App\Support\Marketing\CandleCashMeasurement;
 use Illuminate\Support\Facades\DB;
 
 class MarketingImportGrowaveOpeningBalances extends Command
@@ -65,7 +66,8 @@ class MarketingImportGrowaveOpeningBalances extends Command
                 continue;
             }
 
-            $targetBalance = (int) ($external->points_balance ?? 0);
+            $legacyPoints = (int) ($external->points_balance ?? 0);
+            $targetBalance = CandleCashMeasurement::legacyPointsToStartingCandleCash($legacyPoints);
 
             if ($dryRun) {
                 $summary['dry_run_would_import']++;
@@ -74,7 +76,7 @@ class MarketingImportGrowaveOpeningBalances extends Command
             }
 
             try {
-                $result = DB::transaction(function () use ($external, $marketingProfileId, $targetBalance): string {
+                $result = DB::transaction(function () use ($external, $marketingProfileId, $targetBalance, $legacyPoints): string {
                     $hasOpeningImport = CandleCashTransaction::query()
                         ->where('marketing_profile_id', $marketingProfileId)
                         ->where('type', 'import_opening_balance')
@@ -100,18 +102,21 @@ class MarketingImportGrowaveOpeningBalances extends Command
                             ['balance' => 0]
                         );
 
-                    $currentBalance = (int) $balance->balance;
-                    $delta = $targetBalance - $currentBalance;
+                    $currentBalance = CandleCashMeasurement::normalizeStoredAmount($balance->balance);
+                    $delta = CandleCashMeasurement::normalizeStoredAmount($targetBalance - $currentBalance);
 
                     $balance->forceFill(['balance' => $targetBalance])->save();
 
                     CandleCashTransaction::query()->create([
                         'marketing_profile_id' => $marketingProfileId,
                         'type' => 'import_opening_balance',
+                        'points' => $legacyPoints,
+                        'legacy_points_origin' => true,
+                        'legacy_points_value' => $legacyPoints,
                         'candle_cash_delta' => $delta,
                         'source' => 'growave',
                         'source_id' => (string) $external->id,
-                        'description' => 'Imported opening Growave balance (' . $targetBalance . ' points) from external snapshot #' . $external->id,
+                        'description' => 'Imported historical Growave starting balance from external snapshot #' . $external->id,
                     ]);
 
                     return 'imported';

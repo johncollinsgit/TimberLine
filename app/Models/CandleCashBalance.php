@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Marketing\CandleCashMeasurement;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,9 +17,15 @@ class CandleCashBalance extends Model
         'balance',
     ];
 
-    protected $casts = [
-        'balance' => 'integer',
-    ];
+    public function getBalanceAttribute($value): float
+    {
+        return CandleCashMeasurement::normalizeStoredAmount($value);
+    }
+
+    public function setBalanceAttribute($value): void
+    {
+        $this->attributes['balance'] = CandleCashMeasurement::normalizeStoredAmount($value);
+    }
 
     public function profile(): BelongsTo
     {

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksLegacyCandleCashCompatibility;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CandleCashTaskCompletion extends Model
 {
+    use TracksLegacyCandleCashCompatibility;
+
     protected $fillable = [
         'candle_cash_task_id',
         'marketing_profile_id',
@@ -51,6 +54,10 @@ class CandleCashTaskCompletion extends Model
             return (int) $value;
         }
 
+        if (array_key_exists('reward_points', $this->attributes) && $this->attributes['reward_points'] !== null) {
+            $this->recordLegacyCandleCashCompatibility('candle_cash_task_completions.reward_points', 'fallback_read', __METHOD__);
+        }
+
         return (int) ($this->attributes['reward_points'] ?? 0);
     }
 
@@ -65,7 +72,13 @@ class CandleCashTaskCompletion extends Model
     public function getRewardPointsAttribute($value): int
     {
         if ($value !== null) {
+            $this->recordLegacyCandleCashCompatibility('candle_cash_task_completions.reward_points', 'legacy_read', __METHOD__);
+
             return (int) $value;
+        }
+
+        if (array_key_exists('reward_candle_cash', $this->attributes) && $this->attributes['reward_candle_cash'] !== null) {
+            $this->recordLegacyCandleCashCompatibility('candle_cash_task_completions.reward_points', 'legacy_read', __METHOD__);
         }
 
         return (int) ($this->attributes['reward_candle_cash'] ?? 0);
@@ -73,6 +86,8 @@ class CandleCashTaskCompletion extends Model
 
     public function setRewardPointsAttribute($value): void
     {
+        $this->recordLegacyCandleCashCompatibility('candle_cash_task_completions.reward_points', 'legacy_write', __METHOD__);
+
         $normalized = max(0, (int) $value);
 
         $this->attributes['reward_points'] = $normalized;

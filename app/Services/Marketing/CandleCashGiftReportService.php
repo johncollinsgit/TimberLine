@@ -6,6 +6,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\User;
+use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -25,7 +26,7 @@ class CandleCashGiftReportService
         $to = $this->normalizeDate($to);
 
         $totalGiftTransactions = (int) $this->baseGiftQuery($from, $to)->count();
-        $totalGiftCandleCash = (int) $this->baseGiftQuery($from, $to)->sum('candle_cash_delta');
+        $totalGiftCandleCash = CandleCashMeasurement::normalizeStoredAmount($this->baseGiftQuery($from, $to)->sum('candle_cash_delta'));
 
         $allGiftRecords = $this->baseGiftQuery($from, $to)
             ->with(['profile:id,email,normalized_email'])
@@ -39,7 +40,7 @@ class CandleCashGiftReportService
 
                 return [
                     'id' => $transaction->id,
-                    'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $transaction->candle_cash_delta),
+                    'candle_cash_amount' => $this->candleCashService->amountFromPoints($transaction->candle_cash_delta),
                     'description' => $transaction->description,
                     'gift_intent' => $transaction->gift_intent,
                     'gift_origin' => $transaction->gift_origin,
@@ -98,7 +99,7 @@ class CandleCashGiftReportService
             return [$key => [
                 'label' => $this->formatLabel($value, $key),
                 'count' => (int) $row->count,
-                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->candle_cash_delta),
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints($row->candle_cash_delta),
             ]];
         })->all();
     }
@@ -135,7 +136,7 @@ class CandleCashGiftReportService
             return [$sourceId => [
                 'label' => $label,
                 'count' => (int) $row->count,
-                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->candle_cash_delta),
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints($row->candle_cash_delta),
             ]];
         })->all();
     }

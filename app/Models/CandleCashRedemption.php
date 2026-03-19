@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksLegacyCandleCashCompatibility;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CandleCashRedemption extends Model
 {
+    use TracksLegacyCandleCashCompatibility;
+
     protected $fillable = [
         'marketing_profile_id',
         'reward_id',
@@ -44,6 +47,10 @@ class CandleCashRedemption extends Model
             return (int) $value;
         }
 
+        if (array_key_exists('points_spent', $this->attributes) && $this->attributes['points_spent'] !== null) {
+            $this->recordLegacyCandleCashCompatibility('candle_cash_redemptions.points_spent', 'fallback_read', __METHOD__);
+        }
+
         return (int) ($this->attributes['points_spent'] ?? 0);
     }
 
@@ -58,7 +65,13 @@ class CandleCashRedemption extends Model
     public function getPointsSpentAttribute($value): int
     {
         if ($value !== null) {
+            $this->recordLegacyCandleCashCompatibility('candle_cash_redemptions.points_spent', 'legacy_read', __METHOD__);
+
             return (int) $value;
+        }
+
+        if (array_key_exists('candle_cash_spent', $this->attributes) && $this->attributes['candle_cash_spent'] !== null) {
+            $this->recordLegacyCandleCashCompatibility('candle_cash_redemptions.points_spent', 'legacy_read', __METHOD__);
         }
 
         return (int) ($this->attributes['candle_cash_spent'] ?? 0);
@@ -66,6 +79,8 @@ class CandleCashRedemption extends Model
 
     public function setPointsSpentAttribute($value): void
     {
+        $this->recordLegacyCandleCashCompatibility('candle_cash_redemptions.points_spent', 'legacy_write', __METHOD__);
+
         $normalized = max(0, (int) $value);
 
         $this->attributes['points_spent'] = $normalized;

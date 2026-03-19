@@ -6,6 +6,7 @@ use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Services\Marketing\CandleCashService;
+use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
 
 class ShopifyEmbeddedDashboardCandleCashValueProvider
@@ -25,7 +26,7 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
             ->whereBetween('redeemed_at', [$from, $to])
             ->get(['id', 'candle_cash_spent', 'redeemed_at', 'external_order_source', 'external_order_id']);
 
-        $redeemedCandleCash = (int) $redeemedRows->sum('candle_cash_spent');
+        $redeemedCandleCash = CandleCashMeasurement::normalizeStoredAmount($redeemedRows->sum('candle_cash_spent'));
         $redeemedAmount = round($this->candleCashService->amountFromPoints($redeemedCandleCash), 2);
 
         $giftRows = CandleCashTransaction::query()
@@ -33,7 +34,7 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
             ->whereBetween('created_at', [$from, $to])
             ->get(['id', 'candle_cash_delta', 'created_at']);
 
-        $giftCandleCash = (int) $giftRows->sum('candle_cash_delta');
+        $giftCandleCash = CandleCashMeasurement::normalizeStoredAmount($giftRows->sum('candle_cash_delta'));
         $giftAmount = round($this->candleCashService->amountFromPoints($giftCandleCash), 2);
 
         $birthdayRows = BirthdayRewardIssuance::query()
@@ -42,7 +43,7 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
 
         $birthdayCost = round($birthdayRows->sum(function (BirthdayRewardIssuance $issuance): float {
             if ($issuance->reward_type === 'candle_cash') {
-                return $this->candleCashService->amountFromPoints((int) ($issuance->candle_cash_awarded ?? 0));
+                return $this->candleCashService->amountFromPoints($issuance->candle_cash_awarded ?? 0);
             }
 
             return (float) ($issuance->reward_value ?? 0);

@@ -10,6 +10,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
+use App\Support\Marketing\CandleCashMeasurement;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -819,7 +820,7 @@ class GrowaveMarketingSyncService
 
     /**
      * @param array<int,array<string,mixed>> $activities
-     * @return array{created:int,skipped_existing:int,skipped_no_profile:int,balance_delta:int}
+     * @return array{created:int,skipped_existing:int,skipped_no_profile:int,balance_delta:float}
      */
     protected function applyActivitiesToCandleCash(
         ?int $marketingProfileId,
@@ -846,8 +847,13 @@ class GrowaveMarketingSyncService
                 continue;
             }
 
-            $delta = $this->pointsDeltaFromActivity($activity);
-            if ($delta === null || $delta === 0) {
+            $legacyPoints = $this->pointsDeltaFromActivity($activity);
+            if ($legacyPoints === null || $legacyPoints === 0) {
+                continue;
+            }
+
+            $delta = CandleCashMeasurement::legacyPointsToStartingCandleCash($legacyPoints);
+            if (abs($delta) < 0.0005) {
                 continue;
             }
 
@@ -860,7 +866,7 @@ class GrowaveMarketingSyncService
             $type = $this->transactionTypeFromActivity($activity);
             $description = $this->descriptionFromActivity($activity);
 
-            $result = DB::transaction(function () use ($marketingProfileId, $sourceId, $delta, $type, $description): string {
+            $result = DB::transaction(function () use ($marketingProfileId, $sourceId, $legacyPoints, $delta, $type, $description): string {
                 $existing = CandleCashTransaction::query()
                     ->where('marketing_profile_id', $marketingProfileId)
                     ->where('source', 'growave_activity')
@@ -880,12 +886,15 @@ class GrowaveMarketingSyncService
                     );
 
                 $balance->forceFill([
-                    'balance' => (int) $balance->balance + $delta,
+                    'balance' => CandleCashMeasurement::normalizeStoredAmount($balance->balance + $delta),
                 ])->save();
 
                 CandleCashTransaction::query()->create([
                     'marketing_profile_id' => $marketingProfileId,
                     'type' => $type,
+                    'points' => $legacyPoints,
+                    'legacy_points_origin' => true,
+                    'legacy_points_value' => $legacyPoints,
                     'candle_cash_delta' => $delta,
                     'source' => 'growave_activity',
                     'source_id' => $sourceId,

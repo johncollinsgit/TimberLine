@@ -8,6 +8,7 @@ use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
+use App\Support\Marketing\CandleCashMeasurement;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -30,6 +31,22 @@ class CandleCashService
         $usesLegacyStorefrontConfig = ! array_key_exists('redeem_increment_dollars', $configured)
             || ! array_key_exists('max_redeemable_per_order_dollars', $configured)
             || ! array_key_exists('max_open_codes', $configured);
+
+        if ($usesLegacyStorefrontConfig && array_key_exists('points_per_dollar', $fallback)) {
+            app(CandleCashLegacyCompatibilityService::class)->record(
+                'config.marketing.candle_cash.points_per_dollar',
+                'config_fallback',
+                __METHOD__
+            );
+        }
+
+        if (! $usesLegacyStorefrontConfig && array_key_exists('points_per_dollar', $configured)) {
+            app(CandleCashLegacyCompatibilityService::class)->record(
+                'marketing_settings.candle_cash_program_config.points_per_dollar',
+                'config_fallback',
+                __METHOD__
+            );
+        }
 
         $legacyPointsPerCandleCash = $usesLegacyStorefrontConfig
             ? (int) data_get($fallback, 'legacy_points_per_candle_cash', data_get($fallback, 'points_per_dollar', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH))
@@ -90,9 +107,19 @@ class CandleCashService
         return max(0, (int) round((float) $amount));
     }
 
-    public function amountFromPoints(int $points): float
+    public function normalizeStoredCandleCash(float|int|string|null $amount): float
     {
-        return round((float) $points, 2);
+        return CandleCashMeasurement::normalizeStoredAmount($amount);
+    }
+
+    public function legacyPointsToStartingCandleCash(float|int|string|null $points): float
+    {
+        return CandleCashMeasurement::legacyPointsToStartingCandleCash($points);
+    }
+
+    public function amountFromPoints(float|int|string $points): float
+    {
+        return CandleCashMeasurement::displayAmount($points);
     }
 
     public function legacyPointsFromCandleCash(float|int|string $amount): int
@@ -155,12 +182,13 @@ class CandleCashService
         return ($numeric >= 0 ? '+' : '-') . $this->formatCurrency(abs($numeric));
     }
 
-    public function candleCashAmountLabelFromPoints(int $points, bool $signed = false): string
+    public function candleCashAmountLabelFromPoints(float|int|string $points, bool $signed = false): string
     {
-        $amount = $this->amountFromPoints(abs($points));
+        $numeric = (float) $points;
+        $amount = $this->amountFromPoints(abs($numeric));
 
         if ($signed) {
-            return ($points >= 0 ? '+' : '-') . $this->formatCurrency($amount);
+            return ($numeric >= 0 ? '+' : '-') . $this->formatCurrency($amount);
         }
 
         return $this->formatCurrency($amount);
@@ -176,7 +204,7 @@ class CandleCashService
      *   amount_formatted:string
      * }
      */
-    public function balancePayloadFromPoints(int $points): array
+    public function balancePayloadFromPoints(float|int|string $points): array
     {
         $amount = $this->amountFromPoints($points);
 
@@ -298,7 +326,7 @@ class CandleCashService
             return $this->fixedRedemptionAmount();
         }
 
-        return $this->amountFromPoints((int) $redemption->candle_cash_spent);
+        return $this->amountFromPoints($redemption->candle_cash_spent);
     }
 
     public function cancelStaleStorefrontRedemptions(
@@ -355,12 +383,12 @@ class CandleCashService
             if ((string) $lockedRedemption->status !== 'issued') {
                 return [
                     'restored' => false,
-                    'balance' => (int) $balance->balance,
+                    'balance' => CandleCashMeasurement::normalizeStoredAmount($balance->balance),
                 ];
             }
 
             $restorePoints = max(0, (int) $lockedRedemption->candle_cash_spent);
-            $nextBalance = (int) $balance->balance + $restorePoints;
+            $nextBalance = CandleCashMeasurement::normalizeStoredAmount($balance->balance + $restorePoints);
 
             $balance->forceFill(['balance' => $nextBalance])->save();
 
@@ -425,14 +453,14 @@ class CandleCashService
         );
     }
 
-    public function currentBalance(MarketingProfile $profile): int
+    public function currentBalance(MarketingProfile $profile): float
     {
-        return (int) $this->ensureBalance($profile)->balance;
+        return CandleCashMeasurement::normalizeStoredAmount($this->ensureBalance($profile)->balance);
     }
 
     /**
-     * @param array<string,mixed> $extraAttributes
-     * @return array{balance:int,transaction_id:int}
+     * @param  array<string,mixed>  $extraAttributes
+     * @return array{balance:float,transaction_id:int}
      */
     public function addPoints(
         MarketingProfile $profile,
@@ -451,7 +479,7 @@ class CandleCashService
                 ['balance' => 0]
             );
 
-            $next = (int) $balance->balance + $points;
+            $next = CandleCashMeasurement::normalizeStoredAmount($balance->balance + $points);
             $balance->forceFill(['balance' => $next])->save();
 
             $transaction = CandleCashTransaction::query()->create(array_merge([
@@ -471,7 +499,7 @@ class CandleCashService
     }
 
     /**
-     * @return array{ok:bool,balance:int,redemption_id:?int,code:?string,error:?string}
+     * @return array{ok:bool,balance:float,redemption_id:?int,code:?string,error:?string}
      */
     public function redeemReward(MarketingProfile $profile, CandleCashReward $reward, ?string $platform = null): array
     {
@@ -495,7 +523,7 @@ class CandleCashService
             $cost = in_array($normalizedPlatform, ['shopify', 'public_lookup'], true)
                 ? $this->storefrontRewardPointsCost($reward)
                 : (int) $reward->candle_cash_cost;
-            $current = (int) $balance->balance;
+            $current = CandleCashMeasurement::normalizeStoredAmount($balance->balance);
             if ($current < $cost) {
                 return [
                     'ok' => false,
@@ -506,7 +534,7 @@ class CandleCashService
                 ];
             }
 
-            $next = $current - $cost;
+            $next = CandleCashMeasurement::normalizeStoredAmount($current - $cost);
             $balance->forceFill(['balance' => $next])->save();
 
             $code = $this->generateRedemptionCode();
@@ -545,7 +573,7 @@ class CandleCashService
     /**
      * @return array{
      *  ok:bool,
-     *  balance:int,
+     *  balance:float,
      *  redemption_id:?int,
      *  code:?string,
      *  error:?string,
@@ -623,7 +651,7 @@ class CandleCashService
 
             return [
                 'ok' => false,
-                'balance' => (int) ($result['balance'] ?? $this->currentBalance($profile)),
+                'balance' => CandleCashMeasurement::normalizeStoredAmount($result['balance'] ?? $this->currentBalance($profile)),
                 'redemption_id' => null,
                 'code' => null,
                 'error' => match ($error) {
@@ -641,7 +669,7 @@ class CandleCashService
 
         return [
             'ok' => true,
-            'balance' => (int) ($result['balance'] ?? $this->currentBalance($profile)),
+            'balance' => CandleCashMeasurement::normalizeStoredAmount($result['balance'] ?? $this->currentBalance($profile)),
             'redemption_id' => (int) ($result['redemption_id'] ?? 0),
             'code' => (string) ($result['code'] ?? ''),
             'error' => null,

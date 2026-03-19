@@ -2,26 +2,32 @@
 
 namespace App\Console\Commands;
 
-use App\Models\CandleCashBalance;
-use App\Models\CandleCashTransaction;
 use App\Models\MarketingImportRun;
+use App\Services\Marketing\LegacyCandleCashCorrectionService;
+use App\Support\Marketing\CandleCashMeasurement;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class MarketingRebaseCandleCashBalances extends Command
 {
     protected $signature = 'marketing:rebase-candle-cash-balances
-        {--factor=0.3333333333 : Multiplier applied to current positive balances}
-        {--run-key= : Idempotency key for the rebase run}
-        {--dry-run : Preview the rebase without writing balances or transactions}';
+        {--factor=0.003 : Deprecated legacy option. Must match the corrected legacy points conversion rate.}
+        {--run-key= : Idempotency key for the correction run}
+        {--dry-run : Preview the correction without mutating balances or transactions}';
 
-    protected $description = 'Apply a one-time proportional rebase to existing Candle Cash balances.';
+    protected $description = 'Preview or apply the one-time correction for legacy points-origin Candle Cash values.';
+
+    public function __construct(
+        protected LegacyCandleCashCorrectionService $correctionService
+    ) {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
         $factor = $this->parseFactor($this->option('factor'));
-        if ($factor <= 0 || $factor >= 1) {
-            $this->error('The rebase factor must be greater than 0 and less than 1.');
+        $expectedFactor = CandleCashMeasurement::LEGACY_STARTING_CANDLE_CASH_PER_POINT;
+        if (abs($factor - $expectedFactor) >= 0.0000005) {
+            $this->error('Legacy Candle Cash correction now uses a fixed conversion rate of '.number_format($expectedFactor, 3, '.', '').'. Custom factors have been retired.');
 
             return self::FAILURE;
         }
@@ -41,13 +47,13 @@ class MarketingRebaseCandleCashBalances extends Command
 
         if (! $dryRun) {
             $completed = MarketingImportRun::query()
-                ->where('type', 'candle_cash_balance_rebase')
+                ->where('type', 'candle_cash_legacy_points_correction')
                 ->where('source_label', $runKey)
                 ->where('status', 'completed')
                 ->exists();
 
             if ($completed) {
-                $this->warn('This rebase run key has already been completed.');
+                $this->warn('This correction run key has already been completed.');
 
                 return self::SUCCESS;
             }
@@ -55,51 +61,23 @@ class MarketingRebaseCandleCashBalances extends Command
 
         $summary = [
             'dry_run' => $dryRun,
-            'factor' => $factor,
-            'processed' => 0,
-            'adjusted' => 0,
-            'unchanged' => 0,
-            'original_points' => 0,
-            'target_points' => 0,
-            'reduced_points' => 0,
+            'legacy_points_rate' => $expectedFactor,
         ];
 
         $run = MarketingImportRun::query()->create([
-            'type' => 'candle_cash_balance_rebase',
+            'type' => 'candle_cash_legacy_points_correction',
             'status' => 'running',
             'source_label' => $runKey,
             'started_at' => now(),
             'summary' => $summary,
-            'notes' => $dryRun ? 'dry_run' : 'legacy_balance_rebase',
+            'notes' => $dryRun ? 'dry_run' : 'legacy_points_origin_correction',
         ]);
 
         try {
-            CandleCashBalance::query()
-                ->where('balance', '>', 0)
-                ->orderBy('marketing_profile_id')
-                ->chunkById(200, function ($balances) use (&$summary, $factor): void {
-                    foreach ($balances as $balance) {
-                        $current = max(0, (int) $balance->balance);
-                        $target = max(0, (int) round($current * $factor));
-                        $delta = $target - $current;
-
-                        $summary['processed']++;
-                        $summary['original_points'] += $current;
-                        $summary['target_points'] += $target;
-
-                        if ($delta === 0) {
-                            $summary['unchanged']++;
-                            continue;
-                        }
-
-                        $summary['adjusted']++;
-                        $summary['reduced_points'] += abs($delta);
-                    }
-                }, 'marketing_profile_id');
-
-            if (! $dryRun) {
-                $this->applyRebase($factor, $runKey, $summary);
-            }
+            $summary = array_merge(
+                $summary,
+                $dryRun ? $this->correctionService->preview() : $this->correctionService->apply()
+            );
 
             $run->forceFill([
                 'status' => 'completed',
@@ -107,8 +85,17 @@ class MarketingRebaseCandleCashBalances extends Command
                 'summary' => $summary,
             ])->save();
 
-            foreach (['processed', 'adjusted', 'unchanged', 'original_points', 'target_points', 'reduced_points'] as $key) {
-                $this->line($key . '=' . $summary[$key]);
+            foreach ([
+                'profiles',
+                'legacy_transactions',
+                'legacy_rebases',
+                'legacy_points_total',
+                'corrected_candle_cash_total',
+                'legacy_rows_needing_correction',
+                'legacy_rebases_needing_neutralization',
+                'balances_requiring_recompute',
+            ] as $key) {
+                $this->line($key . '=' . (string) ($summary[$key] ?? 0));
             }
 
             return self::SUCCESS;
@@ -122,54 +109,6 @@ class MarketingRebaseCandleCashBalances extends Command
 
             throw $exception;
         }
-    }
-
-    protected function applyRebase(float $factor, string $runKey, array &$summary): void
-    {
-        CandleCashBalance::query()
-            ->where('balance', '>', 0)
-            ->orderBy('marketing_profile_id')
-            ->chunkById(200, function ($balances) use ($factor, $runKey): void {
-                foreach ($balances as $balance) {
-                    DB::transaction(function () use ($balance, $factor, $runKey): void {
-                        $locked = CandleCashBalance::query()
-                            ->lockForUpdate()
-                            ->where('marketing_profile_id', $balance->marketing_profile_id)
-                            ->firstOrFail();
-
-                        $current = max(0, (int) $locked->balance);
-                        if ($current <= 0) {
-                            return;
-                        }
-
-                        $target = max(0, (int) round($current * $factor));
-                        $delta = $target - $current;
-                        if ($delta === 0) {
-                            return;
-                        }
-
-                        $sourceId = $runKey . ':' . $locked->marketing_profile_id;
-                        if (CandleCashTransaction::query()
-                            ->where('marketing_profile_id', $locked->marketing_profile_id)
-                            ->where('source', 'legacy_rebase')
-                            ->where('source_id', $sourceId)
-                            ->exists()) {
-                            return;
-                        }
-
-                        $locked->forceFill(['balance' => $target])->save();
-
-                        CandleCashTransaction::query()->create([
-                            'marketing_profile_id' => $locked->marketing_profile_id,
-                            'type' => 'adjustment',
-                            'candle_cash_delta' => $delta,
-                            'source' => 'legacy_rebase',
-                            'source_id' => $sourceId,
-                            'description' => 'Legacy Candle Cash rebase (factor ' . rtrim(rtrim(number_format($factor, 10, '.', ''), '0'), '.') . ')',
-                        ]);
-                    });
-                }
-            }, 'marketing_profile_id');
     }
 
     protected function parseFactor(mixed $value): float

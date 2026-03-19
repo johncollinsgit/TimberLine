@@ -8,6 +8,7 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
+use App\Support\Marketing\CandleCashMeasurement;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
@@ -521,10 +522,14 @@ class MarketingMergeGrowaveSnapshot extends Command
 
                     if (! $context['dry_run']) {
                         $transaction = $existing ?: new CandleCashTransaction();
+                        $legacyPoints = is_numeric($row->points ?? null) ? (int) $row->points : 0;
                         $this->forceFillAndSave($transaction, [
                             'marketing_profile_id' => $marketingProfileId,
                             'type' => $this->nullableString($row->type ?? null) ?: 'earn',
-                            'candle_cash_delta' => is_numeric($row->points ?? null) ? (int) $row->points : 0,
+                            'points' => $legacyPoints,
+                            'legacy_points_origin' => true,
+                            'legacy_points_value' => $legacyPoints,
+                            'candle_cash_delta' => CandleCashMeasurement::legacyPointsToStartingCandleCash($legacyPoints),
                             'source' => 'growave_activity',
                             'source_id' => $sourceId,
                             'description' => $this->nullableString($row->description ?? null),
@@ -548,9 +553,9 @@ class MarketingMergeGrowaveSnapshot extends Command
         $count = 0;
 
         foreach ($profileIds as $profileId) {
-            $balanceValue = (int) CandleCashTransaction::query()
+            $balanceValue = CandleCashMeasurement::normalizeStoredAmount(CandleCashTransaction::query()
                 ->where('marketing_profile_id', $profileId)
-                ->sum('candle_cash_delta');
+                ->sum('candle_cash_delta'));
 
             $balance = CandleCashBalance::query()->find($profileId) ?: new CandleCashBalance();
             $this->forceFillAndSave($balance, [

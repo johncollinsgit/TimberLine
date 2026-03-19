@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksLegacyCandleCashCompatibility;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,8 @@ use Carbon\CarbonInterface;
 
 class BirthdayRewardIssuance extends Model
 {
+    use TracksLegacyCandleCashCompatibility;
+
     protected $fillable = [
         'customer_birthday_profile_id',
         'marketing_profile_id',
@@ -80,6 +83,8 @@ class BirthdayRewardIssuance extends Model
             return null;
         }
 
+        $this->recordLegacyCandleCashCompatibility('birthday_reward_issuances.points_awarded', 'fallback_read', __METHOD__);
+
         return (int) $this->attributes['points_awarded'];
     }
 
@@ -94,6 +99,8 @@ class BirthdayRewardIssuance extends Model
     public function getPointsAwardedAttribute($value): ?int
     {
         if ($value !== null) {
+            $this->recordLegacyCandleCashCompatibility('birthday_reward_issuances.points_awarded', 'legacy_read', __METHOD__);
+
             return (int) $value;
         }
 
@@ -101,11 +108,15 @@ class BirthdayRewardIssuance extends Model
             return null;
         }
 
+        $this->recordLegacyCandleCashCompatibility('birthday_reward_issuances.points_awarded', 'legacy_read', __METHOD__);
+
         return (int) $this->attributes['candle_cash_awarded'];
     }
 
     public function setPointsAwardedAttribute($value): void
     {
+        $this->recordLegacyCandleCashCompatibility('birthday_reward_issuances.points_awarded', 'legacy_write', __METHOD__);
+
         $normalized = $value === null ? null : max(0, (int) $value);
 
         $this->attributes['points_awarded'] = $normalized;
@@ -181,6 +192,10 @@ class BirthdayRewardIssuance extends Model
     protected function normalizeRewardType(mixed $value): string
     {
         $normalized = strtolower(trim((string) $value));
+
+        if ($normalized === 'points') {
+            $this->recordLegacyCandleCashCompatibility('birthday_reward_issuances.reward_type', 'normalization', __METHOD__);
+        }
 
         return $normalized === 'points' ? 'candle_cash' : $normalized;
     }

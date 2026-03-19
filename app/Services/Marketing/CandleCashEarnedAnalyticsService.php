@@ -6,6 +6,7 @@ use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
+use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -40,7 +41,7 @@ class CandleCashEarnedAnalyticsService
             })
             ->values();
 
-        $earnedPoints = (int) $windowEvents->sum('candle_cash_delta');
+        $earnedPoints = CandleCashMeasurement::normalizeStoredAmount($windowEvents->sum('candle_cash_delta'));
         $earnedAmount = round($this->candleCashService->amountFromPoints($earnedPoints), 2);
 
         $breakdown = collect($sourceDefinitions)
@@ -76,7 +77,7 @@ class CandleCashEarnedAnalyticsService
             }
 
             $row = $breakdown->get($sourceKey);
-            $row['candleCash'] += round($this->candleCashService->amountFromPoints((int) ($event['candle_cash_delta'] ?? 0)), 2);
+            $row['candleCash'] += round($this->candleCashService->amountFromPoints($event['candle_cash_delta'] ?? 0), 2);
             $row['eventCount']++;
             $row['__customers'] = [
                 ...((array) ($row['__customers'] ?? [])),
@@ -113,10 +114,10 @@ class CandleCashEarnedAnalyticsService
             ->implode(' · ');
 
         $outstandingRows = collect((array) ($state['outstanding_by_profile'] ?? []));
-        $outstandingPoints = (int) $outstandingRows->sum('candle_cash_delta');
+        $outstandingPoints = CandleCashMeasurement::normalizeStoredAmount($outstandingRows->sum('points'));
         $outstandingAmount = round($this->candleCashService->amountFromPoints($outstandingPoints), 2);
         $outstandingCustomerCount = (int) $outstandingRows->count();
-        $excludedOpeningPoints = (int) ($state['excluded_opening_points'] ?? 0);
+        $excludedOpeningPoints = CandleCashMeasurement::normalizeStoredAmount($state['excluded_opening_points'] ?? 0);
         $excludedOpeningAmount = round($this->candleCashService->amountFromPoints($excludedOpeningPoints), 2);
 
         $timeToFirstRedemption = $this->timeToFirstRedemptionMetrics(
@@ -222,8 +223,8 @@ class CandleCashEarnedAnalyticsService
                 ->groupBy('source_label')
                 ->map(fn (Collection $sourceBuckets, string $label): array => [
                     'label' => $label,
-                    'candle_cash' => round($this->candleCashService->amountFromPoints((int) $sourceBuckets->sum('remaining_points')), 2),
-                    'amount' => round($this->candleCashService->amountFromPoints((int) $sourceBuckets->sum('remaining_points')), 2),
+                    'candle_cash' => round($this->candleCashService->amountFromPoints($sourceBuckets->sum('remaining_points')), 2),
+                    'amount' => round($this->candleCashService->amountFromPoints($sourceBuckets->sum('remaining_points')), 2),
                 ])
                 ->sortByDesc('amount')
                 ->take(3)
@@ -372,8 +373,8 @@ class CandleCashEarnedAnalyticsService
                 continue;
             }
 
-            $points = (int) ($transaction->candle_cash_delta ?? 0);
-            if ($points === 0) {
+            $points = CandleCashMeasurement::normalizeStoredAmount($transaction->candle_cash_delta ?? 0);
+            if (abs($points) < 0.0005) {
                 continue;
             }
 
@@ -420,7 +421,7 @@ class CandleCashEarnedAnalyticsService
                 continue;
             }
 
-            $remainingToConsume = abs($points);
+            $remainingToConsume = CandleCashMeasurement::normalizeStoredAmount(abs($points));
             if ($remainingToConsume <= 0) {
                 continue;
             }
@@ -429,15 +430,15 @@ class CandleCashEarnedAnalyticsService
             $debitAtByProfile[$profileId][] = $this->timestampForTransaction($transaction);
 
             foreach ($bucketsByProfile[$profileId] as $index => $bucket) {
-                $available = (int) ($bucket['remaining_points'] ?? 0);
+                $available = CandleCashMeasurement::normalizeStoredAmount($bucket['remaining_points'] ?? 0);
                 if ($available <= 0) {
                     continue;
                 }
 
                 $consumed = min($available, $remainingToConsume);
-                $bucket['remaining_points'] = $available - $consumed;
+                $bucket['remaining_points'] = CandleCashMeasurement::normalizeStoredAmount($available - $consumed);
                 $bucketsByProfile[$profileId][$index] = $bucket;
-                $remainingToConsume -= $consumed;
+                $remainingToConsume = CandleCashMeasurement::normalizeStoredAmount($remainingToConsume - $consumed);
 
                 if ($remainingToConsume <= 0) {
                     break;
@@ -446,16 +447,16 @@ class CandleCashEarnedAnalyticsService
         }
 
         $outstandingByProfile = [];
-        $excludedOpeningPoints = 0;
+        $excludedOpeningPoints = 0.0;
 
         foreach ($bucketsByProfile as $profileId => $buckets) {
             $programBuckets = collect($buckets)
                 ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'program' && (int) ($bucket['remaining_points'] ?? 0) > 0)
                 ->values();
 
-            $openingRemaining = (int) collect($buckets)
+            $openingRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)
                 ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'opening')
-                ->sum('remaining_points');
+                ->sum('remaining_points'));
 
             $excludedOpeningPoints += max(0, $openingRemaining);
 
@@ -463,7 +464,7 @@ class CandleCashEarnedAnalyticsService
                 continue;
             }
 
-            $programPoints = (int) $programBuckets->sum('remaining_points');
+            $programPoints = CandleCashMeasurement::normalizeStoredAmount($programBuckets->sum('remaining_points'));
             $outstandingByProfile[$profileId] = [
                 'points' => $programPoints,
                 'amount' => round($this->candleCashService->amountFromPoints($programPoints), 2),

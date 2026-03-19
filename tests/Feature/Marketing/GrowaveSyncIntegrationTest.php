@@ -181,6 +181,11 @@ test('growave sync imports external profile, review snapshots, and loyalty activ
         ->where('external_customer_id', '5001')
         ->first();
 
+    $firstLegacyTransaction = CandleCashTransaction::query()
+        ->where('source', 'growave_activity')
+        ->orderBy('id')
+        ->first();
+
     expect($external)->not->toBeNull();
 
     $external = $external->refresh();
@@ -193,7 +198,8 @@ test('growave sync imports external profile, review snapshots, and loyalty activ
         ->and((int) MarketingReviewSummary::query()->value('review_count'))->toBe(2)
         ->and(MarketingReviewHistory::query()->count())->toBe(2)
         ->and(CandleCashTransaction::query()->where('source', 'growave_activity')->count())->toBe(3)
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $external->marketing_profile_id)->value('balance'))->toBe(18);
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $external->marketing_profile_id)->value('balance'))->toBe(0.054)
+        ->and((bool) $firstLegacyTransaction?->legacy_points_origin)->toBeTrue();
 });
 
 test('growave sync falls back to email lookup when the Shopify customer id is not found', function () {

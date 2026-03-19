@@ -270,8 +270,8 @@ class MarketingPublicEventController extends Controller
                             ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
                             : (string) ($row->reward?->name ?: 'Candle Cash'),
                         'status' => (string) ($row->status ?: 'issued'),
-                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_spent),
-                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->candle_cash_spent)),
+                        'candle_cash_amount' => $candleCashService->amountFromPoints($row->candle_cash_spent),
+                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($row->candle_cash_spent)),
                         'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
                         'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
                     ])->all()
@@ -397,7 +397,7 @@ class MarketingPublicEventController extends Controller
             'meta' => [
                 'state' => $state,
                 'reward_id' => (int) $reward->id,
-                'balance' => (int) ($result['balance'] ?? 0),
+                'balance' => round((float) ($result['balance'] ?? 0), 3),
             ],
             'resolution_status' => $ok ? 'resolved' : 'open',
         ]);
@@ -408,7 +408,7 @@ class MarketingPublicEventController extends Controller
                 'ok' => $ok,
                 'state' => $state,
                 'message' => $message,
-                'balance' => $candleCashService->balancePayloadFromPoints((int) ($result['balance'] ?? 0)),
+                'balance' => $candleCashService->balancePayloadFromPoints($result['balance'] ?? 0),
                 'reward_name' => 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash',
                 'redemption_code' => $ok ? (string) ($result['code'] ?? '') : null,
                 'redemption_id' => $ok ? (int) ($result['redemption_id'] ?? 0) : null,
@@ -599,8 +599,8 @@ class MarketingPublicEventController extends Controller
                 'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
                 'issued_at' => optional($row->issued_at)->toDateTimeString(),
                 'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
-                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_spent),
-                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->candle_cash_spent)),
+                'candle_cash_amount' => $candleCashService->amountFromPoints($row->candle_cash_spent),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($row->candle_cash_spent)),
             ])->all();
 
         $transactionRows = $profile->candleCashTransactions()
@@ -612,9 +612,9 @@ class MarketingPublicEventController extends Controller
             return [
                 'id' => (int) $transaction->id,
                 'category' => $this->transactionCategoryLabel($transaction),
-                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $transaction->candle_cash_delta),
-                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $transaction->candle_cash_delta))),
-                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $transaction->candle_cash_delta, true),
+                'candle_cash_amount' => $candleCashService->amountFromPoints($transaction->candle_cash_delta),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints(abs((float) $transaction->candle_cash_delta))),
+                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints($transaction->candle_cash_delta, true),
                 'description' => trim((string) ($transaction->description ?? '')) ?: null,
                 'source' => (string) $transaction->source,
                 'occurred_at' => optional($transaction->created_at)->toDateTimeString(),

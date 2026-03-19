@@ -78,7 +78,7 @@ class MarketingConsentIncentiveService
         return [
             'awarded' => true,
             'candle_cash' => $candleCash,
-            'balance' => (int) ($result['balance'] ?? 0),
+            'balance' => round((float) ($result['balance'] ?? 0), 3),
         ];
     }
 }

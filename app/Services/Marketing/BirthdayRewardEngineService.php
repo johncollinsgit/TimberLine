@@ -481,6 +481,14 @@ class BirthdayRewardEngineService
     {
         $normalized = strtolower(trim($rewardType));
 
+        if ($normalized === 'points') {
+            app(CandleCashLegacyCompatibilityService::class)->record(
+                'birthday_reward_config.reward_type',
+                'normalization',
+                __METHOD__
+            );
+        }
+
         return match ($normalized) {
             'candle_cash', 'discount_code', 'free_shipping' => $normalized,
             'points' => 'candle_cash',

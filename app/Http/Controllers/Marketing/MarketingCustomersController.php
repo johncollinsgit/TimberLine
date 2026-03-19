@@ -1039,7 +1039,7 @@ class MarketingCustomersController extends Controller
             ->route('marketing.customers.show', $marketingProfile)
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Candle Cash updated. New balance: ' . $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints((int) ($result['balance'] ?? 0))),
+                'message' => 'Candle Cash updated. New balance: ' . $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints($result['balance'] ?? 0)),
             ]);
     }
 
@@ -1842,11 +1842,11 @@ class MarketingCustomersController extends Controller
                 return [
                     'id' => (int) $transaction->id,
                     'occurred_at' => optional($transaction->created_at)->toDateTimeString(),
-                    'candle_cash_delta' => (int) $transaction->candle_cash_delta,
+                    'candle_cash_delta' => round((float) $transaction->candle_cash_delta, 3),
                     'category' => $this->normalizeGrowaveActivityCategory(
                         providerActivity: $providerActivity,
                         note: $note,
-                        points: (int) $transaction->candle_cash_delta
+                        points: (float) $transaction->candle_cash_delta
                     ),
                     'provider_activity' => strtoupper(str_replace('_', ' ', $providerActivity)),
                     'source_id' => $this->nullableString($transaction->source_id),
@@ -1884,7 +1884,7 @@ class MarketingCustomersController extends Controller
         return $note !== '' ? $note : null;
     }
 
-    protected function normalizeGrowaveActivityCategory(string $providerActivity, ?string $note, int $points): string
+    protected function normalizeGrowaveActivityCategory(string $providerActivity, ?string $note, float|int $points): string
     {
         $noteLower = strtolower(trim((string) $note));
 

@@ -900,12 +900,12 @@ class ShopifyEmbeddedCustomersController extends Controller
             'amount' => $amount,
             'reason' => $reason,
             'actor_id' => auth()->id(),
-            'balance' => (int) ($result['balance'] ?? 0),
+            'balance' => round((float) ($result['balance'] ?? 0), 3),
             'transaction_id' => $result['transaction_id'] ?? null,
             'metadata' => $metadata,
         ]);
 
-        $balance = (int) ($result['balance'] ?? 0);
+        $balance = round((float) ($result['balance'] ?? 0), 3);
         $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
         $noticeMessage = 'Candle Cash sent. New balance: ' . $balanceDisplay . '.';
         $noticeStyle = 'success';

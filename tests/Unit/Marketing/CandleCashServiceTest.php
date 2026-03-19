@@ -51,3 +51,12 @@ test('candle cash service keeps the legacy points conversion isolated for compat
         ->and($service->candleCashFromLegacyPoints(150))->toBe(5.0)
         ->and($service->legacyPointsPerCandleCash())->toBe(30);
 });
+
+test('candle cash service converts historical legacy starting points with the corrected 0.003 rule', function () {
+    $service = app(CandleCashService::class);
+
+    expect($service->legacyPointsToStartingCandleCash(100))->toBe(0.3)
+        ->and($service->legacyPointsToStartingCandleCash(125))->toBe(0.375)
+        ->and($service->amountFromPoints(0.375))->toBe(0.38)
+        ->and($service->amountFromPoints(15))->toBe(15.0);
+});

@@ -357,7 +357,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'occurred_at' => $transaction->created_at,
                     'type' => $type,
                     'label' => $label,
-                    'candle_cash_display' => $this->candleCashService->candleCashAmountLabelFromPoints((int) $transaction->candle_cash_delta, true),
+                    'candle_cash_display' => $this->candleCashService->candleCashAmountLabelFromPoints($transaction->candle_cash_delta, true),
                     'status' => $status,
                     'detail' => $detailText,
                     'actor' => $actor,
@@ -423,7 +423,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'occurred_at' => $referral->rewarded_at ?: $referral->qualified_at ?: $referral->created_at,
                     'type' => $type,
                     'label' => $referral->referral_code ? strtoupper($referral->referral_code) : strtoupper($status),
-                    'candle_cash_display' => $points !== null ? $this->candleCashService->candleCashAmountLabelFromPoints((int) $points, true) : null,
+                    'candle_cash_display' => $points !== null ? $this->candleCashService->candleCashAmountLabelFromPoints($points, true) : null,
                     'status' => $status,
                     'detail' => $referral->referral_code ?: '—',
                     'actor' => null,
@@ -459,9 +459,9 @@ class ShopifyEmbeddedCustomerDetailService
                     'occurred_at' => $occurredAt,
                     'type' => $type,
                     'label' => $label,
-                    'candle_cash' => $completion->reward_candle_cash !== null ? $this->candleCashService->amountFromPoints((int) $completion->reward_candle_cash) : null,
+                    'candle_cash' => $completion->reward_candle_cash !== null ? $this->candleCashService->amountFromPoints($completion->reward_candle_cash) : null,
                     'candle_cash_display' => $completion->reward_candle_cash !== null
-                        ? $this->candleCashService->candleCashAmountLabelFromPoints((int) $completion->reward_candle_cash, true)
+                        ? $this->candleCashService->candleCashAmountLabelFromPoints($completion->reward_candle_cash, true)
                         : ($completion->reward_amount !== null ? '+' . $this->candleCashService->formatRewardCurrency((float) $completion->reward_amount) : null),
                     'status' => (string) ($completion->status ?: 'submitted'),
                     'detail' => $completion->task?->handle ?: '—',

@@ -15,6 +15,7 @@ use App\Services\Marketing\BirthdayCsvImportService;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
+use App\Services\Marketing\CandleCashLegacyCompatibilityService;
 use App\Support\Birthdays\BirthdaySectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -424,6 +425,11 @@ class BirthdayPagesController extends Controller
         );
 
         if (($config['reward_type'] ?? null) === 'points') {
+            app(CandleCashLegacyCompatibilityService::class)->record(
+                'birthday_reward_config.reward_type',
+                'normalization',
+                __METHOD__
+            );
             $config['reward_type'] = 'candle_cash';
         }
 

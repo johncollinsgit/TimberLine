@@ -587,7 +587,8 @@ test('candle cash earned analytics exclude imported opening balances and report 
     ]));
 
     $expectedEarnedAmount = app(CandleCashService::class)->amountFromPoints(500);
-    $expectedExcludedAmount = app(CandleCashService::class)->amountFromPoints(800);
+    $expectedOutstandingAmount = app(CandleCashService::class)->amountFromPoints(402.7);
+    $expectedExcludedAmount = app(CandleCashService::class)->amountFromPoints(0);
 
     $response
         ->assertOk()
@@ -598,6 +599,9 @@ test('candle cash earned analytics exclude imported opening balances and report 
 
     expect((float) $response->json('data.candleCashEngagement.earned.amount'))
         ->toEqual($expectedEarnedAmount);
+
+    expect((float) $response->json('data.candleCashEngagement.outstanding.amount'))
+        ->toEqual($expectedOutstandingAmount);
 
     expect((float) $response->json('data.candleCashEngagement.outstanding.excludedGrandfatheredAmount'))
         ->toEqual($expectedExcludedAmount);
