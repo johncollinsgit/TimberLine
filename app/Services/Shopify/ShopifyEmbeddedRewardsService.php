@@ -31,8 +31,6 @@ class ShopifyEmbeddedRewardsService
         return [
             'meta' => [
                 'program' => [
-                    'legacy_points_per_candle_cash' => $this->candleCashService->legacyPointsPerCandleCash(),
-                    'points_per_dollar' => $this->candleCashService->legacyPointsPerCandleCash(),
                     'measurement_label' => '1 Candle Cash = 1 Candle Cash',
                     'redeem_increment_dollars' => $this->candleCashService->fixedRedemptionAmount(),
                     'redeem_increment_formatted' => $this->candleCashService->fixedRedemptionFormatted(),
@@ -60,7 +58,7 @@ class ShopifyEmbeddedRewardsService
     {
         $rewardAmount = array_key_exists('candle_cash_value', $data) && $data['candle_cash_value'] !== null
             ? round(max(0, (float) $data['candle_cash_value']), 2)
-            : round($this->candleCashService->amountFromPoints(max(0, (int) ($data['points_value'] ?? 0))), 2);
+            : round($this->candleCashService->candleCashFromLegacyPoints(max(0, (int) ($data['points_value'] ?? 0))), 2);
 
         $task->forceFill([
             'title' => trim((string) ($data['title'] ?? '')),
@@ -85,7 +83,7 @@ class ShopifyEmbeddedRewardsService
         $description = $this->nullableString($data['description'] ?? null);
         $candleCashCost = array_key_exists('candle_cash_cost', $data) && $data['candle_cash_cost'] !== null
             ? round(max(0, (float) $data['candle_cash_cost']), 2)
-            : round($this->candleCashService->amountFromPoints(max(0, (int) ($data['points_cost'] ?? 0))), 2);
+            : round($this->candleCashService->candleCashFromLegacyPoints(max(0, (int) ($data['points_cost'] ?? 0))), 2);
         $pointsCost = $this->candleCashService->pointsFromAmount($candleCashCost);
         $rewardValue = $this->nullableString($data['reward_value'] ?? null);
         $enabled = (bool) ($data['enabled'] ?? false);
@@ -180,7 +178,6 @@ class ShopifyEmbeddedRewardsService
     protected function earnActionRow(CandleCashTask $task): array
     {
         $rewardAmount = (float) $task->reward_amount;
-        $pointsValue = $this->candleCashService->pointsFromAmount($rewardAmount);
         $actionType = trim((string) ($task->verification_mode ?: $task->task_type));
 
         return [
@@ -190,8 +187,6 @@ class ShopifyEmbeddedRewardsService
             'description' => $task->description ? (string) $task->description : null,
             'candle_cash_value' => $rewardAmount,
             'candle_cash_value_formatted' => $this->candleCashService->formatCandleCash($rewardAmount),
-            'points_value' => $pointsValue,
-            'legacy_points_value' => $pointsValue,
             'reward_amount' => $rewardAmount,
             'reward_amount_formatted' => $this->candleCashService->formatRewardCurrency($rewardAmount),
             'action_type' => $actionType,
@@ -221,8 +216,6 @@ class ShopifyEmbeddedRewardsService
             'reward_type_label' => $this->labelize((string) $reward->reward_type),
             'candle_cash_cost' => $this->candleCashService->amountFromPoints((int) $reward->points_cost),
             'candle_cash_cost_formatted' => $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints((int) $reward->points_cost)),
-            'points_cost' => (int) $reward->points_cost,
-            'legacy_points_cost' => (int) $reward->points_cost,
             'reward_value' => $reward->reward_value !== null ? (string) $reward->reward_value : null,
             'value_display' => $this->rewardValueDisplay($reward),
             'minimum_order_amount' => null,
@@ -292,7 +285,8 @@ class ShopifyEmbeddedRewardsService
         $raw = $this->rawSettingValue('candle_cash_program_config');
         $effective = array_merge($raw, $this->candleCashService->programConfig());
 
-        $effective['points_per_dollar'] = $this->candleCashService->legacyPointsPerCandleCash();
+        $effective['points_per_dollar'] = $this->candleCashService->pointsPerDollar();
+        $effective['legacy_points_per_candle_cash'] = $this->candleCashService->legacyPointsPerCandleCash();
         $effective['redeem_increment_dollars'] = $discountAmount;
         $effective['max_redeemable_per_order_dollars'] = $this->candleCashService->maxRedeemablePerOrderAmount();
         $effective['max_open_codes'] = $this->candleCashService->maxOpenStorefrontCodes();

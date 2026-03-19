@@ -90,7 +90,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'normalized_phone' => '+15553023333',
     ]);
 
-    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed points');
+    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed Candle Cash');
 
     $storefrontReward = app(CandleCashService::class)->storefrontReward();
     expect($storefrontReward)->not->toBeNull();
@@ -117,7 +117,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         ->where('marketing_profile_id', $profile->id)
         ->where('reward_id', $storefrontReward->id)
         ->exists())->toBeTrue()
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(0);
+        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(290);
 
     $insufficientProfile = MarketingProfile::query()->create([
         'first_name' => 'Short',
@@ -128,7 +128,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'normalized_phone' => '+15553024444',
     ]);
 
-    app(CandleCashService::class)->addPoints($insufficientProfile, 299, 'earn', 'admin', 'seed', 'Seed points');
+    app(CandleCashService::class)->addPoints($insufficientProfile, 9, 'earn', 'admin', 'seed', 'Seed Candle Cash');
 
     $this->post(route('marketing.public.account-rewards.redeem'), [
         'email' => $insufficientProfile->email,
@@ -143,7 +143,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         ->where('marketing_profile_id', $insufficientProfile->id)
         ->where('reward_id', $storefrontReward->id)
         ->exists())->toBeFalse()
-        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $insufficientProfile->id)->value('balance'))->toBe(299);
+        ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $insufficientProfile->id)->value('balance'))->toBe(9);
 
     $this->post(route('marketing.public.account-rewards.redeem'), [
         'email' => $profile->email,

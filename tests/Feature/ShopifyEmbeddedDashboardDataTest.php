@@ -226,7 +226,8 @@ test('embedded dashboard api returns a stable payload contract for an authorized
         ]);
 
     expect($response->json('data.topMetrics'))->toHaveCount(8);
-    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])->toEqual(10.0);
+    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])
+        ->toEqual(app(CandleCashService::class)->amountFromPoints(300));
     expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_earned'))->not->toBeNull();
     expect($response->json('data.candleCashEngagement.outstanding.helperText'))->toContain('excludes imported');
     expect($response->json('data.chart.series'))->not->toBeEmpty();
@@ -590,11 +591,13 @@ test('candle cash earned analytics exclude imported opening balances and report 
 
     $response
         ->assertOk()
-        ->assertJsonPath('data.candleCashEngagement.earned.points', 500)
-        ->assertJsonPath('data.candleCashEngagement.earned.amount', $expectedEarnedAmount)
-        ->assertJsonPath('data.candleCashEngagement.outstanding.points', 500)
-        ->assertJsonPath('data.candleCashEngagement.outstanding.excludedGrandfatheredPoints', 800)
+        ->assertJsonMissingPath('data.candleCashEngagement.earned.points')
+        ->assertJsonMissingPath('data.candleCashEngagement.outstanding.points')
+        ->assertJsonMissingPath('data.candleCashEngagement.outstanding.excludedGrandfatheredPoints')
         ->assertJsonPath('data.candleCashEngagement.customersWithOutstandingEarned.count', 1);
+
+    expect((float) $response->json('data.candleCashEngagement.earned.amount'))
+        ->toEqual($expectedEarnedAmount);
 
     expect((float) $response->json('data.candleCashEngagement.outstanding.excludedGrandfatheredAmount'))
         ->toEqual($expectedExcludedAmount);
@@ -605,8 +608,8 @@ test('candle cash earned analytics exclude imported opening balances and report 
         ->and($averageDays)->toBeLessThanOrEqual(2.1);
 
     $breakdownRows = collect($response->json('data.candleCashEngagement.breakdown.rows'))->keyBy('key');
-    expect((int) ($breakdownRows['signup_welcome_earn']['points'] ?? 0))->toBe(300)
-        ->and((int) ($breakdownRows['birthday_earn']['points'] ?? 0))->toBe(200);
+    expect((float) ($breakdownRows['signup_welcome_earn']['amount'] ?? 0))->toBe(300.0)
+        ->and((float) ($breakdownRows['birthday_earn']['amount'] ?? 0))->toBe(200.0);
 });
 
 test('manual candle cash reminder endpoint sends to eligible profiles once and respects cooldown dedupe', function () {

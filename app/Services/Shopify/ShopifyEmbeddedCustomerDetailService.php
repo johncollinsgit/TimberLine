@@ -463,7 +463,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'occurred_at' => $occurredAt,
                     'type' => $type,
                     'label' => $label,
-                    'points' => $completion->reward_points !== null ? (int) $completion->reward_points : null,
+                    'candle_cash' => $completion->reward_points !== null ? $this->candleCashService->amountFromPoints((int) $completion->reward_points) : null,
                     'candle_cash_display' => $completion->reward_points !== null
                         ? $this->candleCashService->candleCashAmountLabelFromPoints((int) $completion->reward_points, true)
                         : ($completion->reward_amount !== null ? '+' . $this->candleCashService->formatRewardCurrency((float) $completion->reward_amount) : null),

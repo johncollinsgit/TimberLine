@@ -369,7 +369,10 @@ test('shopify integration endpoints return reward and consent responses with sig
         ];
     };
 
-    $balanceQuery = ['email' => $profile->email];
+    $balanceQuery = [
+        'email' => $profile->email,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
 
     $this->withHeaders($signedHeaders('GET', '/shopify/marketing/rewards/balance', $balanceQuery))
         ->getJson(route('marketing.shopify.rewards.balance', $balanceQuery))

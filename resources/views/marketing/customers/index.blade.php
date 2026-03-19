@@ -60,7 +60,7 @@
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[150px]">Phone</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Candle Cash</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Display</th>
-                                <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Legacy Growave</th>
+                                <th class="px-4 py-3 text-left whitespace-nowrap min-w-[130px]">Legacy Growave Balance</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[110px]">Tier</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[100px]">Referrals</th>
                                 <th class="px-4 py-3 text-left whitespace-nowrap min-w-[120px]">Reviews</th>

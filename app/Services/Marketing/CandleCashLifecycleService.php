@@ -167,7 +167,7 @@ class CandleCashLifecycleService
                     'phone' => $this->normalizedPhoneForProfile($profile),
                     'trigger_key' => $trigger,
                     'channel' => $channel,
-                    'outstanding_points' => (int) ($row['outstanding_points'] ?? 0),
+                    'outstanding_candle_cash' => round((float) ($row['outstanding_candle_cash'] ?? 0), 2),
                     'outstanding_amount' => round((float) ($row['outstanding_amount'] ?? 0), 2),
                     'formatted_outstanding_amount' => (string) ($row['formatted_outstanding_amount'] ?? '$0.00'),
                     'earned_date' => $row['earned_date'] ?? null,
@@ -181,7 +181,7 @@ class CandleCashLifecycleService
                 ];
             })
             ->filter(fn (?array $row): bool => is_array($row))
-            ->sortByDesc('outstanding_points')
+            ->sortByDesc('outstanding_candle_cash')
             ->take($limit)
             ->values();
 
@@ -252,7 +252,7 @@ class CandleCashLifecycleService
                 'store_key' => $storeKey,
                 'reason' => (string) ($row['qualification_reason'] ?? ''),
                 'context' => [
-                    'outstanding_points' => (int) ($row['outstanding_points'] ?? 0),
+                    'outstanding_candle_cash' => round((float) ($row['outstanding_candle_cash'] ?? 0), 2),
                     'outstanding_amount' => round((float) ($row['outstanding_amount'] ?? 0), 2),
                     'earned_date' => $row['earned_date'] ?? null,
                     'latest_earned_date' => $row['latest_earned_date'] ?? null,

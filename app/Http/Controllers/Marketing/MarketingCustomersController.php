@@ -1039,7 +1039,7 @@ class MarketingCustomersController extends Controller
             ->route('marketing.customers.show', $marketingProfile)
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Candle Cash updated. New balance: ' . (int) ($result['balance'] ?? 0),
+                'message' => 'Candle Cash updated. New balance: ' . $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints((int) ($result['balance'] ?? 0))),
             ]);
     }
 

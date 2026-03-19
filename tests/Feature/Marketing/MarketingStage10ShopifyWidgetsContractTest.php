@@ -9,11 +9,14 @@ use Illuminate\Support\Str;
 test('shopify v1 consent status returns unknown customer state when identity is missing', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
-    $headers = stage10SignedHeaders('GET', '/shopify/marketing/v1/consent/status', [], '', 'stage10-secret');
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = stage10SignedHeaders('GET', '/shopify/marketing/v1/consent/status', $query, '', 'stage10-secret');
 
     $this->withHeaders($headers)
-        ->getJson(route('marketing.shopify.v1.consent.status'))
+        ->getJson(route('marketing.shopify.v1.consent.status', $query))
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.state', 'unknown_customer')
@@ -23,10 +26,73 @@ test('shopify v1 consent status returns unknown customer state when identity is 
         ->assertJsonPath('meta.states.0', 'unknown_customer');
 });
 
+test('shopify v1 customer-sensitive storefront reads require verified store context', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Store',
+        'email' => 'stage10.store.scope@example.com',
+        'normalized_email' => 'stage10.store.scope@example.com',
+        'phone' => '5554447777',
+        'normalized_phone' => '+15554447777',
+    ]);
+
+    $cases = [
+        [
+            'path' => '/shopify/marketing/v1/rewards/balance',
+            'route' => 'marketing.shopify.v1.rewards.balance',
+            'query' => ['email' => $profile->email, 'phone' => $profile->phone],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/rewards/history',
+            'route' => 'marketing.shopify.v1.rewards.history',
+            'query' => ['email' => $profile->email, 'phone' => $profile->phone],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/rewards/available',
+            'route' => 'marketing.shopify.v1.rewards.available',
+            'query' => ['email' => $profile->email],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/customer/status',
+            'route' => 'marketing.shopify.v1.customer.status',
+            'query' => ['email' => $profile->email, 'phone' => $profile->phone],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/consent/status',
+            'route' => 'marketing.shopify.v1.consent.status',
+            'query' => ['email' => $profile->email, 'phone' => $profile->phone],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/birthday/status',
+            'route' => 'marketing.shopify.v1.birthday.status',
+            'query' => ['email' => $profile->email, 'phone' => $profile->phone],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/candle-cash/status',
+            'route' => 'marketing.shopify.v1.candle-cash.status',
+            'query' => ['email' => $profile->email, 'phone' => $profile->phone],
+        ],
+    ];
+
+    foreach ($cases as $case) {
+        $headers = stage10SignedHeaders('GET', $case['path'], $case['query'], '', 'stage10-secret');
+
+        $this->withHeaders($headers)
+            ->getJson(route($case['route'], $case['query']))
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'missing_store_context')
+            ->assertJsonPath('error.states.0', 'store_context_required');
+    }
+});
+
 test('shopify v1 consent request alias and consent status endpoint share the same contract states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
     config()->set('marketing.sms.enabled', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $email = 'stage10.' . Str::lower(Str::random(8)) . '@example.com';
     $payload = [
@@ -57,7 +123,11 @@ test('shopify v1 consent request alias and consent status endpoint share the sam
     $token = (string) data_get($requested, 'data.verification_token');
     expect($token)->not->toBe('');
 
-    $statusQuery = ['email' => $email, 'phone' => '5554441234'];
+    $statusQuery = [
+        'email' => $email,
+        'phone' => '5554441234',
+        'shop' => 'timberline.example.myshopify.com',
+    ];
     $statusHeaders = stage10SignedHeaders(
         'GET',
         '/shopify/marketing/v1/consent/status',
@@ -102,6 +172,8 @@ test('shopify v1 consent status accepts app proxy signed requests', function () 
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'unused');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $query = stage10AppProxySignedQuery([
         'shop' => 'timberline.example.myshopify.com',
@@ -118,6 +190,8 @@ test('shopify v1 consent status falls back to retail shopify secret for app prox
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', null);
     config()->set('marketing.shopify.signing_secret', null);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
     config()->set('services.shopify.stores.retail.client_secret', 'stage10-retail-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
 
@@ -159,6 +233,8 @@ test('shopify v1 customer status supports anonymous visitor and logged in custom
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $anonymousQuery = stage10AppProxySignedQuery([
         'shop' => 'timberline.example.myshopify.com',
@@ -196,7 +272,7 @@ test('shopify v1 customer status supports anonymous visitor and logged in custom
         'marketing_profile_id' => $profile->id,
         'provider' => 'shopify',
         'integration' => 'shopify_admin',
-        'store_key' => 'timberline.example.myshopify.com',
+        'store_key' => 'retail',
         'external_customer_id' => '987654321',
         'external_customer_gid' => 'gid://shopify/Customer/987654321',
         'email' => $profile->email,
@@ -226,6 +302,8 @@ test('shopify v1 candle cash status returns central contract for linked customer
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Cash',
@@ -261,10 +339,12 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->assertJsonPath('meta.auth_mode', 'app_proxy')
         ->assertJsonPath('data.profile_id', $profile->id)
         ->assertJsonPath('data.copy.title', 'Candle Cash Central')
-        ->assertJsonPath('data.balance.points', 50)
+        ->assertJsonPath('data.balance.candle_cash', 50)
         ->assertJsonPath('data.consent.email', true)
         ->assertJsonPath('data.referral.enabled', true)
         ->assertJsonCount(10, 'data.tasks');
+
+    expect(data_get($response->json(), 'data.balance.points'))->toBeNull();
 
     $tasks = collect($response->json('data.tasks'));
     $googleReview = $tasks->firstWhere('handle', 'google-review');
@@ -288,6 +368,8 @@ test('shopify v1 candle cash status keeps candle club vote locked for guests', f
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $query = stage10AppProxySignedQuery([
         'shop' => 'timberline.example.myshopify.com',
@@ -312,6 +394,8 @@ test('shopify v1 endpoints used by extension resolve under app proxy transport',
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $cases = [
         [

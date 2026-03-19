@@ -88,7 +88,11 @@ test('shopify embedded rewards data route returns normalized earn and redeem sec
     expect($earnItems)->toBeArray()->not->toBeEmpty()
         ->and($redeemItems)->toBeArray()->not->toBeEmpty()
         ->and(array_key_exists('candle_cash_value', $earnItems[0]))->toBeTrue()
-        ->and(array_key_exists('candle_cash_cost', $redeemItems[0]))->toBeTrue();
+        ->and(array_key_exists('candle_cash_cost', $redeemItems[0]))->toBeTrue()
+        ->and(array_key_exists('points_value', $earnItems[0]))->toBeFalse()
+        ->and(array_key_exists('points_cost', $redeemItems[0]))->toBeFalse()
+        ->and(array_key_exists('legacy_points_per_candle_cash', $response->json('data.meta.program')))->toBeFalse()
+        ->and(data_get($response->json(), 'data.meta.program.measurement_label'))->toBe('1 Candle Cash = 1 Candle Cash');
 });
 
 test('shopify embedded rewards data route requires bearer token auth and does not fall back to page state', function () {
@@ -199,7 +203,7 @@ test('shopify embedded rewards redeem update edits the existing reward row in pl
 
     expect((string) $reward->name)->toBe('Free Wax Melt Duo')
         ->and((string) $reward->description)->toBe('Updated reward description.')
-        ->and((int) $reward->points_cost)->toBe(90)
+        ->and((int) $reward->points_cost)->toBe(3)
         ->and((string) $reward->reward_value)->toBe('wax_melt_duo')
         ->and((bool) $reward->is_active)->toBeFalse();
 });

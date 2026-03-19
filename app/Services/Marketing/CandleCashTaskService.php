@@ -220,11 +220,11 @@ class CandleCashTaskService
             ->sum('duplicate_hits');
 
         return [
-            'current_balance_points' => $balance,
+            'current_balance' => $balance,
             'current_balance_amount' => $this->candleCashService->amountFromPoints($balance),
-            'lifetime_earned_points' => $lifetimeEarned,
+            'lifetime_earned' => $lifetimeEarned,
             'lifetime_earned_amount' => $this->candleCashService->amountFromPoints($lifetimeEarned),
-            'lifetime_redeemed_points' => $lifetimeRedeemed,
+            'lifetime_redeemed' => $lifetimeRedeemed,
             'lifetime_redeemed_amount' => $this->candleCashService->amountFromPoints($lifetimeRedeemed),
             'pending_rewards' => $pendingRewards,
             'referral_count' => $referralCount,

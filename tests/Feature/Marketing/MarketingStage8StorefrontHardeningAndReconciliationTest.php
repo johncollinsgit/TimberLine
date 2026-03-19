@@ -253,6 +253,8 @@ test('campaign detail shows reward-assisted conversion drilldown', function () {
 test('shopify customer status excludes internal groups from storefront payload', function () {
     config()->set('marketing.shopify.signing_secret', 'stage8-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage8-retail-client');
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Group Visibility',
@@ -266,7 +268,11 @@ test('shopify customer status excludes internal groups from storefront payload',
     MarketingGroupMember::query()->create(['marketing_group_id' => $internal->id, 'marketing_profile_id' => $profile->id]);
     MarketingGroupMember::query()->create(['marketing_group_id' => $public->id, 'marketing_profile_id' => $profile->id]);
 
-    $query = ['email' => $profile->email, 'phone' => $profile->phone];
+    $query = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
     $path = '/shopify/marketing/customer/status';
     $headers = storefrontSignedHeaders('GET', $path, $query, '', 'stage8-secret');
 
@@ -325,4 +331,3 @@ function storefrontCanonicalQuery(array $query): string
 
     return implode('&', $parts);
 }
-

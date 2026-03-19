@@ -1184,7 +1184,7 @@
                                 <th>Store</th>
                                 <th>External ID</th>
                                 <th>Last Activity</th>
-                                <th>Legacy Growave Points</th>
+                                <th>Legacy Growave Balance</th>
                             </tr>
                         </thead>
                         <tbody>

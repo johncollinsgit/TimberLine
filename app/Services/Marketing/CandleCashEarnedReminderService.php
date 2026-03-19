@@ -47,8 +47,8 @@ class CandleCashEarnedReminderService
 
         $candidates = (array) $this->analyticsService->reminderCandidates($tenantId);
         $rows = collect((array) ($candidates['rows'] ?? []))
-            ->filter(fn (array $row): bool => (int) ($row['outstanding_points'] ?? 0) > 0)
-            ->sortByDesc('outstanding_points')
+            ->filter(fn (array $row): bool => (float) ($row['outstanding_candle_cash'] ?? 0) > 0)
+            ->sortByDesc('outstanding_candle_cash')
             ->values();
 
         $summary = [
@@ -89,7 +89,7 @@ class CandleCashEarnedReminderService
                     'actor_id' => $actorId,
                     'tenant_id' => $tenantId,
                     'reminder_type' => 'candle_cash_unredeemed_earned',
-                    'outstanding_points' => (int) ($recipient['outstanding_points'] ?? 0),
+                    'outstanding_candle_cash' => round((float) ($recipient['outstanding_candle_cash'] ?? 0), 2),
                     'outstanding_amount' => round((float) ($recipient['outstanding_amount'] ?? 0), 2),
                     'earned_date' => $recipient['earned_date'] ?? null,
                     'latest_earned_date' => $recipient['latest_earned_date'] ?? null,

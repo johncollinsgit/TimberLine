@@ -66,7 +66,6 @@ export interface DashboardCandleCashEarnBreakdownRow {
   key: string;
   label: string;
   definition: string;
-  points: number;
   amount: number;
   formattedAmount: string;
   sharePct: number;
@@ -153,7 +152,6 @@ export interface DashboardPayload {
     title: string;
     subtitle: string;
     earned: {
-      points: number;
       amount: number;
       formattedAmount: string;
       eventCount: number;
@@ -165,11 +163,9 @@ export interface DashboardPayload {
       sourceDefinitions: Record<string, { label: string; definition: string }>;
     };
     outstanding: {
-      points: number;
       amount: number;
       formattedAmount: string;
       customerCount: number;
-      excludedGrandfatheredPoints: number;
       excludedGrandfatheredAmount: number;
       helperText: string;
     };

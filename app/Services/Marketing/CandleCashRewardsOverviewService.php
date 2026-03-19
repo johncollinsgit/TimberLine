@@ -15,7 +15,7 @@ class CandleCashRewardsOverviewService
     /**
      * @return array{
      *     program_name:string,
-     *     legacy_points_per_candle_cash:int|float,
+     *     measurement_label:string,
      *     earning_rules_active:bool,
      *     earning_rule_count:int,
      *     redeem_rules_active:bool,
@@ -54,7 +54,7 @@ class CandleCashRewardsOverviewService
 
         return [
             'program_name' => 'Candle Cash',
-            'legacy_points_per_candle_cash' => $this->candleCashService->legacyPointsPerCandleCash(),
+            'measurement_label' => '1 Candle Cash = 1 Candle Cash',
             'earning_rules_active' => $activeTasks->isNotEmpty(),
             'earning_rule_count' => $activeTasks->count(),
             'redeem_rules_active' => $activeRewards->isNotEmpty(),

@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 class CandleCashService
 {
     public const DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH = 30;
+    public const CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR = 1;
 
     protected ?array $programConfigCache = null;
 
@@ -55,9 +56,9 @@ class CandleCashService
             : (string) data_get($configured, 'storefront_reward_value', data_get($fallback, 'storefront_reward_value', '10USD'));
 
         return $this->programConfigCache = [
-            'points_per_dollar' => max(1, $legacyPointsPerCandleCash),
+            'points_per_dollar' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'legacy_points_per_candle_cash' => max(1, $legacyPointsPerCandleCash),
-            'canonical_candle_cash_ratio' => 1,
+            'canonical_candle_cash_ratio' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'redeem_increment_dollars' => round(max(0.01, $redeemIncrement), 2),
             'max_redeemable_per_order_dollars' => round(max(0.01, $maxRedeemablePerOrder), 2),
             'max_open_codes' => max(1, $maxOpenCodes),
@@ -68,7 +69,7 @@ class CandleCashService
 
     public function pointsPerDollar(): int
     {
-        return $this->legacyPointsPerCandleCash();
+        return self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR;
     }
 
     public function legacyPointsPerCandleCash(): int
@@ -78,12 +79,12 @@ class CandleCashService
 
     public function pointsFromAmount(float|int|string $amount): int
     {
-        return $this->legacyPointsFromCandleCash($amount);
+        return max(0, (int) round((float) $amount));
     }
 
     public function amountFromPoints(int $points): float
     {
-        return $this->candleCashFromLegacyPoints($points);
+        return round((float) $points, 2);
     }
 
     public function legacyPointsFromCandleCash(float|int|string $amount): int
@@ -159,9 +160,6 @@ class CandleCashService
 
     /**
      * @return array{
-     *   raw_points:int,
-     *   legacy_points:int,
-     *   points:int,
      *   candle_cash:float,
      *   candle_cash_formatted:string,
      *   candle_cash_amount:float,
@@ -175,9 +173,6 @@ class CandleCashService
         $amount = $this->amountFromPoints($points);
 
         return [
-            'raw_points' => $points,
-            'legacy_points' => $points,
-            'points' => $points,
             'candle_cash' => $amount,
             'candle_cash_formatted' => $this->formatCandleCash($amount),
             'candle_cash_amount' => $amount,
@@ -189,12 +184,11 @@ class CandleCashService
 
     /**
      * @return array{
-     *   legacy_points_per_candle_cash:int,
+     *   canonical_measurement_label:string,
      *   redeem_increment_dollars:float,
      *   redeem_increment_formatted:string,
      *   redeem_increment_candle_cash:float,
      *   redeem_increment_candle_cash_formatted:string,
-     *   redeem_increment_points:int,
      *   max_redeemable_per_order_dollars:float,
      *   max_redeemable_per_order_formatted:string,
      *   max_redemptions_per_order:int
@@ -203,13 +197,11 @@ class CandleCashService
     public function redemptionRulesPayload(): array
     {
         return [
-            'legacy_points_per_candle_cash' => $this->legacyPointsPerCandleCash(),
-            'points_per_dollar' => $this->legacyPointsPerCandleCash(),
+            'canonical_measurement_label' => '1 Candle Cash = 1 Candle Cash',
             'redeem_increment_dollars' => $this->fixedRedemptionAmount(),
             'redeem_increment_formatted' => $this->formatRewardCurrency($this->fixedRedemptionAmount()),
             'redeem_increment_candle_cash' => $this->fixedRedemptionAmount(),
             'redeem_increment_candle_cash_formatted' => $this->formatCandleCash($this->fixedRedemptionAmount()),
-            'redeem_increment_points' => $this->fixedRedemptionPoints(),
             'max_redeemable_per_order_dollars' => $this->maxRedeemablePerOrderAmount(),
             'max_redeemable_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount()),
             'max_redemptions_per_order' => 1,
@@ -404,9 +396,6 @@ class CandleCashService
             'description' => 'Apply ' . $this->formatRewardCurrency($amount) . ' off this order. Candle Cash is redeemed in $10 increments, with a limit of $10 per order.',
             'reward_type' => (string) $reward->reward_type,
             'reward_value' => $reward->reward_value !== null ? (string) $reward->reward_value : null,
-            'raw_points_cost' => $pointsCost,
-            'legacy_points_cost' => $pointsCost,
-            'points_cost' => $pointsCost,
             'candle_cash_cost' => $amount,
             'candle_cash_cost_formatted' => $this->formatCandleCash($amount),
             'candle_cash_amount' => $amount,
@@ -630,12 +619,12 @@ class CandleCashService
                 'redemption_id' => null,
                 'code' => null,
                 'error' => match ($error) {
-                    'insufficient_balance' => 'insufficient_points',
+                    'insufficient_balance' => 'insufficient_candle_cash',
                     'inactive_reward' => 'reward_unavailable',
                     default => 'redemption_failed',
                 },
                 'state' => match ($error) {
-                    'insufficient_balance' => 'insufficient_points',
+                    'insufficient_balance' => 'insufficient_candle_cash',
                     'inactive_reward' => 'reward_unavailable',
                     default => 'try_again_later',
                 },

@@ -101,7 +101,7 @@
 
             <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-8">
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Points</div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Legacy Growave Balance</div>
                     <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveExternal?->points_balance ?? 0)) }}</div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -158,7 +158,7 @@
                             <th class="px-4 py-3 text-left">Integration</th>
                             <th class="px-4 py-3 text-left">Store</th>
                             <th class="px-4 py-3 text-left">External ID</th>
-                            <th class="px-4 py-3 text-left">Points</th>
+                            <th class="px-4 py-3 text-left">Legacy Balance</th>
                             <th class="px-4 py-3 text-left">Tier</th>
                             <th class="px-4 py-3 text-left">Synced</th>
                         </tr>
@@ -219,7 +219,7 @@
                             <th class="px-4 py-3 text-left">Occurred</th>
                             <th class="px-4 py-3 text-left">Category</th>
                             <th class="px-4 py-3 text-left">Provider Event</th>
-                            <th class="px-4 py-3 text-left">Points</th>
+                            <th class="px-4 py-3 text-left">Legacy Balance Change</th>
                             <th class="px-4 py-3 text-left">Source ID</th>
                             <th class="px-4 py-3 text-left">Details</th>
                         </tr>

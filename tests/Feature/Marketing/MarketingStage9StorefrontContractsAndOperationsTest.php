@@ -26,7 +26,11 @@ test('storefront contract responses include standardized envelope states and rec
         'accepts_sms_marketing' => true,
     ]);
 
-    $query = ['email' => $profile->email, 'phone' => $profile->phone];
+    $query = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
     $headers = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $query, '', 'stage9-secret');
     $this->withHeaders($headers)
         ->getJson(route('marketing.shopify.rewards.balance', $query))
@@ -49,7 +53,7 @@ test('storefront contract responses include standardized envelope states and rec
         ->postJson(route('marketing.shopify.rewards.redeem'), $errorPayload)
         ->assertStatus(422)
         ->assertJsonPath('ok', false)
-        ->assertJsonPath('error.code', 'insufficient_points')
+        ->assertJsonPath('error.code', 'insufficient_candle_cash')
         ->assertJsonStructure(['error' => ['states', 'recovery_states']]);
 });
 
@@ -91,6 +95,8 @@ test('storefront app proxy signature mode is accepted when enabled', function ()
     config()->set('marketing.shopify.app_proxy_secret', 'stage9-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'unused');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
     $query = stage9AppProxySignedQuery([
         'shop' => 'timberline.example.myshopify.com',
@@ -101,6 +107,74 @@ test('storefront app proxy signature mode is accepted when enabled', function ()
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('meta.auth_mode', 'app_proxy');
+});
+
+test('storefront reward balance stays isolated to the verified shop tenant', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    config()->set('services.shopify.stores.wholesale.shop', 'cedar-wholesale.example.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'stage9-wholesale-client');
+
+    $retailTenant = Tenant::query()->create([
+        'name' => 'Stage9 Retail Tenant',
+        'slug' => 'stage9-retail-tenant',
+    ]);
+    $wholesaleTenant = Tenant::query()->create([
+        'name' => 'Stage9 Wholesale Tenant',
+        'slug' => 'stage9-wholesale-tenant-reads',
+    ]);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'modernforestry.myshopify.com',
+            'access_token' => 'stage9-retail-token',
+            'tenant_id' => $retailTenant->id,
+        ]
+    );
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'shop_domain' => 'cedar-wholesale.example.myshopify.com',
+            'access_token' => 'stage9-wholesale-token',
+            'tenant_id' => $wholesaleTenant->id,
+        ]
+    );
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $wholesaleTenant->id,
+        'first_name' => 'Scoped',
+        'email' => 'scoped.balance@example.com',
+        'normalized_email' => 'scoped.balance@example.com',
+        'phone' => '5551112345',
+        'normalized_phone' => '+15551112345',
+    ]);
+
+    $matchingQuery = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'shop' => 'cedar-wholesale.example.myshopify.com',
+    ];
+    $matchingHeaders = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $matchingQuery, '', 'stage9-secret');
+    $this->withHeaders($matchingHeaders)
+        ->getJson(route('marketing.shopify.rewards.balance', $matchingQuery))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.profile_id', $profile->id);
+
+    $mismatchedQuery = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
+    $mismatchedHeaders = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $mismatchedQuery, '', 'stage9-secret');
+    $this->withHeaders($mismatchedHeaders)
+        ->getJson(route('marketing.shopify.rewards.balance', $mismatchedQuery))
+        ->assertStatus(404)
+        ->assertJsonPath('error.code', 'profile_not_found')
+        ->assertJsonPath('error.details.status', 'not_found');
 });
 
 test('reward redemption feedback loop returns code issued and already has active code states', function () {
@@ -338,6 +412,8 @@ test('dashboard mark redeemed action reconciles issued code for staff-assisted c
 test('storefront and public touchpoints are logged and visible on customer timeline', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $profile = MarketingProfile::query()->create([
@@ -349,7 +425,11 @@ test('storefront and public touchpoints are logged and visible on customer timel
         'accepts_sms_marketing' => true,
     ]);
 
-    $query = ['email' => $profile->email, 'phone' => $profile->phone];
+    $query = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
     $headers = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $query, '', 'stage9-secret');
     $this->withHeaders($headers)
         ->getJson(route('marketing.shopify.rewards.balance', $query))

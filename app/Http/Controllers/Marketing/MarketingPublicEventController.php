@@ -612,7 +612,6 @@ class MarketingPublicEventController extends Controller
             return [
                 'id' => (int) $transaction->id,
                 'category' => $this->transactionCategoryLabel($transaction),
-                'raw_points' => (int) $transaction->points,
                 'candle_cash_amount' => $candleCashService->amountFromPoints((int) $transaction->points),
                 'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $transaction->points))),
                 'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $transaction->points, true),
@@ -701,7 +700,7 @@ class MarketingPublicEventController extends Controller
         return match ($state) {
             'code_issued' => 'Candle Cash redeemed successfully. Your $10 reward code is ready to use.',
             'already_has_active_code' => 'You already have a $10 Candle Cash reward waiting for you.',
-            'insufficient_points' => 'You need a little more Candle Cash before the $10 redemption is ready.',
+            'insufficient_candle_cash' => 'You need a little more Candle Cash before the $10 redemption is ready.',
             'reward_unavailable' => 'This reward is currently unavailable.',
             'redemption_blocked' => 'Redemption is temporarily blocked. Please try again later.',
             default => 'Could not process redemption right now. Please try again shortly.',

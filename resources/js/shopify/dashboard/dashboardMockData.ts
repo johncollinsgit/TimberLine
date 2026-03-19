@@ -190,7 +190,6 @@ export const dashboardMockData: DashboardPayload = {
     title: "Candle Cash earn activity",
     subtitle: "Fallback engagement section for local development.",
     earned: {
-      points: 1260,
       amount: 42,
       formattedAmount: "$42.00",
       eventCount: 18,
@@ -203,7 +202,6 @@ export const dashboardMockData: DashboardPayload = {
           key: "signup_welcome_earn",
           label: "Signup / Welcome earn",
           definition: "Fallback fixture.",
-          points: 480,
           amount: 16,
           formattedAmount: "$16.00",
           sharePct: 38.1,
@@ -219,11 +217,9 @@ export const dashboardMockData: DashboardPayload = {
       },
     },
     outstanding: {
-      points: 2100,
       amount: 70,
       formattedAmount: "$70.00",
       customerCount: 19,
-      excludedGrandfatheredPoints: 900,
       excludedGrandfatheredAmount: 30,
       helperText: "Fallback fixture for local development.",
     },

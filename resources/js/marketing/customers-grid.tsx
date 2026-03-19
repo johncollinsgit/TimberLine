@@ -537,7 +537,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         </div>
                         <h2 className="mt-2 text-2xl font-semibold text-white">Manage Customers</h2>
                         <p className="mt-2 max-w-3xl text-sm text-emerald-50/70">
-                            Search canonical profiles, keep Candle Cash separate from legacy Growave points,
+                            Search canonical profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
                             and open full customer records without fighting a long static table.
                         </p>
                     </div>
@@ -579,9 +579,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         <option value="manual">Manual</option>
                     </select>
                     <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
-                        <option value="all">All point states</option>
-                        <option value="yes">Has points</option>
-                        <option value="no">No points</option>
+                        <option value="all">All Candle Cash states</option>
+                        <option value="yes">Has Candle Cash</option>
+                        <option value="no">No Candle Cash</option>
                     </select>
                     <select value={hasPhone} onChange={(event) => setHasPhone(event.target.value)} className={fieldClass()}>
                         <option value="all">All phone states</option>

@@ -935,14 +935,14 @@
                         form.elements.reward_value.value = rule.reward_value || "";
 
                         const rewardValueNote = document.getElementById("rule-reward-value-note");
-                        const pointsCostNote = document.getElementById("rule-candle-cash-cost-note");
+                        const candleCashCostNote = document.getElementById("rule-candle-cash-cost-note");
 
                         if (rule.is_storefront_reward) {
                             rewardValueNote.textContent = "This row is the live storefront Candle Cash reward. Keep the discount value numeric, like 10USD.";
-                            pointsCostNote.textContent = "Storefront cost is derived from the discount value and the current Candle Cash value.";
+                            candleCashCostNote.textContent = "Storefront cost is derived from the discount value and the current Candle Cash value.";
                         } else {
                             rewardValueNote.textContent = "Use the current value format already stored on the reward.";
-                            pointsCostNote.textContent = "Displayed as direct Candle Cash cost everywhere in the app.";
+                            candleCashCostNote.textContent = "Displayed as direct Candle Cash cost everywhere in the app.";
                         }
                     }
                 }

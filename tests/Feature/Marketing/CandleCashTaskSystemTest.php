@@ -93,7 +93,7 @@ test('marketing manager can update an existing candle cash redeem rule from back
 
     expect((string) $reward->name)->toBe('Free Wax Melt Duo')
         ->and((string) $reward->description)->toBe('Updated from the Backstage rewards page.')
-        ->and((int) $reward->points_cost)->toBe(90)
+        ->and((int) $reward->points_cost)->toBe(3)
         ->and((string) $reward->reward_value)->toBe('wax_melt_duo')
         ->and((bool) $reward->is_active)->toBeFalse();
 });

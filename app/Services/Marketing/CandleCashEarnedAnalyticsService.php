@@ -49,7 +49,7 @@ class CandleCashEarnedAnalyticsService
                     'key' => $key,
                     'label' => $definition['label'],
                     'definition' => $definition['definition'],
-                    'points' => 0,
+                    'candleCash' => 0.0,
                     'amount' => 0.0,
                     'formattedAmount' => $this->formatCurrency(0),
                     'sharePct' => 0.0,
@@ -66,7 +66,7 @@ class CandleCashEarnedAnalyticsService
                     'key' => $sourceKey,
                     'label' => ucwords(str_replace('_', ' ', $sourceKey)),
                     'definition' => 'Program-earned Candle Cash events grouped under a fallback source bucket.',
-                    'points' => 0,
+                    'candleCash' => 0.0,
                     'amount' => 0.0,
                     'formattedAmount' => $this->formatCurrency(0),
                     'sharePct' => 0.0,
@@ -76,7 +76,7 @@ class CandleCashEarnedAnalyticsService
             }
 
             $row = $breakdown->get($sourceKey);
-            $row['points'] += (int) ($event['points'] ?? 0);
+            $row['candleCash'] += round($this->candleCashService->amountFromPoints((int) ($event['points'] ?? 0)), 2);
             $row['eventCount']++;
             $row['__customers'] = [
                 ...((array) ($row['__customers'] ?? [])),
@@ -88,8 +88,7 @@ class CandleCashEarnedAnalyticsService
 
         $breakdownRows = $breakdown
             ->map(function (array $row) use ($earnedAmount): array {
-                $points = (int) ($row['points'] ?? 0);
-                $amount = round($this->candleCashService->amountFromPoints($points), 2);
+                $amount = round((float) ($row['candleCash'] ?? 0), 2);
                 $customers = collect((array) ($row['__customers'] ?? []))
                     ->filter(fn (int $value): bool => $value > 0)
                     ->unique()
@@ -132,7 +131,6 @@ class CandleCashEarnedAnalyticsService
             'title' => 'Candle Cash earn activity',
             'subtitle' => 'Program-earned Candle Cash and redemption behavior for the selected timeframe.',
             'earned' => [
-                'points' => $earnedPoints,
                 'amount' => $earnedAmount,
                 'formattedAmount' => $this->formatCurrency($earnedAmount),
                 'eventCount' => (int) $windowEvents->count(),
@@ -148,11 +146,9 @@ class CandleCashEarnedAnalyticsService
                 'sourceDefinitions' => $sourceDefinitions,
             ],
             'outstanding' => [
-                'points' => $outstandingPoints,
                 'amount' => $outstandingAmount,
                 'formattedAmount' => $this->formatCurrency($outstandingAmount),
                 'customerCount' => $outstandingCustomerCount,
-                'excludedGrandfatheredPoints' => $excludedOpeningPoints,
                 'excludedGrandfatheredAmount' => $excludedOpeningAmount,
                 'helperText' => 'Currently outstanding earned Candle Cash excludes imported, grandfathered, and manual opening balances.',
             ],
@@ -226,7 +222,7 @@ class CandleCashEarnedAnalyticsService
                 ->groupBy('source_label')
                 ->map(fn (Collection $sourceBuckets, string $label): array => [
                     'label' => $label,
-                    'points' => (int) $sourceBuckets->sum('remaining_points'),
+                    'candle_cash' => round($this->candleCashService->amountFromPoints((int) $sourceBuckets->sum('remaining_points')), 2),
                     'amount' => round($this->candleCashService->amountFromPoints((int) $sourceBuckets->sum('remaining_points')), 2),
                 ])
                 ->sortByDesc('amount')
@@ -239,7 +235,7 @@ class CandleCashEarnedAnalyticsService
                 'first_name' => trim((string) ($profile?->first_name ?? '')),
                 'last_name' => trim((string) ($profile?->last_name ?? '')),
                 'email' => $email !== '' ? $email : null,
-                'outstanding_points' => (int) ($outstanding['points'] ?? 0),
+                'outstanding_candle_cash' => round((float) ($outstanding['amount'] ?? 0), 2),
                 'outstanding_amount' => round((float) ($outstanding['amount'] ?? 0), 2),
                 'formatted_outstanding_amount' => $this->formatCurrency((float) ($outstanding['amount'] ?? 0)),
                 'earned_date' => $firstEarnedAt instanceof CarbonImmutable ? $firstEarnedAt->toIso8601String() : null,

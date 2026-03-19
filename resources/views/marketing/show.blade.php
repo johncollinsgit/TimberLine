@@ -389,7 +389,7 @@
         @elseif($currentSectionKey === 'candle-cash')
             <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
                 <x-admin.help-hint tone="neutral" title="Redemption lifecycle">
-                    `issued` codes are created when points are spent. Shopify code usage is validated in ingestion. Square/event usage can be staff-reconciled and audited.
+                    `issued` codes are created when Candle Cash is redeemed. Shopify code usage is validated in ingestion. Square/event usage can be staff-reconciled and audited.
                 </x-admin.help-hint>
                 <div>
                     <a href="{{ route('marketing.operations.reconciliation') }}" wire:navigate class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-100">
