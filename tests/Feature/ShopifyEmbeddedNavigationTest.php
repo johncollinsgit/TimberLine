@@ -97,8 +97,9 @@ test('embedded shell renders shopify app nav with top-level links', function () 
     $response->assertOk()
         ->assertSee('<s-app-nav>', false)
         ->assertSee('rel="home"', false)
-        ->assertSee('<s-link href="/shopify/app">Dashboard</s-link>', false)
-        ->assertSee('<s-link href="/shopify/app/rewards">Rewards</s-link>', false)
-        ->assertSee('<s-link href="/shopify/app/customers/manage">Customers</s-link>', false)
-        ->assertSee('<s-link href="/shopify/app/settings">Settings</s-link>', false);
+        ->assertSee('<s-link href="/?shop=', false)
+        ->assertSee('<s-link href="/shopify/app?shop=', false)
+        ->assertSee('<s-link href="/shopify/app/rewards?shop=', false)
+        ->assertSee('<s-link href="/shopify/app/customers/manage?shop=', false)
+        ->assertSee('<s-link href="/shopify/app/settings?shop=', false);
 });

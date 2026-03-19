@@ -11,6 +11,14 @@
     'pageActions' => [],
 ])
 
+@php
+    $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        request(),
+        filled($host) ? (string) $host : null
+    );
+    $embeddedNavUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+@endphp
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,11 +57,11 @@
 <body>
     @if($authorized && filled($shopifyApiKey) && filled($host))
         <s-app-nav>
-            <s-link href="{{ route('home', [], false) }}" rel="home">Home</s-link>
-            <s-link href="{{ route('shopify.app', [], false) }}">Dashboard</s-link>
-            <s-link href="{{ route('shopify.app.rewards', [], false) }}">Rewards</s-link>
-            <s-link href="{{ route('shopify.app.customers.manage', [], false) }}">Customers</s-link>
-            <s-link href="{{ route('shopify.app.settings', [], false) }}">Settings</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('home', [], false)) }}" rel="home">Home</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app', [], false)) }}">Dashboard</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app.rewards', [], false)) }}">Rewards</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app.customers.manage', [], false)) }}">Customers</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app.settings', [], false)) }}">Settings</s-link>
         </s-app-nav>
     @endif
     <x-app-shell

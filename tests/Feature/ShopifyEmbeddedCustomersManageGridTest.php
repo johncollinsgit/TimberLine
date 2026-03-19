@@ -387,3 +387,30 @@ test('embedded manage page preserves full Shopify context on customer detail lin
         ->and($content)->toContain('locale=en')
         ->and($content)->toContain('session=embedded-session-token');
 });
+
+test('embedded manage filters and sort controls preserve full Shopify context', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+
+    $response = $this->get(route('shopify.app.customers.manage', retailEmbeddedExtendedSignedQuery()));
+
+    $response->assertOk();
+
+    $content = $response->getContent();
+
+    expect($content)->toContain('name="shop" value="modernforestry.myshopify.com"')
+        ->and($content)->toContain('name="host" value="admin-host-token"')
+        ->and($content)->toContain('name="embedded" value="1"')
+        ->and($content)->toContain('name="id_token" value="eyJhbGciOiJIUzI1NiJ9.test.payload"')
+        ->and($content)->toContain('name="locale" value="en"')
+        ->and($content)->toContain('name="session" value="embedded-session-token"')
+        ->and($content)->toContain('/shopify/app/customers/manage?shop=modernforestry.myshopify.com')
+        ->and($content)->toContain('sort=name')
+        ->and($content)->toContain('sort=email')
+        ->and($content)->toContain('sort=candle_cash')
+        ->and($content)->toContain('sort=rewards_actions')
+        ->and($content)->toContain('sort=last_activity')
+        ->and($content)->toContain('id_token=')
+        ->and($content)->toContain('locale=en')
+        ->and($content)->toContain('session=embedded-session-token');
+});

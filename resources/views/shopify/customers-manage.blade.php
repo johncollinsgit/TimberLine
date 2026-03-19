@@ -49,6 +49,12 @@
 
             return $withEmbeddedContext($url);
         };
+        $sortUrl = static function (array $overrides) use ($withEmbeddedContext): string {
+            return $withEmbeddedContext(
+                url()->current() . '?' . http_build_query(array_merge(request()->query(), $overrides), '', '&', PHP_QUERY_RFC3986)
+            );
+        };
+        $resetUrl = $withEmbeddedContext(url()->current());
     @endphp
 
     <style>
@@ -317,6 +323,9 @@
 
     <section class="customers-manage-root">
         <form method="GET" action="{{ url()->current() }}" class="customers-toolbar">
+            @foreach($embeddedContext as $key => $value)
+                <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
+            @endforeach
             <div class="customers-toolbar-head">
                 <h2>Manage customers</h2>
                 <p>{{ number_format((int) ($customers?->total() ?? 0)) }} customers · {{ number_format((int) ($activeFilterCount ?? 0)) }} active filter{{ (int) ($activeFilterCount ?? 0) === 1 ? '' : 's' }}</p>
@@ -420,7 +429,7 @@
                         </select>
                     </div>
                     <button type="submit" class="customers-button is-primary">Apply</button>
-                    <a href="{{ url()->current() }}" class="customers-button">Reset</a>
+                    <a href="{{ $resetUrl }}" class="customers-button">Reset</a>
                 </div>
             </div>
         </form>
@@ -433,7 +442,7 @@
                             <th>
                                 <a
                                     class="customers-sort-link"
-                                    href="{{ url()->current() . '?' . http_build_query(array_merge(request()->query(), ['sort' => 'name', 'direction' => ($sort === 'name' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1])) }}"
+                                    href="{{ $sortUrl(['sort' => 'name', 'direction' => ($sort === 'name' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                                 >
                                     Name
                                     <span class="customers-sort-indicator">{{ $sort === 'name' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
@@ -442,7 +451,7 @@
                             <th>
                                 <a
                                     class="customers-sort-link"
-                                    href="{{ url()->current() . '?' . http_build_query(array_merge(request()->query(), ['sort' => 'email', 'direction' => ($sort === 'email' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1])) }}"
+                                    href="{{ $sortUrl(['sort' => 'email', 'direction' => ($sort === 'email' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                                 >
                                     Email
                                     <span class="customers-sort-indicator">{{ $sort === 'email' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
@@ -451,7 +460,7 @@
                             <th>
                                 <a
                                     class="customers-sort-link"
-                                    href="{{ url()->current() . '?' . http_build_query(array_merge(request()->query(), ['sort' => 'candle_cash', 'direction' => ($sort === 'candle_cash' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1])) }}"
+                                    href="{{ $sortUrl(['sort' => 'candle_cash', 'direction' => ($sort === 'candle_cash' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                                 >
                                     Candle Cash
                                     <span class="customers-sort-indicator">{{ $sort === 'candle_cash' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
@@ -465,7 +474,7 @@
                             <th>
                                 <a
                                     class="customers-sort-link"
-                                    href="{{ url()->current() . '?' . http_build_query(array_merge(request()->query(), ['sort' => 'rewards_actions', 'direction' => ($sort === 'rewards_actions' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1])) }}"
+                                    href="{{ $sortUrl(['sort' => 'rewards_actions', 'direction' => ($sort === 'rewards_actions' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                                 >
                                     Rewards Actions
                                     <span class="customers-sort-indicator">{{ $sort === 'rewards_actions' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
@@ -474,7 +483,7 @@
                             <th>
                                 <a
                                     class="customers-sort-link"
-                                    href="{{ url()->current() . '?' . http_build_query(array_merge(request()->query(), ['sort' => 'last_activity', 'direction' => ($sort === 'last_activity' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1])) }}"
+                                    href="{{ $sortUrl(['sort' => 'last_activity', 'direction' => ($sort === 'last_activity' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                                 >
                                     Last Activity
                                     <span class="customers-sort-indicator">{{ $sort === 'last_activity' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
