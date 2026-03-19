@@ -35,9 +35,9 @@ class CandleCashRewardsOverviewService
             ->get(['id', 'title', 'handle', 'verification_mode', 'reward_amount']);
 
         $rewards = CandleCashReward::query()
-            ->orderBy('points_cost')
+            ->orderBy('candle_cash_cost')
             ->orderBy('id')
-            ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value', 'is_active']);
+            ->get(['id', 'name', 'description', 'candle_cash_cost', 'reward_type', 'reward_value', 'is_active']);
 
         $activeRewards = $rewards->where('is_active', true)->values();
         $earningModes = $activeTasks
@@ -67,7 +67,7 @@ class CandleCashRewardsOverviewService
             ])->values()->all(),
             'redeem_preview' => $activeRewards->take(3)->map(fn (CandleCashReward $reward): array => [
                 'title' => (string) $reward->name,
-                'detail' => $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints((int) $reward->points_cost)),
+                'detail' => $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints((int) $reward->candle_cash_cost)),
             ])->values()->all(),
         ];
     }

@@ -16,6 +16,7 @@ class CandleCashTaskCompletion extends Model
         'request_key',
         'reward_amount',
         'reward_points',
+        'reward_candle_cash',
         'source_type',
         'source_id',
         'proof_url',
@@ -35,6 +36,7 @@ class CandleCashTaskCompletion extends Model
     protected $casts = [
         'reward_amount' => 'decimal:2',
         'reward_points' => 'integer',
+        'reward_candle_cash' => 'integer',
         'submission_payload' => 'array',
         'started_at' => 'datetime',
         'submitted_at' => 'datetime',
@@ -42,6 +44,40 @@ class CandleCashTaskCompletion extends Model
         'awarded_at' => 'datetime',
         'metadata' => 'array',
     ];
+
+    public function getRewardCandleCashAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['reward_points'] ?? 0);
+    }
+
+    public function setRewardCandleCashAttribute($value): void
+    {
+        $normalized = max(0, (int) $value);
+
+        $this->attributes['reward_candle_cash'] = $normalized;
+        $this->attributes['reward_points'] = $normalized;
+    }
+
+    public function getRewardPointsAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['reward_candle_cash'] ?? 0);
+    }
+
+    public function setRewardPointsAttribute($value): void
+    {
+        $normalized = max(0, (int) $value);
+
+        $this->attributes['reward_points'] = $normalized;
+        $this->attributes['reward_candle_cash'] = $normalized;
+    }
 
     public function task(): BelongsTo
     {

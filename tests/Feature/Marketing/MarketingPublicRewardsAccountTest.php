@@ -63,7 +63,7 @@ test('public rewards account lookup shows balance, referral, reviews, and transa
     CandleCashReward::query()->create([
         'name' => '5% Off',
         'description' => 'Public lookup reward',
-        'points_cost' => 100,
+        'candle_cash_cost' => 100,
         'reward_type' => 'discount',
         'reward_value' => '5%',
         'is_active' => true,
@@ -98,7 +98,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
     $nonStorefrontReward = CandleCashReward::query()->create([
         'name' => 'Large Gift Set',
         'description' => null,
-        'points_cost' => 500,
+        'candle_cash_cost' => 500,
         'reward_type' => 'product',
         'reward_value' => 'gift-set',
         'is_active' => true,

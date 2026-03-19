@@ -95,7 +95,7 @@ class MarketingNextBestActionService
         $balance = $this->candleCashService->currentBalance($profile);
         $minimumRewardCost = (int) (CandleCashReward::query()
             ->where('is_active', true)
-            ->min('points_cost') ?? 0);
+            ->min('candle_cash_cost') ?? 0);
         $distance = $minimumRewardCost > 0 ? max(0, $minimumRewardCost - $balance) : null;
         if ($distance !== null && $distance > 0 && $distance <= 100 && $hasEmailConsent && $hasEmail) {
             return [

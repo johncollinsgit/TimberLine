@@ -190,7 +190,7 @@ class MarketingPublicEventController extends Controller
                 description: 'Event opt-in SMS consent bonus'
             );
             if ($awarded['awarded']) {
-                $bonus = (int) $awarded['points'];
+                $bonus = (int) ($awarded['candle_cash'] ?? 0);
             }
         }
 
@@ -270,8 +270,8 @@ class MarketingPublicEventController extends Controller
                             ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
                             : (string) ($row->reward?->name ?: 'Candle Cash'),
                         'status' => (string) ($row->status ?: 'issued'),
-                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points_spent),
-                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->points_spent)),
+                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_spent),
+                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->candle_cash_spent)),
                         'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
                         'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
                     ])->all()
@@ -599,22 +599,22 @@ class MarketingPublicEventController extends Controller
                 'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
                 'issued_at' => optional($row->issued_at)->toDateTimeString(),
                 'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
-                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points_spent),
-                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->points_spent)),
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_spent),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->candle_cash_spent)),
             ])->all();
 
         $transactionRows = $profile->candleCashTransactions()
             ->orderByDesc('id')
             ->limit(40)
-            ->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at']);
+            ->get(['id', 'type', 'candle_cash_delta', 'source', 'source_id', 'description', 'created_at']);
 
         $transactions = $transactionRows->map(function (CandleCashTransaction $transaction) use ($candleCashService): array {
             return [
                 'id' => (int) $transaction->id,
                 'category' => $this->transactionCategoryLabel($transaction),
-                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $transaction->points),
-                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $transaction->points))),
-                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $transaction->points, true),
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $transaction->candle_cash_delta),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $transaction->candle_cash_delta))),
+                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $transaction->candle_cash_delta, true),
                 'description' => trim((string) ($transaction->description ?? '')) ?: null,
                 'source' => (string) $transaction->source,
                 'occurred_at' => optional($transaction->created_at)->toDateTimeString(),
@@ -637,7 +637,7 @@ class MarketingPublicEventController extends Controller
 
         $reviewRewardRows = $transactionRows
             ->filter(fn (CandleCashTransaction $row): bool => (string) $row->source === 'growave_activity'
-                && $row->points > 0
+                && $row->candle_cash_delta > 0
                 && str_contains(strtolower((string) ($row->description ?? '')), 'review'))
             ->values();
 
@@ -669,7 +669,7 @@ class MarketingPublicEventController extends Controller
         $description = strtolower(trim((string) ($transaction->description ?? '')));
 
         if ((string) $transaction->source === 'growave_activity') {
-            if (str_contains($description, '(redeem)') || $transaction->points < 0) {
+            if (str_contains($description, '(redeem)') || $transaction->candle_cash_delta < 0) {
                 return 'Redeemed';
             }
             if (str_contains($description, '(expired)')) {

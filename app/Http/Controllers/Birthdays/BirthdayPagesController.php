@@ -140,10 +140,10 @@ class BirthdayPagesController extends Controller
             $existing = $this->rewardConfig();
             $data = $request->validate([
                 'enabled' => ['nullable', 'boolean'],
-                'reward_type' => ['required', 'in:points,discount_code,free_shipping'],
+                'reward_type' => ['required', 'in:candle_cash,discount_code,free_shipping'],
                 'reward_name' => ['required', 'string', 'max:160'],
                 'reward_value' => ['nullable', 'numeric', 'min:0'],
-                'points_amount' => ['nullable', 'integer', 'min:0'],
+                'candle_cash_amount' => ['nullable', 'integer', 'min:0'],
                 'discount_code_prefix' => ['nullable', 'string', 'max:40'],
                 'free_shipping_code_prefix' => ['nullable', 'string', 'max:40'],
                 'claim_window_days_before' => ['nullable', 'integer', 'min:0', 'max:365'],
@@ -157,7 +157,7 @@ class BirthdayPagesController extends Controller
                     'reward_type' => $data['reward_type'],
                     'reward_name' => trim((string) $data['reward_name']),
                     'reward_value' => isset($data['reward_value']) ? (float) $data['reward_value'] : data_get($existing, 'reward_value'),
-                    'points_amount' => isset($data['points_amount']) ? (int) $data['points_amount'] : (int) data_get($existing, 'points_amount', 0),
+                    'candle_cash_amount' => isset($data['candle_cash_amount']) ? (int) $data['candle_cash_amount'] : (int) data_get($existing, 'candle_cash_amount', 0),
                     'discount_code_prefix' => trim((string) ($data['discount_code_prefix'] ?? data_get($existing, 'discount_code_prefix', 'BDAY'))) ?: 'BDAY',
                     'free_shipping_code_prefix' => trim((string) ($data['free_shipping_code_prefix'] ?? data_get($existing, 'free_shipping_code_prefix', 'BDAYSHIP'))) ?: 'BDAYSHIP',
                     'claim_window_days_before' => isset($data['claim_window_days_before']) ? (int) $data['claim_window_days_before'] : (int) data_get($existing, 'claim_window_days_before', 0),
@@ -408,13 +408,13 @@ class BirthdayPagesController extends Controller
      */
     protected function rewardConfig(): array
     {
-        return array_merge(
+        $config = array_merge(
             [
                 'enabled' => true,
                 'reward_type' => 'discount_code',
                 'reward_name' => 'Birthday Candle Cash',
                 'reward_value' => 10.00,
-                'points_amount' => 50,
+                'candle_cash_amount' => 50,
                 'discount_code_prefix' => 'BDAY',
                 'free_shipping_code_prefix' => 'BDAYSHIP',
                 'claim_window_days_before' => 0,
@@ -422,6 +422,12 @@ class BirthdayPagesController extends Controller
             ],
             (array) optional(MarketingSetting::query()->where('key', 'birthday_reward_config')->first())->value
         );
+
+        if (($config['reward_type'] ?? null) === 'points') {
+            $config['reward_type'] = 'candle_cash';
+        }
+
+        return $config;
     }
 
     /**

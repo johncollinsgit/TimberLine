@@ -487,7 +487,7 @@
                                     @forelse($selectedProfile->candleCashTransactions as $transaction)
                                         <div class="rounded-2xl border border-white/10 bg-black/10 p-3">
                                             <div class="font-medium text-white">{{ $transaction->description ?: $transaction->source }}</div>
-                                            <div class="mt-1 text-xs text-white/50">{{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->points, true) }} · {{ optional($transaction->created_at)->format('Y-m-d H:i') }}</div>
+                                            <div class="mt-1 text-xs text-white/50">{{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->candle_cash_delta, true) }} · {{ optional($transaction->created_at)->format('Y-m-d H:i') }}</div>
                                         </div>
                                     @empty
                                         <div class="text-sm text-white/55">No Candle Cash transactions yet.</div>

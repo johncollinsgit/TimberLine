@@ -7,13 +7,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 test('candle cash service treats active candle cash amounts as 1 to 1', function () {
-    config()->set('marketing.candle_cash.points_per_dollar', 30);
+    config()->set('marketing.candle_cash.legacy_points_per_candle_cash', 30);
 
     MarketingSetting::query()->updateOrCreate(
         ['key' => 'candle_cash_program_config'],
         [
             'value' => [
-                'points_per_dollar' => 30,
+                'legacy_points_per_candle_cash' => 30,
                 'redeem_increment_dollars' => 10,
                 'max_redeemable_per_order_dollars' => 10,
                 'max_open_codes' => 1,
@@ -30,13 +30,13 @@ test('candle cash service treats active candle cash amounts as 1 to 1', function
 });
 
 test('candle cash service keeps the legacy points conversion isolated for compatibility helpers', function () {
-    config()->set('marketing.candle_cash.points_per_dollar', 30);
+    config()->set('marketing.candle_cash.legacy_points_per_candle_cash', 30);
 
     MarketingSetting::query()->updateOrCreate(
         ['key' => 'candle_cash_program_config'],
         [
             'value' => [
-                'points_per_dollar' => 30,
+                'legacy_points_per_candle_cash' => 30,
                 'redeem_increment_dollars' => 10,
                 'max_redeemable_per_order_dollars' => 10,
                 'max_open_codes' => 1,

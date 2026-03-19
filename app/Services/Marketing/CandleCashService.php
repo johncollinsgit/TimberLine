@@ -32,8 +32,16 @@ class CandleCashService
             || ! array_key_exists('max_open_codes', $configured);
 
         $legacyPointsPerCandleCash = $usesLegacyStorefrontConfig
-            ? (int) data_get($fallback, 'points_per_dollar', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH)
-            : (int) data_get($configured, 'points_per_dollar', data_get($fallback, 'points_per_dollar', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH));
+            ? (int) data_get($fallback, 'legacy_points_per_candle_cash', data_get($fallback, 'points_per_dollar', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH))
+            : (int) data_get(
+                $configured,
+                'legacy_points_per_candle_cash',
+                data_get(
+                    $configured,
+                    'points_per_dollar',
+                    data_get($fallback, 'legacy_points_per_candle_cash', data_get($fallback, 'points_per_dollar', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH))
+                )
+            );
 
         $redeemIncrement = $usesLegacyStorefrontConfig
             ? (float) data_get($fallback, 'redeem_increment_dollars', 10)
@@ -56,7 +64,7 @@ class CandleCashService
             : (string) data_get($configured, 'storefront_reward_value', data_get($fallback, 'storefront_reward_value', '10USD'));
 
         return $this->programConfigCache = [
-            'points_per_dollar' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
+            'candle_cash_units_per_dollar' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'legacy_points_per_candle_cash' => max(1, $legacyPointsPerCandleCash),
             'canonical_candle_cash_ratio' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'redeem_increment_dollars' => round(max(0.01, $redeemIncrement), 2),
@@ -247,7 +255,7 @@ class CandleCashService
         /** @var CandleCashReward|null $reward */
         $reward = CandleCashReward::query()
             ->where('is_active', true)
-            ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value', 'is_active'])
+            ->get(['id', 'name', 'description', 'candle_cash_cost', 'reward_type', 'reward_value', 'is_active'])
             ->sortBy(function (CandleCashReward $row): array {
                 $isExact = $this->isStorefrontReward($row) ? 0 : 1;
                 $amountDelta = abs($this->rewardValueAmount($row) - $this->fixedRedemptionAmount());
@@ -264,7 +272,7 @@ class CandleCashService
     {
         return $this->isStorefrontReward($reward)
             ? $this->fixedRedemptionPoints()
-            : (int) $reward->points_cost;
+            : (int) $reward->candle_cash_cost;
     }
 
     public function storefrontRedemptionMatchesCurrentRules(
@@ -277,7 +285,7 @@ class CandleCashService
             return true;
         }
 
-        return (int) $redemption->points_spent === $this->fixedRedemptionPoints();
+        return (int) $redemption->candle_cash_spent === $this->fixedRedemptionPoints();
     }
 
     public function redemptionAmountForIssuedCode(
@@ -290,7 +298,7 @@ class CandleCashService
             return $this->fixedRedemptionAmount();
         }
 
-        return $this->amountFromPoints((int) $redemption->points_spent);
+        return $this->amountFromPoints((int) $redemption->candle_cash_spent);
     }
 
     public function cancelStaleStorefrontRedemptions(
@@ -312,7 +320,7 @@ class CandleCashService
             ->where(function ($query): void {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
-            ->where('points_spent', '!=', $this->fixedRedemptionPoints())
+            ->where('candle_cash_spent', '!=', $this->fixedRedemptionPoints())
             ->update([
                 'status' => 'canceled',
                 'canceled_at' => now(),
@@ -351,7 +359,7 @@ class CandleCashService
                 ];
             }
 
-            $restorePoints = max(0, (int) $lockedRedemption->points_spent);
+            $restorePoints = max(0, (int) $lockedRedemption->candle_cash_spent);
             $nextBalance = (int) $balance->balance + $restorePoints;
 
             $balance->forceFill(['balance' => $nextBalance])->save();
@@ -365,7 +373,7 @@ class CandleCashService
             CandleCashTransaction::query()->create([
                 'marketing_profile_id' => $profileId,
                 'type' => 'adjustment',
-                'points' => $restorePoints,
+                'candle_cash_delta' => $restorePoints,
                 'source' => 'reward',
                 'source_id' => (string) $lockedRedemption->id,
                 'description' => $reason,
@@ -449,7 +457,7 @@ class CandleCashService
             $transaction = CandleCashTransaction::query()->create(array_merge([
                 'marketing_profile_id' => $profile->id,
                 'type' => $type,
-                'points' => $points,
+                'candle_cash_delta' => $points,
                 'source' => $source,
                 'source_id' => $sourceId,
                 'description' => $description,
@@ -486,7 +494,7 @@ class CandleCashService
             $normalizedPlatform = strtolower(trim((string) $platform));
             $cost = in_array($normalizedPlatform, ['shopify', 'public_lookup'], true)
                 ? $this->storefrontRewardPointsCost($reward)
-                : (int) $reward->points_cost;
+                : (int) $reward->candle_cash_cost;
             $current = (int) $balance->balance;
             if ($current < $cost) {
                 return [
@@ -506,7 +514,7 @@ class CandleCashService
             $redemption = CandleCashRedemption::query()->create([
                 'marketing_profile_id' => $profile->id,
                 'reward_id' => $reward->id,
-                'points_spent' => $cost,
+                'candle_cash_spent' => $cost,
                 'platform' => $platform ? strtolower(trim($platform)) : null,
                 'status' => 'issued',
                 'redemption_code' => $code,
@@ -518,7 +526,7 @@ class CandleCashService
             CandleCashTransaction::query()->create([
                 'marketing_profile_id' => $profile->id,
                 'type' => 'redeem',
-                'points' => -$cost,
+                'candle_cash_delta' => -$cost,
                 'source' => 'reward',
                 'source_id' => (string) $redemption->id,
                 'description' => 'Redeemed reward: ' . $reward->name,

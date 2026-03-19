@@ -276,7 +276,7 @@ test('candle cash grant creates ledger transaction and updates balance', functio
         ->and(CandleCashTransaction::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('type', 'earn')
-            ->where('points', 80)
+            ->where('candle_cash_delta', 80)
             ->exists())->toBeTrue();
 });
 
@@ -286,7 +286,7 @@ test('candle cash redemption spends points and creates unique redemption code', 
 
     app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'Seed balance');
 
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
 
     $this->actingAs($admin)
         ->post(route('marketing.customers.candle-cash.redeem', $profile), [
@@ -303,7 +303,7 @@ test('candle cash redemption spends points and creates unique redemption code', 
     $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance');
     expect($redemption->redemption_code)->toStartWith('CC-')
         ->and($redemption->platform)->toBe('shopify')
-        ->and((int) $balance)->toBe(400 - (int) $reward->points_cost)
+        ->and((int) $balance)->toBe(400 - (int) $reward->candle_cash_cost)
         ->and(CandleCashTransaction::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('type', 'redeem')

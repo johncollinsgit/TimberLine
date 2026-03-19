@@ -161,7 +161,7 @@ test('order profit calculation uses real product costs and linked candle cash co
 
     $reward = CandleCashReward::query()->create([
         'name' => 'Storefront Candle Cash',
-        'points_cost' => 300,
+        'candle_cash_cost' => 300,
         'reward_type' => 'coupon',
         'reward_value' => '10USD',
         'is_active' => true,
@@ -170,7 +170,7 @@ test('order profit calculation uses real product costs and linked candle cash co
     CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => $reward->id,
-        'points_spent' => 300,
+        'candle_cash_spent' => 300,
         'platform' => 'shopify',
         'redemption_code' => 'CC-TEST-100',
         'status' => 'redeemed',

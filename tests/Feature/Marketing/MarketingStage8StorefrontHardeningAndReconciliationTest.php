@@ -2,6 +2,7 @@
 
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
+use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
 use App\Models\EventInstance;
 use App\Models\MarketingCampaign;
@@ -63,7 +64,8 @@ test('shopify storefront endpoints require valid signature and hide internal-onl
 });
 
 test('consent request confirm flow persists states and awards incentive only once', function () {
-    config()->set('marketing.consent_bonus_points.sms', 9);
+    config()->set('marketing.candle_cash_consent_bonus.sms', 9);
+    CandleCashTask::query()->where('handle', 'sms-signup')->update(['enabled' => false]);
 
     $response = $this->post(route('marketing.consent.optin.store'), [
         'email' => 'stage8.consent@example.com',
@@ -88,7 +90,7 @@ test('consent request confirm flow persists states and awards incentive only onc
 
     $request->refresh();
     expect($request->status)->toBe('confirmed')
-        ->and((int) $request->reward_awarded_points)->toBe(9);
+        ->and((int) $request->reward_awarded_candle_cash)->toBe(9);
 
     expect(MarketingConsentEvent::query()
         ->where('marketing_profile_id', $request->marketing_profile_id)
@@ -123,7 +125,7 @@ test('shopify redemption reconciliation validates codes and stays idempotent', f
         'normalized_phone' => '+15552223333',
     ]);
     app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
 
     $order = Order::query()->create([
@@ -169,7 +171,7 @@ test('manual square reconciliation actions persist status and audit fields', fun
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $profile = MarketingProfile::query()->create(['first_name' => 'Manual Square']);
     app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'seed');
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'square');
     $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
 
@@ -200,7 +202,7 @@ test('customer detail shows storefront links and redemption lifecycle details', 
     ]);
 
     app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'seed');
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
 
     $this->actingAs($admin)
@@ -229,11 +231,11 @@ test('campaign detail shows reward-assisted conversion drilldown', function () {
         'order_total' => 50.00,
     ]);
 
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => $reward->id,
-        'points_spent' => (int) $reward->points_cost,
+        'candle_cash_spent' => (int) $reward->candle_cash_cost,
         'platform' => 'shopify',
         'redemption_code' => 'CC-STAGE8-XYZ1',
         'status' => 'redeemed',

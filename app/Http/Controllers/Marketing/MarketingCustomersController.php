@@ -789,8 +789,8 @@ class MarketingCustomersController extends Controller
         $nextBestAction = $this->nextBestActionService->forProfile($marketingProfile);
         $activeRewards = CandleCashReward::query()
             ->where('is_active', true)
-            ->orderBy('points_cost')
-            ->get(['id', 'name', 'points_cost', 'reward_type', 'reward_value']);
+            ->orderBy('candle_cash_cost')
+            ->get(['id', 'name', 'candle_cash_cost', 'reward_type', 'reward_value']);
         $allGroups = MarketingGroup::query()
             ->orderBy('name')
             ->get(['id', 'name', 'is_internal']);
@@ -1445,7 +1445,7 @@ class MarketingCustomersController extends Controller
     /**
      * @param Collection<int,MarketingProfile> $profiles
      * @return array<int,array{
-     *   points:int,
+     *   candle_cash_delta:int,
      *   tier:?string,
      *   referrals:int,
      *   has_growave:bool,
@@ -1842,11 +1842,11 @@ class MarketingCustomersController extends Controller
                 return [
                     'id' => (int) $transaction->id,
                     'occurred_at' => optional($transaction->created_at)->toDateTimeString(),
-                    'points' => (int) $transaction->points,
+                    'candle_cash_delta' => (int) $transaction->candle_cash_delta,
                     'category' => $this->normalizeGrowaveActivityCategory(
                         providerActivity: $providerActivity,
                         note: $note,
-                        points: (int) $transaction->points
+                        points: (int) $transaction->candle_cash_delta
                     ),
                     'provider_activity' => strtoupper(str_replace('_', ' ', $providerActivity)),
                     'source_id' => $this->nullableString($transaction->source_id),

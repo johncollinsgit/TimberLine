@@ -12,6 +12,7 @@ class CandleCashRedemption extends Model
         'marketing_profile_id',
         'reward_id',
         'points_spent',
+        'candle_cash_spent',
         'platform',
         'redemption_code',
         'status',
@@ -29,12 +30,47 @@ class CandleCashRedemption extends Model
 
     protected $casts = [
         'points_spent' => 'integer',
+        'candle_cash_spent' => 'integer',
         'issued_at' => 'datetime',
         'expires_at' => 'datetime',
         'redeemed_at' => 'datetime',
         'canceled_at' => 'datetime',
         'redemption_context' => 'array',
     ];
+
+    public function getCandleCashSpentAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['points_spent'] ?? 0);
+    }
+
+    public function setCandleCashSpentAttribute($value): void
+    {
+        $normalized = max(0, (int) $value);
+
+        $this->attributes['candle_cash_spent'] = $normalized;
+        $this->attributes['points_spent'] = $normalized;
+    }
+
+    public function getPointsSpentAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['candle_cash_spent'] ?? 0);
+    }
+
+    public function setPointsSpentAttribute($value): void
+    {
+        $normalized = max(0, (int) $value);
+
+        $this->attributes['points_spent'] = $normalized;
+        $this->attributes['candle_cash_spent'] = $normalized;
+    }
 
     public function profile(): BelongsTo
     {

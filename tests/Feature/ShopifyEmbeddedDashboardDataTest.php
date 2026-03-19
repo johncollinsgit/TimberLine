@@ -129,7 +129,7 @@ test('embedded dashboard api returns a stable payload contract for an authorized
     CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => 1,
-        'points_spent' => 300,
+        'candle_cash_spent' => 300,
         'platform' => 'shopify',
         'redemption_code' => 'CC-TEST-1001',
         'status' => 'redeemed',
@@ -318,7 +318,7 @@ test('only realized reward cost affects fallback profit when issued birthday rew
     CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => 1,
-        'points_spent' => 300,
+        'candle_cash_spent' => 300,
         'platform' => 'shopify',
         'redemption_code' => 'CC-MIXED-1001',
         'status' => 'redeemed',
@@ -556,7 +556,7 @@ test('candle cash earned analytics exclude imported opening balances and report 
     CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => 1,
-        'points_spent' => 100,
+        'candle_cash_spent' => 100,
         'platform' => 'shopify',
         'redemption_code' => 'CC-EARN-1001',
         'status' => 'redeemed',

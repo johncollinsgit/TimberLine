@@ -23,6 +23,7 @@ class MarketingConsentRequest extends Model
         'confirmed_at',
         'revoked_at',
         'expires_at',
+        'reward_awarded_candle_cash',
         'reward_awarded_points',
         'reward_awarded_at',
     ];
@@ -34,9 +35,44 @@ class MarketingConsentRequest extends Model
         'confirmed_at' => 'datetime',
         'revoked_at' => 'datetime',
         'expires_at' => 'datetime',
+        'reward_awarded_candle_cash' => 'integer',
         'reward_awarded_points' => 'integer',
         'reward_awarded_at' => 'datetime',
     ];
+
+    public function getRewardAwardedCandleCashAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['reward_awarded_points'] ?? 0);
+    }
+
+    public function setRewardAwardedCandleCashAttribute($value): void
+    {
+        $normalized = max(0, (int) $value);
+
+        $this->attributes['reward_awarded_candle_cash'] = $normalized;
+        $this->attributes['reward_awarded_points'] = $normalized;
+    }
+
+    public function getRewardAwardedPointsAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['reward_awarded_candle_cash'] ?? 0);
+    }
+
+    public function setRewardAwardedPointsAttribute($value): void
+    {
+        $normalized = max(0, (int) $value);
+
+        $this->attributes['reward_awarded_points'] = $normalized;
+        $this->attributes['reward_awarded_candle_cash'] = $normalized;
+    }
 
     public function profile(): BelongsTo
     {

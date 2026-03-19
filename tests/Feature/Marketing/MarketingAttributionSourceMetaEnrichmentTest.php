@@ -293,7 +293,7 @@ test('attribution backfill command is dry run safe and enriches order linked rec
     $redemption = CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => 1,
-        'points_spent' => 200,
+        'candle_cash_spent' => 200,
         'platform' => 'shopify',
         'redemption_code' => 'CC-BACKFILL-5101',
         'status' => 'redeemed',

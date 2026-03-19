@@ -183,7 +183,7 @@ class MarketingConsentCaptureService
                 'status' => 'confirmed',
                 'profile' => $profile,
                 'request' => $request,
-                'bonus_awarded' => (int) ($request->reward_awarded_points ?? 0),
+                'bonus_awarded' => (int) ($request->reward_awarded_candle_cash ?? 0),
                 'error' => null,
             ];
         }
@@ -231,14 +231,14 @@ class MarketingConsentCaptureService
                 description: (string) ($context['bonus_description'] ?? 'SMS consent confirmation bonus')
             );
             if ($bonus['awarded']) {
-                $bonusAwarded = (int) $bonus['points'];
+                $bonusAwarded = (int) ($bonus['candle_cash'] ?? 0);
             }
         }
 
         $request->forceFill([
             'status' => 'confirmed',
             'confirmed_at' => now(),
-            'reward_awarded_points' => $bonusAwarded > 0 ? $bonusAwarded : (int) ($request->reward_awarded_points ?? 0),
+            'reward_awarded_candle_cash' => $bonusAwarded > 0 ? $bonusAwarded : (int) ($request->reward_awarded_candle_cash ?? 0),
             'reward_awarded_at' => $bonusAwarded > 0 ? now() : $request->reward_awarded_at,
         ])->save();
 

@@ -162,7 +162,7 @@ class MarketingRebaseCandleCashBalances extends Command
                         CandleCashTransaction::query()->create([
                             'marketing_profile_id' => $locked->marketing_profile_id,
                             'type' => 'adjustment',
-                            'points' => $delta,
+                            'candle_cash_delta' => $delta,
                             'source' => 'legacy_rebase',
                             'source_id' => $sourceId,
                             'description' => 'Legacy Candle Cash rebase (factor ' . rtrim(rtrim(number_format($factor, 10, '.', ''), '0'), '.') . ')',

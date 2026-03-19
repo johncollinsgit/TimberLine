@@ -13,13 +13,25 @@ class MarketingConsentIncentiveService
     ) {
     }
 
+    public function bonusCandleCash(): int
+    {
+        return max(
+            0,
+            (int) data_get(
+                config('marketing.candle_cash_consent_bonus', []),
+                'sms',
+                data_get(config('marketing.consent_bonus_points', []), 'sms', 0)
+            )
+        );
+    }
+
     public function bonusPoints(): int
     {
-        return max(0, (int) data_get(config('marketing.consent_bonus_points', []), 'sms', 0));
+        return $this->bonusCandleCash();
     }
 
     /**
-     * @return array{awarded:bool,points:int,balance:?int,state?:string}
+     * @return array{awarded:bool,candle_cash:int,points:int,balance:?int,state?:string}
      */
     public function awardSmsConsentBonusOnce(MarketingProfile $profile, string $sourceId, string $description): array
     {
@@ -41,31 +53,32 @@ class MarketingConsentIncentiveService
 
             return [
                 'awarded' => $awarded,
-                'points' => $awarded ? (int) ($completion?->reward_points ?? 0) : 0,
+                'candle_cash' => $awarded ? (int) ($completion?->reward_candle_cash ?? 0) : 0,
+                'points' => $awarded ? (int) ($completion?->reward_candle_cash ?? 0) : 0,
                 'balance' => $awarded ? $this->candleCashService->currentBalance($profile) : null,
                 'state' => (string) ($result['state'] ?? ''),
             ];
         }
 
-        $points = $this->bonusPoints();
-        if ($points <= 0) {
-            return ['awarded' => false, 'points' => 0, 'balance' => null];
+        $candleCash = $this->bonusCandleCash();
+        if ($candleCash <= 0) {
+            return ['awarded' => false, 'candle_cash' => 0, 'points' => 0, 'balance' => null];
         }
 
         $alreadyAwarded = CandleCashTransaction::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('source', 'consent')
             ->where('source_id', $sourceId)
-            ->where('points', '>', 0)
+            ->where('candle_cash_delta', '>', 0)
             ->exists();
 
         if ($alreadyAwarded) {
-            return ['awarded' => false, 'points' => 0, 'balance' => null];
+            return ['awarded' => false, 'candle_cash' => 0, 'points' => 0, 'balance' => null];
         }
 
         $result = $this->candleCashService->addPoints(
             profile: $profile,
-            points: $points,
+            points: $candleCash,
             type: 'earn',
             source: 'consent',
             sourceId: $sourceId,
@@ -74,7 +87,8 @@ class MarketingConsentIncentiveService
 
         return [
             'awarded' => true,
-            'points' => $points,
+            'candle_cash' => $candleCash,
+            'points' => $candleCash,
             'balance' => (int) ($result['balance'] ?? 0),
         ];
     }

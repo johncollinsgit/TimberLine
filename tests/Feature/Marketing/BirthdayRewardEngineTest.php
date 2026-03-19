@@ -12,8 +12,8 @@ beforeEach(function () {
         ['key' => 'birthday_reward_config'],
         ['value' => [
             'enabled' => true,
-            'reward_type' => 'points',
-            'points_amount' => 75,
+            'reward_type' => 'candle_cash',
+            'candle_cash_amount' => 75,
             'discount_code_prefix' => 'BDAY',
             'free_shipping_code_prefix' => 'BDAYSHIP',
             'claim_window_days_before' => 365,
@@ -22,7 +22,7 @@ beforeEach(function () {
     );
 });
 
-test('birthday reward engine enforces annual issuance guardrail for points rewards', function () {
+test('birthday reward engine enforces annual issuance guardrail for candle cash rewards', function () {
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Birthday',
         'email' => 'birthday-points@example.com',
@@ -59,7 +59,7 @@ test('birthday reward engine supports discount code issuance and claim flow', fu
         ['value' => [
             'enabled' => true,
             'reward_type' => 'discount_code',
-            'points_amount' => 0,
+            'candle_cash_amount' => 0,
             'discount_code_prefix' => 'BDAY',
             'free_shipping_code_prefix' => 'BDAYSHIP',
             'claim_window_days_before' => 365,

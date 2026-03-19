@@ -155,8 +155,8 @@ class CandleCashTaskService
             $completion->refresh();
             $task = $completion->task()->firstOrFail();
             $profile = $completion->profile()->firstOrFail();
-            $points = $completion->reward_points > 0
-                ? (int) $completion->reward_points
+            $points = $completion->reward_candle_cash > 0
+                ? (int) $completion->reward_candle_cash
                 : $this->candleCashService->pointsFromAmount((float) $completion->reward_amount);
 
             $result = $this->candleCashService->addPoints(
@@ -173,7 +173,7 @@ class CandleCashTaskService
                 'review_notes' => $note ?: $completion->review_notes,
                 'approved_by' => $approvedBy ?: $completion->approved_by,
                 'reward_amount' => $completion->reward_amount > 0 ? $completion->reward_amount : $task->reward_amount,
-                'reward_points' => $points,
+                'reward_candle_cash' => $points,
                 'candle_cash_transaction_id' => (int) ($result['transaction_id'] ?? 0) ?: $completion->candle_cash_transaction_id,
                 'reviewed_at' => now(),
                 'awarded_at' => now(),
@@ -208,8 +208,8 @@ class CandleCashTaskService
     public function customerSummary(MarketingProfile $profile): array
     {
         $balance = $this->candleCashService->currentBalance($profile);
-        $lifetimeEarned = (int) $profile->candleCashTransactions()->where('points', '>', 0)->sum('points');
-        $lifetimeRedeemed = abs((int) $profile->candleCashTransactions()->where('points', '<', 0)->sum('points'));
+        $lifetimeEarned = (int) $profile->candleCashTransactions()->where('candle_cash_delta', '>', 0)->sum('candle_cash_delta');
+        $lifetimeRedeemed = abs((int) $profile->candleCashTransactions()->where('candle_cash_delta', '<', 0)->sum('candle_cash_delta'));
         $pendingRewards = (int) CandleCashTaskCompletion::query()
             ->where('marketing_profile_id', $profile->id)
             ->whereIn('status', ['pending', 'submitted', 'started'])
@@ -359,7 +359,7 @@ class CandleCashTaskService
                 'completion_key' => $completionKey !== '' ? $completionKey : null,
                 'request_key' => trim((string) ($payload['request_key'] ?? '')) ?: null,
                 'reward_amount' => $rewardAmount,
-                'reward_points' => $rewardPoints,
+                'reward_candle_cash' => $rewardPoints,
                 'source_type' => trim((string) ($payload['source_type'] ?? '')) ?: null,
                 'source_id' => trim((string) ($payload['source_id'] ?? '')) ?: null,
                 'proof_url' => trim((string) ($payload['proof_url'] ?? '')) ?: null,
@@ -415,7 +415,7 @@ class CandleCashTaskService
             'status' => 'blocked',
             'request_key' => trim((string) ($payload['request_key'] ?? '')) ?: null,
             'reward_amount' => (float) $task->reward_amount,
-            'reward_points' => $this->candleCashService->pointsFromAmount((float) $task->reward_amount),
+            'reward_candle_cash' => $this->candleCashService->pointsFromAmount((float) $task->reward_amount),
             'source_type' => trim((string) ($payload['source_type'] ?? '')) ?: null,
             'source_id' => trim((string) ($payload['source_id'] ?? '')) ?: null,
             'proof_url' => trim((string) ($payload['proof_url'] ?? '')) ?: null,

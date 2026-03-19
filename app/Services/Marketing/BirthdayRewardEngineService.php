@@ -35,7 +35,7 @@ class BirthdayRewardEngineService
         }
 
         $config = $this->rewardConfig();
-        $rewardType = (string) ($config['reward_type'] ?? 'points');
+        $rewardType = (string) ($config['reward_type'] ?? 'candle_cash');
         $cycleYear = (int) ($options['cycle_year'] ?? now()->year);
         $window = $this->claimWindow($birthdayProfile, $cycleYear, $config);
         $now = now()->toImmutable();
@@ -136,7 +136,7 @@ class BirthdayRewardEngineService
         }
 
         $cycleYear = (int) ($options['cycle_year'] ?? now()->year);
-        $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'points'));
+        $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'candle_cash'));
         $window = $this->claimWindow($birthdayProfile, $cycleYear, $config);
         $now = now()->toImmutable();
 
@@ -197,13 +197,13 @@ class BirthdayRewardEngineService
                 'reward_type' => $rewardType,
                 'reward_name' => $this->rewardName($config),
                 'status' => 'issued',
-                'points_awarded' => null,
+                'candle_cash_awarded' => null,
                 'reward_value' => $this->rewardValue($rewardType, $config),
                 'reward_code' => null,
                 'shopify_discount_id' => null,
                 'shopify_store_key' => null,
                 'shopify_discount_node_id' => null,
-                'discount_sync_status' => $rewardType === 'points' ? 'not_applicable' : 'pending',
+                'discount_sync_status' => $rewardType === 'candle_cash' ? 'not_applicable' : 'pending',
                 'discount_sync_error' => null,
                 'claim_window_starts_at' => $window['starts_at'],
                 'claim_window_ends_at' => $window['ends_at'],
@@ -219,24 +219,24 @@ class BirthdayRewardEngineService
                 'campaign_type' => 'birthday_email',
             ];
 
-            if ($rewardType === 'points') {
-                $points = max(0, (int) ($config['points_amount'] ?? 0));
-                if ($points <= 0) {
-                    throw new RuntimeException('Birthday points reward is misconfigured.');
+            if ($rewardType === 'candle_cash') {
+                $candleCash = max(0, (int) ($config['candle_cash_amount'] ?? 0));
+                if ($candleCash <= 0) {
+                    throw new RuntimeException('Birthday Candle Cash reward is misconfigured.');
                 }
 
                 $result = $this->candleCashService->addPoints(
                     profile: $locked->marketingProfile,
-                    points: $points,
+                    points: $candleCash,
                     type: 'earn',
                     source: 'birthday_reward',
                     sourceId: 'birthday:'.$locked->id.':'.$cycleYear,
-                    description: 'Birthday reward points'
+                    description: 'Birthday Candle Cash reward'
                 );
 
                 $issuancePayload['status'] = 'claimed';
-                $issuancePayload['points_awarded'] = $points;
-                $issuancePayload['reward_value'] = (string) $points;
+                $issuancePayload['candle_cash_awarded'] = $candleCash;
+                $issuancePayload['reward_value'] = (string) $candleCash;
                 $issuancePayload['claimed_at'] = $now;
                 $issuancePayload['activated_at'] = $now;
                 $issuancePayload['metadata'] = [
@@ -296,7 +296,7 @@ class BirthdayRewardEngineService
     {
         $cycleYear = $cycleYear ?: (int) now()->year;
         $config = $this->rewardConfig();
-        $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'points'));
+        $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'candle_cash'));
 
         return DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType): array {
             $locked = CustomerBirthdayProfile::query()
@@ -434,7 +434,7 @@ class BirthdayRewardEngineService
             'reward_type' => 'discount_code',
             'reward_name' => 'Birthday Candle Cash',
             'reward_value' => 10.00,
-            'points_amount' => 50,
+            'candle_cash_amount' => 50,
             'discount_code_prefix' => 'BDAY',
             'free_shipping_code_prefix' => 'BDAYSHIP',
             'claim_window_days_before' => 0,
@@ -482,10 +482,11 @@ class BirthdayRewardEngineService
         $normalized = strtolower(trim($rewardType));
 
         return match ($normalized) {
-            'points', 'discount_code', 'free_shipping' => $normalized,
+            'candle_cash', 'discount_code', 'free_shipping' => $normalized,
+            'points' => 'candle_cash',
             'coupon', 'discount' => 'discount_code',
             'shipping', 'free_ship' => 'free_shipping',
-            default => 'points',
+            default => 'candle_cash',
         };
     }
 
@@ -504,8 +505,8 @@ class BirthdayRewardEngineService
      */
     protected function rewardValue(string $rewardType, array $config): ?string
     {
-        if ($rewardType === 'points') {
-            return (string) max(0, (int) ($config['points_amount'] ?? 0));
+        if ($rewardType === 'candle_cash') {
+            return (string) max(0, (int) ($config['candle_cash_amount'] ?? 0));
         }
 
         $value = $config['reward_value'] ?? null;

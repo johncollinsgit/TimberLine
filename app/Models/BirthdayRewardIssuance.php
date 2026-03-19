@@ -17,6 +17,7 @@ class BirthdayRewardIssuance extends Model
         'reward_name',
         'status',
         'points_awarded',
+        'candle_cash_awarded',
         'reward_value',
         'reward_code',
         'shopify_discount_id',
@@ -42,6 +43,7 @@ class BirthdayRewardIssuance extends Model
     protected $casts = [
         'cycle_year' => 'integer',
         'points_awarded' => 'integer',
+        'candle_cash_awarded' => 'integer',
         'reward_value' => 'decimal:2',
         'shopify_store_key' => 'string',
         'shopify_discount_node_id' => 'string',
@@ -57,6 +59,58 @@ class BirthdayRewardIssuance extends Model
         'attributed_revenue' => 'decimal:2',
         'metadata' => 'array',
     ];
+
+    public function getRewardTypeAttribute($value): string
+    {
+        return $this->normalizeRewardType($value);
+    }
+
+    public function setRewardTypeAttribute($value): void
+    {
+        $this->attributes['reward_type'] = $this->normalizeRewardType($value);
+    }
+
+    public function getCandleCashAwardedAttribute($value): ?int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        if (! array_key_exists('points_awarded', $this->attributes) || $this->attributes['points_awarded'] === null) {
+            return null;
+        }
+
+        return (int) $this->attributes['points_awarded'];
+    }
+
+    public function setCandleCashAwardedAttribute($value): void
+    {
+        $normalized = $value === null ? null : max(0, (int) $value);
+
+        $this->attributes['candle_cash_awarded'] = $normalized;
+        $this->attributes['points_awarded'] = $normalized;
+    }
+
+    public function getPointsAwardedAttribute($value): ?int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        if (! array_key_exists('candle_cash_awarded', $this->attributes) || $this->attributes['candle_cash_awarded'] === null) {
+            return null;
+        }
+
+        return (int) $this->attributes['candle_cash_awarded'];
+    }
+
+    public function setPointsAwardedAttribute($value): void
+    {
+        $normalized = $value === null ? null : max(0, (int) $value);
+
+        $this->attributes['points_awarded'] = $normalized;
+        $this->attributes['candle_cash_awarded'] = $normalized;
+    }
 
     public function birthdayProfile(): BelongsTo
     {
@@ -85,7 +139,7 @@ class BirthdayRewardIssuance extends Model
             return $status;
         }
 
-        if ($this->reward_type === 'points') {
+        if ($this->reward_type === 'candle_cash') {
             return 'not_applicable';
         }
 
@@ -122,5 +176,12 @@ class BirthdayRewardIssuance extends Model
     {
         return (string) $this->status === 'expired'
             || ($this->expires_at !== null && $this->expires_at->isPast() && ! $this->isRedeemed());
+    }
+
+    protected function normalizeRewardType(mixed $value): string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return $normalized === 'points' ? 'candle_cash' : $normalized;
     }
 }

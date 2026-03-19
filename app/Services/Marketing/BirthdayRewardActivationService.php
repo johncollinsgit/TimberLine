@@ -156,11 +156,11 @@ GRAPHQL;
                 ];
             }
 
-            if ($locked->reward_type === 'points') {
+            if ($locked->reward_type === 'candle_cash') {
                 return [
                     'ok' => (string) $locked->status === 'claimed',
                     'state' => (string) $locked->status === 'claimed' ? 'already_claimed' : 'birthday_reward_not_ready',
-                    'error' => (string) $locked->status === 'claimed' ? null : 'points_reward_does_not_require_discount_sync',
+                    'error' => (string) $locked->status === 'claimed' ? null : 'candle_cash_reward_does_not_require_discount_sync',
                     'issuance' => $locked,
                 ];
             }

@@ -187,10 +187,10 @@ class OrderProfitCalculator
             ->where('status', 'redeemed')
             ->where('external_order_source', 'order')
             ->where('external_order_id', (string) $order->id)
-            ->get(['id', 'points_spent']);
+            ->get(['id', 'candle_cash_spent']);
 
         if ($redemptions->isNotEmpty()) {
-            $amount = round($redemptions->sum(fn (CandleCashRedemption $row) => $this->candleCashService->amountFromPoints((int) $row->points_spent)), 2);
+            $amount = round($redemptions->sum(fn (CandleCashRedemption $row) => $this->candleCashService->amountFromPoints((int) $row->candle_cash_spent)), 2);
 
             return [
                 'amount' => $amount,

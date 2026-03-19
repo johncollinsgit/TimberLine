@@ -231,8 +231,8 @@
                                 <td class="px-4 py-3 text-white/85">{{ $activity['category'] }}</td>
                                 <td class="px-4 py-3 text-white/70">{{ $activity['provider_activity'] }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="{{ (int) $activity['points'] >= 0 ? 'text-emerald-100' : 'text-rose-200' }}">
-                                        {{ (int) $activity['points'] > 0 ? '+' : '' }}{{ number_format((int) $activity['points']) }}
+                                    <span class="{{ (int) $activity['candle_cash_delta'] >= 0 ? 'text-emerald-100' : 'text-rose-200' }}">
+                                        {{ (int) $activity['candle_cash_delta'] > 0 ? '+' : '' }}{{ number_format((int) $activity['candle_cash_delta']) }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-white/65 font-mono text-xs">{{ $activity['source_id'] ?: '—' }}</td>
@@ -824,7 +824,7 @@
                     <div class="grid gap-2 sm:grid-cols-3">
                         <select name="reward_id" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
                             @foreach($activeRewards as $reward)
-                                <option value="{{ $reward->id }}">{{ $reward->name }} ({{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $reward->points_cost)) }})</option>
+                                <option value="{{ $reward->id }}">{{ $reward->name }} ({{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $reward->candle_cash_cost)) }})</option>
                             @endforeach
                         </select>
                         <select name="platform" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
@@ -843,7 +843,7 @@
                         <div class="mt-2 space-y-1.5 text-xs text-white/75">
                             @forelse($candleTransactions as $transaction)
                                 <div>
-                                    {{ strtoupper($transaction->type) }} {{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->points, true) }}
+                                    {{ strtoupper($transaction->type) }} {{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->candle_cash_delta, true) }}
                                     · {{ $transaction->source }}
                                     <div class="text-white/55">{{ optional($transaction->created_at)->format('Y-m-d H:i') }} · {{ $transaction->description ?: '—' }}</div>
                                 </div>
@@ -861,7 +861,7 @@
                                         {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
                                         <span class="text-[10px] uppercase tracking-[0.18em] text-white/55">· {{ strtoupper((string) ($redemption->status ?: 'issued')) }}</span>
                                     </div>
-                                    <div class="text-white/65">{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $redemption->points_spent)) }} · <span class="font-mono">{{ $redemption->redemption_code }}</span></div>
+                                    <div class="text-white/65">{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $redemption->candle_cash_spent)) }} · <span class="font-mono">{{ $redemption->redemption_code }}</span></div>
                                     <div class="text-white/55">
                                         {{ strtoupper((string) ($redemption->platform ?: 'n/a')) }}
                                         · {{ optional($redemption->issued_at ?: $redemption->created_at)->format('Y-m-d H:i') ?: '—' }}

@@ -107,14 +107,14 @@ return [
         'event_flows_enabled' => (bool) env('MARKETING_PUBLIC_EVENT_FLOWS_ENABLED', true),
     ],
 
-    'consent_bonus_points' => [
-        'sms' => (int) env('MARKETING_SMS_CONSENT_BONUS_POINTS', 0),
+    'candle_cash_consent_bonus' => [
+        'sms' => (int) env('MARKETING_SMS_CONSENT_BONUS_CANDLE_CASH', env('MARKETING_SMS_CONSENT_BONUS_POINTS', 0)),
     ],
 
     'candle_cash' => [
         'code_expiry_days' => (int) env('MARKETING_CANDLE_CASH_CODE_EXPIRY_DAYS', 30),
         'storefront_base_url' => env('MARKETING_CANDLE_CASH_STOREFRONT_BASE_URL', 'https://theforestrystudio.com'),
-        'points_per_dollar' => (int) env('MARKETING_CANDLE_CASH_POINTS_PER_DOLLAR', 1),
+        'legacy_points_per_candle_cash' => (int) env('MARKETING_CANDLE_CASH_LEGACY_POINTS_PER_CANDLE_CASH', env('MARKETING_CANDLE_CASH_POINTS_PER_DOLLAR', 1)),
         'redeem_increment_dollars' => (float) env('MARKETING_CANDLE_CASH_REDEEM_INCREMENT_DOLLARS', 10),
         'max_redeemable_per_order_dollars' => (float) env('MARKETING_CANDLE_CASH_MAX_REDEEMABLE_PER_ORDER_DOLLARS', 10),
         'max_open_codes' => (int) env('MARKETING_CANDLE_CASH_MAX_OPEN_CODES', 1),
@@ -136,8 +136,10 @@ return [
 
     'birthday_rewards' => [
         'enabled' => (bool) env('MARKETING_BIRTHDAY_REWARDS_ENABLED', true),
-        'reward_type' => env('MARKETING_BIRTHDAY_REWARD_TYPE', 'points'),
-        'points_amount' => (int) env('MARKETING_BIRTHDAY_POINTS_AMOUNT', 50),
+        'reward_type' => env('MARKETING_BIRTHDAY_REWARD_TYPE', 'candle_cash') === 'points'
+            ? 'candle_cash'
+            : env('MARKETING_BIRTHDAY_REWARD_TYPE', 'candle_cash'),
+        'candle_cash_amount' => (int) env('MARKETING_BIRTHDAY_CANDLE_CASH_AMOUNT', env('MARKETING_BIRTHDAY_POINTS_AMOUNT', 50)),
         'discount_code_prefix' => env('MARKETING_BIRTHDAY_DISCOUNT_CODE_PREFIX', 'BDAY'),
         'free_shipping_code_prefix' => env('MARKETING_BIRTHDAY_FREE_SHIPPING_CODE_PREFIX', 'BDAYSHIP'),
         'claim_window_days_before' => (int) env('MARKETING_BIRTHDAY_CLAIM_WINDOW_DAYS_BEFORE', 0),

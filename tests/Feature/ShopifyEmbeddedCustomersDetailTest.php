@@ -71,7 +71,7 @@ function seedEmbeddedCustomerDetailFixture(?int $tenantId = null): MarketingProf
 
     $reward = CandleCashReward::query()->create([
         'name' => '$10 Candle Cash',
-        'points_cost' => 100,
+        'candle_cash_cost' => 100,
         'reward_type' => 'coupon',
         'reward_value' => '10USD',
         'is_active' => true,
@@ -80,7 +80,7 @@ function seedEmbeddedCustomerDetailFixture(?int $tenantId = null): MarketingProf
     CandleCashRedemption::query()->create([
         'marketing_profile_id' => $profile->id,
         'reward_id' => $reward->id,
-        'points_spent' => 100,
+        'candle_cash_spent' => 100,
         'platform' => 'shopify',
         'redemption_code' => 'TESTCODE',
         'status' => 'issued',
@@ -107,7 +107,7 @@ function seedEmbeddedCustomerDetailFixture(?int $tenantId = null): MarketingProf
         'marketing_profile_id' => $profile->id,
         'status' => 'awarded',
         'reward_amount' => 1,
-        'reward_points' => 10,
+        'reward_candle_cash' => 10,
         'created_at' => $now->subDays(6),
         'updated_at' => $now->subDays(6),
         'awarded_at' => $now->subDays(6),

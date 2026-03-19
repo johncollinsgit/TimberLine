@@ -329,7 +329,7 @@ test('ambiguous storefront identity returns verification required instead of sil
     ]);
     expect($left->id)->not->toBe($right->id);
 
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     $payload = [
         'email' => 'left.stage9@example.com',
         'phone' => '5553002000',
@@ -351,7 +351,7 @@ test('reconciliation dashboard surfaces unresolved issues and supports resolutio
         'email' => 'ops.stage9@example.com',
         'normalized_email' => 'ops.stage9@example.com',
     ]);
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
     $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
     $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
@@ -390,7 +390,7 @@ test('dashboard mark redeemed action reconciles issued code for staff-assisted c
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $profile = MarketingProfile::query()->create(['first_name' => 'Manual']);
     app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'seed');
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'square');
     $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
 

@@ -522,14 +522,14 @@ class MarketingMergeGrowaveSnapshot extends Command
                     if (! $context['dry_run']) {
                         $transaction = $existing ?: new CandleCashTransaction();
                         $this->forceFillAndSave($transaction, [
-                        'marketing_profile_id' => $marketingProfileId,
-                        'type' => $this->nullableString($row->type ?? null) ?: 'earn',
-                        'points' => is_numeric($row->points ?? null) ? (int) $row->points : 0,
-                        'source' => 'growave_activity',
-                        'source_id' => $sourceId,
-                        'description' => $this->nullableString($row->description ?? null),
-                        'created_at' => $this->nullableString($row->created_at ?? null) ?: now(),
-                        'updated_at' => $this->nullableString($row->updated_at ?? null) ?: now(),
+                            'marketing_profile_id' => $marketingProfileId,
+                            'type' => $this->nullableString($row->type ?? null) ?: 'earn',
+                            'candle_cash_delta' => is_numeric($row->points ?? null) ? (int) $row->points : 0,
+                            'source' => 'growave_activity',
+                            'source_id' => $sourceId,
+                            'description' => $this->nullableString($row->description ?? null),
+                            'created_at' => $this->nullableString($row->created_at ?? null) ?: now(),
+                            'updated_at' => $this->nullableString($row->updated_at ?? null) ?: now(),
                         ]);
                     }
 
@@ -550,7 +550,7 @@ class MarketingMergeGrowaveSnapshot extends Command
         foreach ($profileIds as $profileId) {
             $balanceValue = (int) CandleCashTransaction::query()
                 ->where('marketing_profile_id', $profileId)
-                ->sum('points');
+                ->sum('candle_cash_delta');
 
             $balance = CandleCashBalance::query()->find($profileId) ?: new CandleCashBalance();
             $this->forceFillAndSave($balance, [

@@ -141,7 +141,7 @@ class MarketingSegmentOpportunityService
     {
         $minimumCost = (int) (CandleCashReward::query()
             ->where('is_active', true)
-            ->min('points_cost') ?? 0);
+            ->min('candle_cash_cost') ?? 0);
         if ($minimumCost <= 0) {
             return 0;
         }

@@ -33,7 +33,7 @@ class MarketingStorefrontWidgetService
         $states[] = $balance > 0 ? 'known_customer_has_balance' : 'known_customer_no_balance';
 
         $activeRewards = $rewards->filter(fn ($reward): bool => (bool) ($reward->is_active ?? true));
-        $minPoints = (int) ($activeRewards->min('points_cost') ?? 0);
+        $minPoints = (int) ($activeRewards->min('candle_cash_cost') ?? 0);
         if ($minPoints > 0) {
             if ($balance >= $minPoints) {
                 $states[] = 'reward_available';
@@ -79,7 +79,7 @@ class MarketingStorefrontWidgetService
             $awarded = CandleCashTransaction::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->where('source', 'consent')
-                ->where('points', '>', 0)
+                ->where('candle_cash_delta', '>', 0)
                 ->exists();
             $states[] = $awarded ? 'incentive_already_awarded' : 'incentive_available';
         }

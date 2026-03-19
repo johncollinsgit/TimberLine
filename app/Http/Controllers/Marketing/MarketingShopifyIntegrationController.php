@@ -174,7 +174,7 @@ class MarketingShopifyIntegrationController extends Controller
         $transactions = $profile->candleCashTransactions()
             ->orderByDesc('id')
             ->limit(30)
-            ->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at']);
+            ->get(['id', 'type', 'candle_cash_delta', 'source', 'source_id', 'description', 'created_at']);
         $redemptions = $this->recentRedemptions($profile);
         $balance = $candleCashService->currentBalance($profile);
         $states = $this->widgetService->rewardWidgetStates($profile, $balance, $this->activeStorefrontRewards($candleCashService), $redemptions);
@@ -204,9 +204,9 @@ class MarketingShopifyIntegrationController extends Controller
             'transactions' => $transactions->map(fn ($row): array => [
                 'id' => (int) $row->id,
                 'type' => (string) $row->type,
-                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points),
-                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $row->points))),
-                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $row->points, true),
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_delta),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $row->candle_cash_delta))),
+                'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $row->candle_cash_delta, true),
                 'source' => (string) $row->source,
                 'source_id' => $row->source_id ? (string) $row->source_id : null,
                 'description' => $row->description ? (string) $row->description : null,
@@ -214,8 +214,8 @@ class MarketingShopifyIntegrationController extends Controller
             ])->all(),
             'redemptions' => $redemptions->map(fn ($row): array => [
                 'id' => (int) $row->id,
-                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points_spent),
-                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->points_spent)),
+                'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_spent),
+                'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) $row->candle_cash_spent)),
                 'status' => (string) ($row->status ?: 'issued'),
                 'platform' => $row->platform ? (string) $row->platform : null,
                 'redemption_code' => (string) $row->redemption_code,
@@ -638,14 +638,14 @@ class MarketingShopifyIntegrationController extends Controller
                 description: 'Shopify widget SMS consent bonus'
             );
             if ($bonus['awarded']) {
-                $bonusAwarded = (int) $bonus['points'];
+                $bonusAwarded = (int) ($bonus['candle_cash'] ?? 0);
             }
 
             if ($result['request']) {
                 $result['request']->forceFill([
                     'status' => 'confirmed',
                     'confirmed_at' => now(),
-                    'reward_awarded_points' => $bonusAwarded > 0 ? $bonusAwarded : (int) ($result['request']->reward_awarded_points ?? 0),
+                    'reward_awarded_candle_cash' => $bonusAwarded > 0 ? $bonusAwarded : (int) ($result['request']->reward_awarded_candle_cash ?? 0),
                     'reward_awarded_at' => $bonusAwarded > 0 ? now() : $result['request']->reward_awarded_at,
                 ])->save();
             }
@@ -828,7 +828,7 @@ class MarketingShopifyIntegrationController extends Controller
         $bonusAlreadyAwarded = CandleCashTransaction::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('source', 'consent')
-            ->where('points', '>', 0)
+            ->where('candle_cash_delta', '>', 0)
             ->exists();
 
         $state = in_array('sms_confirmed', $states, true)
@@ -1193,7 +1193,7 @@ class MarketingShopifyIntegrationController extends Controller
             ? $birthdayRewardEngine->statusForProfile($profile->birthdayProfile)
             : ['state' => 'add_birthday_unlock_reward', 'issuance' => null];
         $recentTransactions = $profile
-            ? $profile->candleCashTransactions()->latest('id')->limit(20)->get(['id', 'type', 'points', 'source', 'source_id', 'description', 'created_at'])
+            ? $profile->candleCashTransactions()->latest('id')->limit(20)->get(['id', 'type', 'candle_cash_delta', 'source', 'source_id', 'description', 'created_at'])
             : collect();
         $activeCodes = $profile
             ? $profile->candleCashRedemptions()
@@ -1413,10 +1413,10 @@ class MarketingShopifyIntegrationController extends Controller
                     return [
                         'id' => (int) $row->id,
                         'type' => (string) $row->type,
-                        'amount' => $candleCashService->amountFromPoints((int) $row->points),
-                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->points),
-                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $row->points))),
-                        'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $row->points, true),
+                        'amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_delta),
+                        'candle_cash_amount' => $candleCashService->amountFromPoints((int) $row->candle_cash_delta),
+                        'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints((int) abs((int) $row->candle_cash_delta))),
+                        'signed_candle_cash_amount_formatted' => $candleCashService->candleCashAmountLabelFromPoints((int) $row->candle_cash_delta, true),
                         'description' => $row->description ? (string) $row->description : null,
                         'created_at' => optional($row->created_at)->toIso8601String(),
                     ];
@@ -2223,8 +2223,8 @@ class MarketingShopifyIntegrationController extends Controller
                 ? (string) $issuance->reward_value
                 : null,
             'status' => isset($issuance->status) ? (string) $issuance->status : null,
-            'points_awarded' => isset($issuance->points_awarded) && $issuance->points_awarded !== null
-                ? (int) $issuance->points_awarded
+            'candle_cash_awarded' => isset($issuance->candle_cash_awarded) && $issuance->candle_cash_awarded !== null
+                ? (int) $issuance->candle_cash_awarded
                 : null,
             'reward_code' => $rewardCode !== ''
                 ? $rewardCode
@@ -2422,7 +2422,7 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         $storefrontReward = clone $reward;
-        $storefrontReward->points_cost = $candleCashService->storefrontRewardPointsCost($reward);
+        $storefrontReward->candle_cash_cost = $candleCashService->storefrontRewardPointsCost($reward);
 
         return collect([$storefrontReward]);
     }
@@ -2434,8 +2434,8 @@ class MarketingShopifyIntegrationController extends Controller
     {
         return CandleCashReward::query()
             ->where('is_active', true)
-            ->orderBy('points_cost')
-            ->get(['id', 'name', 'description', 'points_cost', 'reward_type', 'reward_value', 'is_active']);
+            ->orderBy('candle_cash_cost')
+            ->get(['id', 'name', 'description', 'candle_cash_cost', 'reward_type', 'reward_value', 'is_active']);
     }
 
     /**

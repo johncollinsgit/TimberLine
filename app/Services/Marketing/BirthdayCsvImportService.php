@@ -579,7 +579,7 @@ class BirthdayCsvImportService
                 'customer_birthday_profile_id' => $birthdayProfile->id,
                 'reward_name' => (string) ($config['reward_name'] ?? 'Birthday Candle Cash'),
                 'status' => $used ? 'redeemed' : 'claimed',
-                'points_awarded' => null,
+                'candle_cash_awarded' => null,
                 'reward_value' => number_format((float) ($config['reward_value'] ?? 10), 2, '.', ''),
                 'reward_code' => $rewardCode,
                 'shopify_discount_id' => null,

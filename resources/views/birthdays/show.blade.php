@@ -427,7 +427,7 @@
                             <label class="block">
                                 <span class="text-xs uppercase tracking-[0.18em] text-white/45">Reward Type</span>
                                 <select name="reward_type" class="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
-                                    @foreach(['discount_code' => 'Fixed amount code', 'points' => 'Candle Cash', 'free_shipping' => 'Free shipping'] as $value => $label)
+                                    @foreach(['discount_code' => 'Fixed amount code', 'candle_cash' => 'Candle Cash', 'free_shipping' => 'Free shipping'] as $value => $label)
                                         <option value="{{ $value }}" @selected(data_get($rewardConfig, 'reward_type') === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>

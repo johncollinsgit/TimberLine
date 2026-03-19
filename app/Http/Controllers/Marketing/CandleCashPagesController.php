@@ -354,10 +354,10 @@ class CandleCashPagesController extends Controller
             'selectedProfileSummary' => $selectedProfile ? [
                 'balance_candle_cash' => $candleCashService->currentBalance($selectedProfile),
                 'balance_amount' => $candleCashService->amountFromPoints($candleCashService->currentBalance($selectedProfile)),
-                'lifetime_earned' => (int) $selectedProfile->candleCashTransactions->where('points', '>', 0)->sum('points'),
-                'lifetime_earned_amount' => $candleCashService->amountFromPoints((int) $selectedProfile->candleCashTransactions->where('points', '>', 0)->sum('points')),
-                'lifetime_redeemed' => abs((int) $selectedProfile->candleCashTransactions->where('points', '<', 0)->sum('points')),
-                'lifetime_redeemed_amount' => $candleCashService->amountFromPoints(abs((int) $selectedProfile->candleCashTransactions->where('points', '<', 0)->sum('points'))),
+                'lifetime_earned' => (int) $selectedProfile->candleCashTransactions->where('candle_cash_delta', '>', 0)->sum('candle_cash_delta'),
+                'lifetime_earned_amount' => $candleCashService->amountFromPoints((int) $selectedProfile->candleCashTransactions->where('candle_cash_delta', '>', 0)->sum('candle_cash_delta')),
+                'lifetime_redeemed' => abs((int) $selectedProfile->candleCashTransactions->where('candle_cash_delta', '<', 0)->sum('candle_cash_delta')),
+                'lifetime_redeemed_amount' => $candleCashService->amountFromPoints(abs((int) $selectedProfile->candleCashTransactions->where('candle_cash_delta', '<', 0)->sum('candle_cash_delta'))),
                 'membership_status' => $eligibilityService->membershipStatusForProfile($selectedProfile),
                 'blocked_duplicate_attempts' => (int) $selectedProfile->candleCashTaskEvents()->where('duplicate_hits', '>', 0)->sum('duplicate_hits'),
             ] : null,
@@ -492,7 +492,7 @@ class CandleCashPagesController extends Controller
 
             $this->saveSetting('candle_cash_program_config', array_merge($existing, [
                 'label' => trim((string) $data['label']),
-                'points_per_dollar' => CandleCashService::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
+                'candle_cash_units_per_dollar' => CandleCashService::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
                 'email_signup_reward_amount' => (float) $data['email_signup_reward_amount'],
                 'sms_signup_reward_amount' => (float) $data['sms_signup_reward_amount'],
                 'google_review_reward_amount' => (float) $data['google_review_reward_amount'],

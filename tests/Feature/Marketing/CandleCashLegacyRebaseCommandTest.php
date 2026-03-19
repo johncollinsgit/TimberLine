@@ -69,7 +69,7 @@ test('legacy candle cash rebase applies option 3 haircut once per run key', func
         ->where('source_id', 'option3-aggressive-test:' . $profile->id)
         ->sole();
 
-    expect((int) $transaction->points)->toBe(-200);
+    expect((int) $transaction->candle_cash_delta)->toBe(-200);
 
     expect(MarketingImportRun::query()
         ->where('type', 'candle_cash_balance_rebase')

@@ -203,7 +203,7 @@ test('shopify embedded rewards redeem update edits the existing reward row in pl
 
     expect((string) $reward->name)->toBe('Free Wax Melt Duo')
         ->and((string) $reward->description)->toBe('Updated reward description.')
-        ->and((int) $reward->points_cost)->toBe(3)
+        ->and((int) $reward->candle_cash_cost)->toBe(3)
         ->and((string) $reward->reward_value)->toBe('wax_melt_duo')
         ->and((bool) $reward->is_active)->toBeFalse();
 });
@@ -344,7 +344,7 @@ test('shopify embedded rewards redeem update does not mutate global reward rows 
     $reward = CandleCashReward::query()->where('name', 'Free wax melt')->firstOrFail();
     $originalName = (string) $reward->name;
     $originalDescription = (string) $reward->description;
-    $originalPointsCost = (int) $reward->points_cost;
+    $originalPointsCost = (int) $reward->candle_cash_cost;
     $originalRewardValue = (string) $reward->reward_value;
     $originalActive = (bool) $reward->is_active;
 
@@ -367,7 +367,7 @@ test('shopify embedded rewards redeem update does not mutate global reward rows 
 
     expect((string) $reward->name)->toBe($originalName)
         ->and((string) $reward->description)->toBe($originalDescription)
-        ->and((int) $reward->points_cost)->toBe($originalPointsCost)
+        ->and((int) $reward->candle_cash_cost)->toBe($originalPointsCost)
         ->and((string) $reward->reward_value)->toBe($originalRewardValue)
         ->and((bool) $reward->is_active)->toBe($originalActive);
 });

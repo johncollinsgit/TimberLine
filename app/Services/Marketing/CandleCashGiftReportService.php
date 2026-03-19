@@ -25,7 +25,7 @@ class CandleCashGiftReportService
         $to = $this->normalizeDate($to);
 
         $totalGiftTransactions = (int) $this->baseGiftQuery($from, $to)->count();
-        $totalGiftPoints = (int) $this->baseGiftQuery($from, $to)->sum('points');
+        $totalGiftPoints = (int) $this->baseGiftQuery($from, $to)->sum('candle_cash_delta');
 
         $allGiftRecords = $this->baseGiftQuery($from, $to)
             ->with(['profile:id,email,normalized_email'])
@@ -39,8 +39,8 @@ class CandleCashGiftReportService
 
                 return [
                     'id' => $transaction->id,
-                    'points' => (int) $transaction->points,
-                    'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $transaction->points),
+                    'points' => (int) $transaction->candle_cash_delta,
+                    'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $transaction->candle_cash_delta),
                     'description' => $transaction->description,
                     'gift_intent' => $transaction->gift_intent,
                     'gift_origin' => $transaction->gift_origin,
@@ -89,7 +89,7 @@ class CandleCashGiftReportService
         $rows = $this->baseGiftQuery($from, $to)
             ->selectRaw("$column as value")
             ->selectRaw('count(*) as count')
-            ->selectRaw('coalesce(sum(points), 0) as points')
+            ->selectRaw('coalesce(sum(candle_cash_delta), 0) as candle_cash_delta')
             ->groupBy($column)
             ->orderByDesc('count')
             ->get();
@@ -100,8 +100,8 @@ class CandleCashGiftReportService
             return [$key => [
                 'label' => $this->formatLabel($value, $key),
                 'count' => (int) $row->count,
-                'points' => (int) $row->points,
-                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->points),
+                'points' => (int) $row->candle_cash_delta,
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->candle_cash_delta),
             ]];
         })->all();
     }
@@ -111,7 +111,7 @@ class CandleCashGiftReportService
         $rows = $this->baseGiftQuery($from, $to)
             ->selectRaw('source_id')
             ->selectRaw('count(*) as count')
-            ->selectRaw('coalesce(sum(points), 0) as points')
+            ->selectRaw('coalesce(sum(candle_cash_delta), 0) as candle_cash_delta')
             ->whereNotNull('source_id')
             ->groupBy('source_id')
             ->orderByDesc('count')
@@ -138,8 +138,8 @@ class CandleCashGiftReportService
             return [$sourceId => [
                 'label' => $label,
                 'count' => (int) $row->count,
-                'points' => (int) $row->points,
-                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->points),
+                'points' => (int) $row->candle_cash_delta,
+                'candle_cash_amount' => $this->candleCashService->amountFromPoints((int) $row->candle_cash_delta),
             ]];
         })->all();
     }

@@ -108,7 +108,7 @@ class MarketingImportGrowaveOpeningBalances extends Command
                     CandleCashTransaction::query()->create([
                         'marketing_profile_id' => $marketingProfileId,
                         'type' => 'import_opening_balance',
-                        'points' => $delta,
+                        'candle_cash_delta' => $delta,
                         'source' => 'growave',
                         'source_id' => (string) $external->id,
                         'description' => 'Imported opening Growave balance (' . $targetBalance . ' points) from external snapshot #' . $external->id,

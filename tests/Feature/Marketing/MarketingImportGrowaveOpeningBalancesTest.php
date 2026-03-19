@@ -34,7 +34,7 @@ test('imports latest growave snapshot as candle cash opening balance entry', fun
     expect($balance)->not->toBeNull()
         ->and((int) $balance->balance)->toBe(125)
         ->and($transaction)->not->toBeNull()
-        ->and((int) $transaction->points)->toBe(125)
+        ->and((int) $transaction->candle_cash_delta)->toBe(125)
         ->and((string) $transaction->source_id)->toBe((string) CustomerExternalProfile::query()->sole()->id);
 });
 

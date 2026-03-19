@@ -10,6 +10,7 @@ class CandleCashTransaction extends Model
     protected $fillable = [
         'marketing_profile_id',
         'type',
+        'candle_cash_delta',
         'points',
         'source',
         'source_id',
@@ -22,8 +23,43 @@ class CandleCashTransaction extends Model
     ];
 
     protected $casts = [
+        'candle_cash_delta' => 'integer',
         'points' => 'integer',
     ];
+
+    public function getCandleCashDeltaAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['points'] ?? 0);
+    }
+
+    public function setCandleCashDeltaAttribute($value): void
+    {
+        $normalized = (int) $value;
+
+        $this->attributes['candle_cash_delta'] = $normalized;
+        $this->attributes['points'] = $normalized;
+    }
+
+    public function getPointsAttribute($value): int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        return (int) ($this->attributes['candle_cash_delta'] ?? 0);
+    }
+
+    public function setPointsAttribute($value): void
+    {
+        $normalized = (int) $value;
+
+        $this->attributes['points'] = $normalized;
+        $this->attributes['candle_cash_delta'] = $normalized;
+    }
 
     public function profile(): BelongsTo
     {

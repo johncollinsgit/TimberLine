@@ -40,7 +40,7 @@ class CandleCashEarnedAnalyticsService
             })
             ->values();
 
-        $earnedPoints = (int) $windowEvents->sum('points');
+        $earnedPoints = (int) $windowEvents->sum('candle_cash_delta');
         $earnedAmount = round($this->candleCashService->amountFromPoints($earnedPoints), 2);
 
         $breakdown = collect($sourceDefinitions)
@@ -76,7 +76,7 @@ class CandleCashEarnedAnalyticsService
             }
 
             $row = $breakdown->get($sourceKey);
-            $row['candleCash'] += round($this->candleCashService->amountFromPoints((int) ($event['points'] ?? 0)), 2);
+            $row['candleCash'] += round($this->candleCashService->amountFromPoints((int) ($event['candle_cash_delta'] ?? 0)), 2);
             $row['eventCount']++;
             $row['__customers'] = [
                 ...((array) ($row['__customers'] ?? [])),
@@ -113,7 +113,7 @@ class CandleCashEarnedAnalyticsService
             ->implode(' · ');
 
         $outstandingRows = collect((array) ($state['outstanding_by_profile'] ?? []));
-        $outstandingPoints = (int) $outstandingRows->sum('points');
+        $outstandingPoints = (int) $outstandingRows->sum('candle_cash_delta');
         $outstandingAmount = round($this->candleCashService->amountFromPoints($outstandingPoints), 2);
         $outstandingCustomerCount = (int) $outstandingRows->count();
         $excludedOpeningPoints = (int) ($state['excluded_opening_points'] ?? 0);
@@ -345,7 +345,7 @@ class CandleCashEarnedAnalyticsService
         $transactions = CandleCashTransaction::query()
             ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_transactions.marketing_profile_id')
             ->when($tenantId !== null, fn ($query) => $query->where('mp.tenant_id', $tenantId))
-            ->where('points', '!=', 0)
+            ->where('candle_cash_delta', '!=', 0)
             ->orderBy('candle_cash_transactions.marketing_profile_id')
             ->orderBy('candle_cash_transactions.created_at')
             ->orderBy('candle_cash_transactions.id')
@@ -353,7 +353,7 @@ class CandleCashEarnedAnalyticsService
                 'candle_cash_transactions.id',
                 'candle_cash_transactions.marketing_profile_id',
                 'candle_cash_transactions.type',
-                'candle_cash_transactions.points',
+                'candle_cash_transactions.candle_cash_delta',
                 'candle_cash_transactions.source',
                 'candle_cash_transactions.source_id',
                 'candle_cash_transactions.description',
@@ -372,7 +372,7 @@ class CandleCashEarnedAnalyticsService
                 continue;
             }
 
-            $points = (int) ($transaction->points ?? 0);
+            $points = (int) ($transaction->candle_cash_delta ?? 0);
             if ($points === 0) {
                 continue;
             }
@@ -408,7 +408,7 @@ class CandleCashEarnedAnalyticsService
                     $programEarnEvents[] = [
                         'transaction_id' => (int) $transaction->id,
                         'marketing_profile_id' => $profileId,
-                        'points' => $points,
+                        'candle_cash_delta' => $points,
                         'amount' => round($this->candleCashService->amountFromPoints($points), 2),
                         'source_key' => $sourceKey,
                         'source_label' => (string) ($sourceDefinition['label'] ?? 'Other earn'),

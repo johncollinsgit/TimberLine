@@ -356,7 +356,6 @@ class ShopifyEmbeddedRewardsController extends Controller
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:500'],
             'candle_cash_cost' => ['nullable', 'numeric', 'min:0', 'max:50000'],
-            'points_cost' => ['nullable', 'integer', 'min:0', 'max:50000'],
             'reward_value' => ['nullable', 'string', 'max:120'],
             'enabled' => ['required', 'boolean'],
         ]);

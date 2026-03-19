@@ -886,7 +886,7 @@ class GrowaveMarketingSyncService
                 CandleCashTransaction::query()->create([
                     'marketing_profile_id' => $marketingProfileId,
                     'type' => $type,
-                    'points' => $delta,
+                    'candle_cash_delta' => $delta,
                     'source' => 'growave_activity',
                     'source_id' => $sourceId,
                     'description' => $description,
