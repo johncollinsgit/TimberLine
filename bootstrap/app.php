@@ -1,14 +1,17 @@
 <?php
 
+use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Support\Auth\HomeRedirect;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Http\Middleware\FrameGuard;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -35,6 +38,30 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->report(function (Throwable $e): void {
+            try {
+                $request = request();
+
+                if (! ShopifyEmbeddedCsrfDiagnostics::shouldLog($request, $e)) {
+                    return;
+                }
+
+                Log::warning('shopify.embedded.csrf.exception', ShopifyEmbeddedCsrfDiagnostics::forRequest($request, [
+                    'exception_class' => get_class($e),
+                    'exception_message' => $e->getMessage(),
+                    'csrf_exception_source' => $e instanceof TokenMismatchException
+                        ? 'middleware'
+                        : (($e instanceof HttpExceptionInterface && $e->getStatusCode() === 419) ? 'http_419' : 'other'),
+                ]));
+            } catch (Throwable $diagError) {
+                Log::error('ShopifyEmbeddedCsrfDiagnosticsLoggerFailed', [
+                    'error' => $diagError->getMessage(),
+                    'file' => $diagError->getFile(),
+                    'line' => $diagError->getLine(),
+                ]);
+            }
+        });
+
         $exceptions->report(function (Throwable $e): void {
             try {
                 $request = request();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
+use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
 use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
@@ -164,6 +165,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             'query' => $request->query->all(),
             'form_actions' => $formActions,
             'widgets' => $renderedWidgets,
+            'render_state' => ShopifyEmbeddedCsrfDiagnostics::renderState($request),
         ]);
 
         return $this->renderPage(
@@ -202,8 +204,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingIdentityNormalizer $identityNormalizer,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
-        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerPostPreflight($request, $marketingProfile, 'identity.update', $context);
+        $this->requireValidCsrf($request, 'identity.update', $marketingProfile, $context);
         $this->logCustomerAction($request, $marketingProfile, 'identity.update', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
             Log::warning('Shopify embedded customer identity update blocked', [
@@ -251,8 +254,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         MarketingConsentService $consentService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
-        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerPostPreflight($request, $marketingProfile, 'consent.update', $context);
+        $this->requireValidCsrf($request, 'consent.update', $marketingProfile, $context);
         $this->logCustomerAction($request, $marketingProfile, 'consent.update', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
             Log::warning('Shopify embedded customer consent update blocked', [
@@ -316,9 +320,9 @@ class ShopifyEmbeddedCustomersController extends Controller
             'query' => $request->query->all(),
         ]);
 
-        $this->requireValidCsrf($request);
-
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerPostPreflight($request, $marketingProfile, 'candle_cash.adjust', $context);
+        $this->requireValidCsrf($request, 'candle_cash.adjust', $marketingProfile, $context);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
             Log::warning('Shopify embedded Candle Cash adjustment blocked', [
@@ -476,8 +480,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
-        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerPostPreflight($request, $marketingProfile, 'message.send', $context);
+        $this->requireValidCsrf($request, 'message.send', $marketingProfile, $context);
         $this->logCustomerAction($request, $marketingProfile, 'message.send', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
             Log::warning('Shopify embedded customer message blocked', [
@@ -534,8 +539,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         MarketingProfile $marketingProfile
     ): RedirectResponse {
-        $this->requireValidCsrf($request);
         $context = $contextService->resolvePageContext($request);
+        $this->logCustomerPostPreflight($request, $marketingProfile, 'candle_cash.send', $context);
+        $this->requireValidCsrf($request, 'candle_cash.send', $marketingProfile, $context);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.send', (bool) ($context['ok'] ?? false));
         if (! ($context['ok'] ?? false)) {
             Log::warning('Shopify embedded Candle Cash send blocked', [
@@ -715,6 +721,21 @@ class ShopifyEmbeddedCustomersController extends Controller
             ->all();
     }
 
+    protected function logCustomerPostPreflight(
+        Request $request,
+        MarketingProfile $profile,
+        string $action,
+        array $context
+    ): void {
+        Log::info('shopify.embedded.customer_post.preflight', ShopifyEmbeddedCsrfDiagnostics::forRequest($request, [
+            'action' => $action,
+            'context_ok' => (bool) ($context['ok'] ?? false),
+            'context_status' => $context['status'] ?? 'unknown',
+            'context_mode' => (bool) ($context['ok'] ?? false) ? 'verified' : 'fallback',
+            'profile_id' => $profile->id,
+        ]));
+    }
+
     protected function redirectToCustomerDetail(
         Request $request,
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
@@ -731,12 +752,26 @@ class ShopifyEmbeddedCustomersController extends Controller
         return redirect()->to($target);
     }
 
-    protected function requireValidCsrf(Request $request): void
+    protected function requireValidCsrf(
+        Request $request,
+        string $action,
+        MarketingProfile $profile,
+        array $context
+    ): void
     {
         $token = (string) $request->input('_token', '');
         $sessionToken = (string) $request->session()->token();
 
         if ($token === '' || ! hash_equals($sessionToken, $token)) {
+            Log::warning('shopify.embedded.customer_post.csrf_mismatch', ShopifyEmbeddedCsrfDiagnostics::forRequest($request, [
+                'action' => $action,
+                'context_ok' => (bool) ($context['ok'] ?? false),
+                'context_status' => $context['status'] ?? 'unknown',
+                'context_mode' => (bool) ($context['ok'] ?? false) ? 'verified' : 'fallback',
+                'profile_id' => $profile->id,
+                'mismatch_source' => 'controller',
+            ]));
+
             abort(419, 'CSRF token mismatch.');
         }
     }
