@@ -782,6 +782,47 @@ test('legacy manage route without signed context shows context missing notice', 
         ->assertSeeText('This page must be opened from Shopify Admin');
 });
 
+test('customer detail without verified Shopify context suppresses actionable widgets', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
+
+    $response->assertOk()
+        ->assertSeeText('Open this app from Shopify Admin')
+        ->assertSeeText('Customer detail unavailable')
+        ->assertSeeText('Context Required')
+        ->assertDontSeeText('Save identity')
+        ->assertDontSeeText('Apply adjustment')
+        ->assertDontSeeText('Send Candle Cash')
+        ->assertDontSeeText('Save consent')
+        ->assertDontSeeText('Send message')
+        ->assertDontSeeText($profile->email)
+        ->assertDontSeeText('Marketing profile ID: ' . $profile->id);
+});
+
+test('customer detail with invalid hmac suppresses widgets and returns unauthorized', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $query = retailEmbeddedExtendedSignedQuery();
+    $query['hmac'] = 'invalid-hmac';
+
+    $response = $this->get(route('shopify.app.customers.detail', array_merge([
+        'marketingProfile' => $profile->id,
+    ], $query)));
+
+    $response->assertStatus(401)
+        ->assertSeeText('We could not verify this Shopify request')
+        ->assertSeeText('Customer detail unavailable')
+        ->assertSeeText('signed Shopify query on this request could not be verified')
+        ->assertDontSeeText('Save identity')
+        ->assertDontSeeText('Apply adjustment')
+        ->assertDontSeeText('Send Candle Cash')
+        ->assertDontSeeText('Save consent')
+        ->assertDontSeeText('Send message');
+});
+
 test('customer detail forms fall back to embedded routes without Shopify host', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();

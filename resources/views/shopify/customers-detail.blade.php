@@ -247,73 +247,102 @@
         }
     </style>
 
-    <section class="customers-surface customers-detail-header">
-        <div class="customers-detail-header-row">
-            <div>
-                <a class="customers-detail-back" href="{{ $actionUrlGenerator->url('customers.manage', [], request()) }}">Back to Manage customers</a>
-                <h2 class="customers-detail-name">{{ $customerDisplayName }}</h2>
-                <div class="customers-detail-meta">
-                    {{ $marketingProfile->email ?: 'Email not set' }}
-                    · ID {{ $marketingProfile->id }}
+    @if(! $authorized)
+        <section class="customers-surface customers-detail-header">
+            <div class="customers-detail-header-row">
+                <div>
+                    <h2 class="customers-detail-name">Customer detail unavailable</h2>
+                    <div class="customers-detail-meta">
+                        Shopify context status: {{ str_replace('_', ' ', $status ?? 'unknown') }}
+                    </div>
                 </div>
             </div>
-            <div class="customers-detail-meta">
-                Last activity: {{ $summary['last_activity_display'] ?? '—' }}
+        </section>
+
+        @if(is_array($notice))
+            <div class="customers-detail-notice {{ ($notice['style'] ?? 'success') === 'warning' ? 'is-warning' : 'is-success' }}">
+                {{ $notice['message'] ?? 'Update saved.' }}
             </div>
-        </div>
-    </section>
+        @endif
 
-    @if(is_array($notice))
-        <div class="customers-detail-notice {{ ($notice['style'] ?? 'success') === 'warning' ? 'is-warning' : 'is-success' }}">
-            {{ $notice['message'] ?? 'Update saved.' }}
-        </div>
-    @endif
+        <section class="customers-detail-card" aria-label="Customer detail unavailable">
+            <h3>Context Required</h3>
+            <p>This customer page cannot render actionable widgets until Shopify Admin context is verified.</p>
+            <p>Reopen this customer from Manage customers inside the embedded Shopify Admin app.</p>
+            @if(($status ?? null) === 'invalid_hmac')
+                <p>The signed Shopify query on this request could not be verified, so the page intentionally suppressed every customer widget and form.</p>
+            @elseif(($status ?? null) === 'open_from_shopify')
+                <p>This route was opened without the signed Shopify query or embedded session needed to power the customer widgets.</p>
+            @endif
+        </section>
+    @else
+        <section class="customers-surface customers-detail-header">
+            <div class="customers-detail-header-row">
+                <div>
+                    <a class="customers-detail-back" href="{{ $actionUrlGenerator->url('customers.manage', [], request()) }}">Back to Manage customers</a>
+                    <h2 class="customers-detail-name">{{ $customerDisplayName }}</h2>
+                    <div class="customers-detail-meta">
+                        {{ $marketingProfile->email ?: 'Email not set' }}
+                        · ID {{ $marketingProfile->id }}
+                    </div>
+                </div>
+                <div class="customers-detail-meta">
+                    Last activity: {{ $summary['last_activity_display'] ?? '—' }}
+                </div>
+            </div>
+        </section>
 
-    <section class="customers-detail-summary" aria-label="Customer summary">
-        <article class="customers-detail-metric">
-            <h4>Candle Cash</h4>
-            <p>{{ $summary['candle_cash_display'] ?? '0' }}</p>
-        </article>
-        <article class="customers-detail-metric">
-            <h4>Candle Club</h4>
-            <p>{{ ! empty($summary['candle_club_active']) ? 'Active' : 'Not active' }}</p>
-        </article>
-        <article class="customers-detail-metric">
-            <h4>Rewards Actions</h4>
-            <p>{{ number_format((int) ($summary['rewards_actions_count'] ?? 0)) }}</p>
-        </article>
-        <article class="customers-detail-metric">
-            <h4>Birthday</h4>
-            <p>{{ ! empty($summary['birthday_tracked']) ? 'Tracked' : 'Not tracked' }}</p>
-        </article>
-        <article class="customers-detail-metric">
-            <h4>Wholesale</h4>
-            <p>{{ ! empty($summary['wholesale_eligible']) ? 'Eligible' : 'Not eligible' }}</p>
-        </article>
-    </section>
+        @if(is_array($notice))
+            <div class="customers-detail-notice {{ ($notice['style'] ?? 'success') === 'warning' ? 'is-warning' : 'is-success' }}">
+                {{ $notice['message'] ?? 'Update saved.' }}
+            </div>
+        @endif
 
-    <section class="customers-detail-grid" aria-label="Customer detail sections">
-        <article class="customers-detail-card">
-            <h3>Identity</h3>
-            <p>
-                {{ $customerDisplayName }}<br>
-                {{ $marketingProfile->email ?: 'Email not set' }}<br>
-                {{ $marketingProfile->phone ?: 'Phone not set' }}<br>
-                Created: {{ optional($marketingProfile->created_at)->format('Y-m-d H:i') ?: '—' }}<br>
-                Updated: {{ optional($marketingProfile->updated_at)->format('Y-m-d H:i') ?: '—' }}<br>
-                Marketing profile ID: {{ $marketingProfile->id }}
-            </p>
+        <section class="customers-detail-summary" aria-label="Customer summary">
+            <article class="customers-detail-metric">
+                <h4>Candle Cash</h4>
+                <p>{{ $summary['candle_cash_display'] ?? '0' }}</p>
+            </article>
+            <article class="customers-detail-metric">
+                <h4>Candle Club</h4>
+                <p>{{ ! empty($summary['candle_club_active']) ? 'Active' : 'Not active' }}</p>
+            </article>
+            <article class="customers-detail-metric">
+                <h4>Rewards Actions</h4>
+                <p>{{ number_format((int) ($summary['rewards_actions_count'] ?? 0)) }}</p>
+            </article>
+            <article class="customers-detail-metric">
+                <h4>Birthday</h4>
+                <p>{{ ! empty($summary['birthday_tracked']) ? 'Tracked' : 'Not tracked' }}</p>
+            </article>
+            <article class="customers-detail-metric">
+                <h4>Wholesale</h4>
+                <p>{{ ! empty($summary['wholesale_eligible']) ? 'Eligible' : 'Not eligible' }}</p>
+            </article>
+        </section>
 
-            <form method="POST" action="{{ $customerFormActions['update'] ?? '#' }}" class="customers-detail-form">
-                @csrf
-                @method('PATCH')
-                <input type="text" name="first_name" value="{{ old('first_name', $marketingProfile->first_name) }}" placeholder="First name" />
-                <input type="text" name="last_name" value="{{ old('last_name', $marketingProfile->last_name) }}" placeholder="Last name" />
-                <input type="email" name="email" value="{{ old('email', $marketingProfile->email) }}" placeholder="Email" />
-                <input type="text" name="phone" value="{{ old('phone', $marketingProfile->phone) }}" placeholder="Phone" />
-                <button type="submit" class="customers-detail-button is-primary">Save identity</button>
-            </form>
-        </article>
+        <section class="customers-detail-grid" aria-label="Customer detail sections">
+            <article class="customers-detail-card">
+                <h3>Identity</h3>
+                <p>
+                    {{ $customerDisplayName }}<br>
+                    {{ $marketingProfile->email ?: 'Email not set' }}<br>
+                    {{ $marketingProfile->phone ?: 'Phone not set' }}<br>
+                    Created: {{ optional($marketingProfile->created_at)->format('Y-m-d H:i') ?: '—' }}<br>
+                    Updated: {{ optional($marketingProfile->updated_at)->format('Y-m-d H:i') ?: '—' }}<br>
+                    Marketing profile ID: {{ $marketingProfile->id }}
+                </p>
+
+                <form method="POST" action="{{ $customerFormActions['update'] ?? '#' }}" class="customers-detail-form">
+                    @csrf
+                    @method('PATCH')
+                    <input type="text" name="first_name" value="{{ old('first_name', $marketingProfile->first_name) }}" placeholder="First name" />
+                    <input type="text" name="last_name" value="{{ old('last_name', $marketingProfile->last_name) }}" placeholder="Last name" />
+                    <input type="email" name="email" value="{{ old('email', $marketingProfile->email) }}" placeholder="Email" />
+                    <input type="text" name="phone" value="{{ old('phone', $marketingProfile->phone) }}" placeholder="Phone" />
+                    <button type="submit" class="customers-detail-button is-primary">Save identity</button>
+                </form>
+            </article>
 
         <article class="customers-detail-card">
             <h3>Loyalty Profile</h3>
@@ -513,85 +542,86 @@
                 @endif
             </form>
         </article>
-    </section>
+        </section>
 
-    <section class="customers-detail-card" aria-label="Recent activity">
-        <h3>Recent Activity</h3>
-        <div style="overflow-x: auto; margin-top: 12px;">
-            <table class="customers-detail-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Label</th>
-                        <th>Candle Cash</th>
-                        <th>Actor</th>
-                        <th>Status</th>
-                        <th>Detail</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($activity as $row)
+        <section class="customers-detail-card" aria-label="Recent activity">
+            <h3>Recent Activity</h3>
+            <div style="overflow-x: auto; margin-top: 12px;">
+                <table class="customers-detail-table">
+                    <thead>
                         <tr>
-                            <td>{{ $row['occurred_at_display'] ?? '—' }}</td>
-                            <td>{{ $row['type'] ?? '—' }}</td>
-                            <td>{{ $row['label'] ?? '—' }}</td>
-                            <td>
-                                @if($row['candle_cash_display'] !== null)
-                                    {{ $row['candle_cash_display'] }}
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td>{{ $row['actor'] ?? '—' }}</td>
-                            <td>{{ $row['status'] ?? '—' }}</td>
-                            <td>{{ $row['detail'] ?? '—' }}</td>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Label</th>
+                            <th>Candle Cash</th>
+                            <th>Actor</th>
+                            <th>Status</th>
+                            <th>Detail</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" style="text-align: center; color: rgba(15, 23, 42, 0.6); padding: 18px;">
-                                No recent activity recorded yet.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
+                    </thead>
+                    <tbody>
+                        @forelse($activity as $row)
+                            <tr>
+                                <td>{{ $row['occurred_at_display'] ?? '—' }}</td>
+                                <td>{{ $row['type'] ?? '—' }}</td>
+                                <td>{{ $row['label'] ?? '—' }}</td>
+                                <td>
+                                    @if($row['candle_cash_display'] !== null)
+                                        {{ $row['candle_cash_display'] }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td>{{ $row['actor'] ?? '—' }}</td>
+                                <td>{{ $row['status'] ?? '—' }}</td>
+                                <td>{{ $row['detail'] ?? '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: rgba(15, 23, 42, 0.6); padding: 18px;">
+                                    No recent activity recorded yet.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-    <section class="customers-detail-card" aria-label="External profiles">
-        <h3>External Profiles</h3>
-        <div style="overflow-x: auto; margin-top: 12px;">
-            <table class="customers-detail-table">
-                <thead>
-                    <tr>
-                        <th>Provider</th>
-                        <th>Integration</th>
-                        <th>Store</th>
-                        <th>External ID</th>
-                        <th>Last Activity</th>
-                        <th>Legacy Growave Points</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($externalProfiles as $externalProfile)
+        <section class="customers-detail-card" aria-label="External profiles">
+            <h3>External Profiles</h3>
+            <div style="overflow-x: auto; margin-top: 12px;">
+                <table class="customers-detail-table">
+                    <thead>
                         <tr>
-                            <td>{{ $externalProfile->provider ?: '—' }}</td>
-                            <td>{{ $externalProfile->integration ?: '—' }}</td>
-                            <td>{{ $externalProfile->store_key ?: '—' }}</td>
-                            <td>{{ $externalProfile->external_customer_id ?: '—' }}</td>
-                            <td>{{ optional($externalProfile->last_activity_at)->format('Y-m-d H:i') ?: '—' }}</td>
-                            <td>{{ $externalProfile->points_balance !== null ? number_format((int) $externalProfile->points_balance) : '—' }}</td>
+                            <th>Provider</th>
+                            <th>Integration</th>
+                            <th>Store</th>
+                            <th>External ID</th>
+                            <th>Last Activity</th>
+                            <th>Legacy Growave Points</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" style="text-align: center; color: rgba(15, 23, 42, 0.6); padding: 18px;">
-                                No external profiles linked yet.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
+                    </thead>
+                    <tbody>
+                        @forelse($externalProfiles as $externalProfile)
+                            <tr>
+                                <td>{{ $externalProfile->provider ?: '—' }}</td>
+                                <td>{{ $externalProfile->integration ?: '—' }}</td>
+                                <td>{{ $externalProfile->store_key ?: '—' }}</td>
+                                <td>{{ $externalProfile->external_customer_id ?: '—' }}</td>
+                                <td>{{ optional($externalProfile->last_activity_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td>{{ $externalProfile->points_balance !== null ? number_format((int) $externalProfile->points_balance) : '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: rgba(15, 23, 42, 0.6); padding: 18px;">
+                                    No external profiles linked yet.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
 </x-shopify.customers-layout>

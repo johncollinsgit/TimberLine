@@ -114,23 +114,56 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingProfile $marketingProfile
     ): Response {
-        $displayName = trim((string) ($marketingProfile->first_name . ' ' . $marketingProfile->last_name));
-        if ($displayName === '') {
-            $displayName = $marketingProfile->email ?: ($marketingProfile->phone ?: 'Customer #' . $marketingProfile->id);
+        $context = $contextService->resolvePageContext($request);
+        $authorized = (bool) ($context['ok'] ?? false);
+
+        $displayName = 'Customer detail unavailable';
+        if ($authorized) {
+            $displayName = trim((string) ($marketingProfile->first_name . ' ' . $marketingProfile->last_name));
+            if ($displayName === '') {
+                $displayName = $marketingProfile->email ?: ($marketingProfile->phone ?: 'Customer #' . $marketingProfile->id);
+            }
         }
 
-        $detail = $detailService->build($marketingProfile);
+        $detail = $authorized ? $detailService->build($marketingProfile) : [
+            'summary' => [],
+            'statuses' => [],
+            'activity' => [],
+            'external_profiles' => collect(),
+            'consent' => [],
+            'messaging' => [],
+        ];
 
-        $formActions = [
+        $formActions = $authorized ? [
             'update' => $actionUrlGenerator->url('customers.update', ['marketingProfile' => $marketingProfile->id], $request),
             'candle_cash_adjust' => $actionUrlGenerator->url('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], $request),
             'candle_cash_send' => $actionUrlGenerator->url('customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], $request),
-        ];
+        ] : [];
+
+        $renderedWidgets = $authorized
+            ? [
+                ['key' => 'identity', 'actionable' => true],
+                ['key' => 'loyalty_profile', 'actionable' => false],
+                ['key' => 'candle_cash_adjustment', 'actionable' => true],
+                ['key' => 'send_candle_cash', 'actionable' => true],
+                ['key' => 'reward_completion', 'actionable' => false],
+                ['key' => 'consent', 'actionable' => true],
+                ['key' => 'message_customer', 'actionable' => true],
+                ['key' => 'recent_activity', 'actionable' => false],
+                ['key' => 'external_profiles', 'actionable' => false],
+            ]
+            : [
+                ['key' => 'context_missing', 'actionable' => false],
+            ];
 
         Log::info('shopify.embedded.detail.render', [
             'route' => $request->route()?->getName(),
             'profile_id' => $marketingProfile->id,
+            'authorized' => $authorized,
+            'context_status' => $context['status'] ?? 'unknown',
+            'query' => $request->query->all(),
             'form_actions' => $formActions,
+            'widgets' => $renderedWidgets,
         ]);
 
         return $this->renderPage(
@@ -144,7 +177,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'marketingProfile' => $marketingProfile,
                 'customerDisplayName' => $displayName,
                 'detail' => $detail,
-                'pageActions' => [
+                'pageActions' => $authorized ? [
                     [
                         'label' => 'Back to Customers',
                         'href' => $actionUrlGenerator->url('customers.manage', [], $request),
@@ -153,11 +186,12 @@ class ShopifyEmbeddedCustomersController extends Controller
                         'label' => 'Open in Backstage',
                         'href' => route('marketing.customers.show', $marketingProfile),
                     ],
-                ],
+                ] : [],
                 'giftIntentOptions' => self::giftIntentOptions(),
                 'giftOriginOptions' => self::giftOriginOptions(),
                 'customerFormActions' => $formActions,
-            ]
+            ],
+            resolvedContext: $context,
         );
 }
 
@@ -609,9 +643,10 @@ class ShopifyEmbeddedCustomersController extends Controller
         string $subnavKey,
         string $defaultHeadline,
         string $defaultSubheadline,
-        array $extraViewData
+        array $extraViewData,
+        ?array $resolvedContext = null
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $context = $resolvedContext ?? $contextService->resolvePageContext($request);
 
         Log::info('shopify.embedded.manage.context', [
             'route' => $request->route()?->getName(),
