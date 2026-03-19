@@ -21,13 +21,6 @@ class MarketingStorefrontRequestVerifier
             return $signed;
         }
 
-        if ((bool) config('marketing.shopify.allow_legacy_token', false)) {
-            $legacy = $this->verifyLegacyToken($request);
-            if ($legacy['ok']) {
-                return $legacy;
-            }
-        }
-
         return [
             'ok' => false,
             'mode' => null,
@@ -125,28 +118,6 @@ class MarketingStorefrontRequestVerifier
         }
 
         return ['ok' => true, 'mode' => 'hmac', 'reason' => null];
-    }
-
-    /**
-     * @return array{ok:bool,mode:?string,reason:?string}
-     */
-    protected function verifyLegacyToken(Request $request): array
-    {
-        $expected = trim((string) config('marketing.shopify.widget_token', ''));
-        if ($expected === '') {
-            return ['ok' => false, 'mode' => null, 'reason' => 'legacy_token_not_configured'];
-        }
-
-        $provided = trim((string) ($request->header('X-Marketing-Token') ?: $request->query('token', '')));
-        if ($provided === '') {
-            return ['ok' => false, 'mode' => null, 'reason' => 'missing_legacy_token'];
-        }
-
-        if (! hash_equals($expected, $provided)) {
-            return ['ok' => false, 'mode' => null, 'reason' => 'invalid_legacy_token'];
-        }
-
-        return ['ok' => true, 'mode' => 'legacy_token', 'reason' => null];
     }
 
     protected function signaturePayload(Request $request, string $timestamp): string

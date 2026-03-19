@@ -108,14 +108,6 @@ Route::get('/customers/manage', [ShopifyEmbeddedCustomersController::class, 'red
 Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.embedded.customers.activity');
 Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.embedded.customers.questions');
 Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToDetail'])->name('shopify.embedded.customers.detail');
-Route::patch('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])->name('shopify.embedded.customers.update');
-Route::post('/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])->name('shopify.embedded.customers.update-consent');
-Route::post('/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
-    ->name('shopify.embedded.customers.candle-cash.adjust');
-Route::post('/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessage'])
-    ->name('shopify.embedded.customers.message');
-Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
-    ->name('shopify.embedded.customers.candle-cash.send');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -687,16 +679,6 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.app.customers.activity');
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
-    Route::patch('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'update'])
-        ->name('shopify.app.customers.update');
-    Route::post('/app/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsent'])
-        ->name('shopify.app.customers.update-consent');
-    Route::post('/app/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCash'])
-        ->name('shopify.app.customers.candle-cash.adjust');
-    Route::post('/app/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessage'])
-        ->name('shopify.app.customers.message');
-    Route::post('/app/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCash'])
-        ->name('shopify.app.customers.candle-cash.send');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
@@ -713,9 +695,15 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::patch('/customers/manage/{marketingProfile}/identity', [ShopifyEmbeddedCustomersController::class, 'updateJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.update');
+        Route::post('/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsentJson'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.update-consent');
         Route::post('/customers/manage/{marketingProfile}/candle-cash', [ShopifyEmbeddedCustomersController::class, 'adjustCandleCashJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.candle-cash.adjust');
+        Route::post('/customers/manage/{marketingProfile}/message', [ShopifyEmbeddedCustomersController::class, 'sendMessageJson'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.message');
         Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCashJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.candle-cash.send');

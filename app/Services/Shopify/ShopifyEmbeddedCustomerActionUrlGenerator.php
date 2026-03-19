@@ -9,8 +9,7 @@ class ShopifyEmbeddedCustomerActionUrlGenerator
 {
     public function url(string $routeName, array $routeParameters, Request $request): string
     {
-        $prefix = $this->isEmbeddedRequest($request) ? 'shopify.app.' : 'shopify.embedded.';
-        $fullRoute = route($prefix . $routeName, $routeParameters, false);
+        $fullRoute = route('shopify.app.' . $routeName, $routeParameters, false);
 
         if (! $this->isEmbeddedRequest($request)) {
             return $fullRoute;

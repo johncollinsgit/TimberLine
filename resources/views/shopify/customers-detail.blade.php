@@ -596,8 +596,9 @@
             $giftOriginOptions = $giftOriginOptions ?? [];
             $identityHasErrors = $errors->has('first_name') || $errors->has('last_name') || $errors->has('email') || $errors->has('phone');
             $adjustmentHasErrors = $errors->has('direction') || $errors->has('amount') || $errors->has('reason');
+            $consentHasErrors = $errors->has('channel') || $errors->has('consented') || $errors->has('notes');
             $sendHasErrors = $errors->has('amount') || $errors->has('reason') || $errors->has('message') || $errors->has('gift_intent') || $errors->has('gift_origin') || $errors->has('campaign_key') || $errors->has('sender_key');
-            $messageHasErrors = $errors->has('channel') || $errors->has('message');
+            $messageHasErrors = $errors->has('channel') || $errors->has('message') || $errors->has('sender_key');
         @endphp
 
         <div
@@ -643,11 +644,11 @@
                         </div>
                         <div class="customers-detail-sideitem">
                             <span class="customers-detail-sideitem-label">Email status</span>
-                            <span class="customers-detail-sideitem-value">{{ $emailConsent['label'] ?? 'Not consented' }}</span>
+                            <span class="customers-detail-sideitem-value" data-customer-email-consent-display>{{ $emailConsent['label'] ?? 'Not consented' }}</span>
                         </div>
                         <div class="customers-detail-sideitem">
                             <span class="customers-detail-sideitem-label">SMS status</span>
-                            <span class="customers-detail-sideitem-value">{{ $smsConsent['label'] ?? 'Not consented' }}</span>
+                            <span class="customers-detail-sideitem-value" data-customer-sms-consent-display>{{ $smsConsent['label'] ?? 'Not consented' }}</span>
                         </div>
                         <div class="customers-detail-sideitem">
                             <span class="customers-detail-sideitem-label">Updated</span>
@@ -960,7 +961,7 @@
                                 <div class="customers-detail-mini-grid" style="margin-bottom: 18px;">
                                     <div class="customers-detail-mini-item">
                                         <span class="customers-detail-mini-label">Email</span>
-                                        <span class="customers-detail-mini-value">
+                                        <span class="customers-detail-mini-value" data-customer-email-consent-display>
                                             {{ $emailConsent['label'] ?? 'Not consented' }}
                                             @if(! empty($emailConsent['last_event']['occurred_at_display'] ?? null))
                                                 · {{ $emailConsent['last_event']['occurred_at_display'] }}
@@ -969,7 +970,7 @@
                                     </div>
                                     <div class="customers-detail-mini-item">
                                         <span class="customers-detail-mini-label">SMS</span>
-                                        <span class="customers-detail-mini-value">
+                                        <span class="customers-detail-mini-value" data-customer-sms-consent-display>
                                             {{ $smsConsent['label'] ?? 'Not consented' }}
                                             @if(! empty($smsConsent['last_event']['occurred_at_display'] ?? null))
                                                 · {{ $smsConsent['last_event']['occurred_at_display'] }}
@@ -977,7 +978,13 @@
                                         </span>
                                     </div>
                                 </div>
-                                <form method="POST" action="{{ $actionUrlGenerator->url('customers.update-consent', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
+                                <form
+                                    method="POST"
+                                    action="{{ $customerFormActions['consent'] ?? '#' }}"
+                                    class="customers-detail-form"
+                                    data-embedded-mutation-form
+                                    data-api-endpoint="{{ $mutationBootstrap['consentEndpoint'] ?? '' }}"
+                                >
                                     @csrf
                                     <div class="customers-detail-form-grid">
                                         <div class="customers-detail-form-field">
@@ -987,6 +994,7 @@
                                                 <option value="sms">SMS</option>
                                                 <option value="both">Email + SMS</option>
                                             </select>
+                                            <p class="customers-detail-field-error" data-error-for="channel">{{ $errors->first('channel') }}</p>
                                         </div>
                                         <div class="customers-detail-form-field">
                                             <label for="consent-state">Consent state</label>
@@ -994,15 +1002,24 @@
                                                 <option value="1">Consented</option>
                                                 <option value="0">Not consented</option>
                                             </select>
+                                            <p class="customers-detail-field-error" data-error-for="consented">{{ $errors->first('consented') }}</p>
                                         </div>
                                         <div class="customers-detail-form-field is-full">
                                             <label for="consent-notes">Notes</label>
                                             <input id="consent-notes" type="text" name="notes" placeholder="Notes (optional)" />
+                                            <p class="customers-detail-field-error" data-error-for="notes">{{ $errors->first('notes') }}</p>
                                         </div>
                                     </div>
                                     <div class="customers-detail-button-row">
                                         <p class="customers-detail-form-helper">Consent changes are intended for operational corrections and compliance cleanup.</p>
                                         <button type="submit" class="customers-detail-button is-primary">Save consent</button>
+                                    </div>
+                                    <div
+                                        class="customers-detail-notice {{ $consentHasErrors ? 'is-warning' : 'is-success' }}"
+                                        data-form-feedback
+                                        @if(! $consentHasErrors) hidden @endif
+                                    >
+                                        {{ $errors->first('channel') ?: $errors->first('consented') ?: $errors->first('notes') }}
                                     </div>
                                 </form>
                             </div>
@@ -1021,7 +1038,7 @@
                                     </div>
                                     <div class="customers-detail-mini-item">
                                         <span class="customers-detail-mini-label">Message eligibility</span>
-                                        <span class="customers-detail-mini-value">{{ $smsConsentLabel }}</span>
+                                        <span class="customers-detail-mini-value" data-customer-sms-message-eligibility>{{ $smsConsentLabel }}</span>
                                     </div>
                                 </div>
                                 @if($smsSenders !== [])
@@ -1039,7 +1056,14 @@
                                 @elseif(! $smsConsented)
                                     <p class="customers-detail-form-helper">SMS consent is required before messages can be sent.</p>
                                 @endif
-                                <form method="POST" action="{{ $actionUrlGenerator->url('customers.message', ['marketingProfile' => $marketingProfile->id], request()) }}" class="customers-detail-form">
+                                <form
+                                    method="POST"
+                                    action="{{ $customerFormActions['message'] ?? '#' }}"
+                                    class="customers-detail-form"
+                                    data-embedded-mutation-form
+                                    data-api-endpoint="{{ $mutationBootstrap['messageEndpoint'] ?? '' }}"
+                                    data-reset-on-success="true"
+                                >
                                     @csrf
                                     <div class="customers-detail-form-grid">
                                         <div class="customers-detail-form-field">
@@ -1047,6 +1071,7 @@
                                             <select id="message-channel" name="channel">
                                                 <option value="sms" @selected(old('channel', 'sms') === 'sms')>SMS</option>
                                             </select>
+                                            <p class="customers-detail-field-error" data-error-for="channel">{{ $errors->first('channel') }}</p>
                                         </div>
                                         <div class="customers-detail-form-field">
                                             <label for="message-sender">SMS sender</label>
@@ -1057,21 +1082,25 @@
                                                     </option>
                                                 @endforeach
                                             </select>
+                                            <p class="customers-detail-field-error" data-error-for="sender_key">{{ $errors->first('sender_key') }}</p>
                                         </div>
                                         <div class="customers-detail-form-field is-full">
                                             <label for="message-body">Message</label>
                                             <textarea id="message-body" name="message" rows="3" placeholder="Write a direct message">{{ old('message') }}</textarea>
+                                            <p class="customers-detail-field-error" data-error-for="message">{{ $errors->first('message') }}</p>
                                         </div>
                                     </div>
                                     <div class="customers-detail-button-row">
                                         <p class="customers-detail-form-helper">Only SMS is available on this page today, and the send button respects environment support + phone presence.</p>
                                         <button type="submit" class="customers-detail-button is-primary" @disabled(! $smsSupported || ! $smsHasPhone)>Send message</button>
                                     </div>
-                                    @if($messageHasErrors)
-                                        <div class="customers-detail-notice is-warning">
-                                            {{ $errors->first('channel') ?: $errors->first('message') }}
-                                        </div>
-                                    @endif
+                                    <div
+                                        class="customers-detail-notice {{ $messageHasErrors ? 'is-warning' : 'is-success' }}"
+                                        data-form-feedback
+                                        @if(! $messageHasErrors) hidden @endif
+                                    >
+                                        {{ $errors->first('channel') ?: $errors->first('sender_key') ?: $errors->first('message') }}
+                                    </div>
                                 </form>
                             </div>
                         </div>
@@ -1220,6 +1249,24 @@
                     }
 
                     setText("[data-customer-balance-display]", balanceDisplay);
+                }
+
+                function updateConsent(consent) {
+                    if (!consent || typeof consent !== "object") {
+                        return;
+                    }
+
+                    if (typeof consent.email_label === "string") {
+                        setText("[data-customer-email-consent-display]", consent.email_label);
+                    }
+
+                    if (typeof consent.sms_label === "string") {
+                        setText("[data-customer-sms-consent-display]", consent.sms_label);
+                    }
+
+                    if (typeof consent.sms_message_eligibility === "string") {
+                        setText("[data-customer-sms-message-eligibility]", consent.sms_message_eligibility);
+                    }
                 }
 
                 function clearFieldErrors(form) {
@@ -1407,6 +1454,10 @@
 
                         if (payload.data?.balance_display) {
                             updateBalance(payload.data.balance_display);
+                        }
+
+                        if (payload.data?.consent) {
+                            updateConsent(payload.data.consent);
                         }
 
                         if (form.dataset.resetOnSuccess === "true") {

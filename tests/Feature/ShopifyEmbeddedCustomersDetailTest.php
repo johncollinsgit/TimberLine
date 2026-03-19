@@ -208,37 +208,6 @@ test('customer detail handles missing optional data gracefully', function () {
         ->assertSeeText('No recent activity recorded yet.');
 });
 
-test('customer identity update persists safe fields', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->patch(
-        route('shopify.app.customers.update', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'first_name' => 'Updated',
-            'last_name' => 'Name',
-            'email' => 'updated@example.com',
-            'phone' => '555-111-2222',
-        ]
-    );
-
-    $response->assertRedirect();
-
-    $location = $response->headers->get('Location');
-    $this->assertStringContainsString('/shopify/app/customers/manage/' . $profile->id, $location);
-
-    $profile->refresh();
-
-    expect($profile->first_name)->toBe('Updated')
-        ->and($profile->last_name)->toBe('Name')
-        ->and($profile->email)->toBe('updated@example.com')
-        ->and($profile->normalized_email)->toBe('updated@example.com');
-});
-
 test('customer identity json update succeeds with shopify session token auth', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
@@ -393,144 +362,162 @@ test('customer identity json returns validation errors', function () {
         ->assertJsonValidationErrors(['email', 'phone']);
 });
 
-test('customer identity update alias route now requires csrf token', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
+test('customer consent json update succeeds with shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
 
-    $response = $this->patch(
-        route('shopify.app.customers.update', array_merge([
-            'marketingProfile' => $profile->id,
-        ], retailEmbeddedSignedQuery()), false),
-        [
-            '_token' => 'invalid-token',
-            'first_name' => 'John',
-            'last_name' => 'Collinsretail',
-            'email' => 'johncollinsemail@gmail.com',
-            'phone' => '+18646165468',
-        ]
-    );
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
 
-    $response->assertStatus(419);
-});
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'both',
+                'consented' => true,
+                'notes' => 'Consent granted by JSON admin',
+            ]
+        );
 
-test('customer consent update succeeds and records events', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'Consent updated.')
+        ->assertJsonPath('data.consent.email_label', 'Consented')
+        ->assertJsonPath('data.consent.sms_label', 'Consented')
+        ->assertJsonPath('data.consent.sms_message_eligibility', 'Consented');
 
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'channel' => 'both',
-            'consented' => true,
-            'notes' => 'Consent granted by admin',
-        ]
-    );
-
-    $response->assertRedirect();
+    expect($response->headers->get('Location'))->toBeNull();
 
     $profile->refresh();
 
     expect($profile->accepts_email_marketing)->toBeTrue()
         ->and($profile->accepts_sms_marketing)->toBeTrue();
-
-    expect(MarketingConsentEvent::query()->where('marketing_profile_id', $profile->id)->count())
-        ->toBeGreaterThanOrEqual(2);
 });
 
-test('invalid consent update is rejected', function () {
+test('customer consent json requires embedded api auth and does not fall back to page session state', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
+
     startEmbeddedCustomersDetailSession($this);
 
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
+    $response = $this->postJson(
+        route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
         [
-            '_token' => $token,
-            'channel' => 'invalid',
-            'consented' => 'nope',
-        ]
-    );
-
-    $response->assertSessionHasErrors(['channel', 'consented']);
-});
-
-test('consent update alias route resolves with embedded context', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
             'channel' => 'email',
-            'consented' => false,
-            'notes' => 'Opt-out requested',
+            'consented' => true,
         ]
     );
 
-    $response->assertRedirect();
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth')
+        ->assertJsonPath('message', 'This embedded customer action requires a verified Shopify session token.');
 });
 
-test('candle cash adjustment adds balance and records transaction', function () {
+test('customer consent json rejects legacy embedded context token fallback', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
 
-    $user = User::factory()->create([
-        'name' => 'Alex Admin',
-        'email' => 'alex.admin@example.com',
+    $response = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->postJson(
+            route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'email',
+                'consented' => true,
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth')
+        ->assertJsonPath('message', 'This embedded customer action requires a verified Shopify session token.');
+});
+
+test('customer consent json rejects invalid shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
     ]);
 
-    CandleCashBalance::query()->updateOrCreate(
-        ['marketing_profile_id' => $profile->id],
-        ['balance' => 10]
-    );
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
 
-    $token = csrf_token();
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer not-a-valid-shopify-token'])
+        ->postJson(
+            route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'email',
+                'consented' => true,
+            ]
+        );
 
-    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'direction' => 'add',
-            'amount' => 25,
-            'reason' => 'Manual adjustment for support',
-        ]
-    );
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'invalid_session_token')
+        ->assertJsonPath('message', 'This Shopify session token could not be verified.');
+});
 
-    $response->assertRedirect();
+test('customer consent json rejects expired shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
 
-    $profile->refresh();
-    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+    $expiredNow = time() - 120;
 
-    expect((int) ($balance?->balance ?? 0))->toBe(35);
+    $response = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken([
+                'nbf' => $expiredNow - 60,
+                'iat' => $expiredNow - 60,
+                'exp' => $expiredNow,
+            ]),
+        ])
+        ->postJson(
+            route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'email',
+                'consented' => true,
+            ]
+        );
 
-    $transaction = CandleCashTransaction::query()
-        ->where('marketing_profile_id', $profile->id)
-        ->orderByDesc('id')
-        ->first();
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'expired_session_token')
+        ->assertJsonPath('message', 'This Shopify session expired. Reload the app from Shopify Admin.');
+});
 
-    expect($transaction)->not->toBeNull()
-        ->and($transaction->type)->toBe('adjust')
-        ->and((int) $transaction->points)->toBe(25)
-        ->and($transaction->source)->toBe('shopify_embedded_admin')
-        ->and((int) $transaction->source_id)->toBe($user->id)
-        ->and($transaction->description)->toBe('Manual adjustment for support');
+test('customer consent json returns validation errors', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
 
-    $detailResponse = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
-    $detailResponse->assertOk()
-        ->assertSeeText('Manual Adjustment')
-        ->assertSeeText('Alex Admin');
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'invalid',
+                'consented' => 'nope',
+                'notes' => str_repeat('a', 2001),
+            ]
+        );
+
+    $response->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Consent could not be saved.')
+        ->assertJsonValidationErrors(['channel', 'consented', 'notes']);
 });
 
 test('candle cash adjustment json succeeds with shopify session token auth', function () {
@@ -608,306 +595,64 @@ test('candle cash adjustment json returns validation errors', function () {
         ->assertJsonValidationErrors(['direction', 'amount', 'reason']);
 });
 
-test('candle cash adjustment subtracts balance when allowed', function () {
+test('canonical embedded customer write routes are retired', function () {
     configureEmbeddedRetailStore();
     $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
 
     CandleCashBalance::query()->updateOrCreate(
         ['marketing_profile_id' => $profile->id],
-        ['balance' => 50]
+        ['balance' => 90]
     );
 
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+    $requests = [
         [
-            '_token' => $token,
-            'direction' => 'subtract',
-            'amount' => 20,
-            'reason' => 'Manual correction',
-        ]
-    );
-
-    $response->assertRedirect();
-
-    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
-    expect((int) ($balance?->balance ?? 0))->toBe(30);
-    expect(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
-});
-
-test('positive candle cash adjustment auto-sends rewards sms with shortened link', function () {
-    configureEmbeddedRetailStore();
-    config()->set('marketing.sms.enabled', true);
-    config()->set('marketing.twilio.enabled', true);
-    config()->set('marketing.sms.dry_run', true);
-
-    $profile = seedEmbeddedCustomerDetailFixture();
-    $profile->forceFill([
-        'phone' => '555-222-3333',
-        'normalized_phone' => '15552223333',
-        'accepts_sms_marketing' => true,
-    ])->save();
-
-    startEmbeddedCustomersDetailSession($this);
-
-    $user = User::factory()->create([
-        'name' => 'Taylor Admin',
-        'email' => 'taylor.admin@example.com',
-    ]);
-
-    $token = csrf_token();
-
-    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+            'method' => 'patch',
+            'uri' => '/shopify/app/customers/manage/' . $profile->id,
+            'payload' => ['first_name' => 'Blocked'],
+            'status' => 405,
+        ],
         [
-            '_token' => $token,
-            'direction' => 'add',
-            'amount' => 25,
-            'reason' => 'Support recovery gift',
-        ]
-    );
-
-    $response->assertRedirect();
-
-    $delivery = MarketingMessageDelivery::query()
-        ->where('marketing_profile_id', $profile->id)
-        ->latest('id')
-        ->first();
-
-    $shortLink = MarketingShortLink::query()->latest('id')->first();
-
-    expect($delivery)->not->toBeNull()
-        ->and($delivery->channel)->toBe('sms')
-        ->and($delivery->rendered_message)->toContain('Modern Forestry Just Rewarded you $25 in Candle Cash!')
-        ->and($delivery->rendered_message)->toContain('Click To Redeem!')
-        ->and($delivery->rendered_message)->toContain('Stop to Opt out')
-        ->and($delivery->rendered_message)->not->toContain('https://theforestrystudio.com/pages/rewards');
-
-    expect($shortLink)->not->toBeNull()
-        ->and($shortLink->destination_url)->toBe('https://theforestrystudio.com/pages/rewards')
-        ->and($delivery->rendered_message)->toContain((string) $shortLink->code);
-});
-
-test('positive candle cash adjustment still succeeds when reward sms cannot send', function () {
-    configureEmbeddedRetailStore();
-    config()->set('marketing.sms.enabled', true);
-    config()->set('marketing.twilio.enabled', true);
-    config()->set('marketing.sms.dry_run', true);
-
-    $profile = seedEmbeddedCustomerDetailFixture();
-    $profile->forceFill([
-        'phone' => '555-222-3333',
-        'normalized_phone' => '15552223333',
-        'accepts_sms_marketing' => false,
-    ])->save();
-
-    CandleCashBalance::query()->updateOrCreate(
-        ['marketing_profile_id' => $profile->id],
-        ['balance' => 10]
-    );
-
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+            'method' => 'post',
+            'uri' => '/shopify/app/customers/manage/' . $profile->id . '/consent',
+            'payload' => ['channel' => 'email', 'consented' => false],
+            'status' => 404,
+        ],
         [
-            '_token' => $token,
-            'direction' => 'add',
-            'amount' => 5,
-            'reason' => 'Manual adjustment with blocked sms',
-        ]
-    );
-
-    $response->assertRedirect();
-    $response->assertSessionHas('customer_detail_notice', function (array $notice): bool {
-        return ($notice['style'] ?? null) === 'warning'
-            && str_contains((string) ($notice['message'] ?? ''), 'Reward message not sent');
-    });
-
-    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
-    expect((int) ($balance?->balance ?? 0))->toBe(15);
-});
-
-test('invalid candle cash adjustment is rejected', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+            'method' => 'post',
+            'uri' => '/shopify/app/customers/manage/' . $profile->id . '/candle-cash',
+            'payload' => ['direction' => 'add', 'amount' => 5, 'reason' => 'Blocked'],
+            'status' => 404,
+        ],
         [
-            '_token' => $token,
-            'direction' => 'invalid',
-            'amount' => 0,
-            'reason' => '',
-        ]
-    );
-
-    $response->assertSessionHasErrors(['direction', 'amount', 'reason']);
-});
-
-test('candle cash adjustment requires csrf token', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $sessionToken = 'csrf-session-token';
-
-    $response = $this->withSession(['_token' => $sessionToken])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+            'method' => 'post',
+            'uri' => '/shopify/app/customers/manage/' . $profile->id . '/message',
+            'payload' => ['channel' => 'sms', 'message' => 'Blocked'],
+            'status' => 404,
+        ],
         [
-            '_token' => 'invalid-token',
-            'direction' => 'add',
-            'amount' => 5,
-            'reason' => 'missing token',
-        ]
-    );
+            'method' => 'post',
+            'uri' => '/shopify/app/customers/manage/' . $profile->id . '/candle-cash/send',
+            'payload' => ['amount' => 5, 'reason' => 'Blocked'],
+            'status' => 404,
+        ],
+    ];
 
-    $response->assertStatus(419);
-});
-
-test('candle cash adjustment alias route resolves with embedded context', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'direction' => 'add',
-            'amount' => 5,
-            'reason' => 'Alias adjustment',
-        ]
-    );
-
-    $response->assertRedirect();
-});
-
-test('customer identity app route accepts embedded csrf token', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $response = $this->patch(
-        route('shopify.app.customers.update', array_merge([
-            'marketingProfile' => $profile->id,
-        ], retailEmbeddedExtendedSignedQuery())),
-        [
-            '_token' => csrf_token(),
-            'first_name' => 'Embedded',
-            'last_name' => 'Updated',
-            'email' => 'embedded.updated@example.com',
-            'phone' => '+18646165468',
-        ]
-    );
-
-    $response->assertRedirect();
-    $location = $response->headers->get('Location');
-    expect($location)->not->toBeNull()
-        ->and($location)->toContain('/shopify/app/customers/manage/' . $profile->id)
-        ->and($location)->toContain('shop=modernforestry.myshopify.com')
-        ->and($location)->toContain('host=admin-host-token')
-        ->and($location)->toContain('embedded=1')
-        ->and($location)->toContain('id_token=')
-        ->and($location)->toContain('locale=en')
-        ->and($location)->toContain('session=embedded-session-token');
+    foreach ($requests as $request) {
+        $response = $this->{$request['method']}($request['uri'], $request['payload']);
+        $response->assertStatus($request['status']);
+    }
 
     $profile->refresh();
-
-    expect($profile->first_name)->toBe('Embedded')
-        ->and($profile->last_name)->toBe('Updated')
-        ->and($profile->email)->toBe('embedded.updated@example.com')
-        ->and($profile->phone)->toBe('+18646165468');
-});
-
-test('candle cash adjustment app route accepts embedded csrf token', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    CandleCashBalance::query()->updateOrCreate(
-        ['marketing_profile_id' => $profile->id],
-        ['balance' => 25]
-    );
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', array_merge([
-            'marketingProfile' => $profile->id,
-        ], retailEmbeddedExtendedSignedQuery())),
-        [
-            '_token' => $token,
-            'direction' => 'add',
-            'amount' => 10,
-            'reason' => 'Embedded app adjustment',
-        ]
-    );
-
-    $response->assertRedirect();
-    $location = $response->headers->get('Location');
-    expect($location)->not->toBeNull()
-        ->and($location)->toContain('/shopify/app/customers/manage/' . $profile->id)
-        ->and($location)->toContain('shop=modernforestry.myshopify.com')
-        ->and($location)->toContain('host=admin-host-token')
-        ->and($location)->toContain('embedded=1')
-        ->and($location)->toContain('id_token=')
-        ->and($location)->toContain('locale=en')
-        ->and($location)->toContain('session=embedded-session-token');
-
-    $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
-    expect((int) ($balance?->balance ?? 0))->toBe(35);
-});
-
-test('candle cash subtraction alias route updates balance without sending sms', function () {
-    configureEmbeddedRetailStore();
-    config()->set('marketing.sms.enabled', true);
-    config()->set('marketing.twilio.enabled', true);
-    config()->set('marketing.sms.dry_run', true);
-
-    $profile = seedEmbeddedCustomerDetailFixture();
-    $profile->forceFill([
-        'phone' => '555-222-3333',
-        'normalized_phone' => '15552223333',
-        'accepts_sms_marketing' => true,
-    ])->save();
-
-    CandleCashBalance::query()->updateOrCreate(
-        ['marketing_profile_id' => $profile->id],
-        ['balance' => 150]
-    );
-
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.adjust', array_merge([
-            'marketingProfile' => $profile->id,
-        ], retailEmbeddedExtendedSignedQuery()), false),
-        [
-            '_token' => $token,
-            'direction' => 'subtract',
-            'amount' => 150,
-            'reason' => 'Customer balance correction',
-        ]
-    );
-
-    $response->assertRedirect();
-
     $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
 
-    expect((int) ($balance?->balance ?? 0))->toBe(0)
-        ->and(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
+    expect($profile->first_name)->toBe('Daria')
+        ->and($profile->accepts_email_marketing)->toBeTrue()
+        ->and((int) ($balance?->balance ?? 0))->toBe(90)
+        ->and(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0)
+        ->and(CandleCashTransaction::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('type', 'gift')
+            ->count())->toBe(0);
 });
 
 test('embedded customer detail forms use helper-generated urls with Shopify query params', function () {
@@ -926,18 +671,21 @@ test('embedded customer detail forms use helper-generated urls with Shopify quer
     $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
     $signedRequest = Request::create('/', 'GET', $signature);
 
-    $expectedActions = [
-        'customers.update',
-        'customers.candle-cash.adjust',
-        'customers.candle-cash.send',
-        'customers.update-consent',
-        'customers.message',
+    $expected = $generator->url('customers.detail', ['marketingProfile' => $profile->id], $signedRequest);
+    $escapedAction = htmlspecialchars($expected, ENT_QUOTES, 'UTF-8');
+    $this->assertGreaterThanOrEqual(5, substr_count($content, 'action="' . $escapedAction . '"'));
+
+    $expectedApiEndpoints = [
+        route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
     ];
 
-    foreach ($expectedActions as $routeName) {
-        $expected = $generator->url($routeName, ['marketingProfile' => $profile->id], $signedRequest);
-        $escaped = htmlspecialchars($expected, ENT_QUOTES, 'UTF-8');
-        $this->assertStringContainsString('action="' . $escaped . '"', $content);
+    foreach ($expectedApiEndpoints as $endpoint) {
+        $escaped = htmlspecialchars($endpoint, ENT_QUOTES, 'UTF-8');
+        $this->assertStringContainsString('data-api-endpoint="' . $escaped . '"', $content);
     }
 
     $this->assertStringContainsString('id_token=', $content);
@@ -1007,6 +755,24 @@ test('legacy detail route redirects to the embedded customers detail page', func
     $this->assertStringContainsString('session=embedded-session-token', $location);
 });
 
+test('legacy embedded customer write alias routes are retired', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $requests = [
+        ['method' => 'patch', 'uri' => '/customers/manage/' . $profile->id, 'status' => 405],
+        ['method' => 'post', 'uri' => '/customers/manage/' . $profile->id . '/consent', 'status' => 404],
+        ['method' => 'post', 'uri' => '/customers/manage/' . $profile->id . '/candle-cash', 'status' => 404],
+        ['method' => 'post', 'uri' => '/customers/manage/' . $profile->id . '/message', 'status' => 404],
+        ['method' => 'post', 'uri' => '/customers/manage/' . $profile->id . '/candle-cash/send', 'status' => 404],
+    ];
+
+    foreach ($requests as $request) {
+        $response = $this->{$request['method']}($request['uri'], []);
+        $response->assertStatus($request['status']);
+    }
+});
+
 test('legacy manage route without signed context shows context missing notice', function () {
     $response = $this->get(route('shopify.embedded.customers.manage'));
 
@@ -1066,17 +832,8 @@ test('customer detail forms fall back to embedded routes without Shopify host', 
     $response->assertOk();
     $content = $response->getContent();
 
-    $expectedActions = [
-        route('shopify.app.customers.update', ['marketingProfile' => $profile->id], false),
-        route('shopify.app.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
-        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        route('shopify.app.customers.update-consent', ['marketingProfile' => $profile->id], false),
-        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
-    ];
-
-    foreach ($expectedActions as $action) {
-        $this->assertStringContainsString('action="' . $action . '"', $content);
-    }
+    $expectedAction = route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false);
+    $this->assertGreaterThanOrEqual(5, substr_count($content, 'action="' . $expectedAction . '"'));
 });
 
 test('manual adjustment falls back to Admin actor label when user is not resolved', function () {
@@ -1102,13 +859,18 @@ test('manual adjustment falls back to Admin actor label when user is not resolve
         ->assertSeeText('Admin');
 });
 
-test('sms message send succeeds when consented', function () {
-    configureEmbeddedRetailStore();
+test('sms message json send succeeds with shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
     config()->set('marketing.sms.enabled', true);
     config()->set('marketing.twilio.enabled', true);
     config()->set('marketing.sms.dry_run', true);
 
-    $profile = seedEmbeddedCustomerDetailFixture();
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
     $profile->forceFill([
         'phone' => '555-222-3333',
         'normalized_phone' => '15552223333',
@@ -1116,24 +878,27 @@ test('sms message send succeeds when consented', function () {
     ])->save();
 
     $user = User::factory()->create([
-        'name' => 'Morgan Admin',
-        'email' => 'morgan@example.com',
+        'name' => 'Jordan JSON',
+        'email' => 'jordan.json@example.com',
     ]);
 
-    startEmbeddedCustomersDetailSession($this);
+    $response = $this
+        ->actingAs($user)
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'message' => 'Hello from the JSON customer detail flow.',
+            ]
+        );
 
-    $token = csrf_token();
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'SMS sent successfully.')
+        ->assertJsonPath('notice_style', 'success');
 
-    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'channel' => 'sms',
-            'message' => 'Hello from embedded admin.',
-        ]
-    );
-
-    $response->assertRedirect();
+    expect($response->headers->get('Location'))->toBeNull();
 
     $delivery = MarketingMessageDelivery::query()
         ->where('marketing_profile_id', $profile->id)
@@ -1141,137 +906,183 @@ test('sms message send succeeds when consented', function () {
         ->first();
 
     expect($delivery)->not->toBeNull()
-        ->and($delivery->channel)->toBe('sms')
-        ->and((int) $delivery->created_by)->toBe($user->id);
-
-    $detailResponse = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
-    $detailResponse->assertOk()
-        ->assertSeeText('SMS Message')
-        ->assertSeeText('Morgan Admin');
+        ->and($delivery?->channel)->toBe('sms')
+        ->and((int) ($delivery?->created_by ?? 0))->toBe($user->id);
 });
 
-test('sms message send is rejected when consent is missing', function () {
+test('customer message json requires embedded api auth and does not fall back to page session state', function () {
     configureEmbeddedRetailStore();
     config()->set('marketing.sms.enabled', true);
     config()->set('marketing.twilio.enabled', true);
     config()->set('marketing.sms.dry_run', true);
 
     $profile = seedEmbeddedCustomerDetailFixture();
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->postJson(
+        route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+        [
+            'channel' => 'sms',
+            'message' => 'Blocked without bearer token.',
+        ]
+    );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth')
+        ->assertJsonPath('message', 'This embedded customer action requires a verified Shopify session token.');
+});
+
+test('customer message json rejects legacy embedded context token fallback', function () {
+    configureEmbeddedRetailStore();
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $response = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'message' => 'Blocked by legacy header.',
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth')
+        ->assertJsonPath('message', 'This embedded customer action requires a verified Shopify session token.');
+});
+
+test('customer message json rejects invalid shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer not-a-valid-shopify-token'])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'message' => 'Blocked invalid token.',
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'invalid_session_token')
+        ->assertJsonPath('message', 'This Shopify session token could not be verified.');
+});
+
+test('customer message json rejects expired shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+    $expiredNow = time() - 120;
+
+    $response = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken([
+                'nbf' => $expiredNow - 60,
+                'iat' => $expiredNow - 60,
+                'exp' => $expiredNow,
+            ]),
+        ])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'message' => 'Blocked expired token.',
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'expired_session_token')
+        ->assertJsonPath('message', 'This Shopify session expired. Reload the app from Shopify Admin.');
+});
+
+test('customer message json returns validation errors', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'email',
+                'message' => '',
+                'sender_key' => str_repeat('s', 81),
+            ]
+        );
+
+    $response->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Message could not be sent.')
+        ->assertJsonValidationErrors(['channel', 'message', 'sender_key']);
+});
+
+test('customer message json returns warning when sms consent is missing', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
     $profile->forceFill([
         'phone' => '555-111-0000',
         'normalized_phone' => '15551110000',
         'accepts_sms_marketing' => false,
     ])->save();
 
-    startEmbeddedCustomersDetailSession($this);
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'message' => 'Consent required test.',
+            ]
+        );
 
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'channel' => 'sms',
-            'message' => 'Consent required test.',
-        ]
-    );
-
-    $response->assertRedirect();
+    $response->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('notice_style', 'warning')
+        ->assertJsonPath('message', 'SMS not sent: the customer has not granted SMS consent yet.');
 
     expect(MarketingMessageDelivery::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
-});
-
-test('invalid message input is rejected', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'channel' => 'email',
-            'message' => '',
-        ]
-    );
-
-    $response->assertSessionHasErrors(['channel', 'message']);
-});
-
-test('message send alias route resolves with embedded context', function () {
-    configureEmbeddedRetailStore();
-    config()->set('marketing.sms.enabled', true);
-    config()->set('marketing.twilio.enabled', true);
-    config()->set('marketing.sms.dry_run', true);
-
-    $profile = seedEmbeddedCustomerDetailFixture();
-    $profile->forceFill([
-        'phone' => '555-333-4444',
-        'normalized_phone' => '15553334444',
-        'accepts_sms_marketing' => true,
-    ])->save();
-
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.message', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'channel' => 'sms',
-            'message' => 'Alias route send.',
-        ]
-    );
-
-    $response->assertRedirect();
-});
-
-test('send candle cash succeeds and records gift transaction', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $user = User::factory()->create([
-        'name' => 'Casey Admin',
-        'email' => 'casey@example.com',
-    ]);
-
-    $token = csrf_token();
-
-    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'amount' => 15,
-            'reason' => 'Welcome gift',
-        ]
-    );
-
-    $response->assertRedirect();
-
-    $transaction = CandleCashTransaction::query()
-        ->where('marketing_profile_id', $profile->id)
-        ->orderByDesc('id')
-        ->first();
-
-    expect($transaction)->not->toBeNull()
-        ->and($transaction->type)->toBe('gift')
-        ->and((int) $transaction->points)->toBe(15)
-        ->and($transaction->description)->toBe('Welcome gift')
-        ->and((int) $transaction->source_id)->toBe($user->id);
-    expect($transaction)->and($transaction->gift_intent)->toBeNull()
-        ->and($transaction->gift_origin)->toBeNull()
-        ->and($transaction->campaign_key)->toBeNull()
-        ->and($transaction->notified_via)->toBe('none')
-        ->and($transaction->notification_status)->toBe('skipped');
-
-    $detailResponse = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
-    $detailResponse->assertOk()
-        ->assertSeeText('Candle Cash Sent')
-        ->assertSeeText('Casey Admin');
 });
 
 test('send candle cash json succeeds with shopify session token auth', function () {
@@ -1319,131 +1130,6 @@ test('send candle cash json succeeds with shopify session token auth', function 
         ->and($transaction?->gift_origin)->toBe('marketing');
 });
 
-test('send candle cash rejects invalid input', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'amount' => 0,
-            'reason' => '',
-        ]
-    );
-
-    $response->assertSessionHasErrors(['amount', 'reason']);
-});
-
-test('send candle cash alias route resolves with embedded context', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'amount' => 5,
-            'reason' => 'Alias send',
-        ]
-    );
-
-    $response->assertRedirect();
-});
-
-test('send candle cash records gift metadata and sms notification status', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    $profile->forceFill([
-        'phone' => '555-222-1111',
-        'normalized_phone' => '15552221111',
-        'accepts_sms_marketing' => true,
-    ])->save();
-
-    config()->set('marketing.sms.enabled', true);
-    config()->set('marketing.twilio.enabled', true);
-    config()->set('marketing.sms.dry_run', true);
-
-    startEmbeddedCustomersDetailSession($this);
-
-    $user = User::factory()->create(['name' => 'Gift Admin']);
-    $token = csrf_token();
-
-    $response = $this->actingAs($user)->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'amount' => 12,
-            'reason' => 'VIP thank you',
-            'gift_intent' => 'vip',
-            'gift_origin' => 'marketing',
-            'campaign_key' => 'spring-royalty',
-            'message' => 'Enjoy a little extra Candle Cash!',
-        ]
-    );
-
-    $response->assertRedirect();
-
-    $transaction = CandleCashTransaction::query()
-        ->where('marketing_profile_id', $profile->id)
-        ->latest('id')
-        ->first();
-
-    expect($transaction)->not->toBeNull()
-        ->and($transaction->gift_intent)->toBe('vip')
-        ->and($transaction->gift_origin)->toBe('marketing')
-        ->and($transaction->campaign_key)->toBe('spring-royalty')
-        ->and($transaction->notified_via)->toBe('sms')
-        ->and($transaction->notification_status)->toBe('sent');
-});
-
-test('send candle cash continues even when optional message cannot send', function () {
-    configureEmbeddedRetailStore();
-    $profile = seedEmbeddedCustomerDetailFixture();
-    $profile->forceFill([
-        'phone' => '555-999-0000',
-        'normalized_phone' => '15559990000',
-        'accepts_sms_marketing' => false,
-    ])->save();
-
-    config()->set('marketing.sms.enabled', true);
-    config()->set('marketing.twilio.enabled', true);
-    config()->set('marketing.sms.dry_run', true);
-
-    startEmbeddedCustomersDetailSession($this);
-
-    $token = csrf_token();
-
-    $response = $this->withSession(['_token' => $token])->post(
-        route('shopify.app.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
-        [
-            '_token' => $token,
-            'amount' => 8,
-            'reason' => 'Send with optional message',
-            'message' => 'Hello!',
-        ]
-    );
-
-    $response->assertRedirect();
-
-    $transaction = CandleCashTransaction::query()
-        ->where('marketing_profile_id', $profile->id)
-        ->orderByDesc('id')
-        ->first();
-
-    expect($transaction)->not->toBeNull()
-        ->and($transaction->type)->toBe('gift')
-        ->and((int) $transaction->points)->toBe(8)
-        ->and($transaction->notified_via)->toBe('sms')
-        ->and($transaction->notification_status)->toBe('failed');
-});
-
 test('embedded customer detail mutations and page access are isolated by store tenant', function () {
     $tenantOne = Tenant::query()->create([
         'name' => 'Tenant One',
@@ -1473,6 +1159,34 @@ test('embedded customer detail mutations and page access are isolated by store t
         );
 
     $mutationResponse->assertNotFound()
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Customer not found for this Shopify store.');
+
+    $consentResponse = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'consented' => true,
+            ]
+        );
+
+    $consentResponse->assertNotFound()
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Customer not found for this Shopify store.');
+
+    $messageResponse = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->postJson(
+            route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+            [
+                'channel' => 'sms',
+                'message' => 'Blocked by tenant isolation.',
+            ]
+        );
+
+    $messageResponse->assertNotFound()
         ->assertJsonPath('ok', false)
         ->assertJsonPath('message', 'Customer not found for this Shopify store.');
 });

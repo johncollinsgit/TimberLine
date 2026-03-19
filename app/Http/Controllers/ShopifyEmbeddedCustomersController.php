@@ -144,10 +144,15 @@ class ShopifyEmbeddedCustomersController extends Controller
             'messaging' => [],
         ];
 
+        $detailFormAction = $authorized
+            ? $actionUrlGenerator->url('customers.detail', ['marketingProfile' => $marketingProfile->id], $request)
+            : '#';
         $formActions = $authorized ? [
-            'update' => $actionUrlGenerator->url('customers.update', ['marketingProfile' => $marketingProfile->id], $request),
-            'candle_cash_adjust' => $actionUrlGenerator->url('customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], $request),
-            'candle_cash_send' => $actionUrlGenerator->url('customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], $request),
+            'update' => $detailFormAction,
+            'candle_cash_adjust' => $detailFormAction,
+            'candle_cash_send' => $detailFormAction,
+            'consent' => $detailFormAction,
+            'message' => $detailFormAction,
         ] : [];
 
         $renderedWidgets = $authorized
@@ -205,50 +210,12 @@ class ShopifyEmbeddedCustomersController extends Controller
                     'identityEndpoint' => route('shopify.app.api.customers.update', ['marketingProfile' => $marketingProfile->id], false),
                     'adjustmentEndpoint' => route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], false),
                     'sendCandleCashEndpoint' => route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], false),
+                    'consentEndpoint' => route('shopify.app.api.customers.update-consent', ['marketingProfile' => $marketingProfile->id], false),
+                    'messageEndpoint' => route('shopify.app.api.customers.message', ['marketingProfile' => $marketingProfile->id], false),
                 ] : null,
             ],
             resolvedContext: $context,
         );
-    }
-
-    public function update(
-        Request $request,
-        ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
-        MarketingIdentityNormalizer $identityNormalizer,
-        TenantResolver $tenantResolver,
-        MarketingProfile $marketingProfile
-    ): RedirectResponse {
-        $context = $contextService->resolvePageContext($request);
-        $this->logCustomerPostPreflight($request, $marketingProfile, 'identity.update', $context);
-        $this->requireValidCsrf($request, 'identity.update', $marketingProfile, $context);
-        $this->logCustomerAction($request, $marketingProfile, 'identity.update', (bool) ($context['ok'] ?? false));
-        if (! ($context['ok'] ?? false)) {
-            Log::warning('Shopify embedded customer identity update blocked', [
-                'profile_id' => $marketingProfile->id,
-                'route' => $request->route()?->getName(),
-                'status' => $context['status'] ?? 'unknown',
-            ]);
-            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-                ->with('customer_detail_notice', [
-                'style' => 'warning',
-                'message' => 'Customer update failed: store context could not be verified.',
-            ]);
-        }
-
-        abort_unless(
-            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
-            404
-        );
-
-        $data = $this->validatedIdentityData($request);
-        $this->applyIdentityUpdate($marketingProfile, $data, $identityNormalizer);
-
-        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-            ->with('customer_detail_notice', [
-                'style' => 'success',
-                'message' => 'Customer identity updated.',
-            ]);
     }
 
     public function updateJson(
@@ -287,123 +254,40 @@ class ShopifyEmbeddedCustomersController extends Controller
         ]);
     }
 
-    public function updateConsent(
+    public function updateConsentJson(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         MarketingConsentService $consentService,
         TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
-    ): RedirectResponse {
-        $context = $contextService->resolvePageContext($request);
-        $this->logCustomerPostPreflight($request, $marketingProfile, 'consent.update', $context);
-        $this->requireValidCsrf($request, 'consent.update', $marketingProfile, $context);
-        $this->logCustomerAction($request, $marketingProfile, 'consent.update', (bool) ($context['ok'] ?? false));
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'consent.update.json', (bool) ($context['ok'] ?? false));
+
         if (! ($context['ok'] ?? false)) {
-            Log::warning('Shopify embedded customer consent update blocked', [
-                'profile_id' => $marketingProfile->id,
-                'route' => $request->route()?->getName(),
-                'status' => $context['status'] ?? 'unknown',
-            ]);
-            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-                ->with('customer_detail_notice', [
-                    'style' => 'warning',
-                    'message' => 'Consent update failed: store context could not be verified.',
-                ]);
+            return $this->invalidApiContextResponse($context);
         }
 
-        abort_unless(
-            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
-            404
-        );
+        if (! $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver)) {
+            return $this->customerNotFoundResponse();
+        }
 
-        $data = $request->validate([
-            'channel' => ['required', 'in:sms,email,both'],
-            'consented' => ['required', 'boolean'],
-            'notes' => ['nullable', 'string', 'max:2000'],
-        ]);
+        try {
+            $data = $this->validatedConsentData($request);
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Consent could not be saved.', $exception);
+        }
 
-        $consented = (bool) $data['consented'];
-        $channel = (string) $data['channel'];
-        $notes = trim((string) ($data['notes'] ?? '')) ?: null;
+        $result = $this->applyConsentUpdate($marketingProfile, $data, $consentService);
 
-        $contextPayload = [
-            'source_type' => 'shopify_embedded_admin',
-            'source_id' => (string) (auth()->id() ?? 'embedded'),
-            'details' => [
-                'notes' => $notes,
+        return response()->json([
+            'ok' => true,
+            'message' => $result['notice_message'],
+            'notice_style' => $result['notice_style'],
+            'data' => [
+                'consent' => $this->customerConsentPayload($marketingProfile->fresh()),
             ],
-        ];
-
-        $changed = false;
-        if ($channel === 'sms' || $channel === 'both') {
-            $changed = $consentService->setSmsConsent($marketingProfile, $consented, $contextPayload) || $changed;
-        }
-        if ($channel === 'email' || $channel === 'both') {
-            $changed = $consentService->setEmailConsent($marketingProfile, $consented, $contextPayload) || $changed;
-        }
-
-        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-            ->with('customer_detail_notice', [
-                'style' => $changed ? 'success' : 'warning',
-                'message' => $changed
-                    ? 'Consent updated.'
-                    : 'Consent already set to that value.',
-            ]);
-    }
-
-    public function adjustCandleCash(
-        Request $request,
-        ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
-        ShopifyEmbeddedCustomerCandleCashAdjustmentService $adjustmentService,
-        ShopifyEmbeddedCustomerMessagingService $messagingService,
-        CandleCashService $candleCashService,
-        TenantResolver $tenantResolver,
-        MarketingProfile $marketingProfile
-    ): RedirectResponse {
-        Log::info('shopify.embedded.candle_cash.adjust.entry', [
-            'route' => $request->route()?->getName(),
-            'profile_id' => $marketingProfile->id,
-            'query' => $request->query->all(),
         ]);
-
-        $context = $contextService->resolvePageContext($request);
-        $this->logCustomerPostPreflight($request, $marketingProfile, 'candle_cash.adjust', $context);
-        $this->requireValidCsrf($request, 'candle_cash.adjust', $marketingProfile, $context);
-        $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust', (bool) ($context['ok'] ?? false));
-        if (! ($context['ok'] ?? false)) {
-            Log::warning('Shopify embedded Candle Cash adjustment blocked', [
-                'profile_id' => $marketingProfile->id,
-                'route' => $request->route()?->getName(),
-                'status' => $context['status'] ?? 'unknown',
-            ]);
-            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-                ->with('customer_detail_notice', [
-                    'style' => 'warning',
-                    'message' => 'Candle Cash adjustment failed: store context could not be verified.',
-                ]);
-        }
-
-        abort_unless(
-            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
-            404
-        );
-
-        $data = $this->validatedAdjustmentData($request);
-        $result = $this->applyCandleCashAdjustment(
-            profile: $marketingProfile,
-            data: $data,
-            adjustmentService: $adjustmentService,
-            messagingService: $messagingService,
-            candleCashService: $candleCashService
-        );
-
-        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-            ->with('customer_detail_notice', [
-                'style' => $result['notice_style'],
-                'message' => $result['notice_message'],
-            ]);
     }
 
     public function adjustCandleCashJson(
@@ -524,116 +408,45 @@ class ShopifyEmbeddedCustomersController extends Controller
         ], 400);
     }
 
-    public function sendMessage(
+    public function sendMessageJson(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         ShopifyEmbeddedCustomerMessagingService $messagingService,
         TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
-    ): RedirectResponse {
-        $context = $contextService->resolvePageContext($request);
-        $this->logCustomerPostPreflight($request, $marketingProfile, 'message.send', $context);
-        $this->requireValidCsrf($request, 'message.send', $marketingProfile, $context);
-        $this->logCustomerAction($request, $marketingProfile, 'message.send', (bool) ($context['ok'] ?? false));
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        $this->logCustomerAction($request, $marketingProfile, 'message.send.json', (bool) ($context['ok'] ?? false));
+
         if (! ($context['ok'] ?? false)) {
-            Log::warning('Shopify embedded customer message blocked', [
-                'profile_id' => $marketingProfile->id,
-                'route' => $request->route()?->getName(),
-                'status' => $context['status'] ?? 'unknown',
-            ]);
-            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-                ->with('customer_detail_notice', [
-                    'style' => 'warning',
-                    'message' => 'Message send failed: store context could not be verified.',
-                ]);
+            return $this->invalidApiContextResponse($context);
         }
 
-        abort_unless(
-            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
-            404
-        );
+        if (! $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver)) {
+            return $this->customerNotFoundResponse();
+        }
 
-        $data = $request->validate([
-            'channel' => ['required', 'in:sms'],
-            'message' => ['required', 'string', 'max:1000'],
-            'sender_key' => ['nullable', 'string', 'max:80'],
-        ]);
+        try {
+            $data = $this->validatedMessageData($request);
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Message could not be sent.', $exception);
+        }
 
-        $channel = (string) $data['channel'];
-        $message = trim((string) $data['message']);
-        $senderKey = trim((string) ($data['sender_key'] ?? '')) ?: null;
-
-        $result = match ($channel) {
-            'sms' => $messagingService->sendSms($marketingProfile, $message, auth()->id(), $senderKey),
-            default => [
-                'ok' => false,
-                'message' => 'Message channel is not supported.',
-            ],
-        };
+        $result = $this->applyMessageSend($marketingProfile, $data, $messagingService, $context);
 
         if (! $result['ok']) {
-            Log::warning('Shopify embedded customer message failed', [
-                'profile_id' => $marketingProfile->id,
-                'channel' => $channel,
-                'failure_message' => $result['message'] ?? 'unknown',
-                'context_status' => $context['status'] ?? 'unknown',
-            ]);
-        }
-
-        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-            ->with('customer_detail_notice', [
-                'style' => $result['ok'] ? 'success' : 'warning',
+            return response()->json([
+                'ok' => false,
                 'message' => $result['message'],
-            ]);
-    }
-
-    public function sendCandleCash(
-        Request $request,
-        ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
-        ShopifyEmbeddedCustomerSendCandleCashService $sendService,
-        ShopifyEmbeddedCustomerMessagingService $messagingService,
-        CandleCashService $candleCashService,
-        TenantResolver $tenantResolver,
-        MarketingProfile $marketingProfile
-    ): RedirectResponse {
-        $context = $contextService->resolvePageContext($request);
-        $this->logCustomerPostPreflight($request, $marketingProfile, 'candle_cash.send', $context);
-        $this->requireValidCsrf($request, 'candle_cash.send', $marketingProfile, $context);
-        $this->logCustomerAction($request, $marketingProfile, 'candle_cash.send', (bool) ($context['ok'] ?? false));
-        if (! ($context['ok'] ?? false)) {
-            Log::warning('Shopify embedded Candle Cash send blocked', [
-                'profile_id' => $marketingProfile->id,
-                'route' => $request->route()?->getName(),
-                'status' => $context['status'] ?? 'unknown',
-            ]);
-            return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-                ->with('customer_detail_notice', [
-                    'style' => 'warning',
-                    'message' => 'Send Candle Cash failed: store context could not be verified.',
-                ]);
+                'notice_style' => 'warning',
+            ], 422);
         }
 
-        abort_unless(
-            $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
-            404
-        );
-
-        $data = $this->validatedSendCandleCashData($request);
-        $result = $this->applySendCandleCash(
-            profile: $marketingProfile,
-            data: $data,
-            sendService: $sendService,
-            messagingService: $messagingService,
-            candleCashService: $candleCashService
-        );
-
-        return $this->redirectToCustomerDetail($request, $actionUrlGenerator, $marketingProfile)
-            ->with('customer_detail_notice', [
-                'style' => $result['notice_style'],
-                'message' => $result['notice_message'],
-            ]);
+        return response()->json([
+            'ok' => true,
+            'message' => $result['message'],
+            'notice_style' => 'success',
+        ]);
     }
 
     public function sendCandleCashJson(
@@ -761,61 +574,6 @@ class ShopifyEmbeddedCustomersController extends Controller
             ->all();
     }
 
-    protected function logCustomerPostPreflight(
-        Request $request,
-        MarketingProfile $profile,
-        string $action,
-        array $context
-    ): void {
-        Log::info('shopify.embedded.customer_post.preflight', ShopifyEmbeddedCsrfDiagnostics::forRequest($request, [
-            'action' => $action,
-            'context_ok' => (bool) ($context['ok'] ?? false),
-            'context_status' => $context['status'] ?? 'unknown',
-            'context_mode' => (bool) ($context['ok'] ?? false) ? 'verified' : 'fallback',
-            'profile_id' => $profile->id,
-        ]));
-    }
-
-    protected function redirectToCustomerDetail(
-        Request $request,
-        ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
-        MarketingProfile $marketingProfile
-    ): RedirectResponse {
-        $target = $actionUrlGenerator->url('customers.detail', ['marketingProfile' => $marketingProfile->id], $request);
-
-        Log::info('shopify.embedded.customer_detail.redirect', [
-            'profile_id' => $marketingProfile->id,
-            'target' => $target,
-            'route' => $request->route()?->getName(),
-        ]);
-
-        return redirect()->to($target);
-    }
-
-    protected function requireValidCsrf(
-        Request $request,
-        string $action,
-        MarketingProfile $profile,
-        array $context
-    ): void
-    {
-        $token = (string) $request->input('_token', '');
-        $sessionToken = (string) $request->session()->token();
-
-        if ($token === '' || ! hash_equals($sessionToken, $token)) {
-            Log::warning('shopify.embedded.customer_post.csrf_mismatch', ShopifyEmbeddedCsrfDiagnostics::forRequest($request, [
-                'action' => $action,
-                'context_ok' => (bool) ($context['ok'] ?? false),
-                'context_status' => $context['status'] ?? 'unknown',
-                'context_mode' => (bool) ($context['ok'] ?? false) ? 'verified' : 'fallback',
-                'profile_id' => $profile->id,
-                'mismatch_source' => 'controller',
-            ]));
-
-            abort(419, 'CSRF token mismatch.');
-        }
-    }
-
     /**
      * @return array{first_name:?string,last_name:?string,email:?string,phone:?string}
      */
@@ -866,6 +624,108 @@ class ShopifyEmbeddedCustomersController extends Controller
         ])->validate();
 
         return $data;
+    }
+
+    /**
+     * @return array{channel:string,consented:bool,notes:?string}
+     */
+    protected function validatedConsentData(Request $request): array
+    {
+        /** @var array{channel:string,consented:bool,notes:?string} $data */
+        $data = validator($request->all(), [
+            'channel' => ['required', 'in:sms,email,both'],
+            'consented' => ['required', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ])->validate();
+
+        return $data;
+    }
+
+    /**
+     * @param  array{channel:string,consented:bool,notes:?string}  $data
+     * @return array{notice_style:string,notice_message:string}
+     */
+    protected function applyConsentUpdate(
+        MarketingProfile $marketingProfile,
+        array $data,
+        MarketingConsentService $consentService
+    ): array {
+        $consented = (bool) $data['consented'];
+        $channel = (string) $data['channel'];
+        $notes = trim((string) ($data['notes'] ?? '')) ?: null;
+
+        $contextPayload = [
+            'source_type' => 'shopify_embedded_admin',
+            'source_id' => (string) (auth()->id() ?? 'embedded'),
+            'details' => [
+                'notes' => $notes,
+            ],
+        ];
+
+        $changed = false;
+        if ($channel === 'sms' || $channel === 'both') {
+            $changed = $consentService->setSmsConsent($marketingProfile, $consented, $contextPayload) || $changed;
+        }
+        if ($channel === 'email' || $channel === 'both') {
+            $changed = $consentService->setEmailConsent($marketingProfile, $consented, $contextPayload) || $changed;
+        }
+
+        return [
+            'notice_style' => $changed ? 'success' : 'warning',
+            'notice_message' => $changed
+                ? 'Consent updated.'
+                : 'Consent already set to that value.',
+        ];
+    }
+
+    /**
+     * @return array{channel:string,message:string,sender_key:?string}
+     */
+    protected function validatedMessageData(Request $request): array
+    {
+        /** @var array{channel:string,message:string,sender_key:?string} $data */
+        $data = validator($request->all(), [
+            'channel' => ['required', 'in:sms'],
+            'message' => ['required', 'string', 'max:1000'],
+            'sender_key' => ['nullable', 'string', 'max:80'],
+        ])->validate();
+
+        return $data;
+    }
+
+    /**
+     * @param  array{channel:string,message:string,sender_key:?string}  $data
+     * @param  array<string,mixed>  $context
+     * @return array{ok:bool,message:string}
+     */
+    protected function applyMessageSend(
+        MarketingProfile $marketingProfile,
+        array $data,
+        ShopifyEmbeddedCustomerMessagingService $messagingService,
+        array $context = []
+    ): array {
+        $channel = (string) $data['channel'];
+        $message = trim((string) $data['message']);
+        $senderKey = trim((string) ($data['sender_key'] ?? '')) ?: null;
+
+        $result = match ($channel) {
+            'sms' => $messagingService->sendSms($marketingProfile, $message, auth()->id(), $senderKey),
+            default => [
+                'ok' => false,
+                'message' => 'Message channel is not supported.',
+            ],
+        };
+
+        if (! $result['ok']) {
+            Log::warning('Shopify embedded customer message failed', [
+                'profile_id' => $marketingProfile->id,
+                'channel' => $channel,
+                'failure_message' => $result['message'] ?? 'unknown',
+                'context_status' => $context['status'] ?? 'unknown',
+            ]);
+        }
+
+        return $result;
     }
 
     /**
@@ -1121,6 +981,25 @@ class ShopifyEmbeddedCustomersController extends Controller
             'phone' => $marketingProfile->phone,
             'phone_display' => $marketingProfile->phone ?: 'Phone not set',
             'updated_at_display' => optional($marketingProfile->updated_at)->format('Y-m-d H:i') ?: '—',
+        ];
+    }
+
+    /**
+     * @return array{
+     *   email_label:string,
+     *   sms_label:string,
+     *   sms_message_eligibility:string
+     * }
+     */
+    protected function customerConsentPayload(MarketingProfile $marketingProfile): array
+    {
+        $emailConsented = (bool) ($marketingProfile->accepts_email_marketing ?? false);
+        $smsConsented = (bool) ($marketingProfile->accepts_sms_marketing ?? false);
+
+        return [
+            'email_label' => $emailConsented ? 'Consented' : 'Not consented',
+            'sms_label' => $smsConsented ? 'Consented' : 'Not consented',
+            'sms_message_eligibility' => $smsConsented ? 'Consented' : 'Consent needed',
         ];
     }
 

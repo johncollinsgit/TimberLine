@@ -5,12 +5,17 @@ use App\Models\CandleCashReward;
 use App\Models\EventInstance;
 use App\Models\MarketingProfile;
 use App\Models\MarketingStorefrontEvent;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 
 test('storefront contract responses include standardized envelope states and recovery states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Stage9',
@@ -30,12 +35,14 @@ test('storefront contract responses include standardized envelope states and rec
         ->assertJsonPath('version', 'v1')
         ->assertJsonStructure(['ok', 'version', 'data', 'meta' => ['states']]);
 
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
     $errorPayload = [
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $reward->id,
         'reuse_existing_code' => false,
+        'shop' => 'modernforestry.myshopify.com',
     ];
     $errorHeaders = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($errorPayload), 'stage9-secret');
     $this->withHeaders($errorHeaders)
@@ -67,6 +74,18 @@ test('storefront security supports valid signatures and rejects invalid or stale
         ->assertJsonPath('error.code', 'unauthorized_storefront_request');
 });
 
+test('storefront legacy token auth is rejected even when configured', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.widget_token', 'stage9-token');
+    config()->set('marketing.shopify.allow_legacy_token', true);
+
+    $this->withHeaders(['X-Marketing-Token' => 'stage9-token'])
+        ->getJson(route('marketing.shopify.rewards.available'))
+        ->assertStatus(401)
+        ->assertJsonPath('error.code', 'unauthorized_storefront_request')
+        ->assertJsonPath('error.details.reason', 'missing_signature_headers');
+});
+
 test('storefront app proxy signature mode is accepted when enabled', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage9-proxy-secret');
@@ -87,6 +106,8 @@ test('storefront app proxy signature mode is accepted when enabled', function ()
 test('reward redemption feedback loop returns code issued and already has active code states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Reward',
@@ -97,12 +118,30 @@ test('reward redemption feedback loop returns code issued and already has active
         'accepts_sms_marketing' => true,
     ]);
     app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
-    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
+
+    $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $discountSync->shouldReceive('ensureDiscountForRedemption')
+        ->twice()
+        ->withArgs(function (CandleCashRedemption $redemption, ?string $preferredStoreKey): bool {
+            return $preferredStoreKey === 'retail'
+                && data_get($redemption->redemption_context, 'shopify_store_key') === 'retail';
+        })
+        ->andReturn([
+            'discount_id' => 'gid://shopify/DiscountCodeNode/stage9',
+            'discount_node_id' => 'gid://shopify/DiscountCodeNode/stage9',
+            'store_key' => 'retail',
+            'starts_at' => now()->toIso8601String(),
+            'ends_at' => now()->addDays(30)->toIso8601String(),
+        ]);
+    app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
 
     $payload = [
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $reward->id,
+        'shop' => 'modernforestry.myshopify.com',
     ];
     $headers = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($payload), 'stage9-secret');
 
@@ -123,6 +162,77 @@ test('reward redemption feedback loop returns code issued and already has active
         ->json();
 
     expect((string) data_get($second, 'data.redemption_code'))->toBe((string) data_get($first, 'data.redemption_code'));
+});
+
+test('shopify reward redemption persists and uses verified storefront store context', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage9-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'unused');
+    config()->set('services.shopify.stores.wholesale.client_id', 'stage9-wholesale-client');
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Wholesale Tenant',
+        'slug' => 'stage9-wholesale-tenant',
+    ]);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'shop_domain' => 'cedar-wholesale.example.myshopify.com',
+            'access_token' => 'stage9-wholesale-access-token',
+            'tenant_id' => $tenant->id,
+        ]
+    );
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Wholesale',
+        'email' => 'wholesale.stage9@example.com',
+        'normalized_email' => 'wholesale.stage9@example.com',
+        'phone' => '5552224444',
+        'normalized_phone' => '+15552224444',
+        'accepts_sms_marketing' => true,
+    ]);
+    app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
+
+    $mock = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $mock->shouldReceive('ensureDiscountForRedemption')
+        ->once()
+        ->withArgs(function (CandleCashRedemption $redemption, ?string $preferredStoreKey) use ($tenant): bool {
+            return $preferredStoreKey === 'wholesale'
+                && data_get($redemption->redemption_context, 'shopify_store_key') === 'wholesale'
+                && (int) data_get($redemption->redemption_context, 'tenant_id') === (int) $tenant->id;
+        })
+        ->andReturn([
+            'discount_id' => 'gid://shopify/DiscountCodeNode/1',
+            'discount_node_id' => 'gid://shopify/DiscountCodeNode/1',
+            'store_key' => 'wholesale',
+            'starts_at' => now()->toIso8601String(),
+            'ends_at' => now()->addDays(30),
+        ]);
+    app()->instance(CandleCashShopifyDiscountService::class, $mock);
+
+    $payload = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+    ];
+    $query = stage9AppProxySignedQuery([
+        'shop' => 'cedar-wholesale.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'stage9-proxy-secret');
+
+    $response = $this->postJson(route('marketing.shopify.rewards.redeem', $query), $payload)
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.discount_sync_status', 'synced');
+
+    $redemption = CandleCashRedemption::query()->findOrFail((int) data_get($response->json(), 'data.redemption_id'));
+
+    expect(data_get($redemption->redemption_context, 'shopify_store_key'))->toBe('wholesale')
+        ->and((int) data_get($redemption->redemption_context, 'tenant_id'))->toBe((int) $tenant->id);
 });
 
 test('ambiguous storefront identity returns verification required instead of silent linkage', function () {
@@ -247,7 +357,7 @@ test('storefront and public touchpoints are logged and visible on customer timel
 
     $this->get(route('marketing.public.rewards-lookup', ['email' => $profile->email, 'phone' => $profile->phone]))
         ->assertOk()
-        ->assertSeeText('Rewards Lookup');
+        ->assertSeeText('Candle Cash Account Lookup');
 
     expect(MarketingStorefrontEvent::query()
         ->where('marketing_profile_id', $profile->id)

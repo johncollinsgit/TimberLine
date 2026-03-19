@@ -22,9 +22,9 @@ test('returns app routes and appends signed query for embedded requests', functi
     ]);
 
     $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
-    $url = $generator->url('customers.message', ['marketingProfile' => 17], $request);
+    $url = $generator->url('customers.detail', ['marketingProfile' => 17], $request);
 
-    $base = route('shopify.app.customers.message', ['marketingProfile' => 17], false);
+    $base = route('shopify.app.customers.detail', ['marketingProfile' => 17], false);
 
     assertSame(0, strncmp($url, $base . '?', strlen($base) + 1));
     expect($url)->toContain('shop=modernforestry.myshopify.com')
@@ -38,30 +38,30 @@ test('returns app routes and appends signed query for embedded requests', functi
         ->and($url)->not->toContain('extra=');
 });
 
-test('returns embedded routes when context is missing', function () {
+test('returns app routes when context is missing', function () {
     $request = Request::create('/', 'GET', []);
 
     $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
-    $url = $generator->url('customers.message', ['marketingProfile' => 8], $request);
+    $url = $generator->url('customers.detail', ['marketingProfile' => 8], $request);
 
-    expect($url)->toEqual(route('shopify.embedded.customers.message', ['marketingProfile' => 8], false));
+    expect($url)->toEqual(route('shopify.app.customers.detail', ['marketingProfile' => 8], false));
 });
 
 test('treats named shopify app routes as embedded even without signed query', function () {
     $request = Request::create('/', 'GET', []);
-    $route = new Route(['GET'], '/shopify/app/customers/message', function () {
+    $route = new Route(['GET'], '/shopify/app/customers/manage/8', function () {
     });
-    $route->name('shopify.app.customers.message');
+    $route->name('shopify.app.customers.detail');
 
     $request->setRouteResolver(fn () => $route);
 
     $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
-    $url = $generator->url('customers.message', ['marketingProfile' => 8], $request);
+    $url = $generator->url('customers.detail', ['marketingProfile' => 8], $request);
 
-    expect($url)->toEqual(route('shopify.app.customers.message', ['marketingProfile' => 8], false));
+    expect($url)->toEqual(route('shopify.app.customers.detail', ['marketingProfile' => 8], false));
 });
 
-test('treats partial context without host as non-embedded', function () {
+test('treats partial context without host as an app-route fallback', function () {
     $request = Request::create('/', 'GET', [
         'shop' => 'modernforestry.myshopify.com',
         'timestamp' => '123',
@@ -69,7 +69,7 @@ test('treats partial context without host as non-embedded', function () {
 
     $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
 
-    $url = $generator->url('customers.message', ['marketingProfile' => 8], $request);
+    $url = $generator->url('customers.detail', ['marketingProfile' => 8], $request);
 
-    expect($url)->toEqual(route('shopify.embedded.customers.message', ['marketingProfile' => 8], false));
+    expect($url)->toEqual(route('shopify.app.customers.detail', ['marketingProfile' => 8], false));
 });

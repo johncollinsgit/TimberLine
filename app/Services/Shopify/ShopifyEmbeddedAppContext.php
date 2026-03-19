@@ -3,9 +3,7 @@
 namespace App\Services\Shopify;
 
 use App\Support\Shopify\ShopifyEmbeddedContextQuery;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 
 class ShopifyEmbeddedAppContext
@@ -123,31 +121,7 @@ class ShopifyEmbeddedAppContext
      */
     public function resolveApiContext(Request $request): array
     {
-        $authenticatedContext = $this->resolveAuthenticatedApiContext($request);
-
-        if (($authenticatedContext['ok'] ?? false) || ($authenticatedContext['status'] ?? '') !== 'missing_api_auth') {
-            return $authenticatedContext;
-        }
-
-        $contextToken = $this->contextToken($request);
-        if ($contextToken !== '') {
-            $resolved = $this->resolveContextToken($contextToken);
-
-            if ($resolved !== null) {
-                return $resolved;
-            }
-
-            return [
-                'ok' => false,
-                'status' => 'invalid_context_token',
-                'shop_domain' => null,
-                'host' => null,
-                'signed_query' => [],
-                'auth_source' => 'context_token',
-            ];
-        }
-
-        return $this->resolvePageContext($request);
+        return $this->resolveAuthenticatedApiContext($request);
     }
 
     /**
@@ -196,64 +170,6 @@ class ShopifyEmbeddedAppContext
     }
 
     /**
-     * @return array{
-     *   ok:bool,
-     *   status:string,
-     *   shop_domain:?string,
-     *   host:?string,
-     *   signed_query:array<string,mixed>,
-     *   store?:array<string,mixed>
-     * }|null
-     */
-    protected function resolveContextToken(string $token): ?array
-    {
-        try {
-            /** @var array<string,mixed> $payload */
-            $payload = json_decode(Crypt::decryptString($token), true, flags: JSON_THROW_ON_ERROR);
-        } catch (DecryptException|\JsonException) {
-            return null;
-        }
-
-        $storeKey = strtolower(trim((string) ($payload['store_key'] ?? '')));
-        $shopDomain = $this->normalizeShopDomain((string) ($payload['shop_domain'] ?? ''));
-        $host = trim((string) ($payload['host'] ?? ''));
-        $issuedAt = trim((string) ($payload['issued_at'] ?? ''));
-
-        if ($storeKey === '' || $shopDomain === '' || $issuedAt === '') {
-            return null;
-        }
-
-        try {
-            $issuedAtDate = Carbon::parse($issuedAt);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if ($issuedAtDate->lt(now()->subHours(12))) {
-            return null;
-        }
-
-        $store = ShopifyStores::find($storeKey, true);
-        if ($store === null) {
-            return null;
-        }
-
-        if ($this->normalizeShopDomain((string) ($store['shop'] ?? '')) !== $shopDomain) {
-            return null;
-        }
-
-        return [
-            'ok' => true,
-            'status' => 'ok',
-            'shop_domain' => $shopDomain,
-            'host' => $host !== '' ? $host : null,
-            'signed_query' => [],
-            'auth_source' => 'context_token',
-            'store' => $store,
-        ];
-    }
-
-    /**
      * @return array<string,mixed>
      */
     protected function signedQuery(Request $request): array
@@ -267,21 +183,6 @@ class ShopifyEmbeddedAppContext
         }
 
         return $signedQuery;
-    }
-
-    protected function contextToken(Request $request): string
-    {
-        $header = trim((string) $request->header('X-Forestry-Embedded-Context', ''));
-        if ($header !== '') {
-            return $header;
-        }
-
-        $input = trim((string) $request->input('context_token', ''));
-        if ($input !== '') {
-            return $input;
-        }
-
-        return trim((string) $request->query('context_token', ''));
     }
 
     protected function sessionToken(Request $request): string

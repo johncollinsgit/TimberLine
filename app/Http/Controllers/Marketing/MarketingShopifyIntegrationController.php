@@ -235,6 +235,7 @@ class MarketingShopifyIntegrationController extends Controller
             'reuse_existing_code' => ['nullable', 'boolean'],
         ]);
 
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
         $resolved = $this->resolveProfile($request, scope: 'redeem_request', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_redeem_request', [
@@ -290,6 +291,7 @@ class MarketingShopifyIntegrationController extends Controller
                     'reward_id' => (int) $reward->id,
                     'state' => $state,
                     'balance' => (int) ($result['balance'] ?? 0),
+                    'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
                 ],
             ]);
 
@@ -315,8 +317,14 @@ class MarketingShopifyIntegrationController extends Controller
         $syncState = 'synced';
 
         if ($redemption) {
+            $redemption = $this->syncRedemptionStoreContext($redemption, $storeContext);
+
             try {
-                $this->ensureShopifyDiscountForCandleCashRedemption($discountSyncService, $redemption);
+                $this->ensureShopifyDiscountForCandleCashRedemption(
+                    $discountSyncService,
+                    $redemption,
+                    $this->normalizeStoreKey($storeContext['store_key'] ?? null)
+                );
                 $applyPath = ($result['code'] ?? null)
                     ? $this->candleCashApplyPath((string) $result['code'])
                     : null;
@@ -341,6 +349,7 @@ class MarketingShopifyIntegrationController extends Controller
                         'state' => 'sync_failed',
                         'balance' => $restoredBalance,
                         'error' => $e->getMessage(),
+                        'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
                     ],
                 ]);
 
@@ -372,6 +381,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'reward_id' => (int) $reward->id,
                 'state' => $syncState === 'synced' ? $state : 'sync_failed',
                 'balance' => (int) ($result['balance'] ?? 0),
+                'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
             ],
             'resolution_status' => 'resolved',
         ]);
@@ -412,6 +422,7 @@ class MarketingShopifyIntegrationController extends Controller
             'meta' => ['nullable', 'array'],
         ]);
 
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
         $resolved = $this->resolveProfile($request, scope: 'reward_event', allowCreate: false, allowBody: true);
         $profile = $resolved['profile'] ?? null;
 
@@ -425,6 +436,7 @@ class MarketingShopifyIntegrationController extends Controller
             'request_key' => trim((string) ($data['request_key'] ?? '')) ?: null,
             'dedupe_key' => trim((string) ($data['request_key'] ?? '')) ?: null,
             'profile' => $profile,
+            'tenant_id' => $storeContext['tenant_id'] ?? null,
             'source_type' => 'shopify_widget_reward_surface',
             'source_id' => trim((string) ($data['reward_code'] ?? '')) ?: ($profile ? 'profile:' . $profile->id : null),
             'meta' => array_filter([
@@ -433,6 +445,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'state' => trim((string) ($data['state'] ?? '')) ?: null,
                 'message' => trim((string) ($data['message'] ?? '')) ?: null,
                 'identity_status' => (string) ($resolved['status'] ?? 'missing_identity'),
+                'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
                 'extra' => (array) ($data['meta'] ?? []),
             ], static fn ($value): bool => $value !== null && $value !== []),
             'resolution_status' => str_contains((string) $data['event_type'], 'failure') ? 'open' : 'resolved',
@@ -1113,6 +1126,7 @@ class MarketingShopifyIntegrationController extends Controller
         BirthdayRewardEngineService $birthdayRewardEngine,
         CandleCashShopifyDiscountService $discountSyncService
     ): JsonResponse {
+        $storeContext = $this->resolveStoreContext($request);
         $resolved = $this->resolveProfile($request, scope: 'candle_cash_status', allowCreate: false);
         $profile = $resolved['profile'] ?? null;
         $referralCode = Str::upper(trim((string) $request->query('ref', '')));
@@ -1184,7 +1198,11 @@ class MarketingShopifyIntegrationController extends Controller
 
             if ($isShopify) {
                 try {
-                    $this->ensureShopifyDiscountForCandleCashRedemption($discountSyncService, $row);
+                    $this->ensureShopifyDiscountForCandleCashRedemption(
+                        $discountSyncService,
+                        $row,
+                        $this->normalizeStoreKey($storeContext['store_key'] ?? null)
+                    );
                     $discountSyncStatus = 'synced';
                     $applyPath = $this->candleCashApplyPath((string) $row->redemption_code);
                 } catch (\Throwable $e) {
@@ -1554,9 +1572,14 @@ class MarketingShopifyIntegrationController extends Controller
             'product_url' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $storeContext = $this->resolveStoreContext($request);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('product_review_status');
+        }
+
         $resolved = $this->resolveProfile($request, scope: 'product_review_status', allowCreate: false);
         $profile = $resolved['profile'] ?? null;
-        $product = $this->productReviewContext($data);
+        $product = $this->productReviewContext($data, $storeContext);
         $payload = $productReviewService->storefrontPayload($product, $profile);
         $states = ['product_reviews_ready', $profile ? 'linked_customer' : 'unknown_customer'];
 
@@ -1586,18 +1609,36 @@ class MarketingShopifyIntegrationController extends Controller
             'shopify_customer_id' => ['nullable', 'string', 'max:120'],
         ]);
 
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('product_review_submit');
+        }
+
         $resolved = $this->resolveProfile($request, scope: 'product_review_submit', allowCreate: false, allowBody: true);
         $profile = $resolved['profile'] ?? null;
 
-        $result = $productReviewService->submitReview($profile, $this->productReviewContext($data), [
-            'rating' => (int) $data['rating'],
-            'title' => $data['title'] ?? null,
-            'body' => (string) $data['body'],
-            'name' => $data['name'] ?? null,
-            'email' => $data['email'] ?? null,
-            'request_key' => $data['request_key'] ?? null,
-            'source_surface' => 'shopify_product_page',
-        ]);
+        try {
+            $result = $productReviewService->submitReview($profile, $this->productReviewContext($data, $storeContext), [
+                'rating' => (int) $data['rating'],
+                'title' => $data['title'] ?? null,
+                'body' => (string) $data['body'],
+                'name' => $data['name'] ?? null,
+                'email' => $data['email'] ?? null,
+                'request_key' => $data['request_key'] ?? null,
+                'source_surface' => 'shopify_product_page',
+            ]);
+        } catch (\InvalidArgumentException $exception) {
+            return MarketingStorefrontContract::error(
+                code: 'missing_store_context',
+                message: $exception->getMessage(),
+                status: 422,
+                details: [
+                    'store_key' => $storeContext['store_key'],
+                ],
+                states: ['store_context_required'],
+                recoveryStates: ['reload_storefront']
+            );
+        }
 
         if (! (bool) ($result['ok'] ?? false)) {
             return MarketingStorefrontContract::error(
@@ -1854,16 +1895,20 @@ class MarketingShopifyIntegrationController extends Controller
 
     /**
      * @param array<string,mixed> $data
-     * @return array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key:string}
+     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @return array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,tenant_id:?int}
      */
-    protected function productReviewContext(array $data): array
+    protected function productReviewContext(array $data, array $storeContext): array
     {
         return [
             'product_id' => trim((string) ($data['product_id'] ?? '')),
             'product_handle' => $this->nullableString($data['product_handle'] ?? null),
             'product_title' => $this->nullableString($data['product_title'] ?? null),
             'product_url' => $this->nullableString($data['product_url'] ?? null),
-            'store_key' => 'retail',
+            'store_key' => (string) ($storeContext['store_key'] ?? ''),
+            'tenant_id' => is_numeric($storeContext['tenant_id'] ?? null)
+                ? (int) $storeContext['tenant_id']
+                : null,
         ];
     }
 
@@ -1904,6 +1949,33 @@ class MarketingShopifyIntegrationController extends Controller
             'store_key' => $storeKey,
             'tenant_id' => $tenantId,
         ];
+    }
+
+    /**
+     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     */
+    protected function hasStoreContext(array $storeContext): bool
+    {
+        return $this->normalizeStoreKey($storeContext['store_key'] ?? null) !== null;
+    }
+
+    protected function missingStoreContextResponse(string $scope): JsonResponse
+    {
+        Log::warning('shopify storefront request missing store context', [
+            'scope' => $scope,
+            'route' => request()->route()?->getName(),
+            'path' => request()->path(),
+            'query' => request()->query(),
+        ]);
+
+        return MarketingStorefrontContract::error(
+            code: 'missing_store_context',
+            message: 'A verified Shopify store context is required for this request.',
+            status: 422,
+            details: ['scope' => $scope],
+            states: ['store_context_required'],
+            recoveryStates: ['reload_storefront']
+        );
     }
 
     protected function normalizeStoreKey(mixed $value): ?string
@@ -2192,16 +2264,47 @@ class MarketingShopifyIntegrationController extends Controller
         return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
     }
 
+    /**
+     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     */
+    protected function syncRedemptionStoreContext(CandleCashRedemption $redemption, array $storeContext): CandleCashRedemption
+    {
+        $storeKey = $this->normalizeStoreKey($storeContext['store_key'] ?? null);
+        $tenantId = is_numeric($storeContext['tenant_id'] ?? null) && (int) ($storeContext['tenant_id'] ?? 0) > 0
+            ? (int) $storeContext['tenant_id']
+            : null;
+
+        if ($storeKey === null && $tenantId === null) {
+            return $redemption;
+        }
+
+        $context = is_array($redemption->redemption_context ?? null) ? $redemption->redemption_context : [];
+        $nextContext = array_filter([
+            ...$context,
+            'shopify_store_key' => $storeKey ?? ($context['shopify_store_key'] ?? null),
+            'tenant_id' => $tenantId ?? ($context['tenant_id'] ?? null),
+        ], static fn ($value): bool => $value !== null && $value !== '');
+
+        if ($nextContext === $context) {
+            return $redemption;
+        }
+
+        $redemption->forceFill(['redemption_context' => $nextContext])->save();
+
+        return $redemption->fresh() ?? $redemption;
+    }
+
     protected function ensureShopifyDiscountForCandleCashRedemption(
         CandleCashShopifyDiscountService $discountSyncService,
-        CandleCashRedemption $redemption
+        CandleCashRedemption $redemption,
+        ?string $preferredStoreKey = null
     ): void {
         $platform = strtolower(trim((string) ($redemption->platform ?? '')));
         if ($platform !== '' && $platform !== 'shopify') {
             return;
         }
 
-        $discountSyncService->ensureDiscountForRedemption($redemption, 'retail');
+        $discountSyncService->ensureDiscountForRedemption($redemption, $this->normalizeStoreKey($preferredStoreKey));
     }
 
     protected function preferredBirthdayStoreKey(MarketingProfile $profile): ?string

@@ -22,7 +22,7 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
      * @return array<string,mixed>
      */
     public function storefrontPayload(array $product, ?MarketingProfile $viewer = null): array
@@ -92,7 +92,7 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
      * @param array{rating:int,title:?string,body:string,name:?string,email:?string,request_key?:?string,source_surface?:?string} $payload
      * @return array<string,mixed>
      */
@@ -140,6 +140,15 @@ class ProductReviewService
             ];
         }
 
+        $storeKey = $this->nullableString($product['store_key'] ?? null);
+        if ($storeKey === null) {
+            throw new \InvalidArgumentException('A verified Shopify store context is required before submitting a product review.');
+        }
+
+        $tenantId = is_numeric($product['tenant_id'] ?? null) && (int) ($product['tenant_id'] ?? 0) > 0
+            ? (int) $product['tenant_id']
+            : null;
+
         $profile = $viewer;
         if (! $profile && $reviewerEmail) {
             $resolution = $this->identityService->resolve([
@@ -148,12 +157,15 @@ class ProductReviewService
             ], [
                 'source_type' => 'product_review_submission',
                 'source_id' => $this->submissionIdentitySourceId($product, $reviewerEmail),
+                'tenant_id' => $tenantId,
                 'allow_create' => true,
                 'source_label' => 'product_review_submission',
                 'source_channels' => ['shopify', 'product_review'],
                 'source_meta' => [
                     'product_id' => (string) $product['product_id'],
                     'product_handle' => $product['product_handle'] ?? null,
+                    'shopify_store_key' => $storeKey,
+                    'tenant_id' => $tenantId,
                 ],
             ]);
 
@@ -169,7 +181,6 @@ class ProductReviewService
         }
 
         $externalReviewId = $this->externalReviewId($product, $profile, $normalizedEmail);
-        $storeKey = $this->nullableString($product['store_key'] ?? null) ?: 'retail';
         $reviewLookup = [
             'provider' => 'backstage',
             'integration' => 'native',
@@ -1143,7 +1154,7 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
      */
     protected function approvedReviewsQuery(array $product)
     {
@@ -1151,11 +1162,14 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
      */
     protected function reviewLookupQuery(array $product)
     {
+        $storeKey = $this->nullableString($product['store_key'] ?? null);
+
         return MarketingReviewHistory::query()
+            ->when($storeKey !== null, fn ($query) => $query->where('store_key', $storeKey))
             ->where(function ($query) use ($product): void {
                 $query->where('product_id', (string) $product['product_id']);
 
@@ -1215,13 +1229,15 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
      */
     protected function externalReviewId(array $product, ?MarketingProfile $profile, ?string $normalizedEmail): string
     {
         $identity = $profile?->id ? 'profile:' . $profile->id : 'email:' . sha1((string) $normalizedEmail);
+        $storeKey = $this->nullableString($product['store_key'] ?? null) ?: 'unknown_store';
 
         return 'native:' . sha1(implode('|', [
+            $storeKey,
             (string) $product['product_id'],
             (string) ($product['product_handle'] ?? ''),
             $identity,
@@ -1238,11 +1254,14 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
      */
     protected function submissionIdentitySourceId(array $product, string $email): string
     {
+        $storeKey = $this->nullableString($product['store_key'] ?? null) ?: 'unknown_store';
+
         return 'product-review:' . sha1(implode('|', [
+            $storeKey,
             (string) $product['product_id'],
             Str::lower(trim($email)),
         ]));

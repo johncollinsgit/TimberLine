@@ -3,9 +3,12 @@
 use App\Mail\ProductReviewSubmittedMail;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingSetting;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 
@@ -26,6 +29,7 @@ test('shopify product review status returns approved reviews and summary', funct
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
 
     MarketingReviewHistory::query()->create([
         'provider' => 'growave',
@@ -72,6 +76,7 @@ test('shopify product review submission creates native review, sends email, and 
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
 
     Mail::fake();
 
@@ -114,6 +119,7 @@ test('shopify product review submission creates native review, sends email, and 
 
     expect($review)->not->toBeNull()
         ->and($review->marketing_profile_id)->toBe($profile->id)
+        ->and($review->store_key)->toBe('retail')
         ->and((string) $review->submission_source)->toBe('native_storefront')
         ->and((bool) $review->is_published)->toBeTrue();
 
@@ -146,6 +152,7 @@ test('product review submission validates minimum content length', function () {
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
 
     MarketingSetting::query()->updateOrCreate(
         ['key' => 'candle_cash_integration_config'],
@@ -170,6 +177,227 @@ test('product review submission validates minimum content length', function () {
         ->assertJsonPath('error.code', 'review_too_short');
 });
 
+test('shopify product review status is scoped to the verified Shopify store', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'retail-customer',
+        'external_review_id' => 'retail-review',
+        'rating' => 5,
+        'title' => 'Retail favorite',
+        'body' => 'Retail shoppers should see this review.',
+        'reviewer_name' => 'Retail Reviewer',
+        'reviewer_email' => 'retail-reviewer@example.com',
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'native_storefront',
+        'product_id' => 'sku-501',
+        'product_handle' => 'ember-jar',
+        'product_title' => 'Ember Jar',
+        'submitted_at' => now()->subHour(),
+        'approved_at' => now()->subHour(),
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'wholesale',
+        'external_customer_id' => 'wholesale-customer',
+        'external_review_id' => 'wholesale-review',
+        'rating' => 2,
+        'title' => 'Wholesale only',
+        'body' => 'Wholesale shoppers should see a different review.',
+        'reviewer_name' => 'Wholesale Reviewer',
+        'reviewer_email' => 'wholesale-reviewer@example.com',
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'native_storefront',
+        'product_id' => 'sku-501',
+        'product_handle' => 'ember-jar',
+        'product_title' => 'Ember Jar',
+        'submitted_at' => now()->subMinutes(30),
+        'approved_at' => now()->subMinutes(30),
+    ]);
+
+    $retailQuery = productReviewSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'product_id' => 'sku-501',
+        'product_handle' => 'ember-jar',
+        'product_title' => 'Ember Jar',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', $retailQuery))
+        ->assertOk()
+        ->assertJsonPath('data.summary.review_count', 1)
+        ->assertJsonPath('data.reviews.0.title', 'Retail favorite');
+
+    $wholesaleQuery = productReviewSignedQuery([
+        'shop' => 'cedar-wholesale.example.myshopify.com',
+        'timestamp' => (string) (time() + 1),
+        'product_id' => 'sku-501',
+        'product_handle' => 'ember-jar',
+        'product_title' => 'Ember Jar',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', $wholesaleQuery))
+        ->assertOk()
+        ->assertJsonPath('data.summary.review_count', 1)
+        ->assertJsonPath('data.reviews.0.title', 'Wholesale only');
+});
+
+test('shopify product review submission uses the verified store tenant context', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $retailTenant = Tenant::query()->create([
+        'name' => 'Retail Tenant',
+        'slug' => 'retail-tenant',
+    ]);
+    $wholesaleTenant = Tenant::query()->create([
+        'name' => 'Wholesale Tenant',
+        'slug' => 'wholesale-tenant',
+    ]);
+
+    configureProductReviewStorefrontStores($retailTenant->id, $wholesaleTenant->id);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $wholesaleTenant->id,
+        'first_name' => 'Harbor',
+        'last_name' => 'Trade',
+        'email' => 'harbor.trade@example.com',
+        'normalized_email' => 'harbor.trade@example.com',
+    ]);
+
+    $payload = [
+        'shop' => 'cedar-wholesale.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+        'product_id' => 'sku-902',
+        'product_handle' => 'salt-and-cedar',
+        'product_title' => 'Salt + Cedar',
+        'product_url' => '/products/salt-and-cedar',
+        'rating' => 5,
+        'title' => 'Wholesale reorder win',
+        'body' => 'This wholesale review should stay attached to the wholesale tenant.',
+        'request_key' => 'wholesale-review-902',
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.product-reviews.submit', productReviewSignedQuery([
+        'shop' => $payload['shop'],
+        'timestamp' => $payload['timestamp'],
+    ], 'stage10-proxy-secret')), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.state', 'review_live');
+
+    $review = MarketingReviewHistory::query()->where([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'product_id' => 'sku-902',
+    ])->first();
+
+    expect($review)->not->toBeNull()
+        ->and($review->store_key)->toBe('wholesale')
+        ->and((int) $review->marketing_profile_id)->toBe((int) $profile->id);
+});
+
+test('shopify product review storefront rejects requests without verified store context', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $query = productReviewSignedQuery([
+        'timestamp' => (string) time(),
+        'product_id' => 'sku-777',
+        'product_handle' => 'forest-walk',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', $query))
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'missing_store_context');
+});
+
+test('shopify product review storefront rejects invalid signatures', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'product_id' => 'sku-777',
+        'signature' => 'invalid-signature',
+    ]))
+        ->assertStatus(401)
+        ->assertJsonPath('error.code', 'unauthorized_storefront_request');
+});
+
+test('shopify product review status does not resolve customer identity across store tenants', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $retailTenant = Tenant::query()->create([
+        'name' => 'Retail Tenant',
+        'slug' => 'retail-tenant',
+    ]);
+    $wholesaleTenant = Tenant::query()->create([
+        'name' => 'Wholesale Tenant',
+        'slug' => 'wholesale-tenant',
+    ]);
+
+    configureProductReviewStorefrontStores($retailTenant->id, $wholesaleTenant->id);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $wholesaleTenant->id,
+        'first_name' => 'Whit',
+        'last_name' => 'Pine',
+        'email' => 'whit.pine@example.com',
+        'normalized_email' => 'whit.pine@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $wholesaleTenant->id,
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_admin',
+        'store_key' => 'wholesale',
+        'external_customer_id' => '99887766',
+        'external_customer_gid' => 'gid://shopify/Customer/99887766',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'source_channels' => ['shopify', 'online'],
+        'synced_at' => now(),
+    ]);
+
+    $retailQuery = productReviewSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'product_id' => 'sku-888',
+        'product_handle' => 'deep-forest',
+        'logged_in_customer_id' => 'gid://shopify/Customer/99887766',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', $retailQuery))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.viewer.profile_id', null)
+        ->assertJsonPath('data.viewer.state', 'guest_ready');
+});
+
 function productReviewSignedQuery(array $params, string $secret): array
 {
     $params = array_filter($params, static fn ($value) => $value !== null);
@@ -183,4 +411,30 @@ function productReviewSignedQuery(array $params, string $secret): array
     $params['signature'] = hash_hmac('sha256', implode('', $pairs), $secret);
 
     return $params;
+}
+
+function configureProductReviewStorefrontStores(?int $retailTenantId = null, ?int $wholesaleTenantId = null): void
+{
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'retail-client');
+    config()->set('services.shopify.stores.wholesale.shop', 'cedar-wholesale.example.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-client');
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'tenant_id' => $retailTenantId,
+            'shop_domain' => 'timberline.example.myshopify.com',
+            'access_token' => 'retail-token',
+        ]
+    );
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'tenant_id' => $wholesaleTenantId,
+            'shop_domain' => 'cedar-wholesale.example.myshopify.com',
+            'access_token' => 'wholesale-token',
+        ]
+    );
 }

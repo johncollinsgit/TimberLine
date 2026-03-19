@@ -13,6 +13,7 @@ use App\Models\SquareOrder;
 use App\Models\User;
 use App\Models\EventInstance;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\MarketingEventOpportunityService;
 use App\Services\Marketing\MarketingPerformanceAnalyticsService;
 use App\Services\Marketing\MarketingRecommendationEngine;
@@ -308,13 +309,14 @@ test('public event and rewards routes work without admin auth and do not expose 
 
     $this->get(route('marketing.public.rewards-lookup', ['email' => 'public.event.customer@example.com']))
         ->assertOk()
-        ->assertSeeText('Rewards Lookup');
+        ->assertSeeText('Candle Cash Account Lookup');
 });
 
-test('shopify integration endpoints return reward and consent responses with token auth', function () {
-    config()->set('marketing.shopify.widget_token', 'stage7-token');
-    config()->set('marketing.shopify.allow_legacy_token', true);
+test('shopify integration endpoints return reward and consent responses with signed storefront auth', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage7-secret');
     config()->set('marketing.consent_bonus_points.sms', 5);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage7-retail-client');
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Shopify',
@@ -324,42 +326,94 @@ test('shopify integration endpoints return reward and consent responses with tok
         'normalized_phone' => '+15558882222',
         'accepts_email_marketing' => true,
     ]);
-    app(CandleCashService::class)->addPoints($profile, 220, 'earn', 'admin', 'seed', 'Seed');
-    $reward = \App\Models\CandleCashReward::query()->where('is_active', true)->orderBy('points_cost')->firstOrFail();
+    app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'Seed');
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
 
-    $headers = ['X-Marketing-Token' => 'stage7-token'];
+    $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $discountSync->shouldReceive('ensureDiscountForRedemption')
+        ->once()
+        ->withArgs(function (\App\Models\CandleCashRedemption $redemption, ?string $preferredStoreKey): bool {
+            return $preferredStoreKey === 'retail'
+                && data_get($redemption->redemption_context, 'shopify_store_key') === 'retail';
+        })
+        ->andReturn([
+            'discount_id' => 'gid://shopify/DiscountCodeNode/stage7',
+            'discount_node_id' => 'gid://shopify/DiscountCodeNode/stage7',
+            'store_key' => 'retail',
+            'starts_at' => now()->toIso8601String(),
+            'ends_at' => now()->addDays(30)->toIso8601String(),
+        ]);
+    app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
 
-    $this->withHeaders($headers)
-        ->getJson(route('marketing.shopify.rewards.balance', ['email' => $profile->email]))
+    $signedHeaders = static function (string $method, string $path, array $query = [], array $payload = []): array {
+        ksort($query);
+        $canonicalQuery = collect($query)
+            ->map(function ($value, $key): string {
+                return rawurlencode((string) $key) . '=' . rawurlencode((string) $value);
+            })
+            ->implode('&');
+        $timestamp = (string) time();
+        $body = $payload === [] ? '' : json_encode($payload, JSON_THROW_ON_ERROR);
+        $payloadToSign = implode("\n", [
+            $timestamp,
+            strtoupper($method),
+            $path,
+            $canonicalQuery,
+            hash('sha256', $body),
+        ]);
+
+        return [
+            'X-Marketing-Timestamp' => $timestamp,
+            'X-Marketing-Signature' => hash_hmac('sha256', $payloadToSign, 'stage7-secret'),
+        ];
+    };
+
+    $balanceQuery = ['email' => $profile->email];
+
+    $this->withHeaders($signedHeaders('GET', '/shopify/marketing/rewards/balance', $balanceQuery))
+        ->getJson(route('marketing.shopify.rewards.balance', $balanceQuery))
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.profile_id', $profile->id);
 
-    $this->withHeaders($headers)
+    $this->withHeaders($signedHeaders('GET', '/shopify/marketing/rewards/available'))
         ->getJson(route('marketing.shopify.rewards.available'))
         ->assertOk()
         ->assertJsonPath('ok', true);
 
-    $this->withHeaders($headers)
-        ->postJson(route('marketing.shopify.consent.optin'), [
-            'email' => 'shopify.new@example.com',
-            'phone' => '5551114444',
-            'consent_sms' => true,
-            'consent_email' => true,
-            'award_bonus' => true,
-        ])->assertOk()
+    $consentPayload = [
+        'email' => 'shopify.new@example.com',
+        'phone' => '5551114444',
+        'consent_sms' => true,
+        'consent_email' => true,
+        'award_bonus' => true,
+    ];
+
+    $this->withHeaders($signedHeaders('POST', '/shopify/marketing/consent/optin', [], $consentPayload))
+        ->postJson(route('marketing.shopify.consent.optin'), $consentPayload)
+        ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.accepts_sms_marketing', true);
 
-    $this->withHeaders($headers)
-        ->postJson(route('marketing.shopify.rewards.redeem'), [
-            'email' => $profile->email,
-            'reward_id' => $reward->id,
-        ])->assertOk()
+    $redeemPayload = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
+
+    $this->withHeaders($signedHeaders('POST', '/shopify/marketing/rewards/redeem', [], $redeemPayload))
+        ->postJson(route('marketing.shopify.rewards.redeem'), $redeemPayload)
+        ->assertOk()
         ->assertJsonPath('ok', true);
 
-    $this->withHeaders(['X-Marketing-Token' => 'invalid-token'])
-        ->getJson(route('marketing.shopify.rewards.balance', ['email' => $profile->email]))
+    $this->withHeaders(['X-Marketing-Token' => 'stage7-token'])
+        ->getJson(route('marketing.shopify.rewards.balance', $balanceQuery))
+        ->assertStatus(401);
+
+    $this->withHeaders(['X-Marketing-Signature' => 'invalid-signature', 'X-Marketing-Timestamp' => (string) time()])
+        ->getJson(route('marketing.shopify.rewards.balance', $balanceQuery))
         ->assertStatus(401);
 });
 

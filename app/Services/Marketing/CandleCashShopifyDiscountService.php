@@ -130,6 +130,11 @@ GRAPHQL;
             $candidates[] = $preferredStoreKey;
         }
 
+        $contextStoreKey = strtolower(trim((string) data_get($redemption->redemption_context, 'shopify_store_key', '')));
+        if ($contextStoreKey !== '') {
+            $candidates[] = $contextStoreKey;
+        }
+
         $platform = strtolower(trim((string) ($redemption->platform ?? '')));
         if ($platform !== '') {
             $candidates[] = $platform;

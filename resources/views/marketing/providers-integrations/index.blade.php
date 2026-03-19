@@ -585,7 +585,7 @@
                         Shopify-facing endpoints now require signed requests:
                         <div class="mt-1"><code>X-Marketing-Timestamp</code> + <code>X-Marketing-Signature</code> (HMAC SHA-256 over method/path/query/body).</div>
                         <div class="mt-1">App-proxy mode can also be enabled via <code>signature</code> query verification.</div>
-                        <div class="mt-1">Legacy <code>X-Marketing-Token</code> support is optional and disabled by default.</div>
+                        <div class="mt-1">Legacy <code>X-Marketing-Token</code> storefront auth has been retired.</div>
                     </x-admin.help-hint>
                     <div class="mt-2 text-[11px] text-white/55">
                         Contract shape: <code>{`"ok":true,"version":"v1","data":{...},"meta":{"states":[...]}`}</code> and errors as <code>{`"ok":false,"version":"v1","error":{"code":"...","states":[...],"recovery_states":[...]}`}</code>.
