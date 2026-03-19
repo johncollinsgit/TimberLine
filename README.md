@@ -41,6 +41,16 @@ If `public/hot` exists on the server, delete it so `@vite` uses the manifest:
 Deploy proof: Mon Feb 23 14:03:40 EST 2026
 Deploy proof: Mon Feb 23 14:04:21 EST 2026
 
+## Shopify Embedded Session Cookies
+- Embedded Shopify Admin requests run inside an `admin.shopify.com` iframe, so production session cookies must allow secure cross-site usage.
+- Production env should include:
+  - `SESSION_SECURE_COOKIE=true`
+  - `SESSION_SAME_SITE=none`
+  - `SESSION_PARTITIONED_COOKIE=true`
+- After changing those values, run:
+  - `php artisan optimize:clear`
+  - `php artisan config:clear`
+
 ## Twilio SMS Configuration
 - Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.
 - Preferred: configure `MARKETING_TWILIO_SENDERS` as a JSON array of sender objects. All senders share the same `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.
