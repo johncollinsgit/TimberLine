@@ -2,13 +2,11 @@
 
 namespace App\Services\Shopify;
 
+use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 
 class ShopifyEmbeddedCustomerActionUrlGenerator
 {
-    private const CONTEXT_KEYS = ['shop', 'host', 'hmac', 'timestamp', 'embedded'];
-
     public function url(string $routeName, array $routeParameters, Request $request): string
     {
         $prefix = $this->isEmbeddedRequest($request) ? 'shopify.app.' : 'shopify.embedded.';
@@ -44,21 +42,6 @@ class ShopifyEmbeddedCustomerActionUrlGenerator
 
     private function embeddedContextQuery(Request $request): array
     {
-        $query = [];
-
-        foreach (self::CONTEXT_KEYS as $key) {
-            if (! $request->query->has($key)) {
-                continue;
-            }
-
-            $value = $request->query($key);
-            if ($value === null || (is_string($value) && trim($value) === '')) {
-                continue;
-            }
-
-            $query[$key] = is_string($value) ? trim($value) : $value;
-        }
-
-        return Arr::only($query, self::CONTEXT_KEYS);
+        return ShopifyEmbeddedContextQuery::fromRequest($request);
     }
 }

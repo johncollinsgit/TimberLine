@@ -241,45 +241,13 @@
 </style>
 
 @php
-    $embeddedContext = array_filter([
-        'shop' => trim((string) request()->query('shop', '')),
-        'host' => filled($host) ? (string) $host : trim((string) request()->query('host', '')),
-        'hmac' => trim((string) request()->query('hmac', '')),
-        'timestamp' => trim((string) request()->query('timestamp', '')),
-        'embedded' => trim((string) request()->query('embedded', '')),
-    ], static fn ($value): bool => $value !== '');
+    $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        request(),
+        filled($host) ? (string) $host : null
+    );
 
     $appendEmbeddedContext = static function (string $url) use ($embeddedContext): string {
-        if ($embeddedContext === []) {
-            return $url;
-        }
-
-        if (str_starts_with($url, 'http')) {
-            return $url;
-        }
-
-        $parts = parse_url($url);
-        $path = (string) ($parts['path'] ?? $url);
-
-        parse_str((string) ($parts['query'] ?? ''), $query);
-
-        foreach ($embeddedContext as $key => $value) {
-            if (! array_key_exists($key, $query)) {
-                $query[$key] = $value;
-            }
-        }
-
-        $rebuilt = $path;
-
-        if ($query !== []) {
-            $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
-        }
-
-        if (! empty($parts['fragment'])) {
-            $rebuilt .= '#' . $parts['fragment'];
-        }
-
-        return $rebuilt;
+        return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
     };
 @endphp
 

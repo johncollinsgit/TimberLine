@@ -11,12 +11,12 @@ use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
+use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use App\Services\Marketing\MarketingConsentService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 
 class ShopifyEmbeddedCustomersController extends Controller
@@ -40,8 +40,6 @@ class ShopifyEmbeddedCustomersController extends Controller
         'founder' => 'Founder',
         'ops' => 'Ops',
     ];
-
-    private const EMBEDDED_CONTEXT_KEYS = ['shop', 'host', 'hmac', 'timestamp', 'embedded'];
 
     public function show(
         Request $request,
@@ -423,22 +421,7 @@ class ShopifyEmbeddedCustomersController extends Controller
 
     protected function embeddedContextQuery(Request $request): array
     {
-        $query = [];
-
-        foreach (self::EMBEDDED_CONTEXT_KEYS as $key) {
-            if (! $request->query->has($key)) {
-                continue;
-            }
-
-            $value = $request->query($key);
-            if ($value === null || (is_string($value) && trim($value) === '')) {
-                continue;
-            }
-
-            $query[$key] = is_string($value) ? trim($value) : $value;
-        }
-
-        return Arr::only($query, self::EMBEDDED_CONTEXT_KEYS);
+        return ShopifyEmbeddedContextQuery::fromRequest($request);
     }
 
     protected function embeddedContextMissingResponse(): Response

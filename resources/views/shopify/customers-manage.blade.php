@@ -34,31 +34,12 @@
 
         $labelFor = static fn (bool $state): string => $state ? 'Completed' : 'Not completed';
         $indicatorClassFor = static fn (bool $state): string => $state ? 'is-yes' : 'is-no';
-        $embeddedContext = array_filter([
-            'shop' => trim((string) request()->query('shop', '')),
-            'host' => filled($host ?? null) ? (string) $host : trim((string) request()->query('host', '')),
-            'hmac' => trim((string) request()->query('hmac', '')),
-            'timestamp' => trim((string) request()->query('timestamp', '')),
-            'embedded' => trim((string) request()->query('embedded', '')),
-        ], static fn ($value) => $value !== '');
+        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+            request(),
+            filled($host ?? null) ? (string) $host : null
+        );
         $withEmbeddedContext = static function (string $url) use ($embeddedContext): string {
-            if ($embeddedContext === []) {
-                return $url;
-            }
-
-            if (str_starts_with($url, 'http')) {
-                return $url;
-            }
-
-            foreach (array_keys($embeddedContext) as $key) {
-                if (str_contains($url, $key . '=')) {
-                    return $url;
-                }
-            }
-
-            $separator = str_contains($url, '?') ? '&' : '?';
-
-            return $url . $separator . http_build_query($embeddedContext, '', '&', PHP_QUERY_RFC3986);
+            return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
         };
         $detailRouteName = 'shopify.app.customers.detail';
         $withHost = static function (string $url) use ($withEmbeddedContext): string {

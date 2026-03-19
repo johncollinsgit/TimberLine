@@ -15,6 +15,9 @@ test('returns app routes and appends signed query for embedded requests', functi
         'hmac' => 'abcdef',
         'timestamp' => '1234567890',
         'embedded' => '1',
+        'id_token' => 'header.payload.signature',
+        'locale' => 'en',
+        'session' => 'test-session',
         'extra' => 'drop-this',
     ]);
 
@@ -29,6 +32,9 @@ test('returns app routes and appends signed query for embedded requests', functi
         ->and($url)->toContain('hmac=abcdef')
         ->and($url)->toContain('timestamp=1234567890')
         ->and($url)->toContain('embedded=1')
+        ->and($url)->toContain('id_token=header.payload.signature')
+        ->and($url)->toContain('locale=en')
+        ->and($url)->toContain('session=test-session')
         ->and($url)->not->toContain('extra=');
 });
 

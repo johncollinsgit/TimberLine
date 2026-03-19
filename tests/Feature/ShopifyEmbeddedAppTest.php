@@ -91,7 +91,7 @@ test('shopify embedded session lets root-style home route resolve after signed a
         ->assertSee('id="shopify-dashboard-root"', false);
 });
 
-test('shopify embedded session lets root-style rewards and customers routes resolve after signed app entry', function () {
+test('shopify embedded session keeps rewards root-style route but blocks legacy customer entry without Shopify context', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
     config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
@@ -117,6 +117,7 @@ test('shopify embedded session lets root-style rewards and customers routes reso
         ->assertSeeText('Manage Candle Cash rewards and program settings.');
 
     $this->get('/customers')
-        ->assertOk()
-        ->assertSeeText('Manage customers');
+        ->assertStatus(400)
+        ->assertSeeText('Context Missing')
+        ->assertSeeText('This page must be opened from Shopify Admin');
 });

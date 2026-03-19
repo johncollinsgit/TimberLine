@@ -18,14 +18,23 @@ function configureEmbeddedRetailStore(): void
     );
 }
 
-function retailEmbeddedSignedQuery(): array
+function retailEmbeddedSignedQuery(array $overrides = []): array
 {
-    return shopifyEmbeddedSignedQuery([
+    return shopifyEmbeddedSignedQuery(array_merge([
         'shop' => 'modernforestry.myshopify.com',
         'host' => 'admin-host-token',
         'embedded' => '1',
         'timestamp' => (string) time(),
-    ], 'shopify-client-secret');
+    ], $overrides), 'shopify-client-secret');
+}
+
+function retailEmbeddedExtendedSignedQuery(array $overrides = []): array
+{
+    return retailEmbeddedSignedQuery(array_merge([
+        'id_token' => 'eyJhbGciOiJIUzI1NiJ9.test.payload',
+        'locale' => 'en',
+        'session' => 'embedded-session-token',
+    ], $overrides));
 }
 
 function shopifyEmbeddedSignedQuery(array $query, string $secret): array

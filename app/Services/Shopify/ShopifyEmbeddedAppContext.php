@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -101,23 +102,7 @@ class ShopifyEmbeddedAppContext
 
     private function contextQuery(Request $request): array
     {
-        $query = [];
-
-        foreach (['shop', 'host', 'hmac', 'signature', 'timestamp', 'embedded'] as $key) {
-            if ($request->query->has($key)) {
-                $value = $request->query($key);
-
-                if (is_string($value)) {
-                    $value = trim($value);
-                }
-
-                if ($value !== null && $value !== '') {
-                    $query[$key] = $value;
-                }
-            }
-        }
-
-        return $query;
+        return ShopifyEmbeddedContextQuery::fromRequest($request);
     }
 
     /**

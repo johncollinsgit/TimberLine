@@ -180,7 +180,7 @@ test('customer detail alias route resolves with embedded context', function () {
 
     $response = $this->get(route('shopify.app.customers.detail', array_merge([
         'marketingProfile' => $profile->id,
-    ], retailEmbeddedSignedQuery())));
+    ], retailEmbeddedExtendedSignedQuery())));
 
     $response->assertOk()
         ->assertSeeText($profile->email)
@@ -567,7 +567,7 @@ test('customer identity app route accepts embedded csrf token', function () {
     $response = $this->patch(
         route('shopify.app.customers.update', array_merge([
             'marketingProfile' => $profile->id,
-        ], retailEmbeddedSignedQuery())),
+        ], retailEmbeddedExtendedSignedQuery())),
         [
             '_token' => csrf_token(),
             'first_name' => 'Embedded',
@@ -583,7 +583,10 @@ test('customer identity app route accepts embedded csrf token', function () {
         ->and($location)->toContain('/shopify/app/customers/manage/' . $profile->id)
         ->and($location)->toContain('shop=modernforestry.myshopify.com')
         ->and($location)->toContain('host=admin-host-token')
-        ->and($location)->toContain('embedded=1');
+        ->and($location)->toContain('embedded=1')
+        ->and($location)->toContain('id_token=')
+        ->and($location)->toContain('locale=en')
+        ->and($location)->toContain('session=embedded-session-token');
 
     $profile->refresh();
 
@@ -608,7 +611,7 @@ test('candle cash adjustment app route accepts embedded csrf token', function ()
     $response = $this->withSession(['_token' => $token])->post(
         route('shopify.app.customers.candle-cash.adjust', array_merge([
             'marketingProfile' => $profile->id,
-        ], retailEmbeddedSignedQuery())),
+        ], retailEmbeddedExtendedSignedQuery())),
         [
             '_token' => $token,
             'direction' => 'add',
@@ -623,7 +626,10 @@ test('candle cash adjustment app route accepts embedded csrf token', function ()
         ->and($location)->toContain('/shopify/app/customers/manage/' . $profile->id)
         ->and($location)->toContain('shop=modernforestry.myshopify.com')
         ->and($location)->toContain('host=admin-host-token')
-        ->and($location)->toContain('embedded=1');
+        ->and($location)->toContain('embedded=1')
+        ->and($location)->toContain('id_token=')
+        ->and($location)->toContain('locale=en')
+        ->and($location)->toContain('session=embedded-session-token');
 
     $balance = CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->first();
     expect((int) ($balance?->balance ?? 0))->toBe(35);
@@ -654,7 +660,7 @@ test('candle cash subtraction alias route updates balance without sending sms', 
     $response = $this->withSession(['_token' => $token])->post(
         route('shopify.app.customers.candle-cash.adjust', array_merge([
             'marketingProfile' => $profile->id,
-        ], retailEmbeddedSignedQuery()), false),
+        ], retailEmbeddedExtendedSignedQuery()), false),
         [
             '_token' => $token,
             'direction' => 'subtract',
@@ -676,7 +682,7 @@ test('embedded customer detail forms use helper-generated urls with Shopify quer
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
 
-    $signature = retailEmbeddedSignedQuery();
+    $signature = retailEmbeddedExtendedSignedQuery();
     $response = $this->get(
         route('shopify.app.customers.detail', array_merge(['marketingProfile' => $profile->id], $signature))
     );
@@ -700,6 +706,10 @@ test('embedded customer detail forms use helper-generated urls with Shopify quer
         $escaped = htmlspecialchars($expected, ENT_QUOTES, 'UTF-8');
         $this->assertStringContainsString('action="' . $escaped . '"', $content);
     }
+
+    $this->assertStringContainsString('id_token=', $content);
+    $this->assertStringContainsString('locale=en', $content);
+    $this->assertStringContainsString('session=embedded-session-token', $content);
 });
 
 test('embedded customer detail navigation links preserve Shopify query params', function () {
@@ -707,7 +717,7 @@ test('embedded customer detail navigation links preserve Shopify query params', 
     $profile = seedEmbeddedCustomerDetailFixture();
     startEmbeddedCustomersDetailSession($this);
 
-    $signature = retailEmbeddedSignedQuery();
+    $signature = retailEmbeddedExtendedSignedQuery();
     $response = $this->get(
         route('shopify.app.customers.detail', array_merge(['marketingProfile' => $profile->id], $signature))
     );
@@ -720,6 +730,9 @@ test('embedded customer detail navigation links preserve Shopify query params', 
     $this->assertStringContainsString('shop=modernforestry.myshopify.com', $content);
     $this->assertStringContainsString('host=admin-host-token', $content);
     $this->assertStringContainsString('embedded=1', $content);
+    $this->assertStringContainsString('id_token=', $content);
+    $this->assertStringContainsString('locale=en', $content);
+    $this->assertStringContainsString('session=embedded-session-token', $content);
     $this->assertStringContainsString('href="/?shop=', $content);
     $this->assertStringContainsString('href="/shopify/app/settings?shop=', $content);
     $this->assertStringContainsString('/marketing/customers/' . $profile->id, $content);
@@ -728,13 +741,16 @@ test('embedded customer detail navigation links preserve Shopify query params', 
 test('legacy manage route redirects to the embedded customers manage page', function () {
     configureEmbeddedRetailStore();
 
-    $response = $this->get(route('shopify.embedded.customers.manage', retailEmbeddedSignedQuery()));
+    $response = $this->get(route('shopify.embedded.customers.manage', retailEmbeddedExtendedSignedQuery()));
 
     $response->assertRedirect();
 
     $location = $response->headers->get('Location');
     $this->assertStringContainsString('/shopify/app/customers/manage', $location);
     $this->assertStringContainsString('shop=modernforestry.myshopify.com', $location);
+    $this->assertStringContainsString('id_token=', $location);
+    $this->assertStringContainsString('locale=en', $location);
+    $this->assertStringContainsString('session=embedded-session-token', $location);
 });
 
 test('legacy detail route redirects to the embedded customers detail page', function () {
@@ -744,7 +760,7 @@ test('legacy detail route redirects to the embedded customers detail page', func
     $response = $this->get(
         route('shopify.embedded.customers.detail', array_merge(
             ['marketingProfile' => $profile->id],
-            retailEmbeddedSignedQuery()
+            retailEmbeddedExtendedSignedQuery()
         ))
     );
 
@@ -753,6 +769,9 @@ test('legacy detail route redirects to the embedded customers detail page', func
     $location = $response->headers->get('Location');
     $this->assertStringContainsString('/shopify/app/customers/manage/' . $profile->id, $location);
     $this->assertStringContainsString('host=admin-host-token', $location);
+    $this->assertStringContainsString('id_token=', $location);
+    $this->assertStringContainsString('locale=en', $location);
+    $this->assertStringContainsString('session=embedded-session-token', $location);
 });
 
 test('legacy manage route without signed context shows context missing notice', function () {

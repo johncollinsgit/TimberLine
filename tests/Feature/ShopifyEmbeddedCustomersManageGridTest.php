@@ -370,7 +370,7 @@ test('embedded manage page preserves full Shopify context on customer detail lin
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
 
-    $response = $this->get(route('shopify.app.customers.manage', retailEmbeddedSignedQuery()));
+    $response = $this->get(route('shopify.app.customers.manage', retailEmbeddedExtendedSignedQuery()));
 
     $response->assertOk();
 
@@ -382,5 +382,8 @@ test('embedded manage page preserves full Shopify context on customer detail lin
         ->and($content)->toContain('host=admin-host-token')
         ->and($content)->toContain('hmac=')
         ->and($content)->toContain('timestamp=')
-        ->and($content)->toContain('embedded=1');
+        ->and($content)->toContain('embedded=1')
+        ->and($content)->toContain('id_token=')
+        ->and($content)->toContain('locale=en')
+        ->and($content)->toContain('session=embedded-session-token');
 });
