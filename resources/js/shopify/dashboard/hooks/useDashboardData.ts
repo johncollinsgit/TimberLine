@@ -26,6 +26,99 @@ interface UseDashboardDataResult {
   sendCandleCashReminders: () => Promise<void>;
 }
 
+interface DashboardJsonEnvelope<TData> {
+  ok: boolean;
+  data?: TData;
+  message?: string;
+  status?: string;
+}
+
+interface DashboardRequestError extends Error {
+  payload?: DashboardJsonEnvelope<unknown>;
+  status?: string;
+}
+
+function authFailureMessage(status?: string | null, fallbackMessage?: string | null): string {
+  const messages: Record<string, string> = {
+    missing_api_auth:
+      "Shopify Admin verification is unavailable. Reload the dashboard from Shopify Admin and try again.",
+    invalid_session_token:
+      "Shopify Admin verification failed. Reload the dashboard from Shopify Admin and try again.",
+    expired_session_token:
+      "Your Shopify Admin session expired. Reload the dashboard from Shopify Admin and try again.",
+  };
+
+  return messages[status ?? ""] ?? fallbackMessage ?? "Request failed.";
+}
+
+async function resolveEmbeddedAuthHeaders(): Promise<Record<string, string>> {
+  const shopifyBridge = (
+    window as Window & {
+      shopify?: {
+        idToken?: () => Promise<string> | string;
+      };
+    }
+  ).shopify;
+
+  if (!shopifyBridge || typeof shopifyBridge.idToken !== "function") {
+    throw new Error(authFailureMessage("missing_api_auth"));
+  }
+
+  let sessionToken: unknown = null;
+
+  try {
+    sessionToken = await Promise.race([
+      Promise.resolve(shopifyBridge.idToken()),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 1500)),
+    ]);
+  } catch {
+    throw new Error(authFailureMessage("invalid_session_token"));
+  }
+
+  if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
+    throw new Error(authFailureMessage("missing_api_auth"));
+  }
+
+  return {
+    Accept: "application/json",
+    Authorization: `Bearer ${sessionToken.trim()}`,
+  };
+}
+
+async function requestDashboardJson<TData>(
+  url: string,
+  options: RequestInit = {},
+): Promise<DashboardJsonEnvelope<TData>> {
+  const authHeaders = await resolveEmbeddedAuthHeaders();
+  const headers = {
+    ...authHeaders,
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.headers ?? {}),
+  };
+
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+    headers,
+  });
+
+  const payload = (await response.json().catch(() => ({
+    ok: false,
+    message: "Unexpected response from Backstage.",
+  }))) as DashboardJsonEnvelope<TData>;
+
+  if (!response.ok || !payload.ok) {
+    const error = new Error(
+      authFailureMessage(payload.status, payload.message ?? "Request failed."),
+    ) as DashboardRequestError;
+    error.payload = payload;
+    error.status = payload.status;
+    throw error;
+  }
+
+  return payload;
+}
+
 export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDataResult {
   const config = bootstrap.initialData?.config ?? bootstrap.config;
   const initialQuery = bootstrap.initialData?.query;
@@ -98,22 +191,18 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
       setError(null);
 
       try {
-        const response = await fetch(`${bootstrap.dataEndpoint}?${queryString}`, {
-          headers: bootstrap.contextToken
-            ? {
-                "X-Forestry-Embedded-Context": bootstrap.contextToken,
-              }
-            : undefined,
-          credentials: "same-origin",
-          signal: controller.signal,
-        });
+        const response = await requestDashboardJson<DashboardPayload>(
+          `${bootstrap.dataEndpoint}?${queryString}`,
+          {
+            signal: controller.signal,
+          },
+        );
 
-        const payload = (await response.json()) as { ok: boolean; data?: DashboardPayload; message?: string };
-        if (!response.ok || !payload.ok || !payload.data) {
-          throw new Error(payload.message ?? "Dashboard data could not be loaded.");
+        if (!response.data) {
+          throw new Error("Dashboard data could not be loaded.");
         }
 
-        setData(payload.data);
+        setData(response.data);
       } catch (fetchError) {
         if ((fetchError as Error).name === "AbortError") {
           return;
@@ -128,7 +217,7 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     void fetchData();
 
     return () => controller.abort();
-  }, [bootstrap.authorized, bootstrap.contextToken, bootstrap.dataEndpoint, bootstrap.initialData, queryString, reloadSeed]);
+  }, [bootstrap.authorized, bootstrap.dataEndpoint, bootstrap.initialData, queryString, reloadSeed]);
 
   return {
     data,
@@ -176,28 +265,14 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
       });
 
       try {
-        const response = await fetch(bootstrap.reminderEndpoint, {
+        const response = await requestDashboardJson<Record<string, never>>(bootstrap.reminderEndpoint, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(bootstrap.contextToken
-              ? {
-                  "X-Forestry-Embedded-Context": bootstrap.contextToken,
-                }
-              : {}),
-          },
-          credentials: "same-origin",
           body: JSON.stringify({}),
         });
 
-        const payload = (await response.json()) as { ok: boolean; message?: string };
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.message ?? "Reminder send could not be started.");
-        }
-
         setReminderAction({
           loading: false,
-          message: payload.message ?? "Reminder send attempted.",
+          message: response.message ?? "Reminder send attempted.",
           tone: "success",
         });
         setReloadSeed((current) => current + 1);

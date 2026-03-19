@@ -166,10 +166,16 @@
         }
     </style>
 
-    @include('shared.candle-cash.rewards-overview', [
-        'overview' => $dashboard ?? [],
-        'earnUrl' => route('shopify.embedded.rewards.earn'),
-        'redeemUrl' => route('shopify.embedded.rewards.redeem'),
-        'theme' => 'embedded',
-    ])
+    @if($rewardsEditorAvailable ?? true)
+        @include('shared.candle-cash.rewards-overview', [
+            'overview' => $dashboard ?? [],
+            'earnUrl' => route('shopify.embedded.rewards.earn'),
+            'redeemUrl' => route('shopify.embedded.rewards.redeem'),
+            'theme' => 'embedded',
+        ])
+    @else
+        <div class="rewards-note">
+            {{ $rewardsEditorMessage ?: 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.' }}
+        </div>
+    @endif
 @endsection

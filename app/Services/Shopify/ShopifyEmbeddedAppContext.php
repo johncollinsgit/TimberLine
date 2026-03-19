@@ -13,7 +13,8 @@ class ShopifyEmbeddedAppContext
     protected const PAGE_SESSION_KEY = 'shopify_embedded_page_context';
 
     public function __construct(
-        protected ShopifyHmacVerifier $hmacVerifier
+        protected ShopifyHmacVerifier $hmacVerifier,
+        protected ShopifySessionTokenVerifier $sessionTokenVerifier
     ) {
     }
 
@@ -51,6 +52,7 @@ class ShopifyEmbeddedAppContext
                 'shop_domain' => null,
                 'host' => null,
                 'signed_query' => [],
+                'auth_source' => 'none',
             ];
         }
 
@@ -61,6 +63,7 @@ class ShopifyEmbeddedAppContext
                 'shop_domain' => null,
                 'host' => $host !== '' ? $host : null,
                 'signed_query' => $this->signedQuery($request),
+                'auth_source' => 'signed_query',
             ];
         }
 
@@ -72,6 +75,7 @@ class ShopifyEmbeddedAppContext
                 'shop_domain' => $shopDomain,
                 'host' => $host !== '' ? $host : null,
                 'signed_query' => $this->signedQuery($request),
+                'auth_source' => 'signed_query',
             ];
         }
 
@@ -83,6 +87,7 @@ class ShopifyEmbeddedAppContext
                 'shop_domain' => $shopDomain,
                 'host' => $host !== '' ? $host : null,
                 'signed_query' => $this->signedQuery($request),
+                'auth_source' => 'signed_query',
             ];
         }
 
@@ -92,6 +97,7 @@ class ShopifyEmbeddedAppContext
             'shop_domain' => $shopDomain,
             'host' => $host !== '' ? $host : null,
             'signed_query' => $this->signedQuery($request),
+            'auth_source' => 'signed_query',
             'store' => $store,
         ];
 
@@ -117,9 +123,15 @@ class ShopifyEmbeddedAppContext
      */
     public function resolveApiContext(Request $request): array
     {
-        $token = $this->contextToken($request);
-        if ($token !== '') {
-            $resolved = $this->resolveContextToken($token);
+        $authenticatedContext = $this->resolveAuthenticatedApiContext($request);
+
+        if (($authenticatedContext['ok'] ?? false) || ($authenticatedContext['status'] ?? '') !== 'missing_api_auth') {
+            return $authenticatedContext;
+        }
+
+        $contextToken = $this->contextToken($request);
+        if ($contextToken !== '') {
+            $resolved = $this->resolveContextToken($contextToken);
 
             if ($resolved !== null) {
                 return $resolved;
@@ -131,10 +143,43 @@ class ShopifyEmbeddedAppContext
                 'shop_domain' => null,
                 'host' => null,
                 'signed_query' => [],
+                'auth_source' => 'context_token',
             ];
         }
 
         return $this->resolvePageContext($request);
+    }
+
+    /**
+     * Strict bearer-token resolver for embedded mutation surfaces.
+     *
+     * @return array{
+     *   ok:bool,
+     *   status:string,
+     *   shop_domain:?string,
+     *   host:?string,
+     *   signed_query:array<string,mixed>,
+     *   auth_source:string,
+     *   store?:array<string,mixed>,
+     *   shopify_admin_user_id?:?string,
+     *   shopify_admin_session_id?:?string
+     * }
+     */
+    public function resolveAuthenticatedApiContext(Request $request): array
+    {
+        $sessionToken = $this->sessionToken($request);
+        if ($sessionToken !== '') {
+            return $this->sessionTokenVerifier->verify($sessionToken);
+        }
+
+        return [
+            'ok' => false,
+            'status' => 'missing_api_auth',
+            'shop_domain' => null,
+            'host' => null,
+            'signed_query' => [],
+            'auth_source' => 'none',
+        ];
     }
 
     /**
@@ -203,6 +248,7 @@ class ShopifyEmbeddedAppContext
             'shop_domain' => $shopDomain,
             'host' => $host !== '' ? $host : null,
             'signed_query' => [],
+            'auth_source' => 'context_token',
             'store' => $store,
         ];
     }
@@ -236,6 +282,20 @@ class ShopifyEmbeddedAppContext
         }
 
         return trim((string) $request->query('context_token', ''));
+    }
+
+    protected function sessionToken(Request $request): string
+    {
+        $authorization = trim((string) $request->header('Authorization', ''));
+        if ($authorization !== '') {
+            if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
+                return trim((string) ($matches[1] ?? ''));
+            }
+
+            return $authorization;
+        }
+
+        return trim((string) $request->header('X-Shopify-Session-Token', ''));
     }
 
     protected function normalizeShopDomain(string $shopDomain): string
@@ -291,6 +351,7 @@ class ShopifyEmbeddedAppContext
             'shop_domain' => $shopDomain,
             'host' => $host !== '' ? $host : null,
             'signed_query' => [],
+            'auth_source' => 'session_page_context',
             'store' => $store,
         ];
     }

@@ -202,7 +202,6 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'giftOriginOptions' => self::giftOriginOptions(),
                 'customerFormActions' => $formActions,
                 'customerMutationBootstrap' => $authorized ? [
-                    'contextToken' => $contextService->issueContextToken($context),
                     'identityEndpoint' => route('shopify.app.api.customers.update', ['marketingProfile' => $marketingProfile->id], false),
                     'adjustmentEndpoint' => route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $marketingProfile->id], false),
                     'sendCandleCashEndpoint' => route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $marketingProfile->id], false),
@@ -259,7 +258,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'identity.update.json', (bool) ($context['ok'] ?? false));
 
         if (! ($context['ok'] ?? false)) {
@@ -421,7 +420,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             'profile_id' => $marketingProfile->id,
         ]);
 
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.adjust.json', (bool) ($context['ok'] ?? false));
 
         if (! ($context['ok'] ?? false)) {
@@ -646,7 +645,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         $this->logCustomerAction($request, $marketingProfile, 'candle_cash.send.json', (bool) ($context['ok'] ?? false));
 
         if (! ($context['ok'] ?? false)) {
@@ -1141,10 +1140,12 @@ class ShopifyEmbeddedCustomersController extends Controller
         $status = (string) ($context['status'] ?? 'invalid_request');
         $messages = [
             'open_from_shopify' => 'Open the app from Shopify Admin to load this customer.',
+            'missing_api_auth' => 'This embedded customer action requires a verified Shopify session token.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
             'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
-            'invalid_context_token' => 'This embedded admin session expired. Reload the app from Shopify Admin.',
+            'invalid_session_token' => 'This Shopify session token could not be verified.',
+            'expired_session_token' => 'This Shopify session expired. Reload the app from Shopify Admin.',
         ];
 
         return response()->json([

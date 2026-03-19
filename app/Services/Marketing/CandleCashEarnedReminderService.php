@@ -24,6 +24,9 @@ class CandleCashEarnedReminderService
         $cooldownDays = max(1, min(90, (int) ($options['cooldown_days'] ?? config('marketing.email.candle_cash_reminder.cooldown_days', 14))));
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
         $dryRun = (bool) ($options['dry_run'] ?? false);
+        $tenantId = isset($options['tenant_id']) && (int) $options['tenant_id'] > 0
+            ? (int) $options['tenant_id']
+            : null;
 
         if (in_array((string) ($readiness['status'] ?? ''), ['disabled', 'misconfigured'], true)) {
             return [
@@ -42,7 +45,7 @@ class CandleCashEarnedReminderService
             ];
         }
 
-        $candidates = (array) $this->analyticsService->reminderCandidates();
+        $candidates = (array) $this->analyticsService->reminderCandidates($tenantId);
         $rows = collect((array) ($candidates['rows'] ?? []))
             ->filter(fn (array $row): bool => (int) ($row['outstanding_points'] ?? 0) > 0)
             ->sortByDesc('outstanding_points')
@@ -84,6 +87,7 @@ class CandleCashEarnedReminderService
                 'status' => 'sending',
                 'raw_payload' => [
                     'actor_id' => $actorId,
+                    'tenant_id' => $tenantId,
                     'reminder_type' => 'candle_cash_unredeemed_earned',
                     'outstanding_points' => (int) ($recipient['outstanding_points'] ?? 0),
                     'outstanding_amount' => round((float) ($recipient['outstanding_amount'] ?? 0), 2),

@@ -236,7 +236,6 @@ export interface DashboardBootstrap {
     href: string;
     external?: boolean;
   }>;
-  contextToken: string | null;
   dataEndpoint: string | null;
   reminderEndpoint: string | null;
   config: DashboardConfig | null;

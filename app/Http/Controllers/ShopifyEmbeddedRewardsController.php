@@ -7,6 +7,7 @@ use App\Models\CandleCashTask;
 use App\Services\Marketing\CandleCashRewardsOverviewService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
+use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -29,46 +30,72 @@ class ShopifyEmbeddedRewardsController extends Controller
     public function index(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        CandleCashRewardsOverviewService $overviewService
+        CandleCashRewardsOverviewService $overviewService,
+        TenantResolver $tenantResolver
     ): Response
     {
+        $pageContext = $contextService->resolvePageContext($request);
+        $authorized = (bool) ($pageContext['ok'] ?? false);
+        $store = (array) ($pageContext['store'] ?? []);
+        $configState = $authorized
+            ? $this->rewardsConfigState($store, $tenantResolver)
+            : ['available' => false];
+
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'overview',
             'shopify.rewards-overview',
             [
-                'dashboard' => $overviewService->build(),
+                'dashboard' => $authorized && ($configState['available'] ?? false)
+                    ? $overviewService->build()
+                    : [],
                 'setupNote' => null,
             ]
         );
     }
 
-    public function earn(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function earn(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'earn',
             'shopify.rewards'
         );
     }
 
-    public function redeem(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function redeem(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'redeem',
             'shopify.rewards'
         );
     }
 
-    public function referrals(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function referrals(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'referrals',
             'shopify.rewards-placeholder',
             [
@@ -78,11 +105,16 @@ class ShopifyEmbeddedRewardsController extends Controller
         );
     }
 
-    public function birthdays(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function birthdays(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'birthdays',
             'shopify.rewards-placeholder',
             [
@@ -92,11 +124,16 @@ class ShopifyEmbeddedRewardsController extends Controller
         );
     }
 
-    public function vip(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function vip(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'vip',
             'shopify.rewards-placeholder',
             [
@@ -106,11 +143,16 @@ class ShopifyEmbeddedRewardsController extends Controller
         );
     }
 
-    public function notifications(Request $request, ShopifyEmbeddedAppContext $contextService): Response
+    public function notifications(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response
     {
         return $this->renderSection(
             $request,
             $contextService,
+            $tenantResolver,
             'notifications',
             'shopify.rewards-placeholder',
             [
@@ -123,11 +165,17 @@ class ShopifyEmbeddedRewardsController extends Controller
     public function data(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedRewardsService $rewardsService
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! ($context['ok'] ?? false)) {
             return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
         }
 
         $payload = $rewardsService->payload();
@@ -142,11 +190,17 @@ class ShopifyEmbeddedRewardsController extends Controller
         Request $request,
         CandleCashTask $task,
         ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedRewardsService $rewardsService
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! ($context['ok'] ?? false)) {
             return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
         }
 
         try {
@@ -174,11 +228,17 @@ class ShopifyEmbeddedRewardsController extends Controller
         Request $request,
         CandleCashReward $reward,
         ShopifyEmbeddedAppContext $contextService,
-        ShopifyEmbeddedRewardsService $rewardsService
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! ($context['ok'] ?? false)) {
             return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
         }
 
         try {
@@ -205,6 +265,7 @@ class ShopifyEmbeddedRewardsController extends Controller
     protected function renderSection(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
         string $section,
         string $view,
         array $extra = []
@@ -213,6 +274,9 @@ class ShopifyEmbeddedRewardsController extends Controller
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
+        $configState = $authorized
+            ? $this->rewardsConfigState($store, $tenantResolver)
+            : ['available' => false, 'tenant_id' => null, 'status' => null, 'message' => null];
 
         $viewData = [
             'authorized' => $authorized,
@@ -225,15 +289,19 @@ class ShopifyEmbeddedRewardsController extends Controller
                 : 'Shopify Admin',
             'headline' => $this->headlineForStatus($status),
             'subheadline' => $this->subheadlineForStatus($status),
-            'contextToken' => $authorized ? $contextService->issueContextToken($context) : null,
             'dataEndpoint' => route('shopify.app.api.rewards'),
             'earnUpdateEndpointTemplate' => route('shopify.app.api.rewards.earn.update', ['task' => '__TASK__']),
             'redeemUpdateEndpointTemplate' => route('shopify.app.api.rewards.redeem.update', ['reward' => '__REWARD__']),
             'setupNote' => $authorized
-                ? 'This embedded page updates the live Candle Cash task and reward rows already used by Backstage.'
+                ? (($configState['available'] ?? false)
+                    ? 'This embedded page updates the live Candle Cash task and reward rows already used by Backstage.'
+                    : null)
                 : ($status === 'open_from_shopify'
                     ? 'Open the app from Shopify Admin so the store context can be verified before editing rewards.'
                     : null),
+            'rewardsEditorAvailable' => $authorized && (bool) ($configState['available'] ?? false),
+            'rewardsEditorStatus' => $configState['status'] ?? null,
+            'rewardsEditorMessage' => $configState['message'] ?? null,
             'referenceLinks' => $authorized
                 ? [
                     [
@@ -300,10 +368,12 @@ class ShopifyEmbeddedRewardsController extends Controller
 
         $messages = [
             'open_from_shopify' => 'Open the app from Shopify Admin to load this page.',
+            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload rewards from Shopify Admin and try again.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
             'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
-            'invalid_context_token' => 'This embedded admin session expired. Reload the app from Shopify Admin.',
+            'invalid_session_token' => 'Shopify Admin verification failed. Reload rewards from Shopify Admin and try again.',
+            'expired_session_token' => 'Your Shopify Admin session expired. Reload rewards from Shopify Admin and try again.',
         ];
 
         return response()->json([
@@ -337,5 +407,42 @@ class ShopifyEmbeddedRewardsController extends Controller
         $redeemStatus = (string) data_get($payload, 'redeem.status', 'error');
 
         return $earnStatus === 'error' && $redeemStatus === 'error' ? 500 : 200;
+    }
+
+    /**
+     * @param  array<string,mixed>  $store
+     * @return array{available:bool,tenant_id:?int,status:?string,message:?string}
+     */
+    protected function rewardsConfigState(array $store, TenantResolver $tenantResolver): array
+    {
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
+        if ($tenantId === null) {
+            return [
+                'available' => true,
+                'tenant_id' => null,
+                'status' => null,
+                'message' => null,
+            ];
+        }
+
+        return [
+            'available' => false,
+            'tenant_id' => $tenantId,
+            'status' => 'tenant_scoped_rewards_config_unsupported',
+            'message' => 'This embedded rewards editor is unavailable for tenant-scoped stores until Candle Cash tasks, rewards, and program settings are isolated per tenant.',
+        ];
+    }
+
+    /**
+     * @param  array{status?:?string,message?:?string}  $configState
+     */
+    protected function unsupportedRewardsConfigResponse(array $configState): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'status' => (string) ($configState['status'] ?? 'tenant_scoped_rewards_config_unsupported'),
+            'message' => (string) ($configState['message']
+                ?? 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.'),
+        ], 409);
     }
 }

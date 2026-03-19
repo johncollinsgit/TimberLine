@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -43,7 +44,6 @@ class ShopifyEmbeddedAppController extends Controller
                         'status' => 'open_from_shopify',
                         'storeLabel' => 'Shopify Admin',
                         'links' => [],
-                        'contextToken' => null,
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
                         'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
@@ -72,7 +72,6 @@ class ShopifyEmbeddedAppController extends Controller
                         'status' => 'invalid_request',
                         'storeLabel' => 'Shopify Admin',
                         'links' => [],
-                        'contextToken' => null,
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
                         'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
@@ -129,7 +128,6 @@ class ShopifyEmbeddedAppController extends Controller
                     'status' => 'ok',
                     'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                     'links' => $dashboardLinks,
-                    'contextToken' => $contextService->issueContextToken($context),
                     'dataEndpoint' => route('shopify.app.api.dashboard'),
                     'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                     'initialData' => $dashboardData,
@@ -143,7 +141,7 @@ class ShopifyEmbeddedAppController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
 
         if (! ($context['ok'] ?? false)) {
             return $this->invalidContextResponse($context);
@@ -157,9 +155,10 @@ class ShopifyEmbeddedAppController extends Controller
 
     public function sendCandleCashEarnedReminders(
         Request $request,
-        ShopifyEmbeddedAppContext $contextService
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
     ): JsonResponse {
-        $context = $contextService->resolveApiContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! ($context['ok'] ?? false)) {
             return $this->invalidContextResponse($context);
         }
@@ -169,10 +168,12 @@ class ShopifyEmbeddedAppController extends Controller
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
         $result = $this->candleCashEarnedReminderService->sendManualBatch([
             'limit' => $data['limit'] ?? null,
             'dry_run' => (bool) ($data['dry_run'] ?? false),
             'actor_id' => auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         if ((bool) ($result['blocked'] ?? false)) {
@@ -211,7 +212,9 @@ class ShopifyEmbeddedAppController extends Controller
             'missing_shop' => 'The Shopify shop context is missing from this request.',
             'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
-            'invalid_context_token' => 'This embedded admin session expired. Reload the app from Shopify Admin.',
+            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload the dashboard from Shopify Admin and try again.',
+            'invalid_session_token' => 'Shopify Admin verification failed. Reload the dashboard from Shopify Admin and try again.',
+            'expired_session_token' => 'Your Shopify Admin session expired. Reload the dashboard from Shopify Admin and try again.',
         ];
 
         return response()->json([

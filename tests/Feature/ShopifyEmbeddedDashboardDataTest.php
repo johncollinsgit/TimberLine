@@ -15,11 +15,20 @@ use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Scent;
+use App\Models\ShopifyStore;
 use App\Models\Size;
+use App\Models\Tenant;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardQuery;
 use Illuminate\Support\Facades\Cache;
+
+function retailDashboardApiHeaders(array $headers = []): array
+{
+    return array_merge([
+        'Authorization' => 'Bearer '.retailShopifySessionToken(),
+    ], $headers);
+}
 
 beforeEach(function () {
     $this->withoutVite();
@@ -148,7 +157,7 @@ test('embedded dashboard api returns a stable payload contract for an authorized
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'last_30_days',
         'comparison' => 'previous_period',
         'location_grouping' => 'state',
@@ -224,6 +233,19 @@ test('embedded dashboard api returns a stable payload contract for an authorized
     expect($response->json('data.financialSummary.netProfit.detail'))->toContain('confidence');
 });
 
+test('embedded dashboard api requires bearer token auth and does not fall back to page session state', function () {
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $this->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'previous_period',
+        'location_grouping' => 'state',
+    ]))
+        ->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth');
+});
+
 test('issued birthday rewards without linked orders do not reduce realized net profit', function () {
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Bri',
@@ -251,7 +273,7 @@ test('issued birthday rewards without linked orders do not reduce realized net p
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'last_30_days',
         'comparison' => 'previous_period',
         'location_grouping' => 'state',
@@ -305,7 +327,7 @@ test('only realized reward cost affects fallback profit when issued birthday rew
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'last_30_days',
         'comparison' => 'previous_period',
         'location_grouping' => 'state',
@@ -406,7 +428,7 @@ test('performance trend charts birthday redemption revenue on the redeemed day a
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'custom',
         'custom_start_date' => '2026-03-01',
         'custom_end_date' => '2026-03-07',
@@ -458,7 +480,7 @@ test('performance trend falls back to birthday redemption count when revenue is 
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'custom',
         'custom_start_date' => '2026-03-01',
         'custom_end_date' => '2026-03-07',
@@ -558,7 +580,7 @@ test('candle cash earned analytics exclude imported opening balances and report 
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'last_7_days',
         'comparison' => 'none',
     ]));
@@ -614,7 +636,8 @@ test('manual candle cash reminder endpoint sends to eligible profiles once and r
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $first = $this->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
+    $first = $this->withHeaders(retailDashboardApiHeaders())
+        ->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
     $first
         ->assertOk()
         ->assertJsonPath('ok', true)
@@ -623,7 +646,8 @@ test('manual candle cash reminder endpoint sends to eligible profiles once and r
 
     expect(MarketingEmailDelivery::query()->count())->toBe(1);
 
-    $second = $this->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
+    $second = $this->withHeaders(retailDashboardApiHeaders())
+        ->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
     $second
         ->assertOk()
         ->assertJsonPath('ok', true)
@@ -631,4 +655,133 @@ test('manual candle cash reminder endpoint sends to eligible profiles once and r
         ->assertJsonPath('data.summary.skipped_cooldown', 1);
 
     expect(MarketingEmailDelivery::query()->count())->toBe(1);
+});
+
+test('manual candle cash reminder endpoint rejects the legacy embedded context header fallback', function () {
+    $this->postJson(
+        route('shopify.app.api.dashboard.candle-cash-reminders'),
+        [],
+        ['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()]
+    )
+        ->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth');
+});
+
+test('manual candle cash reminder endpoint rejects invalid shopify session token auth', function () {
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.retailShopifySessionToken([
+            'aud' => 'wrong-client-id',
+        ]),
+    ])->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'))
+        ->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'invalid_session_token');
+});
+
+test('manual candle cash reminder endpoint rejects expired shopify session token auth', function () {
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.retailShopifySessionToken([
+            'exp' => time() - 120,
+            'nbf' => time() - 240,
+            'iat' => time() - 240,
+        ]),
+    ])->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'))
+        ->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'expired_session_token');
+});
+
+test('manual candle cash reminder endpoint keeps sends scoped to the authenticated store tenant', function () {
+    Tenant::unguarded(function (): void {
+        Tenant::query()->updateOrCreate(
+            ['id' => 101],
+            ['name' => 'Retail Tenant', 'slug' => 'retail-tenant']
+        );
+
+        Tenant::query()->updateOrCreate(
+            ['id' => 202],
+            ['name' => 'Wholesale Tenant', 'slug' => 'wholesale-tenant']
+        );
+    });
+
+    configureEmbeddedRetailStore(101);
+
+    config()->set('marketing.email.enabled', true);
+    config()->set('marketing.email.dry_run', true);
+    config()->set('marketing.email.from_email', 'rewards@theforestrystudio.com');
+    config()->set('marketing.email.from_name', 'Modern Forestry');
+    config()->set('services.sendgrid.api_key', 'sg-test-key');
+
+    config()->set('services.shopify.stores.wholesale.shop', 'other-shop.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'shopify-wholesale-client-id');
+    config()->set('services.shopify.stores.wholesale.client_secret', 'shopify-wholesale-client-secret');
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'tenant_id' => 202,
+            'shop_domain' => 'other-shop.myshopify.com',
+            'access_token' => 'shpat_other',
+            'installed_at' => now(),
+        ]
+    );
+
+    $tenantOneProfile = MarketingProfile::query()->create([
+        'tenant_id' => 101,
+        'first_name' => 'Retail',
+        'last_name' => 'Customer',
+        'email' => 'retail-tenant@example.com',
+    ]);
+
+    $tenantTwoProfile = MarketingProfile::query()->create([
+        'tenant_id' => 202,
+        'first_name' => 'Wholesale',
+        'last_name' => 'Customer',
+        'email' => 'wholesale-tenant@example.com',
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $tenantOneProfile->id,
+        'type' => 'earn',
+        'points' => 400,
+        'source' => 'consent',
+        'source_id' => 'sms-consent:tenant-one',
+        'description' => 'Retail tenant earn',
+        'created_at' => now()->subDays(3),
+        'updated_at' => now()->subDays(3),
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $tenantTwoProfile->id,
+        'type' => 'earn',
+        'points' => 500,
+        'source' => 'consent',
+        'source_id' => 'sms-consent:tenant-two',
+        'description' => 'Wholesale tenant earn',
+        'created_at' => now()->subDays(3),
+        'updated_at' => now()->subDays(3),
+    ]);
+
+    $response = $this->withHeaders(retailDashboardApiHeaders())
+        ->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary.sent', 1);
+
+    expect(MarketingEmailDelivery::query()->count())->toBe(1)
+        ->and(MarketingEmailDelivery::query()->value('marketing_profile_id'))->toBe($tenantOneProfile->id)
+        ->and(MarketingEmailDelivery::query()->value('email'))->toBe('retail-tenant@example.com')
+        ->and(data_get(MarketingEmailDelivery::query()->first()?->raw_payload, 'tenant_id'))->toBe(101);
+});
+
+test('manual candle cash reminder endpoint returns json validation errors for invalid batch size', function () {
+    $this->withHeaders(retailDashboardApiHeaders())
+        ->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'), [
+            'limit' => 501,
+        ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['limit']);
 });

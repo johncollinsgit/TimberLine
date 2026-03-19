@@ -437,10 +437,6 @@
         }
     </style>
 
-    @if(filled($setupNote))
-        <div class="rewards-note">{{ $setupNote }}</div>
-    @endif
-
     @if(! empty($referenceLinks))
         <div class="rewards-links">
             @foreach($referenceLinks as $link)
@@ -453,11 +449,14 @@
         <div class="rewards-empty">
             Open the app from Shopify Admin to verify the store context before managing Candle Cash rewards.
         </div>
+    @elseif(! $rewardsEditorAvailable)
+        <div class="rewards-empty">
+            {{ $rewardsEditorMessage ?: 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.' }}
+        </div>
     @else
         <div
             id="shopify-rewards-admin"
             class="rewards-root"
-            data-context-token="{{ $contextToken }}"
             data-endpoint="{{ $dataEndpoint }}"
             data-earn-update-endpoint-template="{{ $earnUpdateEndpointTemplate }}"
             data-redeem-update-endpoint-template="{{ $redeemUpdateEndpointTemplate }}"
@@ -619,8 +618,6 @@
                     redeemTemplate: root.dataset.redeemUpdateEndpointTemplate,
                 };
 
-                const contextToken = root.dataset.contextToken || "";
-
                 function escapeHtml(value) {
                     return String(value ?? "")
                         .replaceAll("&", "&amp;")
@@ -656,12 +653,57 @@
                     return null;
                 }
 
+                function authFailureMessage(status, fallbackMessage) {
+                    const messages = {
+                        missing_api_auth: "Shopify Admin verification is unavailable. Reload rewards from Shopify Admin and try again.",
+                        invalid_session_token: "Shopify Admin verification failed. Reload rewards from Shopify Admin and try again.",
+                        expired_session_token: "Your Shopify Admin session expired. Reload rewards from Shopify Admin and try again.",
+                    };
+
+                    return messages[status] || fallbackMessage || null;
+                }
+
+                async function resolveEmbeddedAuthHeaders() {
+                    if (!window.shopify || typeof window.shopify.idToken !== "function") {
+                        throw new Error(
+                            authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
+                        );
+                    }
+
+                    const headers = {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    };
+
+                    let sessionToken = null;
+
+                    try {
+                        sessionToken = await Promise.race([
+                            Promise.resolve(window.shopify.idToken()),
+                            new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
+                        ]);
+                    } catch (error) {
+                        throw new Error(
+                            authFailureMessage("invalid_session_token", "Shopify Admin verification failed."),
+                        );
+                    }
+
+                    if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
+                        throw new Error(
+                            authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
+                        );
+                    }
+
+                    headers.Authorization = `Bearer ${sessionToken.trim()}`;
+
+                    return headers;
+                }
+
                 async function fetchJson(url, options = {}) {
+                    const authHeaders = await resolveEmbeddedAuthHeaders();
                     const response = await fetch(url, {
                         headers: {
-                            "Accept": "application/json",
-                            "Content-Type": "application/json",
-                            "X-Forestry-Embedded-Context": contextToken,
+                            ...authHeaders,
                             ...(options.headers || {}),
                         },
                         credentials: "same-origin",
@@ -674,7 +716,11 @@
                     }));
 
                     if (!response.ok) {
-                        const error = new Error(payload.message || "Request failed.");
+                        const error = new Error(
+                            authFailureMessage(payload?.status, payload?.message || "Request failed.")
+                            || payload?.message
+                            || "Request failed."
+                        );
                         error.payload = payload;
                         throw error;
                     }

@@ -239,7 +239,7 @@ test('customer identity update persists safe fields', function () {
         ->and($profile->normalized_email)->toBe('updated@example.com');
 });
 
-test('customer identity json update succeeds with embedded context token', function () {
+test('customer identity json update succeeds with shopify session token auth', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -249,7 +249,7 @@ test('customer identity json update succeeds with embedded context token', funct
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
 
     $response = $this
-        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
         ->patchJson(
             route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
             [
@@ -275,6 +275,99 @@ test('customer identity json update succeeds with embedded context token', funct
         ->and($profile->phone)->toBe('555-000-9999');
 });
 
+test('customer identity json requires embedded api auth and does not fall back to page session state', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->patchJson(
+        route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+        [
+            'first_name' => 'Blocked',
+        ]
+    );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth')
+        ->assertJsonPath('message', 'This embedded customer action requires a verified Shopify session token.');
+});
+
+test('customer identity json rejects legacy embedded context token fallback', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $response = $this
+        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->patchJson(
+            route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+            [
+                'first_name' => 'Blocked',
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth')
+        ->assertJsonPath('message', 'This embedded customer action requires a verified Shopify session token.');
+});
+
+test('customer identity json rejects invalid shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer not-a-valid-shopify-token'])
+        ->patchJson(
+            route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+            [
+                'first_name' => 'Blocked',
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'invalid_session_token')
+        ->assertJsonPath('message', 'This Shopify session token could not be verified.');
+});
+
+test('customer identity json rejects expired shopify session token auth', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+    $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
+    $expiredNow = time() - 120;
+
+    $response = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken([
+                'nbf' => $expiredNow - 60,
+                'iat' => $expiredNow - 60,
+                'exp' => $expiredNow,
+            ]),
+        ])
+        ->patchJson(
+            route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
+            [
+                'first_name' => 'Blocked',
+            ]
+        );
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'expired_session_token')
+        ->assertJsonPath('message', 'This Shopify session expired. Reload the app from Shopify Admin.');
+});
+
 test('customer identity json returns validation errors', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
@@ -285,7 +378,7 @@ test('customer identity json returns validation errors', function () {
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
 
     $response = $this
-        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
         ->patchJson(
             route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
             [
@@ -440,7 +533,7 @@ test('candle cash adjustment adds balance and records transaction', function () 
         ->assertSeeText('Alex Admin');
 });
 
-test('candle cash adjustment json succeeds with embedded context token', function () {
+test('candle cash adjustment json succeeds with shopify session token auth', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -464,7 +557,7 @@ test('candle cash adjustment json succeeds with embedded context token', functio
 
     $response = $this
         ->actingAs($user)
-        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
         ->postJson(
             route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
             [
@@ -499,7 +592,7 @@ test('candle cash adjustment json returns validation errors', function () {
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
 
     $response = $this
-        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
         ->postJson(
             route('shopify.app.api.customers.candle-cash.adjust', ['marketingProfile' => $profile->id], false),
             [
@@ -1181,7 +1274,7 @@ test('send candle cash succeeds and records gift transaction', function () {
         ->assertSeeText('Casey Admin');
 });
 
-test('send candle cash json succeeds with embedded context token', function () {
+test('send candle cash json succeeds with shopify session token auth', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -1197,7 +1290,7 @@ test('send candle cash json succeeds with embedded context token', function () {
 
     $response = $this
         ->actingAs($user)
-        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
         ->postJson(
             route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
             [
@@ -1371,7 +1464,7 @@ test('embedded customer detail mutations and page access are isolated by store t
     $detailResponse->assertNotFound();
 
     $mutationResponse = $this
-        ->withHeaders(['X-Forestry-Embedded-Context' => retailEmbeddedContextToken()])
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
         ->patchJson(
             route('shopify.app.api.customers.update', ['marketingProfile' => $profile->id], false),
             [

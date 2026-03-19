@@ -36,6 +36,11 @@ function retailEmbeddedContextToken(string $host = 'admin-host-token'): string
     ]);
 }
 
+function retailShopifySessionToken(array $overrides = []): string
+{
+    return shopifySessionToken('retail', $overrides);
+}
+
 function retailEmbeddedSignedQuery(array $overrides = []): array
 {
     return shopifyEmbeddedSignedQuery(array_merge([
@@ -67,4 +72,50 @@ function shopifyEmbeddedSignedQuery(array $query, string $secret): array
     );
 
     return $payload;
+}
+
+function shopifySessionToken(string $storeKey, array $overrides = []): string
+{
+    $store = ShopifyStores::find($storeKey, true);
+
+    if (! is_array($store)) {
+        throw new RuntimeException("Shopify store [{$storeKey}] is not configured.");
+    }
+
+    $shopDomain = trim((string) ($store['shop'] ?? ''));
+    $clientId = trim((string) ($store['client_id'] ?? ''));
+    $secret = trim((string) ($store['secret'] ?? ''));
+
+    if ($shopDomain === '' || $clientId === '' || $secret === '') {
+        throw new RuntimeException("Shopify store [{$storeKey}] is missing session token credentials.");
+    }
+
+    $now = time();
+    $payload = array_merge([
+        'iss' => 'https://' . $shopDomain . '/admin',
+        'dest' => 'https://' . $shopDomain,
+        'aud' => $clientId,
+        'sub' => 'gid://shopify/User/1',
+        'sid' => 'sid-test',
+        'jti' => uniqid('jti-', true),
+        'nbf' => $now - 5,
+        'iat' => $now - 5,
+        'exp' => $now + 300,
+    ], $overrides);
+
+    $header = [
+        'alg' => 'HS256',
+        'typ' => 'JWT',
+    ];
+
+    $encodedHeader = shopifyBase64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR));
+    $encodedPayload = shopifyBase64UrlEncode(json_encode($payload, JSON_THROW_ON_ERROR));
+    $signature = hash_hmac('sha256', $encodedHeader . '.' . $encodedPayload, $secret, true);
+
+    return $encodedHeader . '.' . $encodedPayload . '.' . shopifyBase64UrlEncode($signature);
+}
+
+function shopifyBase64UrlEncode(string $value): string
+{
+    return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
 }
