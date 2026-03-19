@@ -17,21 +17,12 @@ class MarketingConsentIncentiveService
     {
         return max(
             0,
-            (int) data_get(
-                config('marketing.candle_cash_consent_bonus', []),
-                'sms',
-                data_get(config('marketing.consent_bonus_points', []), 'sms', 0)
-            )
+            (int) data_get(config('marketing.candle_cash_consent_bonus', []), 'sms', 0)
         );
     }
 
-    public function bonusPoints(): int
-    {
-        return $this->bonusCandleCash();
-    }
-
     /**
-     * @return array{awarded:bool,candle_cash:int,points:int,balance:?int,state?:string}
+     * @return array{awarded:bool,candle_cash:int,balance:?int,state?:string}
      */
     public function awardSmsConsentBonusOnce(MarketingProfile $profile, string $sourceId, string $description): array
     {
@@ -54,7 +45,6 @@ class MarketingConsentIncentiveService
             return [
                 'awarded' => $awarded,
                 'candle_cash' => $awarded ? (int) ($completion?->reward_candle_cash ?? 0) : 0,
-                'points' => $awarded ? (int) ($completion?->reward_candle_cash ?? 0) : 0,
                 'balance' => $awarded ? $this->candleCashService->currentBalance($profile) : null,
                 'state' => (string) ($result['state'] ?? ''),
             ];
@@ -62,7 +52,7 @@ class MarketingConsentIncentiveService
 
         $candleCash = $this->bonusCandleCash();
         if ($candleCash <= 0) {
-            return ['awarded' => false, 'candle_cash' => 0, 'points' => 0, 'balance' => null];
+            return ['awarded' => false, 'candle_cash' => 0, 'balance' => null];
         }
 
         $alreadyAwarded = CandleCashTransaction::query()
@@ -73,7 +63,7 @@ class MarketingConsentIncentiveService
             ->exists();
 
         if ($alreadyAwarded) {
-            return ['awarded' => false, 'candle_cash' => 0, 'points' => 0, 'balance' => null];
+            return ['awarded' => false, 'candle_cash' => 0, 'balance' => null];
         }
 
         $result = $this->candleCashService->addPoints(
@@ -88,7 +78,6 @@ class MarketingConsentIncentiveService
         return [
             'awarded' => true,
             'candle_cash' => $candleCash,
-            'points' => $candleCash,
             'balance' => (int) ($result['balance'] ?? 0),
         ];
     }

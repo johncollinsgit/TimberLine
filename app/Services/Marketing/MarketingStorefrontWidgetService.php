@@ -124,7 +124,7 @@ class MarketingStorefrontWidgetService
         }
 
         $balance = (int) ($context['candle_cash_balance'] ?? 0);
-        $minRewardCandleCash = (int) ($context['min_reward_candle_cash'] ?? $context['min_reward_points'] ?? 0);
+        $minRewardCandleCash = (int) ($context['min_reward_candle_cash'] ?? 0);
         if ($balance > 0 && $minRewardCandleCash > 0 && $balance >= max(1, $minRewardCandleCash - 25)) {
             $states[] = 'eligible_for_reward_nudge';
         }
@@ -144,7 +144,7 @@ class MarketingStorefrontWidgetService
             $states[] = $state;
         }
 
-        if (in_array((string) ($result['error'] ?? ''), ['insufficient_candle_cash', 'insufficient_points'], true)) {
+        if ((string) ($result['error'] ?? '') === 'insufficient_candle_cash') {
             $states[] = 'insufficient_candle_cash';
         }
         if ((string) ($result['error'] ?? '') === 'already_has_active_code') {
@@ -172,7 +172,7 @@ class MarketingStorefrontWidgetService
             'unauthorized_storefront_request' => ['contact_support'],
             'identity_review_required' => ['verification_required', 'contact_support'],
             'profile_not_found' => ['verification_required'],
-            'insufficient_candle_cash', 'insufficient_points' => ['try_again_later'],
+            'insufficient_candle_cash' => ['try_again_later'],
             'reward_unavailable' => ['try_again_later'],
             'already_has_active_code' => ['already_redeemed'],
             'code_already_used' => ['already_redeemed'],

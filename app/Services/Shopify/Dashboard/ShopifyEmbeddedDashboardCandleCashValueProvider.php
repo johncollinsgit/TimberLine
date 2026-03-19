@@ -25,16 +25,16 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
             ->whereBetween('redeemed_at', [$from, $to])
             ->get(['id', 'candle_cash_spent', 'redeemed_at', 'external_order_source', 'external_order_id']);
 
-        $redeemedPoints = (int) $redeemedRows->sum('candle_cash_spent');
-        $redeemedAmount = round($this->candleCashService->amountFromPoints($redeemedPoints), 2);
+        $redeemedCandleCash = (int) $redeemedRows->sum('candle_cash_spent');
+        $redeemedAmount = round($this->candleCashService->amountFromPoints($redeemedCandleCash), 2);
 
         $giftRows = CandleCashTransaction::query()
             ->where('type', 'gift')
             ->whereBetween('created_at', [$from, $to])
             ->get(['id', 'candle_cash_delta', 'created_at']);
 
-        $giftPoints = (int) $giftRows->sum('candle_cash_delta');
-        $giftAmount = round($this->candleCashService->amountFromPoints($giftPoints), 2);
+        $giftCandleCash = (int) $giftRows->sum('candle_cash_delta');
+        $giftAmount = round($this->candleCashService->amountFromPoints($giftCandleCash), 2);
 
         $birthdayRows = BirthdayRewardIssuance::query()
             ->whereBetween('issued_at', [$from, $to])
@@ -62,13 +62,11 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
                 'activeModel' => 'discount_based',
             ],
             'used' => [
-                'points' => $redeemedPoints,
                 'amount' => $redeemedAmount,
                 'count' => $redeemedRows->count(),
             ],
             'redeemedAmount' => $redeemedAmount,
             'issued' => [
-                'giftPoints' => $giftPoints,
                 'giftAmount' => $giftAmount,
                 'giftCount' => $giftRows->count(),
                 'birthdayCost' => $birthdayCost,

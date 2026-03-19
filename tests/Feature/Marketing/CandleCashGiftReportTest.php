@@ -134,10 +134,11 @@ test('candle cash gift report aggregates intents, origins, notifications, actors
     $report = app(CandleCashGiftReportService::class)->generate();
 
     expect(data_get($report, 'totals.gift_transactions'))->toBe(2)
-        ->and(data_get($report, 'totals.gift_points'))->toBe(50)
         ->and(data_get($report, 'totals.gift_amount'))->toBe($report['totals']['gift_amount'])
+        ->and(data_get($report, 'totals.gift_points'))->toBeNull()
         ->and(data_get($report, 'breakdowns.intent.retention.count'))->toBe(1)
-        ->and(data_get($report, 'breakdowns.intent.vip.points'))->toBe(30)
+        ->and(data_get($report, 'breakdowns.intent.vip.candle_cash_amount'))->toBe(30.0)
+        ->and(data_get($report, 'transactions.0.points'))->toBeNull()
         ->and(data_get($report, 'breakdowns.origin.support.count'))->toBe(1)
         ->and(data_get($report, 'breakdowns.origin.marketing.count'))->toBe(1)
         ->and(data_get($report, 'breakdowns.notification.skipped.count'))->toBe(1)

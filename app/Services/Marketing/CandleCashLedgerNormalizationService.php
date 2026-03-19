@@ -26,7 +26,7 @@ class CandleCashLedgerNormalizationService
             ],
             'birthday_earn' => [
                 'label' => 'Birthday earn',
-                'definition' => 'Earned from birthday reward credits applied in Candle Cash points.',
+                'definition' => 'Earned from birthday reward credits applied in Candle Cash.',
             ],
             'bonus_promo_earn' => [
                 'label' => 'Bonus / Promo earn',

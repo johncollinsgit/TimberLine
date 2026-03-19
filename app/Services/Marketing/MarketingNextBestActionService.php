@@ -101,7 +101,7 @@ class MarketingNextBestActionService
             return [
                 'action_key' => 'send_reward_reminder_email',
                 'title' => 'Send reward reminder email suggestion',
-                'summary' => 'Profile is within ' . $distance . ' points of redemption threshold.',
+                'summary' => 'Profile is within $' . number_format((float) $distance, 0) . ' of the redemption threshold.',
                 'confidence' => 0.71,
                 'reasons' => ['near_reward_threshold', 'email_consented'],
                 'suggested_channel' => 'email',
