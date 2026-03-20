@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeChartSeries } from "../chartUtils";
 import type { DashboardBootstrap, DashboardComparison, DashboardPayload, DashboardTimeframe } from "../types";
 
 export interface DashboardQueryState {
@@ -13,6 +14,7 @@ interface UseDashboardDataResult {
   data: DashboardPayload | null;
   error: string | null;
   loading: boolean;
+  refreshing: boolean;
   reminderAction: {
     loading: boolean;
     message: string | null;
@@ -23,6 +25,7 @@ interface UseDashboardDataResult {
   setComparison: (value: DashboardComparison) => void;
   setLocationGrouping: (value: "country" | "state" | "city") => void;
   setCustomDates: (start: string | null, end: string | null) => void;
+  refreshData: () => void;
   sendCandleCashReminders: () => Promise<void>;
 }
 
@@ -36,6 +39,37 @@ interface DashboardJsonEnvelope<TData> {
 interface DashboardRequestError extends Error {
   payload?: DashboardJsonEnvelope<unknown>;
   status?: string;
+}
+
+const DASHBOARD_DEBUG_KEY = "sf-dashboard-debug";
+const DASHBOARD_AUTO_REFRESH_KEY = "sf-dashboard-auto-refresh";
+const AUTO_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+
+function isDashboardDebugEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+
+  return (
+    params.get("dashboard_debug") === "1" ||
+    params.get("debug") === "dashboard" ||
+    window.localStorage.getItem(DASHBOARD_DEBUG_KEY) === "true"
+  );
+}
+
+function isAutoRefreshEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+
+  return (
+    params.get("auto_refresh") === "1" ||
+    window.localStorage.getItem(DASHBOARD_AUTO_REFRESH_KEY) === "true"
+  );
 }
 
 function authFailureMessage(status?: string | null, fallbackMessage?: string | null): string {
@@ -123,10 +157,12 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
   const config = bootstrap.initialData?.config ?? bootstrap.config;
   const initialQuery = bootstrap.initialData?.query;
   const firstLoadRef = useRef(true);
+  const manualRefreshRef = useRef(false);
 
   const [data, setData] = useState<DashboardPayload | null>(bootstrap.initialData);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [reloadSeed, setReloadSeed] = useState(0);
   const [reminderAction, setReminderAction] = useState<{
     loading: boolean;
@@ -145,6 +181,8 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     customStartDate: initialQuery?.customStartDate ?? null,
     customEndDate: initialQuery?.customEndDate ?? null,
   });
+
+  const autoRefreshEnabled = useMemo(() => isAutoRefreshEnabled(), []);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -189,10 +227,19 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     const fetchData = async () => {
       setLoading(true);
       setError(null);
+      const shouldForceRefresh = manualRefreshRef.current;
+      if (shouldForceRefresh) {
+        manualRefreshRef.current = false;
+      }
 
       try {
+        const params = new URLSearchParams(queryString);
+        if (shouldForceRefresh) {
+          params.set("refresh", "1");
+        }
+
         const response = await requestDashboardJson<DashboardPayload>(
-          `${bootstrap.dataEndpoint}?${queryString}`,
+          `${bootstrap.dataEndpoint}?${params.toString()}`,
           {
             signal: controller.signal,
           },
@@ -200,6 +247,35 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
 
         if (!response.data) {
           throw new Error("Dashboard data could not be loaded.");
+        }
+
+        if (response.data) {
+          if (isDashboardDebugEnabled()) {
+            const normalizedSeries = normalizeChartSeries(response.data.chart?.series);
+            const chartLabels = normalizedSeries.map((point) => ({
+              raw: point.label,
+              start: point.bucketStart ?? null,
+              end: point.bucketEnd ?? null,
+            }));
+
+            console.groupCollapsed("[Shopify Dashboard] Data payload");
+            console.log("Raw response payload", response);
+            console.log("Query/timeframe", response.data.query);
+            console.log("Interval/granularity", response.data.query?.interval);
+            console.log("Comparison window", response.data.query?.comparisonWindow);
+            console.log("Freshness metadata", response.data.meta?.freshness);
+            console.log("Dashboard cache TTL (seconds)", response.data.meta?.cacheTtlSeconds ?? null);
+            console.log("Chart series (normalized)", normalizedSeries);
+            console.log("Chart series options", response.data.chart?.seriesOptions);
+            console.log("Chart bucket labels", chartLabels);
+            console.groupEnd();
+          }
+
+          if (!Array.isArray(response.data.chart?.series)) {
+            console.warn(
+              "[Shopify Dashboard] Chart series payload is malformed; rendering fallback empty state.",
+            );
+          }
         }
 
         setData(response.data);
@@ -211,6 +287,9 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
         setError((fetchError as Error).message);
       } finally {
         setLoading(false);
+        if (shouldForceRefresh) {
+          setRefreshing(false);
+        }
       }
     };
 
@@ -219,10 +298,31 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     return () => controller.abort();
   }, [bootstrap.authorized, bootstrap.dataEndpoint, bootstrap.initialData, queryString, reloadSeed]);
 
+  useEffect(() => {
+    if (!bootstrap.authorized || !bootstrap.dataEndpoint || !autoRefreshEnabled) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      if (loading || refreshing) {
+        return;
+      }
+
+      setReloadSeed((current) => current + 1);
+    }, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [autoRefreshEnabled, bootstrap.authorized, bootstrap.dataEndpoint, loading, refreshing]);
+
   return {
     data,
     error,
     loading,
+    refreshing,
     reminderAction,
     query,
     setTimeframe: (value) =>
@@ -248,6 +348,15 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
         customStartDate: start,
         customEndDate: end,
       })),
+    refreshData: () => {
+      if (!bootstrap.authorized || !bootstrap.dataEndpoint || loading || refreshing) {
+        return;
+      }
+
+      manualRefreshRef.current = true;
+      setRefreshing(true);
+      setReloadSeed((current) => current + 1);
+    },
     sendCandleCashReminders: async () => {
       if (!bootstrap.authorized || !bootstrap.reminderEndpoint) {
         setReminderAction({

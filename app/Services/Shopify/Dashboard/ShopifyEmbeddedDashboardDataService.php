@@ -47,63 +47,122 @@ class ShopifyEmbeddedDashboardDataService
         $config = $this->config->payload();
         $resolvedQuery = $this->query->resolve($input, $config);
         $cacheKey = $this->cacheKey($resolvedQuery);
+        $cacheTtlSeconds = $this->cacheTtlSeconds($resolvedQuery);
+        $forceRefresh = $this->shouldForceRefresh($input);
+        $cacheHit = false;
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($config, $resolvedQuery): array {
-            $primaryWindow = $this->query->rehydrateWindow((array) $resolvedQuery['primary']);
-            $comparisonWindow = is_array($resolvedQuery['comparisonWindow'] ?? null)
-                ? $this->query->rehydrateWindow((array) $resolvedQuery['comparisonWindow'])
-                : null;
+        if ($forceRefresh) {
+            $payload = $this->buildPayload($config, $resolvedQuery, $cacheTtlSeconds);
+            Cache::put($cacheKey, $payload, now()->addSeconds($cacheTtlSeconds));
+        } else {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached)) {
+                $payload = $cached;
+                $cacheHit = true;
+            } else {
+                $payload = $this->buildPayload($config, $resolvedQuery, $cacheTtlSeconds);
+                Cache::put($cacheKey, $payload, now()->addSeconds($cacheTtlSeconds));
+            }
+        }
 
-            $primarySnapshot = $this->windowSnapshot(
+        $payload['meta'] = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
+        $payload['meta']['freshness'] = [
+            'cache' => [
+                'hit' => $cacheHit,
+                'forced' => $forceRefresh,
+                'ttlSeconds' => $cacheTtlSeconds,
+            ],
+        ];
+
+        return $payload;
+    }
+
+    protected function shouldForceRefresh(array $input): bool
+    {
+        $refresh = $input['refresh'] ?? $input['fresh'] ?? null;
+
+        return filter_var($refresh, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * @param  array<string,mixed>  $config
+     * @param  array<string,mixed>  $resolvedQuery
+     * @return array<string,mixed>
+     */
+    protected function buildPayload(array $config, array $resolvedQuery, int $cacheTtlSeconds): array
+    {
+        $primaryWindow = $this->query->rehydrateWindow((array) $resolvedQuery['primary']);
+        $comparisonWindow = is_array($resolvedQuery['comparisonWindow'] ?? null)
+            ? $this->query->rehydrateWindow((array) $resolvedQuery['comparisonWindow'])
+            : null;
+
+        $primarySnapshot = $this->windowSnapshot(
+            $primaryWindow['from'],
+            $primaryWindow['to'],
+            (string) $resolvedQuery['locationGrouping']
+        );
+        $comparisonSnapshot = $comparisonWindow
+            ? $this->windowSnapshot(
+                $comparisonWindow['from'],
+                $comparisonWindow['to'],
+                (string) $resolvedQuery['locationGrouping']
+            )
+            : null;
+
+        return [
+            'meta' => [
+                'generatedAt' => now()->toIso8601String(),
+                'currencyCode' => 'USD',
+                'cacheTtlSeconds' => $cacheTtlSeconds,
+                'partialData' => [
+                    'attribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
+                    'locations' => (bool) $primarySnapshot['flags']['location_partial'],
+                    'profit' => (bool) $primarySnapshot['flags']['profit_partial'],
+                ],
+            ],
+            'query' => $resolvedQuery,
+            'config' => $config,
+            'topMetrics' => $this->topMetrics($primarySnapshot, $comparisonSnapshot),
+            'chart' => $this->chart(
+                $primarySnapshot,
+                $comparisonSnapshot,
                 $primaryWindow['from'],
                 $primaryWindow['to'],
-                (string) $resolvedQuery['locationGrouping']
-            );
-            $comparisonSnapshot = $comparisonWindow
-                ? $this->windowSnapshot(
-                    $comparisonWindow['from'],
-                    $comparisonWindow['to'],
-                    (string) $resolvedQuery['locationGrouping']
-                )
-                : null;
-
-            return [
-                'meta' => [
-                    'generatedAt' => now()->toIso8601String(),
-                    'currencyCode' => 'USD',
-                    'partialData' => [
-                        'attribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
-                        'locations' => (bool) $primarySnapshot['flags']['location_partial'],
-                        'profit' => (bool) $primarySnapshot['flags']['profit_partial'],
-                    ],
-                ],
-                'query' => $resolvedQuery,
-                'config' => $config,
-                'topMetrics' => $this->topMetrics($primarySnapshot, $comparisonSnapshot),
-                'chart' => $this->chart(
-                    $primarySnapshot,
-                    $comparisonSnapshot,
-                    $primaryWindow['from'],
-                    $primaryWindow['to'],
-                    $comparisonWindow,
-                    $resolvedQuery
-                ),
-                'attribution' => $this->attributionSection($primarySnapshot, $comparisonSnapshot, $config),
-                'locationOrigins' => $this->locationSection($primarySnapshot, $resolvedQuery),
-                'financialSummary' => $this->financialSummary($primarySnapshot, $comparisonSnapshot),
-                'candleCashEngagement' => $this->candleCashEngagementSection($primarySnapshot, $comparisonSnapshot),
-                'flags' => [
-                    'hasAnyData' => (bool) $primarySnapshot['flags']['has_any_data'],
-                    'usesFallbackAttribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
-                    'usesEstimatedOrderRevenue' => (bool) $primarySnapshot['flags']['profit_used_estimator_fallback'],
-                ],
-            ];
-        });
+                $comparisonWindow,
+                $resolvedQuery
+            ),
+            'attribution' => $this->attributionSection($primarySnapshot, $comparisonSnapshot, $config),
+            'locationOrigins' => $this->locationSection($primarySnapshot, $resolvedQuery),
+            'financialSummary' => $this->financialSummary($primarySnapshot, $comparisonSnapshot),
+            'candleCashEngagement' => $this->candleCashEngagementSection($primarySnapshot, $comparisonSnapshot),
+            'flags' => [
+                'hasAnyData' => (bool) $primarySnapshot['flags']['has_any_data'],
+                'usesFallbackAttribution' => (bool) $primarySnapshot['flags']['attribution_partial'],
+                'usesEstimatedOrderRevenue' => (bool) $primarySnapshot['flags']['profit_used_estimator_fallback'],
+            ],
+        ];
     }
 
     protected function cacheKey(array $resolvedQuery): string
     {
         return 'shopify:embedded-dashboard:'.sha1(json_encode($resolvedQuery));
+    }
+
+    protected function cacheTtlSeconds(array $resolvedQuery): int
+    {
+        $timeframe = (string) ($resolvedQuery['timeframe'] ?? 'last_30_days');
+        $primaryWindow = $this->query->rehydrateWindow((array) ($resolvedQuery['primary'] ?? []));
+        $windowTouchesToday = $primaryWindow['to']->greaterThanOrEqualTo(now()->startOfDay()->toImmutable());
+
+        if ($timeframe === 'today') {
+            return 30;
+        }
+
+        if ($windowTouchesToday) {
+            return 60;
+        }
+
+        return in_array($timeframe, ['year_to_date', 'full_year'], true) ? 600 : 300;
     }
 
     protected function currency(float $value): string
@@ -942,8 +1001,12 @@ class ShopifyEmbeddedDashboardDataService
     }
 
     /**
+     * Build the chart from live reward-attributed revenue rows plus Candle Cash
+     * earn/redemption ledger activity so the embedded chart stays backed by
+     * real order and rewards data instead of front-end placeholder series.
+     *
      * @param  Collection<int,array<string,mixed>>  $revenueRows
-     * @return array<string,array<int,array{label:string,value:float}>>
+     * @return array<string,array<int,array{label:string,value:float,start:string,end:string}>>
      */
     protected function chartSeriesMap(Collection $revenueRows, CarbonImmutable $from, CarbonImmutable $to, string $unit): array
     {
@@ -967,8 +1030,8 @@ class ShopifyEmbeddedDashboardDataService
     }
 
     /**
-     * @param  array<string,array<int,array{label:string,value:float}>>  $primarySeries
-     * @param  array<string,array<int,array{label:string,value:float}>>  $comparisonSeries
+     * @param  array<string,array<int,array{label:string,value:float,start:string,end:string}>>  $primarySeries
+     * @param  array<string,array<int,array{label:string,value:float,start:string,end:string}>>  $comparisonSeries
      * @param  array<int,string>  $seriesKeys
      * @return array<int,array<string,mixed>>
      */
@@ -995,6 +1058,8 @@ class ShopifyEmbeddedDashboardDataService
 
             $rows[] = [
                 'label' => (string) ($point['label'] ?? ''),
+                'bucketStart' => (string) ($point['start'] ?? ''),
+                'bucketEnd' => (string) ($point['end'] ?? ''),
                 'primary' => (float) ($values[$focusMetricKey] ?? 0),
                 'comparison' => $hasComparison ? (float) ($comparisonValues[$focusMetricKey] ?? 0) : null,
                 'values' => $values,
@@ -1031,7 +1096,7 @@ class ShopifyEmbeddedDashboardDataService
     }
 
     /**
-     * @return array<int,array{label:string,value:float}>
+     * @return array<int,array{label:string,value:float,start:string,end:string}>
      */
     protected function candleCashEarnedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit): array
     {
@@ -1054,7 +1119,7 @@ class ShopifyEmbeddedDashboardDataService
     }
 
     /**
-     * @return array<int,array{label:string,value:float}>
+     * @return array<int,array{label:string,value:float,start:string,end:string}>
      */
     protected function candleCashRedeemedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit): array
     {
@@ -1086,6 +1151,8 @@ class ShopifyEmbeddedDashboardDataService
             $buckets[$key] = [
                 'label' => $this->bucketLabel($cursor, $unit),
                 'value' => 0.0,
+                'start' => $cursor->toIso8601String(),
+                'end' => $this->bucketEnd($cursor, $unit)->toIso8601String(),
             ];
             $cursor = $this->nextBucket($cursor, $unit);
         }
@@ -1187,6 +1254,16 @@ class ShopifyEmbeddedDashboardDataService
             'week' => $date->addWeek(),
             'month' => $date->addMonth(),
             default => $date->addDay(),
+        };
+    }
+
+    protected function bucketEnd(CarbonImmutable $date, string $unit): CarbonImmutable
+    {
+        return match ($unit) {
+            'hour' => $date->endOfHour(),
+            'week' => $date->endOfWeek(),
+            'month' => $date->endOfMonth(),
+            default => $date->endOfDay(),
         };
     }
 

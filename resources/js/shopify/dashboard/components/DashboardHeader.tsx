@@ -4,6 +4,7 @@ interface DashboardHeaderProps {
   storeLabel: string;
   timeframeLabel: string;
   generatedAt: string | null;
+  refreshing?: boolean;
   partialData: {
     attribution: boolean;
     locations: boolean;
@@ -20,6 +21,7 @@ export function DashboardHeader({
   storeLabel,
   timeframeLabel,
   generatedAt,
+  refreshing = false,
   partialData,
   links,
 }: DashboardHeaderProps) {
@@ -32,6 +34,16 @@ export function DashboardHeader({
         .filter(Boolean)
         .join(" ")
     : null;
+  const updatedAt = generatedAt ? new Date(generatedAt) : null;
+  const formattedUpdatedAt =
+    updatedAt && Number.isFinite(updatedAt.valueOf())
+      ? new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(updatedAt)
+      : "—";
 
   return (
     <div className="sf-dashboard-header">
@@ -54,11 +66,10 @@ export function DashboardHeader({
               The dashboard is now reading from live Backstage data sources so the embedded home can
               act like a real analytics surface instead of a placeholder.
             </Text>
-            {generatedAt ? (
-              <Text as="p" variant="bodySm" tone="subdued">
-                Updated {new Date(generatedAt).toLocaleString()}
-              </Text>
-            ) : null}
+            <Text as="p" variant="bodySm" tone="subdued" className="sf-dashboard-header__updated" aria-live="polite">
+              <span>Last updated {formattedUpdatedAt}</span>
+              {refreshing ? <span className="sf-dashboard-header__refreshing">Refreshing…</span> : null}
+            </Text>
             {note ? (
               <Text as="p" variant="bodySm" tone="subdued">
                 {note}

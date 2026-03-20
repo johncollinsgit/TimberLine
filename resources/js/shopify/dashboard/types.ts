@@ -27,6 +27,8 @@ export interface DashboardMetric {
 
 export interface DashboardChartSeriesPoint {
   label: string;
+  bucketStart?: string | null;
+  bucketEnd?: string | null;
   primary: number;
   comparison: number | null;
   values: Record<string, number>;
@@ -89,6 +91,14 @@ export interface DashboardPayload {
   meta: {
     generatedAt: string;
     currencyCode: string;
+    cacheTtlSeconds?: number;
+    freshness?: {
+      cache: {
+        hit: boolean;
+        forced: boolean;
+        ttlSeconds: number;
+      };
+    };
     partialData: {
       attribution: boolean;
       locations: boolean;

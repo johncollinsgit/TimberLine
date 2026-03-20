@@ -3,7 +3,7 @@
 namespace App\Services\Shopify;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\Pagination\Paginator as PaginatorContract;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +13,7 @@ class ShopifyEmbeddedCustomersGridService
 {
     /**
      * @return array{
-     *   paginator:LengthAwarePaginator,
+     *   paginator:PaginatorContract,
      *   filters:array<string,string|int>,
      *   sort_options:array<int,array{value:string,label:string}>,
      *   active_filter_count:int
@@ -22,14 +22,15 @@ class ShopifyEmbeddedCustomersGridService
     public function resolve(Request $request): array
     {
         $filters = $this->normalizeFilters($request);
-        $query = $this->baseQuery();
+        $searchContext = $this->resolveSearchContext((string) $filters['search']);
+        $query = $this->baseQuery($searchContext['scoped_profile_ids'] ?? null);
 
-        $this->applySearch($query, (string) $filters['search']);
+        $this->applySearch($query, $searchContext);
         $this->applyFilters($query, $filters);
         $this->applySort($query, (string) $filters['sort'], (string) $filters['direction']);
 
         $paginator = $query
-            ->paginate((int) $filters['per_page'])
+            ->simplePaginate((int) $filters['per_page'])
             ->withQueryString();
 
         $mapped = $paginator->getCollection()
@@ -83,36 +84,42 @@ class ShopifyEmbeddedCustomersGridService
     /**
      * @return Builder
      */
-    protected function baseQuery(): Builder
+    protected function baseQuery(?array $scopedProfileIds = null): Builder
     {
         $lastActivityExpression = $this->lastActivityExpression();
 
-        return DB::table('marketing_profiles as mp')
-            ->leftJoinSub($this->balanceSubquery(), 'balance_stats', function ($join): void {
+        $query = DB::table('marketing_profiles as mp');
+
+        if ($scopedProfileIds !== null) {
+            $query->whereIn('mp.id', $scopedProfileIds ?: [0]);
+        }
+
+        return $query
+            ->leftJoinSub($this->balanceSubquery($scopedProfileIds), 'balance_stats', function ($join): void {
                 $join->on('balance_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->taskStatsSubquery(), 'task_stats', function ($join): void {
+            ->leftJoinSub($this->taskStatsSubquery($scopedProfileIds), 'task_stats', function ($join): void {
                 $join->on('task_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->referralStatsSubquery(), 'referral_stats', function ($join): void {
+            ->leftJoinSub($this->referralStatsSubquery($scopedProfileIds), 'referral_stats', function ($join): void {
                 $join->on('referral_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->reviewStatsSubquery(), 'review_stats', function ($join): void {
+            ->leftJoinSub($this->reviewStatsSubquery($scopedProfileIds), 'review_stats', function ($join): void {
                 $join->on('review_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->externalProfileStatsSubquery(), 'external_stats', function ($join): void {
+            ->leftJoinSub($this->externalProfileStatsSubquery($scopedProfileIds), 'external_stats', function ($join): void {
                 $join->on('external_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->wholesaleLinkStatsSubquery(), 'wholesale_link_stats', function ($join): void {
+            ->leftJoinSub($this->wholesaleLinkStatsSubquery($scopedProfileIds), 'wholesale_link_stats', function ($join): void {
                 $join->on('wholesale_link_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->groupStatsSubquery(), 'group_stats', function ($join): void {
+            ->leftJoinSub($this->groupStatsSubquery($scopedProfileIds), 'group_stats', function ($join): void {
                 $join->on('group_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->birthdayIssuanceStatsSubquery(), 'birthday_issuance_stats', function ($join): void {
+            ->leftJoinSub($this->birthdayIssuanceStatsSubquery($scopedProfileIds), 'birthday_issuance_stats', function ($join): void {
                 $join->on('birthday_issuance_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->transactionStatsSubquery(), 'transaction_stats', function ($join): void {
+            ->leftJoinSub($this->transactionStatsSubquery($scopedProfileIds), 'transaction_stats', function ($join): void {
                 $join->on('transaction_stats.marketing_profile_id', '=', 'mp.id');
             })
             ->leftJoin('customer_birthday_profiles as birthday_profiles', 'birthday_profiles.marketing_profile_id', '=', 'mp.id')
@@ -121,8 +128,6 @@ class ShopifyEmbeddedCustomersGridService
                 'mp.first_name',
                 'mp.last_name',
                 'mp.email',
-                'mp.normalized_email',
-                'mp.updated_at',
             ])
             ->selectRaw('coalesce(balance_stats.candle_cash_balance, 0) as candle_cash_balance')
             ->selectRaw('coalesce(task_stats.rewards_actions_count, 0) as rewards_actions_count')
@@ -134,17 +139,65 @@ class ShopifyEmbeddedCustomersGridService
             ->selectRaw($lastActivityExpression . ' as last_activity_at');
     }
 
-    protected function applySearch(Builder $query, string $search): void
+    /**
+     * @param array{
+     *   raw:string,
+     *   mode:string,
+     *   search_like:?string,
+     *   prefix_like:?string,
+     *   normalized_phone:?string,
+     *   phone_prefix_like:?string,
+     *   normalized_phone_with_country_code:?string,
+     *   numeric_id:?int,
+     *   terms:\Illuminate\Support\Collection<int,string>,
+     *   scoped_profile_ids:?array<int,int>
+     * } $searchContext
+     */
+    protected function applySearch(Builder $query, array $searchContext): void
     {
+        $search = (string) ($searchContext['raw'] ?? '');
         if ($search === '') {
             return;
         }
 
-        $searchLike = '%' . $search . '%';
-        $prefixLike = $search . '%';
-        $terms = collect(preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY))
-            ->map(fn (string $term): string => trim($term))
-            ->filter();
+        $mode = (string) ($searchContext['mode'] ?? 'text');
+        $searchLike = (string) ($searchContext['search_like'] ?? ('%' . $search . '%'));
+        $prefixLike = (string) ($searchContext['prefix_like'] ?? ($search . '%'));
+        $phonePrefixLike = (string) ($searchContext['phone_prefix_like'] ?? '');
+        $normalizedPhoneWithCountryCode = $searchContext['normalized_phone_with_country_code'] ?? null;
+        $numericId = $searchContext['numeric_id'] ?? null;
+        /** @var \Illuminate\Support\Collection<int,string> $terms */
+        $terms = $searchContext['terms'] ?? collect();
+
+        if ($mode === 'exact_id' && $numericId !== null) {
+            $query->where('mp.id', '=', $numericId);
+
+            return;
+        }
+
+        if ($mode === 'email') {
+            $query->where(function ($nested) use ($prefixLike, $searchLike): void {
+                $nested
+                    ->where('mp.normalized_email', 'like', strtolower($prefixLike))
+                    ->orWhere('mp.email', 'like', $searchLike);
+            });
+
+            return;
+        }
+
+        if ($mode === 'phone' && $phonePrefixLike !== '') {
+            $query->where(function ($phoneQuery) use ($phonePrefixLike, $normalizedPhoneWithCountryCode, $searchLike): void {
+                $phoneQuery->where('mp.normalized_phone', 'like', $phonePrefixLike);
+
+                if ($normalizedPhoneWithCountryCode !== null) {
+                    $phoneQuery->orWhere('mp.normalized_phone', 'like', $normalizedPhoneWithCountryCode . '%');
+                }
+
+                $phoneQuery->orWhere('mp.phone', 'like', $searchLike);
+            });
+
+            return;
+        }
 
         $query->where(function ($nested) use ($searchLike, $prefixLike, $terms): void {
             $nested
@@ -281,9 +334,136 @@ class ShopifyEmbeddedCustomersGridService
             'birthday_completed' => ((int) ($row->birthday_completed ?? 0)) === 1,
             'wholesale_eligible' => ((int) ($row->wholesale_eligible ?? 0)) === 1,
             'rewards_actions_count' => (int) ($row->rewards_actions_count ?? 0),
-            'last_activity_at' => $row->last_activity_at,
             'last_activity_display' => $this->formatTimestamp($row->last_activity_at),
         ];
+    }
+
+    /**
+     * @return array{
+     *   raw:string,
+     *   mode:string,
+     *   search_like:?string,
+     *   prefix_like:?string,
+     *   normalized_phone:?string,
+     *   phone_prefix_like:?string,
+     *   normalized_phone_with_country_code:?string,
+     *   numeric_id:?int,
+     *   terms:\Illuminate\Support\Collection<int,string>,
+     *   scoped_profile_ids:?array<int,int>
+     * }
+     */
+    protected function resolveSearchContext(string $search): array
+    {
+        $search = trim($search);
+        $searchLike = $search !== '' ? '%' . $search . '%' : null;
+        $prefixLike = $search !== '' ? $search . '%' : null;
+        $normalizedPhone = $search !== '' ? (preg_replace('/\D+/', '', $search) ?? '') : '';
+        $phonePrefixLike = $normalizedPhone !== '' ? $normalizedPhone . '%' : null;
+        $normalizedPhoneWithCountryCode = strlen($normalizedPhone) === 10 ? '1' . $normalizedPhone : null;
+        $terms = collect(preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY))
+            ->map(fn (string $term): string => trim($term))
+            ->filter()
+            ->values();
+
+        $mode = 'text';
+        $numericId = null;
+
+        if ($search === '') {
+            $mode = 'none';
+        } elseif (ctype_digit($search) && strlen($search) <= 8) {
+            $mode = 'exact_id';
+            $numericId = (int) $search;
+        } elseif (str_contains($search, '@')) {
+            $mode = 'email';
+        } elseif ($normalizedPhone !== '' && (strlen($normalizedPhone) >= 7) && ($normalizedPhone !== $search || strlen($normalizedPhone) >= 9)) {
+            $mode = 'phone';
+        }
+
+        return [
+            'raw' => $search,
+            'mode' => $mode,
+            'search_like' => $searchLike,
+            'prefix_like' => $prefixLike,
+            'normalized_phone' => $normalizedPhone !== '' ? $normalizedPhone : null,
+            'phone_prefix_like' => $phonePrefixLike,
+            'normalized_phone_with_country_code' => $normalizedPhoneWithCountryCode,
+            'numeric_id' => $numericId,
+            'terms' => $terms,
+            'scoped_profile_ids' => $this->searchScopedProfileIds(
+                mode: $mode,
+                search: $search,
+                prefixLike: $prefixLike,
+                searchLike: $searchLike,
+                phonePrefixLike: $phonePrefixLike,
+                normalizedPhoneWithCountryCode: $normalizedPhoneWithCountryCode,
+                numericId: $numericId,
+            ),
+        ];
+    }
+
+    /**
+     * @return array<int,int>|null
+     */
+    protected function searchScopedProfileIds(
+        string $mode,
+        string $search,
+        ?string $prefixLike,
+        ?string $searchLike,
+        ?string $phonePrefixLike,
+        ?string $normalizedPhoneWithCountryCode,
+        ?int $numericId,
+    ): ?array {
+        if ($mode === 'none') {
+            return null;
+        }
+
+        if ($mode === 'exact_id') {
+            return $numericId !== null ? [$numericId] : [0];
+        }
+
+        if (! in_array($mode, ['email', 'phone'], true)) {
+            return null;
+        }
+
+        $candidateQuery = DB::table('marketing_profiles as mp')
+            ->select('mp.id')
+            ->limit(251);
+
+        if ($mode === 'email' && $prefixLike !== null && $searchLike !== null) {
+            $candidateQuery->where(function ($nested) use ($prefixLike, $searchLike): void {
+                $nested
+                    ->where('mp.normalized_email', 'like', strtolower($prefixLike))
+                    ->orWhere('mp.email', 'like', $searchLike);
+            });
+        }
+
+        if ($mode === 'phone' && $phonePrefixLike !== null && $searchLike !== null) {
+            $candidateQuery->where(function ($nested) use ($phonePrefixLike, $normalizedPhoneWithCountryCode, $searchLike): void {
+                $nested->where('mp.normalized_phone', 'like', $phonePrefixLike);
+
+                if ($normalizedPhoneWithCountryCode !== null) {
+                    $nested->orWhere('mp.normalized_phone', 'like', $normalizedPhoneWithCountryCode . '%');
+                }
+
+                $nested->orWhere('mp.phone', 'like', $searchLike);
+            });
+        }
+
+        $ids = $candidateQuery->pluck('mp.id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [0];
+        }
+
+        if (count($ids) > 250) {
+            return null;
+        }
+
+        return $ids;
     }
 
     /**
@@ -389,7 +569,7 @@ class ShopifyEmbeddedCustomersGridService
         return 'max(' . implode(', ', $columns) . ')';
     }
 
-    protected function balanceSubquery(): Builder
+    protected function balanceSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('candle_cash_balances')) {
             return $this->emptySubquery([
@@ -398,13 +578,17 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('candle_cash_balances')
+        return $this->applyProfileScope(
+            DB::table('candle_cash_balances')
             ->selectRaw('marketing_profile_id')
             ->selectRaw('max(balance) as candle_cash_balance')
-            ->groupBy('marketing_profile_id');
+            ->groupBy('marketing_profile_id'),
+            'marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function taskStatsSubquery(): Builder
+    protected function taskStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('candle_cash_task_completions') || ! Schema::hasTable('candle_cash_tasks')) {
             return $this->emptySubquery([
@@ -418,7 +602,8 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('candle_cash_task_completions as completions')
+        return $this->applyProfileScope(
+            DB::table('candle_cash_task_completions as completions')
             ->join('candle_cash_tasks as tasks', 'tasks.id', '=', 'completions.candle_cash_task_id')
             ->selectRaw('completions.marketing_profile_id')
             ->selectRaw('count(*) as rewards_actions_count')
@@ -427,10 +612,13 @@ class ShopifyEmbeddedCustomersGridService
             ->selectRaw("max(case when tasks.handle in ('google-review', 'product-review', 'photo-review') and completions.status in ('awarded', 'approved', 'completed') then 1 else 0 end) as review_completed")
             ->selectRaw("max(case when tasks.handle = 'birthday-signup' and completions.status in ('awarded', 'approved', 'completed') then 1 else 0 end) as birthday_completed")
             ->selectRaw('max(completions.created_at) as last_task_activity_at')
-            ->groupBy('completions.marketing_profile_id');
+            ->groupBy('completions.marketing_profile_id'),
+            'completions.marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function referralStatsSubquery(): Builder
+    protected function referralStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('candle_cash_referrals')) {
             return $this->emptySubquery([
@@ -440,14 +628,18 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('candle_cash_referrals')
+        return $this->applyProfileScope(
+            DB::table('candle_cash_referrals')
             ->selectRaw('referrer_marketing_profile_id as marketing_profile_id')
             ->selectRaw("max(case when status in ('qualified', 'rewarded', 'completed') or rewarded_at is not null then 1 else 0 end) as referral_completed")
             ->selectRaw('max(coalesce(rewarded_at, qualified_at, updated_at, created_at)) as last_referral_activity_at')
-            ->groupBy('referrer_marketing_profile_id');
+            ->groupBy('referrer_marketing_profile_id'),
+            'referrer_marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function reviewStatsSubquery(): Builder
+    protected function reviewStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('marketing_review_summaries')) {
             return $this->emptySubquery([
@@ -457,15 +649,19 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('marketing_review_summaries')
+        return $this->applyProfileScope(
+            DB::table('marketing_review_summaries')
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when review_count > 0 then 1 else 0 end) as review_completed")
             ->selectRaw('max(coalesce(last_reviewed_at, source_synced_at, updated_at, created_at)) as last_review_activity_at')
             ->whereNotNull('marketing_profile_id')
-            ->groupBy('marketing_profile_id');
+            ->groupBy('marketing_profile_id'),
+            'marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function externalProfileStatsSubquery(): Builder
+    protected function externalProfileStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('customer_external_profiles')) {
             return $this->emptySubquery([
@@ -475,15 +671,19 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('customer_external_profiles')
+        return $this->applyProfileScope(
+            DB::table('customer_external_profiles')
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when lower(coalesce(store_key, '')) = 'wholesale' or lower(coalesce(integration, '')) = 'wholesale' or lower(coalesce(provider, '')) = 'wholesale' then 1 else 0 end) as wholesale_eligible")
             ->selectRaw('max(coalesce(last_activity_at, synced_at, updated_at, created_at)) as last_external_activity_at')
             ->whereNotNull('marketing_profile_id')
-            ->groupBy('marketing_profile_id');
+            ->groupBy('marketing_profile_id'),
+            'marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function wholesaleLinkStatsSubquery(): Builder
+    protected function wholesaleLinkStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('marketing_profile_links')) {
             return $this->emptySubquery([
@@ -492,13 +692,17 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('marketing_profile_links')
+        return $this->applyProfileScope(
+            DB::table('marketing_profile_links')
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when lower(coalesce(source_type, '')) like 'wholesale%' then 1 else 0 end) as wholesale_eligible")
-            ->groupBy('marketing_profile_id');
+            ->groupBy('marketing_profile_id'),
+            'marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function groupStatsSubquery(): Builder
+    protected function groupStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('marketing_group_members') || ! Schema::hasTable('marketing_groups')) {
             return $this->emptySubquery([
@@ -507,14 +711,18 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('marketing_group_members as members')
+        return $this->applyProfileScope(
+            DB::table('marketing_group_members as members')
             ->join('marketing_groups as groups', 'groups.id', '=', 'members.marketing_group_id')
             ->selectRaw('members.marketing_profile_id')
             ->selectRaw("max(case when lower(coalesce(groups.name, '')) like '%candle club%' then 1 else 0 end) as candle_club_member")
-            ->groupBy('members.marketing_profile_id');
+            ->groupBy('members.marketing_profile_id'),
+            'members.marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function birthdayIssuanceStatsSubquery(): Builder
+    protected function birthdayIssuanceStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('birthday_reward_issuances')) {
             return $this->emptySubquery([
@@ -524,14 +732,18 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('birthday_reward_issuances')
+        return $this->applyProfileScope(
+            DB::table('birthday_reward_issuances')
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when status in ('issued', 'claimed', 'redeemed') or claimed_at is not null then 1 else 0 end) as birthday_completed")
             ->selectRaw('max(coalesce(claimed_at, issued_at, updated_at, created_at)) as last_birthday_activity_at')
-            ->groupBy('marketing_profile_id');
+            ->groupBy('marketing_profile_id'),
+            'marketing_profile_id',
+            $profileIds
+        );
     }
 
-    protected function transactionStatsSubquery(): Builder
+    protected function transactionStatsSubquery(?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('candle_cash_transactions')) {
             return $this->emptySubquery([
@@ -540,10 +752,14 @@ class ShopifyEmbeddedCustomersGridService
             ]);
         }
 
-        return DB::table('candle_cash_transactions')
+        return $this->applyProfileScope(
+            DB::table('candle_cash_transactions')
             ->selectRaw('marketing_profile_id')
             ->selectRaw('max(created_at) as last_transaction_at')
-            ->groupBy('marketing_profile_id');
+            ->groupBy('marketing_profile_id'),
+            'marketing_profile_id',
+            $profileIds
+        );
     }
 
     /**
@@ -558,5 +774,14 @@ class ShopifyEmbeddedCustomersGridService
         }
 
         return $query;
+    }
+
+    protected function applyProfileScope(Builder $query, string $column, ?array $profileIds): Builder
+    {
+        if ($profileIds === null) {
+            return $query;
+        }
+
+        return $query->whereIn($column, $profileIds ?: [0]);
     }
 }

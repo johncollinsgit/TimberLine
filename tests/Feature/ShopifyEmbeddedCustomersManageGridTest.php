@@ -23,6 +23,8 @@ function seedEmbeddedCustomersGridFixtures(): array
         'last_name' => 'Aster',
         'email' => 'alice@example.com',
         'normalized_email' => 'alice@example.com',
+        'phone' => '555-123-0001',
+        'normalized_phone' => '15551230001',
     ]);
 
     $bob = MarketingProfile::query()->create([
@@ -30,6 +32,8 @@ function seedEmbeddedCustomersGridFixtures(): array
         'last_name' => 'Briar',
         'email' => 'bob@example.com',
         'normalized_email' => 'bob@example.com',
+        'phone' => '555-123-0002',
+        'normalized_phone' => '15551230002',
     ]);
 
     $clara = MarketingProfile::query()->create([
@@ -37,6 +41,8 @@ function seedEmbeddedCustomersGridFixtures(): array
         'last_name' => 'Cove',
         'email' => 'clara@example.com',
         'normalized_email' => 'clara@example.com',
+        'phone' => '555-123-0003',
+        'normalized_phone' => '15551230003',
     ]);
 
     DB::table('marketing_profiles')->where('id', $alice->id)->update([
@@ -289,6 +295,35 @@ test('search by email works for manage customers', function () {
         ->assertDontSeeText('alice@example.com');
 });
 
+test('search by phone and customer id works for manage customers', function () {
+    configureEmbeddedRetailStore();
+    $fixtures = seedEmbeddedCustomersGridFixtures();
+    startEmbeddedCustomersSession($this);
+
+    $phoneResponse = $this->get(shopifyAppCustomersManageUrl(['search' => '555-123-0002']));
+
+    $phoneResponse->assertOk()
+        ->assertSeeText('bob@example.com')
+        ->assertDontSeeText('alice@example.com');
+
+    $idResponse = $this->get(shopifyAppCustomersManageUrl(['search' => (string) $fixtures['clara']->id]));
+
+    $idResponse->assertOk()
+        ->assertSeeText('clara@example.com')
+        ->assertDontSeeText('alice@example.com');
+});
+
+test('no-results state stays clean for unmatched customer searches', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+    startEmbeddedCustomersSession($this);
+
+    $response = $this->get(shopifyAppCustomersManageUrl(['search' => 'nobody-will-match-this']));
+
+    $response->assertOk()
+        ->assertSeeText('No customers matched the current search or filters.');
+});
+
 test('sorting by last activity works', function () {
     configureEmbeddedRetailStore();
     seedEmbeddedCustomersGridFixtures();
@@ -413,4 +448,44 @@ test('embedded manage filters and sort controls preserve full Shopify context', 
         ->and($content)->toContain('id_token=')
         ->and($content)->toContain('locale=en')
         ->and($content)->toContain('session=embedded-session-token');
+});
+
+test('embedded manage returns json results for authenticated live search requests', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+
+    $response = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(shopifyAppCustomersManageUrl(['search' => 'Alice']));
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true);
+
+    $resultsHtml = (string) data_get($response->json(), 'data.results_html', '');
+    $summaryLabel = (string) data_get($response->json(), 'data.summary_label', '');
+
+    expect($resultsHtml)->toContain('alice@example.com')
+        ->and($resultsHtml)->not->toContain('bob@example.com')
+        ->and($summaryLabel)->toContain('customer');
+});
+
+test('embedded manage json search requires an authenticated shopify session token', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+    startEmbeddedCustomersSession($this);
+
+    $response = $this
+        ->withHeaders([
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(shopifyAppCustomersManageUrl(['search' => 'Alice']));
+
+    $response->assertStatus(401)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'missing_api_auth');
 });

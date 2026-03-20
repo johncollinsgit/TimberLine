@@ -81,7 +81,9 @@ class ShopifyEmbeddedDashboardQuery
             'primary' => $this->serializeWindow($window),
             'comparisonWindow' => $comparisonWindow ? $this->serializeWindow($comparisonWindow) : null,
             'interval' => $interval,
-            'visualization' => in_array($timeframe, ['year_to_date', 'full_year'], true) ? 'grouped_bar' : 'line',
+            // Keep one chart grammar across every timeframe so the embedded dashboard
+            // feels stable when operators switch from intraday to annual views.
+            'visualization' => 'line',
         ];
     }
 

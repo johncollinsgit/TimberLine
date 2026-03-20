@@ -21,6 +21,7 @@ use App\Models\Tenant;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardQuery;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
 function retailDashboardApiHeaders(array $headers = []): array
@@ -234,6 +235,62 @@ test('embedded dashboard api returns a stable payload contract for an authorized
     expect($response->json('data.financialSummary.netProfit.detail'))->toContain('confidence');
 });
 
+test('dashboard payload cache can be bypassed with refresh and exposes freshness metadata', function () {
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-03-10 10:00:00'));
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $baseQuery = [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'previous_period',
+        'location_grouping' => 'state',
+    ];
+
+    $firstResponse = $this->withHeaders(retailDashboardApiHeaders())->getJson(
+        route('shopify.app.api.dashboard', [
+            ...$baseQuery,
+            'refresh' => 1,
+        ])
+    );
+
+    $firstResponse->assertOk();
+    $firstGeneratedAt = $firstResponse->json('data.meta.generatedAt');
+
+    expect($firstResponse->json('data.meta.freshness.cache.hit'))->toBeFalse()
+        ->and($firstResponse->json('data.meta.freshness.cache.forced'))->toBeTrue()
+        ->and($firstResponse->json('data.meta.freshness.cache.ttlSeconds'))
+        ->toBe($firstResponse->json('data.meta.cacheTtlSeconds'));
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-03-10 10:00:30'));
+
+    $cachedResponse = $this->withHeaders(retailDashboardApiHeaders())->getJson(
+        route('shopify.app.api.dashboard', $baseQuery)
+    );
+
+    $cachedResponse->assertOk();
+
+    expect($cachedResponse->json('data.meta.freshness.cache.hit'))->toBeTrue()
+        ->and($cachedResponse->json('data.meta.freshness.cache.forced'))->toBeFalse()
+        ->and($cachedResponse->json('data.meta.generatedAt'))->toBe($firstGeneratedAt);
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-03-10 10:00:45'));
+
+    $refreshResponse = $this->withHeaders(retailDashboardApiHeaders())->getJson(
+        route('shopify.app.api.dashboard', [
+            ...$baseQuery,
+            'refresh' => 1,
+        ])
+    );
+
+    $refreshResponse->assertOk();
+
+    expect($refreshResponse->json('data.meta.freshness.cache.hit'))->toBeFalse()
+        ->and($refreshResponse->json('data.meta.freshness.cache.forced'))->toBeTrue()
+        ->and($refreshResponse->json('data.meta.generatedAt'))->not->toBe($firstGeneratedAt);
+
+    CarbonImmutable::setTestNow();
+});
+
 test('embedded dashboard api requires bearer token auth and does not fall back to page session state', function () {
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
@@ -379,7 +436,7 @@ test('embedded dashboard query resolves a previous-year comparison window for an
         ]
     );
 
-    expect($query['visualization'])->toBe('grouped_bar')
+    expect($query['visualization'])->toBe('line')
         ->and($query['comparisonWindow'])->not->toBeNull();
 
     $primaryFrom = new DateTimeImmutable($query['primary']['from']);
@@ -500,6 +557,8 @@ test('performance trend exposes multi-series reward, earn, and redeem data with 
         ->and($seriesOptions->pluck('key'))->toContain('rewards_sales', 'birthday_redemption_revenue', 'candle_cash_earned', 'candle_cash_redeemed')
         ->and($seriesOptions->firstWhere('key', 'candle_cash_earned')['selected'])->toBeTrue()
         ->and($march3)->not->toBeNull()
+        ->and($march3['bucketStart'] ?? null)->not->toBeNull()
+        ->and($march3['bucketEnd'] ?? null)->not->toBeNull()
         ->and($march3['primary'])->toBe(42)
         ->and($march3['values']['birthday_redemption_revenue'])->toBe(42)
         ->and($march2)->not->toBeNull()

@@ -68,7 +68,7 @@ test('customers detail route and alias resolve with manage tab active', function
 
     $response->assertOk()
         ->assertSeeText('Customer Detail')
-        ->assertSeeText('Marketing profile ID: '.$profile->id)
+        ->assertSeeText('Profile #'.$profile->id)
         ->assertViewHas('appNavigation', fn (array $navigation): bool => ($navigation['activeSection'] ?? null) === 'customers')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'manage' && ! empty($item['active']));

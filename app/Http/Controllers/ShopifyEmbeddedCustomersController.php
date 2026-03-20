@@ -58,8 +58,21 @@ class ShopifyEmbeddedCustomersController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomersGridService $gridService
-    ): Response {
+    ): Response|JsonResponse {
         $grid = $gridService->resolve($request);
+
+        if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
+            $context = $contextService->resolveAuthenticatedApiContext($request);
+
+            if (! ($context['ok'] ?? false)) {
+                return $this->invalidApiContextResponse($context);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'data' => $this->customersManagePayload($grid),
+            ]);
+        }
 
         Log::info('shopify.embedded.manage.render', [
             'route' => $request->route()?->getName(),
@@ -78,6 +91,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'gridFilters' => $grid['filters'],
                 'gridSortOptions' => $grid['sort_options'],
                 'activeFilterCount' => $grid['active_filter_count'],
+                'customersManageEndpoint' => $request->url(),
             ]
         );
     }
@@ -1049,6 +1063,59 @@ class ShopifyEmbeddedCustomersController extends Controller
             'message' => $message,
             'errors' => $exception->errors(),
         ], 422);
+    }
+
+    /**
+     * @param array{
+     *   paginator:mixed,
+     *   filters:array<string,string|int>,
+     *   sort_options:array<int,array{value:string,label:string}>,
+     *   active_filter_count:int
+     * } $grid
+     * @return array{results_html:string,summary_label:string,page_label:string}
+     */
+    protected function customersManagePayload(array $grid): array
+    {
+        $customers = $grid['paginator'];
+        $filters = $grid['filters'];
+
+        return [
+            'results_html' => view('shopify.partials.customers-manage-results', [
+                'customers' => $customers,
+                'filters' => $filters,
+                'sort' => (string) ($filters['sort'] ?? 'last_activity'),
+                'direction' => (string) ($filters['direction'] ?? 'desc'),
+            ])->render(),
+            'summary_label' => $this->customersSummaryLabel($customers),
+            'page_label' => $this->customersPageLabel($customers),
+        ];
+    }
+
+    protected function customersSummaryLabel(mixed $customers): string
+    {
+        $count = method_exists($customers, 'count') ? (int) $customers->count() : 0;
+        $page = method_exists($customers, 'currentPage') ? (int) $customers->currentPage() : 1;
+
+        return sprintf(
+            '%s customer%s loaded · Page %s',
+            number_format($count),
+            $count === 1 ? '' : 's',
+            number_format($page)
+        );
+    }
+
+    protected function customersPageLabel(mixed $customers): string
+    {
+        if (! method_exists($customers, 'currentPage')) {
+            return 'Page 1';
+        }
+
+        $page = (int) $customers->currentPage();
+        $more = method_exists($customers, 'hasMorePages') && $customers->hasMorePages();
+
+        return $more
+            ? sprintf('Page %s · More results available', number_format($page))
+            : sprintf('Page %s', number_format($page));
     }
 
     /**

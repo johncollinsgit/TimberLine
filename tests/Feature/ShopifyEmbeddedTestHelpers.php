@@ -43,11 +43,13 @@ function retailShopifySessionToken(array $overrides = []): string
 
 function retailEmbeddedSignedQuery(array $overrides = []): array
 {
+    $timestamp = (string) \Carbon\CarbonImmutable::now()->timestamp;
+
     return shopifyEmbeddedSignedQuery(array_merge([
         'shop' => 'modernforestry.myshopify.com',
         'host' => 'admin-host-token',
         'embedded' => '1',
-        'timestamp' => (string) time(),
+        'timestamp' => $timestamp,
     ], $overrides), 'shopify-client-secret');
 }
 
@@ -90,7 +92,7 @@ function shopifySessionToken(string $storeKey, array $overrides = []): string
         throw new RuntimeException("Shopify store [{$storeKey}] is missing session token credentials.");
     }
 
-    $now = time();
+    $now = \Carbon\CarbonImmutable::now()->timestamp;
     $payload = array_merge([
         'iss' => 'https://' . $shopDomain . '/admin',
         'dest' => 'https://' . $shopDomain,

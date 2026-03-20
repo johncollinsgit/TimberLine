@@ -1,6 +1,7 @@
 import {
   AppProvider,
   BlockStack,
+  Button,
   Card,
   InlineGrid,
   InlineStack,
@@ -43,6 +44,8 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
     loading,
     reminderAction,
     query,
+    refreshData,
+    refreshing,
     sendCandleCashReminders,
     setComparison,
     setCustomDates,
@@ -63,6 +66,7 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
               timeframeLabel={data?.query.primary.label ?? "Loading timeframe"}
               generatedAt={data?.meta.generatedAt ?? null}
               partialData={data?.meta.partialData ?? null}
+              refreshing={refreshing}
             />
           }
           controls={
@@ -98,6 +102,16 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
                       options={config.locationGroupingOptions}
                       onChange={setLocationGrouping}
                     />
+                  </div>
+                  <div className="sf-dashboard-control sf-dashboard-control--refresh">
+                    <Button
+                      variant="secondary"
+                      loading={refreshing}
+                      disabled={refreshing || loading}
+                      onClick={() => refreshData()}
+                    >
+                      Refresh data
+                    </Button>
                   </div>
                 </InlineStack>
               </InlineStack>
@@ -152,7 +166,7 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
           chart={
             config.visibleWidgets.performanceChart ? (
               data ? (
-                <PerformanceChartCard chart={data.chart} loading={loading} />
+                <PerformanceChartCard chart={data.chart} query={data.query} loading={loading} />
               ) : (
                 <LoadingCard lines={7} />
               )
