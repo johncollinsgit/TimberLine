@@ -207,7 +207,7 @@ test('embedded dashboard api returns a stable payload contract for an authorized
                     'widgetRegistry',
                 ],
                 'topMetrics',
-                'chart' => ['title', 'subtitle', 'metric', 'visualization', 'series', 'benchmarkLabel', 'benchmarkValue', 'empty'],
+                'chart' => ['title', 'subtitle', 'metric', 'visualization', 'series', 'seriesOptions', 'benchmarkLabel', 'benchmarkValue', 'empty'],
                 'attribution' => ['title', 'subtitle', 'sources', 'empty'],
                 'locationOrigins' => ['title', 'subtitle', 'grouping', 'items', 'empty'],
                 'financialSummary' => ['title', 'subtitle', 'items', 'netProfit'],
@@ -388,7 +388,7 @@ test('embedded dashboard query resolves a previous-year comparison window for an
     expect((int) $comparisonFrom->format('Y'))->toBe((int) $primaryFrom->format('Y') - 1);
 });
 
-test('performance trend charts birthday redemption revenue on the redeemed day and supports comparison windows', function () {
+test('performance trend exposes multi-series reward, earn, and redeem data with comparison windows', function () {
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Birthday',
         'email' => 'birthday-chart@example.com',
@@ -427,6 +427,54 @@ test('performance trend charts birthday redemption revenue on the redeemed day a
         'attributed_revenue' => 21.00,
     ]);
 
+    $currentEarnTransaction = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'candle_cash_delta' => 18,
+        'source' => 'consent',
+        'source_id' => 'consent:chart-current',
+        'description' => 'Current-period signup earn',
+    ]);
+    $currentEarnTransaction->forceFill([
+        'created_at' => '2026-03-02 08:00:00',
+        'updated_at' => '2026-03-02 08:00:00',
+    ])->saveQuietly();
+
+    $comparisonEarnTransaction = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'candle_cash_delta' => 12,
+        'source' => 'consent',
+        'source_id' => 'consent:chart-comparison',
+        'description' => 'Comparison-period signup earn',
+    ]);
+    $comparisonEarnTransaction->forceFill([
+        'created_at' => '2026-02-24 08:00:00',
+        'updated_at' => '2026-02-24 08:00:00',
+    ])->saveQuietly();
+
+    CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => 1,
+        'candle_cash_spent' => 10,
+        'platform' => 'shopify',
+        'redemption_code' => 'CC-CHART-CURRENT',
+        'status' => 'redeemed',
+        'issued_at' => '2026-03-05 10:00:00',
+        'redeemed_at' => '2026-03-05 10:30:00',
+    ]);
+
+    CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => 1,
+        'candle_cash_spent' => 6,
+        'platform' => 'shopify',
+        'redemption_code' => 'CC-CHART-COMPARISON',
+        'status' => 'redeemed',
+        'issued_at' => '2026-02-26 10:00:00',
+        'redeemed_at' => '2026-02-26 10:30:00',
+    ]);
+
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
     $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
@@ -438,46 +486,49 @@ test('performance trend charts birthday redemption revenue on the redeemed day a
 
     $series = collect($response->json('data.chart.series'));
     $march3 = $series->firstWhere('label', 'Mar 3');
-    $march4 = $series->firstWhere('label', 'Mar 4');
+    $march2 = $series->firstWhere('label', 'Mar 2');
+    $march5 = $series->firstWhere('label', 'Mar 5');
+    $seriesOptions = collect($response->json('data.chart.seriesOptions'));
 
     $response
         ->assertOk()
-        ->assertJsonPath('data.chart.metric.key', 'birthday_redemption_revenue')
-        ->assertJsonPath('data.chart.metric.label', 'Birthday Redemption Revenue')
+        ->assertJsonPath('data.chart.metric.key', 'rewards_sales')
+        ->assertJsonPath('data.chart.metric.label', 'Rewards Sales')
         ->assertJsonPath('data.chart.benchmarkValue', '$42.00');
 
-    expect($response->json('data.chart.subtitle'))->toContain('Birthday reward redemption revenue')
+    expect($response->json('data.chart.subtitle'))->toContain('Compare reward-attributed sales')
+        ->and($seriesOptions->pluck('key'))->toContain('rewards_sales', 'birthday_redemption_revenue', 'candle_cash_earned', 'candle_cash_redeemed')
+        ->and($seriesOptions->firstWhere('key', 'candle_cash_earned')['selected'])->toBeTrue()
         ->and($march3)->not->toBeNull()
         ->and($march3['primary'])->toBe(42)
-        ->and($march4)->not->toBeNull()
-        ->and($march4['comparison'])->toBe(21);
+        ->and($march3['values']['birthday_redemption_revenue'])->toBe(42)
+        ->and($march2)->not->toBeNull()
+        ->and($march2['values']['candle_cash_earned'])->toBe(18)
+        ->and($march5)->not->toBeNull()
+        ->and($march5['values']['candle_cash_redeemed'])->toBe(10)
+        ->and($series->contains(fn (array $row): bool => (float) ($row['comparisonValues']['birthday_redemption_revenue'] ?? 0) === 21.0))->toBeTrue()
+        ->and($series->contains(fn (array $row): bool => (float) ($row['comparisonValues']['candle_cash_earned'] ?? 0) === 12.0))->toBeTrue()
+        ->and($series->contains(fn (array $row): bool => (float) ($row['comparisonValues']['candle_cash_redeemed'] ?? 0) === 6.0))->toBeTrue();
 });
 
-test('performance trend falls back to birthday redemption count when revenue is unavailable and keeps a zero-safe series', function () {
+test('performance trend stays useful when only Candle Cash earn activity exists', function () {
     $profile = MarketingProfile::query()->create([
-        'first_name' => 'Count',
-        'email' => 'birthday-count@example.com',
+        'first_name' => 'Earn only',
+        'email' => 'earn-only-chart@example.com',
     ]);
 
-    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+    $earnOnlyTransaction = CandleCashTransaction::query()->create([
         'marketing_profile_id' => $profile->id,
-        'birth_month' => 3,
-        'birth_day' => 5,
-        'source' => 'import',
+        'type' => 'earn',
+        'candle_cash_delta' => 14,
+        'source' => 'consent',
+        'source_id' => 'consent:earn-only',
+        'description' => 'Earn-only chart sample',
     ]);
-
-    BirthdayRewardIssuance::query()->create([
-        'customer_birthday_profile_id' => $birthdayProfile->id,
-        'marketing_profile_id' => $profile->id,
-        'cycle_year' => 2026,
-        'reward_type' => 'discount_code',
-        'reward_name' => 'Birthday reward count only',
-        'status' => 'redeemed',
-        'reward_value' => 10,
-        'redeemed_at' => '2026-03-05 10:30:00',
-        'order_total' => null,
-        'attributed_revenue' => null,
-    ]);
+    $earnOnlyTransaction->forceFill([
+        'created_at' => '2026-03-05 10:30:00',
+        'updated_at' => '2026-03-05 10:30:00',
+    ])->saveQuietly();
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
@@ -493,14 +544,15 @@ test('performance trend falls back to birthday redemption count when revenue is 
 
     $response
         ->assertOk()
-        ->assertJsonPath('data.chart.metric.key', 'birthday_redemption_count')
-        ->assertJsonPath('data.chart.benchmarkValue', '1 redemption')
         ->assertJsonPath('data.chart.empty', false);
 
-    expect($response->json('data.chart.subtitle'))->toContain('showing count instead')
+    expect($response->json('data.chart.metric.key'))->toBe('rewards_sales')
         ->and($series)->toHaveCount(7)
         ->and($march5)->not->toBeNull()
-        ->and($march5['primary'])->toBe(1);
+        ->and($march5['primary'])->toBe(0)
+        ->and($march5['values']['candle_cash_earned'])->toBe(14)
+        ->and($march5['values']['rewards_sales'])->toBe(0)
+        ->and(collect($response->json('data.chart.seriesOptions'))->pluck('key'))->toContain('candle_cash_earned');
 });
 
 test('candle cash earned analytics exclude imported opening balances and report defensible redemption lag', function () {

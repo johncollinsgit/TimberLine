@@ -14,6 +14,7 @@ use App\Services\Marketing\CandleCashShopifyDiscountService;
 test('storefront contract responses include standardized envelope states and recovery states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['stage9.contract@example.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
@@ -180,6 +181,7 @@ test('storefront reward balance stays isolated to the verified shop tenant', fun
 test('reward redemption feedback loop returns code issued and already has active code states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['reward.feedback@example.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
@@ -242,6 +244,7 @@ test('shopify reward redemption persists and uses verified storefront store cont
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage9-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'unused');
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['wholesale.stage9@example.com']);
     config()->set('services.shopify.stores.wholesale.client_id', 'stage9-wholesale-client');
 
     $tenant = Tenant::query()->create([
@@ -307,6 +310,48 @@ test('shopify reward redemption persists and uses verified storefront store cont
 
     expect(data_get($redemption->redemption_context, 'shopify_store_key'))->toBe('wholesale')
         ->and((int) data_get($redemption->redemption_context, 'tenant_id'))->toBe((int) $tenant->id);
+});
+
+test('shopify reward redemption is gated to the temporary beta email allowlist', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com']);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Blocked',
+        'email' => 'blocked.stage9@example.com',
+        'normalized_email' => 'blocked.stage9@example.com',
+        'phone' => '5552221234',
+        'normalized_phone' => '+15552221234',
+    ]);
+    app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
+
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
+
+    $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $discountSync->shouldReceive('ensureDiscountForRedemption')->never();
+    app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
+
+    $payload = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
+    $headers = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($payload), 'stage9-secret');
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.rewards.redeem'), $payload)
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'coming_soon')
+        ->assertJsonPath('error.details.state', 'coming_soon')
+        ->assertJsonPath('error.details.redemption_access.cta_label', 'COMING SOON!');
+
+    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeFalse()
+        ->and((float) \App\Models\CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(400.0);
 });
 
 test('ambiguous storefront identity returns verification required instead of silent linkage', function () {

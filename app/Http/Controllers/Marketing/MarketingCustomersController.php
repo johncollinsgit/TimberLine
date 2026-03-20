@@ -68,25 +68,18 @@ class MarketingCustomersController extends Controller
 
     public function index(Request $request): View
     {
-        $today = now();
         $tenantId = $this->currentTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
-        $profiles = $this->customerIndexQuery($filters, $tenantId)
-            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
-            ->withCount('links')
-            ->paginate((int) $filters['per_page'])
-            ->withQueryString();
-
-        $derivedStats = $this->buildDerivedStats($profiles->getCollection());
-        $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
-        $birthdayReporting = $this->birthdayReportingService->summary($today);
-        $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics((int) $profiles->total());
-        $quickStats = $this->buildIndexQuickStats((int) $profiles->total());
+        $totalProfiles = MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->count();
+        $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics($totalProfiles);
+        $quickStats = $this->buildIndexQuickStats($totalProfiles);
 
         return view('marketing.customers.index', [
             'section' => MarketingSectionRegistry::section('customers'),
             'sections' => $this->navigationItems(),
-            'profiles' => $profiles,
+            'totalProfiles' => $totalProfiles,
             'search' => (string) $filters['search'],
             'sort' => (string) $filters['sort'],
             'dir' => (string) $filters['dir'],
@@ -95,9 +88,6 @@ class MarketingCustomersController extends Controller
             'sourceFilter' => (string) $filters['source'],
             'hasPointsFilter' => (string) $filters['has_points'],
             'hasPhoneFilter' => (string) $filters['has_phone'],
-            'derivedStats' => $derivedStats,
-            'loyaltyStats' => $loyaltyStats,
-            'birthdayReporting' => $birthdayReporting,
             'emptyStateDiagnostics' => $emptyStateDiagnostics,
             'quickStats' => $quickStats,
             'customerGrid' => [

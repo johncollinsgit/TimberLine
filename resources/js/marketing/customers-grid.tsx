@@ -309,6 +309,12 @@ function primaryButtonClass(): string {
     return "inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25";
 }
 
+function filterChipClass(active = true): string {
+    return active
+        ? "inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-50"
+        : "inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65";
+}
+
 function paginationButtonClass(): string {
     return "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
 }
@@ -360,6 +366,15 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const [perPage, setPerPage] = useState(props.initialFilters.per_page);
     const [page, setPage] = useState(1);
     const [reloadToken, setReloadToken] = useState(0);
+    const [filtersOpen, setFiltersOpen] = useState(
+        props.initialFilters.source !== "all" ||
+            props.initialFilters.has_points !== "all" ||
+            props.initialFilters.has_phone !== "all" ||
+            props.initialFilters.birthday_filter !== "all" ||
+            props.initialFilters.sort !== "updated_at" ||
+            props.initialFilters.dir !== "desc" ||
+            props.initialFilters.per_page !== 25,
+    );
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
     const gridTheme = useMemo(() => resolveGridTheme(), []);
     const gridCssVars = useMemo(() => gridThemeVars(gridTheme), [gridTheme]);
@@ -526,6 +541,15 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const resultEnd = pagination && pagination.total > 0
         ? Math.min(pagination.page * pagination.per_page, pagination.total)
         : 0;
+    const activeFilters = [
+        source !== "all" ? `Source: ${source}` : null,
+        hasPoints !== "all" ? (hasPoints === "yes" ? "Has Candle Cash" : "No Candle Cash") : null,
+        hasPhone !== "all" ? (hasPhone === "yes" ? "Has phone" : "Missing phone") : null,
+        birthdayFilter !== "all" ? `Birthday: ${birthdayFilter}` : null,
+        sortField !== "updated_at" ? `Sort: ${sortField}` : null,
+        sortDir !== "desc" ? "Ascending" : null,
+        perPage !== 25 ? `${perPage} rows` : null,
+    ].filter((value): value is string => Boolean(value));
 
     return (
         <div className="space-y-4">
@@ -555,8 +579,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     </div>
                 </div>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-8">
-                    <div className="xl:col-span-2">
+                <div className="mt-5 space-y-3">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                        <div className="flex-1">
                         <label htmlFor={SEARCH_INPUT_ID} className="sr-only">
                             Search customers
                         </label>
@@ -568,46 +593,84 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             placeholder="Search name, email, phone, source ID"
                             className={fieldClass()}
                         />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setFiltersOpen((current) => !current)}
+                                className={buttonClass()}
+                            >
+                                {filtersOpen ? "Hide filters" : "Filters"}
+                                {activeFilters.length > 0 ? ` (${activeFilters.length})` : ""}
+                            </button>
+                            {activeFilters.length > 0 || searchInput !== "" ? (
+                                <button type="button" onClick={handleReset} className={buttonClass()}>
+                                    Reset
+                                </button>
+                            ) : null}
+                        </div>
                     </div>
-                    <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
-                        <option value="all">All sources</option>
-                        <option value="shopify">Shopify</option>
-                        <option value="growave">Growave</option>
-                        <option value="square">Square</option>
-                        <option value="wholesale">Wholesale</option>
-                        <option value="event">Event</option>
-                        <option value="manual">Manual</option>
-                    </select>
-                    <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
-                        <option value="all">All Candle Cash states</option>
-                        <option value="yes">Has Candle Cash</option>
-                        <option value="no">No Candle Cash</option>
-                    </select>
-                    <select value={hasPhone} onChange={(event) => setHasPhone(event.target.value)} className={fieldClass()}>
-                        <option value="all">All phone states</option>
-                        <option value="yes">Has phone</option>
-                        <option value="no">No phone</option>
-                    </select>
-                    <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
-                        <option value="all">All birthdays</option>
-                        <option value="today">Birthday today</option>
-                        <option value="week">Birthday this week</option>
-                        <option value="month">Birthday this month</option>
-                        <option value="missing">Birthday missing</option>
-                    </select>
-                    <select value={sortField} onChange={(event) => setSortField(event.target.value)} className={fieldClass()}>
-                        {(meta?.sort_options ?? props.sortOptions).map((option) => (
-                            <option key={option.value} value={option.value}>
-                                Sort: {option.label}
-                            </option>
-                        ))}
-                    </select>
-                    <div className="flex gap-3">
-                        <select value={sortDir} onChange={(event) => setSortDir(event.target.value === "asc" ? "asc" : "desc")} className={fieldClass()}>
-                            <option value="desc">Descending</option>
-                            <option value="asc">Ascending</option>
-                        </select>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {searchInput !== "" ? (
+                            <span className={filterChipClass()}>
+                                Searching: {searchInput}
+                            </span>
+                        ) : null}
+                        {activeFilters.length > 0 ? (
+                            activeFilters.map((label) => (
+                                <span key={label} className={filterChipClass()}>
+                                    {label}
+                                </span>
+                            ))
+                        ) : (
+                            <span className={filterChipClass(false)}>
+                                Search starts immediately while you type. Open filters only when you need them.
+                            </span>
+                        )}
                     </div>
+
+                    {filtersOpen ? (
+                        <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-2 xl:grid-cols-6">
+                            <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
+                                <option value="all">All sources</option>
+                                <option value="shopify">Shopify</option>
+                                <option value="growave">Growave</option>
+                                <option value="square">Square</option>
+                                <option value="wholesale">Wholesale</option>
+                                <option value="event">Event</option>
+                                <option value="manual">Manual</option>
+                            </select>
+                            <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
+                                <option value="all">All Candle Cash states</option>
+                                <option value="yes">Has Candle Cash</option>
+                                <option value="no">No Candle Cash</option>
+                            </select>
+                            <select value={hasPhone} onChange={(event) => setHasPhone(event.target.value)} className={fieldClass()}>
+                                <option value="all">All phone states</option>
+                                <option value="yes">Has phone</option>
+                                <option value="no">No phone</option>
+                            </select>
+                            <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
+                                <option value="all">All birthdays</option>
+                                <option value="today">Birthday today</option>
+                                <option value="week">Birthday this week</option>
+                                <option value="month">Birthday this month</option>
+                                <option value="missing">Birthday missing</option>
+                            </select>
+                            <select value={sortField} onChange={(event) => setSortField(event.target.value)} className={fieldClass()}>
+                                {(meta?.sort_options ?? props.sortOptions).map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        Sort: {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <select value={sortDir} onChange={(event) => setSortDir(event.target.value === "asc" ? "asc" : "desc")} className={fieldClass()}>
+                                <option value="desc">Descending</option>
+                                <option value="asc">Ascending</option>
+                            </select>
+                        </div>
+                    ) : null}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -619,9 +682,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 : "Customer results"}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={handleReset} className={buttonClass()}>
-                            Reset filters
-                        </button>
+                        <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/60">
+                            Advanced filters are tucked away until you need them.
+                        </span>
                     </div>
                 </div>
             </section>

@@ -3,17 +3,20 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashRedemption;
 use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewSummary;
+use App\Services\Marketing\CandleCashAccessGate;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\GrowaveProjectionService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\CandleCashTaskService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
@@ -36,6 +39,7 @@ class MarketingPublicEventController extends Controller
         protected MarketingStorefrontIdentityService $storefrontIdentityService,
         protected MarketingStorefrontEventLogger $eventLogger,
         protected GrowaveProjectionService $growaveProjectionService,
+        protected CandleCashAccessGate $candleCashAccessGate,
         protected TenantResolver $tenantResolver
     ) {
     }
@@ -288,6 +292,7 @@ class MarketingPublicEventController extends Controller
 
         [$balance, $availableRewards, $redemptions, $transactions, $latestGrowaveExternal, $latestReviewSummary, $reviewRewardStatus, $lastGrowaveSyncAt] =
             $this->rewardsLookupData($profile, $candleCashService);
+        $redemptionAccess = $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
 
         $this->eventLogger->log('public_reward_lookup', [
             'status' => $profile ? 'ok' : ($lookupState === 'verification_required' ? 'verification_required' : 'pending'),
@@ -318,10 +323,15 @@ class MarketingPublicEventController extends Controller
             'lastGrowaveSyncAt' => $lastGrowaveSyncAt,
             'redeemResult' => session('redeem_result'),
             'redemptionRules' => $candleCashService->redemptionRulesPayload(),
+            'redemptionAccess' => $redemptionAccess,
         ]);
     }
 
-    public function redeemRewardsLookup(Request $request, CandleCashService $candleCashService): RedirectResponse
+    public function redeemRewardsLookup(
+        Request $request,
+        CandleCashService $candleCashService,
+        CandleCashShopifyDiscountService $discountSyncService
+    ): RedirectResponse
     {
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
@@ -373,6 +383,30 @@ class MarketingPublicEventController extends Controller
                 ]);
         }
 
+        $redemptionAccess = $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
+        if (! (bool) ($redemptionAccess['redeem_enabled'] ?? false)) {
+            $this->eventLogger->log('public_reward_redeem', [
+                'status' => 'error',
+                'issue_type' => 'coming_soon',
+                'source_surface' => 'public_event',
+                'endpoint' => '/rewards/lookup/redeem',
+                'profile' => $profile,
+                'source_type' => 'reward_lookup_redeem',
+                'source_id' => 'public_lookup',
+                'resolution_status' => 'resolved',
+            ]);
+
+            return redirect()
+                ->route('marketing.public.rewards-lookup', $query)
+                ->with('redeem_result', [
+                    'ok' => false,
+                    'state' => 'coming_soon',
+                    'message' => 'Candle Cash redemption is coming soon for this account.',
+                    'balance' => $candleCashService->balancePayloadFromPoints($candleCashService->currentBalance($profile)),
+                    'cta_label' => $redemptionAccess['cta_label'] ?? 'COMING SOON!',
+                ]);
+        }
+
         $result = $candleCashService->requestStorefrontRedemption(
             profile: $profile,
             reward: $reward,
@@ -385,6 +419,41 @@ class MarketingPublicEventController extends Controller
         $message = $this->redemptionMessageForState($state);
         $eventStatus = $ok ? 'ok' : 'error';
         $eventIssue = $ok ? null : (string) ($result['error'] ?? $state);
+        $discountSyncStatus = $ok ? 'pending' : 'not_attempted';
+        $applyUrl = null;
+
+        if ($ok && (int) ($result['redemption_id'] ?? 0) > 0) {
+            $redemption = CandleCashRedemption::query()->find((int) $result['redemption_id']);
+
+            if ($redemption) {
+                $storeContext = $this->preferredStoreContextForProfile($profile);
+                $redemption = $this->syncRedemptionStoreContext($redemption, $storeContext);
+
+                try {
+                    $sync = $discountSyncService->ensureDiscountForRedemption(
+                        $redemption,
+                        $this->normalizeStoreKey($storeContext['store_key'] ?? null)
+                    );
+                    $discountSyncStatus = 'synced';
+                    $applyUrl = $this->candleCashApplyUrlForStore(
+                        $this->normalizeStoreKey($sync['store_key'] ?? ($storeContext['store_key'] ?? null)),
+                        (string) ($result['code'] ?? '')
+                    );
+                } catch (\Throwable $e) {
+                    $discountSyncStatus = 'sync_failed';
+                    $restore = $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
+                        $redemption,
+                        'Canceled automatically because Shopify could not prepare the Candle Cash discount yet.'
+                    );
+                    $result['balance'] = round((float) ($restore['balance'] ?? $candleCashService->currentBalance($profile)), 3);
+                    $ok = false;
+                    $state = 'discount_not_ready';
+                    $message = 'Your Candle Cash balance is safe. We could not prepare the Shopify discount yet.';
+                    $eventStatus = 'error';
+                    $eventIssue = 'shopify_discount_sync_failed';
+                }
+            }
+        }
 
         $this->eventLogger->log('public_reward_redeem', [
             'status' => $eventStatus,
@@ -398,6 +467,7 @@ class MarketingPublicEventController extends Controller
                 'state' => $state,
                 'reward_id' => (int) $reward->id,
                 'balance' => round((float) ($result['balance'] ?? 0), 3),
+                'discount_sync_status' => $discountSyncStatus,
             ],
             'resolution_status' => $ok ? 'resolved' : 'open',
         ]);
@@ -412,6 +482,8 @@ class MarketingPublicEventController extends Controller
                 'reward_name' => 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash',
                 'redemption_code' => $ok ? (string) ($result['code'] ?? '') : null,
                 'redemption_id' => $ok ? (int) ($result['redemption_id'] ?? 0) : null,
+                'discount_sync_status' => $discountSyncStatus,
+                'apply_url' => $ok ? $applyUrl : null,
             ]);
     }
 
@@ -517,6 +589,113 @@ class MarketingPublicEventController extends Controller
         ];
     }
 
+    /**
+     * @return array{store_key:?string,tenant_id:?int}
+     */
+    protected function preferredStoreContextForProfile(MarketingProfile $profile): array
+    {
+        $storeKey = $this->preferredStoreKeyForProfile($profile);
+
+        return [
+            'store_key' => $storeKey,
+            'tenant_id' => $storeKey ? $this->tenantResolver->resolveTenantIdForStoreKey($storeKey) : null,
+        ];
+    }
+
+    protected function preferredStoreKeyForProfile(MarketingProfile $profile): ?string
+    {
+        $linkedStoreKeys = $profile->links()
+            ->where('source_type', 'shopify_customer')
+            ->pluck('source_id')
+            ->map(function ($sourceId): ?string {
+                $value = trim((string) $sourceId);
+                if (preg_match('/^(retail|wholesale):/i', $value, $matches) === 1) {
+                    return strtolower((string) $matches[1]);
+                }
+
+                return null;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($linkedStoreKeys->contains('retail')) {
+            return 'retail';
+        }
+
+        if ($linkedStoreKeys->isNotEmpty()) {
+            return (string) $linkedStoreKeys->first();
+        }
+
+        $externalStoreKeys = $profile->externalProfiles()
+            ->pluck('store_key')
+            ->map(fn ($storeKey): ?string => $this->normalizeStoreKey($storeKey))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($externalStoreKeys->contains('retail')) {
+            return 'retail';
+        }
+
+        return $externalStoreKeys->isNotEmpty() ? (string) $externalStoreKeys->first() : null;
+    }
+
+    /**
+     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     */
+    protected function syncRedemptionStoreContext(CandleCashRedemption $redemption, array $storeContext): CandleCashRedemption
+    {
+        $storeKey = $this->normalizeStoreKey($storeContext['store_key'] ?? null);
+        $tenantId = is_numeric($storeContext['tenant_id'] ?? null) && (int) ($storeContext['tenant_id'] ?? 0) > 0
+            ? (int) $storeContext['tenant_id']
+            : null;
+
+        if ($storeKey === null && $tenantId === null) {
+            return $redemption;
+        }
+
+        $context = is_array($redemption->redemption_context ?? null) ? $redemption->redemption_context : [];
+        $nextContext = array_filter([
+            ...$context,
+            'shopify_store_key' => $storeKey ?? ($context['shopify_store_key'] ?? null),
+            'tenant_id' => $tenantId ?? ($context['tenant_id'] ?? null),
+        ], static fn ($value): bool => $value !== null && $value !== '');
+
+        if ($nextContext === $context) {
+            return $redemption;
+        }
+
+        $redemption->forceFill(['redemption_context' => $nextContext])->save();
+
+        return $redemption->fresh() ?? $redemption;
+    }
+
+    protected function normalizeStoreKey(mixed $value): ?string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function candleCashApplyUrlForStore(?string $storeKey, string $rewardCode): ?string
+    {
+        $rewardCode = trim($rewardCode);
+        if ($storeKey === null || $rewardCode === '') {
+            return null;
+        }
+
+        $store = ShopifyStores::find($storeKey);
+        $shopDomain = trim((string) ($store['shop'] ?? ''));
+        if ($shopDomain === '') {
+            return null;
+        }
+
+        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=candle_cash';
+
+        return 'https://' . $shopDomain . '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
+    }
+
     protected function queueShopifyCustomerProvisioning(
         MarketingProfile $profile,
         ?string $storeKey,
@@ -582,6 +761,8 @@ class MarketingPublicEventController extends Controller
 
         $balancePoints = $candleCashService->currentBalance($profile);
         $balance = $candleCashService->balancePayloadFromPoints($balancePoints);
+        $redemptionAccess = $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
+        $revealRedemptionCodes = (bool) ($redemptionAccess['redeem_enabled'] ?? false);
         $availableRewards = array_values(array_filter([
             $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward(), $balancePoints),
         ]));
@@ -596,7 +777,7 @@ class MarketingPublicEventController extends Controller
                     ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
                     : (string) ($row->reward?->name ?: 'Candle Cash'),
                 'status' => (string) ($row->status ?: 'issued'),
-                'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
+                'redemption_code' => $revealRedemptionCodes && $row->redemption_code ? (string) $row->redemption_code : null,
                 'issued_at' => optional($row->issued_at)->toDateTimeString(),
                 'redeemed_at' => optional($row->redeemed_at)->toDateTimeString(),
                 'candle_cash_amount' => $candleCashService->amountFromPoints($row->candle_cash_spent),

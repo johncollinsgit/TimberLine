@@ -56,9 +56,15 @@ test('customers index renders canonical customer rows with loyalty enrichment an
         ->assertSeeText('Customers')
         ->assertSeeText('Manage Customers')
         ->assertSeeText('Add Customer')
-        ->assertSeeText('Avery Lane')
-        ->assertSeeText('Platinum')
-        ->assertSeeText('135');
+        ->assertSeeText('Search-first results load in the live grid below')
+        ->assertSeeText('The live grid below loads rows on demand');
+
+    $this->actingAs($admin)
+        ->getJson(route('marketing.customers.data'))
+        ->assertOk()
+        ->assertJsonPath('data.0.customer', 'Avery Lane')
+        ->assertJsonPath('data.0.tier', 'Platinum')
+        ->assertJsonPath('data.0.legacy_growave_points', 135);
 });
 
 test('customers projections prefer data-rich Growave rows over newer empty duplicates', function () {
@@ -139,10 +145,15 @@ test('customers projections prefer data-rich Growave rows over newer empty dupli
     $this->actingAs($admin)
         ->get(route('marketing.customers'))
         ->assertOk()
-        ->assertSeeText('Projection Target')
-        ->assertSeeText('4,321')
-        ->assertSeeText('7')
-        ->assertSeeText('4.75 avg');
+        ->assertSeeText('Manage Customers');
+
+    $this->actingAs($admin)
+        ->getJson(route('marketing.customers.data'))
+        ->assertOk()
+        ->assertJsonPath('data.0.customer', 'Projection Target')
+        ->assertJsonPath('data.0.legacy_growave_points', 4321)
+        ->assertJsonPath('data.0.review_count', 7)
+        ->assertJsonPath('data.0.average_rating', 4.75);
 
     $this->actingAs($admin)
         ->get(route('marketing.customers.show', $profile))
@@ -179,8 +190,13 @@ test('customers search matches external source ids through canonical profile que
     $this->actingAs($admin)
         ->get(route('marketing.customers', ['search' => 'LOOKUP-7788']))
         ->assertOk()
-        ->assertSeeText('Search Target')
-        ->assertSeeText('search.target@example.com');
+        ->assertSeeText('Manage Customers');
+
+    $this->actingAs($admin)
+        ->getJson(route('marketing.customers.data', ['search' => 'LOOKUP-7788']))
+        ->assertOk()
+        ->assertJsonPath('data.0.customer', 'Search Target')
+        ->assertJsonPath('data.0.email', 'search.target@example.com');
 });
 
 test('customers index includes shopify and square-only canonical profiles without requiring growave', function () {
@@ -223,10 +239,17 @@ test('customers index includes shopify and square-only canonical profiles withou
     $this->actingAs($admin)
         ->get(route('marketing.customers'))
         ->assertOk()
-        ->assertSeeText('Shopify Only')
-        ->assertSeeText('shopify.only.index@example.com')
-        ->assertSeeText('Square Only')
-        ->assertSeeText('square.only.index@example.com');
+        ->assertSeeText('Manage Customers');
+
+    $response = $this->actingAs($admin)
+        ->getJson(route('marketing.customers.data'));
+
+    $customers = collect($response->json('data'));
+
+    $response->assertOk();
+
+    expect($customers->pluck('customer'))->toContain('Shopify Only', 'Square Only')
+        ->and($customers->pluck('email'))->toContain('shopify.only.index@example.com', 'square.only.index@example.com');
 });
 
 test('customers index row links to detail page and detail renders canonical identity fields', function () {
@@ -260,8 +283,13 @@ test('customers index row links to detail page and detail renders canonical iden
     $this->actingAs($admin)
         ->get(route('marketing.customers'))
         ->assertOk()
-        ->assertSee($showUrl, false)
-        ->assertSeeText('Riley Carter');
+        ->assertSeeText('Manage Customers');
+
+    $this->actingAs($admin)
+        ->getJson(route('marketing.customers.data'))
+        ->assertOk()
+        ->assertJsonPath('data.0.customer', 'Riley Carter')
+        ->assertJsonPath('data.0.profile_url', $showUrl);
 
     $this->actingAs($admin)
         ->get($showUrl)

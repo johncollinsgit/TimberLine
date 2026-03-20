@@ -315,6 +315,7 @@ test('public event and rewards routes work without admin auth and do not expose 
 test('shopify integration endpoints return reward and consent responses with signed storefront auth', function () {
     config()->set('marketing.shopify.signing_secret', 'stage7-secret');
     config()->set('marketing.candle_cash_consent_bonus.sms', 5);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['shopify.customer@example.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage7-retail-client');
 

@@ -44,10 +44,23 @@
             @if(($redeemResult['ok'] ?? false) && !empty($redeemResult['redemption_code']))
                 <div class="mt-2 text-xs">Code: <span class="font-mono">{{ $redeemResult['redemption_code'] }}</span></div>
             @endif
+            @if(($redeemResult['ok'] ?? false) && !empty($redeemResult['apply_url']))
+                <div class="mt-2 text-xs">
+                    <a
+                        href="{{ $redeemResult['apply_url'] }}"
+                        class="inline-flex rounded-lg border border-current/30 px-3 py-1 font-semibold hover:bg-white/10"
+                    >
+                        Apply on storefront
+                    </a>
+                </div>
+            @endif
             <div class="mt-2 text-xs opacity-90">
                 State: {{ strtoupper((string) ($redeemResult['state'] ?? 'unknown')) }}
                 @if(data_get($redeemResult, 'balance.candle_cash_amount_formatted'))
                     · Balance: {{ data_get($redeemResult, 'balance.candle_cash_amount_formatted') }}
+                @endif
+                @if(! empty($redeemResult['discount_sync_status'] ?? null))
+                    · Discount: {{ strtoupper((string) $redeemResult['discount_sync_status']) }}
                 @endif
             </div>
         </section>
@@ -98,10 +111,18 @@
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
                 <h2 class="text-sm font-semibold text-white">Redeem Candle Cash</h2>
                 <p class="mt-2 text-xs text-zinc-400">Candle Cash is redeemed in $10 increments, with a limit of $10 per order.</p>
+                @if(! data_get($redemptionAccess ?? [], 'redeem_enabled', true))
+                    <p class="mt-2 text-xs text-zinc-400">{{ data_get($redemptionAccess, 'message', 'Candle Cash is temporarily live for selected accounts only.') }}</p>
+                @endif
                 <div class="mt-3 space-y-3">
                     @forelse($availableRewards as $reward)
                         @php
                             $canRedeem = (bool) data_get($reward, 'is_redeemable_now', false);
+                            $redeemEnabled = (bool) data_get($redemptionAccess ?? [], 'redeem_enabled', true);
+                            $buttonEnabled = $canRedeem && $redeemEnabled;
+                            $buttonLabel = ! $redeemEnabled
+                                ? 'COMING SOON!'
+                                : ($canRedeem ? 'Redeem $10 Candle Cash' : 'Need More Candle Cash');
                         @endphp
                         <div class="rounded-xl border border-white/10 bg-white/5 p-3">
                             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -109,15 +130,21 @@
                                     <div class="text-sm font-semibold text-white">{{ data_get($reward, 'name', 'Redeem $10 Candle Cash') }}</div>
                                     <div class="text-xs text-zinc-400">{{ data_get($reward, 'candle_cash_amount_formatted', '$10.00') }} off this order · Limit $10 per order</div>
                                 </div>
-                                <form method="POST" action="{{ route('marketing.public.account-rewards.redeem') }}" class="shrink-0">
-                                    @csrf
-                                    <input type="hidden" name="email" value="{{ request('email') }}">
-                                    <input type="hidden" name="phone" value="{{ request('phone') }}">
-                                    <input type="hidden" name="reward_id" value="{{ (int) data_get($reward, 'id', 0) }}">
-                                    <button type="submit" class="rounded-lg border px-3 py-1.5 text-xs font-semibold {{ $canRedeem ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100' : 'border-zinc-500/40 bg-zinc-700/30 text-zinc-300' }}" {{ $canRedeem ? '' : 'disabled' }}>
-                                        {{ $canRedeem ? 'Redeem $10 Candle Cash' : 'Need More Candle Cash' }}
+                                @if($redeemEnabled)
+                                    <form method="POST" action="{{ route('marketing.public.account-rewards.redeem') }}" class="shrink-0">
+                                        @csrf
+                                        <input type="hidden" name="email" value="{{ request('email') }}">
+                                        <input type="hidden" name="phone" value="{{ request('phone') }}">
+                                        <input type="hidden" name="reward_id" value="{{ (int) data_get($reward, 'id', 0) }}">
+                                        <button type="submit" class="rounded-lg border px-3 py-1.5 text-xs font-semibold {{ $buttonEnabled ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100' : 'border-zinc-500/40 bg-zinc-700/30 text-zinc-300' }}" {{ $buttonEnabled ? '' : 'disabled' }}>
+                                            {{ $buttonLabel }}
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" class="shrink-0 rounded-lg border border-zinc-500/40 bg-zinc-700/30 px-3 py-1.5 text-xs font-semibold text-zinc-300" disabled aria-disabled="true" tabindex="-1">
+                                        {{ $buttonLabel }}
                                     </button>
-                                </form>
+                                @endif
                             </div>
                             @if(data_get($reward, 'description'))
                                 <div class="mt-2 text-xs text-zinc-400">{{ data_get($reward, 'description') }}</div>

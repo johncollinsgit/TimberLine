@@ -417,7 +417,7 @@ class CandleCashService
     /**
      * @return array<string,mixed>|null
      */
-    public function storefrontRewardPayload(?CandleCashReward $reward, ?int $balancePoints = null): ?array
+    public function storefrontRewardPayload(?CandleCashReward $reward, float|int|string|null $balancePoints = null): ?array
     {
         if (! $reward) {
             return null;
@@ -425,6 +425,7 @@ class CandleCashService
 
         $pointsCost = $this->storefrontRewardPointsCost($reward);
         $amount = $this->fixedRedemptionAmount();
+        $normalizedBalance = $balancePoints !== null ? CandleCashMeasurement::normalizeStoredAmount($balancePoints) : null;
 
         return [
             'id' => (int) $reward->id,
@@ -436,7 +437,7 @@ class CandleCashService
             'candle_cash_cost_formatted' => $this->formatCandleCash($amount),
             'candle_cash_amount' => $amount,
             'candle_cash_amount_formatted' => $this->formatRewardCurrency($amount),
-            'is_redeemable_now' => $balancePoints !== null ? $balancePoints >= $pointsCost : null,
+            'is_redeemable_now' => $normalizedBalance !== null ? $normalizedBalance >= $pointsCost : null,
             'redeem_increment_dollars' => $amount,
             'redeem_increment_formatted' => $this->formatRewardCurrency($amount),
             'limit_per_order_dollars' => $this->maxRedeemablePerOrderAmount(),

@@ -3,15 +3,19 @@
 namespace App\Services\Shopify\Dashboard;
 
 use App\Models\BirthdayRewardIssuance;
+use App\Models\CandleCashRedemption;
+use App\Models\CandleCashTransaction;
 use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Services\Marketing\CandleCashEarnedAnalyticsService;
+use App\Services\Marketing\CandleCashLedgerNormalizationService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Reporting\AnalyticsComparisonService;
+use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -30,6 +34,7 @@ class ShopifyEmbeddedDashboardDataService
         protected CandleCashService $candleCashService,
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
         protected CandleCashEarnedAnalyticsService $candleCashEarnedAnalyticsService,
+        protected CandleCashLedgerNormalizationService $candleCashLedgerNormalizationService,
         protected MarketingEmailReadiness $marketingEmailReadiness
     ) {}
 
@@ -827,63 +832,248 @@ class ShopifyEmbeddedDashboardDataService
         ?array $comparisonWindow,
         array $resolvedQuery
     ): array {
-        $primaryDailySeries = $this->birthdayRedemptionDailySeries($from, $to);
-        $comparisonDailySeries = $comparisonWindow
-            ? $this->birthdayRedemptionDailySeries($comparisonWindow['from'], $comparisonWindow['to'])
-            : collect();
-        $seriesMetric = ($primaryDailySeries->sum('revenue') + $comparisonDailySeries->sum('revenue')) > 0.001
-            ? 'revenue'
-            : 'count';
+        $unit = (string) data_get($resolvedQuery, 'interval.unit', 'day');
+        $definitions = $this->chartSeriesDefinitions();
+        $focusMetricKey = (string) data_get($resolvedQuery, 'chartMetric', 'rewards_sales');
+        if (! array_key_exists($focusMetricKey, $definitions)) {
+            $focusMetricKey = 'rewards_sales';
+        }
 
-        $primarySeries = $this->bucketDailyMetricSeries(
-            $primaryDailySeries,
+        $primarySeries = $this->chartSeriesMap(
+            collect($primarySnapshot['revenueRows'] ?? []),
             $from,
             $to,
-            (string) data_get($resolvedQuery, 'interval.unit', 'day'),
-            $seriesMetric
+            $unit
         );
-        $comparisonSeries = $comparisonWindow
-            ? $this->bucketDailyMetricSeries(
-                $comparisonDailySeries,
+        $comparisonSeries = $comparisonWindow && $comparisonSnapshot
+            ? $this->chartSeriesMap(
+                collect($comparisonSnapshot['revenueRows'] ?? []),
                 $comparisonWindow['from'],
                 $comparisonWindow['to'],
-                (string) data_get($resolvedQuery, 'interval.unit', 'day'),
-                $seriesMetric
+                $unit
             )
             : [];
 
-        $rows = [];
-        foreach ($primarySeries as $index => $point) {
-            $comparisonPoint = $comparisonSeries[$index] ?? null;
-            $rows[] = [
-                'label' => $point['label'],
-                'primary' => $point['value'],
-                'comparison' => $comparisonPoint['value'] ?? null,
-            ];
-        }
+        $rows = $this->chartRows(
+            $primarySeries,
+            $comparisonSeries,
+            array_keys($definitions),
+            $focusMetricKey,
+            $comparisonWindow !== null
+        );
+
+        $selectedKeys = $this->defaultChartSelection($focusMetricKey, array_keys($definitions));
+        $seriesOptions = collect($definitions)
+            ->map(function (array $definition, string $key) use ($primarySeries, $comparisonSeries, $selectedKeys, $comparisonWindow): array {
+                return [
+                    'key' => $key,
+                    'label' => $definition['label'],
+                    'description' => $definition['description'],
+                    'color' => $definition['color'],
+                    'selected' => in_array($key, $selectedKeys, true),
+                    'formattedPrimaryTotal' => $this->currency($this->seriesTotal($primarySeries[$key] ?? [])),
+                    'formattedComparisonTotal' => $comparisonWindow
+                        ? $this->currency($this->seriesTotal($comparisonSeries[$key] ?? []))
+                        : null,
+                ];
+            })
+            ->values()
+            ->all();
 
         $bestPrimary = collect($rows)->sortByDesc('primary')->first();
-        $usesRevenue = $seriesMetric === 'revenue';
+        $hasAnyData = collect($rows)->contains(function (array $row): bool {
+            $primaryValues = collect((array) ($row['values'] ?? []));
+            $comparisonValues = collect((array) ($row['comparisonValues'] ?? []));
+
+            return $primaryValues->contains(fn ($value): bool => abs((float) $value) > 0.001)
+                || $comparisonValues->contains(fn ($value): bool => $value !== null && abs((float) $value) > 0.001);
+        });
 
         return [
             'title' => 'Performance trend',
-            'subtitle' => $usesRevenue
-                ? 'Birthday reward redemption revenue by redemption date across the selected timeframe, synchronized with the same timeframe and comparison controls.'
-                : 'Birthday reward redemptions by redemption date across the selected timeframe. Revenue was unavailable for the redeemed rewards in this window, so this chart is showing count instead.',
+            'subtitle' => 'Compare reward-attributed sales, birthday and referral revenue, plus Candle Cash earned and redeemed across the same timeframe and comparison window.',
             'metric' => [
-                'key' => $usesRevenue ? 'birthday_redemption_revenue' : 'birthday_redemption_count',
-                'label' => $usesRevenue ? 'Birthday Redemption Revenue' : 'Birthday Redemption Count',
+                'key' => $focusMetricKey,
+                'label' => $definitions[$focusMetricKey]['label'],
             ],
             'visualization' => (string) $resolvedQuery['visualization'],
             'series' => $rows,
-            'benchmarkLabel' => 'Peak redemption period',
+            'seriesOptions' => $seriesOptions,
+            'benchmarkLabel' => 'Peak selected series period',
             'benchmarkValue' => $bestPrimary
-                ? ($usesRevenue
-                    ? $this->currency((float) $bestPrimary['primary'])
-                    : number_format((float) $bestPrimary['primary']).' redemption'.((float) $bestPrimary['primary'] === 1.0 ? '' : 's'))
-                : ($usesRevenue ? '$0.00' : '0 redemptions'),
-            'empty' => empty($rows),
+                ? $this->currency((float) $bestPrimary['primary'])
+                : '$0.00',
+            'empty' => ! $hasAnyData,
         ];
+    }
+
+    /**
+     * @return array<string,array{label:string,description:string,color:string}>
+     */
+    protected function chartSeriesDefinitions(): array
+    {
+        return [
+            'rewards_sales' => [
+                'label' => 'Rewards Sales',
+                'description' => 'All reward-attributed revenue normalized from campaign conversions, birthday rewards, and referrals.',
+                'color' => '#15803d',
+            ],
+            'birthday_redemption_revenue' => [
+                'label' => 'Birthday Redemption Revenue',
+                'description' => 'Revenue tied specifically to redeemed birthday rewards.',
+                'color' => '#d97706',
+            ],
+            'referral_revenue' => [
+                'label' => 'Referral Revenue',
+                'description' => 'Qualified referral order revenue tied to the loyalty/referral program.',
+                'color' => '#2563eb',
+            ],
+            'candle_cash_earned' => [
+                'label' => 'Candle Cash Earned',
+                'description' => 'Program-earned Candle Cash credited in the selected period, excluding imported opening balances.',
+                'color' => '#0f766e',
+            ],
+            'candle_cash_redeemed' => [
+                'label' => 'Candle Cash Redeemed',
+                'description' => 'Candle Cash converted into redeemed Shopify discount value in the selected period.',
+                'color' => '#7c3aed',
+            ],
+        ];
+    }
+
+    /**
+     * @param  Collection<int,array<string,mixed>>  $revenueRows
+     * @return array<string,array<int,array{label:string,value:float}>>
+     */
+    protected function chartSeriesMap(Collection $revenueRows, CarbonImmutable $from, CarbonImmutable $to, string $unit): array
+    {
+        return [
+            'rewards_sales' => $this->bucketRevenueSeries($revenueRows, $from, $to, $unit),
+            'birthday_redemption_revenue' => $this->bucketRevenueSeries(
+                $revenueRows->filter(fn (array $row): bool => (string) ($row['sourceType'] ?? '') === 'birthday_reward')->values(),
+                $from,
+                $to,
+                $unit
+            ),
+            'referral_revenue' => $this->bucketRevenueSeries(
+                $revenueRows->filter(fn (array $row): bool => (string) ($row['sourceType'] ?? '') === 'referral')->values(),
+                $from,
+                $to,
+                $unit
+            ),
+            'candle_cash_earned' => $this->candleCashEarnedSeries($from, $to, $unit),
+            'candle_cash_redeemed' => $this->candleCashRedeemedSeries($from, $to, $unit),
+        ];
+    }
+
+    /**
+     * @param  array<string,array<int,array{label:string,value:float}>>  $primarySeries
+     * @param  array<string,array<int,array{label:string,value:float}>>  $comparisonSeries
+     * @param  array<int,string>  $seriesKeys
+     * @return array<int,array<string,mixed>>
+     */
+    protected function chartRows(
+        array $primarySeries,
+        array $comparisonSeries,
+        array $seriesKeys,
+        string $focusMetricKey,
+        bool $hasComparison
+    ): array {
+        $focusSeries = $primarySeries[$focusMetricKey] ?? [];
+        $rows = [];
+
+        foreach ($focusSeries as $index => $point) {
+            $values = [];
+            $comparisonValues = [];
+
+            foreach ($seriesKeys as $key) {
+                $values[$key] = round((float) data_get($primarySeries, $key.'.'.$index.'.value', 0), 2);
+                $comparisonValues[$key] = $hasComparison
+                    ? round((float) data_get($comparisonSeries, $key.'.'.$index.'.value', 0), 2)
+                    : null;
+            }
+
+            $rows[] = [
+                'label' => (string) ($point['label'] ?? ''),
+                'primary' => (float) ($values[$focusMetricKey] ?? 0),
+                'comparison' => $hasComparison ? (float) ($comparisonValues[$focusMetricKey] ?? 0) : null,
+                'values' => $values,
+                'comparisonValues' => $comparisonValues,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<int,string>  $seriesKeys
+     * @return array<int,string>
+     */
+    protected function defaultChartSelection(string $focusMetricKey, array $seriesKeys): array
+    {
+        return collect([
+            $focusMetricKey,
+            'candle_cash_earned',
+            'candle_cash_redeemed',
+        ])
+            ->filter(fn (string $key): bool => in_array($key, $seriesKeys, true))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int,array{label:string,value:float}>  $series
+     */
+    protected function seriesTotal(array $series): float
+    {
+        return round(collect($series)->sum('value'), 2);
+    }
+
+    /**
+     * @return array<int,array{label:string,value:float}>
+     */
+    protected function candleCashEarnedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit): array
+    {
+        $rows = CandleCashTransaction::query()
+            ->where('candle_cash_delta', '>', 0)
+            ->whereBetween('created_at', [$from, $to])
+            ->orderBy('created_at')
+            ->get(['id', 'type', 'candle_cash_delta', 'source', 'source_id', 'description', 'created_at'])
+            ->reject(fn (CandleCashTransaction $transaction): bool => $this->candleCashLedgerNormalizationService->isGrandfatheredOpening($transaction))
+            ->map(function (CandleCashTransaction $transaction): array {
+                $amount = CandleCashMeasurement::normalizeStoredAmount($transaction->candle_cash_delta ?? 0);
+
+                return [
+                    'date' => optional($transaction->created_at)?->toImmutable() ?: now()->toImmutable(),
+                    'revenue' => round($this->candleCashService->amountFromPoints($amount), 2),
+                ];
+            });
+
+        return $this->bucketRevenueSeries($rows, $from, $to, $unit);
+    }
+
+    /**
+     * @return array<int,array{label:string,value:float}>
+     */
+    protected function candleCashRedeemedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit): array
+    {
+        $rows = CandleCashRedemption::query()
+            ->where('status', 'redeemed')
+            ->whereNotNull('redeemed_at')
+            ->whereBetween('redeemed_at', [$from, $to])
+            ->orderBy('redeemed_at')
+            ->get(['id', 'candle_cash_spent', 'redeemed_at'])
+            ->map(function (CandleCashRedemption $redemption): array {
+                $amount = CandleCashMeasurement::normalizeStoredAmount($redemption->candle_cash_spent ?? 0);
+
+                return [
+                    'date' => optional($redemption->redeemed_at)?->toImmutable() ?: now()->toImmutable(),
+                    'revenue' => round($this->candleCashService->amountFromPoints($amount), 2),
+                ];
+            });
+
+        return $this->bucketRevenueSeries($rows, $from, $to, $unit);
     }
 
     protected function bucketRevenueSeries(Collection $rows, CarbonImmutable $from, CarbonImmutable $to, string $unit): array

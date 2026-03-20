@@ -172,6 +172,7 @@ class MarketingStorefrontWidgetService
             'unauthorized_storefront_request' => ['contact_support'],
             'identity_review_required' => ['verification_required', 'contact_support'],
             'profile_not_found' => ['verification_required'],
+            'coming_soon' => ['try_again_later'],
             'insufficient_candle_cash' => ['try_again_later'],
             'reward_unavailable' => ['try_again_later'],
             'already_has_active_code' => ['already_redeemed'],

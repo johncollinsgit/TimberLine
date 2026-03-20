@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Models\CandleCashRedemption;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfileLink;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
@@ -161,8 +162,17 @@ GRAPHQL;
             $candidates[] = $storeKey;
         }
 
-        if (in_array('retail', $linkedStoreKeys, true)) {
-            array_unshift($candidates, 'retail');
+        $externalStoreKeys = CustomerExternalProfile::query()
+            ->where('marketing_profile_id', $redemption->marketing_profile_id)
+            ->pluck('store_key')
+            ->map(fn ($storeKey): ?string => strtolower(trim((string) $storeKey)) ?: null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach ($externalStoreKeys as $storeKey) {
+            $candidates[] = $storeKey;
         }
 
         foreach (array_values(array_unique(array_filter($candidates))) as $storeKey) {
@@ -172,7 +182,7 @@ GRAPHQL;
             }
         }
 
-        return ShopifyStores::find('retail') ?: (ShopifyStores::all()[0] ?? null);
+        return null;
     }
 
     /**

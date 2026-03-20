@@ -10,6 +10,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\User;
 use App\Services\Marketing\CandleCashOrderEventService;
 use App\Services\Marketing\CandleCashReferralService;
@@ -304,6 +305,58 @@ test('eligible candle club members can earn the vote reward once per campaign', 
         ->where('candle_cash_task_id', $task->id)
         ->where('source_event_key', 'candle-club-vote:profile:' . $profile->id . ':campaign:spring-2026')
         ->value('duplicate_hits'))->toBe(1);
+});
+
+test('candle club membership is recognized from the live subscription product order lines', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Juniper',
+        'email' => 'juniper@example.com',
+        'normalized_email' => 'juniper@example.com',
+    ]);
+
+    $order = Order::query()->create([
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 4012,
+        'shopify_customer_id' => 'cust-club-4012',
+        'order_number' => '#4012',
+        'email' => $profile->email,
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+        'match_method' => 'email',
+        'confidence' => 1,
+    ]);
+
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'shopify_product_id' => 998877,
+        'shopify_variant_id' => 554433,
+        'quantity' => 1,
+        'ordered_qty' => 1,
+        'currency_code' => 'USD',
+        'unit_price' => 34.00,
+        'line_subtotal' => 34.00,
+        'line_total' => 34.00,
+        'raw_title' => 'Modern Forestry Candle Club 16oz Subscription with Gifts',
+        'raw_variant' => 'Monthly 16oz membership',
+    ]);
+
+    $eligibilityService = app(\App\Services\Marketing\CandleCashTaskEligibilityService::class);
+
+    expect($eligibilityService->membershipStatusForProfile($profile))->toBe('active_candle_club_member');
+
+    app(CandleCashOrderEventService::class)->handle($order, []);
+
+    $task = CandleCashTask::query()->where('handle', 'candle-club-join')->firstOrFail();
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(1);
 });
 
 test('email signup reward is awarded automatically on verified opt in without revoking sms consent', function () {

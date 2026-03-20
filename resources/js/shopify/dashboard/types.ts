@@ -29,6 +29,18 @@ export interface DashboardChartSeriesPoint {
   label: string;
   primary: number;
   comparison: number | null;
+  values: Record<string, number>;
+  comparisonValues: Record<string, number | null>;
+}
+
+export interface DashboardChartSeriesOption {
+  key: string;
+  label: string;
+  description: string;
+  color: string;
+  selected: boolean;
+  formattedPrimaryTotal: string;
+  formattedComparisonTotal: string | null;
 }
 
 export interface DashboardLocationOrigin {
@@ -118,6 +130,7 @@ export interface DashboardPayload {
     };
     visualization: "line" | "grouped_bar";
     series: DashboardChartSeriesPoint[];
+    seriesOptions: DashboardChartSeriesOption[];
     benchmarkLabel: string;
     benchmarkValue: string;
     empty: boolean;

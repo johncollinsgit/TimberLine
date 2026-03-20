@@ -120,6 +120,10 @@ return [
         'max_open_codes' => (int) env('MARKETING_CANDLE_CASH_MAX_OPEN_CODES', 1),
         'storefront_reward_type' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_TYPE', 'coupon'),
         'storefront_reward_value' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_VALUE', '10USD'),
+        'temporary_storefront_live_email_allowlist' => array_values(array_filter(array_map(
+            static fn ($value) => strtolower(trim((string) $value)),
+            explode(',', (string) env('MARKETING_CANDLE_CASH_TEMP_LIVE_EMAIL_ALLOWLIST', 'sarahcollins0816@gmail.com'))
+        ))),
         'password_protection' => [
             'enabled' => (bool) env('MARKETING_CANDLE_CASH_PASSWORD_ENABLED', true),
             'password' => env('MARKETING_CANDLE_CASH_PASSWORD', 'johnnycash'),

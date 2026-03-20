@@ -7,6 +7,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewSummary;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\CandleCashService;
 
 test('public rewards account lookup shows balance, referral, reviews, and transaction history', function () {
@@ -81,16 +82,36 @@ test('public rewards account lookup shows balance, referral, reviews, and transa
 });
 
 test('public rewards account redeem route issues and rejects redemptions with clear states', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', [
+        'sarahcollins0816@gmail.com',
+        'rewards.short@example.com',
+    ]);
+
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Redeem',
         'last_name' => 'Customer',
-        'email' => 'rewards.redeem@example.com',
-        'normalized_email' => 'rewards.redeem@example.com',
+        'email' => 'sarahcollins0816@gmail.com',
+        'normalized_email' => 'sarahcollins0816@gmail.com',
         'phone' => '5553023333',
         'normalized_phone' => '+15553023333',
     ]);
 
     app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed Candle Cash');
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'PUBLIC-REDEEM-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'phone' => $profile->phone,
+        'normalized_phone' => $profile->normalized_phone,
+        'points_balance' => 300,
+        'synced_at' => now(),
+    ]);
 
     $storefrontReward = app(CandleCashService::class)->storefrontReward();
     expect($storefrontReward)->not->toBeNull();
@@ -104,14 +125,37 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'is_active' => true,
     ]);
 
+    $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $discountSync->shouldReceive('ensureDiscountForRedemption')
+        ->once()
+        ->withArgs(function (CandleCashRedemption $redemption, ?string $preferredStoreKey) use ($profile, $storefrontReward): bool {
+            return (int) $redemption->marketing_profile_id === (int) $profile->id
+                && (int) $redemption->reward_id === (int) $storefrontReward->id
+                && $preferredStoreKey === 'retail';
+        })
+        ->andReturn([
+            'discount_id' => 'gid://shopify/DiscountCodeNode/public-redeem',
+            'discount_node_id' => 'gid://shopify/DiscountCodeNode/public-redeem',
+            'store_key' => 'retail',
+            'starts_at' => now()->toIso8601String(),
+            'ends_at' => now()->addDays(30)->toIso8601String(),
+        ]);
+    app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
+
     $this->post(route('marketing.public.account-rewards.redeem'), [
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $storefrontReward->id,
-    ])->assertRedirect(route('marketing.public.rewards-lookup', [
-        'email' => $profile->email,
-        'phone' => $profile->phone,
-    ]));
+    ])
+        ->assertRedirect(route('marketing.public.rewards-lookup', [
+            'email' => $profile->email,
+            'phone' => $profile->phone,
+        ]))
+        ->assertSessionHas('redeem_result', function (array $result): bool {
+            return ($result['ok'] ?? false) === true
+                && ($result['discount_sync_status'] ?? null) === 'synced'
+                && filled($result['redemption_code'] ?? null);
+        });
 
     expect(CandleCashRedemption::query()
         ->where('marketing_profile_id', $profile->id)
@@ -158,6 +202,67 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         ->where('marketing_profile_id', $profile->id)
         ->where('reward_id', $nonStorefrontReward->id)
         ->exists())->toBeFalse();
+});
+
+test('public rewards account shows COMING SOON! and blocks non-allowlisted redemptions', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com']);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Blocked',
+        'last_name' => 'Customer',
+        'email' => 'blocked.redeem@example.com',
+        'normalized_email' => 'blocked.redeem@example.com',
+        'phone' => '5553028888',
+        'normalized_phone' => '+15553028888',
+    ]);
+
+    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed Candle Cash');
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'PUBLIC-REDEEM-BLOCKED-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'phone' => $profile->phone,
+        'normalized_phone' => $profile->normalized_phone,
+        'points_balance' => 300,
+        'synced_at' => now(),
+    ]);
+
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
+
+    $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $discountSync->shouldReceive('ensureDiscountForRedemption')->never();
+    app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
+
+    $this->get(route('marketing.public.account-rewards', [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+    ]))
+        ->assertOk()
+        ->assertSeeText('COMING SOON!');
+
+    $this->post(route('marketing.public.account-rewards.redeem'), [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+    ])
+        ->assertRedirect(route('marketing.public.rewards-lookup', [
+            'email' => $profile->email,
+            'phone' => $profile->phone,
+        ]))
+        ->assertSessionHas('redeem_result', function (array $result): bool {
+            return ($result['ok'] ?? true) === false
+                && ($result['state'] ?? null) === 'coming_soon';
+        });
+
+    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeFalse()
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(300.0);
 });
 
 test('public rewards account prefers data-rich Growave projection when duplicate rows exist', function () {
@@ -249,4 +354,59 @@ test('public rewards account prefers data-rich Growave projection when duplicate
         ->assertSeeText('4 reviews')
         ->assertSeeText('Avg 4.25')
         ->assertSeeText('GRO-RICH-8101');
+});
+
+test('public rewards account redeem restores balance when Shopify discount sync fails', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['recover.balance@example.com']);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Recover',
+        'last_name' => 'Balance',
+        'email' => 'recover.balance@example.com',
+        'normalized_email' => 'recover.balance@example.com',
+        'phone' => '5553090000',
+        'normalized_phone' => '+15553090000',
+    ]);
+
+    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed Candle Cash');
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'PUBLIC-REDEEM-FAIL-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'phone' => $profile->phone,
+        'normalized_phone' => $profile->normalized_phone,
+        'points_balance' => 300,
+        'synced_at' => now(),
+    ]);
+
+    $reward = app(CandleCashService::class)->storefrontReward();
+    expect($reward)->not->toBeNull();
+
+    $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $discountSync->shouldReceive('ensureDiscountForRedemption')
+        ->once()
+        ->andThrow(new RuntimeException('Shopify sync unavailable'));
+    app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
+
+    $this->followingRedirects()->post(route('marketing.public.account-rewards.redeem'), [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+    ])
+        ->assertOk()
+        ->assertSeeText('Redemption Failed')
+        ->assertSeeText('Your Candle Cash balance is safe. We could not prepare the Shopify discount yet.')
+        ->assertSeeText('Discount: SYNC_FAILED');
+
+    $redemption = CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->latest('id')->first();
+
+    expect($redemption)->not->toBeNull()
+        ->and((string) $redemption->status)->toBe('canceled')
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(300.0);
 });

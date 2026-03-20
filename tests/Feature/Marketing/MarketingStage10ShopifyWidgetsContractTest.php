@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\CandleCashBalance;
 use App\Models\CandleCashTask;
 use App\Models\MarketingProfile;
 use App\Models\CustomerExternalProfile;
@@ -361,6 +362,56 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
+});
+
+test('shopify v1 customer reward reads preserve fractional candle cash balances after legacy correction', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Fractional',
+        'last_name' => 'Balance',
+        'email' => 'fractional.balance@example.com',
+        'normalized_email' => 'fractional.balance@example.com',
+        'phone' => '5557773434',
+        'normalized_phone' => '+15557773434',
+    ]);
+
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 0.300,
+    ]);
+
+    $statusQuery = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $statusQuery))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.balance.candle_cash', 0.3)
+        ->assertJsonPath('data.balance.candle_cash_amount', 0.3)
+        ->assertJsonPath('data.summary.current_balance', 0.3)
+        ->assertJsonPath('data.available_rewards.0.is_redeemable_now', false);
+
+    $balanceQuery = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.rewards.balance', $balanceQuery))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.balance.candle_cash', 0.3)
+        ->assertJsonPath('data.balance.candle_cash_amount', 0.3);
 });
 
 test('shopify v1 candle cash status keeps candle club vote locked for guests', function () {

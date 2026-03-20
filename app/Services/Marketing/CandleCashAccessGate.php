@@ -2,10 +2,48 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingProfile;
 use Illuminate\Http\Request;
 
 class CandleCashAccessGate
 {
+    public function storefrontLiveEmailAllowlist(): array
+    {
+        return array_values(array_filter(array_map(
+            static fn ($value) => strtolower(trim((string) $value)),
+            (array) config('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com'])
+        )));
+    }
+
+    public function storefrontRedeemEnabledForProfile(?MarketingProfile $profile): bool
+    {
+        $allowlist = $this->storefrontLiveEmailAllowlist();
+        if ($allowlist === []) {
+            return true;
+        }
+
+        $email = strtolower(trim((string) ($profile?->normalized_email ?: $profile?->email ?: '')));
+
+        return $email !== '' && in_array($email, $allowlist, true);
+    }
+
+    /**
+     * @return array{redeem_enabled:bool,cta_label:string,message:string,mode:string}
+     */
+    public function storefrontRedeemAccessPayload(?MarketingProfile $profile): array
+    {
+        $enabled = $this->storefrontRedeemEnabledForProfile($profile);
+
+        return [
+            'redeem_enabled' => $enabled,
+            'cta_label' => $enabled ? 'Redeem Candle Cash' : 'COMING SOON!',
+            'message' => $enabled
+                ? 'Candle Cash is live for this account.'
+                : 'Candle Cash is temporarily live for selected accounts only.',
+            'mode' => $enabled ? 'live' : 'coming_soon',
+        ];
+    }
+
     public function enabled(): bool
     {
         return (bool) config('marketing.candle_cash.password_protection.enabled', true);
