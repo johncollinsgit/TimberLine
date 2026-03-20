@@ -357,6 +357,8 @@ test('shopify reward redemption is gated to the temporary beta email allowlist',
 test('ambiguous storefront identity returns verification required instead of silent linkage', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
 
     $left = MarketingProfile::query()->create([
         'first_name' => 'Left',
@@ -379,6 +381,7 @@ test('ambiguous storefront identity returns verification required instead of sil
         'email' => 'left.stage9@example.com',
         'phone' => '5553002000',
         'reward_id' => $reward->id,
+        'shop' => 'modernforestry.myshopify.com',
     ];
     $headers = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($payload), 'stage9-secret');
 

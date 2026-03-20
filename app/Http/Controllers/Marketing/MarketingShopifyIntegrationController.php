@@ -256,6 +256,9 @@ class MarketingShopifyIntegrationController extends Controller
         ]);
 
         $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('redeem_request');
+        }
         $resolved = $this->resolveProfile($request, scope: 'redeem_request', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_redeem_request', [
