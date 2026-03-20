@@ -434,6 +434,40 @@ test('reconciliation dashboard surfaces unresolved issues and supports resolutio
         ->and((int) $event->resolved_by)->toBe((int) $admin->id);
 });
 
+test('storefront redemption debug endpoint summarizes latest redeem issue', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['debug.stage9@example.com']);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Debug',
+        'email' => 'debug.stage9@example.com',
+        'normalized_email' => 'debug.stage9@example.com',
+        'phone' => '5553102000',
+        'normalized_phone' => '+15553102000',
+    ]);
+
+    app(CandleCashService::class)->addPoints($profile, 1000, 'earn', 'admin', 'seed', 'seed');
+
+    MarketingStorefrontEvent::query()->create([
+        'event_type' => 'widget_redeem_request',
+        'status' => 'error',
+        'issue_type' => 'shopify_discount_sync_failed',
+        'source_surface' => 'shopify_widget',
+        'endpoint' => '/shopify/marketing/rewards/redeem',
+        'marketing_profile_id' => $profile->id,
+        'occurred_at' => now(),
+        'resolution_status' => 'open',
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson(route('marketing.operations.storefront-redemption-debug', ['email' => $profile->email]))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.profile.id', $profile->id)
+        ->assertJsonPath('data.latest_issue.issue_type', 'shopify_discount_sync_failed')
+        ->assertJsonPath('data.primary_issue', 'shopify_discount_sync_failed');
+});
+
 test('dashboard mark redeemed action reconciles issued code for staff-assisted cases', function () {
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $profile = MarketingProfile::query()->create(['first_name' => 'Manual']);

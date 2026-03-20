@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
 use App\Models\CandleCashRedemption;
+use App\Models\MarketingProfile;
 use App\Models\MarketingStorefrontEvent;
+use App\Services\Marketing\CandleCashAccessGate;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
+use App\Services\Marketing\CandleCashService;
 use App\Support\Marketing\MarketingSectionRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -170,6 +174,85 @@ class MarketingOperationsController extends Controller
             ->with('toast', ['style' => 'success', 'message' => 'Redemption marked as redeemed.']);
     }
 
+    public function storefrontRedemptionDebug(
+        Request $request,
+        CandleCashService $candleCashService,
+        CandleCashAccessGate $accessGate
+    ): JsonResponse {
+        $data = $request->validate([
+            'email' => ['nullable', 'string', 'max:255'],
+            'profile_id' => ['nullable', 'integer'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $profileId = (int) ($data['profile_id'] ?? 0);
+        $email = strtolower(trim((string) ($data['email'] ?? '')));
+
+        $profile = $profileId > 0
+            ? MarketingProfile::query()->find($profileId)
+            : null;
+
+        if (! $profile && $email !== '') {
+            $profile = MarketingProfile::query()
+                ->where('normalized_email', $email)
+                ->orWhere('email', $email)
+                ->first();
+        }
+
+        if (! $profile) {
+            return response()->json([
+                'ok' => false,
+                'error' => [
+                    'code' => 'profile_not_found',
+                    'message' => 'Unable to locate a marketing profile for the requested customer.',
+                ],
+            ], 404);
+        }
+
+        $limit = (int) ($data['limit'] ?? 5);
+        $balance = $candleCashService->currentBalance($profile);
+        $reward = $candleCashService->storefrontReward();
+        $rewardCost = $reward ? $candleCashService->storefrontRewardPointsCost($reward) : null;
+        $openIssuedCount = (int) CandleCashRedemption::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('status', 'issued')
+            ->count();
+
+        $events = MarketingStorefrontEvent::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->whereIn('event_type', ['widget_redeem_request', 'public_redeem_request'])
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get();
+
+        $latestRedeem = $events->first();
+        $latestIssue = $events->first(fn (MarketingStorefrontEvent $event) => in_array($event->status, ['error', 'verification_required', 'pending'], true));
+
+        $accessPayload = $accessGate->storefrontRedeemAccessPayload($profile);
+        $primaryIssue = $this->primaryRedemptionIssue($accessPayload, $openIssuedCount, $rewardCost, $balance, $latestIssue);
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'profile' => [
+                    'id' => (int) $profile->id,
+                    'email' => $profile->email,
+                    'normalized_email' => $profile->normalized_email,
+                ],
+                'balance' => $balance,
+                'reward_cost' => $rewardCost,
+                'open_issued_count' => $openIssuedCount,
+                'max_open_codes' => (int) config('marketing.candle_cash.max_open_codes', 1),
+                'redemption_access' => $accessPayload,
+                'primary_issue' => $primaryIssue,
+                'latest_redeem' => $this->eventSummary($latestRedeem),
+                'latest_issue' => $this->eventSummary($latestIssue),
+                'recent_redeem_events' => $events->map(fn (MarketingStorefrontEvent $event) => $this->eventSummary($event))->values(),
+            ],
+        ]);
+    }
+
     /**
      * @return array<int,array{key:string,label:string,href:string,current:bool}>
      */
@@ -187,5 +270,60 @@ class MarketingOperationsController extends Controller
 
         return $items;
     }
-}
 
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function eventSummary(?MarketingStorefrontEvent $event): ?array
+    {
+        if (! $event) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $event->id,
+            'event_type' => $event->event_type,
+            'status' => $event->status,
+            'issue_type' => $event->issue_type,
+            'endpoint' => $event->endpoint,
+            'source_surface' => $event->source_surface,
+            'resolution_status' => $event->resolution_status,
+            'occurred_at' => $event->occurred_at?->toIso8601String(),
+            'meta' => $event->meta,
+        ];
+    }
+
+    /**
+     * @param array{redeem_enabled:bool,cta_label:string,message:string,mode:string} $accessPayload
+     */
+    protected function primaryRedemptionIssue(
+        array $accessPayload,
+        int $openIssuedCount,
+        ?float $rewardCost,
+        float $balance,
+        ?MarketingStorefrontEvent $latestIssue
+    ): ?string {
+        if (! ($accessPayload['redeem_enabled'] ?? false)) {
+            return 'coming_soon';
+        }
+
+        $maxOpenCodes = (int) config('marketing.candle_cash.max_open_codes', 1);
+        if ($maxOpenCodes > 0 && $openIssuedCount >= $maxOpenCodes) {
+            return 'open_code_exists';
+        }
+
+        if ($rewardCost !== null && $balance < $rewardCost) {
+            return 'insufficient_candle_cash';
+        }
+
+        if ($latestIssue && $latestIssue->issue_type) {
+            return (string) $latestIssue->issue_type;
+        }
+
+        if ($latestIssue && $latestIssue->status !== 'ok') {
+            return (string) $latestIssue->status;
+        }
+
+        return null;
+    }
+}

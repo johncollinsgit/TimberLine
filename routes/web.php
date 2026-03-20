@@ -362,6 +362,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('operations.reconciliation.retry');
             Route::post('/operations/reconciliation/redemptions/{redemption}/mark-redeemed', [MarketingOperationsController::class, 'markRedemptionRedeemed'])
                 ->name('operations.reconciliation.redemptions.mark-redeemed');
+            Route::get('/operations/storefront/redemption-debug', [MarketingOperationsController::class, 'storefrontRedemptionDebug'])
+                ->name('operations.storefront-redemption-debug');
             Route::get('/reviews', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'reviews')
                 ->name('reviews');
