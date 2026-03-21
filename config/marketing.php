@@ -122,7 +122,7 @@ return [
         'storefront_reward_value' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_VALUE', '10USD'),
         'temporary_storefront_live_email_allowlist' => array_values(array_filter(array_map(
             static fn ($value) => strtolower(trim((string) $value)),
-            explode(',', (string) env('MARKETING_CANDLE_CASH_TEMP_LIVE_EMAIL_ALLOWLIST', 'sarahcollins0816@gmail.com,info@theforestrystudio.com,randbhendrich@yahoo.com'))
+            explode(',', (string) env('MARKETING_CANDLE_CASH_TEMP_LIVE_EMAIL_ALLOWLIST', 'sarahcollins0816@gmail.com,info@theforestrystudio.com,randbhendrich@yahoo.com,pjordan.mail@gmail.com,marah.jordan@csuglobal.edu'))
         ))),
         'password_protection' => [
             'enabled' => (bool) env('MARKETING_CANDLE_CASH_PASSWORD_ENABLED', true),
