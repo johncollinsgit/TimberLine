@@ -71,6 +71,58 @@ test('shopify product review status returns approved reviews and summary', funct
         ->assertJsonPath('data.reviews.0.product_handle', 'nightfall-candle');
 });
 
+test('shopify product review status includes legacy growave reviews with product metadata only in raw payload', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'legacy-customer-1',
+        'external_review_id' => 'legacy-review-1',
+        'rating' => 4,
+        'title' => 'Legacy payload-only review',
+        'body' => 'Legacy Growave review with product metadata only in raw payload should still render.',
+        'reviewer_name' => 'Legacy Reviewer',
+        'reviewer_email' => 'legacy.reviewer@example.com',
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'growave_import',
+        'product_id' => null,
+        'product_handle' => null,
+        'product_title' => null,
+        'submitted_at' => now()->subDays(2),
+        'approved_at' => now()->subDays(2),
+        'raw_payload' => [
+            'product' => [
+                'id' => '777001',
+                'handle' => 'legacy-fallback-candle',
+                'title' => 'Legacy Fallback Candle',
+            ],
+        ],
+    ]);
+
+    $query = productReviewSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'product_id' => '777001',
+        'product_handle' => 'legacy-fallback-candle',
+        'product_title' => 'Legacy Fallback Candle',
+        'product_url' => '/products/legacy-fallback-candle',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary.review_count', 1)
+        ->assertJsonPath('data.summary.average_rating', 4)
+        ->assertJsonPath('data.reviews.0.source', 'growave_import');
+});
+
 test('shopify product review submission creates native review, sends email, and awards candle cash once', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');

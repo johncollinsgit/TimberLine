@@ -1167,14 +1167,21 @@ class ProductReviewService
     protected function reviewLookupQuery(array $product)
     {
         $storeKey = $this->nullableString($product['store_key'] ?? null);
+        $productId = trim((string) ($product['product_id'] ?? ''));
+        $productHandle = $this->nullableString($product['product_handle'] ?? null);
 
         return MarketingReviewHistory::query()
             ->when($storeKey !== null, fn ($query) => $query->where('store_key', $storeKey))
-            ->where(function ($query) use ($product): void {
-                $query->where('product_id', (string) $product['product_id']);
+            ->where(function ($query) use ($productId, $productHandle): void {
+                // Legacy Growave rows can store product identity only inside raw_payload.
+                $query->where('product_id', $productId)
+                    ->orWhere('raw_payload->product->id', $productId)
+                    ->orWhere('raw_payload->product->shopifyProductId', $productId)
+                    ->orWhere('raw_payload->product->productId', $productId);
 
-                if (filled($product['product_handle'] ?? null)) {
-                    $query->orWhere('product_handle', (string) $product['product_handle']);
+                if ($productHandle !== null) {
+                    $query->orWhere('product_handle', $productHandle)
+                        ->orWhere('raw_payload->product->handle', $productHandle);
                 }
             });
     }
