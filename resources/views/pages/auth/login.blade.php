@@ -2,16 +2,16 @@
     <div class="flex flex-col gap-6">
         <div class="space-y-2">
             <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Sign in</div>
-            <h1 class="text-3xl font-['Fraunces'] font-semibold text-white">Welcome back to Backstage</h1>
-            <p class="text-sm text-emerald-50/70">Track production, wholesale, and shipping with a single source of truth.</p>
+            <h1 class="text-3xl font-['Fraunces'] font-semibold text-white">Welcome back</h1>
+            <p class="text-sm text-emerald-50/70">Sign in to continue to your account and pick up where you left off.</p>
         </div>
 
         <x-auth-session-status class="text-center" :status="session('status')" />
 
         @if (session('status'))
             <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-3 text-xs text-emerald-50/85">
-                <div class="font-semibold">Next steps</div>
-                <div class="mt-1">Check your email for approval or password setup instructions. Then come back here to sign in.</div>
+                <div class="font-semibold">You're almost in</div>
+                <div class="mt-1">Check your email for next steps if you just requested access. When you're ready, return here and log in.</div>
                 <div class="mt-2 flex flex-wrap gap-3">
                     @if (Route::has('password.request'))
                         <a href="{{ route('password.request') }}" class="underline decoration-emerald-200/60 underline-offset-2" wire:navigate>
@@ -85,7 +85,7 @@
 
             <div class="flex items-center justify-end">
                 <flux:button variant="primary" type="submit" class="w-full" data-test="login-button">
-                    {{ __('Enter Backstage') }}
+                    {{ __('Login') }}
                 </flux:button>
             </div>
         </form>
