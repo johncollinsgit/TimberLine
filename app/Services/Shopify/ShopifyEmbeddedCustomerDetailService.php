@@ -21,6 +21,8 @@ use Illuminate\Support\Str;
 
 class ShopifyEmbeddedCustomerDetailService
 {
+    private const DEFERRED_EXTERNAL_PROFILE_LIMIT = 6;
+
     public function __construct(
         protected TwilioSenderConfigService $senderConfigService,
         protected CandleCashService $candleCashService
@@ -37,10 +39,25 @@ class ShopifyEmbeddedCustomerDetailService
      */
     public function build(MarketingProfile $profile): array
     {
-        $profile->load([
+        return array_merge(
+            $this->buildCritical($profile),
+            $this->buildDeferredSections($profile),
+        );
+    }
+
+    /**
+     * @return array{
+     *   summary:array<string,mixed>,
+     *   statuses:array<string,bool>,
+     *   consent:array<string,mixed>,
+     *   messaging:array<string,mixed>
+     * }
+     */
+    public function buildCritical(MarketingProfile $profile): array
+    {
+        $profile->loadMissing([
             'candleCashBalance',
             'birthdayProfile',
-            'externalProfiles' => fn ($query) => $query->orderByDesc('synced_at')->orderByDesc('id')->limit(6),
         ]);
 
         $balancePoints = $this->balancePoints($profile);
@@ -53,15 +70,13 @@ class ShopifyEmbeddedCustomerDetailService
             'wholesale' => $this->hasWholesaleEligibility($profile->id),
         ];
 
-        $lastActivityAt = $this->lastActivityAt($profile);
-
         $summary = [
             'candle_cash' => $balancePoints,
             'candle_cash_display' => $this->candleCashService->formatRewardCurrency($this->candleCashService->amountFromPoints($balancePoints)),
             'candle_club_active' => $statuses['candle_club'],
             'rewards_actions_count' => $rewardsActions,
-            'last_activity_at' => $lastActivityAt,
-            'last_activity_display' => $this->formatTimestamp($lastActivityAt),
+            'last_activity_at' => null,
+            'last_activity_display' => 'Loading recent activity…',
             'birthday_tracked' => $this->birthdayTracked($profile),
             'wholesale_eligible' => $statuses['wholesale'],
         ];
@@ -69,10 +84,38 @@ class ShopifyEmbeddedCustomerDetailService
         return [
             'summary' => $summary,
             'statuses' => $statuses,
-            'activity' => $this->activityFeed($profile),
-            'external_profiles' => $profile->externalProfiles,
             'consent' => $this->consentSnapshot($profile),
             'messaging' => $this->messagingSnapshot($profile),
+        ];
+    }
+
+    /**
+     * @return array{
+     *   activity:array<int,array<string,mixed>>,
+     *   activity_count:int,
+     *   external_profiles:Collection<int,CustomerExternalProfile>,
+     *   external_profiles_count:int,
+     *   deferred_meta:array{last_activity_at:?CarbonImmutable,last_activity_display:string}
+     * }
+     */
+    public function buildDeferredSections(MarketingProfile $profile): array
+    {
+        $profile->loadMissing([
+            'externalProfiles' => fn ($query) => $query->orderByDesc('synced_at')->orderByDesc('id')->limit(self::DEFERRED_EXTERNAL_PROFILE_LIMIT),
+        ]);
+
+        $activity = $this->activityFeed($profile);
+        $lastActivityAt = $this->latestActivityTimestamp($activity);
+
+        return [
+            'activity' => $activity,
+            'activity_count' => count($activity),
+            'external_profiles' => $profile->externalProfiles,
+            'external_profiles_count' => $this->externalProfilesCount($profile->id),
+            'deferred_meta' => [
+                'last_activity_at' => $lastActivityAt,
+                'last_activity_display' => $lastActivityAt ? $this->formatTimestamp($lastActivityAt) : 'No recent activity',
+            ],
         ];
     }
 
@@ -232,48 +275,15 @@ class ShopifyEmbeddedCustomerDetailService
             ->exists();
     }
 
-    protected function lastActivityAt(MarketingProfile $profile): ?CarbonImmutable
+    protected function externalProfilesCount(int $profileId): int
     {
-        $timestamps = collect([
-            $profile->updated_at,
-            $this->maxTimestamp('candle_cash_transactions', 'created_at', $profile->id, 'marketing_profile_id'),
-            $this->maxTimestamp('candle_cash_task_completions', 'created_at', $profile->id, 'marketing_profile_id'),
-            $this->maxTimestamp('candle_cash_referrals', 'updated_at', $profile->id, 'referrer_marketing_profile_id'),
-            $this->maxTimestamp('marketing_review_summaries', 'updated_at', $profile->id, 'marketing_profile_id'),
-            $this->maxTimestamp('customer_external_profiles', 'updated_at', $profile->id, 'marketing_profile_id'),
-            $profile->birthdayProfile?->reward_last_issued_at,
-            $this->maxTimestamp('birthday_reward_issuances', 'updated_at', $profile->id, 'marketing_profile_id'),
-            $this->maxTimestamp('candle_cash_redemptions', 'updated_at', $profile->id, 'marketing_profile_id'),
-        ])->filter();
-
-        if ($timestamps->isEmpty()) {
-            return null;
+        if (! Schema::hasTable('customer_external_profiles')) {
+            return 0;
         }
 
-        $latest = $timestamps->map(function ($value): ?CarbonImmutable {
-            if ($value === null || (string) $value === '') {
-                return null;
-            }
-
-            try {
-                return CarbonImmutable::parse((string) $value);
-            } catch (\Throwable) {
-                return null;
-            }
-        })->filter()->sortDesc()->first();
-
-        return $latest ?: null;
-    }
-
-    protected function maxTimestamp(string $table, string $column, int $profileId, string $foreignKey): ?string
-    {
-        if (! Schema::hasTable($table)) {
-            return null;
-        }
-
-        return DB::table($table)
-            ->where($foreignKey, $profileId)
-            ->max($column);
+        return (int) DB::table('customer_external_profiles')
+            ->where('marketing_profile_id', $profileId)
+            ->count();
     }
 
     /**
@@ -634,5 +644,26 @@ class ShopifyEmbeddedCustomerDetailService
     {
         return $transaction->type === 'gift'
             && in_array((string) $transaction->source, ['admin', 'shopify_embedded_admin'], true);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $activity
+     */
+    protected function latestActivityTimestamp(array $activity): ?CarbonImmutable
+    {
+        $value = $activity[0]['occurred_at'] ?? null;
+        if ($value instanceof CarbonImmutable) {
+            return $value;
+        }
+
+        if ($value === null || (string) $value === '') {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse((string) $value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

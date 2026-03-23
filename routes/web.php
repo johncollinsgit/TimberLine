@@ -697,6 +697,8 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::patch('/customers/manage/{marketingProfile}/identity', [ShopifyEmbeddedCustomersController::class, 'updateJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.update');
+        Route::get('/customers/manage/{marketingProfile}/sections', [ShopifyEmbeddedCustomersController::class, 'detailSectionsJson'])
+            ->name('customers.detail-sections');
         Route::post('/customers/manage/{marketingProfile}/consent', [ShopifyEmbeddedCustomersController::class, 'updateConsentJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.update-consent');

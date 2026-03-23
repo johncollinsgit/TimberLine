@@ -28,18 +28,67 @@ Notes:
 - `shopify:sync-customer-metafields` requires Admin API `read_customers` or `write_customers` scope; Customer Account `customer_*` scopes are not sufficient for Admin `customers` queries.
 - Webhooks are verified with HMAC and dispatched to a sync queue (Phase 1).
 
-## Deployment (Forge / Production)
-This app uses Vite. Production must build assets and remove any dev hot file.
+## Deployment (GitHub Actions -> Production)
+This repository deploys with `.github/workflows/deploy.yml`.
 
-Required in deploy script:
+Triggers:
+- Push to `main` (automatic deploy)
+- Manual run via `workflow_dispatch` in GitHub Actions (with optional `run_tests` toggle)
+
+Owner workflow:
+```bash
+git add .
+git commit -m "Describe change"
+git push origin main
+```
+
+Required GitHub secrets (configure in the `production` environment):
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_PORT`
+- `DEPLOY_PATH`
+- `DEPLOY_SSH_KEY` (private key for SSH access to the server)
+
+Optional test prerequisites:
+- `FLUX_USERNAME`
+- `FLUX_LICENSE_KEY`
+
+These are only needed for CI test/build when private Flux packages are required.
+
+Server prerequisites:
+- Git with the app already cloned at `DEPLOY_PATH`
+- PHP 8.2+ and required extensions
+- Composer 2
+- Node.js + npm (this app uses Vite)
+- Writable Laravel directories (`storage`, `bootstrap/cache`)
+- Database connectivity from the server
+- Queue worker process manager (Supervisor/systemd) if queues are active
+
+Server deploy command sequence:
+- `git fetch origin main`
+- `git checkout main`
+- `git pull --ff-only origin main`
+- `composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev`
 - `npm ci`
 - `npm run build`
-- `php artisan view:clear`
-
-If `public/hot` exists on the server, delete it so `@vite` uses the manifest:
 - `rm -f public/hot`
-Deploy proof: Mon Feb 23 14:03:40 EST 2026
-Deploy proof: Mon Feb 23 14:04:21 EST 2026
+- `php artisan migrate --force`
+- `php artisan route:clear`
+- `php artisan config:cache`
+- `php artisan view:cache`
+- `php artisan queue:restart`
+
+Notes:
+- `route:cache` is intentionally not used because the app currently has closure routes.
+- Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
+
+Manual deploy:
+1. Go to GitHub -> Actions -> `Deploy Production`.
+2. Click `Run workflow`.
+3. Choose `main` and (optionally) set `run_tests` to false.
+
+Temporarily disable deploy:
+- In GitHub -> Actions -> `Deploy Production` -> `...` menu -> `Disable workflow`.
 
 ## Shopify Embedded Session Cookies
 - Embedded Shopify Admin requests run inside an `admin.shopify.com` iframe, so production session cookies must allow secure cross-site usage.

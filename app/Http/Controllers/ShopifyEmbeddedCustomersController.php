@@ -134,6 +134,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): Response {
+        $criticalStartedAt = microtime(true);
         $context = $contextService->resolvePageContext($request);
         $authorized = (bool) ($context['ok'] ?? false);
 
@@ -149,7 +150,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             $displayName = $this->customerDisplayName($marketingProfile);
         }
 
-        $detail = $authorized ? $detailService->build($marketingProfile) : [
+        $detail = $authorized ? $detailService->buildCritical($marketingProfile) : [
             'summary' => [],
             'statuses' => [],
             'activity' => [],
@@ -157,6 +158,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             'consent' => [],
             'messaging' => [],
         ];
+        $criticalDurationMs = round((microtime(true) - $criticalStartedAt) * 1000, 2);
 
         $detailFormAction = $authorized
             ? $actionUrlGenerator->url('customers.detail', ['marketingProfile' => $marketingProfile->id], $request)
@@ -194,9 +196,10 @@ class ShopifyEmbeddedCustomersController extends Controller
             'form_actions' => $formActions,
             'widgets' => $renderedWidgets,
             'render_state' => ShopifyEmbeddedCsrfDiagnostics::renderState($request),
+            'critical_ms' => $criticalDurationMs,
         ]);
 
-        return $this->renderPage(
+        $response = $this->renderPage(
             request: $request,
             contextService: $contextService,
             view: 'shopify.customers-detail',
@@ -227,9 +230,64 @@ class ShopifyEmbeddedCustomersController extends Controller
                     'consentEndpoint' => route('shopify.app.api.customers.update-consent', ['marketingProfile' => $marketingProfile->id], false),
                     'messageEndpoint' => route('shopify.app.api.customers.message', ['marketingProfile' => $marketingProfile->id], false),
                 ] : null,
+                'customerDetailDeferredBootstrap' => $authorized ? [
+                    'profileId' => (int) $marketingProfile->id,
+                    'sectionsEndpoint' => route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $marketingProfile->id], false),
+                    'perfDebug' => $request->boolean('detail_perf'),
+                ] : null,
             ],
             resolvedContext: $context,
         );
+
+        return $this->withServerTiming($response, [
+            'customer-detail-critical' => $criticalDurationMs,
+        ]);
+    }
+
+    public function detailSectionsJson(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedCustomerDetailService $detailService,
+        TenantResolver $tenantResolver,
+        MarketingProfile $marketingProfile
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        if (! $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver)) {
+            return $this->customerNotFoundResponse();
+        }
+
+        $startedAt = microtime(true);
+        $deferred = $detailService->buildDeferredSections($marketingProfile);
+        $durationMs = round((microtime(true) - $startedAt) * 1000, 2);
+
+        $response = response()->json([
+            'ok' => true,
+            'data' => [
+                'activity_html' => view('shopify.partials.customers-detail-activity-section', [
+                    'activity' => $deferred['activity'],
+                    'activityCount' => $deferred['activity_count'],
+                ])->render(),
+                'external_profiles_html' => view('shopify.partials.customers-detail-external-profiles-section', [
+                    'externalProfiles' => $deferred['external_profiles'],
+                    'externalProfilesCount' => $deferred['external_profiles_count'],
+                ])->render(),
+                'last_activity_display' => $deferred['deferred_meta']['last_activity_display'] ?? 'No recent activity',
+                'activity_count' => (int) ($deferred['activity_count'] ?? 0),
+                'external_profiles_count' => (int) ($deferred['external_profiles_count'] ?? 0),
+                'timings' => $request->boolean('detail_perf') ? [
+                    'build_ms' => $durationMs,
+                ] : null,
+            ],
+        ]);
+
+        return $this->withServerTiming($response, [
+            'customer-detail-deferred' => $durationMs,
+        ]);
     }
 
     public function updateJson(
@@ -1116,6 +1174,21 @@ class ShopifyEmbeddedCustomersController extends Controller
         return $more
             ? sprintf('Page %s · More results available', number_format($page))
             : sprintf('Page %s', number_format($page));
+    }
+
+    protected function withServerTiming(Response|JsonResponse $response, array $metrics): Response|JsonResponse
+    {
+        $values = collect($metrics)
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value, $name): string => sprintf('%s;dur=%s', $name, number_format((float) $value, 2, '.', '')))
+            ->values()
+            ->all();
+
+        if ($values !== []) {
+            $response->headers->set('Server-Timing', implode(', ', $values));
+        }
+
+        return $response;
     }
 
     /**

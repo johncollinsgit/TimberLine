@@ -1,0 +1,153 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: Run test/build job before deploy
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      run_tests: ${{ steps.gate.outputs.run_tests }}
+    steps:
+      - name: Decide whether to run optional test/build job
+        id: gate
+        run: echo "run_tests=${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_tests == 'true' }}" >> "$GITHUB_OUTPUT"
+
+  test_and_build:
+    name: Optional Test And Build
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run_tests == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Check test prerequisites
+        id: test_prereqs
+        run: |
+          set -euo pipefail
+
+          if [ ! -f phpunit.xml ] || [ ! -d tests ]; then
+            echo "can_run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Test suite is not configured yet (missing phpunit.xml or tests/)."
+            exit 0
+          fi
+
+          if grep -q '"livewire/flux"' composer.json && { [ -z "${{ secrets.FLUX_USERNAME }}" ] || [ -z "${{ secrets.FLUX_LICENSE_KEY }}" ]; }; then
+            echo "can_run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping tests: FLUX_USERNAME and FLUX_LICENSE_KEY secrets are required for composer install."
+            exit 0
+          fi
+
+          echo "can_run_tests=true" >> "$GITHUB_OUTPUT"
+
+      - name: Placeholder when test setup is incomplete
+        if: steps.test_prereqs.outputs.can_run_tests != 'true'
+        run: echo "Test/build steps were skipped. Add missing test prerequisites to enable this stage."
+
+      - name: Configure Flux composer auth
+        if: steps.test_prereqs.outputs.can_run_tests == 'true' && secrets.FLUX_USERNAME != '' && secrets.FLUX_LICENSE_KEY != ''
+        run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Install PHP dependencies
+        if: steps.test_prereqs.outputs.can_run_tests == 'true'
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install Node dependencies
+        if: steps.test_prereqs.outputs.can_run_tests == 'true'
+        run: npm ci
+
+      - name: Prepare app key for CI
+        if: steps.test_prereqs.outputs.can_run_tests == 'true'
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Build frontend assets
+        if: steps.test_prereqs.outputs.can_run_tests == 'true'
+        run: npm run build
+
+      - name: Run tests
+        if: steps.test_prereqs.outputs.can_run_tests == 'true'
+        run: php artisan test --without-tty
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - setup
+      - test_and_build
+    if: >
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.test_and_build.result == 'success' || needs.test_and_build.result == 'skipped')
+    environment:
+      name: production
+    steps:
+      - name: Validate deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH'; git fetch origin main; git checkout main; git pull --ff-only origin main; composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev; if [ -f package.json ]; then npm ci; npm run build; rm -f public/hot; fi; php artisan migrate --force; php artisan route:clear; php artisan config:cache; php artisan view:cache; php artisan queue:restart"

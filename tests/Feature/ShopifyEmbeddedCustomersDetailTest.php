@@ -205,7 +205,7 @@ test('customer detail handles missing optional data gracefully', function () {
 
     $response->assertOk()
         ->assertSeeText('Email not set')
-        ->assertSeeText('No recent activity recorded yet.');
+        ->assertSeeText('Loading recent items across rewards, adjustments, and messaging activity.');
 });
 
 test('customer identity json update succeeds with shopify session token auth', function () {
@@ -681,16 +681,58 @@ test('embedded customer detail forms use helper-generated urls with Shopify quer
         route('shopify.app.api.customers.candle-cash.send', ['marketingProfile' => $profile->id], false),
         route('shopify.app.api.customers.update-consent', ['marketingProfile' => $profile->id], false),
         route('shopify.app.api.customers.message', ['marketingProfile' => $profile->id], false),
+        route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $profile->id], false),
     ];
 
-    foreach ($expectedApiEndpoints as $endpoint) {
+    foreach (array_slice($expectedApiEndpoints, 0, 5) as $endpoint) {
         $escaped = htmlspecialchars($endpoint, ENT_QUOTES, 'UTF-8');
         $this->assertStringContainsString('data-api-endpoint="' . $escaped . '"', $content);
     }
 
+    $deferredSectionsEndpoint = htmlspecialchars($expectedApiEndpoints[5], ENT_QUOTES, 'UTF-8');
+    $this->assertStringContainsString('data-deferred-sections-endpoint="' . $deferredSectionsEndpoint . '"', $content);
+
     $this->assertStringContainsString('id_token=', $content);
     $this->assertStringContainsString('locale=en', $content);
     $this->assertStringContainsString('session=embedded-session-token', $content);
+});
+
+test('customer detail exposes deferred sections bootstrap and server timing', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+    startEmbeddedCustomersDetailSession($this);
+
+    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
+
+    $response->assertOk()
+        ->assertHeader('Server-Timing');
+
+    $content = $response->getContent();
+
+    expect($content)->toContain('data-deferred-sections-endpoint="' . route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $profile->id], false) . '"')
+        ->and($content)->toContain('Loading recent items across rewards, adjustments, and messaging activity.')
+        ->and($content)->toContain('Loading linked source records…');
+});
+
+test('customer detail deferred sections api returns live activity and linked sources', function () {
+    configureEmbeddedRetailStore();
+    $profile = seedEmbeddedCustomerDetailFixture();
+
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->getJson(route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $profile->id], false));
+
+    $response->assertOk()
+        ->assertHeader('Server-Timing')
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.external_profiles_count', 1);
+
+    $payload = $response->json('data');
+
+    expect((int) ($payload['activity_count'] ?? 0))->toBeGreaterThan(0)
+        ->and($payload['activity_html'] ?? '')->toContain('Seed earn')
+        ->and($payload['external_profiles_html'] ?? '')->toContain('wholesale-123')
+        ->and($payload['last_activity_display'] ?? null)->not->toBe('Loading recent activity…');
 });
 
 test('embedded customer detail navigation links preserve Shopify query params', function () {
@@ -852,11 +894,17 @@ test('manual adjustment falls back to Admin actor label when user is not resolve
         'updated_at' => now(),
     ]);
 
-    $response = $this->get(route('shopify.app.customers.detail', ['marketingProfile' => $profile->id], false));
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->getJson(route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $profile->id], false));
 
     $response->assertOk()
-        ->assertSeeText('Manual Adjustment')
-        ->assertSeeText('Admin');
+        ->assertJsonPath('ok', true);
+
+    $activityHtml = (string) $response->json('data.activity_html');
+
+    expect($activityHtml)->toContain('Manual Adjustment')
+        ->and($activityHtml)->toContain('Admin');
 });
 
 test('sms message json send succeeds with shopify session token auth', function () {
@@ -1159,6 +1207,16 @@ test('embedded customer detail mutations and page access are isolated by store t
         );
 
     $mutationResponse->assertNotFound()
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Customer not found for this Shopify store.');
+
+    $sectionsResponse = $this
+        ->withHeaders(['Authorization' => 'Bearer ' . retailShopifySessionToken()])
+        ->getJson(
+            route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $profile->id], false)
+        );
+
+    $sectionsResponse->assertNotFound()
         ->assertJsonPath('ok', false)
         ->assertJsonPath('message', 'Customer not found for this Shopify store.');
 

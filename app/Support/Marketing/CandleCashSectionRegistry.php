@@ -11,18 +11,18 @@ class CandleCashSectionRegistry
     {
         return [
             'command' => [
-                'label' => 'Program',
-                'description' => 'Simple overview of how Candle Cash is currently structured.',
+                'label' => 'Overview',
+                'description' => 'Start here for the current Candle Cash setup and health.',
                 'accent' => 'amber',
             ],
             'work' => [
-                'label' => 'Live Rules',
-                'description' => 'Review the live earn and redeem rows already maintained in Backstage.',
+                'label' => 'Rules & Activity',
+                'description' => 'Manage earning rules, redemptions, events, and customer balances.',
                 'accent' => 'emerald',
             ],
             'growth' => [
-                'label' => 'Growth',
-                'description' => 'Referrals, conversion tasks, and program rules.',
+                'label' => 'Referrals & Settings',
+                'description' => 'Track referrals, gift performance, and program settings.',
                 'accent' => 'sky',
             ],
         ];
@@ -35,7 +35,7 @@ class CandleCashSectionRegistry
     {
         return [
             'dashboard' => [
-                'label' => 'Rewards',
+                'label' => 'Overview',
                 'route' => 'marketing.candle-cash',
                 'description' => 'Manage Candle Cash rewards and program settings.',
                 'group' => 'command',
@@ -53,7 +53,7 @@ class CandleCashSectionRegistry
                 'group' => 'work',
             ],
             'queue' => [
-                'label' => 'Events',
+                'label' => 'Activity Queue',
                 'route' => 'marketing.candle-cash.queue',
                 'description' => 'See verified task events, duplicate blocks, and the small number of fallback/manual items.',
                 'group' => 'work',
@@ -77,7 +77,7 @@ class CandleCashSectionRegistry
                 'group' => 'growth',
             ],
             'gifts-report' => [
-                'label' => 'Gift insights',
+                'label' => 'Gift Performance',
                 'route' => 'marketing.candle-cash.gifts-report',
                 'description' => 'Surface Candle Cash send intent, notification status, and post-gift conversions.',
                 'group' => 'growth',

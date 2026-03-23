@@ -844,10 +844,20 @@
 
             const defaultFilters = JSON.parse(root.dataset.defaultFilters || '{}');
             const endpoint = root.dataset.endpoint || window.location.pathname;
+            const detailCache = (() => {
+                try {
+                    return window.sessionStorage;
+                } catch (error) {
+                    return null;
+                }
+            })();
+            const detailCacheTtlMs = 60 * 1000;
             let controller = null;
             let debounceTimer = null;
             let requestSequence = 0;
             let lastRequestedUrl = null;
+            let authHeadersPromise = null;
+            const detailPrefetches = new Map();
 
             function cleanValue(value) {
                 return value == null ? '' : String(value).trim();
@@ -986,20 +996,94 @@
                     throw new Error('Shopify Admin verification is unavailable. Reload this page from Shopify Admin and try again.');
                 }
 
-                const token = await Promise.race([
-                    Promise.resolve(shopifyBridge.idToken()),
-                    new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
-                ]);
+                if (!authHeadersPromise) {
+                    authHeadersPromise = Promise.race([
+                        Promise.resolve(shopifyBridge.idToken()),
+                        new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
+                    ]).then((token) => {
+                        if (typeof token !== 'string' || token.trim() === '') {
+                            authHeadersPromise = null;
+                            throw new Error('Shopify Admin verification is unavailable. Reload this page from Shopify Admin and try again.');
+                        }
 
-                if (typeof token !== 'string' || token.trim() === '') {
-                    throw new Error('Shopify Admin verification is unavailable. Reload this page from Shopify Admin and try again.');
+                        return {
+                            'Accept': 'application/json',
+                            'Authorization': `Bearer ${token.trim()}`,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        };
+                    }).catch((error) => {
+                        authHeadersPromise = null;
+                        throw error;
+                    });
                 }
 
-                return {
-                    'Accept': 'application/json',
-                    'Authorization': `Bearer ${token.trim()}`,
-                    'X-Requested-With': 'XMLHttpRequest',
-                };
+                return authHeadersPromise;
+            }
+
+            function detailCacheKey(profileId) {
+                return `forestry:customer-detail-deferred:${profileId}`;
+            }
+
+            function cacheDetailPrefetch(profileId, data) {
+                if (!detailCache || !profileId || !data || typeof data !== 'object') {
+                    return;
+                }
+
+                try {
+                    detailCache.setItem(detailCacheKey(profileId), JSON.stringify({
+                        stored_at: Date.now(),
+                        data,
+                    }));
+                } catch (error) {
+                    // Ignore session storage failures.
+                }
+            }
+
+            async function prefetchCustomerDetail(target) {
+                const endpointUrl = cleanValue(target?.dataset?.customerPrefetchEndpoint);
+                const profileId = cleanValue(target?.dataset?.customerPrefetchProfileId);
+                if (!endpointUrl || !profileId || detailPrefetches.has(profileId)) {
+                    return;
+                }
+
+                if (detailCache) {
+                    try {
+                        const cached = detailCache.getItem(detailCacheKey(profileId));
+                        if (cached) {
+                            const parsed = JSON.parse(cached);
+                            if (parsed && typeof parsed.stored_at === 'number' && (Date.now() - parsed.stored_at) < detailCacheTtlMs) {
+                                return;
+                            }
+                        }
+                    } catch (error) {
+                        // Ignore malformed cache entries and refetch.
+                    }
+                }
+
+                const promise = (async () => {
+                    try {
+                        const headers = await resolveAuthHeaders();
+                        const response = await fetch(new URL(endpointUrl, window.location.origin).toString(), {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers,
+                        });
+
+                        const payload = await response.json().catch(() => null);
+                        if (!response.ok || !payload?.ok || !payload?.data) {
+                            return;
+                        }
+
+                        cacheDetailPrefetch(profileId, payload.data);
+                    } catch (error) {
+                        // Prefetch is best-effort only.
+                    } finally {
+                        detailPrefetches.delete(profileId);
+                    }
+                })();
+
+                detailPrefetches.set(profileId, promise);
+                await promise;
             }
 
             function buildUrl(overrides = {}, resetPage = false) {
@@ -1204,6 +1288,17 @@
                 event.preventDefault();
                 syncFormFromUrl(url);
                 void requestRows(url, 'Updating customers…');
+            });
+
+            ['mouseenter', 'focusin', 'touchstart'].forEach((eventName) => {
+                resultsNode.addEventListener(eventName, (event) => {
+                    const target = event.target.closest('[data-customer-prefetch-endpoint]');
+                    if (!target || !resultsNode.contains(target)) {
+                        return;
+                    }
+
+                    void prefetchCustomerDetail(target);
+                }, { passive: true });
             });
         })();
     </script>

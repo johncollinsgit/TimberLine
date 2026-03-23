@@ -11,18 +11,18 @@ class BirthdaySectionRegistry
     {
         return [
             'club' => [
-                'label' => 'Club',
-                'description' => 'Customers, campaigns, and day-to-day birthday work.',
+                'label' => 'Customers & Campaigns',
+                'description' => 'Run day-to-day birthday outreach and customer tasks.',
                 'accent' => 'rose',
             ],
             'performance' => [
-                'label' => 'Performance',
-                'description' => 'Rewards, activity, and conversion reporting.',
+                'label' => 'Rewards & Results',
+                'description' => 'Track rewards, activity, and conversion outcomes.',
                 'accent' => 'amber',
             ],
             'setup' => [
                 'label' => 'Setup',
-                'description' => 'Config and reward rules.',
+                'description' => 'Configure capture, timing, and default rules.',
                 'accent' => 'sky',
             ],
         ];
@@ -59,7 +59,7 @@ class BirthdaySectionRegistry
                 'group' => 'performance',
             ],
             'activity' => [
-                'label' => 'Activity',
+                'label' => 'Activity Log',
                 'route' => 'birthdays.activity',
                 'description' => 'Imports, audits, sends, and reward changes.',
                 'group' => 'performance',

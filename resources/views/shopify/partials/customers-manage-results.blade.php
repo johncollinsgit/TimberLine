@@ -29,6 +29,10 @@
     $detailUrlFor = static function (int $id) use ($withEmbeddedContext, $detailRouteName): string {
         return $withEmbeddedContext(route($detailRouteName, ['marketingProfile' => $id], false));
     };
+    $detailSectionsRouteName = 'shopify.app.api.customers.detail-sections';
+    $detailSectionsUrlFor = static function (int $id) use ($detailSectionsRouteName): string {
+        return route($detailSectionsRouteName, ['marketingProfile' => $id], false);
+    };
 @endphp
 
 <section class="customers-table-wrap" aria-label="Manage customers table">
@@ -92,14 +96,17 @@
             <tbody>
                 @forelse($customers as $row)
                     @php($detailUrl = $detailUrlFor((int) $row['id']))
+                    @php($detailSectionsUrl = $detailSectionsUrlFor((int) $row['id']))
                     <tr
                         class="customers-row--clickable"
                         tabindex="0"
+                        data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}"
+                        data-customer-prefetch-profile-id="{{ (int) $row['id'] }}"
                         onclick="if (!event.target.closest('a,button,input,select,label')) { window.location.href='{{ $detailUrl }}'; }"
                         onkeydown="if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('a,button,input,select,label')) { event.preventDefault(); window.location.href='{{ $detailUrl }}'; }"
                     >
                         <td class="customers-name-cell">
-                            <a class="customers-name-link" href="{{ $detailUrl }}">{{ $row['name'] }}</a>
+                            <a class="customers-name-link" href="{{ $detailUrl }}" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">{{ $row['name'] }}</a>
                             <div class="customers-subtext">ID #{{ $row['id'] }}</div>
                         </td>
                         <td>{{ $row['email'] }}</td>
@@ -132,7 +139,7 @@
                         <td>{{ number_format((int) $row['rewards_actions_count']) }}</td>
                         <td>{{ $row['last_activity_display'] }}</td>
                         <td>
-                            <a href="{{ $detailUrl }}" class="customers-button customers-button--row">View</a>
+                            <a href="{{ $detailUrl }}" class="customers-button customers-button--row" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">View</a>
                         </td>
                     </tr>
                 @empty

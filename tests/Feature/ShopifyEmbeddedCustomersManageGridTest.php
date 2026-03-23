@@ -391,10 +391,12 @@ test('row view action links to customer detail and detail route resolves', funct
     $fixtures = seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
     $detailUrl = route('shopify.app.customers.detail', ['marketingProfile' => $fixtures['alice']->id], false);
+    $detailSectionsUrl = route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $fixtures['alice']->id], false);
 
     $this->get(shopifyAppCustomersManageUrl())
         ->assertOk()
-        ->assertSee($detailUrl, false);
+        ->assertSee($detailUrl, false)
+        ->assertSee($detailSectionsUrl, false);
 
     $this->get($detailUrl)
         ->assertOk()

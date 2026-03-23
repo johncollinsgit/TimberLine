@@ -11,23 +11,23 @@ class MarketingSectionRegistry
     {
         return [
             'command-center' => [
-                'label' => 'Home',
-                'description' => 'Start here for customers and daily work.',
+                'label' => 'Day-to-Day',
+                'description' => 'Start here for daily customer and message work.',
                 'accent' => 'emerald',
             ],
             'audiences-messaging' => [
-                'label' => 'Lists & Sends',
-                'description' => 'Groups, segments, campaigns, and message tools.',
+                'label' => 'Audiences & Campaigns',
+                'description' => 'Build and send groups, segments, campaigns, and templates.',
                 'accent' => 'sky',
             ],
             'loyalty-retention' => [
-                'label' => 'Rewards',
-                'description' => 'Points, reviews, and contact rules.',
+                'label' => 'Rewards & Retention',
+                'description' => 'Manage Candle Cash, reviews, and consent rules.',
                 'accent' => 'amber',
             ],
             'data-operations' => [
-                'label' => 'Setup',
-                'description' => 'Match fixes, orders, connections, and settings.',
+                'label' => 'Data & Setup',
+                'description' => 'Fix identity matches, check orders, and manage integrations.',
                 'accent' => 'rose',
             ],
         ];
@@ -66,7 +66,7 @@ class MarketingSectionRegistry
                 'group' => 'command-center',
             ],
             'messages' => [
-                'label' => 'Messages',
+                'label' => 'Message Center',
                 'route' => 'marketing.messages',
                 'description' => 'Operator hub for groups, manual internal sends, campaign approvals, and reusable message templates.',
                 'hint_title' => 'How to use this page',
@@ -78,7 +78,7 @@ class MarketingSectionRegistry
                 'group' => 'command-center',
             ],
             'groups' => [
-                'label' => 'Groups',
+                'label' => 'Saved Groups',
                 'route' => 'marketing.groups',
                 'description' => 'Manual customer list management for curated outreach cohorts outside rule-based segments.',
                 'hint_title' => 'How to use this page',
@@ -114,11 +114,11 @@ class MarketingSectionRegistry
                 'group' => 'audiences-messaging',
             ],
             'automations' => [
-                'label' => 'Flows',
+                'label' => 'Automations',
                 'route' => 'marketing.automations',
                 'description' => 'Lifecycle automation definitions driven by events, orders, and profile state.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Automation execution is still deferred. Use Campaigns + Suggestions approval queues for controlled, human-reviewed workflows.',
+                'hint_text' => 'Automation execution is still deferred. Use Campaigns + Recommendations approval queues for controlled, human-reviewed workflows.',
                 'coming_next' => [
                     'Trigger/action automation builder and run logs.',
                     'Safety controls for pause/resume and eligibility checks.',
@@ -126,7 +126,7 @@ class MarketingSectionRegistry
                 'group' => 'audiences-messaging',
             ],
             'message-templates' => [
-                'label' => 'Templates',
+                'label' => 'Message Templates',
                 'route' => 'marketing.message-templates',
                 'description' => 'Template library for reusable campaign copy with variable rendering previews.',
                 'hint_title' => 'How to use this page',
@@ -138,11 +138,11 @@ class MarketingSectionRegistry
                 'group' => 'audiences-messaging',
             ],
             'recommendations' => [
-                'label' => 'Suggestions',
+                'label' => 'Recommendations',
                 'route' => 'marketing.recommendations',
                 'description' => 'Rule-based recommendation center with recipient approvals and explainable next-best-action suggestions.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Suggestions are transparent rule outcomes fed by real delivery/conversion performance, not autonomous sends. Review and approve/reject explicitly.',
+                'hint_text' => 'Recommendations are transparent rule outcomes fed by real delivery/conversion performance, not autonomous sends. Review and approve/reject explicitly.',
                 'coming_next' => [
                     'Recommendation impact tracking tied to conversion outcomes.',
                     'Model-assisted scoring inputs layered on top of rule rails.',
@@ -150,7 +150,7 @@ class MarketingSectionRegistry
                 'group' => 'audiences-messaging',
             ],
             'candle-cash' => [
-                'label' => 'Rewards',
+                'label' => 'Candle Cash',
                 'route' => 'marketing.candle-cash',
                 'description' => 'Candle Cash rewards ledger, issued-code lifecycle, and Shopify/Square redemption reconciliation visibility.',
                 'hint_title' => 'How to use this page',
@@ -174,7 +174,7 @@ class MarketingSectionRegistry
                 'group' => 'loyalty-retention',
             ],
             'suppression-consent' => [
-                'label' => 'Consent',
+                'label' => 'Consent & Quiet Hours',
                 'route' => 'marketing.suppression-consent',
                 'description' => 'Consent guardrail area for opt-outs, quiet hours, and suppression governance.',
                 'hint_title' => 'How to use this page',
@@ -186,7 +186,7 @@ class MarketingSectionRegistry
                 'group' => 'loyalty-retention',
             ],
             'identity-review' => [
-                'label' => 'Fix Matches',
+                'label' => 'Identity Matches',
                 'route' => 'marketing.identity-review',
                 'description' => 'Queue management for profile-link conflicts and explicit manual identity resolutions.',
                 'hint_title' => 'How to use this page',
@@ -210,7 +210,7 @@ class MarketingSectionRegistry
                 'group' => 'data-operations',
             ],
             'providers-integrations' => [
-                'label' => 'Connections',
+                'label' => 'Integrations',
                 'route' => 'marketing.providers-integrations',
                 'description' => 'Square sync controls, legacy import tooling, source overlap analysis, and event attribution source mapping.',
                 'hint_title' => 'How to use this page',

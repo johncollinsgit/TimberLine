@@ -29,6 +29,7 @@
         $notice = session('customer_detail_notice');
         $actionUrlGenerator = app(\App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator::class);
         $mutationBootstrap = (array) ($customerMutationBootstrap ?? []);
+        $deferredBootstrap = (array) ($customerDetailDeferredBootstrap ?? []);
         $emailConsent = (array) ($consent['email'] ?? []);
         $smsConsent = (array) ($consent['sms'] ?? []);
         $emailDisplay = $marketingProfile->email ?: 'Email not set';
@@ -37,6 +38,13 @@
         $phoneMissing = blank($marketingProfile->phone);
         $activityCount = count($activity);
         $externalProfilesCount = $externalProfiles instanceof \Illuminate\Support\Collection ? $externalProfiles->count() : count((array) $externalProfiles);
+        $lastActivityDisplay = (string) ($summary['last_activity_display'] ?? 'Loading recent activity…');
+        $activitySummary = $activityCount > 0
+            ? number_format($activityCount) . ' recent item' . ($activityCount === 1 ? '' : 's') . ' across rewards, adjustments, and messaging activity.'
+            : 'Loading recent items across rewards, adjustments, and messaging activity.';
+        $externalProfilesSummary = $externalProfilesCount > 0
+            ? number_format($externalProfilesCount) . ' linked provider profile' . ($externalProfilesCount === 1 ? '' : 's') . ' currently attached to this customer.'
+            : 'Loading linked source records…';
     @endphp
 
     <style>
@@ -514,10 +522,76 @@
             background: rgba(255, 255, 255, 0.9);
         }
 
+        .customers-detail-deferred-section {
+            position: relative;
+            min-height: 320px;
+        }
+
+        .customers-detail-deferred-section.is-loading::after,
+        .customers-detail-deferred-section.is-refreshing::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+        }
+
+        .customers-detail-deferred-shell {
+            display: grid;
+            gap: 16px;
+        }
+
+        .customers-detail-deferred-placeholder {
+            display: grid;
+            gap: 12px;
+            min-height: 252px;
+            align-content: start;
+        }
+
+        .customers-detail-skeleton-row {
+            height: 46px;
+            border-radius: 16px;
+            background: linear-gradient(90deg, rgba(241, 245, 249, 0.88) 0%, rgba(255, 255, 255, 0.98) 48%, rgba(241, 245, 249, 0.88) 100%);
+            background-size: 220% 100%;
+            animation: customers-detail-skeleton 1.2s ease-in-out infinite;
+        }
+
+        .customers-detail-skeleton-row.is-short {
+            max-width: 46%;
+        }
+
+        .customers-detail-skeleton-row.is-mid {
+            max-width: 72%;
+        }
+
+        .customers-detail-deferred-error {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .customers-detail-deferred-error[hidden] {
+            display: none !important;
+        }
+
         .customers-detail-empty {
             text-align: center;
             color: rgba(15, 23, 42, 0.58);
             padding: 22px;
+        }
+
+        .customers-detail-sideitem-value.is-loading,
+        .customers-detail-card-copy.is-loading {
+            color: rgba(15, 23, 42, 0.46);
+        }
+
+        @keyframes customers-detail-skeleton {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
         }
 
         @media (max-width: 1100px) {
@@ -607,6 +681,9 @@
             data-identity-endpoint="{{ $mutationBootstrap['identityEndpoint'] ?? '' }}"
             data-adjustment-endpoint="{{ $mutationBootstrap['adjustmentEndpoint'] ?? '' }}"
             data-send-candle-cash-endpoint="{{ $mutationBootstrap['sendCandleCashEndpoint'] ?? '' }}"
+            data-deferred-sections-endpoint="{{ $deferredBootstrap['sectionsEndpoint'] ?? '' }}"
+            data-profile-id="{{ $deferredBootstrap['profileId'] ?? '' }}"
+            data-perf-debug="{{ ! empty($deferredBootstrap['perfDebug']) ? 'true' : 'false' }}"
         >
             <section class="customers-detail-section customers-detail-hero" aria-label="Customer profile header">
                 <div>
@@ -640,7 +717,7 @@
                     <div class="customers-detail-sidegrid">
                         <div class="customers-detail-sideitem">
                             <span class="customers-detail-sideitem-label">Last activity</span>
-                            <span class="customers-detail-sideitem-value">{{ $summary['last_activity_display'] ?? 'No recent activity' }}</span>
+                            <span class="customers-detail-sideitem-value {{ str_contains(strtolower($lastActivityDisplay), 'loading') ? 'is-loading' : '' }}" data-customer-last-activity-display>{{ $lastActivityDisplay }}</span>
                         </div>
                         <div class="customers-detail-sideitem">
                             <span class="customers-detail-sideitem-label">Email status</span>
@@ -1125,86 +1202,43 @@
                 </div>
             </section>
 
-            <section class="customers-detail-section" aria-label="Recent activity">
-                <div class="customers-detail-section-header">
-                    <div>
-                        <p class="customers-detail-eyebrow">Recent activity</p>
-                        <h3 class="customers-detail-card-title">Recent Activity</h3>
-                        <p class="customers-detail-card-copy">{{ number_format($activityCount) }} recent items across rewards, adjustments, and messaging activity.</p>
+            <section class="customers-detail-section customers-detail-deferred-section is-loading" aria-label="Recent activity" data-customer-activity-shell>
+                <div data-customer-activity-section class="customers-detail-deferred-shell">
+                    <div class="customers-detail-section-header">
+                        <div>
+                            <p class="customers-detail-eyebrow">Recent activity</p>
+                            <h3 class="customers-detail-card-title">Recent Activity</h3>
+                            <p class="customers-detail-card-copy is-loading" data-customer-activity-summary>{{ $activitySummary }}</p>
+                        </div>
+                    </div>
+                    <div class="customers-detail-deferred-placeholder" aria-hidden="true">
+                        <div class="customers-detail-skeleton-row is-short"></div>
+                        <div class="customers-detail-skeleton-row"></div>
+                        <div class="customers-detail-skeleton-row"></div>
+                        <div class="customers-detail-skeleton-row is-mid"></div>
+                        <div class="customers-detail-skeleton-row"></div>
                     </div>
                 </div>
-                <div class="customers-detail-table-wrap">
-                    <table class="customers-detail-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Label</th>
-                                <th>Candle Cash</th>
-                                <th>Actor</th>
-                                <th>Status</th>
-                                <th>Detail</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($activity as $row)
-                                <tr>
-                                    <td>{{ $row['occurred_at_display'] ?? '—' }}</td>
-                                    <td>{{ $row['type'] ?? '—' }}</td>
-                                    <td>{{ $row['label'] ?? '—' }}</td>
-                                    <td>{{ $row['candle_cash_display'] !== null ? $row['candle_cash_display'] : '—' }}</td>
-                                    <td>{{ $row['actor'] ?? '—' }}</td>
-                                    <td>{{ $row['status'] ?? '—' }}</td>
-                                    <td>{{ $row['detail'] ?? '—' }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="7" class="customers-detail-empty">No recent activity recorded yet.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
+                <div class="customers-detail-notice customers-detail-deferred-error is-warning" data-customer-activity-error hidden></div>
             </section>
 
-            <section class="customers-detail-section" aria-label="External profiles">
-                <div class="customers-detail-section-header">
-                    <div>
-                        <p class="customers-detail-eyebrow">External profiles</p>
-                        <h3 class="customers-detail-card-title">Linked source records</h3>
-                        <p class="customers-detail-card-copy">{{ number_format($externalProfilesCount) }} linked provider profiles currently attached to this customer.</p>
+            <section class="customers-detail-section customers-detail-deferred-section is-loading" aria-label="External profiles" data-customer-external-shell>
+                <div data-customer-external-profiles-section class="customers-detail-deferred-shell">
+                    <div class="customers-detail-section-header">
+                        <div>
+                            <p class="customers-detail-eyebrow">External profiles</p>
+                            <h3 class="customers-detail-card-title">Linked source records</h3>
+                            <p class="customers-detail-card-copy is-loading" data-customer-external-profiles-summary>{{ $externalProfilesSummary }}</p>
+                        </div>
+                    </div>
+                    <div class="customers-detail-deferred-placeholder" aria-hidden="true">
+                        <div class="customers-detail-skeleton-row"></div>
+                        <div class="customers-detail-skeleton-row"></div>
+                        <div class="customers-detail-skeleton-row is-mid"></div>
+                        <div class="customers-detail-skeleton-row"></div>
                     </div>
                 </div>
-                <div class="customers-detail-table-wrap">
-                    <table class="customers-detail-table">
-                        <thead>
-                            <tr>
-                                <th>Provider</th>
-                                <th>Integration</th>
-                                <th>Store</th>
-                                <th>External ID</th>
-                                <th>Last Activity</th>
-                                <th>Legacy Growave Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($externalProfiles as $externalProfile)
-                                <tr>
-                                    <td>{{ $externalProfile->provider ?: '—' }}</td>
-                                    <td>{{ $externalProfile->integration ?: '—' }}</td>
-                                    <td>{{ $externalProfile->store_key ?: '—' }}</td>
-                                    <td>{{ $externalProfile->external_customer_id ?: '—' }}</td>
-                                    <td>{{ optional($externalProfile->last_activity_at)->format('Y-m-d H:i') ?: '—' }}</td>
-                                    <td>{{ $externalProfile->points_balance !== null ? number_format((int) $externalProfile->points_balance) : '—' }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="customers-detail-empty">No external profiles linked yet.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
+                <div class="customers-detail-notice customers-detail-deferred-error is-warning" data-customer-external-error hidden></div>
             </section>
         </div>
 
@@ -1213,6 +1247,58 @@
                 const root = document.getElementById("shopify-customer-detail");
                 if (!root) {
                     return;
+                }
+
+                const deferredEndpoint = String(root.dataset.deferredSectionsEndpoint || "");
+                const profileId = String(root.dataset.profileId || "");
+                const perfDebug = root.dataset.perfDebug === "true";
+                const activityShell = root.querySelector("[data-customer-activity-shell]");
+                const activitySection = root.querySelector("[data-customer-activity-section]");
+                const activityError = root.querySelector("[data-customer-activity-error]");
+                const externalShell = root.querySelector("[data-customer-external-shell]");
+                const externalSection = root.querySelector("[data-customer-external-profiles-section]");
+                const externalError = root.querySelector("[data-customer-external-error]");
+                const detailCache = (() => {
+                    try {
+                        return window.sessionStorage;
+                    } catch (error) {
+                        return null;
+                    }
+                })();
+                const deferredCacheTtlMs = 60 * 1000;
+                let sessionTokenPromise = null;
+                let deferredController = null;
+                let deferredRequestSequence = 0;
+
+                function debug(message, payload = null) {
+                    if (!perfDebug || typeof console === "undefined" || typeof console.debug !== "function") {
+                        return;
+                    }
+
+                    if (payload === null) {
+                        console.debug(`[customer-detail] ${message}`);
+                        return;
+                    }
+
+                    console.debug(`[customer-detail] ${message}`, payload);
+                }
+
+                function mark(name) {
+                    if (typeof window.performance?.mark === "function") {
+                        window.performance.mark(name);
+                    }
+                }
+
+                function measure(name, start, end) {
+                    if (typeof window.performance?.measure !== "function") {
+                        return;
+                    }
+
+                    try {
+                        window.performance.measure(name, start, end);
+                    } catch (error) {
+                        // Ignore duplicate performance marks.
+                    }
                 }
 
                 function setText(selector, value) {
@@ -1243,6 +1329,17 @@
                     }
                 }
 
+                function updateLastActivity(display) {
+                    if (typeof display !== "string") {
+                        return;
+                    }
+
+                    root.querySelectorAll("[data-customer-last-activity-display]").forEach((node) => {
+                        node.textContent = display;
+                        node.classList.remove("is-loading");
+                    });
+                }
+
                 function updateBalance(balanceDisplay) {
                     if (typeof balanceDisplay !== "string") {
                         return;
@@ -1267,6 +1364,125 @@
                     if (typeof consent.sms_message_eligibility === "string") {
                         setText("[data-customer-sms-message-eligibility]", consent.sms_message_eligibility);
                     }
+                }
+
+                function activitySummaryLabel(count) {
+                    const value = Number.isFinite(count) ? Number(count) : 0;
+                    return value > 0
+                        ? `${value.toLocaleString()} recent item${value === 1 ? "" : "s"} across rewards, adjustments, and messaging activity.`
+                        : "No recent activity recorded yet.";
+                }
+
+                function externalProfilesSummaryLabel(count) {
+                    const value = Number.isFinite(count) ? Number(count) : 0;
+                    return value > 0
+                        ? `${value.toLocaleString()} linked provider profile${value === 1 ? "" : "s"} currently attached to this customer.`
+                        : "No external profiles linked yet.";
+                }
+
+                function updateDeferredSummaries(data = {}) {
+                    if (typeof data.last_activity_display === "string") {
+                        updateLastActivity(data.last_activity_display);
+                    }
+
+                    if (Number.isFinite(data.activity_count)) {
+                        setText("[data-customer-activity-summary]", activitySummaryLabel(data.activity_count));
+                        root.querySelectorAll("[data-customer-activity-summary]").forEach((node) => node.classList.remove("is-loading"));
+                    }
+
+                    if (Number.isFinite(data.external_profiles_count)) {
+                        setText("[data-customer-external-profiles-summary]", externalProfilesSummaryLabel(data.external_profiles_count));
+                        root.querySelectorAll("[data-customer-external-profiles-summary]").forEach((node) => node.classList.remove("is-loading"));
+                    }
+                }
+
+                function deferredCacheKey(id) {
+                    return `forestry:customer-detail-deferred:${id}`;
+                }
+
+                function readDeferredCache() {
+                    if (!detailCache || !profileId) {
+                        return null;
+                    }
+
+                    try {
+                        const raw = detailCache.getItem(deferredCacheKey(profileId));
+                        if (!raw) {
+                            return null;
+                        }
+
+                        const parsed = JSON.parse(raw);
+                        if (!parsed || typeof parsed !== "object" || typeof parsed.stored_at !== "number" || !parsed.data) {
+                            return null;
+                        }
+
+                        if ((Date.now() - parsed.stored_at) > deferredCacheTtlMs) {
+                            detailCache.removeItem(deferredCacheKey(profileId));
+                            return null;
+                        }
+
+                        return parsed.data;
+                    } catch (error) {
+                        return null;
+                    }
+                }
+
+                function writeDeferredCache(data) {
+                    if (!detailCache || !profileId || !data || typeof data !== "object") {
+                        return;
+                    }
+
+                    try {
+                        detailCache.setItem(deferredCacheKey(profileId), JSON.stringify({
+                            stored_at: Date.now(),
+                            data,
+                        }));
+                    } catch (error) {
+                        // Ignore storage failures in embedded/private browsing contexts.
+                    }
+                }
+
+                function setDeferredShellState(shell, state) {
+                    if (!shell) {
+                        return;
+                    }
+
+                    shell.classList.toggle("is-loading", state === "loading");
+                    shell.classList.toggle("is-refreshing", state === "refreshing");
+                }
+
+                function setDeferredError(target, message) {
+                    if (!target) {
+                        return;
+                    }
+
+                    if (!message) {
+                        target.hidden = true;
+                        target.innerHTML = "";
+                        return;
+                    }
+
+                    target.hidden = false;
+                    target.innerHTML = `
+                        <span>${message}</span>
+                        <button type="button" class="customers-detail-button" data-customer-deferred-retry>Retry</button>
+                    `;
+                }
+
+                function renderDeferredSections(data = {}, { fromCache = false } = {}) {
+                    if (typeof data.activity_html === "string" && activitySection) {
+                        activitySection.innerHTML = data.activity_html;
+                        setDeferredShellState(activityShell, fromCache ? "refreshing" : "idle");
+                    }
+
+                    if (typeof data.external_profiles_html === "string" && externalSection) {
+                        externalSection.innerHTML = data.external_profiles_html;
+                        setDeferredShellState(externalShell, fromCache ? "refreshing" : "idle");
+                    }
+
+                    setDeferredError(activityError, "");
+                    setDeferredError(externalError, "");
+                    updateDeferredSummaries(data);
                 }
 
                 function clearFieldErrors(form) {
@@ -1380,20 +1596,22 @@
                         "Content-Type": "application/json",
                     };
 
-                    let sessionToken = null;
-
-                    try {
-                        sessionToken = await Promise.race([
+                    if (!sessionTokenPromise) {
+                        sessionTokenPromise = Promise.race([
                             Promise.resolve(window.shopify.idToken()),
                             new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
-                        ]);
-                    } catch (error) {
-                        throw new Error(
-                            authFailureMessage("invalid_session_token", "Shopify Admin verification failed."),
-                        );
+                        ]).catch(() => {
+                            sessionTokenPromise = null;
+                            throw new Error(
+                                authFailureMessage("invalid_session_token", "Shopify Admin verification failed."),
+                            );
+                        });
                     }
 
+                    const sessionToken = await sessionTokenPromise;
+
                     if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
+                        sessionTokenPromise = null;
                         throw new Error(
                             authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
                         );
@@ -1402,6 +1620,76 @@
                     headers.Authorization = `Bearer ${sessionToken.trim()}`;
 
                     return headers;
+                }
+
+                async function loadDeferredSections({ background = false } = {}) {
+                    if (!deferredEndpoint) {
+                        return;
+                    }
+
+                    deferredRequestSequence += 1;
+                    const sequence = deferredRequestSequence;
+
+                    if (deferredController) {
+                        deferredController.abort();
+                    }
+
+                    deferredController = new AbortController();
+                    setDeferredShellState(activityShell, background ? "refreshing" : "loading");
+                    setDeferredShellState(externalShell, background ? "refreshing" : "loading");
+                    setDeferredError(activityError, "");
+                    setDeferredError(externalError, "");
+                    mark("customer-detail-deferred-start");
+
+                    try {
+                        const headers = await resolveEmbeddedAuthHeaders();
+                        const url = new URL(deferredEndpoint, window.location.origin);
+                        if (perfDebug) {
+                            url.searchParams.set("detail_perf", "1");
+                        }
+
+                        const response = await fetch(url.toString(), {
+                            method: "GET",
+                            headers,
+                            credentials: "same-origin",
+                            signal: deferredController.signal,
+                        });
+
+                        const payload = await response.json().catch(() => ({
+                            ok: false,
+                            message: "Customer detail sections could not be loaded.",
+                        }));
+
+                        if (!response.ok || !payload.ok || !payload.data) {
+                            throw new Error(payload.message || "Customer detail sections could not be loaded.");
+                        }
+
+                        if (sequence !== deferredRequestSequence) {
+                            return;
+                        }
+
+                        renderDeferredSections(payload.data);
+                        writeDeferredCache(payload.data);
+                        mark("customer-detail-deferred-end");
+                        measure("customer-detail-deferred", "customer-detail-deferred-start", "customer-detail-deferred-end");
+                        debug("deferred sections loaded", {
+                            timings: payload.data.timings || null,
+                            lastActivity: payload.data.last_activity_display || null,
+                            activityCount: payload.data.activity_count ?? null,
+                            externalProfilesCount: payload.data.external_profiles_count ?? null,
+                        });
+                    } catch (error) {
+                        if (error && error.name === "AbortError") {
+                            return;
+                        }
+
+                        const message = error instanceof Error ? error.message : "Customer detail sections could not be loaded.";
+                        setDeferredShellState(activityShell, "idle");
+                        setDeferredShellState(externalShell, "idle");
+                        setDeferredError(activityError, message);
+                        setDeferredError(externalError, message);
+                        debug("deferred sections failed", { message });
+                    }
                 }
 
                 async function submitMutationForm(event) {
@@ -1467,6 +1755,7 @@
                         const tone = payload.notice_style === "warning" ? "warning" : "success";
                         setFormFeedback(form, tone, payload.message || "Saved.");
                         window.ForestryEmbeddedApp?.showToast?.(payload.message || "Saved.", tone === "success" ? "success" : "error");
+                        void loadDeferredSections({ background: true });
                     } catch (error) {
                         const message = error instanceof Error ? error.message : "Request failed.";
                         setFormFeedback(form, "warning", message);
@@ -1480,6 +1769,26 @@
 
                 root.querySelectorAll("[data-embedded-mutation-form]").forEach((form) => {
                     form.addEventListener("submit", submitMutationForm);
+                });
+
+                root.addEventListener("click", (event) => {
+                    const retry = event.target.closest("[data-customer-deferred-retry]");
+                    if (!retry) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    void loadDeferredSections();
+                });
+
+                const cachedDeferred = readDeferredCache();
+                if (cachedDeferred) {
+                    renderDeferredSections(cachedDeferred, { fromCache: true });
+                    debug("rendered deferred sections from cache");
+                }
+
+                window.requestAnimationFrame(() => {
+                    void loadDeferredSections({ background: Boolean(cachedDeferred) });
                 });
             })();
         </script>

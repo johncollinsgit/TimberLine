@@ -60,7 +60,7 @@
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <a href="{{ route('marketing.providers-integrations') }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">
-                        Back to Connections
+                        Back to Integrations
                     </a>
                     <a href="{{ route('marketing.providers-integrations.shopify-customer-sync-health', array_merge(request()->query(), ['refresh' => 1])) }}" class="inline-flex rounded-full border border-sky-300/35 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100">
                         Refresh Checks
