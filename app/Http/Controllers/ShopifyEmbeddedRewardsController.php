@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
+use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\CandleCashRewardsOverviewService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Tenancy\TenantResolver;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -111,17 +113,164 @@ class ShopifyEmbeddedRewardsController extends Controller
         TenantResolver $tenantResolver
     ): Response
     {
+        $context = $contextService->resolvePageContext($request);
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            : null;
+
         return $this->renderSection(
             $request,
             $contextService,
             $tenantResolver,
             'birthdays',
-            'shopify.rewards-placeholder',
+            'shopify.rewards-birthdays',
             [
-                'title' => 'Birthday rewards coming soon',
-                'message' => 'Birthday-specific reward controls are still managed from Backstage. This tab will mirror that data soon.',
+                'setupNote' => $authorized
+                    ? 'Birthday analytics uses canonical delivery records, provider webhook updates, and reward redemption outcomes scoped to this tenant.'
+                    : null,
+                'birthdayAnalyticsBootstrap' => [
+                    'authorized' => $authorized,
+                    'tenant_id' => $tenantId,
+                    'status' => (string) ($context['status'] ?? 'invalid_request'),
+                    'filters' => [
+                        'date_from' => now()->subDays(29)->toDateString(),
+                        'date_to' => now()->toDateString(),
+                        'provider' => null,
+                        'template_key' => null,
+                        'status' => 'all',
+                        'comparison_mode' => 'template',
+                        'period_view' => 'raw',
+                        'compare_from' => null,
+                        'compare_to' => null,
+                    ],
+                    'endpoints' => [
+                        'analytics' => route('shopify.app.api.rewards.birthdays.analytics', [], false),
+                        'analytics_export' => route('shopify.app.api.rewards.birthdays.analytics.export', [], false),
+                    ],
+                ],
             ]
         );
+    }
+
+    public function birthdayAnalytics(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        BirthdayReportingService $reportingService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        if ($tenantId === null) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Birthday analytics are unavailable.',
+            ], 422);
+        }
+
+        try {
+            $filters = $this->validatedBirthdayAnalyticsFilters($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Birthday analytics filters are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $analytics = $reportingService->birthdayAnalytics([
+            ...$filters,
+            'tenant_id' => $tenantId,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'data' => $analytics,
+        ]);
+    }
+
+    public function birthdayAnalyticsExport(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        BirthdayReportingService $reportingService
+    ): \Symfony\Component\HttpFoundation\Response {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        if ($tenantId === null) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Birthday analytics export is unavailable.',
+            ], 422);
+        }
+
+        try {
+            $filters = $this->validatedBirthdayAnalyticsFilters($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Birthday analytics export filters are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $analytics = $reportingService->birthdayAnalytics([
+            ...$filters,
+            'tenant_id' => $tenantId,
+        ]);
+        $columns = $reportingService->birthdayAnalyticsExportColumns($analytics);
+        $rows = $reportingService->birthdayAnalyticsExportRows($analytics);
+
+        $dateFrom = (string) data_get($analytics, 'filters.date_from', now()->subDays(29)->toDateString());
+        $dateTo = (string) data_get($analytics, 'filters.date_to', now()->toDateString());
+        $filename = sprintf(
+            'birthday-analytics-tenant-%d-%s-to-%s.csv',
+            $tenantId,
+            preg_replace('/[^0-9\\-]/', '', $dateFrom) ?: 'start',
+            preg_replace('/[^0-9\\-]/', '', $dateTo) ?: 'end'
+        );
+
+        return response()->streamDownload(function () use ($columns, $rows): void {
+            $stream = fopen('php://output', 'w');
+            if (! is_resource($stream)) {
+                return;
+            }
+
+            fputcsv($stream, $columns);
+            foreach ($rows as $row) {
+                $record = [];
+                foreach ($columns as $column) {
+                    $value = $row[$column] ?? '';
+                    if (is_bool($value)) {
+                        $record[] = $value ? 'true' : 'false';
+                        continue;
+                    }
+                    if (is_array($value)) {
+                        $record[] = json_encode($value);
+                        continue;
+                    }
+
+                    $record[] = is_scalar($value) || $value === null ? (string) ($value ?? '') : json_encode($value);
+                }
+
+                fputcsv($stream, $record);
+            }
+
+            fclose($stream);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     public function vip(
@@ -361,6 +510,99 @@ class ShopifyEmbeddedRewardsController extends Controller
         ]);
     }
 
+    /**
+     * @return array{
+     *   date_from:?string,
+     *   date_to:?string,
+     *   provider:?string,
+     *   template_key:?string,
+     *   status:string,
+     *   comparison_mode:'template'|'provider'|'period',
+     *   period_view:'raw'|'per_day',
+     *   compare_from:?string,
+     *   compare_to:?string
+     * }
+     */
+    protected function validatedBirthdayAnalyticsFilters(Request $request): array
+    {
+        $validated = validator($request->query(), [
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
+            'provider' => ['nullable', 'string', 'max:60'],
+            'template_key' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', 'in:all,attempted,sent,delivered,opened,clicked,failed,bounced,unsupported'],
+            'comparison_mode' => ['nullable', 'in:template,provider,period'],
+            'period_view' => ['nullable', 'in:raw,per_day'],
+            'compare_from' => ['nullable', 'date_format:Y-m-d'],
+            'compare_to' => ['nullable', 'date_format:Y-m-d'],
+        ])->validate();
+
+        $dateFrom = isset($validated['date_from']) ? CarbonImmutable::parse((string) $validated['date_from']) : null;
+        $dateTo = isset($validated['date_to']) ? CarbonImmutable::parse((string) $validated['date_to']) : null;
+        $compareFrom = isset($validated['compare_from']) ? CarbonImmutable::parse((string) $validated['compare_from']) : null;
+        $compareTo = isset($validated['compare_to']) ? CarbonImmutable::parse((string) $validated['compare_to']) : null;
+        $comparisonMode = strtolower(trim((string) ($validated['comparison_mode'] ?? 'template')));
+        $periodView = strtolower(trim((string) ($validated['period_view'] ?? 'raw')));
+
+        if ($dateFrom && $dateTo) {
+            if ($dateFrom->greaterThan($dateTo)) {
+                throw ValidationException::withMessages([
+                    'date_from' => ['Start date must be on or before end date.'],
+                ]);
+            }
+
+            if ($dateFrom->diffInDays($dateTo) > 366) {
+                throw ValidationException::withMessages([
+                    'date_range' => ['Date range must be 366 days or less.'],
+                ]);
+            }
+        }
+
+        if (($compareFrom && ! $compareTo) || (! $compareFrom && $compareTo)) {
+            throw ValidationException::withMessages([
+                'compare_range' => ['Both compare_from and compare_to are required when using a custom comparison range.'],
+            ]);
+        }
+
+        if ($comparisonMode !== 'period' && array_key_exists('period_view', $validated)) {
+            throw ValidationException::withMessages([
+                'period_view' => ['Period view is only supported when comparison_mode is period.'],
+            ]);
+        }
+
+        if ($compareFrom && $compareTo) {
+            if ($comparisonMode !== 'period') {
+                throw ValidationException::withMessages([
+                    'comparison_mode' => ['Custom comparison range is only supported when comparison_mode is period.'],
+                ]);
+            }
+
+            if ($compareFrom->greaterThan($compareTo)) {
+                throw ValidationException::withMessages([
+                    'compare_from' => ['Compare start date must be on or before compare end date.'],
+                ]);
+            }
+
+            if ($compareFrom->diffInDays($compareTo) > 366) {
+                throw ValidationException::withMessages([
+                    'compare_range' => ['Comparison date range must be 366 days or less.'],
+                ]);
+            }
+        }
+
+        return [
+            'date_from' => isset($validated['date_from']) ? trim((string) $validated['date_from']) : null,
+            'date_to' => isset($validated['date_to']) ? trim((string) $validated['date_to']) : null,
+            'provider' => $this->nullableString($validated['provider'] ?? null),
+            'template_key' => $this->nullableString($validated['template_key'] ?? null),
+            'status' => strtolower(trim((string) ($validated['status'] ?? 'all'))),
+            'comparison_mode' => $comparisonMode,
+            'period_view' => $comparisonMode === 'period' ? $periodView : 'raw',
+            'compare_from' => isset($validated['compare_from']) ? trim((string) $validated['compare_from']) : null,
+            'compare_to' => isset($validated['compare_to']) ? trim((string) $validated['compare_to']) : null,
+        ];
+    }
+
     protected function invalidContextResponse(array $context): JsonResponse
     {
         $status = (string) ($context['status'] ?? 'invalid_request');
@@ -443,5 +685,12 @@ class ShopifyEmbeddedRewardsController extends Controller
             'message' => (string) ($configState['message']
                 ?? 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.'),
         ], 409);
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

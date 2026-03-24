@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
+use App\Models\CandleCashTaskCompletion;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
@@ -33,6 +34,7 @@ use App\Services\Marketing\MarketingNextBestActionService;
 use App\Services\Marketing\MarketingProfileMatcher;
 use App\Services\Marketing\MarketingProfileScoreService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
+use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
@@ -62,7 +64,8 @@ class MarketingCustomersController extends Controller
         protected BirthdayRewardEngineService $birthdayRewardEngine,
         protected BirthdayReportingService $birthdayReportingService,
         protected ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService,
-        protected GrowaveProjectionService $growaveProjectionService
+        protected GrowaveProjectionService $growaveProjectionService,
+        protected MarketingWishlistService $wishlistService
     ) {
     }
 
@@ -687,6 +690,14 @@ class MarketingCustomersController extends Controller
             ->limit(25)
             ->get();
 
+        $nativeReviewHistory = $marketingProfile->reviewHistory()
+            ->where('provider', 'backstage')
+            ->where('integration', 'native')
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+
         if ($growaveReviewHistory->isEmpty() && $latestGrowaveReviewSummary) {
             $growaveReviewHistory = MarketingReviewHistory::query()
                 ->where('marketing_review_summary_id', $latestGrowaveReviewSummary->id)
@@ -708,6 +719,53 @@ class MarketingCustomersController extends Controller
             'external_customer_id' => $latestGrowaveExternal?->external_customer_id ?: $latestGrowaveReviewSummary?->external_customer_id,
             'external_customer_email' => $latestGrowaveReviewSummary?->external_customer_email,
             'last_synced_at' => $growaveLastSyncAt,
+        ];
+
+        $nativeApprovedReviewCount = (int) $nativeReviewHistory
+            ->where('status', 'approved')
+            ->where('is_published', true)
+            ->count();
+        $nativeAverageRating = $nativeApprovedReviewCount > 0
+            ? round((float) $nativeReviewHistory
+                ->where('status', 'approved')
+                ->where('is_published', true)
+                ->avg('rating'), 2)
+            : null;
+        $nativeLatestPublishedReview = $nativeReviewHistory
+            ->where('status', 'approved')
+            ->where('is_published', true)
+            ->sortByDesc(fn (MarketingReviewHistory $review): int => (int) (
+                optional($review->approved_at ?: $review->reviewed_at ?: $review->created_at)->timestamp ?? 0
+            ))
+            ->first();
+        $nativeReviewSummary = [
+            'review_count' => (int) $nativeReviewHistory->count(),
+            'published_review_count' => $nativeApprovedReviewCount,
+            'average_rating' => $nativeAverageRating,
+            'last_reviewed_at' => optional($nativeLatestPublishedReview?->approved_at ?: $nativeLatestPublishedReview?->reviewed_at ?: $nativeLatestPublishedReview?->created_at)->toDateTimeString(),
+            'last_submitted_at' => optional(
+                $nativeReviewHistory
+                    ->sortByDesc(fn (MarketingReviewHistory $review): int => (int) (optional($review->submitted_at ?: $review->created_at)->timestamp ?? 0))
+                    ->first()?->submitted_at
+                    ?: $nativeReviewHistory->sortByDesc('id')->first()?->created_at
+            )->toDateTimeString(),
+        ];
+
+        $nativeReviewRewardCompletions = CandleCashTaskCompletion::query()
+            ->where('marketing_profile_id', $marketingProfile->id)
+            ->whereIn('status', ['awarded', 'approved'])
+            ->whereHas('task', fn ($builder) => $builder->where('handle', 'product-review'))
+            ->orderByDesc('awarded_at')
+            ->orderByDesc('id')
+            ->get(['id', 'status', 'reward_candle_cash', 'awarded_at', 'reviewed_at', 'created_at']);
+        $nativeReviewRewardStatus = [
+            'count' => (int) $nativeReviewRewardCompletions->count(),
+            'last_rewarded_at' => optional(
+                $nativeReviewRewardCompletions->first()?->awarded_at
+                    ?: $nativeReviewRewardCompletions->first()?->reviewed_at
+                    ?: $nativeReviewRewardCompletions->first()?->created_at
+            )->toDateTimeString(),
+            'total_candle_cash' => (int) $nativeReviewRewardCompletions->sum('reward_candle_cash'),
         ];
 
         $eventSummary = $this->attributionService->eventSummaryForProfile($marketingProfile);
@@ -771,6 +829,45 @@ class MarketingCustomersController extends Controller
                 ->limit(120)
                 ->get()
         );
+        $legacyReviewRewardRows = $marketingProfile->candleCashTransactions()
+            ->where('source', 'growave_activity')
+            ->where('candle_cash_delta', '>', 0)
+            ->where('description', 'like', '%review%')
+            ->orderByDesc('id')
+            ->limit(120)
+            ->get(['id', 'candle_cash_delta', 'created_at']);
+        $legacyReviewRewardStatus = [
+            'count' => (int) $legacyReviewRewardRows->count(),
+            'last_rewarded_at' => optional($legacyReviewRewardRows->first()?->created_at)->toDateTimeString(),
+            'total_candle_cash' => (int) $legacyReviewRewardRows->sum('candle_cash_delta'),
+        ];
+
+        $preferredReviewDataSource = ($nativeReviewSummary['review_count'] > 0 || $nativeReviewRewardStatus['count'] > 0)
+            ? 'native'
+            : (($growaveReviewHistory->count() > 0 || (int) ($latestGrowaveReviewSummary?->review_count ?? 0) > 0 || $legacyReviewRewardStatus['count'] > 0)
+                ? 'legacy_growave'
+                : 'none');
+        $preferredReviewSummary = $preferredReviewDataSource === 'native'
+            ? $nativeReviewSummary
+            : [
+                'review_count' => (int) ($latestGrowaveReviewSummary?->review_count ?? 0),
+                'published_review_count' => (int) ($latestGrowaveReviewSummary?->published_review_count ?? 0),
+                'average_rating' => $latestGrowaveReviewSummary?->average_rating !== null
+                    ? round((float) $latestGrowaveReviewSummary->average_rating, 2)
+                    : null,
+                'last_reviewed_at' => optional($latestGrowaveReviewSummary?->source_synced_at)->toDateTimeString(),
+                'last_submitted_at' => optional($latestGrowaveReviewSummary?->source_synced_at)->toDateTimeString(),
+            ];
+        $preferredReviewRewardStatus = $preferredReviewDataSource === 'native'
+            ? $nativeReviewRewardStatus
+            : $legacyReviewRewardStatus;
+        $wishlistPayload = $this->wishlistService->backstagePayload($marketingProfile);
+        $nativeWishlistItems = $wishlistPayload['native_items'];
+        $legacyWishlistItems = $wishlistPayload['legacy_items'];
+        $nativeWishlistSummary = $wishlistPayload['native_summary'];
+        $legacyWishlistSummary = $wishlistPayload['legacy_summary'];
+        $preferredWishlistDataSource = $wishlistPayload['preferred_data_source'];
+        $preferredWishlistSummary = $wishlistPayload['preferred_summary'];
         $candleRedemptions = $marketingProfile->candleCashRedemptions()
             ->with('reward:id,name,reward_type,reward_value')
             ->orderByDesc('id')
@@ -833,6 +930,19 @@ class MarketingCustomersController extends Controller
             'growaveReviewHistory' => $growaveReviewHistory,
             'growaveSourceMeta' => $growaveSourceMeta,
             'growaveLoyaltyTransactions' => $growaveLoyaltyTransactions,
+            'nativeReviewHistory' => $nativeReviewHistory,
+            'nativeReviewSummary' => $nativeReviewSummary,
+            'nativeReviewRewardStatus' => $nativeReviewRewardStatus,
+            'legacyReviewRewardStatus' => $legacyReviewRewardStatus,
+            'preferredReviewSummary' => $preferredReviewSummary,
+            'preferredReviewRewardStatus' => $preferredReviewRewardStatus,
+            'preferredReviewDataSource' => $preferredReviewDataSource,
+            'nativeWishlistItems' => $nativeWishlistItems,
+            'legacyWishlistItems' => $legacyWishlistItems,
+            'nativeWishlistSummary' => $nativeWishlistSummary,
+            'legacyWishlistSummary' => $legacyWishlistSummary,
+            'preferredWishlistSummary' => $preferredWishlistSummary,
+            'preferredWishlistDataSource' => $preferredWishlistDataSource,
             'eventSummary' => $eventSummary,
             'unresolvedAttributionValues' => $unresolvedAttributionValues,
             'campaignStats' => $campaignStats,

@@ -25,6 +25,7 @@ use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingProfileSyncService;
+use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
@@ -1660,14 +1661,353 @@ class MarketingShopifyIntegrationController extends Controller
 
         $resolved = $this->resolveProfile($request, scope: 'product_review_status', allowCreate: false);
         $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
         $product = $this->productReviewContext($data, $storeContext);
         $payload = $productReviewService->storefrontPayload($product, $profile);
         $states = ['product_reviews_ready', $profile ? 'linked_customer' : 'unknown_customer'];
+
+        $this->logStorefrontEvent($request, 'widget_product_review_status_lookup', [
+            'status' => 'ok',
+            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_product_review_status',
+            'source_id' => (string) $data['product_id'],
+            'meta' => [
+                'identity_status' => $identityStatus,
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
 
         return MarketingStorefrontContract::success([
             'profile_id' => $profile?->id,
             ...$payload,
         ], $this->contractMeta($request), array_values(array_unique($states)));
+    }
+
+    public function wishlistStatus(
+        Request $request,
+        MarketingWishlistService $wishlistService
+    ): JsonResponse {
+        $data = $request->validate([
+            'product_id' => ['nullable', 'string', 'max:120'],
+            'product_variant_id' => ['nullable', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $storeContext = $this->resolveStoreContext($request);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('wishlist_status');
+        }
+
+        $resolved = $this->resolveProfile($request, scope: 'wishlist_status', allowCreate: false);
+        $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $payload = $wishlistService->storefrontPayload($profile, [
+            ...$this->wishlistContext($data, $storeContext),
+            'limit' => (int) ($data['limit'] ?? 25),
+            'identity_status' => $identityStatus,
+        ]);
+        $viewerState = (string) data_get($payload, 'viewer.state', 'wishlist_empty');
+        $states = [$viewerState, $profile ? 'linked_customer' : 'unknown_customer'];
+
+        $this->logStorefrontEvent($request, 'widget_wishlist_status_lookup', [
+            'status' => 'ok',
+            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_wishlist_status',
+            'source_id' => (string) ($data['product_id'] ?? 'wishlist'),
+            'meta' => [
+                'identity_status' => $identityStatus,
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => $data['product_id'] ?? null,
+                'product_handle' => $data['product_handle'] ?? null,
+                'active_count' => (int) data_get($payload, 'summary.active_count', 0),
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile?->id,
+            ...$payload,
+        ], $this->contractMeta($request), array_values(array_unique(array_filter($states))));
+    }
+
+    public function addWishlistItem(
+        Request $request,
+        MarketingWishlistService $wishlistService
+    ): JsonResponse {
+        $data = $request->validate([
+            'product_id' => ['required', 'string', 'max:120'],
+            'product_variant_id' => ['nullable', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'request_key' => ['nullable', 'string', 'max:200'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('wishlist_add');
+        }
+
+        $resolved = $this->resolveProfile($request, scope: 'wishlist_add', allowCreate: false, allowBody: true);
+        $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $requestKey = trim((string) ($data['request_key'] ?? ''));
+
+        if (! $profile) {
+            $this->logStorefrontEvent($request, 'widget_wishlist_add', [
+                'status' => 'error',
+                'issue_type' => 'identity_' . $identityStatus,
+                'source_type' => 'shopify_widget_wishlist_add',
+                'source_id' => (string) $data['product_id'],
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'meta' => [
+                    'identity_status' => $identityStatus,
+                    'store_key' => $storeContext['store_key'] ?? null,
+                    'tenant_id' => $storeContext['tenant_id'] ?? null,
+                    'product_id' => (string) $data['product_id'],
+                    'product_handle' => $data['product_handle'] ?? null,
+                ],
+            ]);
+
+            return $this->identityErrorResponse($identityStatus, $request);
+        }
+
+        $this->logStorefrontEvent($request, 'widget_wishlist_add', [
+            'status' => 'pending',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_wishlist_add',
+            'source_id' => (string) $data['product_id'],
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'meta' => [
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+                'marketing_profile_id_hint' => (int) ($data['marketing_profile_id'] ?? 0) ?: null,
+                'shopify_customer_id_present' => filled($data['shopify_customer_id'] ?? null),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        try {
+            $result = $wishlistService->addItem(
+                $profile,
+                $this->wishlistContext($data, $storeContext),
+                [
+                    'request_key' => $data['request_key'] ?? null,
+                    'source' => 'native_storefront',
+                    'source_surface' => 'shopify_product_page',
+                    'raw_payload' => [
+                        'product' => [
+                            'id' => (string) $data['product_id'],
+                            'variant_id' => $data['product_variant_id'] ?? null,
+                            'handle' => $data['product_handle'] ?? null,
+                            'title' => $data['product_title'] ?? null,
+                            'url' => $data['product_url'] ?? null,
+                        ],
+                    ],
+                ]
+            );
+        } catch (\InvalidArgumentException $exception) {
+            $this->logStorefrontEvent($request, 'widget_wishlist_add', [
+                'status' => 'error',
+                'issue_type' => 'missing_store_context',
+                'profile' => $profile,
+                'source_type' => 'shopify_widget_wishlist_add',
+                'source_id' => (string) $data['product_id'],
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'meta' => [
+                    'store_key' => $storeContext['store_key'] ?? null,
+                    'tenant_id' => $storeContext['tenant_id'] ?? null,
+                    'error' => $exception->getMessage(),
+                ],
+                'resolution_status' => 'open',
+            ]);
+
+            return MarketingStorefrontContract::error(
+                code: 'missing_store_context',
+                message: $exception->getMessage(),
+                status: 422,
+                details: [
+                    'store_key' => $storeContext['store_key'],
+                ],
+                states: ['store_context_required'],
+                recoveryStates: ['reload_storefront']
+            );
+        }
+
+        /** @var \App\Models\MarketingProfileWishlistItem|null $item */
+        $item = $result['item'] ?? null;
+        $payload = $wishlistService->storefrontPayload($profile, [
+            ...$this->wishlistContext($data, $storeContext),
+            'identity_status' => $identityStatus,
+        ]);
+
+        $this->logStorefrontEvent($request, 'widget_wishlist_add', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_wishlist_add',
+            'source_id' => (string) ($item?->id ?: $data['product_id']),
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'meta' => [
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+                'wishlist_item_id' => $item?->id,
+                'wishlist_state' => (string) ($result['state'] ?? 'wishlist_added'),
+                'created' => (bool) ($result['created'] ?? false),
+                'restored' => (bool) ($result['restored'] ?? false),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile->id,
+            'state' => (string) ($result['state'] ?? 'wishlist_added'),
+            'item' => $item ? $wishlistService->itemPayload($item) : null,
+            ...$payload,
+        ], $this->contractMeta($request), [(string) ($result['state'] ?? 'wishlist_added')]);
+    }
+
+    public function removeWishlistItem(
+        Request $request,
+        MarketingWishlistService $wishlistService
+    ): JsonResponse {
+        $data = $request->validate([
+            'product_id' => ['required', 'string', 'max:120'],
+            'product_variant_id' => ['nullable', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'request_key' => ['nullable', 'string', 'max:200'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('wishlist_remove');
+        }
+
+        $resolved = $this->resolveProfile($request, scope: 'wishlist_remove', allowCreate: false, allowBody: true);
+        $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $requestKey = trim((string) ($data['request_key'] ?? ''));
+
+        if (! $profile) {
+            $this->logStorefrontEvent($request, 'widget_wishlist_remove', [
+                'status' => 'error',
+                'issue_type' => 'identity_' . $identityStatus,
+                'source_type' => 'shopify_widget_wishlist_remove',
+                'source_id' => (string) $data['product_id'],
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'meta' => [
+                    'identity_status' => $identityStatus,
+                    'store_key' => $storeContext['store_key'] ?? null,
+                    'tenant_id' => $storeContext['tenant_id'] ?? null,
+                    'product_id' => (string) $data['product_id'],
+                    'product_handle' => $data['product_handle'] ?? null,
+                ],
+            ]);
+
+            return $this->identityErrorResponse($identityStatus, $request);
+        }
+
+        $this->logStorefrontEvent($request, 'widget_wishlist_remove', [
+            'status' => 'pending',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_wishlist_remove',
+            'source_id' => (string) $data['product_id'],
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'meta' => [
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        try {
+            $result = $wishlistService->removeItem($profile, $this->wishlistContext($data, $storeContext), [
+                'request_key' => $data['request_key'] ?? null,
+            ]);
+        } catch (\InvalidArgumentException $exception) {
+            $this->logStorefrontEvent($request, 'widget_wishlist_remove', [
+                'status' => 'error',
+                'issue_type' => 'missing_store_context',
+                'profile' => $profile,
+                'source_type' => 'shopify_widget_wishlist_remove',
+                'source_id' => (string) $data['product_id'],
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'meta' => [
+                    'store_key' => $storeContext['store_key'] ?? null,
+                    'tenant_id' => $storeContext['tenant_id'] ?? null,
+                    'error' => $exception->getMessage(),
+                ],
+                'resolution_status' => 'open',
+            ]);
+
+            return MarketingStorefrontContract::error(
+                code: 'missing_store_context',
+                message: $exception->getMessage(),
+                status: 422,
+                details: [
+                    'store_key' => $storeContext['store_key'],
+                ],
+                states: ['store_context_required'],
+                recoveryStates: ['reload_storefront']
+            );
+        }
+
+        /** @var \App\Models\MarketingProfileWishlistItem|null $item */
+        $item = $result['item'] ?? null;
+        $payload = $wishlistService->storefrontPayload($profile, [
+            ...$this->wishlistContext($data, $storeContext),
+            'identity_status' => $identityStatus,
+        ]);
+
+        $this->logStorefrontEvent($request, 'widget_wishlist_remove', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_wishlist_remove',
+            'source_id' => (string) ($item?->id ?: $data['product_id']),
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'meta' => [
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+                'wishlist_item_id' => $item?->id,
+                'wishlist_state' => (string) ($result['state'] ?? 'wishlist_removed'),
+                'removed' => (bool) ($result['removed'] ?? false),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile->id,
+            'state' => (string) ($result['state'] ?? 'wishlist_removed'),
+            'item' => $item ? $wishlistService->itemPayload($item) : null,
+            ...$payload,
+        ], $this->contractMeta($request), [(string) ($result['state'] ?? 'wishlist_removed')]);
     }
 
     public function submitProductReview(
@@ -1697,6 +2037,30 @@ class MarketingShopifyIntegrationController extends Controller
 
         $resolved = $this->resolveProfile($request, scope: 'product_review_submit', allowCreate: false, allowBody: true);
         $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $requestKey = trim((string) ($data['request_key'] ?? ''));
+
+        $this->logStorefrontEvent($request, 'widget_product_review_submit', [
+            'status' => 'pending',
+            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_product_review_submit',
+            'source_id' => (string) $data['product_id'],
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'meta' => [
+                'identity_status' => $identityStatus,
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+                'rating' => (int) $data['rating'],
+                'email_present' => filled($data['email'] ?? null),
+                'phone_present' => filled($data['phone'] ?? null),
+                'shopify_customer_id_present' => filled($data['shopify_customer_id'] ?? null),
+                'marketing_profile_id_hint' => (int) ($data['marketing_profile_id'] ?? 0) ?: null,
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
 
         try {
             $result = $productReviewService->submitReview($profile, $this->productReviewContext($data, $storeContext), [
@@ -1709,6 +2073,21 @@ class MarketingShopifyIntegrationController extends Controller
                 'source_surface' => 'shopify_product_page',
             ]);
         } catch (\InvalidArgumentException $exception) {
+            $this->logStorefrontEvent($request, 'widget_product_review_submit', [
+                'status' => 'error',
+                'issue_type' => 'missing_store_context',
+                'profile' => $profile,
+                'source_type' => 'shopify_widget_product_review_submit',
+                'source_id' => (string) $data['product_id'],
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'meta' => [
+                    'store_key' => $storeContext['store_key'] ?? null,
+                    'tenant_id' => $storeContext['tenant_id'] ?? null,
+                    'error' => $exception->getMessage(),
+                ],
+                'resolution_status' => 'open',
+            ]);
+
             return MarketingStorefrontContract::error(
                 code: 'missing_store_context',
                 message: $exception->getMessage(),
@@ -1722,20 +2101,59 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         if (! (bool) ($result['ok'] ?? false)) {
+            $errorCode = (string) ($result['error'] ?? 'product_review_submit_failed');
+
+            $this->logStorefrontEvent($request, 'widget_product_review_submit', [
+                'status' => 'error',
+                'issue_type' => $errorCode,
+                'profile' => $profile,
+                'source_type' => 'shopify_widget_product_review_submit',
+                'source_id' => (string) $data['product_id'],
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'meta' => [
+                    'store_key' => $storeContext['store_key'] ?? null,
+                    'tenant_id' => $storeContext['tenant_id'] ?? null,
+                    'product_id' => (string) $data['product_id'],
+                    'product_handle' => $data['product_handle'] ?? null,
+                ],
+                'resolution_status' => 'open',
+            ]);
+
             return MarketingStorefrontContract::error(
-                code: (string) ($result['error'] ?? 'product_review_submit_failed'),
+                code: $errorCode,
                 message: (string) ($result['message'] ?? 'That review could not be submitted right now.'),
                 status: 422,
                 details: [
                     'product_id' => (string) $data['product_id'],
                 ],
-                states: [(string) ($result['error'] ?? 'product_review_submit_failed')],
+                states: [$errorCode],
                 recoveryStates: ['try_again_later']
             );
         }
 
         /** @var \App\Models\MarketingReviewHistory|null $review */
         $review = $result['review'] ?? null;
+
+        $this->logStorefrontEvent($request, 'widget_product_review_submit', [
+            'status' => 'ok',
+            'profile' => $review?->profile ?: $profile,
+            'source_type' => 'shopify_widget_product_review_submit',
+            'source_id' => (string) ($review?->external_review_id ?: $data['product_id']),
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'meta' => [
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'product_id' => (string) $data['product_id'],
+                'product_handle' => $data['product_handle'] ?? null,
+                'review_id' => $review?->id,
+                'review_status' => $review?->status,
+                'award_state' => (string) data_get($result, 'award.state'),
+                'task_event_id' => data_get($result, 'award.event.id'),
+                'task_completion_id' => data_get($result, 'award.completion.id'),
+                'created' => (bool) ($result['created'] ?? false),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
 
         return MarketingStorefrontContract::success([
             'profile_id' => $review?->marketing_profile_id ?: $profile?->id,
@@ -1988,6 +2406,26 @@ class MarketingShopifyIntegrationController extends Controller
     {
         return [
             'product_id' => trim((string) ($data['product_id'] ?? '')),
+            'product_handle' => $this->nullableString($data['product_handle'] ?? null),
+            'product_title' => $this->nullableString($data['product_title'] ?? null),
+            'product_url' => $this->nullableString($data['product_url'] ?? null),
+            'store_key' => (string) ($storeContext['store_key'] ?? ''),
+            'tenant_id' => is_numeric($storeContext['tenant_id'] ?? null)
+                ? (int) $storeContext['tenant_id']
+                : null,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @return array{product_id:string,product_variant_id:?string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,tenant_id:?int}
+     */
+    protected function wishlistContext(array $data, array $storeContext): array
+    {
+        return [
+            'product_id' => trim((string) ($data['product_id'] ?? '')),
+            'product_variant_id' => $this->nullableString($data['product_variant_id'] ?? null),
             'product_handle' => $this->nullableString($data['product_handle'] ?? null),
             'product_title' => $this->nullableString($data['product_title'] ?? null),
             'product_url' => $this->nullableString($data['product_url'] ?? null),

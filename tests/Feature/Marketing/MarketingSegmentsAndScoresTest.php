@@ -3,6 +3,7 @@
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileScore;
 use App\Models\MarketingSegment;
+use App\Models\MarketingProfileWishlistItem;
 use App\Models\User;
 use App\Services\Marketing\MarketingProfileScoreService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
@@ -58,6 +59,47 @@ test('segment evaluator handles or rules', function () {
     $result = app(MarketingSegmentEvaluator::class)->evaluateProfile($segment, $profile);
 
     expect($result['matched'])->toBeTrue();
+});
+
+test('segment evaluator can target wishlist signals', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Wishlisted',
+        'email' => 'wishlisted@example.com',
+        'normalized_email' => 'wishlisted@example.com',
+    ]);
+
+    MarketingProfileWishlistItem::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'product_id' => 'wish-700',
+        'product_handle' => 'cedar-glow',
+        'product_title' => 'Cedar Glow',
+        'status' => MarketingProfileWishlistItem::STATUS_ACTIVE,
+        'source' => 'native_storefront',
+        'added_at' => now()->subDay(),
+        'last_added_at' => now()->subDay(),
+    ]);
+
+    $segment = MarketingSegment::query()->create([
+        'name' => 'Wishlist segment',
+        'status' => 'active',
+        'rules_json' => [
+            'logic' => 'and',
+            'conditions' => [
+                ['field' => 'wishlist_active_count', 'operator' => 'gte', 'value' => 1],
+                ['field' => 'wishlist_product_handle', 'operator' => 'contains', 'value' => 'cedar-glow'],
+            ],
+            'groups' => [],
+        ],
+    ]);
+
+    $result = app(MarketingSegmentEvaluator::class)->evaluateProfile($segment, $profile);
+
+    expect($result['matched'])->toBeTrue()
+        ->and($result['metrics']['wishlist_active_count'] ?? 0)->toBe(1)
+        ->and($result['metrics']['wishlist_product_handles'] ?? [])->toContain('cedar-glow');
 });
 
 test('system segments are seeded and segment preview returns matches', function () {

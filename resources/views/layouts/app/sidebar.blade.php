@@ -1351,136 +1351,133 @@
   $analyticsActive = request()->routeIs('analytics.*') || request()->is('analytics*');
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
   $birthdaysActive = request()->routeIs('birthdays.*') || request()->is('birthdays*');
-  $dashboardActive = request()->routeIs('dashboard') || request()->is('dashboard');
   $wikiActive = request()->routeIs('wiki.index') || request()->is('wiki');
   $inventoryActive = request()->routeIs('inventory.index');
   $eventsActive = request()->routeIs('events.*');
   $marketListsActive = request()->routeIs('markets.lists.*');
   $marketsActive = request()->routeIs('markets.browser.*');
   $adminTab = is_string(request()->query('tab')) ? (string) request()->query('tab') : '';
-  $defaultAdminTab = $isAdmin ? 'users' : 'imports';
-  $activeAdminTab = $adminTab !== '' ? $adminTab : $defaultAdminTab;
 
-  $operationsSubItems = [];
+  $sidebarItems = [];
   if ($canAccessOps) {
-      $operationsSubItems[] = ['key' => 'retail-plan', 'label' => 'Pour Lists', 'href' => $hrefRetailPlan, 'current' => $retailPlanActive];
+      $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => $hrefRetailPlan, 'label' => 'All Pour Lists', 'current' => $retailPlanActive];
   }
   if ($canAccessOps) {
-      $operationsSubItems[] = ['key' => 'events', 'label' => 'Events', 'href' => route('events.index'), 'current' => $eventsActive];
+      $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
   }
   if ($canAccessOps) {
-      $operationsSubItems[] = ['key' => 'shipping-room', 'label' => 'Shipping', 'href' => $hrefShipping, 'current' => $shippingActive];
+      $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
   }
   if ($canAccessOps || $isPouring) {
-      $operationsSubItems[] = ['key' => 'pouring-room', 'label' => 'Pouring', 'href' => $hrefPouring, 'current' => $pouringActive];
+      $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
   }
   if ($canAccessOps) {
-      $operationsSubItems[] = ['key' => 'markets', 'label' => 'Markets', 'href' => route('markets.browser.index'), 'current' => $marketsActive || $marketListsActive];
+      $sidebarItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => $hrefAnalytics, 'label' => 'Analytics', 'current' => $analyticsActive];
+  }
+  if ($canAccessMarketing) {
+      $sidebarItems[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Marketing', 'current' => $marketingActive];
+  }
+  if ($canAccessMarketing) {
+      $sidebarItems[] = ['key' => 'birthdays', 'icon' => 'gift', 'href' => route('birthdays.customers'), 'label' => 'Birthdays', 'current' => $birthdaysActive];
   }
   if ($canAccessOps) {
-      $operationsSubItems[] = ['key' => 'inventory', 'label' => 'Inventory', 'href' => route('inventory.index'), 'current' => $inventoryActive];
+      $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
   }
   if ($canAccessOps) {
-      $operationsSubItems[] = ['key' => 'analytics', 'label' => 'Reports', 'href' => $hrefAnalytics, 'current' => $analyticsActive];
+      $sidebarItems[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
   }
-  $operationsActive = collect($operationsSubItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
+  $sidebarItems[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Backstage Wiki', 'current' => $wikiActive];
+  if ($canAccessOps) {
+      $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
+  }
 
-  $adminSubGroups = [];
+  $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
+  $sidebarItemsByKey = collect($sidebarItems)->keyBy('key');
+  $orderedSidebarKeys = [];
+  foreach ($preferredSidebarOrder as $key) {
+      if (is_string($key) && $sidebarItemsByKey->has($key) && !in_array($key, $orderedSidebarKeys, true)) {
+          $orderedSidebarKeys[] = $key;
+      }
+  }
+  foreach ($sidebarItems as $item) {
+      if (!in_array($item['key'], $orderedSidebarKeys, true)) {
+          $orderedSidebarKeys[] = $item['key'];
+      }
+  }
+  $orderedSidebarItems = collect($orderedSidebarKeys)
+      ->map(fn ($key) => $sidebarItemsByKey->get($key))
+      ->filter()
+      ->values();
+  $adminSubItems = [];
   if ($canAccessOps) {
-      $adminSubGroups = [
+      $adminSubItems = [
           [
-              'key' => 'team-and-imports',
-              'label' => 'Team & Imports',
-              'items' => [
-                  ...($isAdmin ? [[
-                      'key' => 'users',
-                      'label' => 'Team',
-                      'href' => route('admin.index', ['tab' => 'users']),
-                      'current' => $adminActive && $activeAdminTab === 'users',
-                  ]] : []),
-                  [
-                      'key' => 'imports',
-                      'label' => 'Import Runs',
-                      'href' => route('admin.index', ['tab' => 'imports']),
-                      'current' => $adminActive && $activeAdminTab === 'imports',
-                  ],
-                  [
-                      'key' => 'scent-intake',
-                      'label' => 'Import Fixes',
-                      'href' => route('admin.index', ['tab' => 'scent-intake']),
-                      'current' => $adminActive && $activeAdminTab === 'scent-intake',
-                  ],
-              ],
+              'key' => 'master-data',
+              'label' => 'Master Data',
+              'href' => route('admin.index', ['tab' => 'master-data', 'resource' => (string) request()->query('resource', 'scents') ?: 'scents']),
+              'current' => $adminActive && $adminTab === 'master-data',
+          ],
+          ...($isAdmin ? [[
+              'key' => 'users',
+              'label' => 'Manage Users',
+              'href' => route('admin.index', ['tab' => 'users']),
+              'current' => $adminActive && $adminTab === 'users',
+          ]] : []),
+          [
+              'key' => 'imports',
+              'label' => 'Fix Imports',
+              'href' => route('admin.index', ['tab' => 'imports']),
+              'current' => $adminActive && $adminTab === 'imports',
           ],
           [
-              'key' => 'catalog-setup',
-              'label' => 'Catalog Setup',
-              'items' => [
-                  [
-                      'key' => 'catalog',
-                      'label' => 'Scents',
-                      'href' => route('admin.index', ['tab' => 'catalog']),
-                      'current' => $adminActive && $activeAdminTab === 'catalog',
-                  ],
-                  [
-                      'key' => 'sizes-wicks',
-                      'label' => 'Sizes & Wicks',
-                      'href' => route('admin.index', ['tab' => 'sizes-wicks']),
-                      'current' => $adminActive && $activeAdminTab === 'sizes-wicks',
-                  ],
-                  [
-                      'key' => 'wholesale-custom',
-                      'label' => 'Wholesale Scents',
-                      'href' => route('admin.index', ['tab' => 'wholesale-custom']),
-                      'current' => $adminActive && $activeAdminTab === 'wholesale-custom',
-                  ],
-                  [
-                      'key' => 'blends',
-                      'label' => 'Oil Blends',
-                      'href' => route('admin.index', ['tab' => 'blends']),
-                      'current' => $adminActive && $activeAdminTab === 'blends',
-                  ],
-                  [
-                      'key' => 'candle-club',
-                      'label' => 'Candle Club',
-                      'href' => route('admin.index', ['tab' => 'candle-club']),
-                      'current' => $adminActive && $activeAdminTab === 'candle-club',
-                  ],
-                  [
-                      'key' => 'oils',
-                      'label' => 'Oil Abbreviations',
-                      'href' => route('admin.index', ['tab' => 'oils']),
-                      'current' => $adminActive && $activeAdminTab === 'oils',
-                  ],
-              ],
+              'key' => 'scent-intake',
+              'label' => 'Scent Intake',
+              'href' => route('admin.index', ['tab' => 'scent-intake']),
+              'current' => $adminActive && $adminTab === 'scent-intake',
           ],
           [
-              'key' => 'data-tools',
-              'label' => 'Data Tools',
-              'items' => [
-                  [
-                      'key' => 'master-data',
-                      'label' => 'Master Data',
-                      'href' => route('admin.index', ['tab' => 'master-data', 'resource' => (string) request()->query('resource', 'scents') ?: 'scents']),
-                      'current' => $adminActive && $activeAdminTab === 'master-data',
-                  ],
-              ],
+              'key' => 'catalog',
+              'label' => 'Scent Catalog',
+              'href' => route('admin.index', ['tab' => 'catalog']),
+              'current' => $adminActive && $adminTab === 'catalog',
+          ],
+          [
+              'key' => 'sizes-wicks',
+              'label' => 'Sizes & Wicks',
+              'href' => route('admin.index', ['tab' => 'sizes-wicks']),
+              'current' => $adminActive && $adminTab === 'sizes-wicks',
+          ],
+          [
+              'key' => 'wholesale-custom',
+              'label' => 'Wholesale Custom Scents',
+              'href' => route('admin.index', ['tab' => 'wholesale-custom']),
+              'current' => $adminActive && $adminTab === 'wholesale-custom',
+          ],
+          [
+              'key' => 'blends',
+              'label' => 'Oil Blends',
+              'href' => route('admin.index', ['tab' => 'blends']),
+              'current' => $adminActive && $adminTab === 'blends',
+          ],
+          [
+              'key' => 'candle-club',
+              'label' => 'Candle Club',
+              'href' => route('admin.index', ['tab' => 'candle-club']),
+              'current' => $adminActive && $adminTab === 'candle-club',
+          ],
+          [
+              'key' => 'oils',
+              'label' => 'Scent Oil Abbreviations',
+              'href' => route('admin.index', ['tab' => 'oils']),
+              'current' => $adminActive && $adminTab === 'oils',
           ],
       ];
-
-      $adminSubGroups = collect($adminSubGroups)
-          ->map(function (array $group): array {
-              $group['current'] = collect($group['items'])->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
-
-              return $group;
-          })
-          ->values()
-          ->all();
   }
 
   $marketingSubItems = [];
   $marketingSubGroups = [];
-  $marketingSidebarGroups = [];
+  $birthdaySubItems = [];
+  $birthdaySubGroups = [];
   if ($canAccessMarketing) {
       $marketingSubItems = collect(\App\Support\Marketing\MarketingSectionRegistry::sections())
           ->map(function (array $section, string $key): array {
@@ -1509,102 +1506,23 @@
           ->all();
 
       $birthdaySubGroups = \App\Support\Birthdays\BirthdaySectionRegistry::groupNavigationItems($birthdaySubItems);
-
-      $marketingSidebarGroups = collect($marketingSubGroups)
-          ->map(function (array $group): array {
-              $group['label'] = 'Marketing: ' . $group['label'];
-
-              return $group;
-          })
-          ->concat(
-              collect($birthdaySubGroups)->map(function (array $group): array {
-                  $group['label'] = 'Birthdays: ' . $group['label'];
-
-                  return $group;
-              })
-          )
-          ->values()
-          ->all();
   }
 
-  $helpCenterItems = [
-      [
-          'key' => 'wiki-home',
-          'label' => 'Wiki Home',
-          'href' => route('wiki.index'),
-          'current' => request()->routeIs('wiki.index')
-              || request()->routeIs('wiki.categories')
-              || request()->routeIs('wiki.category')
-              || (
-                  request()->routeIs('wiki.article')
-                  && request()->route('slug') !== 'market-room'
-                  && !str_starts_with((string) request()->route('slug', ''), 'wholesale')
-              ),
-      ],
+  $wikiSectionItems = [
       [
           'key' => 'wholesale-processes',
-          'label' => 'Wholesale Guide',
+          'label' => 'Wholesale Processes',
           'href' => route('wiki.wholesale-processes'),
           'current' => request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*'),
       ],
       [
           'key' => 'market-room-process',
-          'label' => 'Market Room Guide',
+          'label' => 'Market Room Process',
           'href' => route('wiki.article', ['slug' => 'market-room']),
           'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'market-room',
       ],
   ];
-  $helpCenterActive = collect($helpCenterItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
-
-  $sidebarItems = [];
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'dashboard', 'icon' => 'chart-bar', 'href' => $hrefDashboard, 'label' => 'Dashboard', 'current' => $dashboardActive];
-  }
-  if (count($operationsSubItems) > 0) {
-      $sidebarItems[] = ['key' => 'operations', 'icon' => 'clipboard-document', 'href' => $operationsSubItems[0]['href'], 'label' => 'Operations', 'current' => $operationsActive];
-  }
-  if ($canAccessMarketing) {
-      $sidebarItems[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Customers & Marketing', 'current' => $marketingActive || $birthdaysActive];
-  }
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => $hrefAdmin, 'label' => 'Settings', 'current' => $adminActive];
-  }
-  $sidebarItems[] = ['key' => 'help-docs', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Help & Docs', 'current' => $helpCenterActive];
-
-  $legacySidebarKeyMap = [
-      'retail-plan' => 'operations',
-      'events' => 'operations',
-      'shipping-room' => 'operations',
-      'pouring-room' => 'operations',
-      'analytics' => 'operations',
-      'markets' => 'operations',
-      'inventory' => 'operations',
-      'birthdays' => 'marketing',
-      'backstage-wiki' => 'help-docs',
-  ];
-
-  $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
-  $sidebarItemsByKey = collect($sidebarItems)->keyBy('key');
-  $orderedSidebarKeys = [];
-  foreach ($preferredSidebarOrder as $key) {
-      if (! is_string($key)) {
-          continue;
-      }
-
-      $normalizedKey = $legacySidebarKeyMap[$key] ?? $key;
-      if ($sidebarItemsByKey->has($normalizedKey) && ! in_array($normalizedKey, $orderedSidebarKeys, true)) {
-          $orderedSidebarKeys[] = $normalizedKey;
-      }
-  }
-  foreach ($sidebarItems as $item) {
-      if (! in_array($item['key'], $orderedSidebarKeys, true)) {
-          $orderedSidebarKeys[] = $item['key'];
-      }
-  }
-  $orderedSidebarItems = collect($orderedSidebarKeys)
-      ->map(fn ($key) => $sidebarItemsByKey->get($key))
-      ->filter()
-      ->values();
+  $wikiSectionsActive = collect($wikiSectionItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
 
   $unresolvedExceptions = 0;
   $latestRun = null;
@@ -1684,17 +1602,17 @@
                 data-sidebar-item
                 data-sidebar-key="{{ $item['key'] }}"
               >
-                @if($item['key'] === 'operations' && count($operationsSubItems) > 0)
-                  <details class="mf-admin-group" {{ $operationsActive ? 'open' : '' }}>
+                @if($item['key'] === 'administration' && count($adminSubItems) > 0)
+                  <details class="mf-admin-group" {{ $adminActive ? 'open' : '' }}>
                     <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
-                        <flux:icon.clipboard-document class="size-4" />
-                        <span class="mf-nav-label">{{ $item['label'] }}</span>
+                        <flux:icon.wrench-screwdriver class="size-4" />
+                        <span class="mf-nav-label">Administration</span>
                       </span>
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                     </summary>
                     <div class="mf-admin-subnav">
-                      @foreach($operationsSubItems as $subItem)
+                      @foreach($adminSubItems as $subItem)
                         <a
                           href="{{ $subItem['href'] }}"
                           wire:navigate
@@ -1705,17 +1623,17 @@
                       @endforeach
                     </div>
                   </details>
-                @elseif($item['key'] === 'marketing' && count($marketingSidebarGroups) > 0)
-                  <details class="mf-admin-group" {{ ($marketingActive || $birthdaysActive) ? 'open' : '' }}>
+                @elseif($item['key'] === 'marketing' && count($marketingSubGroups) > 0)
+                  <details class="mf-admin-group" {{ $marketingActive ? 'open' : '' }}>
                     <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
                         <flux:icon.megaphone class="size-4" />
-                        <span class="mf-nav-label">{{ $item['label'] }}</span>
+                        <span class="mf-nav-label">Marketing</span>
                       </span>
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                     </summary>
                     <div class="mf-admin-subnav">
-                      @foreach($marketingSidebarGroups as $marketingGroup)
+                      @foreach($marketingSubGroups as $marketingGroup)
                         <details class="mf-admin-group mf-admin-group-nested" {{ ($marketingGroup['current'] ?? false) ? 'open' : '' }}>
                           <summary class="mf-admin-group-summary mf-admin-group-summary-compact">
                             <span class="mf-admin-group-main">
@@ -1738,26 +1656,26 @@
                       @endforeach
                     </div>
                   </details>
-                @elseif($item['key'] === 'administration' && count($adminSubGroups) > 0)
-                  <details class="mf-admin-group" {{ $adminActive ? 'open' : '' }}>
+                @elseif($item['key'] === 'birthdays' && count($birthdaySubGroups) > 0)
+                  <details class="mf-admin-group" {{ $birthdaysActive ? 'open' : '' }}>
                     <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
-                        <flux:icon.wrench-screwdriver class="size-4" />
-                        <span class="mf-nav-label">{{ $item['label'] }}</span>
+                        <flux:icon.gift class="size-4" />
+                        <span class="mf-nav-label">Birthdays</span>
                       </span>
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                     </summary>
                     <div class="mf-admin-subnav">
-                      @foreach($adminSubGroups as $adminGroup)
-                        <details class="mf-admin-group mf-admin-group-nested" {{ ($adminGroup['current'] ?? false) ? 'open' : '' }}>
+                      @foreach($birthdaySubGroups as $birthdayGroup)
+                        <details class="mf-admin-group mf-admin-group-nested" {{ ($birthdayGroup['current'] ?? false) ? 'open' : '' }}>
                           <summary class="mf-admin-group-summary mf-admin-group-summary-compact">
                             <span class="mf-admin-group-main">
-                              <span class="mf-nav-label">{{ $adminGroup['label'] }}</span>
+                              <span class="mf-nav-label">{{ $birthdayGroup['label'] }}</span>
                             </span>
                             <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                           </summary>
                           <div class="mf-admin-subnav mf-admin-subnav-deep">
-                            @foreach($adminGroup['items'] as $subItem)
+                            @foreach($birthdayGroup['items'] as $subItem)
                               <a
                                 href="{{ $subItem['href'] }}"
                                 wire:navigate
@@ -1771,27 +1689,6 @@
                       @endforeach
                     </div>
                   </details>
-                @elseif($item['key'] === 'help-docs' && count($helpCenterItems) > 0)
-                  <details class="mf-admin-group" {{ $helpCenterActive ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
-                      <span class="mf-admin-group-main">
-                        <flux:icon.book-open class="size-4" />
-                        <span class="mf-nav-label">{{ $item['label'] }}</span>
-                      </span>
-                      <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
-                    </summary>
-                    <div class="mf-admin-subnav">
-                      @foreach($helpCenterItems as $helpItem)
-                        <a
-                          href="{{ $helpItem['href'] }}"
-                          wire:navigate
-                          class="mf-admin-subnav-link {{ $helpItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                        >
-                          <span>{{ $helpItem['label'] }}</span>
-                        </a>
-                      @endforeach
-                    </div>
-                  </details>
                 @else
                   <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item {{ $item['current'] ? 'mf-active-pill' : '' }}">
                     <span class="mf-nav-label">{{ $item['label'] }}</span>
@@ -1799,6 +1696,28 @@
                 @endif
               </div>
             @endforeach
+            <div class="mf-sidebar-sort-item">
+              <details class="mf-admin-group" {{ $wikiSectionsActive ? 'open' : '' }}>
+                <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'mf-active-pill' : '' }}">
+                  <span class="mf-admin-group-main">
+                    <flux:icon.book-open class="size-4" />
+                    <span class="mf-nav-label">Wiki Sections</span>
+                  </span>
+                  <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
+                </summary>
+                <div class="mf-admin-subnav">
+                  @foreach($wikiSectionItems as $wikiSection)
+                    <a
+                      href="{{ $wikiSection['href'] }}"
+                      wire:navigate
+                      class="mf-admin-subnav-link {{ $wikiSection['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                    >
+                      <span>{{ $wikiSection['label'] }}</span>
+                    </a>
+                  @endforeach
+                </div>
+              </details>
+            </div>
           </div>
         </flux:sidebar.group>
 

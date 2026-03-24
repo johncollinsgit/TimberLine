@@ -141,7 +141,7 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId): MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign): MarketingEmailDelivery {
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -151,16 +151,40 @@ class MarketingEmailExecutionService
             return MarketingEmailDelivery::query()->create([
                 'marketing_campaign_recipient_id' => $recipient->id,
                 'marketing_profile_id' => $profile->id,
+                'tenant_id' => $profile->tenant_id,
+                'provider' => 'sendgrid',
+                'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
+                'template_key' => $recipient->variant?->variant_key,
                 'email' => $email,
                 'status' => 'sending',
                 'raw_payload' => [
                     'actor_id' => $actorId,
+                ],
+                'metadata' => [
+                    'tenant_id' => $profile->tenant_id,
+                    'customer_id' => $profile->id,
+                    'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
+                    'template_key' => $recipient->variant?->variant_key,
+                    'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
                 ],
             ]);
         });
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
             'dry_run' => $dryRun,
+            'tenant_id' => $profile->tenant_id,
+            'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
+            'template_key' => $recipient->variant?->variant_key,
+            'customer_id' => $profile->id,
+            'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
+            'metadata' => [
+                'campaign_id' => $campaign->id,
+                'campaign_recipient_id' => $recipient->id,
+            ],
+            'categories' => [
+                'marketing-campaign',
+                'campaign-' . $campaign->id,
+            ],
             'custom_args' => [
                 'marketing_email_delivery_id' => (string) $delivery->id,
                 'marketing_campaign_recipient_id' => (string) $recipient->id,
@@ -168,12 +192,18 @@ class MarketingEmailExecutionService
         ]);
 
         $success = (bool) ($send['success'] ?? false);
+        $provider = trim((string) ($send['provider'] ?? 'sendgrid')) ?: 'sendgrid';
         $delivery->forceFill([
-            'sendgrid_message_id' => $send['message_id'] ?? null,
+            'provider' => $provider,
+            'provider_message_id' => $send['message_id'] ?? null,
+            'sendgrid_message_id' => $provider === 'sendgrid' ? ($send['message_id'] ?? null) : null,
             'status' => $success ? 'sent' : 'failed',
             'sent_at' => $success ? now() : null,
             'failed_at' => $success ? null : now(),
-            'raw_payload' => is_array($send['payload'] ?? null) ? $send['payload'] : ['raw' => $send],
+            'raw_payload' => [
+                'provider' => $provider,
+                'payload' => is_array($send['payload'] ?? null) ? $send['payload'] : ['raw' => $send],
+            ],
         ])->save();
 
         $recipient->forceFill([

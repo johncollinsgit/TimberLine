@@ -22,11 +22,11 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn', 'Ways to Earn'],
     'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem', 'Ways to Redeem'],
     'rewards referrals' => ['shopify.embedded.rewards.referrals', 'rewards', 'referrals', 'Referrals coming soon'],
-    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays', 'Birthday rewards coming soon'],
+    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays', 'Birthday Email Analytics'],
     'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip', 'VIP experiences coming soon'],
     'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications', 'Notifications coming soon'],
     'customers' => ['shopify.app.customers', 'customers', null, 'Manage customers'],
-'settings' => ['shopify.app.settings', 'settings', null, 'Candle Cash program controls and messaging settings are managed in Backstage. This page will expose them soon.'],
+    'settings' => ['shopify.app.settings', 'settings', null, 'Configure email provider selection per tenant/store.'],
 ]);
 
 test('customers routes and aliases keep customers section active with correct subnav tab', function (string $routeName, string $activeTab, string $visibleText) {

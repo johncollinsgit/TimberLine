@@ -10,6 +10,7 @@ use App\Models\MarketingReviewHistory;
 use App\Models\Order;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class ProductReviewService
 {
@@ -149,6 +150,20 @@ class ProductReviewService
             ? (int) $product['tenant_id']
             : null;
 
+        Log::info('native product review submission received', [
+            'marketing_profile_id' => $viewer?->id,
+            'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'product_id' => (string) $product['product_id'],
+            'product_handle' => $product['product_handle'] ?? null,
+            'rating' => $rating,
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'source_surface' => $sourceSurface,
+            'allow_guest' => $allowGuest,
+            'has_reviewer_email' => $reviewerEmail !== null,
+            'reviewer_email_hash' => $normalizedEmail ? sha1($normalizedEmail) : null,
+        ]);
+
         $profile = $viewer;
         if (! $profile && $reviewerEmail) {
             $resolution = $this->identityService->resolve([
@@ -170,6 +185,17 @@ class ProductReviewService
             ]);
 
             if ($resolution['status'] === 'review_required') {
+                Log::warning('native product review identity unresolved', [
+                    'tenant_id' => $tenantId,
+                    'store_key' => $storeKey,
+                    'product_id' => (string) $product['product_id'],
+                    'product_handle' => $product['product_handle'] ?? null,
+                    'request_key' => $requestKey !== '' ? $requestKey : null,
+                    'source_surface' => $sourceSurface,
+                    'identity_status' => (string) ($resolution['status'] ?? 'review_required'),
+                    'reviewer_email_hash' => $normalizedEmail ? sha1($normalizedEmail) : null,
+                ]);
+
                 return [
                     'ok' => false,
                     'error' => 'identity_review_required',
@@ -178,6 +204,18 @@ class ProductReviewService
             }
 
             $profile = $resolution['profile'];
+
+            Log::info('native product review identity resolved', [
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'product_id' => (string) $product['product_id'],
+                'product_handle' => $product['product_handle'] ?? null,
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'source_surface' => $sourceSurface,
+                'identity_status' => (string) ($resolution['status'] ?? 'resolved'),
+                'marketing_profile_id' => $profile?->id,
+                'reviewer_email_hash' => $normalizedEmail ? sha1($normalizedEmail) : null,
+            ]);
         }
 
         $externalReviewId = $this->externalReviewId($product, $profile, $normalizedEmail);
@@ -206,6 +244,17 @@ class ProductReviewService
                 'resolution_status' => 'resolved',
             ]);
 
+            Log::info('native product review duplicate blocked', [
+                'marketing_profile_id' => $profile?->id,
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'product_id' => (string) $product['product_id'],
+                'product_handle' => $product['product_handle'] ?? null,
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'external_review_id' => $externalReviewId,
+                'existing_review_id' => $existing->id,
+            ]);
+
             return [
                 'ok' => false,
                 'error' => 'duplicate_review',
@@ -217,54 +266,86 @@ class ProductReviewService
         $moderationEnabled = $this->moderationEnabled();
         $status = $moderationEnabled ? 'pending' : 'approved';
         $now = now();
-
-        [$review, $created] = $this->persistReview($reviewLookup, [
-            'marketing_profile_id' => $profile?->id,
-            'marketing_review_summary_id' => null,
-            'external_customer_id' => $this->externalCustomerId($profile, $normalizedEmail),
-            'rating' => $rating,
-            'title' => $title,
-            'body' => $body,
-            'reviewer_name' => $reviewerName,
-            'reviewer_email' => $reviewerEmail,
-            'is_published' => ! $moderationEnabled,
-            'status' => $status,
-            'submission_source' => 'native_storefront',
-            'is_verified_buyer' => $profile ? $this->hasOrderLink($profile) : false,
-            'product_id' => (string) $product['product_id'],
-            'product_handle' => $this->nullableString($product['product_handle'] ?? null),
-            'product_url' => $this->canonicalProductUrl($product),
-            'product_title' => $this->nullableString($product['product_title'] ?? null),
-            'submitted_at' => $existing?->submitted_at ?: $now,
-            'reviewed_at' => ! $moderationEnabled ? $now : null,
-            'approved_at' => ! $moderationEnabled ? $now : null,
-            'rejected_at' => null,
-            'moderated_by' => null,
-            'moderation_notes' => null,
-            'source_synced_at' => $now,
-            'raw_payload' => [
-                'request_key' => $requestKey !== '' ? $requestKey : null,
-                'source_surface' => $sourceSurface,
-                'submitted_via' => 'storefront',
-            ],
-        ]);
-
-        $award = null;
-        if ($profile) {
-            $award = $this->verificationService->awardProductReview($profile, (string) $review->external_review_id, [
+        try {
+            [$review, $created] = $this->persistReview($reviewLookup, [
+                'marketing_profile_id' => $profile?->id,
+                'marketing_review_summary_id' => null,
+                'external_customer_id' => $this->externalCustomerId($profile, $normalizedEmail),
+                'rating' => $rating,
+                'title' => $title,
+                'body' => $body,
+                'reviewer_name' => $reviewerName,
+                'reviewer_email' => $reviewerEmail,
+                'is_published' => ! $moderationEnabled,
+                'status' => $status,
+                'submission_source' => 'native_storefront',
+                'is_verified_buyer' => $profile ? $this->hasOrderLink($profile) : false,
                 'product_id' => (string) $product['product_id'],
-                'product_handle' => $product['product_handle'] ?? null,
-                'product_title' => $product['product_title'] ?? null,
-                'review_source' => 'backstage_native',
+                'product_handle' => $this->nullableString($product['product_handle'] ?? null),
+                'product_url' => $this->canonicalProductUrl($product),
+                'product_title' => $this->nullableString($product['product_title'] ?? null),
+                'submitted_at' => $existing?->submitted_at ?: $now,
+                'reviewed_at' => ! $moderationEnabled ? $now : null,
+                'approved_at' => ! $moderationEnabled ? $now : null,
+                'rejected_at' => null,
+                'moderated_by' => null,
+                'moderation_notes' => null,
+                'source_synced_at' => $now,
+                'raw_payload' => [
+                    'request_key' => $requestKey !== '' ? $requestKey : null,
+                    'source_surface' => $sourceSurface,
+                    'submitted_via' => 'storefront',
+                ],
             ]);
 
-            $completion = $award['completion'] ?? null;
-            $event = $award['event'] ?? null;
-            $review->forceFill([
-                'candle_cash_task_event_id' => $event?->id ?: $review->candle_cash_task_event_id,
-                'candle_cash_task_completion_id' => $completion?->id ?: $review->candle_cash_task_completion_id,
-            ])->save();
+            $award = null;
+            if ($profile) {
+                $award = $this->verificationService->awardProductReview($profile, (string) $review->external_review_id, [
+                    'product_id' => (string) $product['product_id'],
+                    'product_handle' => $product['product_handle'] ?? null,
+                    'product_title' => $product['product_title'] ?? null,
+                    'review_source' => 'backstage_native',
+                ]);
+
+                $completion = $award['completion'] ?? null;
+                $event = $award['event'] ?? null;
+                $review->forceFill([
+                    'candle_cash_task_event_id' => $event?->id ?: $review->candle_cash_task_event_id,
+                    'candle_cash_task_completion_id' => $completion?->id ?: $review->candle_cash_task_completion_id,
+                ])->save();
+            }
+        } catch (\Throwable $exception) {
+            Log::error('native product review submit failed', [
+                'marketing_profile_id' => $profile?->id,
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'product_id' => (string) $product['product_id'],
+                'product_handle' => $product['product_handle'] ?? null,
+                'request_key' => $requestKey !== '' ? $requestKey : null,
+                'source_surface' => $sourceSurface,
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
         }
+
+        Log::info('native product review persisted', [
+            'marketing_profile_id' => $profile?->id,
+            'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'product_id' => (string) $product['product_id'],
+            'product_handle' => $product['product_handle'] ?? null,
+            'request_key' => $requestKey !== '' ? $requestKey : null,
+            'source_surface' => $sourceSurface,
+            'review_id' => $review->id,
+            'external_review_id' => (string) $review->external_review_id,
+            'review_status' => (string) $review->status,
+            'created' => $created,
+            'award_state' => (string) ($award['state'] ?? 'not_attempted'),
+            'task_event_id' => data_get($award, 'event.id'),
+            'task_completion_id' => data_get($award, 'completion.id'),
+            'transaction_id' => data_get($award, 'completion.candle_cash_transaction_id'),
+        ]);
 
         $this->eventLogger->log('product_review_submitted', [
             'status' => 'ok',

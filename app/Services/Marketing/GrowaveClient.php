@@ -129,6 +129,87 @@ class GrowaveClient
     }
 
     /**
+     * @return array{totalCount:int,currentOffset:int,perPage:int,items:array<int,array<string,mixed>>,notFound:bool}
+     */
+    public function getWishlists(string $customerIdentifier, int $perPage = 50, int $offset = 0): array
+    {
+        $response = $this->sendWithRetries(
+            fn (): Response => $this->baseRequest()->withToken($this->accessToken())->get($this->url('/v2/wishlists/getWishlists'), [
+                'customerIdentifier' => $customerIdentifier,
+                'perPage' => min(max($perPage, 1), 50),
+                'offset' => max($offset, 0),
+            ]),
+            refreshTokenOnUnauthorized: true
+        );
+
+        if ($response->status() === 404) {
+            return [
+                'totalCount' => 0,
+                'currentOffset' => max($offset, 0),
+                'perPage' => max(1, min($perPage, 50)),
+                'items' => [],
+                'notFound' => true,
+            ];
+        }
+
+        $response->throw();
+
+        $payload = $this->arrayPayload($response);
+        $items = is_array($payload['items'] ?? null)
+            ? $payload['items']
+            : (is_array($payload['wishlists'] ?? null) ? $payload['wishlists'] : []);
+
+        return [
+            'totalCount' => max(0, (int) ($payload['totalCount'] ?? count($items))),
+            'currentOffset' => max(0, (int) ($payload['currentOffset'] ?? $offset)),
+            'perPage' => max(1, (int) ($payload['perPage'] ?? $perPage)),
+            'items' => $items,
+            'notFound' => false,
+        ];
+    }
+
+    /**
+     * @return array{totalCount:int,currentOffset:int,perPage:int,items:array<int,array<string,mixed>>,notFound:bool}
+     */
+    public function getWishlistItems(string $wishlistIdentifier, int $perPage = 50, int $offset = 0): array
+    {
+        $response = $this->sendWithRetries(
+            fn (): Response => $this->baseRequest()->withToken($this->accessToken())->get($this->url('/v2/wishlists/getWishlistItems'), [
+                'wishlistId' => $wishlistIdentifier,
+                'wishlistIdentifier' => $wishlistIdentifier,
+                'perPage' => min(max($perPage, 1), 50),
+                'offset' => max($offset, 0),
+            ]),
+            refreshTokenOnUnauthorized: true
+        );
+
+        if ($response->status() === 404) {
+            return [
+                'totalCount' => 0,
+                'currentOffset' => max($offset, 0),
+                'perPage' => max(1, min($perPage, 50)),
+                'items' => [],
+                'notFound' => true,
+            ];
+        }
+
+        $response->throw();
+
+        $payload = $this->arrayPayload($response);
+        $items = is_array($payload['items'] ?? null)
+            ? $payload['items']
+            : (is_array($payload['wishlistItems'] ?? null) ? $payload['wishlistItems'] : []);
+
+        return [
+            'totalCount' => max(0, (int) ($payload['totalCount'] ?? count($items))),
+            'currentOffset' => max(0, (int) ($payload['currentOffset'] ?? $offset)),
+            'perPage' => max(1, (int) ($payload['perPage'] ?? $perPage)),
+            'items' => $items,
+            'notFound' => false,
+        ];
+    }
+
+    /**
      * @return array{totalCount:int,currentPage:int,perPage:int,activities:array<int,array<string,mixed>>}
      */
     public function getActivityHistory(string $customerIdentifier, int $perPage = 50, int $page = 1): array

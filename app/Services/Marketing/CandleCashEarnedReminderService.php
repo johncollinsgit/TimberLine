@@ -83,6 +83,10 @@ class CandleCashEarnedReminderService
             $delivery = MarketingEmailDelivery::query()->create([
                 'marketing_campaign_recipient_id' => null,
                 'marketing_profile_id' => $profileId,
+                'tenant_id' => $tenantId,
+                'provider' => 'sendgrid',
+                'campaign_type' => 'candle_cash_reminder',
+                'template_key' => 'candle_cash_unredeemed_earned',
                 'email' => $email,
                 'status' => 'sending',
                 'raw_payload' => [
@@ -96,6 +100,12 @@ class CandleCashEarnedReminderService
                     'expiration_date' => $recipient['expiration_date'] ?? null,
                     'expiration_policy' => $recipient['expiration_policy'] ?? null,
                 ],
+                'metadata' => [
+                    'tenant_id' => $tenantId,
+                    'customer_id' => $profileId,
+                    'campaign_type' => 'candle_cash_reminder',
+                    'template_key' => 'candle_cash_unredeemed_earned',
+                ],
             ]);
 
             $sendResult = $this->sendGridEmailService->sendEmail(
@@ -104,6 +114,17 @@ class CandleCashEarnedReminderService
                 $this->bodyForRecipient($recipient),
                 [
                     'dry_run' => $dryRun,
+                    'tenant_id' => $tenantId,
+                    'campaign_type' => 'candle_cash_reminder',
+                    'template_key' => 'candle_cash_unredeemed_earned',
+                    'customer_id' => $profileId,
+                    'metadata' => [
+                        'delivery_kind' => 'candle_cash_unredeemed_earned',
+                    ],
+                    'categories' => [
+                        'candle-cash-reminder',
+                        'unredeemed-earned',
+                    ],
                     'custom_args' => [
                         'marketing_email_delivery_id' => (string) $delivery->id,
                         'marketing_profile_id' => (string) $profileId,
@@ -113,14 +134,18 @@ class CandleCashEarnedReminderService
             );
 
             $success = (bool) ($sendResult['success'] ?? false);
+            $provider = trim((string) ($sendResult['provider'] ?? 'sendgrid')) ?: 'sendgrid';
             $delivery->forceFill([
-                'sendgrid_message_id' => $sendResult['message_id'] ?? null,
+                'provider' => $provider,
+                'provider_message_id' => $sendResult['message_id'] ?? null,
+                'sendgrid_message_id' => $provider === 'sendgrid' ? ($sendResult['message_id'] ?? null) : null,
                 'status' => $success ? 'sent' : 'failed',
                 'sent_at' => $success ? now() : null,
                 'failed_at' => $success ? null : now(),
                 'raw_payload' => array_merge(
                     (array) ($delivery->raw_payload ?? []),
                     [
+                        'provider' => $provider,
                         'provider_payload' => is_array($sendResult['payload'] ?? null) ? $sendResult['payload'] : [],
                         'provider_status' => (string) ($sendResult['status'] ?? ''),
                         'error_message' => $sendResult['error_message'] ?? null,

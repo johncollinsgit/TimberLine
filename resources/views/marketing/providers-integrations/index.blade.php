@@ -1,9 +1,9 @@
-<x-layouts::app :title="'Integrations'">
+<x-layouts::app :title="'Connections'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Integrations"
+            title="Connections"
             description="Square sync, legacy importer workflows, and event source mapping administration for marketing attribution."
             hint-title="How this page works"
             hint-text="All imports and syncs are additive. Identity merges still follow exact email/phone rules, and ambiguous matches are routed to Identity Review."

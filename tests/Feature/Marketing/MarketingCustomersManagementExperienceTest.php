@@ -3,7 +3,9 @@
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
+use App\Models\MarketingProfileWishlistItem;
 use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\User;
@@ -161,7 +163,7 @@ test('customers projections prefer data-rich Growave rows over newer empty dupli
         ->assertSeeText('4,321')
         ->assertSeeText('7')
         ->assertSeeText('4.75')
-        ->assertSeeText('Open Referral Link');
+        ->assertSeeText('Open Legacy Link');
 });
 
 test('customers search matches external source ids through canonical profile query', function () {
@@ -197,6 +199,59 @@ test('customers search matches external source ids through canonical profile que
         ->assertOk()
         ->assertJsonPath('data.0.customer', 'Search Target')
         ->assertJsonPath('data.0.email', 'search.target@example.com');
+});
+
+test('customer detail shows native wishlist summary while keeping legacy wishlist provenance visible', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Wishlist',
+        'last_name' => 'Signal',
+        'email' => 'wishlist.signal@example.com',
+        'normalized_email' => 'wishlist.signal@example.com',
+    ]);
+
+    MarketingProfileWishlistItem::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'product_id' => 'wish-100',
+        'product_handle' => 'cedar-glow',
+        'product_title' => 'Cedar Glow',
+        'status' => MarketingProfileWishlistItem::STATUS_ACTIVE,
+        'source' => 'native_storefront',
+        'added_at' => now()->subDay(),
+        'last_added_at' => now()->subDay(),
+    ]);
+
+    MarketingProfileWishlistItem::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'product_id' => 'wish-legacy-200',
+        'product_handle' => 'heritage-pine',
+        'product_title' => 'Heritage Pine',
+        'status' => MarketingProfileWishlistItem::STATUS_ACTIVE,
+        'source' => 'growave_import',
+        'added_at' => now()->subDays(2),
+        'last_added_at' => now()->subDays(2),
+        'source_synced_at' => now()->subHour(),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers.show', $profile))
+        ->assertOk()
+        ->assertSeeText('Backstage Native Wishlist')
+        ->assertSeeText('Native Backstage Wishlist')
+        ->assertSeeText('Legacy Wishlist Rows')
+        ->assertSeeText('Cedar Glow')
+        ->assertSeeText('Heritage Pine')
+        ->assertSeeText('Native Backstage');
 });
 
 test('customers index includes shopify and square-only canonical profiles without requiring growave', function () {
@@ -302,6 +357,77 @@ test('customers index row links to detail page and detail renders canonical iden
         ->assertSee('name="last_name"', false)
         ->assertSee('name="email"', false)
         ->assertSee('name="phone"', false);
+});
+
+test('customer detail prefers native review projections while keeping legacy growave history visible', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Native',
+        'last_name' => 'Preference',
+        'email' => 'native.preference@example.com',
+        'normalized_email' => 'native.preference@example.com',
+        'phone' => '555-777-1111',
+        'normalized_phone' => '5557771111',
+        'source_channels' => ['shopify'],
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'LEGACY-NATIVE-PREF',
+        'points_balance' => 220,
+        'vip_tier' => 'Silver',
+        'referral_link' => 'https://example.test/ref/native-preference',
+        'synced_at' => now(),
+    ]);
+
+    MarketingReviewSummary::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'LEGACY-NATIVE-PREF',
+        'review_count' => 7,
+        'published_review_count' => 7,
+        'average_rating' => 4.20,
+        'source_synced_at' => now(),
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'profile:' . $profile->id,
+        'external_review_id' => 'native-pref-1',
+        'rating' => 5,
+        'title' => 'Native-first projection',
+        'body' => 'This native review should be used as the primary runtime signal.',
+        'reviewer_name' => 'Native Preference',
+        'reviewer_email' => $profile->email,
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'native_storefront',
+        'product_id' => 'native-pref-1',
+        'product_handle' => 'native-pref-candle',
+        'product_title' => 'Native Preference Candle',
+        'submitted_at' => now()->subMinutes(3),
+        'approved_at' => now()->subMinutes(2),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('marketing.customers.show', $profile))
+        ->assertOk()
+        ->assertSeeText('Active Review Source')
+        ->assertSeeText('Native Backstage')
+        ->assertSeeText('Native Backstage Reviews')
+        ->assertSeeText('Legacy Growave Reviews (Read-Only)');
 });
 
 test('customer detail update saves canonical fields and keeps growave enrichment read-only', function () {

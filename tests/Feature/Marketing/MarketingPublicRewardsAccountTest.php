@@ -2,10 +2,13 @@
 
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashReward;
+use App\Models\CandleCashTask;
+use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
+use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\CandleCashService;
@@ -79,6 +82,116 @@ test('public rewards account lookup shows balance, referral, reviews, and transa
         ->assertSeeText('Transaction History')
         ->assertSeeText('Review Status')
         ->assertSeeText('https://refrr.app/example/12345');
+});
+
+test('public rewards account prefers native review and reward signals when available', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Native',
+        'last_name' => 'Signals',
+        'email' => 'native.signals@example.com',
+        'normalized_email' => 'native.signals@example.com',
+        'phone' => '5553037777',
+        'normalized_phone' => '+15553037777',
+    ]);
+
+    app(CandleCashService::class)->addPoints($profile, 180, 'earn', 'admin', 'seed', 'Seed balance');
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'LEGACY-991',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'phone' => $profile->phone,
+        'normalized_phone' => $profile->normalized_phone,
+        'points_balance' => 180,
+        'referral_link' => 'https://refrr.app/example/native-signals',
+        'raw_metafields' => [],
+        'synced_at' => now(),
+    ]);
+
+    MarketingReviewSummary::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'LEGACY-991',
+        'external_customer_email' => $profile->email,
+        'review_count' => 4,
+        'published_review_count' => 4,
+        'average_rating' => 4.75,
+        'source_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+
+    $task = CandleCashTask::query()->firstOrCreate(
+        ['handle' => 'product-review'],
+        [
+            'title' => 'Write a product review',
+            'description' => 'Leave a product review to earn Candle Cash.',
+            'reward_amount' => 5.00,
+            'enabled' => true,
+            'display_order' => 10,
+            'task_type' => 'auto_event',
+            'verification_mode' => 'product_review_platform_event',
+            'auto_award' => true,
+            'max_completions_per_customer' => 1,
+            'requires_manual_approval' => false,
+            'requires_customer_submission' => false,
+            'eligibility_type' => 'everyone',
+            'visible_to_noneligible_customers' => false,
+        ]
+    );
+
+    $completion = CandleCashTaskCompletion::query()->create([
+        'candle_cash_task_id' => $task->id,
+        'marketing_profile_id' => $profile->id,
+        'status' => 'awarded',
+        'completion_key' => 'task:product-review|profile:' . $profile->id . '|source:product_review_platform_event:native-test',
+        'reward_amount' => 5.00,
+        'reward_candle_cash' => 5,
+        'source_type' => 'product_review_platform_event',
+        'source_id' => 'product-review:native-test',
+        'awarded_at' => now()->subMinutes(5),
+        'reviewed_at' => now()->subMinutes(5),
+        'submitted_at' => now()->subMinutes(5),
+        'started_at' => now()->subMinutes(5),
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'profile:' . $profile->id,
+        'external_review_id' => 'native-review-991',
+        'candle_cash_task_completion_id' => $completion->id,
+        'rating' => 5,
+        'title' => 'Native review',
+        'body' => 'Native review data should be preferred over legacy projections.',
+        'reviewer_name' => 'Native Signals',
+        'reviewer_email' => $profile->email,
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'native_storefront',
+        'product_id' => '991',
+        'product_handle' => 'native-signal-candle',
+        'product_title' => 'Native Signal Candle',
+        'submitted_at' => now()->subMinutes(6),
+        'approved_at' => now()->subMinutes(5),
+    ]);
+
+    $this->get(route('marketing.public.account-rewards', [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+    ]))
+        ->assertOk()
+        ->assertSeeText('Source:')
+        ->assertSeeText('Native Backstage reviews')
+        ->assertSeeText('Native: 1 reviews')
+        ->assertSeeText('Legacy Growave (read-only): 4 reviews');
 });
 
 test('public rewards account redeem route issues and rejects redemptions with clear states', function () {

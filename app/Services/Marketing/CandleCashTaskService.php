@@ -9,6 +9,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class CandleCashTaskService
@@ -282,6 +283,16 @@ class CandleCashTaskService
 
             $state = (string) ($existingCompletion?->status ?: ($event->reward_awarded ? 'awarded' : ($event->status ?: 'duplicate')));
 
+            Log::info('candle cash task completion resolved from duplicate event', [
+                'task_id' => $task->id,
+                'task_handle' => $task->handle,
+                'marketing_profile_id' => $profile->id,
+                'event_id' => $event->id,
+                'source_event_key' => $event->source_event_key,
+                'state' => $state,
+                'completion_id' => $existingCompletion?->id,
+            ]);
+
             return [
                 'ok' => in_array($state, ['awarded', 'approved', 'pending', 'submitted'], true),
                 'state' => $state,
@@ -320,6 +331,16 @@ class CandleCashTaskService
             if ($existing) {
                 $this->taskEventService->markPending($event, $existing, [
                     'duplicate_completion_key' => $completionKey,
+                ]);
+
+                Log::info('candle cash task completion reused by completion key', [
+                    'task_id' => $task->id,
+                    'task_handle' => $task->handle,
+                    'marketing_profile_id' => $profile->id,
+                    'event_id' => $event->id,
+                    'completion_id' => $existing->id,
+                    'completion_key' => $completionKey,
+                    'state' => (string) $existing->status,
                 ]);
 
                 return [
@@ -373,6 +394,15 @@ class CandleCashTaskService
             if (! $autoApprove) {
                 $this->taskEventService->markPending($event, $completion);
 
+                Log::info('candle cash task completion created pending review', [
+                    'task_id' => $task->id,
+                    'task_handle' => $task->handle,
+                    'marketing_profile_id' => $profile->id,
+                    'event_id' => $event->id,
+                    'completion_id' => $completion->id,
+                    'completion_key' => $completion->completion_key,
+                ]);
+
                 return $completion;
             }
 
@@ -391,12 +421,36 @@ class CandleCashTaskService
                 'awarded_at' => now(),
             ])->save();
 
+            Log::info('candle cash task transaction created', [
+                'task_id' => $task->id,
+                'task_handle' => $task->handle,
+                'marketing_profile_id' => $profile->id,
+                'event_id' => $event->id,
+                'completion_id' => $completion->id,
+                'completion_key' => $completion->completion_key,
+                'reward_candle_cash' => $rewardPoints,
+                'transaction_id' => (int) ($result['transaction_id'] ?? 0),
+                'source_id' => $completionKey !== '' ? $completionKey : ('task-completion:' . $completion->id),
+            ]);
+
             $this->taskEventService->markAwarded($event, $completion, [
                 'transaction_id' => (int) ($result['transaction_id'] ?? 0),
             ]);
 
             return $completion;
         });
+
+        Log::info('candle cash task completion created', [
+            'task_id' => $task->id,
+            'task_handle' => $task->handle,
+            'marketing_profile_id' => $profile->id,
+            'event_id' => $event->id,
+            'completion_id' => $completion->id,
+            'completion_key' => $completion->completion_key,
+            'state' => $status,
+            'auto_approved' => $autoApprove,
+            'transaction_id' => $completion->candle_cash_transaction_id,
+        ]);
 
         return [
             'ok' => true,

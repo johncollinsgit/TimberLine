@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingOrderEventAttribution;
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileWishlistItem;
 use App\Models\Order;
 use App\Models\SquareOrder;
 use Carbon\CarbonImmutable;
@@ -111,6 +112,17 @@ class MarketingProfileAnalyticsService
 
         $totalSquareSpend = (float) $squareOrders->sum(fn (SquareOrder $order) => ((int) ($order->total_money_amount ?? 0)) / 100);
         $totalOrders = $orderIds->count() + $squareOrderIds->count();
+        $wishlistItems = MarketingProfileWishlistItem::query()
+            ->forTenantId((int) ($profile->tenant_id ?: 0) ?: null)
+            ->where('marketing_profile_id', $profileId)
+            ->get(['status', 'product_id', 'product_handle', 'product_title', 'store_key', 'added_at', 'last_added_at']);
+        $activeWishlistItems = $wishlistItems->where('status', MarketingProfileWishlistItem::STATUS_ACTIVE)->values();
+        $removedWishlistItems = $wishlistItems->where('status', MarketingProfileWishlistItem::STATUS_REMOVED)->values();
+        $wishlistLastAddedAt = $activeWishlistItems
+            ->map(fn (MarketingProfileWishlistItem $item) => $item->last_added_at ?: $item->added_at)
+            ->filter()
+            ->sortByDesc(fn ($value) => $value?->timestamp ?? 0)
+            ->first();
 
         $metrics = [
             'profile_id' => $profileId,
@@ -136,6 +148,20 @@ class MarketingProfileAnalyticsService
             'days_since_last_event_purchase' => isset($lastEvent['timestamp']) && (int) $lastEvent['timestamp'] > 0
                 ? now()->diffInDays(CarbonImmutable::createFromTimestamp((int) $lastEvent['timestamp']))
                 : null,
+            'wishlist_active_count' => (int) $activeWishlistItems->count(),
+            'wishlist_removed_count' => (int) $removedWishlistItems->count(),
+            'wishlist_last_added_at' => $wishlistLastAddedAt?->toIso8601String(),
+            'wishlist_product_handles' => $activeWishlistItems->pluck('product_handle')->filter()->unique()->values()->all(),
+            'wishlist_product_ids' => $activeWishlistItems->pluck('product_id')->filter()->unique()->values()->all(),
+            'wishlist_product_titles' => $activeWishlistItems->pluck('product_title')->filter()->unique()->values()->all(),
+            'wishlist_store_keys' => $activeWishlistItems->pluck('store_key')->filter()->unique()->values()->all(),
+            'wishlist_recent_additions_30d' => (int) $activeWishlistItems
+                ->filter(function (MarketingProfileWishlistItem $item): bool {
+                    $addedAt = $item->last_added_at ?: $item->added_at;
+
+                    return $addedAt !== null && $addedAt->greaterThanOrEqualTo(now()->subDays(30));
+                })
+                ->count(),
         ];
 
         $this->cache[$profileId] = $metrics;

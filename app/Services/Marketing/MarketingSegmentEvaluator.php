@@ -124,6 +124,9 @@ class MarketingSegmentEvaluator
             'profile_source' => $metrics['profile_sources'] ?? [],
             'has_square_link' => $metrics['has_square_link'] ?? false,
             'has_shopify_link' => $metrics['has_shopify_link'] ?? false,
+            'wishlist_product_handle' => $metrics['wishlist_product_handles'] ?? [],
+            'wishlist_product_id' => $metrics['wishlist_product_ids'] ?? [],
+            'wishlist_product_title' => $metrics['wishlist_product_titles'] ?? [],
             default => $metrics[$field] ?? null,
         };
     }

@@ -67,7 +67,7 @@
                 <div>
                     <div class="mb-2 text-xs uppercase tracking-[0.2em] text-white/55">Conditions</div>
                     <x-admin.help-hint tone="neutral" title="Supported fields">
-                        `total_spent`, `total_orders`, `days_since_last_order`, `source_channel`, `has_email_consent`, `has_sms_consent`, `purchased_at_event`, `purchased_event_name`, `last_event_name`, `profile_source`, `has_square_link`, `has_shopify_link`
+                        `total_spent`, `total_orders`, `days_since_last_order`, `source_channel`, `has_email_consent`, `has_sms_consent`, `purchased_at_event`, `purchased_event_name`, `last_event_name`, `profile_source`, `has_square_link`, `has_shopify_link`, `wishlist_active_count`, `wishlist_recent_additions_30d`, `wishlist_product_handle`, `wishlist_product_id`
                     </x-admin.help-hint>
 
                     <div id="segment-condition-list" class="mt-3 space-y-2">

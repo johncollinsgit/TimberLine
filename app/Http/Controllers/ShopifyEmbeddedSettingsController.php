@@ -2,10 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Marketing\Email\TenantEmailDispatchService;
+use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Tenancy\TenantResolver;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedSettingsController extends Controller
 {
@@ -14,14 +20,18 @@ class ShopifyEmbeddedSettingsController extends Controller
     public function show(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        TwilioSenderConfigService $senderConfigService
-    ): Response
-    {
+        TwilioSenderConfigService $senderConfigService,
+        TenantResolver $tenantResolver,
+        TenantEmailSettingsService $emailSettingsService
+    ): Response {
         $context = $contextService->resolvePageContext($request);
 
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            : null;
 
         return $this->embeddedResponse(
             response()->view('shopify.settings', [
@@ -39,9 +49,264 @@ class ShopifyEmbeddedSettingsController extends Controller
                 'pageActions' => [],
                 'smsSenders' => $senderConfigService->all(),
                 'defaultSmsSender' => $senderConfigService->defaultSender(),
+                'emailSettingsBootstrap' => [
+                    'authorized' => $authorized,
+                    'tenant_id' => $tenantId,
+                    'store_key' => $authorized ? ($store['key'] ?? null) : null,
+                    'status' => $status,
+                    'settings' => $authorized && $tenantId !== null
+                        ? $emailSettingsService->forAdmin($tenantId)
+                        : null,
+                    'endpoints' => [
+                        'load' => route('shopify.app.api.settings.email', [], false),
+                        'save' => route('shopify.app.api.settings.email.save', [], false),
+                        'validate' => route('shopify.app.api.settings.email.validate', [], false),
+                        'test' => route('shopify.app.api.settings.email.test', [], false),
+                        'health' => route('shopify.app.api.settings.email.health', [], false),
+                    ],
+                ],
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );
+    }
+
+    public function emailSettings(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantEmailSettingsService $emailSettingsService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'tenant_id' => $tenantId,
+                'settings' => $emailSettingsService->forAdmin($tenantId),
+            ],
+        ]);
+    }
+
+    public function saveEmailSettings(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantEmailSettingsService $emailSettingsService,
+        TenantEmailDispatchService $emailDispatchService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+
+        try {
+            $data = $this->validatedEmailSettingsData($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Email settings could not be saved.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        try {
+            $emailSettingsService->saveForTenant($tenantId, $data);
+            $validation = $emailDispatchService->validateConfiguration([
+                'tenant_id' => $tenantId,
+                'perform_live_check' => false,
+            ]);
+
+            $status = $this->statusFromValidation($validation, (string) ($data['email_provider'] ?? 'sendgrid'));
+            $emailSettingsService->setProviderDiagnostics(
+                $tenantId,
+                $status,
+                $validation['valid'] ? null : (string) ($validation['issues'][0] ?? 'Configuration incomplete.')
+            );
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Email settings saved.',
+                'data' => [
+                    'tenant_id' => $tenantId,
+                    'settings' => $emailSettingsService->forAdmin($tenantId),
+                    'validation' => $validation,
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('shopify email settings save failed', [
+                'tenant_id' => $tenantId,
+                'error' => $exception->getMessage(),
+                'provider' => $data['email_provider'] ?? null,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to save email settings.',
+            ], 500);
+        }
+    }
+
+    public function validateEmailSettings(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantEmailSettingsService $emailSettingsService,
+        TenantEmailDispatchService $emailDispatchService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+
+        $emailSettingsService->setProviderDiagnostics($tenantId, 'testing');
+
+        $validation = $emailDispatchService->validateConfiguration([
+            'tenant_id' => $tenantId,
+            'perform_live_check' => true,
+        ]);
+
+        $status = $this->statusFromValidation($validation, (string) data_get($emailSettingsService->forAdmin($tenantId), 'email_provider', 'sendgrid'));
+        $emailSettingsService->setProviderDiagnostics(
+            $tenantId,
+            $status,
+            $validation['valid'] ? null : (string) ($validation['issues'][0] ?? 'Configuration validation failed.')
+        );
+
+        return response()->json([
+            'ok' => (bool) $validation['valid'],
+            'message' => (bool) $validation['valid']
+                ? 'Provider configuration validated.'
+                : (string) ($validation['issues'][0] ?? 'Provider configuration has issues.'),
+            'data' => [
+                'tenant_id' => $tenantId,
+                'validation' => $validation,
+                'settings' => $emailSettingsService->forAdmin($tenantId),
+            ],
+        ], (bool) $validation['valid'] ? 200 : 422);
+    }
+
+    public function sendTestEmail(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantEmailSettingsService $emailSettingsService,
+        TenantEmailDispatchService $emailDispatchService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+
+        try {
+            $data = validator($request->all(), [
+                'to_email' => ['required', 'email', 'max:255'],
+                'subject' => ['nullable', 'string', 'max:200'],
+                'dry_run' => ['nullable', 'boolean'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Test email request is invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $emailSettingsService->setProviderDiagnostics($tenantId, 'testing');
+
+        $result = $emailDispatchService->sendTestEmail(
+            (string) $data['to_email'],
+            [
+                'tenant_id' => $tenantId,
+                'subject' => $data['subject'] ?? null,
+                'dry_run' => (bool) ($data['dry_run'] ?? false),
+            ]
+        );
+
+        $success = (bool) ($result['success'] ?? false);
+        $emailSettingsService->setProviderDiagnostics(
+            $tenantId,
+            $success ? 'configured' : 'error',
+            $success ? null : (string) ($result['error_message'] ?? 'Test email failed.'),
+            true
+        );
+
+        return response()->json([
+            'ok' => $success,
+            'message' => $success
+                ? 'Test email sent.'
+                : (string) ($result['error_message'] ?? 'Test email failed.'),
+            'data' => [
+                'tenant_id' => $tenantId,
+                'result' => $result,
+                'settings' => $emailSettingsService->forAdmin($tenantId),
+            ],
+        ], $success ? 200 : 422);
+    }
+
+    public function emailProviderHealth(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantEmailSettingsService $emailSettingsService,
+        TenantEmailDispatchService $emailDispatchService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+
+        $health = $emailDispatchService->healthStatus([
+            'tenant_id' => $tenantId,
+            'perform_live_check' => true,
+        ]);
+
+        $status = in_array((string) ($health['status'] ?? ''), ['configured', 'not_configured'], true)
+            ? (string) $health['status']
+            : 'error';
+
+        $emailSettingsService->setProviderDiagnostics(
+            $tenantId,
+            $status,
+            $status === 'configured' ? null : (string) ($health['message'] ?? 'Provider health check failed.')
+        );
+
+        return response()->json([
+            'ok' => $status === 'configured',
+            'message' => (string) ($health['message'] ?? 'Health status unavailable.'),
+            'data' => [
+                'tenant_id' => $tenantId,
+                'health' => $health,
+                'settings' => $emailSettingsService->forAdmin($tenantId),
+            ],
+        ], $status === 'configured' ? 200 : 422);
     }
 
     protected function headlineForStatus(string $status): string
@@ -49,7 +314,7 @@ class ShopifyEmbeddedSettingsController extends Controller
         return match ($status) {
             'open_from_shopify' => 'Open this app from Shopify Admin',
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'We could not verify this Shopify request',
-            default => 'Program settings',
+            default => 'Email settings',
         };
     }
 
@@ -58,7 +323,7 @@ class ShopifyEmbeddedSettingsController extends Controller
         return match ($status) {
             'open_from_shopify' => 'This page is meant to load inside your Shopify admin so it can verify the store context.',
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
-            default => 'Candle Cash program controls and messaging settings are managed in Backstage. This page will expose them soon.',
+            default => 'Configure per-tenant email provider, sender defaults, and health checks for app-driven email delivery.',
         };
     }
 
@@ -72,5 +337,91 @@ class ShopifyEmbeddedSettingsController extends Controller
         $response->headers->remove('X-Frame-Options');
 
         return $response;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function validatedEmailSettingsData(Request $request): array
+    {
+        return validator($request->all(), [
+            'email_provider' => ['required', 'in:shopify_email,sendgrid,custom'],
+            'email_enabled' => ['required', 'boolean'],
+            'from_name' => ['nullable', 'string', 'max:120'],
+            'from_email' => ['nullable', 'email', 'max:255'],
+            'reply_to_email' => ['nullable', 'email', 'max:255'],
+            'analytics_enabled' => ['required', 'boolean'],
+            'provider_config' => ['nullable', 'array'],
+            'provider_config.api_key' => ['nullable', 'string', 'max:500'],
+            'provider_config.clear_api_key' => ['nullable', 'boolean'],
+            'provider_config.verified_sender_email' => ['nullable', 'email', 'max:255'],
+            'provider_config.verified_sender_name' => ['nullable', 'string', 'max:120'],
+            'provider_config.reply_to_email' => ['nullable', 'email', 'max:255'],
+            'provider_config.tracking_enabled' => ['nullable', 'boolean'],
+            'provider_config.template_defaults' => ['nullable', 'array'],
+            'provider_config.driver' => ['nullable', 'string', 'max:80'],
+            'provider_config.api_endpoint' => ['nullable', 'url', 'max:500'],
+            'provider_config.auth_scheme' => ['nullable', 'string', 'max:80'],
+            'provider_config.notes' => ['nullable', 'string', 'max:2000'],
+        ])->validate();
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    protected function resolveTenantIdFromContext(array $context, TenantResolver $tenantResolver): ?int
+    {
+        return $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    protected function invalidApiContextResponse(array $context): JsonResponse
+    {
+        $status = (string) ($context['status'] ?? 'invalid_request');
+
+        $messages = [
+            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload this page from Shopify Admin and try again.',
+            'invalid_session_token' => 'Shopify Admin verification failed. Reload this page from Shopify Admin and try again.',
+            'expired_session_token' => 'Your Shopify Admin session expired. Reload this page from Shopify Admin and try again.',
+        ];
+
+        return response()->json([
+            'ok' => false,
+            'status' => $status,
+            'message' => $messages[$status] ?? 'This Shopify request could not be verified.',
+        ], 401);
+    }
+
+    protected function tenantNotMappedResponse(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => 'This Shopify store is not mapped to a tenant yet. Email settings are unavailable.',
+        ], 422);
+    }
+
+    /**
+     * @param array<string,mixed> $validation
+     */
+    protected function statusFromValidation(array $validation, string $provider): string
+    {
+        $provider = strtolower(trim($provider));
+        if ($provider === 'shopify_email') {
+            return 'configured';
+        }
+
+        if ((bool) ($validation['valid'] ?? false)) {
+            return 'configured';
+        }
+
+        $status = strtolower(trim((string) ($validation['status'] ?? 'error')));
+
+        if ($provider === 'custom') {
+            return 'not_configured';
+        }
+
+        return $status === 'not_configured' ? 'not_configured' : 'error';
     }
 }

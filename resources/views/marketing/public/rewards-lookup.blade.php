@@ -70,6 +70,13 @@
         @php
             $maskedEmail = $profile->email ? preg_replace('/(^.).+(@.*$)/', '$1***$2', $profile->email) : null;
             $maskedPhone = $profile->phone ? preg_replace('/\d(?=\d{2})/', '*', preg_replace('/\D+/', '', $profile->phone)) : null;
+            $activeReviewCount = (int) data_get($reviewSummary ?? [], 'review_count', 0);
+            $activeReviewAverage = data_get($reviewSummary ?? [], 'average_rating');
+            $activeReviewLastReviewedAt = data_get($reviewSummary ?? [], 'last_reviewed_at');
+            $nativeReviewCount = (int) data_get($nativeReviewSummary ?? [], 'review_count', 0);
+            $nativeReviewAverage = data_get($nativeReviewSummary ?? [], 'average_rating');
+            $legacyReviewCount = (int) ($legacyReviewSummary?->review_count ?? 0);
+            $legacyReviewAverage = $legacyReviewSummary?->average_rating;
         @endphp
         <section class="grid gap-4 lg:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
@@ -86,14 +93,14 @@
                     <div class="mt-2 text-sm text-zinc-400">No referral link on file.</div>
                 @endif
                 <div class="mt-3 text-xs text-zinc-400">
-                    Growave ID: {{ $latestGrowaveExternal?->external_customer_id ?: '—' }}
+                    Legacy Growave ID: {{ $latestGrowaveExternal?->external_customer_id ?: '—' }}
                 </div>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
                 <h2 class="text-sm font-semibold text-white">Review Status</h2>
                 <div class="mt-2 text-sm text-white/80">
-                    {{ (int) ($latestReviewSummary?->review_count ?? 0) }} reviews
-                    · Avg {{ number_format((float) ($latestReviewSummary?->average_rating ?? 0), 2) }}
+                    {{ $activeReviewCount }} reviews
+                    · Avg {{ $activeReviewAverage !== null ? number_format((float) $activeReviewAverage, 2) : '—' }}
                 </div>
                 <div class="mt-2 text-xs text-zinc-400">
                     Review rewards: {{ (int) ($reviewRewardStatus['count'] ?? 0) }}
@@ -101,6 +108,33 @@
                         · Last: {{ \Illuminate\Support\Carbon::parse((string) $reviewRewardStatus['last_rewarded_at'])->format('Y-m-d H:i') }}
                     @endif
                 </div>
+                <div class="mt-2 text-xs text-zinc-400">
+                    Source:
+                    @if(($reviewDataSource ?? 'none') === 'native')
+                        Native Backstage reviews
+                    @elseif(($reviewDataSource ?? 'none') === 'legacy_growave')
+                        Legacy Growave history
+                    @else
+                        No review data yet
+                    @endif
+                    @if($activeReviewLastReviewedAt)
+                        · Last review: {{ \Illuminate\Support\Carbon::parse((string) $activeReviewLastReviewedAt)->format('Y-m-d H:i') }}
+                    @endif
+                </div>
+                @if($nativeReviewCount > 0 || (int) ($nativeReviewRewardStatus['count'] ?? 0) > 0)
+                    <div class="mt-2 text-xs text-zinc-400">
+                        Native: {{ $nativeReviewCount }} reviews
+                        · Avg {{ $nativeReviewAverage !== null ? number_format((float) $nativeReviewAverage, 2) : '—' }}
+                        · Rewards {{ (int) ($nativeReviewRewardStatus['count'] ?? 0) }}
+                    </div>
+                @endif
+                @if($legacyReviewCount > 0 || (int) ($legacyReviewRewardStatus['count'] ?? 0) > 0)
+                    <div class="mt-2 text-xs text-zinc-500">
+                        Legacy Growave (read-only): {{ $legacyReviewCount }} reviews
+                        · Avg {{ $legacyReviewAverage !== null ? number_format((float) $legacyReviewAverage, 2) : '—' }}
+                        · Rewards {{ (int) ($legacyReviewRewardStatus['count'] ?? 0) }}
+                    </div>
+                @endif
                 <div class="mt-2 text-xs text-zinc-500">
                     Last Growave sync: {{ $lastGrowaveSyncAt ? \Illuminate\Support\Carbon::parse((string) $lastGrowaveSyncAt)->format('Y-m-d H:i') : '—' }}
                 </div>

@@ -229,6 +229,65 @@ test('product review submission validates minimum content length', function () {
         ->assertJsonPath('error.code', 'review_too_short');
 });
 
+test('shopify product review submission handles conflicted identity safely', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
+
+    $email = 'conflicted.reviewer@example.com';
+
+    MarketingProfile::query()->create([
+        'first_name' => 'Avery',
+        'last_name' => 'North',
+        'email' => $email,
+        'normalized_email' => $email,
+    ]);
+    MarketingProfile::query()->create([
+        'first_name' => 'Avery',
+        'last_name' => 'South',
+        'email' => $email,
+        'normalized_email' => $email,
+    ]);
+
+    $payload = [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $email,
+        'product_id' => 'sku-conflict-901',
+        'product_handle' => 'identity-safe-candle',
+        'product_title' => 'Identity Safe Candle',
+        'product_url' => '/products/identity-safe-candle',
+        'rating' => 4,
+        'title' => 'Needs identity review',
+        'body' => 'This review should fail safely when identity matching is ambiguous.',
+        'request_key' => 'conflict-review-submit-901',
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.product-reviews.submit', productReviewSignedQuery([
+        'shop' => $payload['shop'],
+        'timestamp' => $payload['timestamp'],
+    ], 'stage10-proxy-secret')), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'identity_review_required');
+
+    expect(MarketingReviewHistory::query()
+        ->where('provider', 'backstage')
+        ->where('integration', 'native')
+        ->where('product_id', 'sku-conflict-901')
+        ->count())->toBe(0);
+
+    $conflictedProfileIds = MarketingProfile::query()
+        ->where('normalized_email', $email)
+        ->pluck('id');
+
+    expect(CandleCashTaskCompletion::query()
+        ->whereIn('marketing_profile_id', $conflictedProfileIds->all())
+        ->whereHas('task', fn ($builder) => $builder->where('handle', 'product-review'))
+        ->count())->toBe(0);
+});
+
 test('shopify product review status is scoped to the verified Shopify store', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');

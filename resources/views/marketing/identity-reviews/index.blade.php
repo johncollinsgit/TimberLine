@@ -1,9 +1,9 @@
-<x-layouts::app :title="'Identity Matches'">
+<x-layouts::app :title="'Fix Matches'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Identity Matches"
+            title="Fix Matches"
             description="Manual queue for ambiguous identity matches to prevent risky automatic merges."
             hint-title="Why this queue exists"
             hint-text="Exact normalized email/phone matches merge automatically. Conflicting matches are intentionally held here for reviewer decisions."

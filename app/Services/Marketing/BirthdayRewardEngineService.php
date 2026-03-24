@@ -13,7 +13,8 @@ class BirthdayRewardEngineService
 {
     public function __construct(
         protected CandleCashService $candleCashService,
-        protected BirthdayProfileService $birthdayProfileService
+        protected BirthdayProfileService $birthdayProfileService,
+        protected BirthdayEmailDispatchService $birthdayEmailDispatchService
     ) {
     }
 
@@ -149,7 +150,7 @@ class BirthdayRewardEngineService
             ];
         }
 
-        return DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType, $config, $window, $now): array {
+        $result = DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType, $config, $window, $now): array {
             $locked = CustomerBirthdayProfile::query()
                 ->whereKey($birthdayProfile->id)
                 ->lockForUpdate()
@@ -278,6 +279,30 @@ class BirthdayRewardEngineService
                 'claim_window' => $window,
             ];
         });
+
+        $issued = $result['issuance'] ?? null;
+        if ($issued instanceof BirthdayRewardIssuance) {
+            try {
+                $result['email_delivery'] = $this->birthdayEmailDispatchService->sendIssuanceEmail($issued);
+            } catch (\Throwable $exception) {
+                $result['email_delivery'] = [
+                    'ok' => false,
+                    'success' => false,
+                    'attempted' => true,
+                    'already_recorded' => false,
+                    'provider' => null,
+                    'status' => 'failed',
+                    'message_id' => null,
+                    'delivery_id' => null,
+                    'birthday_message_event_id' => null,
+                    'event_key' => null,
+                    'error_code' => 'birthday_email_dispatch_exception',
+                    'error_message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return $result;
     }
 
     public function generateUniqueCodeForRewardType(string $rewardType, int $cycleYear, ?array $config = null): string

@@ -37,6 +37,9 @@ class MarketingIssueBirthdayRewards extends Command
             'already_claimed' => 0,
             'outside_claim_window' => 0,
             'skipped' => 0,
+            'email_sent' => 0,
+            'email_failed' => 0,
+            'email_already_recorded' => 0,
         ];
 
         foreach ($profiles as $profile) {
@@ -71,6 +74,14 @@ class MarketingIssueBirthdayRewards extends Command
 
             if ((bool) ($result['ok'] ?? false)) {
                 $summary['issued']++;
+                $emailResult = (array) ($result['email_delivery'] ?? []);
+                if ((bool) ($emailResult['success'] ?? false)) {
+                    $summary['email_sent']++;
+                } elseif ((bool) ($emailResult['already_recorded'] ?? false)) {
+                    $summary['email_already_recorded']++;
+                } elseif ($emailResult !== []) {
+                    $summary['email_failed']++;
+                }
             } else {
                 $errorState = (string) ($result['state'] ?? 'skipped');
                 if ($errorState === 'outside_claim_window') {

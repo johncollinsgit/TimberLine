@@ -6,6 +6,7 @@ use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
 use App\Models\MarketingProfile;
+use Illuminate\Support\Facades\Log;
 
 class CandleCashTaskEventService
 {
@@ -42,6 +43,17 @@ class CandleCashTaskEventService
                 ]),
             ])->save();
 
+            Log::info('candle cash task event duplicate detected', [
+                'task_id' => $task->id,
+                'task_handle' => $task->handle,
+                'marketing_profile_id' => $profile?->id,
+                'event_id' => $existing->id,
+                'source_event_key' => $eventKey,
+                'source_type' => $existing->source_type,
+                'source_id' => $existing->source_id,
+                'duplicate_hits' => (int) $existing->duplicate_hits,
+            ]);
+
             return ['event' => $existing->fresh(), 'duplicate' => true];
         }
 
@@ -57,6 +69,18 @@ class CandleCashTaskEventService
             'blocked_reason' => trim((string) ($payload['blocked_reason'] ?? '')) ?: null,
             'occurred_at' => $payload['occurred_at'] ?? now(),
             'metadata' => is_array($payload['metadata'] ?? null) ? $payload['metadata'] : null,
+        ]);
+
+        Log::info('candle cash task event recorded', [
+            'task_id' => $task->id,
+            'task_handle' => $task->handle,
+            'marketing_profile_id' => $profile?->id,
+            'event_id' => $event->id,
+            'verification_mode' => $event->verification_mode,
+            'source_event_key' => $event->source_event_key,
+            'source_type' => $event->source_type,
+            'source_id' => $event->source_id,
+            'status' => $event->status,
         ]);
 
         return ['event' => $event, 'duplicate' => false];

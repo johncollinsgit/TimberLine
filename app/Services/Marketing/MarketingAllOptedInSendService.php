@@ -144,11 +144,21 @@ class MarketingAllOptedInSendService
                 ]);
             }
 
+            $tenantId = is_numeric($payload['tenant_id'] ?? null)
+                ? (int) $payload['tenant_id']
+                : null;
+
             $results['email'] = $this->sendGridEmailService->sendEmail(
                 $toEmail,
                 $subject,
                 $this->renderPreviewText((string) ($payload['email_body'] ?? ''), $previewProfile, (string) ($payload['cta_link'] ?? ''), 'email'),
-                ['dry_run' => false]
+                [
+                    'dry_run' => false,
+                    'tenant_id' => $tenantId,
+                    'campaign_type' => 'all_opted_in_test',
+                    'template_key' => 'all_opted_in_preview',
+                    'categories' => ['all-opted-in-test'],
+                ]
             );
         }
 

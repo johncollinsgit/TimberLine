@@ -619,6 +619,13 @@ Route::prefix('shopify/marketing')
         Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('candle-cash.tasks.submit');
+        Route::get('/wishlist/status', [MarketingShopifyIntegrationController::class, 'wishlistStatus'])->name('wishlist.status');
+        Route::post('/wishlist/add', [MarketingShopifyIntegrationController::class, 'addWishlistItem'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.add');
+        Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.remove');
         Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
         Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
             ->withoutMiddleware([VerifyCsrfToken::class])
@@ -664,6 +671,13 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('candle-cash.tasks.submit');
+        Route::get('/wishlist/status', [MarketingShopifyIntegrationController::class, 'wishlistStatus'])->name('wishlist.status');
+        Route::post('/wishlist/add', [MarketingShopifyIntegrationController::class, 'addWishlistItem'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.add');
+        Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.remove');
         Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
         Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
             ->withoutMiddleware([VerifyCsrfToken::class])
@@ -688,6 +702,10 @@ Route::prefix('shopify')->middleware('web')->group(function () {
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
+        Route::get('/rewards/birthdays/analytics', [ShopifyEmbeddedRewardsController::class, 'birthdayAnalytics'])
+            ->name('rewards.birthdays.analytics');
+        Route::get('/rewards/birthdays/analytics/export', [ShopifyEmbeddedRewardsController::class, 'birthdayAnalyticsExport'])
+            ->name('rewards.birthdays.analytics.export');
         Route::patch('/rewards/earn/{task}', [ShopifyEmbeddedRewardsController::class, 'updateEarnRule'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.earn.update');
@@ -711,6 +729,20 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCashJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.candle-cash.send');
+        Route::get('/settings/email', [ShopifyEmbeddedSettingsController::class, 'emailSettings'])
+            ->name('settings.email');
+        Route::post('/settings/email', [ShopifyEmbeddedSettingsController::class, 'saveEmailSettings'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.email.save');
+        Route::post('/settings/email/validate', [ShopifyEmbeddedSettingsController::class, 'validateEmailSettings'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.email.validate');
+        Route::post('/settings/email/test', [ShopifyEmbeddedSettingsController::class, 'sendTestEmail'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.email.test');
+        Route::post('/settings/email/health', [ShopifyEmbeddedSettingsController::class, 'emailProviderHealth'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.email.health');
     });
     Route::get('/auth/{store}', [ShopifyAuthController::class, 'auth'])->name('shopify.auth');
     Route::get('/reinstall/{store}', [ShopifyAuthController::class, 'reinstall'])->name('shopify.reinstall');

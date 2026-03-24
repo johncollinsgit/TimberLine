@@ -1,27 +1,27 @@
-<x-layouts::app :title="'Recommendations'">
+<x-layouts::app :title="'Suggestions'">
     <div class="mx-auto w-full max-w-[1850px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
-            title="Recommendations"
-            description="Rule-based recommendation center and approval queue for campaign recipient and optimization recommendations."
+            title="Suggestions"
+            description="Rule-based recommendation center and approval queue for campaign recipient and optimization suggestions."
             hint-title="Recommendation governance"
-            hint-text="Recommendations are never autonomous sends. Every approval/rejection is recorded for auditability."
+            hint-text="Suggestions are never autonomous sends. Every approval/rejection is recorded for auditability."
         />
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <h2 class="text-lg font-semibold text-white">Recommendations</h2>
+                <h2 class="text-lg font-semibold text-white">Suggestions</h2>
                 <form method="POST" action="{{ route('marketing.recommendations.generate-global') }}">
                     @csrf
                     <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
-                        Generate Recommendations
+                        Generate Suggestions
                     </button>
                 </form>
             </div>
 
-            <x-admin.help-hint tone="neutral" title="Recommendation types">
-                Recommendations are generated from real performance outcomes plus profile/event/reward rules. They stay explainable and never send automatically.
+            <x-admin.help-hint tone="neutral" title="Suggestion types">
+                Suggestions are generated from real performance outcomes plus profile/event/reward rules. They stay explainable and never send automatically.
             </x-admin.help-hint>
 
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -57,7 +57,7 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
-            <h3 class="text-sm font-semibold text-white">Recent Recommendation Runs</h3>
+            <h3 class="text-sm font-semibold text-white">Recent Suggestion Runs</h3>
             <x-admin.help-hint tone="neutral" title="Learning + governance">
                 Learning uses observed delivery and conversion outcomes. Apply actions remain manual and auditable through approvals.
             </x-admin.help-hint>
@@ -133,7 +133,7 @@
         </section>
 
         <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6 space-y-4">
-            <h3 class="text-sm font-semibold text-white">Recommendations</h3>
+            <h3 class="text-sm font-semibold text-white">Suggestions</h3>
             <div class="overflow-x-auto rounded-2xl border border-white/10">
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">

@@ -94,46 +94,94 @@
 
             <div class="flex flex-wrap gap-2 text-xs">
                 <span class="inline-flex rounded-full border border-blue-300/35 bg-blue-500/15 px-2.5 py-1 text-blue-100">Shopify Source</span>
+                <span class="inline-flex rounded-full border border-cyan-300/35 bg-cyan-500/15 px-2.5 py-1 text-cyan-100">Backstage Native Reviews</span>
+                <span class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-2.5 py-1 text-amber-100">Backstage Native Wishlist</span>
                 @if($latestGrowaveExternal || $latestGrowaveReviewSummary)
-                    <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-2.5 py-1 text-emerald-100">Growave Source</span>
+                    <span class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-2.5 py-1 text-emerald-100">Legacy Growave Source</span>
                 @endif
             </div>
 
             <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-8">
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Review Source</div>
+                    <div class="mt-2 text-sm text-white">
+                        @if(($preferredReviewDataSource ?? 'none') === 'native')
+                            Native Backstage
+                        @elseif(($preferredReviewDataSource ?? 'none') === 'legacy_growave')
+                            Legacy Growave
+                        @else
+                            No review data
+                        @endif
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Reviews</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($preferredReviewSummary['review_count'] ?? 0)) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Avg Rating</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">
+                        @if(($preferredReviewSummary['average_rating'] ?? null) !== null)
+                            {{ number_format((float) $preferredReviewSummary['average_rating'], 2) }}
+                        @else
+                            —
+                        @endif
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Review Rewards</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($preferredReviewRewardStatus['count'] ?? 0)) }}</div>
+                    <div class="mt-1 text-[11px] text-white/55">
+                        Last reward: {{ $preferredReviewRewardStatus['last_rewarded_at'] ?? '—' }}
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-white/55">Legacy Growave Balance</div>
                     <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveExternal?->points_balance ?? 0)) }}</div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Tier</div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Legacy Growave Tier</div>
                     <div class="mt-2 text-sm text-white">{{ $latestGrowaveExternal?->vip_tier ?: '—' }}</div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Referral Link</div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Legacy Referral Link</div>
                     @if($latestGrowaveExternal?->referral_link)
                         <a href="{{ $latestGrowaveExternal->referral_link }}" target="_blank" rel="noreferrer" class="mt-2 inline-flex text-xs text-emerald-100 underline decoration-dotted">
-                            Open Referral Link
+                            Open Legacy Link
                         </a>
                     @else
                         <div class="mt-2 text-sm text-white/60">—</div>
                     @endif
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">External Records</div>
-                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format($externalProfiles->count()) }}</div>
-                </article>
-                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Growave Reviews</div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Legacy Growave Reviews</div>
                     <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($latestGrowaveReviewSummary?->review_count ?? 0)) }}</div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Avg Rating</div>
-                    <div class="mt-2 text-2xl font-semibold text-white">
-                        @if($latestGrowaveReviewSummary?->average_rating !== null)
-                            {{ number_format((float) $latestGrowaveReviewSummary->average_rating, 2) }}
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Wishlist Source</div>
+                    <div class="mt-2 text-sm text-white">
+                        @if(($preferredWishlistDataSource ?? 'none') === 'native')
+                            Native Backstage
+                        @elseif(($preferredWishlistDataSource ?? 'none') === 'legacy')
+                            Legacy Import
                         @else
-                            —
+                            No wishlist data
                         @endif
+                    </div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Wishlist Items</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($preferredWishlistSummary['active_count'] ?? 0)) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Wishlist Adds (30d)</div>
+                    <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($preferredWishlistSummary['recent_additions_30d'] ?? 0)) }}</div>
+                </article>
+                <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Wishlist Last Added</div>
+                    <div class="mt-2 text-sm text-white">{{ $preferredWishlistSummary['last_added_at'] ?? '—' }}</div>
+                    <div class="mt-1 text-[11px] text-white/55">
+                        Removed items: {{ number_format((int) ($preferredWishlistSummary['removed_count'] ?? 0)) }}
                     </div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -151,6 +199,9 @@
             </div>
 
             <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <div class="border-b border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                    External Profile Records (Read-Only)
+                </div>
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
@@ -184,6 +235,51 @@
             </div>
 
             <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <div class="border-b border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                    Native Backstage Reviews
+                </div>
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Review ID</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Rating</th>
+                            <th class="px-4 py-3 text-left">Product</th>
+                            <th class="px-4 py-3 text-left">Submitted</th>
+                            <th class="px-4 py-3 text-left">Reward Event</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($nativeReviewHistory as $review)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $review->external_review_id }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ strtoupper((string) ($review->status ?: 'approved')) }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $review->rating !== null ? number_format((int) $review->rating) : '—' }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $review->product_title ?: ($review->product_id ?: '—') }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($review->submitted_at ?: $review->created_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">
+                                    @if($review->candle_cash_task_completion_id)
+                                        Completion #{{ $review->candle_cash_task_completion_id }}
+                                    @elseif($review->candle_cash_task_event_id)
+                                        Event #{{ $review->candle_cash_task_event_id }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-6 text-center text-white/55">No native Backstage review history yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <div class="border-b border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                    Legacy Growave Reviews (Read-Only)
+                </div>
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
@@ -205,7 +301,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-4 py-6 text-center text-white/55">No Growave review history synced yet.</td>
+                                <td colspan="5" class="px-4 py-6 text-center text-white/55">No legacy Growave review history synced yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -213,6 +309,75 @@
             </div>
 
             <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <div class="border-b border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                    Native Backstage Wishlist
+                </div>
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Product</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Store</th>
+                            <th class="px-4 py-3 text-left">Last Added</th>
+                            <th class="px-4 py-3 text-left">Removed</th>
+                            <th class="px-4 py-3 text-left">Provenance</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($nativeWishlistItems as $item)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $item->product_title ?: ($item->product_handle ?: $item->product_id) }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ strtoupper((string) $item->status) }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $item->store_key ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($item->last_added_at ?: $item->added_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($item->removed_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ $item->provider }}/{{ $item->integration }}{{ $item->source ? ' · ' . $item->source : '' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-6 text-center text-white/55">No native Backstage wishlist items recorded yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <div class="border-b border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                    Legacy Wishlist Rows (Read-Only)
+                </div>
+                <table class="min-w-full text-sm">
+                    <thead class="bg-white/5 text-white/65">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Product</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Store</th>
+                            <th class="px-4 py-3 text-left">Synced</th>
+                            <th class="px-4 py-3 text-left">Provenance</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/10">
+                        @forelse($legacyWishlistItems as $item)
+                            <tr>
+                                <td class="px-4 py-3 text-white/80">{{ $item->product_title ?: ($item->product_handle ?: $item->product_id) }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ strtoupper((string) $item->status) }}</td>
+                                <td class="px-4 py-3 text-white/75">{{ $item->store_key ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ optional($item->source_synced_at ?: $item->updated_at)->format('Y-m-d H:i') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-white/60">{{ $item->provider }}/{{ $item->integration }}{{ $item->source ? ' · ' . $item->source : '' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-4 py-6 text-center text-white/55">No legacy wishlist rows synced yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <div class="border-b border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                    Legacy Growave Loyalty Activity (Read-Only)
+                </div>
                 <table class="min-w-full text-sm">
                     <thead class="bg-white/5 text-white/65">
                         <tr>
@@ -240,7 +405,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-4 py-6 text-center text-white/55">No Growave loyalty activity transactions synced yet.</td>
+                                <td colspan="6" class="px-4 py-6 text-center text-white/55">No legacy Growave loyalty activity transactions synced yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

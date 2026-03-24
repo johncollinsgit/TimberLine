@@ -2,11 +2,15 @@
 
 namespace App\Services\Marketing;
 
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
+use App\Services\Marketing\Email\TenantEmailDispatchService;
 
 class SendGridEmailService
 {
+    public function __construct(
+        protected TenantEmailDispatchService $dispatchService
+    ) {
+    }
+
     /**
      * @param array<string,mixed> $options
      * @return array{
@@ -14,154 +18,36 @@ class SendGridEmailService
      *   provider:string,
      *   message_id:?string,
      *   status:string,
+     *   error_code:?string,
      *   error_message:?string,
      *   payload:array<string,mixed>,
-     *   dry_run:bool
+     *   dry_run:bool,
+     *   retryable:bool,
+     *   tenant_id:?int
      * }
      */
     public function sendEmail(string $toEmail, string $subject, string $bodyText, array $options = []): array
     {
-        $dryRun = (bool) ($options['dry_run'] ?? false) || (bool) config('marketing.email.dry_run', false);
-        $enabled = (bool) config('marketing.email.enabled', false);
-        $apiKey = trim((string) (config('services.sendgrid.api_key') ?: config('services.sendgrid_api_key')));
+        $result = $this->dispatchService->sendEmail(
+            toEmail: $toEmail,
+            subject: $subject,
+            textBody: $bodyText,
+            options: $options,
+        );
 
-        $toEmail = trim($toEmail);
-        $subject = trim($subject);
-        $bodyText = trim($bodyText);
-        if ($toEmail === '' || $subject === '' || $bodyText === '') {
-            return [
-                'success' => false,
-                'provider' => 'sendgrid',
-                'message_id' => null,
-                'status' => 'failed',
-                'error_message' => 'Missing destination email, subject, or body.',
-                'payload' => [],
-                'dry_run' => $dryRun,
-            ];
-        }
-
-        if ($dryRun) {
-            return [
-                'success' => true,
-                'provider' => 'sendgrid',
-                'message_id' => 'DRYRUN-SG-' . strtoupper(bin2hex(random_bytes(6))),
-                'status' => 'sent',
-                'error_message' => null,
-                'payload' => [
-                    'dry_run' => true,
-                    'to' => $toEmail,
-                    'subject' => $subject,
-                ],
-                'dry_run' => true,
-            ];
-        }
-
-        if (! $enabled) {
-            return [
-                'success' => false,
-                'provider' => 'sendgrid',
-                'message_id' => null,
-                'status' => 'failed',
-                'error_message' => 'Email sending is disabled by configuration.',
-                'payload' => [],
-                'dry_run' => false,
-            ];
-        }
-
-        if ($apiKey === '') {
-            return [
-                'success' => false,
-                'provider' => 'sendgrid',
-                'message_id' => null,
-                'status' => 'failed',
-                'error_message' => 'SendGrid API key is not configured.',
-                'payload' => [],
-                'dry_run' => false,
-            ];
-        }
-
-        $fromEmail = trim((string) config('marketing.email.from_email', ''));
-        $fromName = trim((string) config('marketing.email.from_name', 'Timberline'));
-        if ($fromEmail === '') {
-            return [
-                'success' => false,
-                'provider' => 'sendgrid',
-                'message_id' => null,
-                'status' => 'failed',
-                'error_message' => 'SendGrid from email is not configured.',
-                'payload' => [],
-                'dry_run' => false,
-            ];
-        }
-
-        $customArgs = is_array($options['custom_args'] ?? null) ? $options['custom_args'] : [];
-
-        $payload = [
-            'personalizations' => [[
-                'to' => [['email' => $toEmail]],
-                'subject' => $subject,
-                'custom_args' => $customArgs,
-            ]],
-            'from' => [
-                'email' => $fromEmail,
-                'name' => $fromName,
-            ],
-            'content' => [[
-                'type' => 'text/plain',
-                'value' => $bodyText,
-            ]],
+        return [
+            'success' => (bool) ($result['success'] ?? false),
+            'provider' => (string) ($result['provider'] ?? 'sendgrid'),
+            'message_id' => $result['message_id'] ?? null,
+            'status' => (string) ($result['status'] ?? 'failed'),
+            'error_code' => $result['error_code'] ?? null,
+            'error_message' => $result['error_message'] ?? null,
+            'payload' => is_array($result['payload'] ?? null) ? $result['payload'] : [],
+            'dry_run' => (bool) ($result['dry_run'] ?? false),
+            'retryable' => (bool) ($result['retryable'] ?? false),
+            'tenant_id' => isset($result['tenant_id']) && is_numeric($result['tenant_id'])
+                ? (int) $result['tenant_id']
+                : null,
         ];
-
-        try {
-            $response = $this->request($apiKey)->post('https://api.sendgrid.com/v3/mail/send', $payload);
-            $messageId = trim((string) $response->header('X-Message-Id', '')) ?: null;
-
-            if ($response->failed()) {
-                return [
-                    'success' => false,
-                    'provider' => 'sendgrid',
-                    'message_id' => $messageId,
-                    'status' => 'failed',
-                    'error_message' => 'SendGrid request failed with status ' . $response->status(),
-                    'payload' => [
-                        'request' => $payload,
-                        'response' => $response->json() ?: ['body' => $response->body()],
-                    ],
-                    'dry_run' => false,
-                ];
-            }
-
-            return [
-                'success' => true,
-                'provider' => 'sendgrid',
-                'message_id' => $messageId,
-                'status' => 'sent',
-                'error_message' => null,
-                'payload' => [
-                    'request' => $payload,
-                    'status_code' => $response->status(),
-                ],
-                'dry_run' => false,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'provider' => 'sendgrid',
-                'message_id' => null,
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-                'payload' => ['request' => $payload],
-                'dry_run' => false,
-            ];
-        }
-    }
-
-    protected function request(string $apiKey): PendingRequest
-    {
-        return Http::acceptJson()
-            ->asJson()
-            ->timeout(20)
-            ->retry(2, 200, throw: false)
-            ->withToken($apiKey);
     }
 }

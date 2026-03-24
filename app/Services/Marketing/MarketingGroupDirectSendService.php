@@ -202,16 +202,37 @@ class MarketingGroupDirectSendService
         $delivery = MarketingEmailDelivery::query()->create([
             'marketing_campaign_recipient_id' => null,
             'marketing_profile_id' => $profile->id,
+            'tenant_id' => $profile->tenant_id,
+            'provider' => 'sendgrid',
+            'campaign_type' => 'group_direct_send',
+            'template_key' => 'group_' . $group->id,
             'email' => $email,
             'status' => 'sending',
             'raw_payload' => [
                 'group_id' => $group->id,
                 'group_name' => $group->name,
             ],
+            'metadata' => [
+                'tenant_id' => $profile->tenant_id,
+                'customer_id' => $profile->id,
+                'campaign_type' => 'group_direct_send',
+                'template_key' => 'group_' . $group->id,
+            ],
         ]);
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $message, [
             'dry_run' => $dryRun,
+            'tenant_id' => $profile->tenant_id,
+            'campaign_type' => 'group_direct_send',
+            'template_key' => 'group_' . $group->id,
+            'customer_id' => $profile->id,
+            'metadata' => [
+                'marketing_group_id' => $group->id,
+            ],
+            'categories' => [
+                'group-direct-send',
+                'group-' . $group->id,
+            ],
             'custom_args' => [
                 'marketing_email_delivery_id' => (string) $delivery->id,
                 'marketing_profile_id' => (string) $profile->id,
@@ -220,15 +241,19 @@ class MarketingGroupDirectSendService
         ]);
 
         $success = (bool) ($send['success'] ?? false);
+        $provider = trim((string) ($send['provider'] ?? 'sendgrid')) ?: 'sendgrid';
         $delivery->forceFill([
-            'sendgrid_message_id' => $send['message_id'] ?? null,
+            'provider' => $provider,
+            'provider_message_id' => $send['message_id'] ?? null,
+            'sendgrid_message_id' => $provider === 'sendgrid' ? ($send['message_id'] ?? null) : null,
             'status' => $success ? 'sent' : 'failed',
             'sent_at' => $success ? now() : null,
             'failed_at' => $success ? null : now(),
             'raw_payload' => [
                 ...((array) $delivery->raw_payload),
                 'dry_run' => $dryRun,
-                'provider' => $send,
+                'provider' => $provider,
+                'provider_result' => $send,
             ],
         ])->save();
 

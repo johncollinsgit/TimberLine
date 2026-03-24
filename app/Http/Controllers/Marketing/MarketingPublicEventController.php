@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashRedemption;
 use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
 use App\Models\CandleCashReward;
@@ -290,7 +291,21 @@ class MarketingPublicEventController extends Controller
         $profile = $resolution['profile'];
         $lookupState = $resolution['state'];
 
-        [$balance, $availableRewards, $redemptions, $transactions, $latestGrowaveExternal, $latestReviewSummary, $reviewRewardStatus, $lastGrowaveSyncAt] =
+        [
+            $balance,
+            $availableRewards,
+            $redemptions,
+            $transactions,
+            $latestGrowaveExternal,
+            $reviewSummary,
+            $nativeReviewSummary,
+            $legacyReviewSummary,
+            $reviewRewardStatus,
+            $nativeReviewRewardStatus,
+            $legacyReviewRewardStatus,
+            $lastGrowaveSyncAt,
+            $reviewDataSource,
+        ] =
             $this->rewardsLookupData($profile, $candleCashService);
         $redemptionAccess = $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
 
@@ -318,9 +333,14 @@ class MarketingPublicEventController extends Controller
             'redemptions' => $redemptions,
             'transactions' => $transactions,
             'latestGrowaveExternal' => $latestGrowaveExternal,
-            'latestReviewSummary' => $latestReviewSummary,
+            'reviewSummary' => $reviewSummary,
+            'nativeReviewSummary' => $nativeReviewSummary,
+            'legacyReviewSummary' => $legacyReviewSummary,
             'reviewRewardStatus' => $reviewRewardStatus,
+            'nativeReviewRewardStatus' => $nativeReviewRewardStatus,
+            'legacyReviewRewardStatus' => $legacyReviewRewardStatus,
             'lastGrowaveSyncAt' => $lastGrowaveSyncAt,
+            'reviewDataSource' => $reviewDataSource,
             'redeemResult' => session('redeem_result'),
             'redemptionRules' => $candleCashService->redemptionRulesPayload(),
             'redemptionAccess' => $redemptionAccess,
@@ -735,9 +755,14 @@ class MarketingPublicEventController extends Controller
      *   2:array<int,array<string,mixed>>,
      *   3:Collection<int,array<string,mixed>>,
      *   4:?CustomerExternalProfile,
-     *   5:?MarketingReviewSummary,
-     *   6:array{count:int,last_rewarded_at:?string},
-     *   7:?string
+     *   5:array{review_count:int,average_rating:?float,last_reviewed_at:?string},
+     *   6:array{review_count:int,average_rating:?float,last_reviewed_at:?string},
+     *   7:?MarketingReviewSummary,
+     *   8:array{count:int,last_rewarded_at:?string,source:string},
+     *   9:array{count:int,last_rewarded_at:?string,source:string},
+     *   10:array{count:int,last_rewarded_at:?string,source:string},
+     *   11:?string,
+     *   12:string
      * }
      */
     protected function rewardsLookupData(?MarketingProfile $profile, CandleCashService $candleCashService): array
@@ -753,9 +778,14 @@ class MarketingPublicEventController extends Controller
                 collect(),
                 collect(),
                 null,
+                ['review_count' => 0, 'average_rating' => null, 'last_reviewed_at' => null],
+                ['review_count' => 0, 'average_rating' => null, 'last_reviewed_at' => null],
                 null,
-                ['count' => 0, 'last_rewarded_at' => null],
+                ['count' => 0, 'last_rewarded_at' => null, 'source' => 'none'],
+                ['count' => 0, 'last_rewarded_at' => null, 'source' => 'none'],
+                ['count' => 0, 'last_rewarded_at' => null, 'source' => 'none'],
                 null,
+                'none',
             ];
         }
 
@@ -816,15 +846,57 @@ class MarketingPublicEventController extends Controller
             $latestGrowaveExternal
         );
 
+        $nativeApprovedReviews = $profile->reviewHistory()
+            ->where('provider', 'backstage')
+            ->where('integration', 'native')
+            ->where('status', 'approved')
+            ->where('is_published', true);
+
+        $nativeReviewCount = (int) (clone $nativeApprovedReviews)->count();
+        $nativeAverageRating = $nativeReviewCount > 0
+            ? round((float) ((clone $nativeApprovedReviews)->avg('rating') ?? 0), 2)
+            : null;
+        $latestNativeReview = (clone $nativeApprovedReviews)
+            ->orderByDesc('approved_at')
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->first(['approved_at', 'reviewed_at', 'created_at']);
+        $nativeLastReviewedAt = optional(
+            $latestNativeReview?->approved_at ?: $latestNativeReview?->reviewed_at ?: $latestNativeReview?->created_at
+        )->toDateTimeString();
+
+        $nativeReviewSummary = [
+            'review_count' => $nativeReviewCount,
+            'average_rating' => $nativeAverageRating,
+            'last_reviewed_at' => $nativeLastReviewedAt,
+        ];
+
         $reviewRewardRows = $transactionRows
             ->filter(fn (CandleCashTransaction $row): bool => (string) $row->source === 'growave_activity'
                 && $row->candle_cash_delta > 0
                 && str_contains(strtolower((string) ($row->description ?? '')), 'review'))
             ->values();
 
-        $reviewRewardStatus = [
+        $legacyReviewRewardStatus = [
             'count' => $reviewRewardRows->count(),
             'last_rewarded_at' => optional($reviewRewardRows->first()?->created_at)->toDateTimeString(),
+            'source' => 'legacy_growave',
+        ];
+
+        $nativeReviewRewardCompletions = CandleCashTaskCompletion::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->whereIn('status', ['awarded', 'approved'])
+            ->whereHas('task', fn ($builder) => $builder->where('handle', 'product-review'))
+            ->orderByDesc('awarded_at')
+            ->orderByDesc('id');
+        $latestNativeReviewReward = (clone $nativeReviewRewardCompletions)->first(['awarded_at', 'reviewed_at', 'created_at']);
+
+        $nativeReviewRewardStatus = [
+            'count' => (int) (clone $nativeReviewRewardCompletions)->count(),
+            'last_rewarded_at' => optional(
+                $latestNativeReviewReward?->awarded_at ?: $latestNativeReviewReward?->reviewed_at ?: $latestNativeReviewReward?->created_at
+            )->toDateTimeString(),
+            'source' => 'native_task_completion',
         ];
 
         $lastGrowaveSyncAt = collect([
@@ -832,15 +904,37 @@ class MarketingPublicEventController extends Controller
             optional($latestReviewSummary?->source_synced_at)->toDateTimeString(),
         ])->filter()->max();
 
+        $legacyReviewSummary = [
+            'review_count' => (int) ($latestReviewSummary?->review_count ?? 0),
+            'average_rating' => $latestReviewSummary?->average_rating !== null
+                ? round((float) $latestReviewSummary->average_rating, 2)
+                : null,
+            'last_reviewed_at' => optional($latestReviewSummary?->source_synced_at)->toDateTimeString(),
+        ];
+
+        $hasNativeReviewSignals = $nativeReviewSummary['review_count'] > 0 || $nativeReviewRewardStatus['count'] > 0;
+        $hasLegacyReviewSignals = $legacyReviewSummary['review_count'] > 0 || $legacyReviewRewardStatus['count'] > 0;
+
+        $reviewSummary = $hasNativeReviewSignals ? $nativeReviewSummary : $legacyReviewSummary;
+        $reviewRewardStatus = $hasNativeReviewSignals ? $nativeReviewRewardStatus : $legacyReviewRewardStatus;
+        $reviewDataSource = $hasNativeReviewSignals
+            ? 'native'
+            : ($hasLegacyReviewSignals ? 'legacy_growave' : 'none');
+
         return [
             $balance,
             $availableRewards,
             $redemptions,
             $transactions,
             $latestGrowaveExternal,
+            $reviewSummary,
+            $nativeReviewSummary,
             $latestReviewSummary,
             $reviewRewardStatus,
+            $nativeReviewRewardStatus,
+            $legacyReviewRewardStatus,
             $lastGrowaveSyncAt,
+            $reviewDataSource,
         ];
     }
 
