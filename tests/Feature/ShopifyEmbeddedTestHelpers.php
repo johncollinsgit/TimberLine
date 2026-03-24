@@ -21,6 +21,14 @@ function configureEmbeddedRetailStore(?int $tenantId = null): void
     );
 }
 
+function configureStorefrontRetailStoreContext(
+    string $shopDomain = 'retail.example.myshopify.com',
+    string $clientId = 'birthday-retail-client'
+): void {
+    config()->set('services.shopify.stores.retail.shop', $shopDomain);
+    config()->set('services.shopify.stores.retail.client_id', $clientId);
+}
+
 function retailEmbeddedContextToken(string $host = 'admin-host-token'): string
 {
     $store = ShopifyStores::find('retail', true);

@@ -18,6 +18,8 @@ use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use Illuminate\Support\Facades\Http;
 
+require_once __DIR__ . '/../ShopifyEmbeddedTestHelpers.php';
+
 beforeEach(function () {
     MarketingSetting::query()->updateOrCreate(
         ['key' => 'birthday_reward_config'],
@@ -121,6 +123,7 @@ test('storefront birthday payload reflects activated reward state correctly', fu
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'birthday-signing-secret');
+    configureStorefrontRetailStoreContext();
 
     [$profile, $birthday, $issuance] = birthdayRewardFixture([
         'status' => 'claimed',
