@@ -267,12 +267,12 @@ test('candle cash grant creates ledger transaction and updates balance', functio
     $this->actingAs($admin)
         ->post(route('marketing.customers.candle-cash.grant', $profile), [
             'type' => 'earn',
-            'points' => 80,
+            'amount' => 80,
             'description' => 'Manual reward',
         ])
         ->assertRedirect(route('marketing.customers.show', $profile));
 
-    expect(CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(80)
+    expect((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(80.0)
         ->and(CandleCashTransaction::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('type', 'earn')

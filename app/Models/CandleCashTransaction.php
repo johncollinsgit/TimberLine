@@ -57,10 +57,14 @@ class CandleCashTransaction extends Model
         });
     }
 
-    public function getCandleCashDeltaAttribute($value): float
+    public function getCandleCashDeltaAttribute($value): float|int
     {
         if ($value !== null) {
-            return CandleCashMeasurement::normalizeStoredAmount($value);
+            $normalized = CandleCashMeasurement::normalizeStoredAmount($value);
+
+            return CandleCashMeasurement::isWholeAmount($normalized)
+                ? (int) round($normalized)
+                : $normalized;
         }
 
         if (array_key_exists('points', $this->attributes) && $this->attributes['points'] !== null) {
@@ -71,7 +75,11 @@ class CandleCashTransaction extends Model
             return CandleCashMeasurement::legacyPointsToStartingCandleCash($this->attributes['points'] ?? 0);
         }
 
-        return CandleCashMeasurement::normalizeStoredAmount($this->attributes['points'] ?? 0);
+        $normalized = CandleCashMeasurement::normalizeStoredAmount($this->attributes['points'] ?? 0);
+
+        return CandleCashMeasurement::isWholeAmount($normalized)
+            ? (int) round($normalized)
+            : $normalized;
     }
 
     public function setCandleCashDeltaAttribute($value): void

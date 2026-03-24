@@ -240,12 +240,8 @@ test('customers empty state surfaces upstream sync diagnostics and readable head
         ->assertSeeText('No marketing profiles have been built yet')
         ->assertSeeText('Shopify/Growave/Square')
         ->assertSeeText('Run profile sync to build the canonical customer index.')
-        ->assertSeeText('Customer')
-        ->assertSeeText('Source Badges')
-        ->assertSeeText('Linked Sources')
-        ->assertSeeText('Orders')
-        ->assertSeeText('Actions')
-        ->assertSee('whitespace-nowrap', false)
-        ->assertSee('min-w-[1780px]', false)
+        ->assertSeeText('Customer master index')
+        ->assertSeeText('Manage Customers')
+        ->assertSeeText('The live grid below loads rows on demand so search and filters stay fast.')
         ->assertSee('php artisan marketing:sync-profiles --source=all --chunk=500', false);
 });

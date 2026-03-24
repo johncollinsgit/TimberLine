@@ -187,10 +187,13 @@ class OrderProfitCalculator
             ->where('status', 'redeemed')
             ->where('external_order_source', 'order')
             ->where('external_order_id', (string) $order->id)
-            ->get(['id', 'candle_cash_spent']);
+            ->with('reward:id,name,candle_cash_cost,reward_type,reward_value,is_active')
+            ->get(['id', 'reward_id', 'candle_cash_spent']);
 
         if ($redemptions->isNotEmpty()) {
-            $amount = round($redemptions->sum(fn (CandleCashRedemption $row) => $this->candleCashService->amountFromPoints((int) $row->candle_cash_spent)), 2);
+            $amount = round($redemptions->sum(
+                fn (CandleCashRedemption $row): float => $this->candleCashService->redemptionAmountForIssuedCode($row, $row->reward)
+            ), 2);
 
             return [
                 'amount' => $amount,

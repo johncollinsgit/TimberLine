@@ -27,6 +27,7 @@ class CandleCashEarnedReminderService
         $tenantId = isset($options['tenant_id']) && (int) $options['tenant_id'] > 0
             ? (int) $options['tenant_id']
             : null;
+        $effectiveDryRun = (bool) ($readiness['dry_run'] ?? false) || $dryRun;
 
         if (in_array((string) ($readiness['status'] ?? ''), ['disabled', 'misconfigured'], true)) {
             return [
@@ -60,7 +61,7 @@ class CandleCashEarnedReminderService
             'eligible' => (int) ($candidates['eligible_customers'] ?? 0),
             'missing_email_customers' => (int) ($candidates['missing_email_customers'] ?? 0),
             'cooldown_days' => $cooldownDays,
-            'dry_run' => (bool) ($readiness['dry_run'] ?? false) || $dryRun,
+            'dry_run' => $effectiveDryRun,
         ];
 
         foreach ($rows->take($limit) as $recipient) {
@@ -113,7 +114,7 @@ class CandleCashEarnedReminderService
                 $this->subjectForRecipient($recipient),
                 $this->bodyForRecipient($recipient),
                 [
-                    'dry_run' => $dryRun,
+                    'dry_run' => $effectiveDryRun,
                     'tenant_id' => $tenantId,
                     'campaign_type' => 'candle_cash_reminder',
                     'template_key' => 'candle_cash_unredeemed_earned',

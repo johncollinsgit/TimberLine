@@ -104,7 +104,7 @@ jobs:
 
       - name: Run tests
         if: steps.test_prereqs.outputs.can_run_tests == 'true'
-        run: php artisan test --without-tty
+        run: php -d memory_limit=512M ./vendor/bin/pest
 
   deploy:
     name: Deploy
