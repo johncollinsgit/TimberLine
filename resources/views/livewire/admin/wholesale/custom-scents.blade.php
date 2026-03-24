@@ -3,7 +3,7 @@
     <div>
       <div class="text-lg font-semibold text-white">Wholesale Custom Scents</div>
       <div class="text-sm text-emerald-50/70">Account-specific scent names mapped to canonical scents.</div>
-      <div class="mt-1 text-xs text-emerald-100/70">Customer-specific naming and mapping. New scents still go through the wizard.</div>
+      <div class="mt-1 text-xs text-emerald-100/70">Customer-specific naming and mapping. Use the wizard for manual adds; master CSV sync can create canonical blends when missing.</div>
     </div>
     <div class="flex items-center gap-2">
       <label class="relative inline-flex h-10 cursor-pointer items-center rounded-full border border-amber-300/40 bg-amber-500/20 px-4 text-xs font-semibold text-amber-50 hover:bg-amber-500/30">

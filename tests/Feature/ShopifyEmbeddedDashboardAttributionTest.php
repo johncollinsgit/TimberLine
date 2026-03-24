@@ -183,7 +183,9 @@ test('embedded dashboard api returns normalized attribution channels from linked
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer '.retailShopifySessionToken()])
+        ->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'last_30_days',
         'comparison' => 'none',
     ]));

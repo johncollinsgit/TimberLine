@@ -429,7 +429,9 @@ test('dashboard attribution prefers persisted conversion snapshot over changed l
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
-    $response = $this->getJson(route('shopify.app.api.dashboard', [
+    $response = $this
+        ->withHeaders(['Authorization' => 'Bearer '.retailShopifySessionToken()])
+        ->getJson(route('shopify.app.api.dashboard', [
         'timeframe' => 'last_30_days',
         'comparison' => 'none',
     ]));

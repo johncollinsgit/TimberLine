@@ -109,7 +109,7 @@ class TwilioSmsService
                 'provider_message_id' => null,
                 'status' => 'failed',
                 'error_code' => 'sms_disabled',
-                'error_message' => 'SMS sending is disabled by configuration.',
+                'error_message' => 'SMS sending is disabled by configuration. Set MARKETING_SMS_ENABLED=true.',
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),

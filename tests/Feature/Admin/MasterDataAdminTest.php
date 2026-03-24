@@ -336,7 +336,7 @@ test('scent intake persists a new canonical scent and exposes it through master 
     expect((bool) $scent->is_wholesale_custom)->toBeTrue();
 
     expect(ScentAlias::query()
-        ->where('alias', 'Sunrise Limited')
+        ->where('alias', ScentAlias::normalizeLabel('Sunrise Limited'))
         ->where('scope', 'markets')
         ->where('scent_id', $scent->id)
         ->exists())->toBeTrue();

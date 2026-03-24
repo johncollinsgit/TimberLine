@@ -194,6 +194,7 @@ class CustomScentsCrud extends Component
             $exitCode = Artisan::call('wholesale-custom:sync-master', [
                 'csv' => $absolutePath,
                 '--replace' => true,
+                '--allow-create-canonical' => true,
             ]);
 
             if ($exitCode !== 0) {
@@ -205,7 +206,7 @@ class CustomScentsCrud extends Component
             $this->resetPage();
             $this->dispatch('toast', [
                 'type' => 'success',
-                'message' => 'Wholesale custom master CSV synced. Canonical scents were not auto-created (wizard-governed).',
+                'message' => 'Wholesale custom master CSV synced. Canonical scents were created or linked where possible.',
             ]);
         } catch (Throwable $e) {
             $this->dispatch('toast', [

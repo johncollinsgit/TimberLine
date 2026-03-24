@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Actions\ScentGovernance\CreateScentAction;
 use App\Actions\ScentGovernance\CreateScentAliasAction;
 use App\Models\MappingException;
 use App\Models\Order;
@@ -12,6 +13,7 @@ use App\Models\Size;
 use App\Services\ScentGovernance\ResolveScentMatchService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -395,6 +397,10 @@ class MappingExceptions extends Component
                 ['month' => (int) $this->candleClubMonth, 'year' => (int) $this->candleClubYear],
                 ['scent_id' => $scentId]
             );
+        }
+
+        if (! $scentId) {
+            $scentId = $this->createCanonicalScentFromModalInput($sample);
         }
 
         if (! $scentId) {
@@ -1120,6 +1126,73 @@ class MappingExceptions extends Component
         }
 
         return null;
+    }
+
+    protected function createCanonicalScentFromModalInput(?MappingException $sample): ?int
+    {
+        $name = trim($this->newScentName) !== '' ? trim($this->newScentName) : trim($this->modalRawTitle);
+        if ($name === '') {
+            return null;
+        }
+
+        // Keep wizard-first UX for normal interaction, while preserving legacy
+        // saveGroup callers that still submit explicit create fields.
+        $hasLegacyCreateInput = trim($this->newScentOil) !== ''
+            || trim($this->newScentAbbr) !== ''
+            || (bool) $this->newScentIsBlend
+            || ! blank($this->newScentBlendCount);
+        if (! $hasLegacyCreateInput) {
+            return null;
+        }
+
+        $display = trim($this->newScentDisplay) !== '' ? trim($this->newScentDisplay) : $name;
+        $isWholesale = (string) ($sample?->store_key ?? '') === 'wholesale' || filled($sample?->account_name);
+
+        try {
+            $scent = app(CreateScentAction::class)->execute([
+                'name' => $name,
+                'display_name' => $display,
+                'abbreviation' => trim($this->newScentAbbr),
+                'oil_reference_name' => trim($this->newScentOil),
+                'is_blend' => (bool) $this->newScentIsBlend,
+                'blend_oil_count' => $this->newScentIsBlend && ! blank($this->newScentBlendCount)
+                    ? (int) $this->newScentBlendCount
+                    : null,
+                'is_wholesale_custom' => $isWholesale,
+                'is_active' => true,
+                'source_context' => 'mapping_exceptions',
+            ]);
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->flatten()->first();
+            $this->dispatch('toast', [
+                'type' => 'warning',
+                'message' => $firstError ? (string) $firstError : 'Unable to create canonical scent from intake inputs.',
+            ]);
+
+            return null;
+        }
+
+        if (Schema::hasTable('scent_aliases')) {
+            $aliases = collect([
+                trim((string) ($sample?->raw_scent_name ?? '')),
+                trim((string) ($sample?->raw_title ?? '')),
+                trim($this->modalRawTitle),
+            ])->filter()->unique()->values()->all();
+
+            if ($aliases !== []) {
+                app(CreateScentAliasAction::class)->syncAcrossScopes(
+                    (int) $scent->id,
+                    $aliases,
+                    ['markets'],
+                    [
+                        trim((string) ($scent->name ?? '')),
+                        trim((string) ($scent->display_name ?? '')),
+                    ]
+                );
+            }
+        }
+
+        return (int) $scent->id;
     }
 
     protected function wizardUrlForModal(string $rawName, bool $isCandleClub): string

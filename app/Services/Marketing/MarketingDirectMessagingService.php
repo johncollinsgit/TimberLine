@@ -307,8 +307,8 @@ class MarketingDirectMessagingService
                 return ['sendable' => false, 'profile' => null, 'to_phone' => null, 'requires_consent' => true];
             }
 
-            $toPhone = trim((string) ($profile->normalized_phone ?: $profile->phone));
-            if ($toPhone === '') {
+            $toPhone = $this->identityNormalizer->toE164((string) ($profile->normalized_phone ?: $profile->phone));
+            if ($toPhone === null) {
                 return ['sendable' => false, 'profile' => null, 'to_phone' => null, 'requires_consent' => true];
             }
 
@@ -321,25 +321,31 @@ class MarketingDirectMessagingService
             return ['sendable' => false, 'profile' => null, 'to_phone' => null, 'requires_consent' => false];
         }
 
+        $phoneCandidates = $this->identityNormalizer->phoneMatchCandidates($phone);
         $profile = MarketingProfile::query()
-            ->where('normalized_phone', $normalized)
+            ->whereIn('normalized_phone', $phoneCandidates)
             ->first();
 
         if (! $profile) {
+            $normalizedE164 = $this->identityNormalizer->toE164($normalized) ?: $normalized;
+            $rawPhone = trim((string) ($recipient['phone'] ?? ''));
             $profile = MarketingProfile::query()->create([
                 'first_name' => $this->firstName((string) ($recipient['name'] ?? '')),
                 'last_name' => $this->lastName((string) ($recipient['name'] ?? '')),
                 'email' => $this->nullableString($recipient['email'] ?? null),
                 'normalized_email' => null,
-                'phone' => trim((string) ($recipient['phone'] ?? $normalized)) ?: $normalized,
-                'normalized_phone' => $normalized,
+                'phone' => $rawPhone !== '' ? $rawPhone : $normalizedE164,
+                'normalized_phone' => $normalizedE164,
                 'source_channels' => ['manual_message_entry'],
                 'accepts_sms_marketing' => false,
                 'accepts_email_marketing' => false,
             ]);
         }
 
-        return ['sendable' => true, 'profile' => $profile, 'to_phone' => $normalized, 'requires_consent' => false];
+        $toPhone = $this->identityNormalizer->toE164((string) ($profile->normalized_phone ?: $profile->phone))
+            ?: ($this->identityNormalizer->toE164($normalized) ?: $normalized);
+
+        return ['sendable' => true, 'profile' => $profile, 'to_phone' => $toPhone, 'requires_consent' => false];
     }
 
     protected function firstName(string $name): ?string

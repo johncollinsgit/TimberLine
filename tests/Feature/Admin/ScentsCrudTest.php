@@ -8,133 +8,69 @@ use App\Models\Scent;
 use App\Models\WholesaleCustomScent;
 use Livewire\Livewire;
 
-test('can create a non-blend scent without blend fields', function () {
+test('open create redirects to scent wizard', function () {
+    $expectedWizardUrl = route('admin.scent-wizard', [
+        'source_context' => 'catalog',
+        'return_to' => route('admin.index', ['tab' => 'catalog']),
+    ]);
+
     Livewire::test(ScentsCrud::class)
         ->call('openCreate')
-        ->set('create.name', 'Glazed Lemon Cake')
-        ->set('create.display_name', 'Glazed Lemon Cake')
-        ->set('create.abbreviation', 'GLC')
-        ->set('create.oil_reference_name', 'Lemon Pound Cake')
-        ->set('create.is_blend', false)
-        ->set('create.oil_blend_id', '')
-        ->set('create.blend_oil_count', '')
+        ->assertRedirect($expectedWizardUrl);
+});
+
+test('legacy create action redirects to scent wizard', function () {
+    $expectedWizardUrl = route('admin.scent-wizard', [
+        'source_context' => 'catalog',
+        'return_to' => route('admin.index', ['tab' => 'catalog']),
+    ]);
+
+    Livewire::test(ScentsCrud::class)
         ->call('create')
-        ->assertDispatched('toast');
-
-    $scent = Scent::query()->where('name', 'glazed lemon cake')->first();
-    expect($scent)->not->toBeNull();
-    expect((string) ($scent->display_name ?? ''))->toBe('Glazed Lemon Cake');
-    expect((string) ($scent->abbreviation ?? ''))->toBe('GLC');
-    expect((string) ($scent->oil_reference_name ?? ''))->toBe('Lemon Pound Cake');
-    expect((bool) $scent->is_blend)->toBeFalse();
-    expect($scent->oil_blend_id)->toBeNull();
-    expect($scent->blend_oil_count)->toBeNull();
+        ->assertRedirect($expectedWizardUrl);
 });
 
-test('create form only shows blend fields when blend is enabled', function () {
-    $component = Livewire::test(ScentsCrud::class)
-        ->call('openCreate')
-        ->assertDontSee('Blend Mapping')
-        ->assertDontSee('Recipe Sources');
+test('catalog scents view points users to the wizard for new scent creation', function () {
+    $expectedWizardUrl = route('admin.scent-wizard', [
+        'source_context' => 'catalog',
+        'return_to' => route('admin.index', ['tab' => 'catalog']),
+    ]);
 
-    $component
-        ->set('create.is_blend', true)
-        ->assertSee('Blend Mapping')
-        ->assertSee('Recipe Sources');
+    Livewire::test(ScentsCrud::class)
+        ->assertSee('New Scent Wizard')
+        ->assertSee($expectedWizardUrl);
 });
 
-test('unchecking blend clears blend fields', function () {
+test('unchecking blend clears blend fields on edit payload', function () {
     $blend = Blend::query()->create([
         'name' => 'Citrus Blend',
         'is_blend' => true,
     ]);
 
-    Livewire::test(ScentsCrud::class)
-        ->call('openCreate')
-        ->set('create.is_blend', true)
-        ->set('create.oil_blend_id', $blend->id)
-        ->set('create.blend_oil_count', 3)
-        ->set('create.is_blend', false)
-        ->assertSet('create.oil_blend_id', null)
-        ->assertSet('create.blend_oil_count', null)
-        ->assertSet('create.recipe_components', []);
-});
-
-test('duplicate name shows create name error', function () {
-    Scent::query()->create([
-        'name' => 'honeysuckle',
-        'display_name' => 'Honeysuckle',
+    $scent = Scent::query()->create([
+        'name' => 'citrus woods',
+        'display_name' => 'Citrus Woods',
+        'is_blend' => true,
+        'oil_blend_id' => $blend->id,
+        'blend_oil_count' => 3,
         'is_active' => true,
     ]);
 
     Livewire::test(ScentsCrud::class)
-        ->call('openCreate')
-        ->set('create.name', 'Honeysuckle')
-        ->set('create.display_name', 'Honeysuckle 2')
-        ->set('create.abbreviation', 'HSX')
-        ->call('create')
-        ->assertHasErrors(['create.name']);
+        ->call('openEdit', $scent->id)
+        ->set('edit.is_blend', false)
+        ->assertSet('edit.oil_blend_id', null)
+        ->assertSet('edit.blend_oil_count', null)
+        ->assertSet('edit.recipe_components', []);
 });
 
-test('duplicate abbreviation shows create abbreviation error', function () {
-    Scent::query()->create([
-        'name' => 'mint tea',
-        'display_name' => 'Mint Tea',
-        'abbreviation' => 'MT',
+test('apply selected wholesale source hydrates canonical and recipe sources for edit', function () {
+    $editableScent = Scent::query()->create([
+        'name' => 'pending custom scent',
+        'display_name' => 'Pending Custom Scent',
         'is_active' => true,
     ]);
 
-    Livewire::test(ScentsCrud::class)
-        ->call('openCreate')
-        ->set('create.name', 'Vanilla Mint')
-        ->set('create.display_name', 'Vanilla Mint')
-        ->set('create.abbreviation', 'MT')
-        ->call('create')
-        ->assertHasErrors(['create.abbreviation']);
-});
-
-test('can create blend scent by creating inline blend from recipe sources', function () {
-    $lavender = BaseOil::query()->create([
-        'name' => 'Lavender',
-        'grams_on_hand' => 0,
-        'reorder_threshold' => 0,
-        'jug_size_grams' => 2263,
-        'active' => true,
-    ]);
-    $gingersnap = BaseOil::query()->create([
-        'name' => 'Gingersnap',
-        'grams_on_hand' => 0,
-        'reorder_threshold' => 0,
-        'jug_size_grams' => 2263,
-        'active' => true,
-    ]);
-
-    Livewire::test(ScentsCrud::class)
-        ->call('openCreate')
-        ->set('create.name', 'lavender snap')
-        ->set('create.display_name', 'Lavender Snap')
-        ->set('create.is_blend', true)
-        ->set('create.create_inline_blend', true)
-        ->set('create.inline_blend_name', 'Lavender Snap Blend')
-        ->set('create.recipe_components', [
-            ['type' => 'base_oil', 'id' => $lavender->id, 'ratio_weight' => 2],
-            ['type' => 'base_oil', 'id' => $gingersnap->id, 'ratio_weight' => 1],
-        ])
-        ->call('create')
-        ->assertHasNoErrors();
-
-    $scent = Scent::query()->where('name', 'lavender snap')->first();
-    expect($scent)->not->toBeNull();
-    expect((bool) $scent->is_blend)->toBeTrue();
-    expect($scent->oil_blend_id)->not->toBeNull();
-
-    $blend = Blend::query()->find($scent->oil_blend_id);
-    expect($blend)->not->toBeNull();
-    expect($blend->name)->toBe('Lavender Snap Blend');
-    expect(BlendComponent::query()->where('blend_id', $blend->id)->count())->toBe(2);
-});
-
-test('apply selected wholesale source hydrates canonical and recipe sources', function () {
     $canonical = Scent::query()->create([
         'name' => 'vintage amber',
         'display_name' => 'Vintage Amber',
@@ -168,12 +104,12 @@ test('apply selected wholesale source hydrates canonical and recipe sources', fu
     ]);
 
     Livewire::test(ScentsCrud::class)
-        ->call('openCreate')
-        ->set('create.is_blend', true)
-        ->set('create.source_wholesale_custom_scent_id', $source->id)
-        ->call('applySelectedWholesaleSource', 'create')
-        ->assertSet('create.canonical_scent_id', $canonical->id)
-        ->assertSet('create.recipe_components.0.type', 'blend');
+        ->call('openEdit', $editableScent->id)
+        ->set('edit.is_blend', true)
+        ->set('edit.source_wholesale_custom_scent_id', $source->id)
+        ->call('applySelectedWholesaleSource', 'edit')
+        ->assertSet('edit.canonical_scent_id', $canonical->id)
+        ->assertSet('edit.recipe_components.0.type', 'blend');
 });
 
 test('can update a scent field with inline editing', function () {

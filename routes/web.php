@@ -11,6 +11,7 @@ use App\Http\Controllers\Marketing\MarketingConsentCaptureController;
 use App\Http\Controllers\Marketing\MarketingCustomersController;
 use App\Http\Controllers\Marketing\MarketingGroupsController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
+use App\Http\Controllers\Marketing\MarketingMessagesController;
 use App\Http\Controllers\Marketing\MarketingMessageTemplatesController;
 use App\Http\Controllers\Marketing\MarketingOperationsController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
@@ -256,6 +257,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/messages', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'messages')
                 ->name('messages');
+            Route::get('/messages/send', [MarketingMessagesController::class, 'send'])->name('messages.send');
+            Route::get('/messages/deliveries', [MarketingMessagesController::class, 'deliveries'])->name('messages.deliveries');
+            Route::get('/messages/search-customers', [MarketingMessagesController::class, 'searchCustomers'])->name('messages.search-customers');
+            Route::post('/messages/save-audience', [MarketingMessagesController::class, 'saveAudience'])->name('messages.save-audience');
+            Route::post('/messages/save-message', [MarketingMessagesController::class, 'saveMessage'])->name('messages.save-message');
+            Route::post('/messages/set-step', [MarketingMessagesController::class, 'setStep'])->name('messages.set-step');
+            Route::post('/messages/send-test', [MarketingMessagesController::class, 'sendTest'])->name('messages.send-test');
+            Route::post('/messages/execute', [MarketingMessagesController::class, 'executeSend'])->name('messages.execute');
+            Route::post('/messages/reset', [MarketingMessagesController::class, 'resetWizard'])->name('messages.reset');
             Route::get('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'show'])->name('send.all-opted-in');
             Route::post('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'submit'])->name('send.all-opted-in.submit');
             Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
