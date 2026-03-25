@@ -96,6 +96,7 @@
         <x-app-topbar
             :navigation="$navigation['items'] ?? []"
             :active="$navigation['activeSection'] ?? null"
+            :active-child="$navigation['activeChild'] ?? null"
             :host="$host"
             :title="$pageTitle"
             :subtitle="$pageSubtitle"

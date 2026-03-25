@@ -1,5 +1,43 @@
 # Modern Forestry Backstage
 
+## Current Release State (2026-03-25)
+
+This branch now includes the first commercialization/operator shell on top of tenant entitlements.
+
+Implemented and navigable now:
+- Embedded product shell:
+  - `/shopify/app` (overview/dashboard)
+  - `/shopify/app/start` (Start Here)
+  - `/shopify/app/plans` (Plans & Add-ons informational)
+  - `/shopify/app/integrations` (integrations placeholder surface)
+- Public product surfaces:
+  - `/platform/promo`
+  - `/platform/contact`
+- Operator diagnostics surfaces:
+  - customer email timeline provider-context filters + CSV export parity
+  - birthday analytics/reporting/export/comparison flows
+  - campaign delivery diagnostics/provider-context sections
+
+Integrations surface behavior (intentional in this release):
+- placeholder-first, entitlement-aware cards
+- setup detail drawer per integration
+- deterministic read-only status registry context per card
+- fallback-first guidance (manual/CSV/continue without connector)
+- no live connector sync/OAuth/jobs/webhooks/API writes from this page
+
+Commercialization/access state:
+- product shell and entitlement-aware UI are in place
+- billing/checkout/activation writes are not implemented yet
+- upgrade prompts are informational routing only
+
+Multi-tenant state:
+- tenant-aware semantics are now established in email/birthday/provider diagnostics and shell module-state presentation
+- full domain tenant isolation is still in progress and should not be overclaimed
+- internal ops/inventory/pouring boundaries remain intentionally cautious and partially candle-shaped
+
+Recommended next step after this push:
+- deploy and run manual production verification of shell navigation, diagnostics filters/export parity, and integrations placeholder/drawer behavior before adding new scope
+
 ## Shopify (Phase 1)
 Required environment keys:
 - `SHOPIFY_RETAIL_SHOP`

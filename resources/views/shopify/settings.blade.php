@@ -8,6 +8,11 @@
     :app-navigation="$appNavigation"
     :page-actions="$pageActions"
 >
+    @php
+        $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
+        $settingsModuleState = is_array($moduleStates['settings'] ?? null) ? $moduleStates['settings'] : null;
+    @endphp
+
     <style>
         .settings-root {
             display: grid;
@@ -323,6 +328,14 @@
     </style>
 
     <section class="settings-root" id="email-settings-root">
+        @if(is_array($settingsModuleState))
+            <x-tenancy.module-state-card
+                :module-state="$settingsModuleState"
+                title="Settings module state"
+                description="Settings visibility and readiness now come from tenant entitlement + setup state."
+            />
+        @endif
+
         <article class="settings-card">
             <div class="settings-head">
                 <div>

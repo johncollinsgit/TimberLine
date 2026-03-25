@@ -465,7 +465,11 @@ class ShopifyEmbeddedRewardsController extends Controller
                     ],
                 ]
                 : [],
-            'appNavigation' => $this->embeddedAppNavigation('rewards', $section),
+            'appNavigation' => $this->embeddedAppNavigation(
+                'rewards',
+                $section,
+                $configState['tenant_id'] ?? null
+            ),
             'pageActions' => [],
         ];
 

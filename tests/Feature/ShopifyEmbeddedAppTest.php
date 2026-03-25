@@ -121,3 +121,31 @@ test('shopify embedded session keeps rewards root-style route but blocks legacy 
         ->assertSeeText('Context Missing')
         ->assertSeeText('This page must be opened from Shopify Admin');
 });
+
+test('shopify embedded dashboard renders module-state checklist shell and bootstrap payload', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
+    config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
+
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'modernforestry.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+
+    $query = shopifyEmbeddedSignedQuery([
+        'shop' => 'modernforestry.myshopify.com',
+        'host' => 'admin-host-token',
+        'embedded' => '1',
+        'timestamp' => (string) time(),
+    ], 'shopify-client-secret');
+
+    $response = $this->get(route('shopify.app', $query));
+
+    $response->assertOk()
+        ->assertSeeText('Module setup checklist')
+        ->assertSee('data-module-checklist="true"', false)
+        ->assertSee('tenant-module-access-bootstrap', false)
+        ->assertSee('"checklist"', false);
+});

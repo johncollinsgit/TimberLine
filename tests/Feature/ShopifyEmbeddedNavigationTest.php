@@ -103,3 +103,11 @@ test('embedded shell renders shopify app nav with top-level links', function () 
         ->assertSee('<s-link href="/shopify/app/customers/manage?shop=', false)
         ->assertSee('<s-link href="/shopify/app/settings?shop=', false);
 });
+
+test('embedded navigation renders module-state indicators for placeholder and setup surfaces', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('shopify.embedded.rewards.referrals', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('data-module-state="coming_soon"', false);
+});

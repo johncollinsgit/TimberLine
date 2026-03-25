@@ -23,6 +23,19 @@
     :page-subnav="$customerSubnav"
     :page-actions="$pageActions"
 >
+    @php
+        $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
+        $activeSubnav = collect($customerSubnav ?? [])->first(
+            fn (array $item): bool => ! empty($item['active'])
+        );
+        $activeModuleState = is_array($activeSubnav['module_state'] ?? null)
+            ? $activeSubnav['module_state']
+            : (is_array($moduleStates['customers'] ?? null) ? $moduleStates['customers'] : null);
+        $activeModuleUi = \App\Support\Tenancy\TenantModuleUi::present($activeModuleState, 'Customers');
+        $lockedModule = ($activeModuleUi['ui_state'] ?? '') === 'locked';
+        $comingSoonModule = ($activeModuleUi['ui_state'] ?? '') === 'coming_soon';
+    @endphp
+
     <style>
         .customers-stack {
             display: grid;
@@ -60,6 +73,25 @@
     </style>
 
     <section class="customers-stack">
-        {{ $slot }}
+        @if(is_array($activeModuleState))
+            <x-tenancy.module-state-card
+                :module-state="$activeModuleState"
+                :title="$activeModuleUi['label']"
+                description="Customer module visibility and readiness follow tenant entitlement state."
+            />
+        @endif
+
+        @if($lockedModule || $comingSoonModule)
+            <x-tenancy.module-upgrade-prompt
+                :module-state="$activeModuleState"
+                :cta-href="route('marketing.overview')"
+                cta-label="Request customer module access"
+                coming-soon-cta-label="Follow roadmap"
+            />
+        @endif
+
+        @if(! $lockedModule)
+            {{ $slot }}
+        @endif
     </section>
 </x-shopify-embedded-shell>

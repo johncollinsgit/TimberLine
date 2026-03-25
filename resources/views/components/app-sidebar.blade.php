@@ -107,6 +107,13 @@
             inset 2px 0 0 #0f8f61;
     }
 
+    .app-sidebar-link-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
     .app-sidebar-children {
         list-style: none;
         margin: 6px 0 8px 10px;
@@ -137,6 +144,13 @@
         background: rgba(15, 143, 97, 0.1);
         color: #0d6f4d;
         font-weight: 620;
+    }
+
+    .app-sidebar-child-link-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
     }
 
     @media (max-width: 900px) {
@@ -192,7 +206,17 @@
                     href="{{ $item['href'] }}"
                     class="app-sidebar-link{{ $isParentActive ? ' is-active' : '' }}"
                 >
-                    {{ $item['label'] }}
+                    <span class="app-sidebar-link-row">
+                        <span>{{ $item['label'] }}</span>
+                        @if(is_array($item['module_state'] ?? null))
+                            <x-tenancy.module-state-badge
+                                :module-state="$item['module_state']"
+                                size="sm"
+                                compact
+                                :hide-active="true"
+                            />
+                        @endif
+                    </span>
                 </a>
 
                 @if($hasChildren && $isExpanded)
@@ -203,7 +227,17 @@
                                     href="{{ $child['href'] }}"
                                     class="app-sidebar-child-link{{ $activeChild === $child['key'] ? ' is-active' : '' }}"
                                 >
-                                    {{ $child['label'] }}
+                                    <span class="app-sidebar-child-link-row">
+                                        <span>{{ $child['label'] }}</span>
+                                        @if(is_array($child['module_state'] ?? null))
+                                            <x-tenancy.module-state-badge
+                                                :module-state="$child['module_state']"
+                                                size="sm"
+                                                compact
+                                                :hide-active="true"
+                                            />
+                                        @endif
+                                    </span>
                                 </a>
                             </li>
                         @endforeach

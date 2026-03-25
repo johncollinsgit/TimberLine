@@ -2,6 +2,55 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Current Release State (Scan First)
+
+Current implemented shell/diagnostics checkpoint:
+- Embedded product shell is live and navigable:
+  - `/shopify/app` (overview/dashboard)
+  - `/shopify/app/start`
+  - `/shopify/app/plans`
+  - `/shopify/app/integrations`
+- Public product surfaces are implemented:
+  - `/platform/promo`
+  - `/platform/contact`
+- Diagnostics/operator surfaces are implemented and test-covered:
+  - customer email timeline provider-context filters + CSV export parity
+  - birthday analytics/reporting/export/comparison
+  - campaign delivery diagnostics/provider-context visibility
+- Integrations is placeholder-first:
+  - setup drawer exists
+  - read-only deterministic status registry exists
+  - entitlement-aware states (`connected`, `setup_needed`, `locked`, `coming_soon`) exist
+  - no real connector sync/OAuth/jobs/webhooks/API writes exist
+- Billing/checkout activation is intentionally not implemented yet.
+
+Current execution priority:
+- deploy/verify/stabilize this shell and diagnostics release
+- avoid new feature sprawl unless a concrete regression requires it
+
+## Dual-Track Strategy (Hard Guardrail)
+
+This platform has two product tracks that must evolve together without breaking each other:
+
+1. Shopify Product Track (flagship wedge)
+- Remains first-class and commercially useful for Shopify merchants.
+- Existing Shopify proof-of-concept behavior is sacrosanct during architecture and docs work:
+  - storefront widgets and signed proxy flows
+  - embedded dashboard/customers/settings flows
+  - Candle Cash, birthdays, reviews, wishlist
+  - canonical marketing identity pipeline
+- Do not genericize away Shopify-specific value.
+
+2. Broader Business Systems Track (expansion path)
+- Extends the same canonical backend into direct business onboarding, integrations, uploads/imports, and tiered access.
+- This is an expansion path, not a rewrite.
+- Reuse shared core primitives only when real use cases justify extraction.
+
+Authoritative direction docs:
+- `docs/architecture/dual-track-product-direction.md`
+- `docs/architecture/operational-multi-tenant-direction.md`
+- `docs/architecture/tenant-entitlements-foundation.md`
+
 This repo has important architectural and deployment realities that must be understood first:
 - Laravel backend is the canonical system of truth
 - Shopify theme repo is separate from backend repo
@@ -114,7 +163,7 @@ Use this order for feature work:
 
 Do not skip upward on this ladder without documenting why the simpler level was insufficient.
 
-## Current Priority TODOs
+## Historical TODO Backlog (Not Current Release Focus)
 
 ### Immediate launch goal
 - [ ] Launch Candle Cash tomorrow in a way that is visibly working on the live storefront and in the Laravel admin/backstage system

@@ -8,6 +8,25 @@ Give future implementation work a clear boundary model for what is already tenan
 
 This document is intentionally opinionated but does not claim unfinished domains are already fully multi-tenant.
 
+## Current Release Checkpoint (2026-03-25)
+
+Implemented operator/product surfaces now include:
+- embedded shell surfaces for overview/start/plans/integrations
+- public promo/contact product surfaces
+- tenant-aware diagnostics surfaces for:
+  - customer email timeline provider-context filters + CSV export parity
+  - birthday analytics/reporting/export/comparison
+  - campaign delivery diagnostics/provider-context summaries
+
+Integrations scope in this release:
+- placeholder-first cards + setup drawer + read-only status registry
+- no live connector sync/OAuth/jobs/webhooks/API writes
+
+What this checkpoint means for next runs:
+- treat this as stabilization/deploy/verify baseline
+- avoid broad architecture expansion unless fixing concrete regressions
+- keep docs explicit about placeholder/read-only vs operational behavior
+
 ## Product Architecture Doctrine
 
 - Fire Forge Tech is the platform owner.
@@ -232,6 +251,49 @@ Before extending customers, inventory, orders, or ops workflows:
    - why current reuse was insufficient
    - what is generic vs domain-specific
    - idempotency + tenant-scope implications
+
+## Entitlement-First and Tiered Product Vision
+
+Future platform work should be designed as entitlement-aware by default, even when full billing orchestration is not implemented yet.
+
+### Product access model direction
+- Plan levels define broad capability envelopes (for example: core, growth, pro, enterprise).
+- Add-ons define optional purchasable modules on top of a base plan.
+- Each tenant/module should support explicit states:
+  - enabled
+  - disabled
+  - configured
+  - setup-incomplete
+  - locked (upgrade required)
+
+### Required behavior for new major modules
+- Module enablement must be tenant-scoped.
+- Access checks must exist in backend service/controller paths, not only in UI visibility rules.
+- Setup status must be explicit so UI can show:
+  - next required setup action
+  - degraded/placeholder state safely
+  - upgrade prompt when entitlement is missing
+- Storefront and embedded/admin surfaces should read from the same entitlement/status truth where possible.
+
+### Billing implementation scope (current)
+- Do not block platform progress on immediate full billing integration.
+- It is acceptable to start with canonical entitlement state tables/config and upgrade prompts first.
+- When billing is later connected, it should map onto existing entitlement states instead of replacing module logic.
+- Foundation implementation details live in:
+  - `docs/architecture/tenant-entitlements-foundation.md`
+
+### Identity and canonical data constraint
+- Entitlement packaging must never introduce a second customer identity stack.
+- Continue reusing canonical identity and sync pipelines:
+  - `marketing_profiles`
+  - `customer_external_profiles`
+  - `marketing_profile_links`
+  - `MarketingProfileSyncService`
+
+### Anti-patterns to avoid
+- Hardcoding module access by store key, email domain, or temporary tenant checks.
+- Treating placeholder pages as “enabled” modules without backend capability.
+- Building separate per-tenant module forks when one entitlement-aware module can serve all tenants.
 
 ## Explicit Ambiguities (Intentional)
 

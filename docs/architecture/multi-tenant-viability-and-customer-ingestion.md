@@ -3,6 +3,11 @@
 > Historical reverse-engineering snapshot from 2026-03-18.
 > For current cross-domain boundary guidance (including customer, inventory/ops, and candle-specific vs reusable layering), see:
 > `docs/architecture/operational-multi-tenant-direction.md`.
+>
+> Current release overlay (2026-03-25):
+> - embedded product shell (`/shopify/app`, `/shopify/app/start`, `/shopify/app/plans`, `/shopify/app/integrations`) is now implemented
+> - diagnostics/operator surfaces (customer timeline filters/export parity, birthday analytics comparison/export, campaign diagnostics) are implemented
+> - integrations remains placeholder-first/read-only with setup drawer + status registry (no live connector sync/OAuth/jobs/webhooks)
 
 ## Purpose
 Document the current Backstage/Shopify marketing architecture, assess viability for true multi-tenant operation, and define the best current workflow for ingesting new customers and rewards signups (email + SMS).

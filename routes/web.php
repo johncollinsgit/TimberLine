@@ -23,6 +23,7 @@ use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
+use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
@@ -112,6 +113,8 @@ Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'a
 Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.embedded.customers.questions');
 Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToDetail'])->name('shopify.embedded.customers.detail');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
+Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
+Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -703,6 +706,9 @@ Route::prefix('shopify/marketing/v1')
 
 Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
+    Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
+    Route::get('/app/plans', [ShopifyEmbeddedAppController::class, 'plansAndAddons'])->name('shopify.app.plans');
+    Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
     Route::get('/app/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers.manage');

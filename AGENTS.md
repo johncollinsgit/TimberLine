@@ -28,6 +28,34 @@ Before building anything new:
 Do not create duplicate systems that replicate existing logic.
 Prefer modifying the current architecture over introducing parallel structures.
 
+Dual-track product guardrail:
+- Shopify Product Track is the flagship wedge and must remain strong.
+- Broader Business Systems Track is an expansion path, not a rewrite.
+- Do not weaken currently working Shopify proof-of-concept flows while building broader platform direction.
+
+Feature classification rules (required for every new major feature):
+- Classify as exactly one:
+  - Shopify-only
+  - Shared core
+  - Integration layer
+  - Purchasable add-on
+  - Internal/admin only
+
+Required feature metadata before implementation:
+1. Classification (from the list above)
+2. Tenant scope (tenant-scoped, global-by-design, or mixed with explicit bridge rules)
+3. Entitlement/access level (plan tier, add-on dependency, enabled/disabled defaults)
+4. Canonical model/service dependency (which existing canonical models/services are reused)
+5. Shopify-specific hooks (proxy routes, embedded surfaces, webhooks, theme/runtime dependencies)
+6. Setup/onboarding implications (what setup checklist or connector state must exist)
+7. Shopify behavior preservation requirement (what current behavior must remain unchanged)
+8. Non-Shopify applicability target (now, later, or never)
+
+Identity duplication warning:
+- Never invent a parallel customer identity system.
+- Reuse `marketing_profiles`, `customer_external_profiles`, `marketing_profile_links`, and `MarketingProfileSyncService`.
+- Any proposal that introduces a second profile/identity truth must be rejected unless explicitly approved.
+
 Identity architecture rule:
 - The canonical customer identity model is `marketing_profiles`.
 - External systems such as Shopify, Square, and Growave must integrate through:

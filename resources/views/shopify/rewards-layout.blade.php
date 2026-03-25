@@ -19,6 +19,26 @@
     :app-navigation="$appNavigation"
     :page-actions="$pageActions"
 >
+    @php
+        $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
+        $activeChild = strtolower(trim((string) ($appNavigation['activeChild'] ?? 'overview')));
+        $activeSection = strtolower(trim((string) ($appNavigation['activeSection'] ?? 'rewards')));
+        $moduleMap = [
+            'overview' => 'rewards',
+            'earn' => 'rewards',
+            'redeem' => 'rewards',
+            'referrals' => 'referrals',
+            'birthdays' => 'birthdays',
+            'vip' => 'vip',
+            'notifications' => 'notifications',
+        ];
+        $activeModuleKey = $moduleMap[$activeChild] ?? $activeSection;
+        $activeModuleState = is_array($moduleStates[$activeModuleKey] ?? null) ? $moduleStates[$activeModuleKey] : null;
+        $activeModuleUi = \App\Support\Tenancy\TenantModuleUi::present($activeModuleState, ucfirst(str_replace('_', ' ', $activeModuleKey)));
+        $lockedModule = ($activeModuleUi['ui_state'] ?? '') === 'locked';
+        $comingSoonModule = ($activeModuleUi['ui_state'] ?? '') === 'coming_soon';
+    @endphp
+
     <style>
         .rewards-root {
             display: flex;
@@ -40,10 +60,29 @@
     </style>
 
     <section class="rewards-root">
+        @if(is_array($activeModuleState))
+            <x-tenancy.module-state-card
+                :module-state="$activeModuleState"
+                :title="$activeModuleUi['label']"
+                description="Module access and setup state is sourced from tenant entitlements."
+            />
+        @endif
+
+        @if($lockedModule || $comingSoonModule)
+            <x-tenancy.module-upgrade-prompt
+                :module-state="$activeModuleState"
+                :cta-href="route('marketing.overview')"
+                cta-label="Request module access"
+                coming-soon-cta-label="Follow roadmap"
+            />
+        @endif
+
         @if(filled($setupNote))
             <div class="rewards-note">{{ $setupNote }}</div>
         @endif
 
-        @yield('rewards-content')
+        @if(! $lockedModule)
+            @yield('rewards-content')
+        @endif
     </section>
 </x-shopify-embedded-shell>

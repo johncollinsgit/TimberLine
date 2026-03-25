@@ -7,6 +7,7 @@
     'host' => null,
     'navigation' => [],
     'active' => null,
+    'activeChild' => null,
 ])
 
 <style>
@@ -81,6 +82,9 @@
     }
 
     .app-topbar-nav-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         text-decoration: none;
         color: rgba(15, 23, 42, 0.6);
         font-size: 13px;
@@ -139,6 +143,13 @@
         color: rgba(15, 23, 42, 0.98);
     }
 
+    .app-topbar-title-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
     .app-topbar-subtitle {
         margin: 0;
         font-size: 14px;
@@ -187,6 +198,7 @@
     .app-topbar-subnav-link {
         display: inline-flex;
         align-items: center;
+        gap: 6px;
         text-decoration: none;
         color: rgba(15, 23, 42, 0.58);
         font-size: 12.5px;
@@ -249,6 +261,28 @@
     $appendEmbeddedContext = static function (string $url) use ($embeddedContext): string {
         return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
     };
+
+    $activeSectionItem = collect($navigation)->first(
+        fn (array $item): bool => ($item['key'] ?? null) === $active
+    );
+    $activeChildren = is_array($activeSectionItem) && is_array($activeSectionItem['children'] ?? null)
+        ? $activeSectionItem['children']
+        : [];
+    $activeChildItem = collect($activeChildren)->first(
+        fn (array $item): bool => ($item['key'] ?? null) === $activeChild
+    );
+    $activeModuleState = is_array($activeSectionItem) && is_array($activeSectionItem['module_state'] ?? null)
+        ? $activeSectionItem['module_state']
+        : null;
+    if (is_array($activeChildItem['module_state'] ?? null)) {
+        $activeModuleState = $activeChildItem['module_state'];
+    }
+    $activeSubnavItem = collect($subnav)->first(
+        fn (array $item): bool => ! empty($item['active'])
+    );
+    if (is_array($activeSubnavItem) && is_array($activeSubnavItem['module_state'] ?? null)) {
+        $activeModuleState = $activeSubnavItem['module_state'];
+    }
 @endphp
 
 <header class="app-topbar">
@@ -273,7 +307,15 @@
                         href="{{ $appendEmbeddedContext($item['href']) }}"
                         class="app-topbar-nav-link{{ ($active ?? null) === ($item['key'] ?? null) ? ' is-active' : '' }}"
                     >
-                        {{ $item['label'] }}
+                        <span>{{ $item['label'] }}</span>
+                        @if(is_array($item['module_state'] ?? null))
+                            <x-tenancy.module-state-badge
+                                :module-state="$item['module_state']"
+                                size="sm"
+                                compact
+                                :hide-active="true"
+                            />
+                        @endif
                     </a>
                 @endforeach
             </nav>
@@ -290,7 +332,12 @@
             <div class="app-topbar-main">
                 <div class="app-topbar-text">
                     @if(filled($title))
-                        <h1 class="app-topbar-title">{{ $title }}</h1>
+                        <div class="app-topbar-title-row">
+                            <h1 class="app-topbar-title">{{ $title }}</h1>
+                            @if(is_array($activeModuleState))
+                                <x-tenancy.module-state-badge :module-state="$activeModuleState" size="sm" />
+                            @endif
+                        </div>
                     @endif
                     @if(filled($subtitle))
                         <p class="app-topbar-subtitle">{{ $subtitle }}</p>
@@ -320,7 +367,15 @@
                             href="{{ $appendEmbeddedContext($item['href']) }}"
                             class="app-topbar-subnav-link{{ ! empty($item['active']) ? ' is-active' : '' }}"
                         >
-                            {{ $item['label'] }}
+                            <span>{{ $item['label'] }}</span>
+                            @if(is_array($item['module_state'] ?? null))
+                                <x-tenancy.module-state-badge
+                                    :module-state="$item['module_state']"
+                                    size="sm"
+                                    compact
+                                    :hide-active="true"
+                                />
+                            @endif
                         </a>
                     @endforeach
                 </nav>

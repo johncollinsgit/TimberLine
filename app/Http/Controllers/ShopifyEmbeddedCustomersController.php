@@ -14,6 +14,7 @@ use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
 use App\Services\Tenancy\TenantResolver;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use App\Services\Marketing\MarketingConsentService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
@@ -588,6 +589,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? app(TenantResolver::class)->resolveTenantIdForStoreContext($store)
+            : null;
 
         return $this->embeddedResponse(
             response()->view($view, array_merge([
@@ -601,8 +605,8 @@ class ShopifyEmbeddedCustomersController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, $defaultHeadline),
                 'subheadline' => $this->subheadlineForStatus($status, $defaultSubheadline),
-                'appNavigation' => $this->embeddedAppNavigation('customers'),
-                'pageSubnav' => $this->customerSubnav($subnavKey),
+                'appNavigation' => $this->embeddedAppNavigation('customers', null, $tenantId),
+                'pageSubnav' => $this->customerSubnav($subnavKey, $tenantId),
                 'pageActions' => [],
             ], $extraViewData)),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
@@ -1192,18 +1196,37 @@ class ShopifyEmbeddedCustomersController extends Controller
     }
 
     /**
-     * @return array<int,array{key:string,label:string,href:string,active:bool}>
+     * @return array<int,array{key:string,label:string,href:string,active:bool,module_state?:array<string,mixed>}>
      */
-    protected function customerSubnav(string $activeKey): array
+    protected function customerSubnav(string $activeKey, ?int $tenantId = null): array
     {
+        /** @var TenantModuleAccessResolver $resolver */
+        $resolver = app(TenantModuleAccessResolver::class);
+        $moduleStates = $resolver->resolveForTenant($tenantId, ['customers', 'activity', 'questions']);
+        $resolvedStates = (array) ($moduleStates['modules'] ?? []);
+
         $items = [
             ['key' => 'manage', 'label' => 'Manage customers', 'href' => route('shopify.app.customers.manage', [], false)],
             ['key' => 'activity', 'label' => 'Activity', 'href' => route('shopify.app.customers.activity', [], false)],
             ['key' => 'questions', 'label' => 'Questions', 'href' => route('shopify.app.customers.questions', [], false)],
         ];
 
+        $subnavModuleMap = [
+            'manage' => 'customers',
+            'activity' => 'activity',
+            'questions' => 'questions',
+        ];
+
         return array_map(
-            fn (array $item): array => array_merge($item, ['active' => $item['key'] === $activeKey]),
+            function (array $item) use ($activeKey, $subnavModuleMap, $resolvedStates): array {
+                $moduleKey = $subnavModuleMap[$item['key']] ?? null;
+                $state = $moduleKey !== null ? ($resolvedStates[$moduleKey] ?? null) : null;
+
+                return array_merge($item, [
+                    'active' => $item['key'] === $activeKey,
+                    'module_state' => $state,
+                ]);
+            },
             $items
         );
     }

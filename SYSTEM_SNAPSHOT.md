@@ -9,6 +9,55 @@
 - Shopify storefront communicates with Laravel primarily through signed app-proxy endpoints
 - Theme repo is separate from backend repo
 - Architecture is in single-tenant-to-multi-tenant transition; tenant scaffolding exists in-code and conversion is in progress
+- Dual-track product direction is documented in:
+  - `docs/architecture/dual-track-product-direction.md`
+  - `docs/architecture/operational-multi-tenant-direction.md`
+  - `docs/architecture/tenant-entitlements-foundation.md`
+
+## Current Release State (2026-03-25)
+
+Quick-scan summary for future agents:
+- Product shell/commercialization surfaces are implemented:
+  - embedded: `/shopify/app`, `/shopify/app/start`, `/shopify/app/plans`, `/shopify/app/integrations`
+  - public: `/platform/promo`, `/platform/contact`
+- Diagnostics/operator surfaces are implemented and actively used:
+  - customer email timeline provider-context filters + CSV export parity
+  - birthday analytics/reporting/export/comparison
+  - campaign delivery diagnostics/provider-context summaries
+- Integrations surface is intentionally placeholder-first:
+  - per-connector setup drawer
+  - read-only deterministic status registry metadata
+  - entitlement-aware card states (`connected`, `setup_needed`, `locked`, `coming_soon`)
+  - no real connector sync/OAuth/jobs/webhooks/API writes from this surface
+- Commercialization direction is active but billing/checkout activation is not implemented yet.
+- Tenant-aware direction is established in shell + diagnostics, while full domain tenant isolation remains in progress.
+- Immediate next step is deploy + verify this release, not broad new feature expansion.
+
+## Current Shopify Proof-of-Concept Reality
+- Working now (proof-of-concept surfaces that must not be weakened):
+  - Storefront signed proxy contracts (`/apps/forestry/*`, `/shopify/marketing/v1/*`) via `routes/web.php` + `MarketingShopifyIntegrationController`
+  - Embedded Shopify app flows for dashboard/customers/settings/rewards via:
+    - `ShopifyEmbeddedAppController`
+    - `ShopifyEmbeddedCustomersController`
+    - `ShopifyEmbeddedRewardsController`
+    - `ShopifyEmbeddedSettingsController`
+  - First-party feature systems in active use:
+    - Candle Cash
+    - birthdays
+    - native reviews/comments
+    - wishlist
+    - canonical marketing identity linking
+
+- Partial/incomplete reality (do not overclaim):
+  - Tenant safety remains incomplete across core domains and reporting.
+  - Embedded dashboard/customers still require hard tenant-scope auditing in query/service paths.
+  - Candle Cash and birthday data models still rely heavily on `marketing_profile_id` joins rather than direct tenant isolation on all domain tables.
+  - Multiple embedded tabs are currently placeholder/thin surfaces (`referrals`, `vip`, `notifications`, `activity`, `questions`) and should not be documented as complete modules.
+
+- Documentation truthfulness rule:
+  - If documentation claims conflict with implemented routes/controllers/services, trust implementation reality and mark docs as stale.
+  - Historical references to packaged Shopify extension-directory architecture should be treated as stale when contradicted by code.
+  - Current storefront runtime behavior is heavily delivered through the separate Shopify theme repo sidecar (`modernforestry-live-theme`) plus backend proxy contracts.
 
 ## Local Repo Locations
 ### Backend repo

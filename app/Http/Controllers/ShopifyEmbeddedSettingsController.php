@@ -45,7 +45,7 @@ class ShopifyEmbeddedSettingsController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status),
                 'subheadline' => $this->subheadlineForStatus($status),
-                'appNavigation' => $this->embeddedAppNavigation('settings'),
+                'appNavigation' => $this->embeddedAppNavigation('settings', null, $tenantId),
                 'pageActions' => [],
                 'smsSenders' => $senderConfigService->all(),
                 'defaultSmsSender' => $senderConfigService->defaultSender(),

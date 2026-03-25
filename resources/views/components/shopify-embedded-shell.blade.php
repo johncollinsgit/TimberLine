@@ -17,6 +17,8 @@
         filled($host) ? (string) $host : null
     );
     $embeddedNavUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+    $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
+    $moduleChecklist = \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates);
 @endphp
 
 <!DOCTYPE html>
@@ -76,5 +78,15 @@
     >
         {{ $slot }}
     </x-app-shell>
+
+    @if(is_array($appNavigation) && $moduleStates !== [])
+        <script id="tenant-module-access-bootstrap" type="application/json">
+            {!! json_encode([
+                'tenant_id' => $appNavigation['tenantId'] ?? null,
+                'modules' => $moduleStates,
+                'checklist' => $moduleChecklist,
+            ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+        </script>
+    @endif
 </body>
 </html>
