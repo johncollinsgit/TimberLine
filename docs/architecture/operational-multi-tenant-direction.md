@@ -8,6 +8,33 @@ Give future implementation work a clear boundary model for what is already tenan
 
 This document is intentionally opinionated but does not claim unfinished domains are already fully multi-tenant.
 
+## Product Architecture Doctrine
+
+- Fire Forge Tech is the platform owner.
+- The Forestry Studio is the flagship tenant, not the architectural center of the platform.
+- Flagship customization is allowed; platform coupling is not.
+- New capabilities should be designed so they can be sold to future tenants without requiring architectural rework.
+- Platform nouns, config keys, service names, and data models should remain domain-neutral unless a constraint is truly tenant-specific.
+
+## Feature Classification Rules
+
+Every new feature must be classified as one of:
+- Core platform capability
+- Tenant configuration option
+- Purchasable add-on
+- Temporary tenant-specific override
+
+If a feature begins as a tenant-specific customization, document the path by which it could later become:
+1. tenant config, or
+2. a reusable add-on.
+
+## Tenant Presentation And Packaging Rules
+
+- Structure, labels, ordering, visibility, and workflow composition should be tenant-configurable where practical.
+- Shared business logic should remain in canonical backend services/contracts.
+- Tenant-specific UI/presentation may vary, but should sit on top of shared module logic.
+- Purchasable add-ons must be tenant-scoped, billing-aware, and configurable without per-tenant forks.
+
 ## Current Multi-Tenant Status By Domain
 
 ### 1) Email provider + delivery reporting (established direction)
@@ -148,6 +175,14 @@ Before extending customers, inventory, orders, or ops workflows:
    - why current reuse was insufficient
    - what is generic vs domain-specific
    - idempotency + tenant-scope implications
+
+Before merging a feature, document:
+- whether it is core, config, add-on, or override
+- what is Forestry-specific vs platform-generic
+- what tenant settings control it
+- how entitlement/billing is checked
+- whether it works for a non-candle tenant without code changes
+- which canonical services/contracts it reuses
 
 ## Explicit Ambiguities (Intentional)
 

@@ -18,6 +18,32 @@ Before building anything:
 5. For customer/inventory/order/ops changes, read:
    - `docs/architecture/operational-multi-tenant-direction.md`
 
+## Platform Product Doctrine
+
+- Fire Forge Tech is the platform owner.
+- The Forestry Studio is the flagship tenant, not the architectural center of the platform.
+- Flagship customization is allowed; platform coupling is not.
+- New capabilities should be shaped so they can be sold to future tenants without architectural rework.
+- Platform nouns, config keys, service names, and data models should remain domain-neutral unless a constraint is truly tenant-specific.
+
+Every new feature must be classified as one of:
+- Core platform capability
+- Tenant configuration option
+- Purchasable add-on
+- Temporary tenant-specific override
+
+If something starts as a tenant-specific override, document how it could later become:
+1. tenant configuration, or
+2. a reusable add-on.
+
+Before merging a feature, document:
+- which classification it falls under
+- what is Forestry-specific vs platform-generic
+- which tenant settings control it
+- how entitlement/billing is checked
+- whether it works for a non-candle tenant without code changes
+- which canonical services/contracts it reuses
+
 ## Storefront Sidecar Status (Recorded)
 
 The current rewards storefront "sidecar" work was implemented in the separate Shopify theme repo:
@@ -48,6 +74,7 @@ Future purchasable apps/modules must be built as tenant-scoped add-ons on top of
 - Prefer one shared module architecture with tenant configuration over per-tenant forks.
 - Avoid creating sidecar data models for rewards/reviews/wishlist/identity.
 - Treat add-ons as attachable capabilities, not separate parallel systems.
+- Tenant-specific UI/presentation is allowed, but it must sit on top of shared module logic and canonical backend contracts.
 
 ## Current Priority TODOs
 

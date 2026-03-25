@@ -1,6 +1,9 @@
 # SYSTEM SNAPSHOT
 
 ## Project Overview
+- Fire Forge Tech is the platform owner.
+- The Forestry Studio is the flagship tenant, not the architectural center of the platform.
+- Flagship customization is allowed, but platform architecture must remain reusable for future tenants.
 - This is a Laravel + Shopify integration project
 - Laravel backend is the canonical system of truth
 - Shopify storefront communicates with Laravel primarily through signed app-proxy endpoints
@@ -204,6 +207,29 @@ Before building anything:
 3. check whether the behavior belongs in backend repo, theme repo, or both
 4. confirm deploy path to determine what is actually live
 5. avoid creating parallel systems
+
+## Feature Packaging Doctrine
+
+Every new feature should be categorized as one of:
+- core platform capability
+- tenant configuration option
+- purchasable add-on
+- temporary tenant-specific override
+
+Implementation expectations:
+- Prefer domain-neutral platform nouns, config keys, service names, and data models unless the requirement is truly tenant-specific.
+- Shared business logic should remain in canonical backend services/contracts.
+- Tenant-specific structure, labels, ordering, visibility, and workflow composition should be configurable where practical.
+- Purchasable add-ons must be tenant-scoped, billing-aware, and configurable without per-tenant forks.
+- If a feature begins as a tenant-specific override, document the path to convert it into tenant configuration or a reusable add-on.
+
+Before merging a feature, document:
+- the feature classification
+- what is Forestry-specific vs platform-generic
+- which tenant settings control presentation/behavior
+- how entitlement or billing is checked
+- whether a non-candle tenant can use it without code changes
+- which canonical services/contracts were reused
 
 ## Current Priority TODOs
 ### Do Now — Candle Cash Launch-Critical Verification
