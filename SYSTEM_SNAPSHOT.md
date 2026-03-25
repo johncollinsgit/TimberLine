@@ -136,6 +136,21 @@ Historically, third-party systems like Growave used API/OAuth-style access, but 
   - backend contract availability
   - theme runtime/rendering path
 
+### Rewards Sidecar Snapshot
+- `/pages/rewards` storefront UX currently runs through theme-side runtime files:
+  - `/Users/johncollins/projects/modernforestry-live-theme/assets/forestry-rewards.js`
+  - `/Users/johncollins/projects/modernforestry-live-theme/assets/forestry-rewards.css`
+- Current sidecar status:
+  - theme selector moved behind compact top-right toggle/panel
+  - top summary/status clutter removed
+  - birthday reward + birthday intake combined into one expandable card
+  - reward opportunity cards collapsed by default with accessible toggles
+  - task/reward history sections removed from the page UI
+  - responsive hierarchy/spacing polish for mobile + desktop
+- Boundary rule:
+  - This sidecar is a presentation layer that calls canonical backend contracts.
+  - Do not replicate backend reward or identity business logic in theme JS.
+
 ## Data Principles
 - Canonical tables only
 - No shadow systems
@@ -694,6 +709,13 @@ Examples:
 
 Rule:
 - Different verticals should reuse core identity, timeline, messaging hooks, and admin visibility wherever possible.
+
+Add-on packaging rule (future purchasable apps):
+- Treat add-ons as tenant-scoped capabilities/modules, not separate sidecar data systems.
+- Add-ons must reuse canonical identity (`marketing_profiles` + existing link tables/services).
+- Add-ons should integrate through existing signed storefront/app-proxy patterns when possible.
+- Access to add-ons should be controlled by tenant-scoped feature/billing state.
+- Avoid per-tenant forks; one module implementation, tenant-level configuration.
 
 ### 4. Tenant Onboarding Flow
 Intended sales/delivery operating flow:

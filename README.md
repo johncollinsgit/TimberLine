@@ -141,3 +141,27 @@ Temporarily disable deploy:
 - For cross-domain boundary decisions (tenant/platform vs reusable ops primitives vs candle-specific logic), use:
   - `docs/architecture/operational-multi-tenant-direction.md`
 - This guidance is intended for future implementation runs touching customers, inventory/internal ops, order workflows, and lifecycle communications.
+
+## Storefront Rewards Sidecar (Theme Repo)
+- The current `/pages/rewards` UI sidecar lives in the separate Shopify theme repository:
+  - `/Users/johncollins/projects/modernforestry-live-theme`
+  - implemented in `assets/forestry-rewards.js` + `assets/forestry-rewards.css`
+- Recent sidecar update delivered:
+  - compact theme toggle/dropdown
+  - removed top rewards-summary clutter
+  - unified birthday reward + intake into one expandable card
+  - collapsible opportunity cards for compact default scan
+  - removed task/reward history blocks from page layout
+  - mobile/desktop spacing and hierarchy polish
+- Backend remains canonical for identity/rewards state; sidecar only presents and invokes existing contracts.
+
+## Future Purchasable Add-Ons (Tenant-Scoped)
+- Build future apps/modules as tenant-scoped add-ons attached to the shared platform shell.
+- Reuse canonical identity and marketing architecture:
+  - `marketing_profiles`
+  - `customer_external_profiles`
+  - `marketing_profile_links`
+  - existing sync/service pipelines
+- Prefer extending existing signed storefront/API contracts before adding new surfaces.
+- Feature access must be tenant-scoped and billing-aware (no global hardcoded availability).
+- Do not fork per-tenant architecture; use one reusable module with tenant-level configuration.

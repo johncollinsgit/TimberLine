@@ -18,6 +18,37 @@ Before building anything:
 5. For customer/inventory/order/ops changes, read:
    - `docs/architecture/operational-multi-tenant-direction.md`
 
+## Storefront Sidecar Status (Recorded)
+
+The current rewards storefront "sidecar" work was implemented in the separate Shopify theme repo:
+- Theme repo: `/Users/johncollins/projects/modernforestry-live-theme`
+- Runtime files:
+  - `assets/forestry-rewards.js`
+  - `assets/forestry-rewards.css`
+
+Scope completed in that sidecar:
+- Theme selector is hidden by default behind a compact top-right toggle
+- Top summary/status clutter was removed from `/pages/rewards`
+- Birthday experience was consolidated into a single expandable card
+- Reward opportunity cards are collapsible by default for compact scanning
+- Task/Rewards history blocks were removed from the rewards page UI
+- Layout hierarchy and spacing were refined for mobile + desktop
+
+Important boundary:
+- This sidecar is a storefront UX layer only.
+- Canonical rewards logic, identity, and verification remain in Laravel/backend contracts.
+- Do not rebuild rewards logic in theme JavaScript.
+
+## Future Add-On App Rules (Multi-Tenant)
+
+Future purchasable apps/modules must be built as tenant-scoped add-ons on top of the shared platform shell:
+- Keep canonical identity in `marketing_profiles` (+ existing link tables/pipelines).
+- Reuse existing signed storefront contracts (`/apps/forestry/...`, `/shopify/marketing/v1/...`) before adding endpoints.
+- Gate availability by tenant-scoped feature/billing state, not hardcoded store/email checks.
+- Prefer one shared module architecture with tenant configuration over per-tenant forks.
+- Avoid creating sidecar data models for rewards/reviews/wishlist/identity.
+- Treat add-ons as attachable capabilities, not separate parallel systems.
+
 ## Current Priority TODOs
 
 ### Immediate launch goal
