@@ -14,10 +14,13 @@ use App\Models\MarketingGroupImportRun;
 use App\Models\MarketingGroupMember;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
+use App\Models\Tenant;
+use App\Models\TenantEmailSetting;
 use App\Models\User;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\MarketingCampaignAudienceBuilder;
 use App\Services\Marketing\MarketingEmailExecutionService;
+use App\Services\Marketing\MarketingGroupDirectSendService;
 use Illuminate\Support\Facades\Http;
 
 test('group can be created and member can be added', function () {
@@ -167,6 +170,7 @@ test('sendgrid email execution sends approved recipients and stores delivery met
     config()->set('marketing.email.enabled', true);
     config()->set('marketing.email.dry_run', false);
     config()->set('marketing.email.from_email', 'marketing@example.com');
+    config()->set('marketing.email.from_name', 'Modern Forestry');
     config()->set('services.sendgrid.api_key', 'SG_TEST');
 
     Http::fake([
@@ -203,9 +207,135 @@ test('sendgrid email execution sends approved recipients and stores delivery met
     $delivery = MarketingEmailDelivery::query()->where('marketing_campaign_recipient_id', $recipient->id)->firstOrFail();
 
     expect($result['outcome'])->toBe('sent')
+        ->and($delivery->provider)->toBe('sendgrid')
         ->and($delivery->sendgrid_message_id)->toBe('SG_MSG_123')
+        ->and((string) data_get($delivery->metadata, 'provider'))->toBe('sendgrid')
+        ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('fallback')
+        ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeTrue()
         ->and($delivery->status)->toBe('sent')
         ->and($recipient->fresh()->status)->toBe('sent');
+});
+
+test('email execution records unsupported tenant provider context without mislabeling sendgrid', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Unsupported Campaign Email Tenant',
+        'slug' => 'unsupported-campaign-email-tenant',
+    ]);
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'email_provider' => 'custom',
+        'email_enabled' => true,
+        'from_name' => 'Custom Sender',
+        'from_email' => 'custom@example.test',
+        'provider_status' => 'not_configured',
+        'provider_config' => [
+            'driver' => 'custom-http',
+            'api_endpoint' => 'https://api.custom-email.test/send',
+        ],
+        'analytics_enabled' => true,
+    ]);
+
+    $campaign = MarketingCampaign::query()->create([
+        'name' => 'Unsupported Provider Campaign',
+        'status' => 'active',
+        'channel' => 'email',
+    ]);
+
+    $variant = MarketingCampaignVariant::query()->create([
+        'campaign_id' => $campaign->id,
+        'name' => 'Unsupported Variant',
+        'message_text' => 'Hi {{first_name}}',
+        'status' => 'active',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Unsupported',
+        'email' => 'unsupported.target@example.com',
+        'normalized_email' => 'unsupported.target@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $recipient = MarketingCampaignRecipient::query()->create([
+        'campaign_id' => $campaign->id,
+        'marketing_profile_id' => $profile->id,
+        'variant_id' => $variant->id,
+        'channel' => 'email',
+        'status' => 'approved',
+    ]);
+
+    $result = app(MarketingEmailExecutionService::class)->sendRecipient($recipient);
+    $delivery = MarketingEmailDelivery::query()->where('marketing_campaign_recipient_id', $recipient->id)->firstOrFail();
+
+    expect($result['outcome'])->toBe('failed')
+        ->and((string) $result['reason'])->toBe('provider_failure')
+        ->and($delivery->provider)->toBe('custom')
+        ->and($delivery->provider_message_id)->toBeNull()
+        ->and($delivery->sendgrid_message_id)->toBeNull()
+        ->and($delivery->status)->toBe('failed')
+        ->and((string) data_get($delivery->metadata, 'provider'))->toBe('custom')
+        ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('tenant')
+        ->and((string) data_get($delivery->metadata, 'provider_readiness_status'))->toBe('unsupported')
+        ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeFalse();
+});
+
+test('group direct email send records tenant-resolved unsupported provider context', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Direct Send Unsupported Tenant',
+        'slug' => 'direct-send-unsupported-tenant',
+    ]);
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'email_provider' => 'custom',
+        'email_enabled' => true,
+        'from_name' => 'Custom Sender',
+        'from_email' => 'custom@example.test',
+        'provider_status' => 'not_configured',
+        'provider_config' => [
+            'driver' => 'custom-http',
+            'api_endpoint' => 'https://api.custom-email.test/send',
+        ],
+        'analytics_enabled' => true,
+    ]);
+
+    $group = MarketingGroup::query()->create([
+        'name' => 'Internal Email Group',
+        'is_internal' => true,
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Group Member',
+        'email' => 'group.member@example.test',
+        'normalized_email' => 'group.member@example.test',
+        'accepts_email_marketing' => true,
+    ]);
+
+    MarketingGroupMember::query()->create([
+        'marketing_group_id' => $group->id,
+        'marketing_profile_id' => $profile->id,
+    ]);
+
+    $summary = app(MarketingGroupDirectSendService::class)->sendToGroup(
+        group: $group,
+        channel: 'email',
+        message: 'Hello {{first_name}}',
+        subject: 'Internal group update',
+        options: ['dry_run' => false]
+    );
+
+    $delivery = MarketingEmailDelivery::query()->where('marketing_profile_id', $profile->id)->latest('id')->firstOrFail();
+
+    expect((int) ($summary['processed'] ?? 0))->toBe(1)
+        ->and((int) ($summary['failed'] ?? 0))->toBe(1)
+        ->and($delivery->provider)->toBe('custom')
+        ->and($delivery->status)->toBe('failed')
+        ->and((string) data_get($delivery->metadata, 'provider'))->toBe('custom')
+        ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('tenant')
+        ->and((string) data_get($delivery->metadata, 'provider_readiness_status'))->toBe('unsupported')
+        ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeFalse();
 });
 
 test('sendgrid webhook updates delivery states and handles duplicate callbacks idempotently', function () {

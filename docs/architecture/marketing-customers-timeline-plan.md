@@ -11,8 +11,31 @@ Define the next-stage architecture for a unified customer timeline in the custom
 - Growave enrichment snapshots: `customer_external_profiles` where `integration = growave`.
 - Reviews: currently planned; inferred only from source-link signals.
 - Marketing activity: `messageDeliveries`, `campaignConversions`, and `consentEvents` relationships.
+- Email delivery diagnostics: `emailDeliveries` (`marketing_email_deliveries`) with provider-context derivation via `MarketingEmailDeliveryProviderContext`.
 
 The detail page now exposes a `Unified Customer Timeline Plan` section that reports stream readiness and current counts.
+
+## Current implemented provider-context diagnostics (email timeline)
+The customer detail page `Email Delivery Timeline` now renders canonical provider-context diagnostics per row using persisted `marketing_email_deliveries.metadata` fields:
+- `provider_resolution_source`
+- `provider_readiness_status`
+- `provider_config_status`
+- `provider_using_fallback_config`
+
+Implemented row-level operator labels include:
+- sent via tenant-configured provider
+- sent via fallback provider config
+- attempted with unsupported provider runtime
+- blocked by incomplete provider setup
+- provider context unavailable for legacy row
+
+The surface also includes compact summary counts for:
+- tenant vs fallback resolution paths
+- unsupported/incomplete attempts
+- legacy/unknown-context rows
+- resolution/readiness mix chips
+
+Legacy rows are explicitly labeled as unavailable/unknown context and are never backfilled from current runtime config.
 
 ## Canonical event envelope (planned)
 Future timeline items should be rendered from a normalized event envelope:

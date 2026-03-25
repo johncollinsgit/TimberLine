@@ -13,6 +13,7 @@ use App\Models\MarketingImportRun;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Models\MarketingProfile;
+use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingSegment;
 use App\Models\MarketingOrderEventAttribution;
@@ -25,10 +26,12 @@ use App\Models\SquarePayment;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardEngineService;
+use App\Services\Marketing\BirthdayEmailDeliveryStatusNormalizer;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\GrowaveProjectionService;
 use App\Services\Marketing\MarketingConsentService;
+use App\Services\Marketing\MarketingEmailDeliveryProviderContext;
 use App\Services\Marketing\MarketingEventAttributionService;
 use App\Services\Marketing\MarketingNextBestActionService;
 use App\Services\Marketing\MarketingProfileMatcher;
@@ -43,10 +46,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MarketingCustomersController extends Controller
 {
@@ -63,9 +69,11 @@ class MarketingCustomersController extends Controller
         protected BirthdayProfileService $birthdayProfileService,
         protected BirthdayRewardEngineService $birthdayRewardEngine,
         protected BirthdayReportingService $birthdayReportingService,
+        protected BirthdayEmailDeliveryStatusNormalizer $emailDeliveryStatusNormalizer,
         protected ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService,
         protected GrowaveProjectionService $growaveProjectionService,
-        protected MarketingWishlistService $wishlistService
+        protected MarketingWishlistService $wishlistService,
+        protected MarketingEmailDeliveryProviderContext $emailDeliveryProviderContextResolver
     ) {
     }
 
@@ -811,11 +819,18 @@ class MarketingCustomersController extends Controller
             ->limit(120)
             ->get();
 
-        $emailDeliveries = $marketingProfile->emailDeliveries()
-            ->with(['recipient.campaign:id,name'])
+        $emailDeliveryTimelineFilters = $this->normalizeEmailDeliveryTimelineFilters($request);
+        $emailDeliveryTimelineFilterOptions = $this->emailDeliveryTimelineFilterOptions();
+        $emailDeliveryTimelinePaginator = $this->customerEmailTimelineDeliveryQuery($marketingProfile, $emailDeliveryTimelineFilters)
             ->orderByDesc('id')
-            ->limit(120)
-            ->get();
+            ->paginate($this->emailDeliveryTimelinePerPage(), ['*'], 'email_page')
+            ->withQueryString();
+        $emailDeliveries = collect($emailDeliveryTimelinePaginator->items());
+        $emailDeliveryTimelineRows = $this->buildEmailDeliveryTimelineRows($emailDeliveries);
+        $emailDeliveryProviderContextSummary = $this->buildEmailDeliveryProviderContextSummaryForFilters(
+            $marketingProfile,
+            $emailDeliveryTimelineFilters
+        );
 
         $candleBalance = $this->candleCashService->currentBalance($marketingProfile);
         $candleTransactions = $marketingProfile->candleCashTransactions()
@@ -952,6 +967,11 @@ class MarketingCustomersController extends Controller
             'campaignOptions' => $campaignOptions,
             'deliveries' => $deliveries,
             'emailDeliveries' => $emailDeliveries,
+            'emailDeliveryTimelinePaginator' => $emailDeliveryTimelinePaginator,
+            'emailDeliveryTimelineRows' => $emailDeliveryTimelineRows,
+            'emailDeliveryProviderContextSummary' => $emailDeliveryProviderContextSummary,
+            'emailDeliveryTimelineFilters' => $emailDeliveryTimelineFilters,
+            'emailDeliveryTimelineFilterOptions' => $emailDeliveryTimelineFilterOptions,
             'conversions' => $conversions,
             'consentEvents' => $consentEvents,
             'candleBalance' => $candleBalance,
@@ -967,6 +987,725 @@ class MarketingCustomersController extends Controller
             'birthdayProfile' => $birthdayProfile,
             'birthdayRewardStatus' => $birthdayRewardStatus,
         ]);
+    }
+
+    public function exportEmailDeliveries(MarketingProfile $marketingProfile, Request $request): StreamedResponse
+    {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
+
+        $filters = $this->normalizeEmailDeliveryTimelineFilters($request);
+        $deliveries = $this->customerEmailTimelineDeliveryQuery($marketingProfile, $filters)
+            ->orderByDesc('id')
+            ->get();
+        $rows = $this->buildEmailDeliveryTimelineRows($deliveries);
+        $columns = [
+            'attempted_at',
+            'sent_at',
+            'delivered_at',
+            'opened_at',
+            'clicked_at',
+            'failed_at',
+            'campaign',
+            'campaign_type',
+            'subject',
+            'template_key',
+            'status',
+            'normalized_status',
+            'recipient_email',
+            'provider',
+            'provider_resolution_source',
+            'provider_resolution_source_label',
+            'provider_readiness_status',
+            'provider_readiness_status_label',
+            'provider_runtime_path',
+            'provider_runtime_path_label',
+            'provider_using_fallback_config',
+            'context_label',
+            'failure_context_hint',
+            'failure_message',
+            'provider_message_id',
+        ];
+        $records = $this->buildEmailDeliveryTimelineExportRows($rows);
+
+        $filename = sprintf(
+            'customer-%d-email-timeline-%s.csv',
+            (int) $marketingProfile->id,
+            now()->format('Ymd_His')
+        );
+
+        return response()->streamDownload(function () use ($columns, $records): void {
+            $stream = fopen('php://output', 'w');
+            if (! is_resource($stream)) {
+                return;
+            }
+
+            fputcsv($stream, $columns);
+            foreach ($records as $record) {
+                $row = [];
+                foreach ($columns as $column) {
+                    $value = $record[$column] ?? '';
+                    if (is_bool($value)) {
+                        $row[] = $value ? 'true' : 'false';
+                        continue;
+                    }
+
+                    $row[] = is_scalar($value) || $value === null
+                        ? (string) ($value ?? '')
+                        : json_encode($value);
+                }
+
+                fputcsv($stream, $row);
+            }
+
+            fclose($stream);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * @return array{
+     *   provider_resolution_source:?string,
+     *   provider_readiness_status:?string,
+     *   date_from:?string,
+     *   date_to:?string,
+     *   status:?string
+     * }
+     */
+    protected function normalizeEmailDeliveryTimelineFilters(Request $request): array
+    {
+        $data = $request->validate([
+            'provider_resolution_source' => ['nullable', 'in:tenant,fallback,none,unknown'],
+            'provider_readiness_status' => ['nullable', 'in:ready,unsupported,incomplete,error,not_configured,unknown'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'status' => ['nullable', 'in:attempted,sent,delivered,opened,clicked,failed,bounced,unsupported'],
+        ]);
+
+        $resolutionSource = strtolower(trim((string) ($data['provider_resolution_source'] ?? '')));
+        $readinessStatus = strtolower(trim((string) ($data['provider_readiness_status'] ?? '')));
+        $status = strtolower(trim((string) ($data['status'] ?? '')));
+        $dateFrom = $this->nullableString($data['date_from'] ?? null);
+        $dateTo = $this->nullableString($data['date_to'] ?? null);
+
+        return [
+            'provider_resolution_source' => $resolutionSource !== '' ? $resolutionSource : null,
+            'provider_readiness_status' => $readinessStatus !== '' ? $readinessStatus : null,
+            'date_from' => $dateFrom !== null ? Carbon::parse($dateFrom)->toDateString() : null,
+            'date_to' => $dateTo !== null ? Carbon::parse($dateTo)->toDateString() : null,
+            'status' => $status !== '' ? $status : null,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   provider_resolution_sources:array<int,array{key:string,label:string}>,
+     *   provider_readiness_statuses:array<int,array{key:string,label:string}>,
+     *   statuses:array<int,array{key:string,label:string}>
+     * }
+     */
+    protected function emailDeliveryTimelineFilterOptions(): array
+    {
+        $resolutionSources = collect(['tenant', 'fallback', 'none', 'unknown'])
+            ->map(fn (string $key): array => [
+                'key' => $key,
+                'label' => $this->emailDeliveryProviderContextResolver->resolutionSourceLabel($key),
+            ])
+            ->values()
+            ->all();
+
+        $readinessStatuses = collect(['ready', 'unsupported', 'incomplete', 'error', 'not_configured', 'unknown'])
+            ->map(fn (string $key): array => [
+                'key' => $key,
+                'label' => $this->emailDeliveryProviderContextResolver->readinessStatusLabel($key),
+            ])
+            ->values()
+            ->all();
+
+        $statuses = collect(['attempted', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'bounced', 'unsupported'])
+            ->map(fn (string $key): array => [
+                'key' => $key,
+                'label' => $this->emailDeliveryTimelineStatusLabel($key),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'provider_resolution_sources' => $resolutionSources,
+            'provider_readiness_statuses' => $readinessStatuses,
+            'statuses' => $statuses,
+        ];
+    }
+
+    /**
+     * @param  array{
+     *   provider_resolution_source:?string,
+     *   provider_readiness_status:?string,
+     *   date_from:?string,
+     *   date_to:?string,
+     *   status:?string
+     * }  $filters
+     */
+    protected function customerEmailTimelineDeliveryQuery(MarketingProfile $marketingProfile, array $filters): Builder|HasMany
+    {
+        $query = $marketingProfile->emailDeliveries()
+            ->with(['recipient.campaign:id,name']);
+
+        $query = $this->applyEmailDeliveryProviderContextFilters($query, $filters);
+        $query = $this->applyEmailDeliveryDateRangeFilters($query, $filters);
+
+        return $this->applyEmailDeliveryStatusFilter($query, $filters);
+    }
+
+    /**
+     * @param  array{
+     *   provider_resolution_source:?string,
+     *   provider_readiness_status:?string,
+     *   date_from:?string,
+     *   date_to:?string,
+     *   status:?string
+     * }  $filters
+     */
+    protected function applyEmailDeliveryProviderContextFilters(Builder|HasMany $query, array $filters): Builder|HasMany
+    {
+        $resolutionSource = strtolower(trim((string) ($filters['provider_resolution_source'] ?? '')));
+        if ($resolutionSource !== '') {
+            if ($resolutionSource === 'unknown') {
+                $query->where(fn (Builder $builder) => $this->applyEmailDeliveryUnknownResolutionSourceClause($builder));
+            } else {
+                $query->where('metadata->provider_resolution_source', $resolutionSource);
+            }
+        }
+
+        $readinessStatus = strtolower(trim((string) ($filters['provider_readiness_status'] ?? '')));
+        if ($readinessStatus !== '') {
+            if ($readinessStatus === 'unknown') {
+                $query->where(fn (Builder $builder) => $this->applyEmailDeliveryUnknownReadinessStatusClause($builder));
+            } else {
+                $query->where('metadata->provider_readiness_status', $readinessStatus);
+            }
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  array{
+     *   provider_resolution_source:?string,
+     *   provider_readiness_status:?string,
+     *   date_from:?string,
+     *   date_to:?string,
+     *   status:?string
+     * }  $filters
+     */
+    protected function applyEmailDeliveryDateRangeFilters(Builder|HasMany $query, array $filters): Builder|HasMany
+    {
+        $dateFrom = $this->nullableString($filters['date_from'] ?? null);
+        if ($dateFrom !== null) {
+            $query->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+
+        $dateTo = $this->nullableString($filters['date_to'] ?? null);
+        if ($dateTo !== null) {
+            $query->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  array{
+     *   provider_resolution_source:?string,
+     *   provider_readiness_status:?string,
+     *   date_from:?string,
+     *   date_to:?string,
+     *   status:?string
+     * }  $filters
+     */
+    protected function applyEmailDeliveryStatusFilter(Builder|HasMany $query, array $filters): Builder|HasMany
+    {
+        $status = strtolower(trim((string) ($filters['status'] ?? '')));
+        if ($status === '' || $status === 'attempted') {
+            return $query;
+        }
+
+        if ($status === 'unsupported') {
+            return $query->where(fn (Builder $builder) => $this->applyEmailDeliveryUnsupportedClause($builder));
+        }
+
+        if ($status === 'bounced') {
+            return $query->where(fn (Builder $builder) => $this->applyEmailDeliveryBouncedClause($builder));
+        }
+
+        if ($status === 'failed') {
+            return $query->where(fn (Builder $builder) => $this->applyEmailDeliveryFailureClause($builder));
+        }
+
+        if ($status === 'clicked') {
+            $query->where(function (Builder $builder): void {
+                $builder
+                    ->whereNotNull('clicked_at')
+                    ->orWhere('status', 'clicked');
+            });
+
+            return $this->applyEmailDeliverySuccessGuard($query);
+        }
+
+        if ($status === 'opened') {
+            $query->where(function (Builder $builder): void {
+                $builder
+                    ->whereNotNull('opened_at')
+                    ->orWhereIn('status', ['opened', 'clicked']);
+            });
+
+            return $this->applyEmailDeliverySuccessGuard($query);
+        }
+
+        if ($status === 'delivered') {
+            $query->where(function (Builder $builder): void {
+                $builder
+                    ->whereNotNull('delivered_at')
+                    ->orWhereIn('status', ['delivered', 'opened', 'clicked']);
+            });
+
+            return $this->applyEmailDeliverySuccessGuard($query);
+        }
+
+        if ($status === 'sent') {
+            $query->where(function (Builder $builder): void {
+                $builder
+                    ->whereNotNull('sent_at')
+                    ->orWhereIn('status', ['sending', 'sent', 'delivered', 'opened', 'clicked']);
+            });
+
+            return $this->applyEmailDeliverySuccessGuard($query);
+        }
+
+        return $query;
+    }
+
+    protected function applyEmailDeliverySuccessGuard(Builder|HasMany $query): Builder|HasMany
+    {
+        return $query
+            ->whereNull('failed_at')
+            ->where(function (Builder $builder): void {
+                $builder
+                    ->whereNull('status')
+                    ->orWhereNotIn('status', ['failed', 'undelivered', 'bounced', 'dropped']);
+            })
+            ->where(function (Builder $builder): void {
+                $builder
+                    ->whereNull('metadata->error_code')
+                    ->orWhereNotIn('metadata->error_code', ['unsupported_provider_action', 'not_implemented', 'unauthorized_sender']);
+            })
+            ->where(function (Builder $builder): void {
+                $builder
+                    ->whereNull('raw_payload->provider_result->error_code')
+                    ->orWhereNotIn('raw_payload->provider_result->error_code', ['unsupported_provider_action', 'not_implemented', 'unauthorized_sender']);
+            })
+            ->where(function (Builder $builder): void {
+                $builder
+                    ->whereNull('raw_payload->last_event->event')
+                    ->orWhereNotIn('raw_payload->last_event->event', ['bounce', 'bounced', 'blocked', 'drop', 'dropped', 'spamreport', 'spam_report']);
+            });
+    }
+
+    protected function applyEmailDeliveryFailureClause(Builder $builder): void
+    {
+        $builder
+            ->whereIn('status', ['failed', 'undelivered', 'bounced', 'dropped'])
+            ->orWhereNotNull('failed_at')
+            ->orWhere(fn (Builder $unsupported) => $this->applyEmailDeliveryUnsupportedClause($unsupported))
+            ->orWhere(fn (Builder $bounced) => $this->applyEmailDeliveryBouncedClause($bounced));
+    }
+
+    protected function applyEmailDeliveryUnsupportedClause(Builder $builder): void
+    {
+        $builder
+            ->whereIn('metadata->error_code', ['unsupported_provider_action', 'not_implemented'])
+            ->orWhereIn('raw_payload->provider_result->error_code', ['unsupported_provider_action', 'not_implemented'])
+            ->orWhere(function (Builder $providerBuilder): void {
+                $providerBuilder
+                    ->whereIn('provider', ['shopify_email', 'custom'])
+                    ->where('status', 'failed');
+            });
+    }
+
+    protected function applyEmailDeliveryBouncedClause(Builder $builder): void
+    {
+        $builder
+            ->where('status', 'bounced')
+            ->orWhereIn('metadata->error_code', ['unauthorized_sender'])
+            ->orWhereIn('raw_payload->provider_result->error_code', ['unauthorized_sender'])
+            ->orWhereIn('raw_payload->last_event->event', ['bounce', 'bounced', 'blocked', 'drop', 'dropped', 'spamreport', 'spam_report']);
+    }
+
+    protected function applyEmailDeliveryUnknownResolutionSourceClause(Builder $builder): void
+    {
+        $allowedResolutionSources = ['tenant', 'fallback', 'none'];
+        $builder
+            ->whereNull('metadata')
+            ->orWhereNull('metadata->provider_resolution_source')
+            ->orWhere('metadata->provider_resolution_source', '')
+            ->orWhereNotIn('metadata->provider_resolution_source', $allowedResolutionSources);
+    }
+
+    protected function applyEmailDeliveryUnknownReadinessStatusClause(Builder $builder): void
+    {
+        $allowedReadinessStatuses = ['ready', 'unsupported', 'incomplete', 'error', 'not_configured'];
+        $builder
+            ->whereNull('metadata')
+            ->orWhereNull('metadata->provider_readiness_status')
+            ->orWhere('metadata->provider_readiness_status', '')
+            ->orWhereNotIn('metadata->provider_readiness_status', $allowedReadinessStatuses);
+    }
+
+    protected function emailDeliveryTimelineStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'attempted' => 'Attempted',
+            'sent' => 'Sent',
+            'delivered' => 'Delivered',
+            'opened' => 'Opened',
+            'clicked' => 'Clicked',
+            'failed' => 'Failed',
+            'bounced' => 'Bounced',
+            'unsupported' => 'Unsupported runtime',
+            default => 'Unknown',
+        };
+    }
+
+    protected function emailDeliveryTimelinePerPage(): int
+    {
+        return 25;
+    }
+
+    /**
+     * @param Collection<int,array{delivery:MarketingEmailDelivery,provider_context:array<string,mixed>,context_label:string,failure_context_hint:?string,normalized_status:string}> $rows
+     * @return array<int,array<string,string|bool>>
+     */
+    protected function buildEmailDeliveryTimelineExportRows(Collection $rows): array
+    {
+        return $rows
+            ->map(function (array $row): array {
+                /** @var MarketingEmailDelivery $delivery */
+                $delivery = $row['delivery'];
+                $providerContext = (array) ($row['provider_context'] ?? []);
+                $subject = $this->nullableString(data_get($delivery->raw_payload, 'request.subject'))
+                    ?? $this->nullableString(data_get($delivery->raw_payload, 'payload.request.subject'))
+                    ?? $this->nullableString(data_get($delivery->raw_payload, 'provider_result.payload.request.subject'))
+                    ?? '';
+                $failureMessage = $this->nullableString(data_get($delivery->raw_payload, 'provider_result.error_message'))
+                    ?? $this->nullableString(data_get($delivery->raw_payload, 'error_message'))
+                    ?? $this->nullableString(data_get($delivery->metadata, 'error_code'))
+                    ?? '';
+
+                return [
+                    'attempted_at' => optional($delivery->created_at)->toDateTimeString() ?? '',
+                    'sent_at' => optional($delivery->sent_at)->toDateTimeString() ?? '',
+                    'delivered_at' => optional($delivery->delivered_at)->toDateTimeString() ?? '',
+                    'opened_at' => optional($delivery->opened_at)->toDateTimeString() ?? '',
+                    'clicked_at' => optional($delivery->clicked_at)->toDateTimeString() ?? '',
+                    'failed_at' => optional($delivery->failed_at)->toDateTimeString() ?? '',
+                    'campaign' => (string) ($delivery->recipient?->campaign?->name ?? ''),
+                    'campaign_type' => (string) ($delivery->campaign_type ?? ''),
+                    'subject' => $subject,
+                    'template_key' => (string) ($delivery->template_key ?? ''),
+                    'status' => (string) ($delivery->status ?? ''),
+                    'normalized_status' => (string) ($row['normalized_status'] ?? 'attempted'),
+                    'recipient_email' => (string) ($delivery->email ?? ''),
+                    'provider' => (string) data_get($providerContext, 'provider', 'unknown'),
+                    'provider_resolution_source' => (string) data_get($providerContext, 'provider_resolution_source', 'unknown'),
+                    'provider_resolution_source_label' => (string) data_get($providerContext, 'provider_resolution_source_label', 'Legacy / unavailable'),
+                    'provider_readiness_status' => (string) data_get($providerContext, 'provider_readiness_status', 'unknown'),
+                    'provider_readiness_status_label' => (string) data_get($providerContext, 'provider_readiness_status_label', 'Legacy / unavailable'),
+                    'provider_runtime_path' => (string) data_get($providerContext, 'provider_runtime_path', 'legacy_or_unavailable'),
+                    'provider_runtime_path_label' => (string) data_get($providerContext, 'provider_runtime_path_label', 'Legacy / unavailable'),
+                    'provider_using_fallback_config' => (bool) data_get($providerContext, 'provider_using_fallback_config', false),
+                    'context_label' => (string) ($row['context_label'] ?? ''),
+                    'failure_context_hint' => (string) ($row['failure_context_hint'] ?? ''),
+                    'failure_message' => $failureMessage,
+                    'provider_message_id' => (string) ($delivery->provider_message_id ?: $delivery->sendgrid_message_id ?: ''),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param Collection<int,MarketingEmailDelivery> $deliveries
+     * @return Collection<int,array{
+     *   delivery:MarketingEmailDelivery,
+     *   provider_context:array<string,mixed>,
+     *   context_label:string,
+     *   failure_context_hint:?string,
+     *   normalized_status:string
+     * }>
+     */
+    protected function buildEmailDeliveryTimelineRows(Collection $deliveries): Collection
+    {
+        return $deliveries
+            ->map(function (MarketingEmailDelivery $delivery): array {
+                $providerContext = $this->emailDeliveryProviderContextResolver->resolveFromDelivery($delivery);
+                $normalizedStatus = (string) ($this->emailDeliveryStatusNormalizer->normalize($delivery)['normalized_status'] ?? 'attempted');
+
+                return [
+                    'delivery' => $delivery,
+                    'provider_context' => $providerContext,
+                    'context_label' => $this->customerEmailProviderContextLabel($providerContext),
+                    'failure_context_hint' => $this->customerEmailProviderFailureHint($delivery, $providerContext),
+                    'normalized_status' => $normalizedStatus,
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * @param Collection<int,array{delivery:MarketingEmailDelivery,provider_context:array<string,mixed>,context_label:string,failure_context_hint:?string,normalized_status:string}> $rows
+     * @return array{
+     *   total_attempts:int,
+     *   tenant_path_attempts:int,
+     *   fallback_path_attempts:int,
+     *   unknown_context_attempts:int,
+     *   unsupported_or_blocked_attempts:int,
+     *   by_resolution_source:array<int,array{key:string,label:string,count:int}>,
+     *   by_readiness_status:array<int,array{key:string,label:string,count:int}>
+     * }
+     */
+    protected function buildEmailDeliveryProviderContextSummary(Collection $rows): array
+    {
+        $byResolutionSource = $rows
+            ->groupBy(fn (array $row): string => (string) data_get($row, 'provider_context.provider_resolution_source', 'unknown'))
+            ->map(function (Collection $group, string $key): array {
+                return [
+                    'key' => $key,
+                    'label' => $this->emailDeliveryProviderContextResolver->resolutionSourceLabel($key),
+                    'count' => (int) $group->count(),
+                ];
+            })
+            ->sortBy(function (array $row): int {
+                return match ((string) ($row['key'] ?? 'unknown')) {
+                    'tenant' => 1,
+                    'fallback' => 2,
+                    'none' => 3,
+                    default => 4,
+                };
+            })
+            ->values();
+
+        $byReadinessStatus = $rows
+            ->groupBy(fn (array $row): string => (string) data_get($row, 'provider_context.provider_readiness_status', 'unknown'))
+            ->map(function (Collection $group, string $key): array {
+                return [
+                    'key' => $key,
+                    'label' => $this->emailDeliveryProviderContextResolver->readinessStatusLabel($key),
+                    'count' => (int) $group->count(),
+                ];
+            })
+            ->sortBy(function (array $row): int {
+                return match ((string) ($row['key'] ?? 'unknown')) {
+                    'ready' => 1,
+                    'unsupported' => 2,
+                    'incomplete' => 3,
+                    'not_configured' => 4,
+                    'error' => 5,
+                    default => 6,
+                };
+            })
+            ->values();
+
+        return [
+            'total_attempts' => (int) $rows->count(),
+            'tenant_path_attempts' => (int) $rows
+                ->filter(fn (array $row): bool => (string) data_get($row, 'provider_context.provider_resolution_source', 'unknown') === 'tenant')
+                ->count(),
+            'fallback_path_attempts' => (int) $rows
+                ->filter(fn (array $row): bool => (string) data_get($row, 'provider_context.provider_resolution_source', 'unknown') === 'fallback')
+                ->count(),
+            'unknown_context_attempts' => (int) $rows
+                ->filter(fn (array $row): bool => (string) data_get($row, 'provider_context.provider_resolution_source', 'unknown') === 'unknown')
+                ->count(),
+            'unsupported_or_blocked_attempts' => (int) $rows
+                ->filter(fn (array $row): bool => in_array(
+                    (string) data_get($row, 'provider_context.provider_readiness_status', 'unknown'),
+                    ['unsupported', 'incomplete', 'not_configured', 'error'],
+                    true
+                ))
+                ->count(),
+            'by_resolution_source' => $byResolutionSource->all(),
+            'by_readiness_status' => $byReadinessStatus->all(),
+        ];
+    }
+
+    /**
+     * @param  array{
+     *   provider_resolution_source:?string,
+     *   provider_readiness_status:?string,
+     *   date_from:?string,
+     *   date_to:?string,
+     *   status:?string
+     * }  $filters
+     * @return array{
+     *   total_attempts:int,
+     *   tenant_path_attempts:int,
+     *   fallback_path_attempts:int,
+     *   unknown_context_attempts:int,
+     *   unsupported_or_blocked_attempts:int,
+     *   by_resolution_source:array<int,array{key:string,label:string,count:int}>,
+     *   by_readiness_status:array<int,array{key:string,label:string,count:int}>
+     * }
+     */
+    protected function buildEmailDeliveryProviderContextSummaryForFilters(MarketingProfile $marketingProfile, array $filters): array
+    {
+        $byResolutionSource = collect(['tenant', 'fallback', 'none', 'unknown'])
+            ->map(function (string $key) use ($marketingProfile, $filters): array {
+                $query = $this->customerEmailTimelineDeliveryQuery($marketingProfile, $filters);
+
+                if ($key === 'unknown') {
+                    $query->where(fn (Builder $builder) => $this->applyEmailDeliveryUnknownResolutionSourceClause($builder));
+                } else {
+                    $query->where('metadata->provider_resolution_source', $key);
+                }
+
+                return [
+                    'key' => $key,
+                    'label' => $this->emailDeliveryProviderContextResolver->resolutionSourceLabel($key),
+                    'count' => (int) $query->count(),
+                ];
+            })
+            ->values();
+
+        $byReadinessStatus = collect(['ready', 'unsupported', 'incomplete', 'not_configured', 'error', 'unknown'])
+            ->map(function (string $key) use ($marketingProfile, $filters): array {
+                $query = $this->customerEmailTimelineDeliveryQuery($marketingProfile, $filters);
+
+                if ($key === 'unknown') {
+                    $query->where(fn (Builder $builder) => $this->applyEmailDeliveryUnknownReadinessStatusClause($builder));
+                } else {
+                    $query->where('metadata->provider_readiness_status', $key);
+                }
+
+                return [
+                    'key' => $key,
+                    'label' => $this->emailDeliveryProviderContextResolver->readinessStatusLabel($key),
+                    'count' => (int) $query->count(),
+                ];
+            })
+            ->values();
+
+        $resolutionByKey = $byResolutionSource->keyBy('key');
+        $readinessByKey = $byReadinessStatus->keyBy('key');
+        $totalAttempts = (int) $this->customerEmailTimelineDeliveryQuery($marketingProfile, $filters)->count();
+
+        return [
+            'total_attempts' => $totalAttempts,
+            'tenant_path_attempts' => (int) data_get($resolutionByKey->get('tenant'), 'count', 0),
+            'fallback_path_attempts' => (int) data_get($resolutionByKey->get('fallback'), 'count', 0),
+            'unknown_context_attempts' => (int) data_get($resolutionByKey->get('unknown'), 'count', 0),
+            'unsupported_or_blocked_attempts' => (int) (
+                (int) data_get($readinessByKey->get('unsupported'), 'count', 0)
+                + (int) data_get($readinessByKey->get('incomplete'), 'count', 0)
+                + (int) data_get($readinessByKey->get('not_configured'), 'count', 0)
+                + (int) data_get($readinessByKey->get('error'), 'count', 0)
+            ),
+            'by_resolution_source' => $byResolutionSource->all(),
+            'by_readiness_status' => $byReadinessStatus->all(),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $providerContext
+     */
+    protected function customerEmailProviderContextLabel(array $providerContext): string
+    {
+        $legacyContextMissing = (bool) ($providerContext['legacy_context_missing'] ?? false);
+        if ($legacyContextMissing) {
+            return 'Provider context unavailable for legacy row.';
+        }
+
+        $provider = $this->customerEmailProviderDisplayName((string) ($providerContext['provider'] ?? 'unknown'));
+        $resolutionSource = (string) ($providerContext['provider_resolution_source'] ?? 'unknown');
+        $readinessStatus = (string) ($providerContext['provider_readiness_status'] ?? 'unknown');
+        $runtimePath = (string) ($providerContext['provider_runtime_path'] ?? 'legacy_or_unavailable');
+
+        if ($readinessStatus === 'unsupported' || $runtimePath === 'unsupported_runtime') {
+            return 'Attempted with unsupported provider runtime.';
+        }
+
+        if (in_array($readinessStatus, ['incomplete', 'not_configured'], true) || $runtimePath === 'blocked_runtime') {
+            return 'Blocked by incomplete provider setup.';
+        }
+
+        if ($readinessStatus === 'error') {
+            return 'Blocked by provider validation error.';
+        }
+
+        if ($resolutionSource === 'fallback' && $readinessStatus === 'ready') {
+            return 'Sent via fallback provider config.';
+        }
+
+        if ($resolutionSource === 'tenant' && $readinessStatus === 'ready') {
+            return 'Sent via tenant-configured ' . $provider . '.';
+        }
+
+        if ($resolutionSource === 'none') {
+            return 'Attempted without resolved provider source.';
+        }
+
+        return 'Provider context captured for this delivery attempt.';
+    }
+
+    /**
+     * @param array<string,mixed> $providerContext
+     */
+    protected function customerEmailProviderFailureHint(MarketingEmailDelivery $delivery, array $providerContext): ?string
+    {
+        $status = strtolower(trim((string) ($delivery->status ?? '')));
+        if (! in_array($status, ['failed', 'undelivered', 'bounced', 'dropped'], true)) {
+            return null;
+        }
+
+        if ((bool) ($providerContext['legacy_context_missing'] ?? false)) {
+            return 'This failed row predates provider-context stamping.';
+        }
+
+        $resolutionSource = (string) ($providerContext['provider_resolution_source'] ?? 'unknown');
+        $readinessStatus = (string) ($providerContext['provider_readiness_status'] ?? 'unknown');
+
+        if ($readinessStatus === 'unsupported') {
+            return 'Failed because provider runtime is unsupported in this app flow.';
+        }
+
+        if (in_array($readinessStatus, ['incomplete', 'not_configured'], true)) {
+            return 'Failed because provider setup was incomplete at attempt time.';
+        }
+
+        if ($readinessStatus === 'error') {
+            return 'Failed due to provider readiness validation error.';
+        }
+
+        if ($resolutionSource === 'fallback') {
+            return 'Failed while using fallback provider configuration.';
+        }
+
+        if ($resolutionSource === 'tenant') {
+            return 'Failed via tenant-configured provider path.';
+        }
+
+        return null;
+    }
+
+    protected function customerEmailProviderDisplayName(string $provider): string
+    {
+        $provider = strtolower(trim($provider));
+
+        return match ($provider) {
+            'sendgrid' => 'SendGrid',
+            'shopify_email' => 'Shopify Email',
+            'custom' => 'Custom Provider',
+            'unknown', '' => 'provider',
+            default => ucfirst(str_replace('_', ' ', $provider)),
+        };
     }
 
     public function update(MarketingProfile $marketingProfile, Request $request): RedirectResponse

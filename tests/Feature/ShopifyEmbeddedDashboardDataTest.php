@@ -18,6 +18,7 @@ use App\Models\Scent;
 use App\Models\ShopifyStore;
 use App\Models\Size;
 use App\Models\Tenant;
+use App\Models\TenantEmailSetting;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardQuery;
@@ -763,6 +764,11 @@ test('manual candle cash reminder endpoint sends to eligible profiles once and r
         ->assertJsonPath('data.summary.skipped_cooldown', 0);
 
     expect(MarketingEmailDelivery::query()->count())->toBe(1);
+    $delivery = MarketingEmailDelivery::query()->firstOrFail();
+    expect((string) $delivery->provider)->toBe('sendgrid')
+        ->and((string) data_get($delivery->metadata, 'provider'))->toBe('sendgrid')
+        ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('fallback')
+        ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeTrue();
 
     $second = $this->withHeaders(retailDashboardApiHeaders())
         ->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
@@ -773,6 +779,91 @@ test('manual candle cash reminder endpoint sends to eligible profiles once and r
         ->assertJsonPath('data.summary.skipped_cooldown', 1);
 
     expect(MarketingEmailDelivery::query()->count())->toBe(1);
+});
+
+test('manual candle cash reminder endpoint blocks unsupported tenant provider readiness', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Reminder Unsupported Tenant',
+        'slug' => 'reminder-unsupported-tenant',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'email_provider' => 'shopify_email',
+        'email_enabled' => true,
+        'from_name' => 'Shopify Sender',
+        'from_email' => 'shopify@example.test',
+        'provider_status' => 'configured',
+        'provider_config' => [
+            'use_shopify_native_email' => true,
+            'supports_app_sends' => false,
+        ],
+        'analytics_enabled' => true,
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Unsupported',
+        'last_name' => 'Reminder',
+        'email' => 'unsupported-reminder@example.com',
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'points' => 300,
+        'source' => 'consent',
+        'source_id' => 'sms-consent:unsupported',
+        'description' => 'SMS welcome earn',
+        'created_at' => now()->subDays(2),
+        'updated_at' => now()->subDays(2),
+    ]);
+
+    $response = $this->withHeaders(retailDashboardApiHeaders())
+        ->postJson(route('shopify.app.api.dashboard.candle-cash-reminders'));
+
+    $response
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('data.status', 'unsupported')
+        ->assertJsonPath('data.readiness.provider', 'shopify_email');
+
+    expect(MarketingEmailDelivery::query()->count())->toBe(0);
+});
+
+test('embedded dashboard payload exposes tenant-scoped email readiness status', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Dashboard Readiness Tenant',
+        'slug' => 'dashboard-readiness-tenant',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'email_provider' => 'custom',
+        'email_enabled' => true,
+        'from_name' => 'Custom Sender',
+        'from_email' => 'custom@example.test',
+        'provider_status' => 'not_configured',
+        'provider_config' => [
+            'driver' => 'custom-http',
+            'api_endpoint' => 'https://api.custom-email.test/send',
+        ],
+        'analytics_enabled' => true,
+    ]);
+
+    $response = $this->withHeaders(retailDashboardApiHeaders())
+        ->getJson(route('shopify.app.api.dashboard', [
+            'timeframe' => 'last_7_days',
+            'comparison' => 'none',
+        ]));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.candleCashEngagement.reminderEligibility.emailReadiness.provider', 'custom')
+        ->assertJsonPath('data.candleCashEngagement.reminderEligibility.emailReadiness.status', 'unsupported')
+        ->assertJsonPath('data.candleCashEngagement.reminderEligibility.emailReadiness.canSend', false);
 });
 
 test('manual candle cash reminder endpoint rejects the legacy embedded context header fallback', function () {

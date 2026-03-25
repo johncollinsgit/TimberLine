@@ -401,6 +401,18 @@
                     </select>
                 </div>
                 <div class="birthday-analytics-field">
+                    <label for="birthday-provider-resolution-source">Resolution Source</label>
+                    <select id="birthday-provider-resolution-source" name="provider_resolution_source">
+                        <option value="">All resolution paths</option>
+                    </select>
+                </div>
+                <div class="birthday-analytics-field">
+                    <label for="birthday-provider-readiness-status">Readiness Status</label>
+                    <select id="birthday-provider-readiness-status" name="provider_readiness_status">
+                        <option value="">All readiness states</option>
+                    </select>
+                </div>
+                <div class="birthday-analytics-field">
                     <label for="birthday-template">Template</label>
                     <select id="birthday-template" name="template_key">
                         <option value="">All templates</option>
@@ -509,6 +521,26 @@
             </section>
         </div>
 
+        <div class="birthday-analytics-grid">
+            <section class="birthday-analytics-card">
+                <h3>Provider Resolution Context</h3>
+                <p>Tenant-configured vs fallback vs unresolved delivery attempts from canonical provider context stamps.</p>
+                <div class="birthday-analytics-table" id="birthday-analytics-provider-resolution"></div>
+            </section>
+
+            <section class="birthday-analytics-card">
+                <h3>Provider Readiness Context</h3>
+                <p>Readiness status captured at attempt time for each birthday delivery row.</p>
+                <div class="birthday-analytics-table" id="birthday-analytics-provider-readiness"></div>
+            </section>
+        </div>
+
+        <section class="birthday-analytics-card">
+            <h3>Failure Reasons by Resolution Path</h3>
+            <p>Segmented failure reasons so fallback and unsupported paths stay visible without raw metadata inspection.</p>
+            <div class="birthday-analytics-table" id="birthday-analytics-failures-by-resolution"></div>
+        </section>
+
         <section class="birthday-analytics-card">
             <h3>Campaign Comparison</h3>
             <p>Compare birthday performance by template or provider using canonical sends, attribution links, and redemption outcomes.</p>
@@ -546,6 +578,9 @@
             const statusesNode = document.getElementById("birthday-analytics-statuses");
             const providersNode = document.getElementById("birthday-analytics-providers");
             const failuresNode = document.getElementById("birthday-analytics-failures");
+            const providerResolutionNode = document.getElementById("birthday-analytics-provider-resolution");
+            const providerReadinessNode = document.getElementById("birthday-analytics-provider-readiness");
+            const failureByResolutionNode = document.getElementById("birthday-analytics-failures-by-resolution");
             const notesNode = document.getElementById("birthday-analytics-notes");
             const comparisonNode = document.getElementById("birthday-analytics-comparison");
             const comparisonRecommendationNode = document.getElementById("birthday-analytics-comparison-recommendation");
@@ -559,6 +594,8 @@
             const dateFromInput = document.getElementById("birthday-date-from");
             const dateToInput = document.getElementById("birthday-date-to");
             const providerSelect = document.getElementById("birthday-provider");
+            const providerResolutionSourceSelect = document.getElementById("birthday-provider-resolution-source");
+            const providerReadinessStatusSelect = document.getElementById("birthday-provider-readiness-status");
             const templateSelect = document.getElementById("birthday-template");
             const statusSelect = document.getElementById("birthday-status");
             const comparisonModeSelect = document.getElementById("birthday-comparison-mode");
@@ -733,6 +770,9 @@
                 statusesNode.innerHTML = `<div class="birthday-analytics-empty">Loading status breakdown...</div>`;
                 providersNode.innerHTML = `<div class="birthday-analytics-empty">Loading provider breakdown...</div>`;
                 failuresNode.innerHTML = `<div class="birthday-analytics-empty">Loading failure reasons...</div>`;
+                providerResolutionNode.innerHTML = `<div class="birthday-analytics-empty">Loading provider resolution context...</div>`;
+                providerReadinessNode.innerHTML = `<div class="birthday-analytics-empty">Loading provider readiness context...</div>`;
+                failureByResolutionNode.innerHTML = `<div class="birthday-analytics-empty">Loading segmented failure reasons...</div>`;
                 comparisonRecommendationNode.innerHTML = `<div class="birthday-analytics-empty">Loading comparison guidance...</div>`;
                 comparisonNode.innerHTML = `<div class="birthday-analytics-empty">Loading campaign comparison...</div>`;
                 notesNode.innerHTML = `<div class="birthday-analytics-empty">Loading attribution notes...</div>`;
@@ -748,6 +788,9 @@
                 statusesNode.innerHTML = markup;
                 providersNode.innerHTML = markup;
                 failuresNode.innerHTML = markup;
+                providerResolutionNode.innerHTML = markup;
+                providerReadinessNode.innerHTML = markup;
+                failureByResolutionNode.innerHTML = markup;
                 comparisonRecommendationNode.innerHTML = markup;
                 comparisonNode.innerHTML = markup;
                 notesNode.innerHTML = markup;
@@ -1071,6 +1114,9 @@
                 const statusBreakdown = Array.isArray(data?.status_breakdown) ? data.status_breakdown : [];
                 const providerBreakdown = Array.isArray(data?.provider_breakdown) ? data.provider_breakdown : [];
                 const failures = Array.isArray(data?.top_failure_reasons) ? data.top_failure_reasons : [];
+                const providerResolutionBreakdown = Array.isArray(data?.provider_resolution_breakdown) ? data.provider_resolution_breakdown : [];
+                const providerReadinessBreakdown = Array.isArray(data?.provider_readiness_breakdown) ? data.provider_readiness_breakdown : [];
+                const failureReasonsByResolution = Array.isArray(data?.top_failure_reasons_by_resolution_source) ? data.top_failure_reasons_by_resolution_source : [];
                 const notes = Array.isArray(data?.notes) ? data.notes : [];
                 const attribution = data?.attribution || {};
                 const trend = data?.trend || {};
@@ -1175,6 +1221,87 @@
                     `).join("")
                     : `<div class="birthday-analytics-empty">No failure reasons recorded for this filter set.</div>`;
 
+                providerResolutionNode.innerHTML = providerResolutionBreakdown.length > 0
+                    ? `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Resolution Source</th>
+                                    <th>Attempted</th>
+                                    <th>Sent</th>
+                                    <th>Failed</th>
+                                    <th>Unsupported</th>
+                                    <th>Providers</th>
+                                    <th>Legacy Rows</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${providerResolutionBreakdown.map((row) => `
+                                    <tr>
+                                        <td>${escapeHtml(row.provider_resolution_source_label || row.provider_resolution_source || "unknown")}</td>
+                                        <td>${escapeHtml(formatNumber(row.attempted))}</td>
+                                        <td>${escapeHtml(formatNumber(row.sent))}</td>
+                                        <td>${escapeHtml(formatNumber(row.failed))}</td>
+                                        <td>${escapeHtml(formatNumber(row.unsupported))}</td>
+                                        <td>${escapeHtml((Array.isArray(row.providers) ? row.providers : []).join(", ") || "—")}</td>
+                                        <td>${escapeHtml(formatNumber(row.legacy_context_missing_count || 0))}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    `
+                    : `<div class="birthday-analytics-empty">No provider resolution context rows are available for this filter set.</div>`;
+
+                providerReadinessNode.innerHTML = providerReadinessBreakdown.length > 0
+                    ? `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Readiness Status</th>
+                                    <th>Attempted</th>
+                                    <th>Sent</th>
+                                    <th>Failed</th>
+                                    <th>Unsupported</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${providerReadinessBreakdown.map((row) => `
+                                    <tr>
+                                        <td>${escapeHtml(row.provider_readiness_status_label || row.provider_readiness_status || "unknown")}</td>
+                                        <td>${escapeHtml(formatNumber(row.attempted))}</td>
+                                        <td>${escapeHtml(formatNumber(row.sent))}</td>
+                                        <td>${escapeHtml(formatNumber(row.failed))}</td>
+                                        <td>${escapeHtml(formatNumber(row.unsupported))}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    `
+                    : `<div class="birthday-analytics-empty">No provider readiness context rows are available for this filter set.</div>`;
+
+                failureByResolutionNode.innerHTML = failureReasonsByResolution.length > 0
+                    ? `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Resolution Source</th>
+                                    <th>Failure Reason</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${failureReasonsByResolution.map((row) => `
+                                    <tr>
+                                        <td>${escapeHtml(row.provider_resolution_source_label || row.provider_resolution_source || "unknown")}</td>
+                                        <td>${escapeHtml(row.reason || "unknown_failure")}</td>
+                                        <td>${escapeHtml(formatNumber(row.count))}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    `
+                    : `<div class="birthday-analytics-empty">No segmented failure reasons recorded for this filter set.</div>`;
+
                 const linkStats = attribution.delivery_links || {};
                 const attributionNotes = [
                     `Linked delivery rows: ${formatNumber(linkStats.linked_count || 0)}`,
@@ -1202,12 +1329,16 @@
             function setFilterOptions(data) {
                 const options = data?.options || {};
                 const providers = Array.isArray(options.providers) ? options.providers : [];
+                const providerResolutionSources = Array.isArray(options.provider_resolution_sources) ? options.provider_resolution_sources : [];
+                const providerReadinessStatuses = Array.isArray(options.provider_readiness_statuses) ? options.provider_readiness_statuses : [];
                 const templates = Array.isArray(options.template_keys) ? options.template_keys : [];
                 const statuses = Array.isArray(options.statuses) ? options.statuses : ["all"];
                 const comparisonModes = Array.isArray(options.comparison_modes) ? options.comparison_modes : ["template", "provider", "period"];
                 const periodViews = Array.isArray(options.period_views) ? options.period_views : ["raw", "per_day"];
 
                 const currentProvider = providerSelect.value;
+                const currentProviderResolutionSource = providerResolutionSourceSelect.value;
+                const currentProviderReadinessStatus = providerReadinessStatusSelect.value;
                 const currentTemplate = templateSelect.value;
                 const currentStatus = statusSelect.value || "all";
                 const currentComparisonMode = comparisonModeSelect.value || "template";
@@ -1218,6 +1349,22 @@
                     ...providers.map((provider) => `<option value="${escapeHtml(provider)}">${escapeHtml(provider)}</option>`),
                 ].join("");
                 providerSelect.value = providers.includes(currentProvider) ? currentProvider : "";
+
+                providerResolutionSourceSelect.innerHTML = [
+                    '<option value="">All resolution paths</option>',
+                    ...providerResolutionSources.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value.replaceAll("_", " "))}</option>`),
+                ].join("");
+                providerResolutionSourceSelect.value = providerResolutionSources.includes(currentProviderResolutionSource)
+                    ? currentProviderResolutionSource
+                    : "";
+
+                providerReadinessStatusSelect.innerHTML = [
+                    '<option value="">All readiness states</option>',
+                    ...providerReadinessStatuses.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value.replaceAll("_", " "))}</option>`),
+                ].join("");
+                providerReadinessStatusSelect.value = providerReadinessStatuses.includes(currentProviderReadinessStatus)
+                    ? currentProviderReadinessStatus
+                    : "";
 
                 templateSelect.innerHTML = [
                     '<option value="">All templates</option>',
@@ -1291,6 +1438,8 @@
                 const dateFrom = String(dateFromInput.value || "").trim();
                 const dateTo = String(dateToInput.value || "").trim();
                 const provider = String(providerSelect.value || "").trim();
+                const providerResolutionSource = String(providerResolutionSourceSelect.value || "").trim();
+                const providerReadinessStatus = String(providerReadinessStatusSelect.value || "").trim();
                 const template = String(templateSelect.value || "").trim();
                 const status = String(statusSelect.value || "all").trim().toLowerCase();
                 const comparisonMode = String(comparisonModeSelect.value || "template").trim().toLowerCase();
@@ -1306,6 +1455,12 @@
                 }
                 if (provider !== "") {
                     query.set("provider", provider);
+                }
+                if (providerResolutionSource !== "") {
+                    query.set("provider_resolution_source", providerResolutionSource);
+                }
+                if (providerReadinessStatus !== "") {
+                    query.set("provider_readiness_status", providerReadinessStatus);
                 }
                 if (template !== "") {
                     query.set("template_key", template);
@@ -1334,6 +1489,8 @@
                 dateFromInput.value = String(filters.date_from || "");
                 dateToInput.value = String(filters.date_to || "");
                 providerSelect.value = String(filters.provider || "");
+                providerResolutionSourceSelect.value = String(filters.provider_resolution_source || "");
+                providerReadinessStatusSelect.value = String(filters.provider_readiness_status || "");
                 templateSelect.value = String(filters.template_key || "");
                 statusSelect.value = String(filters.status || "all");
                 comparisonModeSelect.value = String(filters.comparison_mode || "template");

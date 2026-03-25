@@ -11,7 +11,8 @@ class MarketingEmailExecutionService
 {
     public function __construct(
         protected SendGridEmailService $sendGridEmailService,
-        protected MarketingTemplateRenderer $templateRenderer
+        protected MarketingTemplateRenderer $templateRenderer,
+        protected MarketingEmailReadiness $emailReadiness
     ) {
     }
 
@@ -136,12 +137,14 @@ class MarketingEmailExecutionService
         $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->name ?: 'Timberline Update'));
         $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
+        $providerContext = $this->emailReadiness->providerContextForDelivery($this->positiveInt($profile->tenant_id));
+        $resolvedProvider = trim((string) ($providerContext['provider'] ?? 'sendgrid')) ?: 'sendgrid';
 
         if ($subject === '') {
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign): MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext): MarketingEmailDelivery {
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -152,13 +155,14 @@ class MarketingEmailExecutionService
                 'marketing_campaign_recipient_id' => $recipient->id,
                 'marketing_profile_id' => $profile->id,
                 'tenant_id' => $profile->tenant_id,
-                'provider' => 'sendgrid',
+                'provider' => $resolvedProvider,
                 'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                 'template_key' => $recipient->variant?->variant_key,
                 'email' => $email,
                 'status' => 'sending',
                 'raw_payload' => [
                     'actor_id' => $actorId,
+                    'provider_resolution' => $providerContext,
                 ],
                 'metadata' => [
                     'tenant_id' => $profile->tenant_id,
@@ -166,6 +170,11 @@ class MarketingEmailExecutionService
                     'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                     'template_key' => $recipient->variant?->variant_key,
                     'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
+                    'provider' => $resolvedProvider,
+                    'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                    'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                    'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                    'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
                 ],
             ]);
         });
@@ -180,6 +189,8 @@ class MarketingEmailExecutionService
             'metadata' => [
                 'campaign_id' => $campaign->id,
                 'campaign_recipient_id' => $recipient->id,
+                'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
             ],
             'categories' => [
                 'marketing-campaign',
@@ -201,8 +212,24 @@ class MarketingEmailExecutionService
             'sent_at' => $success ? now() : null,
             'failed_at' => $success ? null : now(),
             'raw_payload' => [
+                ...((array) ($delivery->raw_payload ?? [])),
                 'provider' => $provider,
                 'payload' => is_array($send['payload'] ?? null) ? $send['payload'] : ['raw' => $send],
+                'provider_result' => [
+                    'status' => $send['status'] ?? null,
+                    'error_code' => $send['error_code'] ?? null,
+                    'error_message' => $send['error_message'] ?? null,
+                    'retryable' => (bool) ($send['retryable'] ?? false),
+                ],
+            ],
+            'metadata' => [
+                ...((array) ($delivery->metadata ?? [])),
+                'provider' => $provider,
+                'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
+                'error_code' => $send['error_code'] ?? null,
             ],
         ])->save();
 
@@ -241,5 +268,16 @@ class MarketingEmailExecutionService
         ])->save();
 
         return ['outcome' => 'skipped', 'reason' => $reason, 'dry_run' => false];
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $parsed = (int) $value;
+
+        return $parsed > 0 ? $parsed : null;
     }
 }

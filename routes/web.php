@@ -74,6 +74,7 @@ use App\Models\WholesaleCustomScent;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
 use App\Support\Wiki\WikiRepository;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -84,10 +85,11 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function (
     Request $request,
     ShopifyEmbeddedAppContext $contextService,
-    ShopifyEmbeddedAppController $controller
+    ShopifyEmbeddedAppController $controller,
+    TenantResolver $tenantResolver
 ) {
     if ($contextService->hasPageContext($request)) {
-        return $controller->show($request, $contextService);
+        return $controller->show($request, $contextService, $tenantResolver);
     }
 
     if (auth()->check()) {
@@ -244,6 +246,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
                 Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
                 Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
+                Route::get('/customers/{marketingProfile}/email-deliveries/export', [MarketingCustomersController::class, 'exportEmailDeliveries'])
+                    ->name('customers.email-deliveries.export');
                 Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
                 Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
                 Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');

@@ -14,7 +14,8 @@ class BirthdayEmailDispatchService
     public function __construct(
         protected TenantEmailDispatchService $emailDispatchService,
         protected TenantEmailSettingsService $emailSettingsService,
-        protected MarketingTemplateRenderer $templateRenderer
+        protected MarketingTemplateRenderer $templateRenderer,
+        protected MarketingEmailReadiness $emailReadiness
     ) {
     }
 
@@ -53,10 +54,9 @@ class BirthdayEmailDispatchService
         $birthdayProfile = $issuance->birthdayProfile;
         $tenantId = $this->positiveInt($profile?->tenant_id);
         $settings = $this->emailSettingsService->resolvedForTenant($tenantId);
-        $selectedProvider = strtolower(trim((string) ($settings['email_provider'] ?? 'sendgrid')));
-        if (! in_array($selectedProvider, ['sendgrid', 'shopify_email', 'custom'], true)) {
-            $selectedProvider = 'sendgrid';
-        }
+        $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId);
+        $selectedProvider = trim((string) ($providerContext['provider'] ?? ($settings['email_provider'] ?? 'sendgrid')));
+        $selectedProvider = $selectedProvider !== '' ? strtolower($selectedProvider) : 'sendgrid';
 
         $config = $this->campaignConfig();
         $subjectTemplate = $this->nullableString($config['birthday_email_subject'] ?? null)
@@ -83,6 +83,10 @@ class BirthdayEmailDispatchService
             'cohort_date' => $cohortDate,
             'birthday_reward_issuance_id' => (int) $issuance->id,
             'provider' => $selectedProvider,
+            'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+            'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+            'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+            'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
         ];
 
         $failure = $this->preflightFailure($profile, $config);
@@ -125,6 +129,7 @@ class BirthdayEmailDispatchService
                 'source' => 'birthday_reward_engine',
                 'birthday_reward_issuance_id' => (int) $issuance->id,
                 'event_key' => $eventKey,
+                'provider_resolution' => $providerContext,
             ],
             'metadata' => $metadata,
         ]);
@@ -185,7 +190,7 @@ class BirthdayEmailDispatchService
                 ],
             ],
             'metadata' => [
-                ...$metadata,
+                ...((array) ($delivery->metadata ?? [])),
                 'provider' => $provider,
                 'delivery_id' => (int) $delivery->id,
                 'error_code' => $errorCode,

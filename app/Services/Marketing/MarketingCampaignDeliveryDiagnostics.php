@@ -11,6 +11,11 @@ use Illuminate\Support\Str;
 
 class MarketingCampaignDeliveryDiagnostics
 {
+    public function __construct(
+        protected MarketingEmailDeliveryProviderContext $providerContextResolver
+    ) {
+    }
+
     protected int $webhookDelayMinutes = 15;
 
     protected int $recentWebhookHours = 24;
@@ -52,6 +57,7 @@ class MarketingCampaignDeliveryDiagnostics
 
         $recipientMetrics = $this->recipientMetrics($rows);
         $webhookHealth = $this->webhookHealth($rows);
+        $providerContextSummary = $this->providerContextSummary($rows);
         $overallStatus = $this->determineStatus($readiness, $lastSmoke, $webhookHealth);
         $overallHint = $this->overallHint($overallStatus, $readiness, $lastSmoke, $webhookHealth);
 
@@ -60,6 +66,8 @@ class MarketingCampaignDeliveryDiagnostics
             'smoke_test_recipient' => $smokeRecipient !== '' ? $smokeRecipient : null,
             'last_smoke_test_attempt_at' => data_get($lastSmoke, 'sent_at'),
             'last_smoke_test_status' => data_get($lastSmoke, 'status'),
+            'last_smoke_test_provider' => data_get($lastSmoke, 'provider'),
+            'last_smoke_test_provider_message_id' => data_get($lastSmoke, 'provider_message_id'),
             'last_smoke_test_sendgrid_message_id' => data_get($lastSmoke, 'sendgrid_message_id'),
             'last_smoke_test_webhook_event' => data_get($lastSmoke, 'last_webhook_event'),
             'last_smoke_test_webhook_at' => data_get($lastSmoke, 'last_webhook_at'),
@@ -71,6 +79,7 @@ class MarketingCampaignDeliveryDiagnostics
             'overall_hint' => $overallHint,
             'webhook_health' => $webhookHealth,
             'recipient_tracking' => $recipientMetrics,
+            'provider_context' => $providerContextSummary,
             'deliveries' => $rows->values()->all(),
             // Backwards-compatible keys for existing campaign views.
             'last_smoke' => $this->legacySummary($lastSmoke, $latestWebhook),
@@ -137,12 +146,16 @@ class MarketingCampaignDeliveryDiagnostics
                 $lastFailure = $events->filter(fn (array $event): bool => $this->isFailureEvent((string) ($event['event'] ?? '')))->last();
                 $eventNames = $events->pluck('event')->all();
 
-                $providerAccepted = trim((string) ($delivery->sendgrid_message_id ?? '')) !== '';
+                $providerMessageId = trim((string) ($delivery->provider_message_id ?: $delivery->sendgrid_message_id ?: ''));
+                $providerAccepted = $providerMessageId !== '';
                 $sentAt = $delivery->sent_at ?: $delivery->created_at;
                 $awaitingWebhook = $providerAccepted && $events->isEmpty();
                 $awaitingWebhookOverdue = $awaitingWebhook && $this->isOlderThan($sentAt, $this->webhookDelayMinutes);
                 $hasFailure = $this->hasFailure($delivery, $eventNames);
                 $status = strtolower(trim((string) ($delivery->status ?? 'unknown')));
+                $providerContext = $this->providerContextResolver->resolveFromDelivery($delivery);
+                $providerContextNotes = array_values(array_map('strval', (array) ($providerContext['notes'] ?? [])));
+                $firstProviderContextNote = $providerContextNotes[0] ?? null;
 
                 return [
                     'id' => (int) $delivery->id,
@@ -158,6 +171,20 @@ class MarketingCampaignDeliveryDiagnostics
                     'status_label' => Str::headline($status !== '' ? $status : 'unknown'),
                     'status_tone' => $this->statusTone($status, $eventNames),
                     'sent_at' => $delivery->sent_at,
+                    'provider' => (string) ($providerContext['provider'] ?? 'unknown'),
+                    'provider_resolution_source' => (string) ($providerContext['provider_resolution_source'] ?? 'unknown'),
+                    'provider_resolution_source_label' => (string) ($providerContext['provider_resolution_source_label'] ?? 'Legacy / unavailable'),
+                    'provider_readiness_status' => (string) ($providerContext['provider_readiness_status'] ?? 'unknown'),
+                    'provider_readiness_status_label' => (string) ($providerContext['provider_readiness_status_label'] ?? 'Legacy / unavailable'),
+                    'provider_config_status' => (string) ($providerContext['provider_config_status'] ?? 'unknown'),
+                    'provider_using_fallback_config' => (bool) ($providerContext['provider_using_fallback_config'] ?? false),
+                    'provider_runtime_path' => (string) ($providerContext['provider_runtime_path'] ?? 'legacy_or_unavailable'),
+                    'provider_runtime_path_label' => (string) ($providerContext['provider_runtime_path_label'] ?? 'Legacy / unavailable'),
+                    'provider_context_notes' => $providerContextNotes,
+                    'provider_context_note' => $firstProviderContextNote,
+                    'legacy_provider_context' => (bool) ($providerContext['legacy_context_missing'] ?? false),
+                    'provider_message_id' => $providerMessageId !== '' ? $providerMessageId : null,
+                    'provider_message_id_short' => Str::limit($providerMessageId !== '' ? $providerMessageId : '—', 28),
                     'sendgrid_message_id' => $delivery->sendgrid_message_id,
                     'sendgrid_message_id_short' => Str::limit((string) ($delivery->sendgrid_message_id ?? '—'), 28),
                     'provider_accepted' => $providerAccepted,
@@ -178,9 +205,123 @@ class MarketingCampaignDeliveryDiagnostics
                     'unsubscribed' => $this->hasUnsubscribe($eventNames),
                     'awaiting_webhook' => $awaitingWebhook,
                     'awaiting_webhook_overdue' => $awaitingWebhookOverdue,
-                    'hint' => $this->rowHint($providerAccepted, $events, $awaitingWebhook, $awaitingWebhookOverdue, $status, $lastFailure),
+                    'hint' => $this->rowHint($providerAccepted, $events, $awaitingWebhook, $awaitingWebhookOverdue, $status, $lastFailure)
+                        ?: $firstProviderContextNote,
                 ];
             });
+    }
+
+    /**
+     * @param Collection<int,array<string,mixed>> $rows
+     * @return array{
+     *   by_resolution_source:array<int,array{
+     *     key:string,
+     *     label:string,
+     *     attempted:int,
+     *     sent:int,
+     *     failed:int,
+     *     unsupported:int,
+     *     providers:array<int,string>,
+     *     fallback_count:int,
+     *     legacy_count:int
+     *   }>,
+     *   by_readiness_status:array<int,array{
+     *     key:string,
+     *     label:string,
+     *     attempted:int,
+     *     sent:int,
+     *     failed:int,
+     *     unsupported:int
+     *   }>,
+     *   by_runtime_path:array<int,array{
+     *     key:string,
+     *     label:string,
+     *     attempted:int
+     *   }>
+     * }
+     */
+    protected function providerContextSummary(Collection $rows): array
+    {
+        $byResolutionSource = $rows
+            ->groupBy(fn (array $row): string => (string) ($row['provider_resolution_source'] ?? 'unknown'))
+            ->map(function (Collection $group, string $key): array {
+                return [
+                    'key' => $key,
+                    'label' => $this->providerContextResolver->resolutionSourceLabel($key),
+                    'attempted' => (int) $group->count(),
+                    'sent' => (int) $group->where('provider_accepted', true)->count(),
+                    'failed' => (int) $group->where('failed', true)->count(),
+                    'unsupported' => (int) $group
+                        ->filter(fn (array $row): bool => (string) ($row['provider_readiness_status'] ?? '') === 'unsupported')
+                        ->count(),
+                    'providers' => $group
+                        ->pluck('provider')
+                        ->map(fn ($value): string => strtolower(trim((string) $value)))
+                        ->filter()
+                        ->unique()
+                        ->sort()
+                        ->values()
+                        ->all(),
+                    'fallback_count' => (int) $group->where('provider_using_fallback_config', true)->count(),
+                    'legacy_count' => (int) $group->where('legacy_provider_context', true)->count(),
+                ];
+            })
+            ->sortBy(function (array $row): int {
+                return match ((string) ($row['key'] ?? 'unknown')) {
+                    'tenant' => 1,
+                    'fallback' => 2,
+                    'none' => 3,
+                    default => 4,
+                };
+            })
+            ->values()
+            ->all();
+
+        $byReadinessStatus = $rows
+            ->groupBy(fn (array $row): string => (string) ($row['provider_readiness_status'] ?? 'unknown'))
+            ->map(function (Collection $group, string $key): array {
+                return [
+                    'key' => $key,
+                    'label' => $this->providerContextResolver->readinessStatusLabel($key),
+                    'attempted' => (int) $group->count(),
+                    'sent' => (int) $group->where('provider_accepted', true)->count(),
+                    'failed' => (int) $group->where('failed', true)->count(),
+                    'unsupported' => (int) $group
+                        ->filter(fn (array $row): bool => (string) ($row['provider_runtime_path'] ?? '') === 'unsupported_runtime')
+                        ->count(),
+                ];
+            })
+            ->sortBy(function (array $row): int {
+                return match ((string) ($row['key'] ?? 'unknown')) {
+                    'ready' => 1,
+                    'unsupported' => 2,
+                    'incomplete' => 3,
+                    'not_configured' => 4,
+                    'error' => 5,
+                    default => 6,
+                };
+            })
+            ->values()
+            ->all();
+
+        $byRuntimePath = $rows
+            ->groupBy(fn (array $row): string => (string) ($row['provider_runtime_path'] ?? 'legacy_or_unavailable'))
+            ->map(function (Collection $group, string $key): array {
+                return [
+                    'key' => $key,
+                    'label' => $this->providerContextResolver->runtimePathLabel($key),
+                    'attempted' => (int) $group->count(),
+                ];
+            })
+            ->sortByDesc('attempted')
+            ->values()
+            ->all();
+
+        return [
+            'by_resolution_source' => $byResolutionSource,
+            'by_readiness_status' => $byReadinessStatus,
+            'by_runtime_path' => $byRuntimePath,
+        ];
     }
 
     /**
@@ -290,7 +431,7 @@ class MarketingCampaignDeliveryDiagnostics
             $hint = 'Some sends have provider IDs but no webhook events beyond the expected delay window.';
         } elseif ($withMessageIdNoEvents > 0) {
             $indicator = 'delayed';
-            $hint = 'SendGrid accepted at least one send and webhook callbacks are still pending.';
+            $hint = 'Provider accepted at least one send and webhook callbacks are still pending.';
         } elseif ($rows->isNotEmpty() && $eventRows->isEmpty()) {
             $indicator = 'missing_events';
             $hint = 'No webhook events are recorded yet for recent delivery attempts.';
@@ -317,8 +458,14 @@ class MarketingCampaignDeliveryDiagnostics
             return 'needs_config';
         }
 
-        $readinessStatus = (string) ($readiness['status'] ?? 'disabled');
-        if (in_array($readinessStatus, ['disabled', 'misconfigured'], true)) {
+        $readinessStatus = strtolower(trim((string) ($readiness['status'] ?? 'not_configured')));
+        $legacyStatus = strtolower(trim((string) ($readiness['legacy_status'] ?? '')));
+        $hasCanSendFlag = array_key_exists('can_send', $readiness);
+        if (
+            ($hasCanSendFlag && ! (bool) ($readiness['can_send'] ?? false))
+            || in_array($readinessStatus, ['disabled', 'misconfigured', 'not_configured', 'incomplete', 'unsupported', 'error'], true)
+            || in_array($legacyStatus, ['disabled', 'misconfigured'], true)
+        ) {
             return 'needs_config';
         }
 
@@ -358,21 +505,32 @@ class MarketingCampaignDeliveryDiagnostics
                 return 'Set MARKETING_EMAIL_SMOKE_TEST_RECIPIENT to enable safe smoke-test verification.';
             }
 
-            $readinessStatus = (string) ($readiness['status'] ?? 'disabled');
-            if ($readinessStatus === 'disabled') {
-                return 'Email sending is disabled. Enable MARKETING_EMAIL_ENABLED for live verification.';
+            $readinessStatus = strtolower(trim((string) ($readiness['status'] ?? 'not_configured')));
+            if (in_array($readinessStatus, ['unsupported'], true)) {
+                $notes = (array) ($readiness['notes'] ?? []);
+
+                return (string) ($notes[0] ?? 'Selected email provider does not support runtime sends from this app flow.');
             }
 
-            $missing = (array) ($readiness['missing_reasons'] ?? []);
+            if (in_array($readinessStatus, ['not_configured'], true)) {
+                return 'Email sending is disabled or not configured for the active tenant.';
+            }
+
+            $missing = (array) ($readiness['missing_requirements'] ?? $readiness['missing_reasons'] ?? []);
             if ($missing !== []) {
                 return 'Email configuration is incomplete: ' . implode(', ', $missing) . '.';
+            }
+
+            $notes = (array) ($readiness['notes'] ?? []);
+            if ($notes !== []) {
+                return (string) $notes[0];
             }
 
             return 'Email configuration needs review before this campaign can be verified.';
         }
 
         if ($status === 'awaiting_webhook') {
-            return 'Smoke test send was recorded and is waiting for SendGrid webhook callbacks.';
+            return 'Smoke test send was recorded and is waiting for provider webhook callbacks.';
         }
 
         if ($status === 'webhook_received') {
@@ -479,15 +637,15 @@ class MarketingCampaignDeliveryDiagnostics
         ?array $lastFailure
     ): ?string {
         if (! $providerAccepted && in_array($status, ['sent', 'sending'], true)) {
-            return 'Message marked as sent but no SendGrid message ID was recorded.';
+            return 'Message marked as sent but no provider message ID was recorded.';
         }
 
         if ($awaitingWebhookOverdue) {
-            return 'SendGrid accepted this send, but webhook events are overdue.';
+            return 'Provider accepted this send, but webhook events are overdue.';
         }
 
         if ($awaitingWebhook) {
-            return 'SendGrid accepted this send; waiting for webhook callbacks.';
+            return 'Provider accepted this send; waiting for webhook callbacks.';
         }
 
         if ($lastFailure) {

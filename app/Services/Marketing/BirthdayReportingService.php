@@ -15,7 +15,8 @@ use Illuminate\Support\Collection;
 class BirthdayReportingService
 {
     public function __construct(
-        protected BirthdayEmailDeliveryStatusNormalizer $deliveryStatusNormalizer
+        protected BirthdayEmailDeliveryStatusNormalizer $deliveryStatusNormalizer,
+        protected MarketingEmailDeliveryProviderContext $providerContextResolver
     ) {
     }
 
@@ -81,6 +82,34 @@ class BirthdayReportingService
             $query->where('provider', $provider);
         }
 
+        $resolutionSource = strtolower(trim((string) ($filters['provider_resolution_source'] ?? '')));
+        if ($resolutionSource !== '') {
+            if ($resolutionSource === 'unknown') {
+                $query->where(function (Builder $builder): void {
+                    $builder
+                        ->whereNull('metadata')
+                        ->orWhereNull('metadata->provider_resolution_source')
+                        ->orWhere('metadata->provider_resolution_source', '');
+                });
+            } else {
+                $query->where('metadata->provider_resolution_source', $resolutionSource);
+            }
+        }
+
+        $readinessStatus = strtolower(trim((string) ($filters['provider_readiness_status'] ?? '')));
+        if ($readinessStatus !== '') {
+            if ($readinessStatus === 'unknown') {
+                $query->where(function (Builder $builder): void {
+                    $builder
+                        ->whereNull('metadata')
+                        ->orWhereNull('metadata->provider_readiness_status')
+                        ->orWhere('metadata->provider_readiness_status', '');
+                });
+            } else {
+                $query->where('metadata->provider_readiness_status', $readinessStatus);
+            }
+        }
+
         $templateKey = trim((string) ($filters['template_key'] ?? ''));
         if ($templateKey !== '') {
             $query->where('template_key', $templateKey);
@@ -112,6 +141,8 @@ class BirthdayReportingService
      *     date_from:string,
      *     date_to:string,
      *     provider:?string,
+     *     provider_resolution_source:?string,
+     *     provider_readiness_status:?string,
      *     template_key:?string,
      *     status:string,
      *     comparison_mode:'template'|'provider'|'period',
@@ -121,6 +152,8 @@ class BirthdayReportingService
      *   },
      *   options:array{
      *     providers:array<int,string>,
+     *     provider_resolution_sources:array<int,string>,
+     *     provider_readiness_statuses:array<int,string>,
      *     template_keys:array<int,string>,
      *     statuses:array<int,string>,
      *     comparison_modes:array<int,string>,
@@ -153,7 +186,31 @@ class BirthdayReportingService
      *     bounced:int,
      *     unsupported:int
      *   }>,
+     *   provider_resolution_breakdown:array<int,array{
+     *     provider_resolution_source:string,
+     *     provider_resolution_source_label:string,
+     *     attempted:int,
+     *     sent:int,
+     *     failed:int,
+     *     unsupported:int,
+     *     providers:array<int,string>,
+     *     legacy_context_missing_count:int
+     *   }>,
+     *   provider_readiness_breakdown:array<int,array{
+     *     provider_readiness_status:string,
+     *     provider_readiness_status_label:string,
+     *     attempted:int,
+     *     sent:int,
+     *     failed:int,
+     *     unsupported:int
+     *   }>,
      *   top_failure_reasons:array<int,array{reason:string,count:int}>,
+     *   top_failure_reasons_by_resolution_source:array<int,array{
+     *     provider_resolution_source:string,
+     *     provider_resolution_source_label:string,
+     *     reason:string,
+     *     count:int
+     *   }>,
      *   attribution:array{
      *     delivery_links:array{
      *       linked_count:int,
@@ -172,6 +229,8 @@ class BirthdayReportingService
     {
         $tenantId = $this->positiveInt($filters['tenant_id'] ?? null);
         $provider = $this->nullableString($filters['provider'] ?? null);
+        $providerResolutionSource = $this->normalizedProviderResolutionSourceFilter($filters['provider_resolution_source'] ?? null);
+        $providerReadinessStatus = $this->normalizedProviderReadinessStatusFilter($filters['provider_readiness_status'] ?? null);
         $templateKey = $this->nullableString($filters['template_key'] ?? null);
         $statusFilter = $this->normalizedStatusFilter((string) ($filters['status'] ?? 'all'));
         $comparisonMode = $this->normalizedComparisonMode($filters['comparison_mode'] ?? null);
@@ -211,6 +270,8 @@ class BirthdayReportingService
         $deliveryBaseQuery = $this->canonicalBirthdayEmailDeliveryQuery([
             'tenant_id' => $tenantId,
             'provider' => $provider,
+            'provider_resolution_source' => $providerResolutionSource,
+            'provider_readiness_status' => $providerReadinessStatus,
             'template_key' => $templateKey,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
@@ -224,9 +285,11 @@ class BirthdayReportingService
                 $couponCode = strtoupper(trim((string) ($metadata['coupon_code'] ?? '')));
                 $issuanceId = $this->positiveInt($metadata['birthday_reward_issuance_id'] ?? null)
                     ?? ($couponCode !== '' ? $this->positiveInt($issuanceIdsByCode[$couponCode] ?? null) : null);
+                $providerContext = $this->providerContextResolver->resolveFromDelivery($delivery);
 
                 return [
                     'delivery' => $delivery,
+                    'provider_context' => $providerContext,
                     'normalized' => $this->deliveryStatusNormalizer->normalize($delivery),
                     'issuance_id' => $issuanceId,
                 ];
@@ -286,6 +349,64 @@ class BirthdayReportingService
             ->values()
             ->all();
 
+        $providerResolutionBreakdown = $deliveryRows
+            ->groupBy(fn (array $row): string => (string) data_get($row, 'provider_context.provider_resolution_source', 'unknown'))
+            ->map(function (Collection $rows, string $source): array {
+                return [
+                    'provider_resolution_source' => $source,
+                    'provider_resolution_source_label' => $this->providerContextResolver->resolutionSourceLabel($source),
+                    'attempted' => (int) $rows->count(),
+                    'sent' => (int) $rows->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.sent', false))->count(),
+                    'failed' => (int) $rows->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.failed', false))->count(),
+                    'unsupported' => (int) $rows->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.unsupported', false))->count(),
+                    'providers' => $rows
+                        ->map(fn (array $row): string => (string) data_get($row, 'provider_context.provider', 'unknown'))
+                        ->filter(fn (string $provider): bool => $provider !== '')
+                        ->unique()
+                        ->sort()
+                        ->values()
+                        ->all(),
+                    'legacy_context_missing_count' => (int) $rows
+                        ->filter(fn (array $row): bool => (bool) data_get($row, 'provider_context.legacy_context_missing', false))
+                        ->count(),
+                ];
+            })
+            ->sortBy(function (array $row): int {
+                return match ((string) ($row['provider_resolution_source'] ?? 'unknown')) {
+                    'tenant' => 1,
+                    'fallback' => 2,
+                    'none' => 3,
+                    default => 4,
+                };
+            })
+            ->values()
+            ->all();
+
+        $providerReadinessBreakdown = $deliveryRows
+            ->groupBy(fn (array $row): string => (string) data_get($row, 'provider_context.provider_readiness_status', 'unknown'))
+            ->map(function (Collection $rows, string $status): array {
+                return [
+                    'provider_readiness_status' => $status,
+                    'provider_readiness_status_label' => $this->providerContextResolver->readinessStatusLabel($status),
+                    'attempted' => (int) $rows->count(),
+                    'sent' => (int) $rows->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.sent', false))->count(),
+                    'failed' => (int) $rows->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.failed', false))->count(),
+                    'unsupported' => (int) $rows->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.unsupported', false))->count(),
+                ];
+            })
+            ->sortBy(function (array $row): int {
+                return match ((string) ($row['provider_readiness_status'] ?? 'unknown')) {
+                    'ready' => 1,
+                    'unsupported' => 2,
+                    'incomplete' => 3,
+                    'not_configured' => 4,
+                    'error' => 5,
+                    default => 6,
+                };
+            })
+            ->values()
+            ->all();
+
         $failureReasons = $deliveryRows
             ->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.failed', false))
             ->map(function (array $row): string {
@@ -303,6 +424,34 @@ class BirthdayReportingService
             ->take(8)
             ->all();
 
+        $failureReasonsByResolutionSource = $deliveryRows
+            ->filter(fn (array $row): bool => (bool) data_get($row, 'normalized.failed', false))
+            ->map(function (array $row): array {
+                $reason = trim((string) data_get($row, 'normalized.failure_reason', 'unknown_failure'));
+                $source = (string) data_get($row, 'provider_context.provider_resolution_source', 'unknown');
+
+                return [
+                    'provider_resolution_source' => $source !== '' ? $source : 'unknown',
+                    'provider_resolution_source_label' => $this->providerContextResolver->resolutionSourceLabel($source !== '' ? $source : 'unknown'),
+                    'reason' => $reason !== '' ? mb_substr($reason, 0, 120) : 'unknown_failure',
+                ];
+            })
+            ->groupBy(fn (array $row): string => (string) ($row['provider_resolution_source'] ?? 'unknown') . '||' . (string) ($row['reason'] ?? 'unknown_failure'))
+            ->map(function (Collection $rows): array {
+                $sample = (array) $rows->first();
+
+                return [
+                    'provider_resolution_source' => (string) ($sample['provider_resolution_source'] ?? 'unknown'),
+                    'provider_resolution_source_label' => (string) ($sample['provider_resolution_source_label'] ?? 'Legacy / unavailable'),
+                    'reason' => (string) ($sample['reason'] ?? 'unknown_failure'),
+                    'count' => (int) $rows->count(),
+                ];
+            })
+            ->sortByDesc('count')
+            ->values()
+            ->take(12)
+            ->all();
+
         $linkedIssuanceIds = $deliveryRows
             ->map(fn (array $row): ?int => $this->positiveInt($row['issuance_id'] ?? null))
             ->filter()
@@ -315,6 +464,8 @@ class BirthdayReportingService
             ->map(fn (int $id): ?BirthdayRewardIssuance => $issuancesById->get($id))
             ->filter();
         $hasDeliveryCohortFilter = $provider !== null
+            || $providerResolutionSource !== null
+            || $providerReadinessStatus !== null
             || $templateKey !== null
             || $statusFilter !== 'all';
         $issuanceCohort = $hasDeliveryCohortFilter ? $linkedIssuances : $issuances;
@@ -352,11 +503,25 @@ class BirthdayReportingService
             'tenant_id' => $tenantId,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
-        ])->get(['provider', 'template_key']);
+        ])->get(['provider', 'template_key', 'metadata']);
 
         $providerOptions = $optionDeliveries
             ->map(fn (MarketingEmailDelivery $delivery): string => strtolower(trim((string) ($delivery->provider ?? ''))))
             ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        $providerResolutionOptions = $optionDeliveries
+            ->map(fn (MarketingEmailDelivery $delivery): string => (string) $this->providerContextResolver->resolveFromDelivery($delivery)['provider_resolution_source'])
+            ->filter(fn (string $value): bool => $value !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        $providerReadinessOptions = $optionDeliveries
+            ->map(fn (MarketingEmailDelivery $delivery): string => (string) $this->providerContextResolver->resolveFromDelivery($delivery)['provider_readiness_status'])
+            ->filter(fn (string $value): bool => $value !== '')
             ->unique()
             ->sort()
             ->values()
@@ -385,6 +550,12 @@ class BirthdayReportingService
         if ($unlinkedCount > 0) {
             $notes[] = $unlinkedCount . ' delivery row(s) could not be linked to a birthday reward issuance via persisted issuance ID or coupon code metadata.';
         }
+        $legacyContextCount = (int) $deliveryRows
+            ->filter(fn (array $row): bool => (bool) data_get($row, 'provider_context.legacy_context_missing', false))
+            ->count();
+        if ($legacyContextCount > 0) {
+            $notes[] = $legacyContextCount . ' delivery row(s) are legacy and do not include provider-resolution metadata; they are labeled as unknown in context breakdowns.';
+        }
 
         $trend = $this->buildDailyTrend(
             $dateFrom,
@@ -398,6 +569,8 @@ class BirthdayReportingService
                 filters: [
                     'tenant_id' => $tenantId,
                     'provider' => $provider,
+                    'provider_resolution_source' => $providerResolutionSource,
+                    'provider_readiness_status' => $providerReadinessStatus,
                     'template_key' => $templateKey,
                     'status' => $statusFilter,
                 ],
@@ -446,6 +619,8 @@ class BirthdayReportingService
                 'date_from' => $dateFrom->toDateString(),
                 'date_to' => $dateTo->toDateString(),
                 'provider' => $provider,
+                'provider_resolution_source' => $providerResolutionSource,
+                'provider_readiness_status' => $providerReadinessStatus,
                 'template_key' => $templateKey,
                 'status' => $statusFilter,
                 'comparison_mode' => $comparisonMode,
@@ -455,6 +630,8 @@ class BirthdayReportingService
             ],
             'options' => [
                 'providers' => $providerOptions,
+                'provider_resolution_sources' => $providerResolutionOptions,
+                'provider_readiness_statuses' => $providerReadinessOptions,
                 'template_keys' => $templateOptions,
                 'statuses' => ['all', 'attempted', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'bounced', 'unsupported'],
                 'comparison_modes' => ['template', 'provider', 'period'],
@@ -485,7 +662,10 @@ class BirthdayReportingService
             ],
             'status_breakdown' => $statusBreakdown,
             'provider_breakdown' => $providerBreakdown,
+            'provider_resolution_breakdown' => $providerResolutionBreakdown,
+            'provider_readiness_breakdown' => $providerReadinessBreakdown,
             'top_failure_reasons' => $failureReasons,
+            'top_failure_reasons_by_resolution_source' => $failureReasonsByResolutionSource,
             'attribution' => [
                 'delivery_links' => [
                     'linked_count' => $linkedCount,
@@ -539,6 +719,13 @@ class BirthdayReportingService
             'delta_direction',
             'insufficient_baseline',
             'provider',
+            'provider_resolution_source',
+            'provider_resolution_source_label',
+            'provider_readiness_status',
+            'provider_readiness_status_label',
+            'provider_config_status',
+            'provider_using_fallback_config',
+            'provider_runtime_path',
             'template_key',
             'status',
             'rewards_issued',
@@ -780,6 +967,32 @@ class BirthdayReportingService
             ];
         }
 
+        foreach ((array) ($analytics['provider_resolution_breakdown'] ?? []) as $row) {
+            $rows[] = [
+                'record_type' => 'provider_resolution_breakdown',
+                'provider_resolution_source' => (string) ($row['provider_resolution_source'] ?? ''),
+                'provider_resolution_source_label' => (string) ($row['provider_resolution_source_label'] ?? ''),
+                'provider_attempted' => (int) ($row['attempted'] ?? 0),
+                'provider_sent' => (int) ($row['sent'] ?? 0),
+                'provider_failed' => (int) ($row['failed'] ?? 0),
+                'provider_unsupported' => (int) ($row['unsupported'] ?? 0),
+                'count' => (int) ($row['legacy_context_missing_count'] ?? 0),
+                'note' => implode(' | ', array_map('strval', (array) ($row['providers'] ?? []))),
+            ];
+        }
+
+        foreach ((array) ($analytics['provider_readiness_breakdown'] ?? []) as $row) {
+            $rows[] = [
+                'record_type' => 'provider_readiness_breakdown',
+                'provider_readiness_status' => (string) ($row['provider_readiness_status'] ?? ''),
+                'provider_readiness_status_label' => (string) ($row['provider_readiness_status_label'] ?? ''),
+                'provider_attempted' => (int) ($row['attempted'] ?? 0),
+                'provider_sent' => (int) ($row['sent'] ?? 0),
+                'provider_failed' => (int) ($row['failed'] ?? 0),
+                'provider_unsupported' => (int) ($row['unsupported'] ?? 0),
+            ];
+        }
+
         foreach ((array) ($analytics['status_breakdown'] ?? []) as $row) {
             $rows[] = [
                 'record_type' => 'status_breakdown',
@@ -791,6 +1004,16 @@ class BirthdayReportingService
         foreach ((array) ($analytics['top_failure_reasons'] ?? []) as $row) {
             $rows[] = [
                 'record_type' => 'failure_reason',
+                'key' => (string) ($row['reason'] ?? ''),
+                'count' => (int) ($row['count'] ?? 0),
+            ];
+        }
+
+        foreach ((array) ($analytics['top_failure_reasons_by_resolution_source'] ?? []) as $row) {
+            $rows[] = [
+                'record_type' => 'failure_reason_by_resolution_source',
+                'provider_resolution_source' => (string) ($row['provider_resolution_source'] ?? ''),
+                'provider_resolution_source_label' => (string) ($row['provider_resolution_source_label'] ?? ''),
                 'key' => (string) ($row['reason'] ?? ''),
                 'count' => (int) ($row['count'] ?? 0),
             ];
@@ -2074,6 +2297,30 @@ class BirthdayReportingService
         return in_array($normalized, ['all', 'attempted', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'bounced', 'unsupported'], true)
             ? $normalized
             : 'all';
+    }
+
+    protected function normalizedProviderResolutionSourceFilter(mixed $source): ?string
+    {
+        $normalized = strtolower(trim((string) $source));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return in_array($normalized, ['tenant', 'fallback', 'none', 'unknown'], true)
+            ? $normalized
+            : null;
+    }
+
+    protected function normalizedProviderReadinessStatusFilter(mixed $status): ?string
+    {
+        $normalized = strtolower(trim((string) $status));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return in_array($normalized, ['ready', 'unsupported', 'incomplete', 'error', 'not_configured', 'unknown'], true)
+            ? $normalized
+            : null;
     }
 
     protected function normalizedComparisonMode(mixed $mode): string

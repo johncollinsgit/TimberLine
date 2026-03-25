@@ -9,10 +9,11 @@ interface CandleCashEngagementSectionProps {
 }
 
 const readinessBadgeTone = {
-  ready_for_live_send: "success",
-  dry_run_only: "attention",
-  disabled: "warning",
-  misconfigured: "critical",
+  ready: "success",
+  unsupported: "critical",
+  incomplete: "critical",
+  error: "critical",
+  not_configured: "warning",
 } as const;
 
 export function CandleCashEngagementSection({
@@ -22,10 +23,10 @@ export function CandleCashEngagementSection({
   onSendReminders,
 }: CandleCashEngagementSectionProps) {
   const readiness = section.reminderEligibility.emailReadiness;
-  const readinessStatus = readiness?.status ?? "disabled";
-  const remindersBlocked = readinessStatus === "disabled" || readinessStatus === "misconfigured";
+  const readinessStatus = readiness?.status ?? "not_configured";
+  const remindersBlocked = readiness?.canSend === false || readinessStatus !== "ready";
   const reminderButtonLabel =
-    readinessStatus === "dry_run_only"
+    readinessStatus === "ready" && readiness?.dryRun
       ? "Run unused-balance reminder dry run"
       : "Send unused-balance reminder emails";
 
@@ -44,13 +45,17 @@ export function CandleCashEngagementSection({
           <BlockStack gap="150">
             <InlineStack gap="200" blockAlign="center">
               <Badge tone={readinessBadgeTone[readinessStatus as keyof typeof readinessBadgeTone] ?? "warning"}>
-                {readinessStatus === "ready_for_live_send"
-                  ? "Live send ready"
-                  : readinessStatus === "dry_run_only"
-                    ? "Dry run only"
-                    : readinessStatus === "misconfigured"
-                      ? "Misconfigured"
-                      : "Disabled"}
+                {readinessStatus === "ready"
+                  ? readiness?.dryRun
+                    ? "Ready (dry run)"
+                    : "Ready"
+                  : readinessStatus === "unsupported"
+                    ? "Unsupported"
+                    : readinessStatus === "incomplete"
+                      ? "Incomplete setup"
+                      : readinessStatus === "error"
+                        ? "Validation error"
+                        : "Not configured"}
               </Badge>
               <Button
                 variant="primary"
@@ -75,6 +80,16 @@ export function CandleCashEngagementSection({
         {readiness?.missingReasons?.length ? (
           <Text as="p" variant="bodySm" tone="critical">
             {readiness.missingReasons.join(" · ")}
+          </Text>
+        ) : null}
+        {readiness?.notes?.length ? (
+          <Text as="p" variant="bodySm" tone="subdued">
+            {readiness.notes.join(" · ")}
+          </Text>
+        ) : null}
+        {readiness?.warnings?.length ? (
+          <Text as="p" variant="bodySm" tone="subdued">
+            {readiness.warnings.join(" · ")}
           </Text>
         ) : null}
         {reminderFeedback ? (
@@ -162,4 +177,3 @@ export function CandleCashEngagementSection({
     </Card>
   );
 }
-

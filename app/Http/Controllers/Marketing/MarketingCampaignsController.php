@@ -127,6 +127,7 @@ class MarketingCampaignsController extends Controller
     }
 
     public function show(
+        Request $request,
         MarketingCampaign $campaign,
         MarketingPerformanceAnalyticsService $performanceAnalyticsService,
         MarketingTimingRecommendationService $timingRecommendationService,
@@ -171,7 +172,7 @@ class MarketingCampaignsController extends Controller
             ->limit(200)
             ->get();
 
-        $emailReadiness = $readinessService->summary();
+        $emailReadiness = $readinessService->summary($this->currentTenantId($request));
         $diagnostics = $diagnosticsService->summarize($campaign, $emailReadiness, $emailDeliveryLog);
 
         $conversionSummary = [
@@ -277,16 +278,22 @@ class MarketingCampaignsController extends Controller
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
+        $readiness = $readinessService->summary($this->currentTenantId($request));
+        $effectiveDryRun = (bool) ($data['dry_run'] ?? false) || (bool) ($readiness['dry_run'] ?? false);
+        $blocked = $this->blockEmailSend($readiness, $effectiveDryRun, $campaign);
+        if ($blocked) {
+            return $blocked;
+        }
+
         $summary = $executionService->sendApprovedForCampaign($campaign, [
             'limit' => (int) ($data['limit'] ?? 500),
-            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'dry_run' => $effectiveDryRun,
             'actor_id' => (int) auth()->id(),
         ]);
 
-        $status = $readinessService->summary();
         $modeLabel = ($summary['dry_run'] ?? false)
             ? 'Dry run'
-            : ($status['status'] === 'ready_for_live_send' ? 'Live send' : 'Configured send');
+            : ((string) ($readiness['status'] ?? 'not_configured') === 'ready' ? 'Live send' : 'Configured send');
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
@@ -315,23 +322,23 @@ class MarketingCampaignsController extends Controller
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
-        $dryRun = (bool) ($data['dry_run'] ?? false);
-        $readiness = $readinessService->summary();
-        $blocked = $this->blockEmailSend($readiness, $dryRun, $campaign);
+        $readiness = $readinessService->summary($this->currentTenantId($request));
+        $effectiveDryRun = (bool) ($data['dry_run'] ?? false) || (bool) ($readiness['dry_run'] ?? false);
+        $blocked = $this->blockEmailSend($readiness, $effectiveDryRun, $campaign);
         if ($blocked) {
             return $blocked;
         }
 
         $summary = $executionService->sendApprovedForCampaign($campaign, [
             'recipient_ids' => array_map('intval', (array) $data['recipient_ids']),
-            'dry_run' => $dryRun,
+            'dry_run' => $effectiveDryRun,
             'limit' => count((array) $data['recipient_ids']),
             'actor_id' => (int) auth()->id(),
         ]);
 
         $modeLabel = ($summary['dry_run'] ?? false)
             ? 'Dry run'
-            : ($readiness['status'] === 'ready_for_live_send' ? 'Live send' : 'Configured send');
+            : ((string) ($readiness['status'] ?? 'not_configured') === 'ready' ? 'Live send' : 'Configured send');
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
@@ -354,8 +361,9 @@ class MarketingCampaignsController extends Controller
         MarketingEmailExecutionService $executionService,
         MarketingEmailReadiness $readinessService
     ): RedirectResponse {
-        $readiness = $readinessService->summary();
-        $blocked = $this->blockEmailSend($readiness, false, $campaign);
+        $readiness = $readinessService->summary($this->currentTenantId($request));
+        $effectiveDryRun = (bool) ($readiness['dry_run'] ?? false);
+        $blocked = $this->blockEmailSend($readiness, $effectiveDryRun, $campaign);
         if ($blocked) {
             return $blocked;
         }
@@ -411,7 +419,7 @@ class MarketingCampaignsController extends Controller
 
         $summary = $executionService->sendApprovedForCampaign($campaign, [
             'recipient_ids' => [$recipient->id],
-            'dry_run' => (bool) ($readiness['dry_run'] ?? false),
+            'dry_run' => $effectiveDryRun,
             'limit' => 1,
             'actor_id' => (int) auth()->id(),
         ]);
@@ -421,7 +429,7 @@ class MarketingCampaignsController extends Controller
             ->orderByDesc('id')
             ->first();
 
-        $modeLabel = ($summary['dry_run'] ?? false) || $readiness['dry_run']
+        $modeLabel = ($summary['dry_run'] ?? false) || $effectiveDryRun
             ? 'Dry run smoke test'
             : 'Live smoke test';
 
@@ -435,8 +443,12 @@ class MarketingCampaignsController extends Controller
             (int) $summary['skipped']
         );
 
-        if ($delivery && $delivery->sendgrid_message_id) {
-            $message .= sprintf(' SendGrid ID: %s.', $delivery->sendgrid_message_id);
+        if ($delivery) {
+            $providerMessageId = trim((string) ($delivery->provider_message_id ?: $delivery->sendgrid_message_id ?: ''));
+            if ($providerMessageId !== '') {
+                $providerLabel = strtoupper(trim((string) ($delivery->provider ?: 'provider')));
+                $message .= sprintf(' %s ID: %s.', $providerLabel, $providerMessageId);
+            }
         }
 
         return redirect()
@@ -478,13 +490,34 @@ class MarketingCampaignsController extends Controller
 
     protected function blockEmailSend(array $readiness, bool $dryRun, MarketingCampaign $campaign): ?RedirectResponse
     {
-        if ($dryRun || $readiness['status'] === 'ready_for_live_send' || $readiness['status'] === 'dry_run_only') {
+        if ((string) ($readiness['status'] ?? 'not_configured') === 'ready' && (bool) ($readiness['can_send'] ?? false)) {
             return null;
         }
 
-        $reason = $readiness['status'] === 'disabled'
-            ? 'Email sending is currently disabled (MARKETING_EMAIL_ENABLED=false).'
-            : 'Email misconfigured: ' . implode(', ', $readiness['missing_reasons']);
+        $status = (string) ($readiness['status'] ?? 'not_configured');
+        $missing = collect((array) ($readiness['missing_requirements'] ?? $readiness['missing_reasons'] ?? []))
+            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+            ->map(fn ($value): string => trim((string) $value))
+            ->values()
+            ->all();
+        $notes = collect((array) ($readiness['notes'] ?? []))
+            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+            ->map(fn ($value): string => trim((string) $value))
+            ->values()
+            ->all();
+
+        $reason = match ($status) {
+            'unsupported' => $notes[0] ?? 'Selected provider does not support runtime email sends in this architecture.',
+            'incomplete' => $missing !== []
+                ? 'Email provider setup is incomplete: ' . implode(', ', $missing)
+                : 'Email provider setup is incomplete for this tenant.',
+            'error' => $missing[0] ?? ($notes[0] ?? 'Email readiness could not be validated.'),
+            default => 'Email sending is disabled or not configured for this tenant.',
+        };
+
+        if ($dryRun) {
+            $reason .= ' This run was requested as dry run, but provider readiness is still required.';
+        }
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
@@ -492,6 +525,13 @@ class MarketingCampaignsController extends Controller
                 'style' => 'warning',
                 'message' => $reason,
             ]);
+    }
+
+    protected function currentTenantId(Request $request): ?int
+    {
+        $tenantId = $request->attributes->get('current_tenant_id');
+
+        return is_numeric($tenantId) ? (int) $tenantId : null;
     }
 
     public function sendSelectedSms(

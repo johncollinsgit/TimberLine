@@ -37,10 +37,17 @@ test('delivery diagnostics derives readiness states from smoke-test and webhook 
     MarketingEmailDelivery::query()->create([
         'marketing_campaign_recipient_id' => $recipient->id,
         'marketing_profile_id' => $recipient->marketing_profile_id,
+        'provider' => 'sendgrid',
         'email' => 'smoke@example.com',
         'status' => 'sent',
         'sendgrid_message_id' => 'SG-awaiting',
         'sent_at' => now()->subMinutes(20),
+        'metadata' => [
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
+        ],
         'raw_payload' => [
             'request' => ['id' => 'awaiting'],
         ],
@@ -59,7 +66,9 @@ test('delivery diagnostics derives readiness states from smoke-test and webhook 
         'status' => 'ready_for_live_send',
     ], MarketingEmailDelivery::query()->where('marketing_campaign_recipient_id', $recipient->id)->get());
     expect($awaiting['overall_status'])->toBe('awaiting_webhook')
-        ->and(data_get($awaiting, 'webhook_health.indicator'))->toBe('missing_events');
+        ->and(data_get($awaiting, 'webhook_health.indicator'))->toBe('missing_events')
+        ->and((int) data_get($awaiting, 'provider_context.by_resolution_source.0.attempted', 0))->toBe(1)
+        ->and((string) data_get($awaiting, 'provider_context.by_resolution_source.0.key', ''))->toBe('fallback');
 
     $delivery = MarketingEmailDelivery::query()->where('marketing_campaign_recipient_id', $recipient->id)->latest('id')->firstOrFail();
     $delivery->forceFill([
@@ -109,10 +118,17 @@ test('delivery diagnostics builds recipient-level tracking and smoke/live mode r
     MarketingEmailDelivery::query()->create([
         'marketing_campaign_recipient_id' => $smokeRecipient->id,
         'marketing_profile_id' => $smokeRecipient->marketing_profile_id,
+        'provider' => 'sendgrid',
         'email' => 'smoke@example.com',
         'status' => 'clicked',
         'sendgrid_message_id' => 'SG-SMOKE-CLICK',
         'sent_at' => now()->subMinutes(15),
+        'metadata' => [
+            'provider_resolution_source' => 'tenant',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => false,
+        ],
         'raw_payload' => [
             'events' => [
                 ['event' => 'processed', 'at' => now()->subMinutes(14)->toIso8601String()],
@@ -126,10 +142,17 @@ test('delivery diagnostics builds recipient-level tracking and smoke/live mode r
     MarketingEmailDelivery::query()->create([
         'marketing_campaign_recipient_id' => $liveRecipient->id,
         'marketing_profile_id' => $liveRecipient->marketing_profile_id,
+        'provider' => 'sendgrid',
         'email' => 'buyer@example.com',
         'status' => 'failed',
         'sendgrid_message_id' => 'SG-LIVE-FAIL',
         'sent_at' => now()->subMinutes(18),
+        'metadata' => [
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
+        ],
         'raw_payload' => [
             'events' => [
                 ['event' => 'dropped', 'at' => now()->subMinutes(17)->toIso8601String()],
@@ -140,10 +163,17 @@ test('delivery diagnostics builds recipient-level tracking and smoke/live mode r
     MarketingEmailDelivery::query()->create([
         'marketing_campaign_recipient_id' => $unsubscribeRecipient->id,
         'marketing_profile_id' => $unsubscribeRecipient->marketing_profile_id,
+        'provider' => 'shopify_email',
         'email' => 'unsub@example.com',
         'status' => 'sent',
         'sendgrid_message_id' => 'DRYRUN-SG-UNSUB',
         'sent_at' => now()->subMinutes(10),
+        'metadata' => [
+            'provider_resolution_source' => 'tenant',
+            'provider_readiness_status' => 'unsupported',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => false,
+        ],
         'raw_payload' => [
             'dry_run' => true,
             'events' => [
@@ -171,9 +201,13 @@ test('delivery diagnostics builds recipient-level tracking and smoke/live mode r
         ->and(data_get($summary, 'webhook_health.indicator'))->toBe('failures_detected');
 
     $rows = collect((array) ($summary['deliveries'] ?? []));
+    $resolutionRows = collect((array) data_get($summary, 'provider_context.by_resolution_source', []))->keyBy('key');
+    $readinessRows = collect((array) data_get($summary, 'provider_context.by_readiness_status', []))->keyBy('key');
     expect($rows->where('is_smoke_test', true)->count())->toBe(1)
         ->and($rows->where('mode', 'dry_run')->count())->toBe(1)
-        ->and($rows->where('mode', 'live')->count())->toBe(1);
+        ->and($rows->where('mode', 'live')->count())->toBe(1)
+        ->and((int) data_get($resolutionRows->get('fallback') ?? [], 'attempted', 0))->toBe(1)
+        ->and((int) data_get($readinessRows->get('unsupported') ?? [], 'attempted', 0))->toBe(1);
 });
 
 test('campaign detail renders the upgraded delivery diagnostics section', function () {
@@ -194,10 +228,17 @@ test('campaign detail renders the upgraded delivery diagnostics section', functi
     MarketingEmailDelivery::query()->create([
         'marketing_campaign_recipient_id' => $recipient->id,
         'marketing_profile_id' => $recipient->marketing_profile_id,
+        'provider' => 'sendgrid',
         'email' => 'smoke@example.com',
         'status' => 'sent',
         'sendgrid_message_id' => 'SG-DIAG-UI',
         'sent_at' => now()->subMinutes(7),
+        'metadata' => [
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
+        ],
         'raw_payload' => [
             'events' => [
                 ['event' => 'processed', 'at' => now()->subMinutes(6)->toIso8601String()],
@@ -216,5 +257,6 @@ test('campaign detail renders the upgraded delivery diagnostics section', functi
         ->assertSeeText('Delivery Diagnostics')
         ->assertSeeText('Recipient-level Tracking')
         ->assertSeeText('Webhook Health')
+        ->assertSeeText('Resolution Source')
         ->assertSeeText('Send Smoke Test');
 });

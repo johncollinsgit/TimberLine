@@ -19,7 +19,6 @@ class CandleCashEarnedReminderService
      */
     public function sendManualBatch(array $options = []): array
     {
-        $readiness = $this->emailReadiness->summary();
         $limit = max(1, min(500, (int) ($options['limit'] ?? config('marketing.email.candle_cash_reminder.max_send_limit', 200))));
         $cooldownDays = max(1, min(90, (int) ($options['cooldown_days'] ?? config('marketing.email.candle_cash_reminder.cooldown_days', 14))));
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
@@ -27,13 +26,28 @@ class CandleCashEarnedReminderService
         $tenantId = isset($options['tenant_id']) && (int) $options['tenant_id'] > 0
             ? (int) $options['tenant_id']
             : null;
+        $readiness = $this->emailReadiness->summary($tenantId);
+        $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId);
+        $resolvedProvider = trim((string) ($providerContext['provider'] ?? ($readiness['provider'] ?? 'sendgrid'))) ?: 'sendgrid';
         $effectiveDryRun = (bool) ($readiness['dry_run'] ?? false) || $dryRun;
 
-        if (in_array((string) ($readiness['status'] ?? ''), ['disabled', 'misconfigured'], true)) {
+        if (! (bool) ($readiness['can_send'] ?? false)) {
+            $missing = collect((array) ($readiness['missing_requirements'] ?? []))
+                ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                ->map(fn ($value): string => trim((string) $value))
+                ->values()
+                ->all();
+            $notes = collect((array) ($readiness['notes'] ?? []))
+                ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                ->map(fn ($value): string => trim((string) $value))
+                ->values()
+                ->all();
+
             return [
                 'blocked' => true,
-                'status' => (string) ($readiness['status'] ?? 'disabled'),
-                'message' => 'Email reminders are blocked until marketing email configuration is enabled and complete.',
+                'status' => (string) ($readiness['status'] ?? 'not_configured'),
+                'message' => $notes[0]
+                    ?? ($missing[0] ?? 'Email reminders are blocked until tenant email configuration is ready.'),
                 'readiness' => $readiness,
                 'summary' => [
                     'processed' => 0,
@@ -85,7 +99,7 @@ class CandleCashEarnedReminderService
                 'marketing_campaign_recipient_id' => null,
                 'marketing_profile_id' => $profileId,
                 'tenant_id' => $tenantId,
-                'provider' => 'sendgrid',
+                'provider' => $resolvedProvider,
                 'campaign_type' => 'candle_cash_reminder',
                 'template_key' => 'candle_cash_unredeemed_earned',
                 'email' => $email,
@@ -100,12 +114,18 @@ class CandleCashEarnedReminderService
                     'latest_earned_date' => $recipient['latest_earned_date'] ?? null,
                     'expiration_date' => $recipient['expiration_date'] ?? null,
                     'expiration_policy' => $recipient['expiration_policy'] ?? null,
+                    'provider_resolution' => $providerContext,
                 ],
                 'metadata' => [
                     'tenant_id' => $tenantId,
                     'customer_id' => $profileId,
                     'campaign_type' => 'candle_cash_reminder',
                     'template_key' => 'candle_cash_unredeemed_earned',
+                    'provider' => $resolvedProvider,
+                    'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                    'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                    'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                    'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
                 ],
             ]);
 
@@ -153,6 +173,15 @@ class CandleCashEarnedReminderService
                         'dry_run' => (bool) ($sendResult['dry_run'] ?? false),
                     ]
                 ),
+                'metadata' => [
+                    ...((array) ($delivery->metadata ?? [])),
+                    'provider' => $provider,
+                    'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                    'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                    'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                    'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
+                    'error_code' => $sendResult['error_code'] ?? null,
+                ],
             ])->save();
 
             if ($success) {
@@ -171,7 +200,7 @@ class CandleCashEarnedReminderService
 
         return [
             'blocked' => false,
-            'status' => (string) ($readiness['status'] ?? 'ready_for_live_send'),
+            'status' => (string) ($readiness['status'] ?? 'ready'),
             'message' => $message,
             'readiness' => $readiness,
             'summary' => $summary,

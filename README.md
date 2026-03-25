@@ -124,3 +124,20 @@ Temporarily disable deploy:
 - Gift transactions now persist `gift_intent`, `gift_origin`, `notified_via`, `notification_status`, and `campaign_key` in `candle_cash_transactions`.
 - Backstage surfaces a `Gift insights` tab under Candle Cash (`/marketing/candle-cash/gifts-report`) that summarizes total gifts, intent/origin/notification breakdowns, actor attribution, recent gift rows, and a simple post-gift conversion proxy.
 - Use the date filters on that page to focus on a specific window and understand whether gifted customers later placed orders.
+
+## Email Provider-Context Reporting
+- Birthday analytics and exports expose provider context directly from canonical delivery metadata in `marketing_email_deliveries`.
+- Supported reporting dimensions include:
+  - `provider_resolution_source` (`tenant`, `fallback`, `none`, `unknown`)
+  - `provider_readiness_status` (`ready`, `unsupported`, `incomplete`, `error`, `not_configured`, `unknown`)
+- Embedded birthday analytics filters now include provider resolution/readiness context, and exports include matching breakdown rows.
+- Campaign delivery diagnostics now show provider resolution/readiness/runtime-path summaries per campaign.
+- Customer email timeline now shows row-level provider-context labels plus summary chips (tenant vs fallback paths, unsupported/incomplete attempts, and legacy/unknown rows) on `marketing.customers.show`.
+- Customer email timeline now supports operator filters for `provider_resolution_source` and `provider_readiness_status`.
+- Customer email timeline CSV export now has filter parity via `marketing.customers.email-deliveries.export` (`/marketing/customers/{marketingProfile}/email-deliveries/export`) and includes provider-context labels for legacy/unknown rows.
+- Architecture details: `docs/architecture/birthday-provider-context-reporting.md`.
+
+## Operational Architecture Guidance
+- For cross-domain boundary decisions (tenant/platform vs reusable ops primitives vs candle-specific logic), use:
+  - `docs/architecture/operational-multi-tenant-direction.md`
+- This guidance is intended for future implementation runs touching customers, inventory/internal ops, order workflows, and lifecycle communications.

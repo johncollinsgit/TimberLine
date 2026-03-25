@@ -46,13 +46,16 @@ class ShopifyEmbeddedDashboardDataService
     {
         $config = $this->config->payload();
         $resolvedQuery = $this->query->resolve($input, $config);
-        $cacheKey = $this->cacheKey($resolvedQuery);
+        $tenantId = isset($input['tenant_id']) && is_numeric($input['tenant_id'])
+            ? (int) $input['tenant_id']
+            : null;
+        $cacheKey = $this->cacheKey($resolvedQuery, $tenantId);
         $cacheTtlSeconds = $this->cacheTtlSeconds($resolvedQuery);
         $forceRefresh = $this->shouldForceRefresh($input);
         $cacheHit = false;
 
         if ($forceRefresh) {
-            $payload = $this->buildPayload($config, $resolvedQuery, $cacheTtlSeconds);
+            $payload = $this->buildPayload($config, $resolvedQuery, $cacheTtlSeconds, $tenantId);
             Cache::put($cacheKey, $payload, now()->addSeconds($cacheTtlSeconds));
         } else {
             $cached = Cache::get($cacheKey);
@@ -60,7 +63,7 @@ class ShopifyEmbeddedDashboardDataService
                 $payload = $cached;
                 $cacheHit = true;
             } else {
-                $payload = $this->buildPayload($config, $resolvedQuery, $cacheTtlSeconds);
+                $payload = $this->buildPayload($config, $resolvedQuery, $cacheTtlSeconds, $tenantId);
                 Cache::put($cacheKey, $payload, now()->addSeconds($cacheTtlSeconds));
             }
         }
@@ -89,7 +92,7 @@ class ShopifyEmbeddedDashboardDataService
      * @param  array<string,mixed>  $resolvedQuery
      * @return array<string,mixed>
      */
-    protected function buildPayload(array $config, array $resolvedQuery, int $cacheTtlSeconds): array
+    protected function buildPayload(array $config, array $resolvedQuery, int $cacheTtlSeconds, ?int $tenantId): array
     {
         $primaryWindow = $this->query->rehydrateWindow((array) $resolvedQuery['primary']);
         $comparisonWindow = is_array($resolvedQuery['comparisonWindow'] ?? null)
@@ -99,13 +102,15 @@ class ShopifyEmbeddedDashboardDataService
         $primarySnapshot = $this->windowSnapshot(
             $primaryWindow['from'],
             $primaryWindow['to'],
-            (string) $resolvedQuery['locationGrouping']
+            (string) $resolvedQuery['locationGrouping'],
+            $tenantId
         );
         $comparisonSnapshot = $comparisonWindow
             ? $this->windowSnapshot(
                 $comparisonWindow['from'],
                 $comparisonWindow['to'],
-                (string) $resolvedQuery['locationGrouping']
+                (string) $resolvedQuery['locationGrouping'],
+                $tenantId
             )
             : null;
 
@@ -143,9 +148,12 @@ class ShopifyEmbeddedDashboardDataService
         ];
     }
 
-    protected function cacheKey(array $resolvedQuery): string
+    protected function cacheKey(array $resolvedQuery, ?int $tenantId): string
     {
-        return 'shopify:embedded-dashboard:'.sha1(json_encode($resolvedQuery));
+        return 'shopify:embedded-dashboard:'.sha1(json_encode([
+            'tenant_id' => $tenantId,
+            'query' => $resolvedQuery,
+        ]));
     }
 
     protected function cacheTtlSeconds(array $resolvedQuery): int
@@ -205,7 +213,7 @@ class ShopifyEmbeddedDashboardDataService
     /**
      * @return array<string,mixed>
      */
-    protected function windowSnapshot(CarbonImmutable $from, CarbonImmutable $to, string $locationGrouping): array
+    protected function windowSnapshot(CarbonImmutable $from, CarbonImmutable $to, string $locationGrouping, ?int $tenantId): array
     {
         $conversionRows = $this->conversionRows($from, $to);
         $birthdayRows = $this->birthdayRows($from, $to);
@@ -219,7 +227,7 @@ class ShopifyEmbeddedDashboardDataService
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
         $candleCash = $this->candleCashProvider->snapshot($from, $to);
         $candleCashEngagement = $this->candleCashEarnedAnalyticsService->snapshot($from, $to);
-        $emailReadiness = $this->marketingEmailReadiness->summary();
+        $emailReadiness = $this->marketingEmailReadiness->summary($tenantId);
         $returningCustomerRate = $this->returningCustomerRate($from, $to);
         $realizedRewardCost = max(0.0, (float) data_get($candleCash, 'realizedRewardCost', 0));
         $birthdayRewardLiability = round((float) data_get($candleCash, 'issuedBirthdayValue', 0), 2);
@@ -236,10 +244,17 @@ class ShopifyEmbeddedDashboardDataService
                 'reminderEligibility' => [
                     ...(array) data_get($candleCashEngagement, 'reminderEligibility', []),
                     'emailReadiness' => [
-                        'status' => (string) ($emailReadiness['status'] ?? 'disabled'),
+                        'status' => (string) ($emailReadiness['status'] ?? 'not_configured'),
+                        'provider' => (string) ($emailReadiness['provider'] ?? 'sendgrid'),
+                        'canSend' => (bool) ($emailReadiness['can_send'] ?? false),
+                        'canSendLive' => (bool) ($emailReadiness['can_send_live'] ?? false),
                         'enabled' => (bool) ($emailReadiness['enabled'] ?? false),
                         'dryRun' => (bool) ($emailReadiness['dry_run'] ?? false),
-                        'missingReasons' => (array) ($emailReadiness['missing_reasons'] ?? []),
+                        'missingReasons' => (array) ($emailReadiness['missing_requirements'] ?? $emailReadiness['missing_reasons'] ?? []),
+                        'warnings' => (array) ($emailReadiness['warnings'] ?? []),
+                        'notes' => (array) ($emailReadiness['notes'] ?? []),
+                        'resolutionSource' => (string) ($emailReadiness['resolution_source'] ?? 'none'),
+                        'usingFallbackConfig' => (bool) ($emailReadiness['using_fallback_config'] ?? false),
                     ],
                 ],
             ],

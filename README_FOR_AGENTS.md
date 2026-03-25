@@ -15,6 +15,8 @@ Before building anything:
 2. Confirm whether the work belongs in backend repo, theme repo, or both
 3. Confirm whether the code is only local or actually deployed
 4. Reuse existing architecture before inventing new systems
+5. For customer/inventory/order/ops changes, read:
+   - `docs/architecture/operational-multi-tenant-direction.md`
 
 ## Current Priority TODOs
 
@@ -40,6 +42,10 @@ Before building anything:
   - what provider/config is in use
   - where failures or gaps exist
 - [ ] Make email operational enough to support the customer/reward workflow after launch
+- [x] Customer email timeline provider-context diagnostics now include:
+  - row labels + summary chips
+  - filters for provider resolution/readiness context
+  - CSV export parity with active filters
 
 ### Platform direction (important but NOT current focus)
 - [ ] Expand beyond Shopify into a general small-business operating system

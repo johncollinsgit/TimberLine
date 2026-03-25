@@ -21,7 +21,8 @@ class ShopifyEmbeddedAppController extends Controller
 
     public function show(
         Request $request,
-        ShopifyEmbeddedAppContext $contextService
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
     ): Response {
         $context = $contextService->resolvePageContext($request);
 
@@ -84,6 +85,7 @@ class ShopifyEmbeddedAppController extends Controller
 
         /** @var array<string,mixed> $store */
         $store = $context['store'];
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
         $dashboardLinks = [
             [
                 'label' => 'Rewards Admin',
@@ -108,7 +110,10 @@ class ShopifyEmbeddedAppController extends Controller
                 'external' => true,
             ],
         ];
-        $dashboardData = $this->dashboardDataService->payload($request->query());
+        $dashboardData = $this->dashboardDataService->payload([
+            ...$request->query(),
+            'tenant_id' => $tenantId,
+        ]);
 
         return $this->embeddedResponse(
             response()->view('shopify.dashboard', [
@@ -139,7 +144,8 @@ class ShopifyEmbeddedAppController extends Controller
 
     public function data(
         Request $request,
-        ShopifyEmbeddedAppContext $contextService
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
     ): JsonResponse {
         $context = $contextService->resolveAuthenticatedApiContext($request);
 
@@ -147,9 +153,14 @@ class ShopifyEmbeddedAppController extends Controller
             return $this->invalidContextResponse($context);
         }
 
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+
         return response()->json([
             'ok' => true,
-            'data' => $this->dashboardDataService->payload($request->query()),
+            'data' => $this->dashboardDataService->payload([
+                ...$request->query(),
+                'tenant_id' => $tenantId,
+            ]),
         ]);
     }
 

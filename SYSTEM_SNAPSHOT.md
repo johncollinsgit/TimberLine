@@ -90,6 +90,38 @@ Historically, third-party systems like Growave used API/OAuth-style access, but 
 - Analytics: `MarketingProfileAnalyticsService`
 - Segments: `MarketingSegmentEvaluator`
 
+### Email delivery reporting context
+- Canonical delivery table: `marketing_email_deliveries`.
+- Provider resolution/readiness context is stamped into delivery metadata and now surfaced directly in:
+  - birthday analytics + exports
+  - campaign delivery diagnostics
+  - customer email timeline diagnostics (`marketing.customers.show`)
+- Canonical derivation service:
+  - `app/Services/Marketing/MarketingEmailDeliveryProviderContext.php`
+- Customer timeline rows include operator-facing provider context labels (tenant-configured/fallback/unsupported/incomplete/legacy) and provider-context summary counts.
+- Customer timeline supports optional provider-context filters:
+  - `provider_resolution_source` (`tenant`, `fallback`, `none`, `unknown`)
+  - `provider_readiness_status` (`ready`, `unsupported`, `incomplete`, `error`, `not_configured`, `unknown`)
+- Customer timeline CSV export route:
+  - `marketing.customers.email-deliveries.export`
+  - `/marketing/customers/{marketingProfile}/email-deliveries/export`
+  - export uses the same active provider-context filters as the timeline view
+- Legacy rows without provider-context metadata remain visible as `unknown`/legacy context (no fabricated mapping).
+- Reference: `docs/architecture/birthday-provider-context-reporting.md`.
+
+### Operational Domain Boundary Guidance
+- Cross-domain boundary guidance for future implementation runs lives in:
+  - `docs/architecture/operational-multi-tenant-direction.md`
+- Use it to decide whether a requested change belongs to:
+  - tenant/platform infrastructure
+  - reusable operational workflow infrastructure
+  - candle-specific domain logic
+- Current documented stance:
+  - email + birthday/lifecycle messaging are established tenant-aware directions
+  - customer domain is tenant-scoped and should remain reusable beyond campaign-specific flows
+  - inventory/order ops currently include reusable primitives but remain partially candle-shaped
+  - avoid premature generalization of candle manufacturing assumptions
+
 ## Storefront Architecture
 - Storefront uses signed endpoints, not random ad hoc AJAX contracts
 - Primary controller: `MarketingShopifyIntegrationController`

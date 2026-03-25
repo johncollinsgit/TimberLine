@@ -15,7 +15,8 @@ class MarketingGroupDirectSendService
         protected TwilioSmsService $twilioSmsService,
         protected SendGridEmailService $sendGridEmailService,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected MarketingEmailReadiness $emailReadiness
     ) {
     }
 
@@ -74,6 +75,7 @@ class MarketingGroupDirectSendService
             ->orderBy('marketing_profiles.id')
             ->get([
                 'marketing_profiles.id',
+                'marketing_profiles.tenant_id',
                 'marketing_profiles.first_name',
                 'marketing_profiles.last_name',
                 'marketing_profiles.email',
@@ -199,11 +201,14 @@ class MarketingGroupDirectSendService
             return 'skipped';
         }
 
+        $providerContext = $this->emailReadiness->providerContextForDelivery($this->positiveInt($profile->tenant_id));
+        $resolvedProvider = trim((string) ($providerContext['provider'] ?? 'sendgrid')) ?: 'sendgrid';
+
         $delivery = MarketingEmailDelivery::query()->create([
             'marketing_campaign_recipient_id' => null,
             'marketing_profile_id' => $profile->id,
             'tenant_id' => $profile->tenant_id,
-            'provider' => 'sendgrid',
+            'provider' => $resolvedProvider,
             'campaign_type' => 'group_direct_send',
             'template_key' => 'group_' . $group->id,
             'email' => $email,
@@ -211,12 +216,18 @@ class MarketingGroupDirectSendService
             'raw_payload' => [
                 'group_id' => $group->id,
                 'group_name' => $group->name,
+                'provider_resolution' => $providerContext,
             ],
             'metadata' => [
                 'tenant_id' => $profile->tenant_id,
                 'customer_id' => $profile->id,
                 'campaign_type' => 'group_direct_send',
                 'template_key' => 'group_' . $group->id,
+                'provider' => $resolvedProvider,
+                'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
             ],
         ]);
 
@@ -228,6 +239,8 @@ class MarketingGroupDirectSendService
             'customer_id' => $profile->id,
             'metadata' => [
                 'marketing_group_id' => $group->id,
+                'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
             ],
             'categories' => [
                 'group-direct-send',
@@ -255,6 +268,15 @@ class MarketingGroupDirectSendService
                 'provider' => $provider,
                 'provider_result' => $send,
             ],
+            'metadata' => [
+                ...((array) ($delivery->metadata ?? [])),
+                'provider' => $provider,
+                'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
+                'error_code' => $send['error_code'] ?? null,
+            ],
         ])->save();
 
         return $success ? 'sent' : 'failed';
@@ -279,5 +301,16 @@ class MarketingGroupDirectSendService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $parsed = (int) $value;
+
+        return $parsed > 0 ? $parsed : null;
     }
 }

@@ -430,10 +430,17 @@ export const dashboardMockData: DashboardPayload = {
       missingEmailCustomers: 2,
       expirationPolicy: "No fixed expiration date is currently stored for earned Candle Cash buckets in this ledger.",
       emailReadiness: {
-        status: "ready_for_live_send",
+        status: "ready",
+        provider: "sendgrid",
+        canSend: true,
+        canSendLive: true,
         enabled: true,
         dryRun: false,
         missingReasons: [],
+        warnings: [],
+        notes: [],
+        resolutionSource: "tenant",
+        usingFallbackConfig: false,
       },
     },
     comparison: {

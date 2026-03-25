@@ -393,7 +393,8 @@ class PouringQueueService
 
     protected function sizeSummaryLabel(string $sizeCode, string $sizeLabel): string
     {
-        $haystack = strtolower(trim($sizeCode !== '' ? $sizeCode : $sizeLabel));
+        // Prefer the human label to avoid false matches from UUID-suffixed size codes.
+        $haystack = strtolower(trim($sizeLabel !== '' ? $sizeLabel : $sizeCode));
 
         if (str_contains($haystack, 'wax') || str_contains($haystack, 'melt')) {
             return 'WM';
@@ -412,7 +413,7 @@ class PouringQueueService
 
     protected function sizeSortOrder(string $sizeCode, string $sizeLabel): int
     {
-        $haystack = strtolower(trim($sizeCode !== '' ? $sizeCode : $sizeLabel));
+        $haystack = strtolower(trim($sizeLabel !== '' ? $sizeLabel : $sizeCode));
 
         if (str_contains($haystack, '16')) {
             return 1;

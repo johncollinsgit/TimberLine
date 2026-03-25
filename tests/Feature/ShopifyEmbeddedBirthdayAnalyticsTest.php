@@ -190,6 +190,147 @@ test('shopify embedded birthday analytics api validates comparison mode inputs',
         ->assertJsonPath('errors.comparison_mode.0', 'The selected comparison mode is invalid.');
 });
 
+test('shopify embedded birthday analytics api validates provider resolution and readiness filter inputs', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Retail Birthday Analytics Provider Context Validation',
+        'slug' => 'retail-birthday-analytics-provider-context-validation',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this
+        ->withHeaders(retailBirthdayAnalyticsApiHeaders())
+        ->getJson(route('shopify.app.api.rewards.birthdays.analytics', [
+            'provider_resolution_source' => 'legacy',
+        ], false))
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('errors.provider_resolution_source.0', 'The selected provider resolution source is invalid.');
+
+    $this
+        ->withHeaders(retailBirthdayAnalyticsApiHeaders())
+        ->getJson(route('shopify.app.api.rewards.birthdays.analytics', [
+            'provider_readiness_status' => 'misconfigured',
+        ], false))
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('errors.provider_readiness_status.0', 'The selected provider readiness status is invalid.');
+});
+
+test('shopify embedded birthday analytics api supports provider resolution and readiness filters', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Retail Birthday Analytics Provider Context Filter',
+        'slug' => 'retail-birthday-analytics-provider-context-filter',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'ContextFilter',
+        'email' => 'context-filter@embedded.test',
+        'normalized_email' => 'context-filter@embedded.test',
+        'accepts_email_marketing' => true,
+    ]);
+    $birthday = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => (int) now()->month,
+        'birth_day' => (int) now()->day,
+        'source' => 'test',
+        'source_captured_at' => now(),
+    ]);
+    $issuance = BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthday->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => (int) now()->year,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday Reward',
+        'status' => 'issued',
+        'reward_code' => 'BDAY-CTX-FLT-EMBED',
+        'issued_at' => now()->subDay(),
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'sendgrid',
+        'provider_message_id' => 'SG-CTX-FLT-EMBED',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profile->email,
+        'status' => 'sent',
+        'sent_at' => now()->subHours(2),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuance->id,
+            'coupon_code' => 'BDAY-CTX-FLT-EMBED',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
+        ],
+        'raw_payload' => [],
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'shopify_email',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profile->email,
+        'status' => 'failed',
+        'failed_at' => now()->subHour(),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuance->id,
+            'coupon_code' => 'BDAY-CTX-FLT-EMBED',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'error_code' => 'unsupported_provider_action',
+            'provider_resolution_source' => 'tenant',
+            'provider_readiness_status' => 'unsupported',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => false,
+        ],
+        'raw_payload' => [],
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'sendgrid',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profile->email,
+        'status' => 'failed',
+        'failed_at' => now()->subMinutes(30),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuance->id,
+            'coupon_code' => 'BDAY-EXPORT-1',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'error_code' => 'provider_down',
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
+        ],
+        'raw_payload' => [],
+    ]);
+
+    $response = $this
+        ->withHeaders(retailBirthdayAnalyticsApiHeaders())
+        ->getJson(route('shopify.app.api.rewards.birthdays.analytics', [
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+        ], false));
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.filters.provider_resolution_source', 'fallback')
+        ->assertJsonPath('data.filters.provider_readiness_status', 'ready')
+        ->assertJsonPath('data.metrics.birthday_emails_attempted', 2);
+});
+
 test('shopify embedded birthday analytics api validates period_view inputs', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Retail Birthday Analytics Period View Validation',
@@ -338,6 +479,29 @@ test('shopify embedded birthday analytics api supports provider comparison mode'
             'campaign_type' => 'birthday',
             'template_key' => 'birthday_email_primary',
             'error_code' => 'unsupported_provider_action',
+        ],
+        'raw_payload' => [],
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'sendgrid',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profile->email,
+        'status' => 'failed',
+        'failed_at' => now()->subMinutes(30),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuance->id,
+            'coupon_code' => 'BDAY-EXPORT-1',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'error_code' => 'provider_down',
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
         ],
         'raw_payload' => [],
     ]);
@@ -653,6 +817,8 @@ test('shopify embedded birthday analytics export returns csv that matches active
         ->and((string) data_get($rows->firstWhere('key', 'comparison_mode') ?? [], 'value'))->toBe('provider')
         ->and((int) $rows->where('record_type', 'comparison_row')->count())->toBeGreaterThan(0)
         ->and((string) data_get($rows->firstWhere('record_type', 'summary_metric') ?? [], 'record_type'))->toBe('summary_metric')
+        ->and((int) $rows->where('record_type', 'provider_resolution_breakdown')->count())->toBeGreaterThan(0)
+        ->and((int) $rows->where('record_type', 'provider_readiness_breakdown')->count())->toBeGreaterThan(0)
         ->and((string) data_get($rows->firstWhere('provider', 'shopify_email') ?? [], 'record_type', ''))->toBe('');
 });
 

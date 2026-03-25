@@ -327,6 +327,242 @@ test('birthday analytics supports provider template and status filtering with re
         ->and((array) ($analytics['notes'] ?? []))->not->toBeEmpty();
 });
 
+test('birthday analytics exposes provider context breakdowns and preserves legacy rows as unknown context', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Analytics Provider Context',
+        'slug' => 'birthday-analytics-provider-context',
+    ]);
+
+    [$profileOne, $birthdayOne] = createBirthdayProfile($tenant, 'ContextOne', 'context-one@example.test');
+    [$profileTwo, $birthdayTwo] = createBirthdayProfile($tenant, 'ContextTwo', 'context-two@example.test');
+    [$profileThree, $birthdayThree] = createBirthdayProfile($tenant, 'ContextThree', 'context-three@example.test');
+    [$profileLegacy, $birthdayLegacy] = createBirthdayProfile($tenant, 'ContextLegacy', 'context-legacy@example.test');
+
+    $issuanceOne = BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayOne->id,
+        'marketing_profile_id' => $profileOne->id,
+        'cycle_year' => (int) now()->year,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday Reward',
+        'status' => 'issued',
+        'reward_code' => 'BDAY-CTX-1',
+        'issued_at' => now()->subDay(),
+    ]);
+
+    $issuanceTwo = BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayTwo->id,
+        'marketing_profile_id' => $profileTwo->id,
+        'cycle_year' => (int) now()->year,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday Reward',
+        'status' => 'issued',
+        'reward_code' => 'BDAY-CTX-2',
+        'issued_at' => now()->subDay(),
+    ]);
+
+    $issuanceThree = BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayThree->id,
+        'marketing_profile_id' => $profileThree->id,
+        'cycle_year' => (int) now()->year,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday Reward',
+        'status' => 'issued',
+        'reward_code' => 'BDAY-CTX-3',
+        'issued_at' => now()->subDay(),
+    ]);
+
+    $issuanceLegacy = BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayLegacy->id,
+        'marketing_profile_id' => $profileLegacy->id,
+        'cycle_year' => (int) now()->year,
+        'reward_type' => 'discount_code',
+        'reward_name' => 'Birthday Reward',
+        'status' => 'issued',
+        'reward_code' => 'BDAY-CTX-LEGACY',
+        'issued_at' => now()->subDay(),
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profileOne->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'sendgrid',
+        'provider_message_id' => 'SG-CTX-1',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profileOne->email,
+        'status' => 'sent',
+        'sent_at' => now()->subHours(4),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuanceOne->id,
+            'coupon_code' => 'BDAY-CTX-1',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'provider_resolution_source' => 'tenant',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => false,
+        ],
+        'raw_payload' => [],
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profileTwo->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'sendgrid',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profileTwo->email,
+        'status' => 'failed',
+        'failed_at' => now()->subHours(3),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuanceTwo->id,
+            'coupon_code' => 'BDAY-CTX-2',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'error_code' => 'provider_down',
+            'provider_resolution_source' => 'fallback',
+            'provider_readiness_status' => 'ready',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => true,
+        ],
+        'raw_payload' => [],
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profileThree->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'shopify_email',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profileThree->email,
+        'status' => 'failed',
+        'failed_at' => now()->subHours(2),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuanceThree->id,
+            'coupon_code' => 'BDAY-CTX-3',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'error_code' => 'unsupported_provider_action',
+            'provider_resolution_source' => 'tenant',
+            'provider_readiness_status' => 'unsupported',
+            'provider_config_status' => 'configured',
+            'provider_using_fallback_config' => false,
+        ],
+        'raw_payload' => [],
+    ]);
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_profile_id' => $profileLegacy->id,
+        'tenant_id' => $tenant->id,
+        'provider' => 'sendgrid',
+        'provider_message_id' => 'SG-CTX-LEGACY',
+        'campaign_type' => 'birthday',
+        'template_key' => 'birthday_email_primary',
+        'email' => $profileLegacy->email,
+        'status' => 'sent',
+        'sent_at' => now()->subHours(1),
+        'metadata' => [
+            'birthday_reward_issuance_id' => (int) $issuanceLegacy->id,
+            'coupon_code' => 'BDAY-CTX-LEGACY',
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+        ],
+        'raw_payload' => [],
+    ]);
+
+    $analytics = app(BirthdayReportingService::class)->birthdayAnalytics([
+        'tenant_id' => $tenant->id,
+        'date_from' => now()->subDays(7)->toDateString(),
+        'date_to' => now()->toDateString(),
+    ]);
+
+    $resolutionRows = collect((array) data_get($analytics, 'provider_resolution_breakdown', []))->keyBy('provider_resolution_source');
+    $readinessRows = collect((array) data_get($analytics, 'provider_readiness_breakdown', []))->keyBy('provider_readiness_status');
+    $failureByResolutionRows = collect((array) data_get($analytics, 'top_failure_reasons_by_resolution_source', []));
+
+    expect((int) data_get($resolutionRows->get('tenant') ?? [], 'attempted', 0))->toBe(2)
+        ->and((int) data_get($resolutionRows->get('fallback') ?? [], 'attempted', 0))->toBe(1)
+        ->and((int) data_get($resolutionRows->get('unknown') ?? [], 'attempted', 0))->toBe(1)
+        ->and((int) data_get($resolutionRows->get('unknown') ?? [], 'legacy_context_missing_count', 0))->toBe(1)
+        ->and((int) data_get($readinessRows->get('ready') ?? [], 'attempted', 0))->toBe(2)
+        ->and((int) data_get($readinessRows->get('unsupported') ?? [], 'attempted', 0))->toBe(1)
+        ->and((int) data_get($readinessRows->get('unknown') ?? [], 'attempted', 0))->toBe(1)
+        ->and((int) data_get($failureByResolutionRows->firstWhere('provider_resolution_source', 'fallback') ?? [], 'count', 0))->toBe(1)
+        ->and((int) data_get($failureByResolutionRows->firstWhere('provider_resolution_source', 'tenant') ?? [], 'count', 0))->toBe(1)
+        ->and(collect((array) ($analytics['notes'] ?? []))->contains(
+            fn (string $note): bool => str_contains($note, 'legacy') && str_contains($note, 'provider-resolution metadata')
+        ))->toBeTrue();
+});
+
+test('birthday analytics filters by provider resolution source and readiness status', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Analytics Context Filters',
+        'slug' => 'birthday-analytics-context-filters',
+    ]);
+
+    foreach ([
+        ['key' => 'tenant', 'provider' => 'sendgrid', 'status' => 'sent', 'readiness' => 'ready'],
+        ['key' => 'fallback', 'provider' => 'sendgrid', 'status' => 'failed', 'readiness' => 'ready'],
+        ['key' => 'tenant', 'provider' => 'shopify_email', 'status' => 'failed', 'readiness' => 'unsupported'],
+    ] as $index => $seed) {
+        [$profile, $birthday] = createBirthdayProfile($tenant, 'FilterCtx' . $index, 'filter-ctx-' . $index . '@example.test');
+
+        $issuance = BirthdayRewardIssuance::query()->create([
+            'customer_birthday_profile_id' => $birthday->id,
+            'marketing_profile_id' => $profile->id,
+            'cycle_year' => (int) now()->year,
+            'reward_type' => 'discount_code',
+            'reward_name' => 'Birthday Reward',
+            'status' => 'issued',
+            'reward_code' => 'BDAY-CTX-FLT-' . $index,
+            'issued_at' => now()->subDay(),
+        ]);
+
+        MarketingEmailDelivery::query()->create([
+            'marketing_profile_id' => $profile->id,
+            'tenant_id' => $tenant->id,
+            'provider' => (string) $seed['provider'],
+            'campaign_type' => 'birthday',
+            'template_key' => 'birthday_email_primary',
+            'email' => $profile->email,
+            'status' => (string) $seed['status'],
+            'sent_at' => (string) $seed['status'] === 'sent' ? now()->subHour() : null,
+            'failed_at' => (string) $seed['status'] === 'failed' ? now()->subHour() : null,
+            'metadata' => [
+                'birthday_reward_issuance_id' => (int) $issuance->id,
+                'coupon_code' => 'BDAY-CTX-FLT-' . $index,
+                'campaign_type' => 'birthday',
+                'template_key' => 'birthday_email_primary',
+                'provider_resolution_source' => (string) $seed['key'],
+                'provider_readiness_status' => (string) $seed['readiness'],
+                'provider_config_status' => 'configured',
+                'provider_using_fallback_config' => (string) $seed['key'] === 'fallback',
+            ],
+            'raw_payload' => [],
+        ]);
+    }
+
+    $fallback = app(BirthdayReportingService::class)->birthdayAnalytics([
+        'tenant_id' => $tenant->id,
+        'date_from' => now()->subDays(7)->toDateString(),
+        'date_to' => now()->toDateString(),
+        'provider_resolution_source' => 'fallback',
+    ]);
+
+    expect((int) data_get($fallback, 'metrics.birthday_emails_attempted'))->toBe(1)
+        ->and((int) data_get($fallback, 'metrics.birthday_emails_failed'))->toBe(1);
+
+    $unsupported = app(BirthdayReportingService::class)->birthdayAnalytics([
+        'tenant_id' => $tenant->id,
+        'date_from' => now()->subDays(7)->toDateString(),
+        'date_to' => now()->toDateString(),
+        'provider_readiness_status' => 'unsupported',
+    ]);
+
+    expect((int) data_get($unsupported, 'metrics.birthday_emails_attempted'))->toBe(1)
+        ->and((int) data_get(collect($unsupported['status_breakdown'] ?? [])->firstWhere('status', 'unsupported'), 'count', 0))->toBe(1);
+});
+
 test('birthday analytics empty state returns zero metrics with empty flag', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Birthday Analytics Empty',

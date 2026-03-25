@@ -63,25 +63,35 @@
             </x-admin.help-hint>
 
             @php
-                $emailReadinessStatus = $emailReadiness['status'] ?? 'disabled';
+                $emailReadinessStatus = $emailReadiness['status'] ?? 'not_configured';
+                $emailCanSend = (bool) ($emailReadiness['can_send'] ?? false);
+                $emailDryRun = (bool) ($emailReadiness['dry_run'] ?? false);
                 $readinessLabel = match ($emailReadinessStatus) {
-                    'ready_for_live_send' => 'Email ready for live send',
-                    'dry_run_only' => 'Email configured (dry run mode)',
-                    'misconfigured' => 'Email misconfigured',
-                    default => 'Email sending disabled',
+                    'ready' => $emailDryRun ? 'Email ready (dry run mode)' : 'Email ready for live send',
+                    'unsupported' => 'Provider unsupported for runtime sends',
+                    'incomplete' => 'Email setup incomplete',
+                    'error' => 'Email readiness error',
+                    default => 'Email not configured',
                 };
                 $readinessTone = match ($emailReadinessStatus) {
-                    'ready_for_live_send' => 'success',
-                    'dry_run_only' => 'warning',
-                    default => 'critical',
+                    'ready' => $emailDryRun ? 'warning' : 'success',
+                    'unsupported' => 'critical',
+                    'incomplete' => 'critical',
+                    'error' => 'critical',
+                    default => 'warning',
                 };
                 $readinessSubtitle = match ($emailReadinessStatus) {
-                    'ready_for_live_send' => 'SendGrid API key, sender name, and address are configured.',
-                    'dry_run_only' => 'SendGrid is configured but MARKETING_EMAIL_DRY_RUN is on. Sends will not reach recipients.',
-                    'misconfigured' => 'SendGrid sender info or API key is missing.',
-                    default => 'MARKETING_EMAIL_ENABLED is off.',
+                    'ready' => (bool) ($emailReadiness['using_fallback_config'] ?? false)
+                        ? 'Ready using fallback global configuration because tenant-specific settings are not present.'
+                        : ($emailDryRun
+                            ? 'Provider is configured, but global dry-run mode is enabled.'
+                            : 'Provider is configured for tenant-scoped runtime sending.'),
+                    'unsupported' => (string) (data_get($emailReadiness, 'notes.0') ?? 'Selected provider does not support app-driven runtime sends yet.'),
+                    'incomplete' => 'Provider settings are incomplete for this tenant.',
+                    'error' => (string) (data_get($emailReadiness, 'missing_requirements.0') ?? 'Provider validation returned an error.'),
+                    default => 'Email is disabled or not configured for this tenant.',
                 };
-                $missingReasons = $emailReadiness['missing_reasons'] ?? [];
+                $missingReasons = $emailReadiness['missing_requirements'] ?? $emailReadiness['missing_reasons'] ?? [];
             @endphp
 
             @if($campaign->channel === 'email')
@@ -123,13 +133,14 @@
                         @php
                             $statusKey = $emailReadinessStatus;
                             $buttonText = match ($statusKey) {
-                                'ready_for_live_send' => 'Send Approved Email',
-                                'dry_run_only' => 'Run Dry Run for Approved Email',
-                                'misconfigured' => 'Email misconfigured',
-                                default => 'Email disabled',
+                                'ready' => $emailDryRun ? 'Run Dry Run for Approved Email' : 'Send Approved Email',
+                                'unsupported' => 'Provider unsupported',
+                                'incomplete' => 'Email setup incomplete',
+                                'error' => 'Readiness error',
+                                default => 'Email not configured',
                             };
-                            $buttonDisabled = in_array($statusKey, ['disabled', 'misconfigured'], true);
-                            $includeDryRunInput = $statusKey === 'dry_run_only';
+                            $buttonDisabled = ! $emailCanSend;
+                            $includeDryRunInput = $statusKey === 'ready' && $emailDryRun;
                         @endphp
                         <button type="submit" class="inline-flex rounded-full border border-sky-300/40 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100 disabled:bg-white/10 disabled:text-slate-300" {{ $buttonDisabled ? 'disabled' : '' }}>
                             {{ $buttonText }}
@@ -154,6 +165,10 @@
                     $diag = $diagnostics ?? [];
                     $tracking = (array) ($diag['recipient_tracking'] ?? []);
                     $webhookHealth = (array) ($diag['webhook_health'] ?? []);
+                    $providerContext = (array) ($diag['provider_context'] ?? []);
+                    $providerResolutionRows = collect((array) ($providerContext['by_resolution_source'] ?? []));
+                    $providerReadinessRows = collect((array) ($providerContext['by_readiness_status'] ?? []));
+                    $providerRuntimeRows = collect((array) ($providerContext['by_runtime_path'] ?? []));
                     $rows = collect((array) ($diag['deliveries'] ?? []))->take(14);
                     $status = $diag['overall_status'] ?? 'ready';
                     $statusLabel = match ($status) {
@@ -195,6 +210,7 @@
                         ['label' => 'Last webhook', 'value' => optional($diag['last_webhook_at'] ?? null)->format('Y-m-d H:i') ?? 'None'],
                         ['label' => 'Last live send', 'value' => optional($diag['last_live_send_at'] ?? null)->format('Y-m-d H:i') ?? 'Never'],
                         ['label' => 'Smoke recipient', 'value' => $smokeConfigured ? $smokeRecipient : 'Configure env'],
+                        ['label' => 'Fallback-path sends', 'value' => (string) (int) $providerResolutionRows->where('key', 'fallback')->sum('attempted')],
                     ];
                 @endphp
 
@@ -202,7 +218,7 @@
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <h3 class="text-sm font-semibold tracking-wide text-white">Delivery Diagnostics</h3>
-                            <p class="text-xs text-white/60">Readiness, smoke verification, SendGrid acceptance, webhook health, and recipient outcomes in one view.</p>
+                            <p class="text-xs text-white/60">Readiness, smoke verification, provider acceptance, webhook health, and recipient outcomes in one view.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $statusClass }}">{{ $statusLabel }}</span>
@@ -253,6 +269,57 @@
                         </article>
                     </div>
 
+                    <div class="grid gap-3 lg:grid-cols-3">
+                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="text-xs uppercase tracking-[0.2em] text-white/55">Resolution Source</div>
+                            <div class="mt-3 space-y-2 text-xs text-white/75">
+                                @forelse($providerResolutionRows as $row)
+                                    <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+                                        <div class="font-semibold text-white">{{ $row['label'] ?? 'Legacy / unavailable' }}</div>
+                                        <div class="mt-1 text-white/70">
+                                            Attempted {{ (int) ($row['attempted'] ?? 0) }}
+                                            · Sent {{ (int) ($row['sent'] ?? 0) }}
+                                            · Failed {{ (int) ($row['failed'] ?? 0) }}
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-white/60">No provider-resolution context rows yet.</div>
+                                @endforelse
+                            </div>
+                        </article>
+
+                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="text-xs uppercase tracking-[0.2em] text-white/55">Readiness at Attempt Time</div>
+                            <div class="mt-3 space-y-2 text-xs text-white/75">
+                                @forelse($providerReadinessRows as $row)
+                                    <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+                                        <div class="font-semibold text-white">{{ $row['label'] ?? 'Legacy / unavailable' }}</div>
+                                        <div class="mt-1 text-white/70">
+                                            Attempted {{ (int) ($row['attempted'] ?? 0) }}
+                                            · Unsupported {{ (int) ($row['unsupported'] ?? 0) }}
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-white/60">No readiness-context rows yet.</div>
+                                @endforelse
+                            </div>
+                        </article>
+
+                        <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div class="text-xs uppercase tracking-[0.2em] text-white/55">Runtime Path</div>
+                            <div class="mt-3 space-y-2 text-xs text-white/75">
+                                @forelse($providerRuntimeRows as $row)
+                                    <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+                                        <div class="font-semibold text-white">{{ $row['label'] ?? 'Legacy / unavailable' }}</div>
+                                        <div class="mt-1 text-white/70">Attempted {{ (int) ($row['attempted'] ?? 0) }}</div>
+                                    </div>
+                                @empty
+                                    <div class="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-white/60">No runtime-path rows yet.</div>
+                                @endforelse
+                            </div>
+                        </article>
+                    </div>
+
                     <div class="flex flex-wrap gap-2">
                         <form method="POST" action="{{ route('marketing.campaigns.send-smoke-test-email', $campaign) }}">
                             @csrf
@@ -283,7 +350,8 @@
                                             <th class="px-3 py-2">Mode</th>
                                             <th class="px-3 py-2">Status</th>
                                             <th class="px-3 py-2">Sent At</th>
-                                            <th class="px-3 py-2">SendGrid ID</th>
+                                            <th class="px-3 py-2">Provider Context</th>
+                                            <th class="px-3 py-2">Provider ID</th>
                                             <th class="px-3 py-2">Webhook</th>
                                         </tr>
                                     </thead>
@@ -314,8 +382,18 @@
                                                     {{ optional($row['sent_at'] ?? null)->format('Y-m-d H:i') ?? 'Pending' }}
                                                 </td>
                                                 <td class="px-3 py-2 text-[0.7rem] text-white/60">
-                                                    @if($row['sendgrid_message_id'])
-                                                        <span title="{{ $row['sendgrid_message_id'] }}">{{ $row['sendgrid_message_id_short'] }}</span>
+                                                    <div class="font-semibold text-white/85">{{ strtoupper((string) ($row['provider'] ?? 'unknown')) }}</div>
+                                                    <div class="text-[0.65rem] text-white/50">
+                                                        {{ $row['provider_resolution_source_label'] ?? 'Legacy / unavailable' }}
+                                                        · {{ $row['provider_readiness_status_label'] ?? 'Legacy / unavailable' }}
+                                                    </div>
+                                                    @if(($row['provider_using_fallback_config'] ?? false) === true)
+                                                        <div class="text-[0.65rem] text-amber-200">Using fallback config</div>
+                                                    @endif
+                                                </td>
+                                                <td class="px-3 py-2 text-[0.7rem] text-white/60">
+                                                    @if($row['provider_message_id'])
+                                                        <span title="{{ $row['provider_message_id'] }}">{{ $row['provider_message_id_short'] }}</span>
                                                     @else
                                                         —
                                                     @endif
@@ -330,14 +408,15 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td colspan="6" class="bg-white/5 px-3 py-2 text-[0.65rem] text-white/60">
+                                                <td colspan="7" class="bg-white/5 px-3 py-2 text-[0.65rem] text-white/60">
                                                     <details>
                                                         <summary class="cursor-pointer text-white/70">Details</summary>
                                                         <div class="mt-1 space-y-1">
                                                             <div>Delivery ID: {{ $row['id'] }}</div>
                                                             <div>Mode: {{ $row['mode_label'] }}</div>
+                                                            <div>Provider path: {{ $row['provider_runtime_path_label'] ?? 'Legacy / unavailable' }}</div>
                                                             <div>Provider accepted: {{ $row['provider_accepted'] ? 'Yes' : 'No' }}</div>
-                                                            <div>SendGrid message ID: {{ $row['sendgrid_message_id'] ?: 'none' }}</div>
+                                                            <div>Provider message ID: {{ $row['provider_message_id'] ?: ($row['sendgrid_message_id'] ?: 'none') }}</div>
                                                             <div>Webhook events stored: {{ (int) ($row['webhook_event_count'] ?? 0) }}</div>
                                                             <div>Last webhook event: {{ $row['last_webhook_event'] ? \Illuminate\Support\Str::headline((string) $row['last_webhook_event']) : 'none' }}</div>
                                                             <div>Engagement: delivered {{ $row['delivered'] ? 'yes' : 'no' }}, opened {{ $row['opened'] ? 'yes' : 'no' }}, clicked {{ $row['clicked'] ? 'yes' : 'no' }}</div>
@@ -615,7 +694,12 @@
                                             @if($recipient->latestEmailDelivery)
                                                 {{ $recipient->latestEmailDelivery->status }}
                                                 <div class="text-xs text-white/50">{{ optional($recipient->latestEmailDelivery->sent_at)->format('Y-m-d H:i') ?: optional($recipient->latestEmailDelivery->created_at)->format('Y-m-d H:i') }}</div>
-                                                <div class="text-xs text-white/45">{{ $recipient->latestEmailDelivery->sendgrid_message_id ?: 'No SendGrid ID' }}</div>
+                                                @php
+                                                    $latestProviderMessageId = $recipient->latestEmailDelivery->provider_message_id
+                                                        ?: $recipient->latestEmailDelivery->sendgrid_message_id;
+                                                    $latestProviderLabel = strtoupper(trim((string) ($recipient->latestEmailDelivery->provider ?: 'provider')));
+                                                @endphp
+                                                <div class="text-xs text-white/45">{{ $latestProviderMessageId ? ($latestProviderLabel . ' ID: ' . $latestProviderMessageId) : 'No provider ID' }}</div>
                                             @else
                                                 —
                                             @endif
@@ -674,7 +758,7 @@
                             <tr>
                                 <th class="px-4 py-3 text-left">Recipient</th>
                                 <th class="px-4 py-3 text-left">Status</th>
-                                <th class="px-4 py-3 text-left">SendGrid ID</th>
+                                <th class="px-4 py-3 text-left">Provider ID</th>
                                 <th class="px-4 py-3 text-left">Sent</th>
                                 <th class="px-4 py-3 text-left">Delivered</th>
                                 <th class="px-4 py-3 text-left">Opened</th>
@@ -690,7 +774,7 @@
                                         <div class="text-xs text-white/55">{{ $delivery->email ?: ($delivery->profile?->email ?: '—') }}</div>
                                     </td>
                                     <td class="px-4 py-3 text-white/75">{{ $delivery->status }}</td>
-                                    <td class="px-4 py-3 text-white/65">{{ $delivery->sendgrid_message_id ?: '—' }}</td>
+                                    <td class="px-4 py-3 text-white/65">{{ $delivery->provider_message_id ?: $delivery->sendgrid_message_id ?: '—' }}</td>
                                     <td class="px-4 py-3 text-white/65">{{ optional($delivery->sent_at)->format('Y-m-d H:i') ?: '—' }}</td>
                                     <td class="px-4 py-3 text-white/65">{{ optional($delivery->delivered_at)->format('Y-m-d H:i') ?: '—' }}</td>
                                     <td class="px-4 py-3 text-white/65">{{ optional($delivery->opened_at)->format('Y-m-d H:i') ?: '—' }}</td>

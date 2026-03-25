@@ -208,10 +208,17 @@ export interface DashboardPayload {
       missingEmailCustomers: number;
       expirationPolicy: string;
       emailReadiness?: {
-        status: "ready_for_live_send" | "dry_run_only" | "disabled" | "misconfigured" | string;
+        status: "ready" | "unsupported" | "incomplete" | "error" | "not_configured" | string;
+        provider?: string;
+        canSend?: boolean;
+        canSendLive?: boolean;
         enabled: boolean;
         dryRun: boolean;
         missingReasons: string[];
+        warnings?: string[];
+        notes?: string[];
+        resolutionSource?: "tenant" | "fallback" | "none" | string;
+        usingFallbackConfig?: boolean;
       };
     };
     comparison?: {

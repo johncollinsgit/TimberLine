@@ -758,11 +758,167 @@
 
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
                 <h3 class="text-sm font-semibold text-white">Email Delivery Timeline</h3>
-                <x-admin.help-hint tone="neutral" title="SendGrid callback behavior">
-                    Delivery/open/click/bounce events are applied idempotently from SendGrid webhooks. Duplicate callbacks do not create duplicate state transitions.
+                <x-admin.help-hint tone="neutral" title="Provider callback behavior">
+                    Delivery/open/click/bounce events are applied idempotently from provider webhooks. Duplicate callbacks do not create duplicate state transitions.
                 </x-admin.help-hint>
+                @php
+                    /** @var \Illuminate\Contracts\Pagination\LengthAwarePaginator|null $emailTimelinePaginator */
+                    $emailTimelinePaginator = $emailDeliveryTimelinePaginator ?? null;
+                    $emailTimelineRows = collect($emailDeliveryTimelineRows ?? []);
+                    $emailProviderContextSummary = (array) ($emailDeliveryProviderContextSummary ?? []);
+                    $emailTimelineFilters = (array) ($emailDeliveryTimelineFilters ?? []);
+                    $emailTimelineFilterOptions = (array) ($emailDeliveryTimelineFilterOptions ?? []);
+                    $timelineCurrentPage = (int) ($emailTimelinePaginator?->currentPage() ?? 1);
+                    $timelinePerPage = (int) ($emailTimelinePaginator?->perPage() ?? max(1, $emailTimelineRows->count()));
+                    $timelineTotal = (int) ($emailTimelinePaginator?->total() ?? $emailTimelineRows->count());
+                    $timelineFrom = $timelineTotal > 0 ? (($timelineCurrentPage - 1) * $timelinePerPage) + 1 : 0;
+                    $timelineTo = $timelineTotal > 0 ? min($timelineCurrentPage * $timelinePerPage, $timelineTotal) : 0;
+                    $selectedResolutionSource = (string) ($emailTimelineFilters['provider_resolution_source'] ?? '');
+                    $selectedReadinessStatus = (string) ($emailTimelineFilters['provider_readiness_status'] ?? '');
+                    $selectedDateFrom = (string) ($emailTimelineFilters['date_from'] ?? '');
+                    $selectedDateTo = (string) ($emailTimelineFilters['date_to'] ?? '');
+                    $selectedStatus = (string) ($emailTimelineFilters['status'] ?? '');
+                    $hasTimelineFilters = $selectedResolutionSource !== ''
+                        || $selectedReadinessStatus !== ''
+                        || $selectedDateFrom !== ''
+                        || $selectedDateTo !== ''
+                        || $selectedStatus !== '';
+                    $resolutionFilterOptions = collect((array) ($emailTimelineFilterOptions['provider_resolution_sources'] ?? []));
+                    $readinessFilterOptions = collect((array) ($emailTimelineFilterOptions['provider_readiness_statuses'] ?? []));
+                    $statusFilterOptions = collect((array) ($emailTimelineFilterOptions['statuses'] ?? []));
+                    $timelineExportQuery = array_filter([
+                        'provider_resolution_source' => $selectedResolutionSource,
+                        'provider_readiness_status' => $selectedReadinessStatus,
+                        'date_from' => $selectedDateFrom,
+                        'date_to' => $selectedDateTo,
+                        'status' => $selectedStatus,
+                    ], fn ($value) => is_string($value) && trim($value) !== '');
+                    $timelineExportUrl = route('marketing.customers.email-deliveries.export', array_merge(
+                        ['marketingProfile' => $profile],
+                        $timelineExportQuery
+                    ));
+                    $resolutionSummaryRows = collect((array) ($emailProviderContextSummary['by_resolution_source'] ?? []))->take(4);
+                    $readinessSummaryRows = collect((array) ($emailProviderContextSummary['by_readiness_status'] ?? []))->take(4);
+                @endphp
+
+                <form method="GET" action="{{ route('marketing.customers.show', $profile) }}" class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_160px_160px_minmax(0,1fr)_auto]">
+                    <label class="text-xs text-white/75">
+                        <span class="mb-1 block font-semibold text-white/80">Provider Resolution Source</span>
+                        <select name="provider_resolution_source" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white">
+                            <option value="">All resolution sources</option>
+                            @foreach($resolutionFilterOptions as $option)
+                                <option value="{{ (string) ($option['key'] ?? '') }}" @selected($selectedResolutionSource === (string) ($option['key'] ?? ''))>
+                                    {{ (string) ($option['label'] ?? 'Legacy / unavailable') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="text-xs text-white/75">
+                        <span class="mb-1 block font-semibold text-white/80">Provider Readiness Status</span>
+                        <select name="provider_readiness_status" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white">
+                            <option value="">All readiness statuses</option>
+                            @foreach($readinessFilterOptions as $option)
+                                <option value="{{ (string) ($option['key'] ?? '') }}" @selected($selectedReadinessStatus === (string) ($option['key'] ?? ''))>
+                                    {{ (string) ($option['label'] ?? 'Legacy / unavailable') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="text-xs text-white/75">
+                        <span class="mb-1 block font-semibold text-white/80">Date From</span>
+                        <input type="date" name="date_from" value="{{ $selectedDateFrom }}" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" />
+                    </label>
+                    <label class="text-xs text-white/75">
+                        <span class="mb-1 block font-semibold text-white/80">Date To</span>
+                        <input type="date" name="date_to" value="{{ $selectedDateTo }}" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" />
+                    </label>
+                    <label class="text-xs text-white/75">
+                        <span class="mb-1 block font-semibold text-white/80">Delivery Status</span>
+                        <select name="status" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white">
+                            <option value="">All statuses</option>
+                            @foreach($statusFilterOptions as $option)
+                                <option value="{{ (string) ($option['key'] ?? '') }}" @selected($selectedStatus === (string) ($option['key'] ?? ''))>
+                                    {{ (string) ($option['label'] ?? 'Unknown') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <div class="flex flex-wrap items-end gap-2">
+                        <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100">
+                            Apply filters
+                        </button>
+                        @if($hasTimelineFilters)
+                            <a href="{{ route('marketing.customers.show', $profile) }}" class="inline-flex rounded-full border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-white/85">
+                                Reset
+                            </a>
+                        @endif
+                        <a href="{{ $timelineExportUrl }}" class="inline-flex rounded-full border border-sky-300/35 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100">
+                            Export CSV
+                        </a>
+                    </div>
+                </form>
+
+                @if($hasTimelineFilters)
+                    <div class="mt-2 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                        Filtered results active. Timeline cards, summary chips, and CSV export all reflect the same active filters.
+                    </div>
+                @endif
+
+                @if($timelineTotal > 0)
+                    <div class="mt-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75">
+                        Showing <span class="font-semibold text-white">{{ $timelineFrom }}-{{ $timelineTo }}</span> of
+                        <span class="font-semibold text-white">{{ $timelineTotal }}</span> filtered attempts.
+                        Summary chips reflect the full filtered result set.
+                    </div>
+                @endif
+
+                @if((int) ($emailProviderContextSummary['total_attempts'] ?? 0) > 0)
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2 text-xs text-white/75">
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            Tenant path attempts: <span class="font-semibold text-white">{{ (int) ($emailProviderContextSummary['tenant_path_attempts'] ?? 0) }}</span>
+                            · Fallback path attempts: <span class="font-semibold text-white">{{ (int) ($emailProviderContextSummary['fallback_path_attempts'] ?? 0) }}</span>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            Unsupported/incomplete attempts: <span class="font-semibold text-white">{{ (int) ($emailProviderContextSummary['unsupported_or_blocked_attempts'] ?? 0) }}</span>
+                            · Legacy context rows: <span class="font-semibold text-white">{{ (int) ($emailProviderContextSummary['unknown_context_attempts'] ?? 0) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-2 grid gap-2 sm:grid-cols-2 text-[11px] text-white/70">
+                        <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                            <div class="font-semibold text-white/85">Resolution source mix</div>
+                            <div class="mt-1">
+                                @foreach($resolutionSummaryRows as $row)
+                                    <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 mr-1 mb-1">
+                                        {{ $row['label'] ?? 'Legacy / unavailable' }}: {{ (int) ($row['count'] ?? 0) }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                            <div class="font-semibold text-white/85">Readiness mix</div>
+                            <div class="mt-1">
+                                @foreach($readinessSummaryRows as $row)
+                                    <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 mr-1 mb-1">
+                                        {{ $row['label'] ?? 'Legacy / unavailable' }}: {{ (int) ($row['count'] ?? 0) }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="mt-3 space-y-2">
-                    @forelse($emailDeliveries as $delivery)
+                    @forelse($emailTimelineRows as $row)
+                        @php
+                            /** @var \App\Models\MarketingEmailDelivery $delivery */
+                            $delivery = $row['delivery'];
+                            $providerContext = (array) ($row['provider_context'] ?? []);
+                            $providerResolutionLabel = (string) ($providerContext['provider_resolution_source_label'] ?? 'Legacy / unavailable');
+                            $providerReadinessLabel = (string) ($providerContext['provider_readiness_status_label'] ?? 'Legacy / unavailable');
+                            $providerRuntimeLabel = (string) ($providerContext['provider_runtime_path_label'] ?? 'Legacy / unavailable');
+                            $providerKey = (string) ($providerContext['provider'] ?? ($delivery->provider ?: 'unknown'));
+                        @endphp
                         <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                             <div class="text-sm text-white">
                                 {{ $delivery->recipient?->campaign?->name ?: 'Campaign email' }} · {{ strtoupper((string) $delivery->status) }}
@@ -775,12 +931,36 @@
                                 · Opened {{ optional($delivery->opened_at)->format('Y-m-d H:i') ?: '—' }}
                                 · Clicked {{ optional($delivery->clicked_at)->format('Y-m-d H:i') ?: '—' }}
                             </div>
-                            <div class="mt-1 text-xs text-white/45">SendGrid: {{ $delivery->sendgrid_message_id ?: '—' }}</div>
+                            <div class="mt-1 text-xs text-white/55">
+                                Provider {{ strtoupper($providerKey) }} · {{ $providerResolutionLabel }} · {{ $providerReadinessLabel }}
+                                @if((bool) ($providerContext['provider_using_fallback_config'] ?? false))
+                                    · fallback config active
+                                @endif
+                            </div>
+                            <div class="mt-1 text-xs text-white/50">
+                                Canonical status: {{ strtoupper((string) ($row['normalized_status'] ?? 'attempted')) }}
+                            </div>
+                            <div class="mt-1 text-xs text-sky-100">
+                                {{ (string) ($row['context_label'] ?? 'Provider context unavailable.') }}
+                            </div>
+                            <div class="mt-1 text-xs text-white/50">Runtime path: {{ $providerRuntimeLabel }}</div>
+                            @if(! empty($row['failure_context_hint']))
+                                <div class="mt-1 text-xs text-rose-200">{{ (string) $row['failure_context_hint'] }}</div>
+                            @endif
+                            <div class="mt-1 text-xs text-white/45">Provider ID: {{ $delivery->provider_message_id ?: $delivery->sendgrid_message_id ?: '—' }}</div>
                         </div>
                     @empty
-                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60">No email touches logged yet.</div>
+                        <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60">
+                            {{ $hasTimelineFilters ? 'No email touches match the active timeline filters.' : 'No email touches logged yet.' }}
+                        </div>
                     @endforelse
                 </div>
+
+                @if($emailTimelinePaginator && $emailTimelinePaginator->hasPages())
+                    <div class="mt-3">
+                        {{ $emailTimelinePaginator->onEachSide(1)->links() }}
+                    </div>
+                @endif
             </article>
 
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
