@@ -13,20 +13,34 @@ This document is intentionally opinionated but does not claim unfinished domains
 - Fire Forge Tech is the platform owner.
 - The Forestry Studio is the flagship tenant, not the architectural center of the platform.
 - Flagship customization is allowed; platform coupling is not.
-- New capabilities should be designed so they can be sold to future tenants without requiring architectural rework.
 - Platform nouns, config keys, service names, and data models should remain domain-neutral unless a constraint is truly tenant-specific.
 
-## Feature Classification Rules
+## Required Before Implementation (Hard Gate)
 
-Every new feature must be classified as one of:
-- Core platform capability
-- Tenant configuration option
-- Purchasable add-on
-- Temporary tenant-specific override
+Do not implement a feature until all of the following are explicitly written:
+- Classification: core platform capability / tenant configuration option / purchasable add-on / temporary tenant-specific override
+- Tenant scope: what varies per tenant
+- Entitlement/billing model: if applicable
+- Canonical services/contracts reused
+- Whether it works for a non-Forestry tenant without code changes
 
-If a feature begins as a tenant-specific customization, document the path by which it could later become:
-1. tenant config, or
-2. a reusable add-on.
+If this is not defined, stop and define it before coding.
+
+## Forestry Bias Warning
+
+- The Forestry Studio is the flagship tenant, but it is not the architectural center of the platform.
+- Do not assume Forestry structure, naming, or UX is globally correct.
+- Do not encode Forestry-specific language into platform models, services, config keys, or data models.
+- Do not skip tenant abstraction "just for now."
+- If a feature works for Forestry but not for a generic tenant, redesign the abstraction before implementing.
+
+## Override -> Platform Graduation Rule
+
+- Evaluate every tenant-specific override for promotion into:
+  1. a tenant configuration option, or
+  2. a shared add-on module.
+- Do not let overrides accumulate as permanent parallel logic.
+- Document the expected graduation path when creating an override.
 
 ## Tenant Presentation And Packaging Rules
 
@@ -34,6 +48,49 @@ If a feature begins as a tenant-specific customization, document the path by whi
 - Shared business logic should remain in canonical backend services/contracts.
 - Tenant-specific UI/presentation may vary, but should sit on top of shared module logic.
 - Purchasable add-ons must be tenant-scoped, billing-aware, and configurable without per-tenant forks.
+
+## Storefront Sidecar Boundary (Strict)
+
+- Theme-side JS/CSS may render UI, trigger actions, and consume backend responses.
+- Theme-side JS/CSS must not implement business logic.
+- Theme-side JS/CSS must not perform validation that diverges from backend rules.
+- Theme-side JS/CSS must not create parallel state systems.
+- Backend remains the single source of truth.
+
+## Add-On Module Requirements
+
+Every add-on must explicitly define:
+- Canonical data ownership
+- Tenant scope boundary
+- Entitlement/billing check
+- Admin configuration surface
+- Storefront interaction surface
+- Integration points (`API`, app proxy, theme, etc.)
+- Canonical services/contracts reused
+
+Add-ons are attachable capabilities, not isolated systems or feature flags.
+
+Add-on implementation rules:
+- Reuse canonical identity and established sync/service pipelines before introducing new surfaces.
+- Reuse existing signed storefront/app-proxy contracts when storefront interaction is required.
+- Prefer one shared module architecture with tenant-level configuration over per-tenant forks.
+
+## Productization Principle
+
+- Evaluate every feature built for The Forestry Studio as a future product for other tenants.
+- Build for Forestry, but name, structure, and scope features so they can be reused or sold without architectural rework.
+
+## Customization Ladder (Implementation Order)
+
+Use this order for feature work:
+1. Tenant content/config only
+2. Tenant UI/theme composition
+3. Shared module option
+4. Shared module extension
+5. Tenant-specific override
+6. New bespoke code path (last resort only)
+
+Do not skip upward on this ladder without documenting why the simpler level was insufficient.
 
 ## Current Multi-Tenant Status By Domain
 
@@ -175,14 +232,6 @@ Before extending customers, inventory, orders, or ops workflows:
    - why current reuse was insufficient
    - what is generic vs domain-specific
    - idempotency + tenant-scope implications
-
-Before merging a feature, document:
-- whether it is core, config, add-on, or override
-- what is Forestry-specific vs platform-generic
-- what tenant settings control it
-- how entitlement/billing is checked
-- whether it works for a non-candle tenant without code changes
-- which canonical services/contracts it reuses
 
 ## Explicit Ambiguities (Intentional)
 

@@ -23,26 +23,34 @@ Before building anything:
 - Fire Forge Tech is the platform owner.
 - The Forestry Studio is the flagship tenant, not the architectural center of the platform.
 - Flagship customization is allowed; platform coupling is not.
-- New capabilities should be shaped so they can be sold to future tenants without architectural rework.
 - Platform nouns, config keys, service names, and data models should remain domain-neutral unless a constraint is truly tenant-specific.
 
-Every new feature must be classified as one of:
-- Core platform capability
-- Tenant configuration option
-- Purchasable add-on
-- Temporary tenant-specific override
+## Required Before Implementation (Hard Gate)
 
-If something starts as a tenant-specific override, document how it could later become:
-1. tenant configuration, or
-2. a reusable add-on.
+Do not implement a feature until all of the following are explicitly written:
+- Classification: core platform capability / tenant configuration option / purchasable add-on / temporary tenant-specific override
+- Tenant scope: what varies per tenant
+- Entitlement/billing model: if applicable
+- Canonical services/contracts reused
+- Whether it works for a non-Forestry tenant without code changes
 
-Before merging a feature, document:
-- which classification it falls under
-- what is Forestry-specific vs platform-generic
-- which tenant settings control it
-- how entitlement/billing is checked
-- whether it works for a non-candle tenant without code changes
-- which canonical services/contracts it reuses
+If this is not defined, stop and define it before coding.
+
+## Forestry Bias Warning
+
+- The Forestry Studio is the flagship tenant, but it is not the architectural center of the platform.
+- Do not assume Forestry structure, naming, or UX is globally correct.
+- Do not encode Forestry-specific language into platform models, services, config keys, or data models.
+- Do not skip tenant abstraction "just for now."
+- If a feature works for Forestry but not for a generic tenant, redesign the abstraction before implementing.
+
+## Override -> Platform Graduation Rule
+
+- Evaluate every tenant-specific override for promotion into:
+  1. a tenant configuration option, or
+  2. a shared add-on module.
+- Do not let overrides accumulate as permanent parallel logic.
+- Document the expected graduation path when creating an override.
 
 ## Storefront Sidecar Status (Recorded)
 
@@ -60,21 +68,51 @@ Scope completed in that sidecar:
 - Task/Rewards history blocks were removed from the rewards page UI
 - Layout hierarchy and spacing were refined for mobile + desktop
 
-Important boundary:
-- This sidecar is a storefront UX layer only.
-- Canonical rewards logic, identity, and verification remain in Laravel/backend contracts.
-- Do not rebuild rewards logic in theme JavaScript.
+## Storefront Sidecar Boundary (Strict)
 
-## Future Add-On App Rules (Multi-Tenant)
+- Theme-side JS/CSS may render UI, trigger actions, and consume backend responses.
+- Theme-side JS/CSS must not implement business logic.
+- Theme-side JS/CSS must not perform validation that diverges from backend rules.
+- Theme-side JS/CSS must not create parallel state systems.
+- Backend remains the single source of truth.
 
-Future purchasable apps/modules must be built as tenant-scoped add-ons on top of the shared platform shell:
+## Add-On Module Requirements
+
+Every add-on must explicitly define:
+- Canonical data ownership
+- Tenant scope boundary
+- Entitlement/billing check
+- Admin configuration surface
+- Storefront interaction surface
+- Integration points (`API`, app proxy, theme, etc.)
+- Canonical services/contracts reused
+
+Add-ons are attachable capabilities, not isolated systems or feature flags.
+
+Add-on implementation rules:
 - Keep canonical identity in `marketing_profiles` (+ existing link tables/pipelines).
 - Reuse existing signed storefront contracts (`/apps/forestry/...`, `/shopify/marketing/v1/...`) before adding endpoints.
 - Gate availability by tenant-scoped feature/billing state, not hardcoded store/email checks.
 - Prefer one shared module architecture with tenant configuration over per-tenant forks.
 - Avoid creating sidecar data models for rewards/reviews/wishlist/identity.
-- Treat add-ons as attachable capabilities, not separate parallel systems.
 - Tenant-specific UI/presentation is allowed, but it must sit on top of shared module logic and canonical backend contracts.
+
+## Productization Principle
+
+- Evaluate every feature built for The Forestry Studio as a future product for other tenants.
+- Build for Forestry, but name, structure, and scope features so they can be reused or sold without architectural rework.
+
+## Customization Ladder (Implementation Order)
+
+Use this order for feature work:
+1. Tenant content/config only
+2. Tenant UI/theme composition
+3. Shared module option
+4. Shared module extension
+5. Tenant-specific override
+6. New bespoke code path (last resort only)
+
+Do not skip upward on this ladder without documenting why the simpler level was insufficient.
 
 ## Current Priority TODOs
 
