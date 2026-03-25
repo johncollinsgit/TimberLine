@@ -38,6 +38,35 @@ Multi-tenant state:
 Recommended next step after this push:
 - deploy and run manual production verification of shell navigation, diagnostics filters/export parity, and integrations placeholder/drawer behavior before adding new scope
 
+## Production Auth Findings (2026-03-25)
+
+Observed during live verification at `https://backstage.theforestrystudio.com/login`:
+- Password resets run locally do not affect production.
+- Production user `johncollinsemail@gmail.com` exists, is active/approved, and password reset was successfully applied on production (`PASSWORD_MATCH=1`).
+- Google login failure is currently external-credential based, not route/UI based:
+  - production log shows `POST https://www.googleapis.com/oauth2/v4/token` returning `401 invalid_client`
+  - message: `The provided client secret is invalid.`
+
+What was verified on production:
+- `services.google.client_secret` loaded by Laravel matches the `.env` value fingerprint (same length/hash), so this is not a runtime config drift in the app process at verification time.
+- Login Google credentials are distinct from `GOOGLE_GBP_*` credentials (no accidental key collision in current config).
+
+Google login runbook:
+1. In Google Cloud Console, confirm the OAuth client ID + client secret pair are from the same OAuth credential entry.
+2. Update production `.env` keys:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `GOOGLE_REDIRECT_URI`
+3. Rebuild Laravel runtime config on production:
+   - `php artisan config:cache`
+   - `php artisan queue:restart`
+4. Retry in an incognito window and check `storage/logs/laravel.log`:
+   - `invalid_client` => wrong/revoked ID+secret pair
+   - `redirect_uri_mismatch` => callback URL mismatch in Google Console
+
+Important:
+- Do not mix login keys (`GOOGLE_CLIENT_*`) with Google Business Profile keys (`GOOGLE_GBP_*`); they are separate integrations.
+
 ## Shopify (Phase 1)
 Required environment keys:
 - `SHOPIFY_RETAIL_SHOP`

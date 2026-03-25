@@ -28,6 +28,23 @@ Current execution priority:
 - deploy/verify/stabilize this shell and diagnostics release
 - avoid new feature sprawl unless a concrete regression requires it
 
+## Auth Findings (2026-03-25)
+
+Production login verification findings:
+- A local password reset does not affect production auth.
+- Live user `johncollinsemail@gmail.com` was confirmed active/approved and production password reset verified (`PASSWORD_MATCH=1`).
+- Google login failure is currently due to Google OAuth credential rejection, with production logs showing:
+  - `401 invalid_client`
+  - `The provided client secret is invalid.`
+
+What to check first when this recurs:
+1. Verify login uses `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (not `GOOGLE_GBP_*` keys).
+2. Confirm ID+secret are from the same Google OAuth client credential.
+3. After env edits on production, run:
+   - `php artisan config:cache`
+   - `php artisan queue:restart`
+4. Re-test in incognito and inspect `storage/logs/laravel.log` for `invalid_client` vs `redirect_uri_mismatch`.
+
 ## Dual-Track Strategy (Hard Guardrail)
 
 This platform has two product tracks that must evolve together without breaking each other:
