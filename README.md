@@ -52,17 +52,26 @@ What was verified on production:
 - Login Google credentials are distinct from `GOOGLE_GBP_*` credentials (no accidental key collision in current config).
 
 Google login runbook:
-1. In Google Cloud Console, confirm the OAuth client ID + client secret pair are from the same OAuth credential entry.
-2. Update production `.env` keys:
+1. Run local/production diagnostics (masked output only):
+   - `php artisan auth:doctor-google`
+   - `php artisan auth:doctor-google --token-smoke`
+2. In Google Cloud Console, confirm the OAuth client ID + client secret pair are from the same OAuth credential entry.
+3. Update production `.env` keys:
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
    - `GOOGLE_REDIRECT_URI`
-3. Rebuild Laravel runtime config on production:
+4. Rebuild Laravel runtime config on production:
+   - `php artisan config:clear`
    - `php artisan config:cache`
    - `php artisan queue:restart`
-4. Retry in an incognito window and check `storage/logs/laravel.log`:
-   - `invalid_client` => wrong/revoked ID+secret pair
+5. Retry in an incognito window and check `storage/logs/laravel.log`:
+   - `invalid_client` => wrong/revoked/mismatched OAuth pair
+   - `invalid_grant` => credentials accepted; test/code is intentionally invalid or expired
    - `redirect_uri_mismatch` => callback URL mismatch in Google Console
+
+Interpretation of smoke test results:
+- `invalid_client` = broken client ID/secret pair
+- `invalid_grant` = credentials accepted by Google
 
 Important:
 - Do not mix login keys (`GOOGLE_CLIENT_*`) with Google Business Profile keys (`GOOGLE_GBP_*`); they are separate integrations.

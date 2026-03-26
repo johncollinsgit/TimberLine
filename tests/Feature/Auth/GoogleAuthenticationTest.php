@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -135,4 +136,58 @@ test('google callback redirects back to login when the provider exchange fails',
     $response->assertRedirect(route('login'));
     $response->assertSessionHasErrors(['email']);
     $this->assertGuest();
+});
+
+test('google redirect fails gracefully when config is incomplete and logs preflight failure', function () {
+    config()->set('services.google.client_secret', '');
+    Log::spy();
+
+    Socialite::shouldReceive('driver')->never();
+
+    $response = $this->get(route('auth.google.redirect'));
+
+    $response->assertRedirect(route('login'));
+    $response->assertSessionHasErrors(['email']);
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(function (string $message, array $context): bool {
+            return $message === 'auth.google.oauth.preflight_failed'
+                && (string) ($context['category'] ?? '') === 'auth.google.oauth'
+                && (string) ($context['event'] ?? '') === 'preflight_failed'
+                && (string) ($context['phase'] ?? '') === 'redirect';
+        })
+        ->once();
+});
+
+test('google callback logs sanitized oauth failure details without leaking secrets', function () {
+    config()->set('services.google.client_secret', 'sensitive-secret-value');
+    Log::spy();
+
+    $provider = \Mockery::mock();
+    $provider->shouldReceive('user')
+        ->once()
+        ->andThrow(new RuntimeException('invalid_client sensitive-secret-value'));
+
+    Socialite::shouldReceive('driver')
+        ->once()
+        ->with('google')
+        ->andReturn($provider);
+
+    $response = $this->get(route('auth.google.callback'));
+
+    $response->assertRedirect(route('login'));
+    $response->assertSessionHasErrors(['email']);
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(function (string $message, array $context): bool {
+            $oauthErrorMessage = (string) ($context['oauth_error_message'] ?? '');
+
+            return $message === 'auth.google.oauth.callback_failure'
+                && (string) ($context['category'] ?? '') === 'auth.google.oauth'
+                && (string) ($context['failure_class'] ?? '') === 'invalid_client'
+                && array_key_exists('state_present', $context)
+                && array_key_exists('code_present', $context)
+                && ! str_contains($oauthErrorMessage, 'sensitive-secret-value');
+        })
+        ->once();
 });

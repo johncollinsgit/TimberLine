@@ -38,12 +38,21 @@ Production login verification findings:
   - `The provided client secret is invalid.`
 
 What to check first when this recurs:
-1. Verify login uses `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (not `GOOGLE_GBP_*` keys).
-2. Confirm ID+secret are from the same Google OAuth client credential.
-3. After env edits on production, run:
+1. Run diagnostics first:
+   - `php artisan auth:doctor-google`
+   - `php artisan auth:doctor-google --token-smoke`
+2. Verify login uses `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (not `GOOGLE_GBP_*` keys).
+3. Confirm ID+secret are from the same Google OAuth client credential.
+4. After env edits on production, run:
+   - `php artisan config:clear`
    - `php artisan config:cache`
    - `php artisan queue:restart`
-4. Re-test in incognito and inspect `storage/logs/laravel.log` for `invalid_client` vs `redirect_uri_mismatch`.
+5. Re-test in incognito and inspect `storage/logs/laravel.log`.
+
+Smoke test interpretation:
+- `invalid_client` => wrong/revoked/mismatched OAuth pair
+- `invalid_grant` => credentials accepted, grant intentionally invalid/expired
+- `redirect_uri_mismatch` => callback URL mismatch in Google Console
 
 ## Dual-Track Strategy (Hard Guardrail)
 
