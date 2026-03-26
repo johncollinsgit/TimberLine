@@ -187,6 +187,29 @@ Notes:
 - `route:cache` is intentionally not used because the app currently has closure routes.
 - Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
 
+Known push/deploy pitfalls (2026-03-26):
+- GitHub Action fails before deploy steps with missing-input errors:
+  - Cause: one or more required `DEPLOY_*` secrets are missing in the `production` environment.
+  - Check: GitHub -> Settings -> Environments -> `production` -> Secrets and variables.
+  - Required: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`.
+- Deploy runs but production code is stale:
+  - Cause: server repo is not on `main` (for example, left on a temporary branch).
+  - Check on server:
+    - `cd "$DEPLOY_PATH"`
+    - `git branch --show-current`
+    - `git rev-parse --short HEAD`
+    - `git rev-parse --short origin/main`
+  - Recovery:
+    - `git fetch origin main`
+    - `git checkout main`
+    - `git pull --ff-only origin main`
+- Push succeeds but no production rollout occurs:
+  - Check whether the `Deploy Production` workflow is disabled.
+  - Check Actions run status and inspect the first failed step (most failures here are config/secrets, not app code).
+- Security hygiene for server remotes:
+  - Do not keep personal access tokens embedded in `origin` URLs on production.
+  - If a tokenized remote URL is found, rotate the token and switch to SSH/deploy-key auth.
+
 Manual deploy:
 1. Go to GitHub -> Actions -> `Deploy Production`.
 2. Click `Run workflow`.
