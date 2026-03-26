@@ -5,7 +5,9 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\FortifyLoginResponse;
+use App\Http\Responses\FortifyPasswordResetResponse;
 use App\Http\Responses\FortifyRegisterResponse;
+use App\Http\Responses\FortifyTwoFactorLoginResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -24,7 +26,9 @@ class FortifyServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\Laravel\Fortify\Contracts\LoginResponse::class, FortifyLoginResponse::class);
+        $this->app->singleton(\Laravel\Fortify\Contracts\PasswordResetResponse::class, FortifyPasswordResetResponse::class);
         $this->app->singleton(\Laravel\Fortify\Contracts\RegisterResponse::class, FortifyRegisterResponse::class);
+        $this->app->singleton(\Laravel\Fortify\Contracts\TwoFactorLoginResponse::class, FortifyTwoFactorLoginResponse::class);
     }
 
     /**

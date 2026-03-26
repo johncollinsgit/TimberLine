@@ -3,14 +3,16 @@
 <meta name="csrf-token" content="{{ csrf_token() }}" />
 
 @php
-    $mfPageTitle = $title ? $title.' · Modern Forestry Backstage' : 'Modern Forestry Backstage';
+    $authTenantPresentation = $authTenantPresentation ?? [];
+    $appMetaName = (string) ($authTenantPresentation['app_name'] ?? config('app.name', 'Modern Forestry Backstage'));
+    $mfPageTitle = $title ? $title.' · '.$appMetaName : $appMetaName;
     $mfOgImage = asset('apple-touch-icon.png').'?v=bs4';
 @endphp
 
 <title>{{ $mfPageTitle }}</title>
-<meta name="application-name" content="Modern Forestry Backstage">
-<meta name="apple-mobile-web-app-title" content="Modern Forestry Backstage">
-<meta property="og:site_name" content="Modern Forestry Backstage">
+<meta name="application-name" content="{{ $appMetaName }}">
+<meta name="apple-mobile-web-app-title" content="{{ $appMetaName }}">
+<meta property="og:site_name" content="{{ $appMetaName }}">
 <meta property="og:title" content="{{ $mfPageTitle }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ url()->current() }}">

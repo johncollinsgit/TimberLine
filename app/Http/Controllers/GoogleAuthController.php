@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Support\Auth\GoogleOAuthFailureClassifier;
-use App\Support\Auth\HomeRedirect;
+use App\Support\Auth\PostLoginRedirectResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -38,13 +38,13 @@ class GoogleAuthController extends Controller
                 exception: $e,
             );
 
-            report($e);
+            $this->reportUnexpectedOAuthFailure($e, $failureClass);
 
             return $this->redirectWithGoogleUnavailable();
         }
     }
 
-    public function callback(): RedirectResponse
+    public function callback(PostLoginRedirectResolver $postLoginRedirectResolver): RedirectResponse
     {
         if (! $this->ensureGoogleLoginReady('callback')) {
             return $this->redirectWithGoogleUnavailable();
@@ -78,7 +78,7 @@ class GoogleAuthController extends Controller
                 attempt: 'stateful',
                 exception: $stateException,
             );
-            report($stateException);
+            $this->reportUnexpectedOAuthFailure($stateException, GoogleOAuthFailureClassifier::STATE_ERROR);
 
             try {
                 $googleUser = Socialite::driver('google')
@@ -96,7 +96,7 @@ class GoogleAuthController extends Controller
                     attempt: 'stateless_fallback',
                     exception: $fallback,
                 );
-                report($fallback);
+                $this->reportUnexpectedOAuthFailure($fallback, $failureClass);
 
                 return $this->redirectWithGoogleError();
             }
@@ -112,7 +112,7 @@ class GoogleAuthController extends Controller
                 attempt: 'stateful',
                 exception: $e,
             );
-            report($e);
+            $this->reportUnexpectedOAuthFailure($e, $failureClass);
 
             return $this->redirectWithGoogleError();
         }
@@ -186,7 +186,13 @@ class GoogleAuthController extends Controller
 
         request()->session()->regenerate();
 
-        return redirect()->intended(HomeRedirect::pathFor($user));
+        $target = $postLoginRedirectResolver->resolve(
+            request: request(),
+            user: $user,
+            authMethod: 'google',
+        );
+
+        return redirect()->to($target);
     }
 
     protected function redirectWithGoogleError(): RedirectResponse
@@ -307,5 +313,14 @@ class GoogleAuthController extends Controller
         $domain = Str::lower((string) Str::after($email, '@'));
 
         return in_array($domain, $allowed, true);
+    }
+
+    protected function reportUnexpectedOAuthFailure(Throwable $exception, string $failureClass): void
+    {
+        if ($failureClass !== GoogleOAuthFailureClassifier::UNKNOWN_OAUTH_FAILURE) {
+            return;
+        }
+
+        report($exception);
     }
 }

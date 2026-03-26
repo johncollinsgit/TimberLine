@@ -1,9 +1,16 @@
 <x-layouts::auth>
+    @php
+        $authTenantPresentation = $authTenantPresentation ?? [];
+        $loginEyebrow = $authTenantPresentation['login_eyebrow'] ?? 'Sign in';
+        $loginTitle = $authTenantPresentation['login_title'] ?? 'Welcome back';
+        $loginSubtitle = $authTenantPresentation['login_subtitle'] ?? 'Sign in to continue to your account and pick up where you left off.';
+    @endphp
+
     <div class="flex flex-col gap-6">
         <div class="space-y-2">
-            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Sign in</div>
-            <h1 class="text-3xl font-['Fraunces'] font-semibold text-white">Welcome back</h1>
-            <p class="text-sm text-emerald-50/70">Sign in to continue to your account and pick up where you left off.</p>
+            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">{{ $loginEyebrow }}</div>
+            <h1 class="text-3xl font-['Fraunces'] font-semibold text-white">{{ $loginTitle }}</h1>
+            <p class="text-sm text-emerald-50/70">{{ $loginSubtitle }}</p>
         </div>
 
         <x-auth-session-status class="text-center" :status="session('status')" />

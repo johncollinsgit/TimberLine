@@ -76,6 +76,35 @@ Interpretation of smoke test results:
 Important:
 - Do not mix login keys (`GOOGLE_CLIENT_*`) with Google Business Profile keys (`GOOGLE_GBP_*`); they are separate integrations.
 
+## Auth Redirect Diagnostics (2026-03-26)
+
+Ship-readiness manual validation and release checklist:
+- `docs/operations/auth-tenant-ship-readiness.md`
+
+Tenant-aware login landing decisions now emit:
+- event: `auth.post_login.redirect_decision`
+- category: `auth.redirect`
+
+Redirect strategy meanings:
+- `intended_url`: session `url.intended` was present and passed host/query safety checks.
+- `tenant_intent`: no accepted intended URL; tenant intent existed and user membership check passed.
+- `role_fallback`: no safe intended URL and no usable tenant intent; role default route used.
+- `safe_fallback`: role fallback returned empty; hard fallback route used.
+
+If tenant landing looks wrong, check in order:
+1. `tenant_intent_exists`, `tenant_intent_tenant_id`, `tenant_membership_passed` in the redirect decision log.
+2. `intended_present` and `intended_accepted` to confirm whether intended URL safety rejected a redirect.
+3. `auth.tenant_context.resolved` log around entry/callback routes (`login`, `login.store`, `auth.google.callback`, `password.reset`, `password.update`) and compare `host`, `classification`, and `strategy`.
+4. User tenant membership in `tenant_user` for the intended tenant.
+5. Session reset lifecycle:
+   - logout should clear tenant session context
+   - failed login should not set `tenant_id`
+   - successful login should consume `auth.tenant_intent`
+
+Google OAuth callback failure severity:
+- known OAuth classes (`invalid_client`, `invalid_grant`, `redirect_uri_mismatch`, `state_error`) are logged as structured warnings.
+- only `unknown_oauth_failure` is additionally reported as an exception.
+
 ## Shopify (Phase 1)
 Required environment keys:
 - `SHOPIFY_RETAIL_SHOP`

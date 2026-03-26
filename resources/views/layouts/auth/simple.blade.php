@@ -4,6 +4,14 @@
         @include('partials.head')
     </head>
     <body class="min-h-screen bg-[#0b0f0c] text-zinc-100 antialiased">
+        @php
+            $authTenantPresentation = $authTenantPresentation ?? [];
+            $tenantLabel = $authTenantPresentation['tenant_label'] ?? 'Modern Forestry';
+            $portalName = $authTenantPresentation['portal_name'] ?? 'Backstage';
+            $heroTitle = $authTenantPresentation['hero_title'] ?? 'Production, shipping, and wholesale operations in one calm place.';
+            $heroSubtitle = $authTenantPresentation['hero_subtitle'] ?? 'Built for real inventory flow. Track orders, line items, and fulfillment without the noise.';
+            $heroTagline = $authTenantPresentation['hero_tagline'] ?? 'Operations Console';
+        @endphp
         <div class="relative min-h-svh overflow-hidden">
             <div class="pointer-events-none absolute inset-0">
                 <div class="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-emerald-500/20 blur-[120px]"></div>
@@ -19,22 +27,22 @@
                             <x-app-logo-icon class="size-8 fill-current text-emerald-200" />
                         </span>
                         <div>
-                            <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Modern Forestry</div>
-                            <div class="text-2xl font-['Fraunces'] font-semibold text-white">Backstage</div>
+                            <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">{{ $tenantLabel }}</div>
+                            <div class="text-2xl font-['Fraunces'] font-semibold text-white">{{ $portalName }}</div>
                         </div>
                     </div>
 
                     <div class="max-w-md space-y-4">
                         <div class="text-4xl font-['Fraunces'] font-semibold leading-tight text-white">
-                            Production, shipping, and wholesale operations in one calm place.
+                            {{ $heroTitle }}
                         </div>
                         <p class="text-sm text-emerald-50/70">
-                            Built for real inventory flow. Track orders, line items, and fulfillment without the noise.
+                            {{ $heroSubtitle }}
                         </p>
                     </div>
 
                     <div class="text-xs uppercase tracking-[0.2em] text-emerald-50/50">
-                        Operations Console
+                        {{ $heroTagline }}
                     </div>
                 </div>
 
@@ -45,8 +53,8 @@
                                 <x-app-logo-icon class="size-6 fill-current text-emerald-200" />
                             </span>
                             <div>
-                                <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60 lg:hidden">Modern Forestry</div>
-                                <div class="text-lg font-['Fraunces'] font-semibold text-white lg:text-xl">Backstage</div>
+                                <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60 lg:hidden">{{ $tenantLabel }}</div>
+                                <div class="text-lg font-['Fraunces'] font-semibold text-white lg:text-xl">{{ $portalName }}</div>
                             </div>
                         </div>
 

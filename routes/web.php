@@ -769,7 +769,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/callback/{store}', [ShopifyAuthController::class, 'callback'])->name('shopify.callback');
 });
 
-Route::middleware('guest')->prefix('auth/google')->name('auth.google.')->group(function () {
+Route::middleware(['guest', 'auth.tenant.context'])->prefix('auth/google')->name('auth.google.')->group(function () {
     Route::get('/redirect', [GoogleAuthController::class, 'redirect'])->name('redirect');
     Route::get('/callback', [GoogleAuthController::class, 'callback'])->name('callback');
 });

@@ -5,9 +5,9 @@ namespace App\Http\Responses;
 use App\Support\Auth\PostLoginRedirectResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 
-class FortifyLoginResponse implements LoginResponseContract
+class FortifyTwoFactorLoginResponse implements TwoFactorLoginResponseContract
 {
     public function __construct(
         protected PostLoginRedirectResolver $redirectResolver,
@@ -17,7 +17,7 @@ class FortifyLoginResponse implements LoginResponseContract
     public function toResponse($request)
     {
         if ($request->wantsJson()) {
-            return new JsonResponse(['two_factor' => false]);
+            return new JsonResponse('', 204);
         }
 
         /** @var Request $request */
@@ -29,7 +29,7 @@ class FortifyLoginResponse implements LoginResponseContract
         $target = $this->redirectResolver->resolve(
             request: $request,
             user: $user,
-            authMethod: 'password',
+            authMethod: 'password_two_factor',
         );
 
         return redirect()->to($target);
