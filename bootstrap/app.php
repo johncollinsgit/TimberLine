@@ -1,12 +1,12 @@
 <?php
 
-use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Support\Auth\HomeRedirect;
+use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Request;
 use Illuminate\Http\Middleware\FrameGuard;
+use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->remove(FrameGuard::class);
+        $middleware->web(prepend: [
+            \App\Http\Middleware\ResolveHostTenantContext::class,
+        ]);
         $middleware->validateCsrfTokens(except: [
             'shopify/app/api/dashboard/candle-cash-reminders',
             'shopify/app/api/rewards/earn/*',
@@ -33,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,
+            'landlord.operator' => \App\Http\Middleware\EnsureLandlordOperator::class,
             'marketing.storefront.verify' => \App\Http\Middleware\VerifyMarketingStorefrontRequest::class,
             'tenant.access' => \App\Http\Middleware\EnsureTenantAccess::class,
             'auth.tenant.context' => \App\Http\Middleware\ResolveAuthTenantContext::class,
@@ -77,12 +81,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 $checks[] = [
                     'label' => '01 route path is /retail/plan',
                     'status' => 'pass',
-                    'detail' => 'path=' . $request->path(),
+                    'detail' => 'path='.$request->path(),
                 ];
                 $checks[] = [
                     'label' => '02 queue query value is valid',
                     'status' => in_array($queue, $allowedQueues, true) ? 'pass' : 'not_pass',
-                    'detail' => 'queue=' . ($queue !== '' ? $queue : '(empty)'),
+                    'detail' => 'queue='.($queue !== '' ? $queue : '(empty)'),
                 ];
                 $checks[] = [
                     'label' => '03 route conflict with ?queue=markets',
@@ -94,7 +98,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     try {
                         return $fn();
                     } catch (Throwable $t) {
-                        return 'check_failed: ' . class_basename($t) . ': ' . $t->getMessage();
+                        return 'check_failed: '.class_basename($t).': '.$t->getMessage();
                     }
                 };
 
@@ -103,7 +107,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'status' => ($safe(fn () => Route::has('retail.plan')) === true) ? 'pass' : 'not_pass',
                     'detail' => is_string($v = $safe(fn () => Route::has('retail.plan')))
                         ? $v
-                        : ('route_has=' . (($v ?? false) ? 'yes' : 'no')),
+                        : ('route_has='.(($v ?? false) ? 'yes' : 'no')),
                 ];
 
                 $retailTables = $safe(fn () => [
@@ -114,7 +118,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'label' => '05 retail plan tables',
                     'status' => is_array($retailTables) && $retailTables[0] && $retailTables[1] ? 'pass' : (is_array($retailTables) ? 'not_pass' : 'check'),
                     'detail' => is_array($retailTables)
-                        ? 'retail_plans=' . ($retailTables[0] ? 'yes' : 'no') . ', retail_plan_items=' . ($retailTables[1] ? 'yes' : 'no')
+                        ? 'retail_plans='.($retailTables[0] ? 'yes' : 'no').', retail_plan_items='.($retailTables[1] ? 'yes' : 'no')
                         : $retailTables,
                 ];
 
@@ -137,7 +141,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'label' => '08 scents/sizes tables',
                     'status' => is_array($lookupTables) && $lookupTables[0] && $lookupTables[1] ? 'pass' : (is_array($lookupTables) ? 'not_pass' : 'check'),
                     'detail' => is_array($lookupTables)
-                        ? 'scents=' . ($lookupTables[0] ? 'yes' : 'no') . ', sizes=' . ($lookupTables[1] ? 'yes' : 'no')
+                        ? 'scents='.($lookupTables[0] ? 'yes' : 'no').', sizes='.($lookupTables[1] ? 'yes' : 'no')
                         : $lookupTables,
                 ];
 
@@ -151,7 +155,7 @@ return Application::configure(basePath: dirname(__DIR__))
                         'label' => '09 markets tables',
                         'status' => is_array($marketTables) && $marketTables[0] && $marketTables[1] && $marketTables[2] ? 'pass' : (is_array($marketTables) ? 'not_pass' : 'check'),
                         'detail' => is_array($marketTables)
-                            ? 'market_pour_lists=' . ($marketTables[0] ? 'yes' : 'no') . ', market_pour_list_lines=' . ($marketTables[1] ? 'yes' : 'no') . ', events=' . ($marketTables[2] ? 'yes' : 'no')
+                            ? 'market_pour_lists='.($marketTables[0] ? 'yes' : 'no').', market_pour_list_lines='.($marketTables[1] ? 'yes' : 'no').', events='.($marketTables[2] ? 'yes' : 'no')
                             : $marketTables,
                     ];
 
@@ -164,7 +168,7 @@ return Application::configure(basePath: dirname(__DIR__))
                         'label' => '10 markets extras (routes + wick_type)',
                         'status' => is_array($marketExtras) && $marketExtras[0] && $marketExtras[1] && $marketExtras[2] ? 'pass' : (is_array($marketExtras) ? 'not_pass' : 'check'),
                         'detail' => is_array($marketExtras)
-                            ? 'events.index=' . ($marketExtras[0] ? 'yes' : 'no') . ', markets.lists.index=' . ($marketExtras[1] ? 'yes' : 'no') . ', order_lines.wick_type=' . ($marketExtras[2] ? 'yes' : 'no')
+                            ? 'events.index='.($marketExtras[0] ? 'yes' : 'no').', markets.lists.index='.($marketExtras[1] ? 'yes' : 'no').', order_lines.wick_type='.($marketExtras[2] ? 'yes' : 'no')
                             : $marketExtras,
                     ];
                 } else {
@@ -173,7 +177,7 @@ return Application::configure(basePath: dirname(__DIR__))
                         'label' => '09 orders/order_lines tables',
                         'status' => is_array($orderTables) && $orderTables[0] && $orderTables[1] ? 'pass' : (is_array($orderTables) ? 'not_pass' : 'check'),
                         'detail' => is_array($orderTables)
-                            ? 'orders=' . ($orderTables[0] ? 'yes' : 'no') . ', order_lines=' . ($orderTables[1] ? 'yes' : 'no')
+                            ? 'orders='.($orderTables[0] ? 'yes' : 'no').', order_lines='.($orderTables[1] ? 'yes' : 'no')
                             : $orderTables,
                     ];
 
@@ -186,7 +190,7 @@ return Application::configure(basePath: dirname(__DIR__))
                         'label' => '10 core order columns',
                         'status' => is_array($orderCols) && $orderCols[0] && $orderCols[1] && $orderCols[2] ? 'pass' : (is_array($orderCols) ? 'not_pass' : 'check'),
                         'detail' => is_array($orderCols)
-                            ? 'orders.published_at=' . ($orderCols[0] ? 'yes' : 'no') . ', order_lines.ordered_qty=' . ($orderCols[1] ? 'yes' : 'no') . ', order_lines.extra_qty=' . ($orderCols[2] ? 'yes' : 'no')
+                            ? 'orders.published_at='.($orderCols[0] ? 'yes' : 'no').', order_lines.ordered_qty='.($orderCols[1] ? 'yes' : 'no').', order_lines.extra_qty='.($orderCols[2] ? 'yes' : 'no')
                             : $orderCols,
                     ];
                 }

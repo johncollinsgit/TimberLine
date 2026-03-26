@@ -105,6 +105,87 @@ Google OAuth callback failure severity:
 - known OAuth classes (`invalid_client`, `invalid_grant`, `redirect_uri_mismatch`, `state_error`) are logged as structured warnings.
 - only `unknown_oauth_failure` is additionally reported as an exception.
 
+## Landlord Host Foundation (Phase 1, 2026-03-26)
+
+What was added:
+- New pre-auth host context resolution path for all web requests:
+  - `app/Services/Tenancy/PreAuthTenantContextResolver.php`
+  - `app/Support/Tenancy/HostTenantContext.php`
+  - `app/Http/Middleware/ResolveHostTenantContext.php`
+- Middleware is prepended to the `web` stack in `bootstrap/app.php` so host context is available before auth/login handling.
+- Host behavior now supports:
+  - landlord host (`app.fireforgetech.com`) => landlord context (`isLandlordMode=true`), no tenant required
+  - tenant host (`<slug>.fireforgetech.com`) => resolves tenant by slug/subdomain
+  - unknown host => unresolved context, no fallback to first tenant
+- Existing auth tenant resolver (`GuestAuthTenantContextResolver`) now reuses this host resolver rather than duplicating host parsing logic.
+
+Configuration added:
+- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default `app.fireforgetech.com`)
+- `TENANCY_LANDLORD_OPERATOR_ROLES` env var (comma-separated, default `admin`)
+- `TENANCY_LANDLORD_OPERATOR_EMAILS` env var (comma-separated, optional allowlist)
+- `config/tenancy.php` now exposes:
+  - `tenancy.landlord.hosts`
+  - `tenancy.landlord.primary_host`
+  - `tenancy.landlord.operator_roles`
+  - `tenancy.landlord.operator_emails`
+
+Local setup note:
+- In this implementation, the first host in `TENANCY_LANDLORD_HOSTS` is treated as the landlord route domain (`tenancy.landlord.primary_host`) and is what `Route::domain(...)` uses for `/landlord*` routes.
+- Host examples:
+  - production example: `TENANCY_LANDLORD_HOSTS=app.fireforgetech.com`
+  - local example: `TENANCY_LANDLORD_HOSTS=app.fireforgetech.test`
+- Recommended local baseline:
+  - `TENANCY_LANDLORD_HOSTS=app.fireforgetech.test`
+  - `TENANCY_LANDLORD_OPERATOR_ROLES=admin`
+  - `TENANCY_LANDLORD_OPERATOR_EMAILS=`
+- Fast local login bootstrap (if your expected admin login fails):
+  - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin`
+  - then sign in at `/login` and open `/landlord`
+- Leave `TENANCY_LANDLORD_OPERATOR_EMAILS` blank unless you explicitly want an additional email allowlist on top of role checks.
+
+Landlord/operator routes added (landlord-host only):
+- `GET /landlord` => landlord dashboard (`landlord.dashboard`)
+- `GET /landlord/tenants` => read-only tenant directory (`landlord.tenants.index`)
+- `GET /landlord/tenants/{tenant}` => read-only tenant detail (`landlord.tenants.show`)
+- Guarded by `auth`, `verified`, and `landlord.operator`
+- `landlord.operator` is an interim dedicated landlord check that defaults to `admin` role only (and can optionally enforce an email allowlist) until a first-class landlord role/flag exists.
+- Implemented via:
+  - `app/Http/Controllers/Landlord/LandlordTenantDirectoryController.php`
+  - `resources/views/landlord/dashboard.blade.php`
+  - `resources/views/landlord/tenants/index.blade.php`
+  - `resources/views/landlord/tenants/show.blade.php`
+
+Read-only directory fields now surfaced from existing schema/relations:
+- tenant name
+- slug/subdomain
+- derived status label (from existing access/users/shopify/health signals)
+- `created_at`
+- user count
+- connected Shopify stores count
+- primary Shopify store/domain
+- basic readiness/health indicators derived from current data
+
+View data path prepared for host-aware UI:
+- shared on every web request:
+  - `hostTenantContext`
+  - `hostTenant`
+  - `isLandlordMode`
+- wired into auth/app layouts as `data-landlord-mode` and `data-host-tenant` attributes for future branding/runtime branching.
+
+Tests added:
+- `tests/Feature/Tenancy/LandlordHostFoundationTest.php`
+  - landlord host access for authorized landlord operators
+  - tenant host resolution
+  - unknown host no-fallback behavior
+  - `/landlord`, `/landlord/tenants`, and `/landlord/tenants/{tenant}` blocked on tenant hosts
+  - non-landlord-authorized users forbidden on landlord host routes
+
+Explicit non-goals in this phase:
+- no changes to post-auth `tenant.access` enforcement semantics
+- no billing/impersonation/write actions in landlord surfaces
+- no Candle Cash/campaign/birthdays core-table changes
+- no Shopify embedded/proxy/webhook behavior changes
+
 ## Shopify (Phase 1)
 Required environment keys:
 - `SHOPIFY_RETAIL_SHOP`

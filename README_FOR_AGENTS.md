@@ -23,10 +23,57 @@ Current implemented shell/diagnostics checkpoint:
   - entitlement-aware states (`connected`, `setup_needed`, `locked`, `coming_soon`) exist
   - no real connector sync/OAuth/jobs/webhooks/API writes exist
 - Billing/checkout activation is intentionally not implemented yet.
+- Landlord/admin Phase 1 host foundation is now in place:
+  - pre-auth host tenant context is globally resolved via middleware
+  - landlord host: `app.fireforgetech.com`
+  - tenant host pattern: `<slug>.fireforgetech.com`
+  - landlord routes (host-locked): `/landlord`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
+  - landlord directory pages are read-only in this phase
+  - unknown hosts do not silently fallback to first tenant
 
 Current execution priority:
 - deploy/verify/stabilize this shell and diagnostics release
 - avoid new feature sprawl unless a concrete regression requires it
+
+## Landlord Host Foundation (2026-03-26)
+
+Reference implementation paths:
+- `app/Services/Tenancy/PreAuthTenantContextResolver.php`
+- `app/Support/Tenancy/HostTenantContext.php`
+- `app/Http/Middleware/ResolveHostTenantContext.php`
+- `app/Http/Controllers/Landlord/LandlordTenantDirectoryController.php`
+- `resources/views/landlord/*`
+- `tests/Feature/Tenancy/LandlordHostFoundationTest.php`
+
+Config:
+- `TENANCY_LANDLORD_HOSTS` (comma-separated list)
+- `TENANCY_LANDLORD_OPERATOR_ROLES` (comma-separated list, default `admin`)
+- `TENANCY_LANDLORD_OPERATOR_EMAILS` (optional comma-separated allowlist)
+- `config('tenancy.landlord.primary_host')`
+- `config('tenancy.landlord.hosts')`
+- `config('tenancy.landlord.operator_roles')`
+- `config('tenancy.landlord.operator_emails')`
+
+Local routing note:
+- `config('tenancy.landlord.primary_host')` is derived from the first host in `TENANCY_LANDLORD_HOSTS` and is what landlord `Route::domain(...)` bindings use.
+- Distinguish host examples in docs:
+  - production example: `app.fireforgetech.com`
+  - local example: `app.fireforgetech.test`
+- Keep local examples explicit in docs/config comments so operators do not assume the full `hosts` list is domain-bound in routing.
+- Fast local auth bootstrap path already exists and should be preferred over ad-hoc DB edits:
+  - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin`
+  - this sets role, password, active/approved state, and verified email for local login.
+
+Authorization note:
+- Landlord routes use dedicated middleware `landlord.operator` instead of tenant-facing `role:admin,manager`.
+- Interim safety model: default `admin` role access only, with optional landlord operator email allowlist.
+- TODO for future hardening: replace role/email interim rules with a first-class landlord operator role/flag.
+
+Important guardrails for future edits:
+- Do not bypass host-locked landlord routing by making landlord pages globally available.
+- Keep post-auth `tenant.access` middleware behavior unchanged unless explicitly requested.
+- Keep landlord directory read-only until explicit write safety requirements are defined.
+- Keep Shopify embedded/storefront/proxy behavior unchanged while evolving landlord/admin surfaces.
 
 ## Auth Findings (2026-03-25)
 

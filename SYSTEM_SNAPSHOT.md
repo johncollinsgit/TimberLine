@@ -31,6 +31,13 @@ Quick-scan summary for future agents:
   - no real connector sync/OAuth/jobs/webhooks/API writes from this surface
 - Commercialization direction is active but billing/checkout activation is not implemented yet.
 - Tenant-aware direction is established in shell + diagnostics, while full domain tenant isolation remains in progress.
+- Landlord/admin Phase 1 host foundation is implemented:
+  - global pre-auth host context middleware resolves landlord/tenant/none host mode
+  - landlord host target is `app.fireforgetech.com` (configurable)
+  - tenant host target is `<slug>.fireforgetech.com`
+  - unknown hosts resolve safely to `none` (no first-tenant fallback)
+  - landlord routes are host-locked and read-only in this phase: `/landlord`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
+  - landlord route auth uses dedicated `landlord.operator` middleware (default `admin` role; optional email allowlist) instead of tenant-facing role groups
 - Immediate next step is deploy + verify this release, not broad new feature expansion.
 
 ## Current Shopify Proof-of-Concept Reality

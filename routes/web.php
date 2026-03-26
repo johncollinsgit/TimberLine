@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
@@ -19,8 +20,8 @@ use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\Marketing\MarketingPublicEventController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
-use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
+use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\PlatformProductPagesController;
@@ -99,6 +100,22 @@ Route::get('/', function (
 
     return redirect()->route('login');
 })->name('home');
+
+$landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.fireforgetech.com')));
+
+if ($landlordHost !== '') {
+    Route::domain($landlordHost)
+        ->middleware(['auth', 'verified', 'landlord.operator'])
+        ->name('landlord.')
+        ->group(function (): void {
+            Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
+                ->name('dashboard');
+            Route::get('/landlord/tenants', [LandlordTenantDirectoryController::class, 'index'])
+                ->name('tenants.index');
+            Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
+                ->name('tenants.show');
+        });
+}
 
 Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.embedded.rewards');
 Route::get('/rewards/earn', [ShopifyEmbeddedRewardsController::class, 'earn'])->name('shopify.embedded.rewards.earn');

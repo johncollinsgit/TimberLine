@@ -11,8 +11,14 @@
             $heroTitle = $authTenantPresentation['hero_title'] ?? 'Production, shipping, and wholesale operations in one calm place.';
             $heroSubtitle = $authTenantPresentation['hero_subtitle'] ?? 'Built for real inventory flow. Track orders, line items, and fulfillment without the noise.';
             $heroTagline = $authTenantPresentation['hero_tagline'] ?? 'Operations Console';
+            $isLandlordMode = (bool) ($isLandlordMode ?? false);
+            $hostTenantSlug = isset($hostTenant) && $hostTenant ? (string) ($hostTenant->slug ?? '') : (string) data_get($hostTenantContext ?? [], 'tenant.slug', '');
         @endphp
-        <div class="relative min-h-svh overflow-hidden">
+        <div
+            class="relative min-h-svh overflow-hidden"
+            data-landlord-mode="{{ $isLandlordMode ? '1' : '0' }}"
+            data-host-tenant="{{ $hostTenantSlug }}"
+        >
             <div class="pointer-events-none absolute inset-0">
                 <div class="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-emerald-500/20 blur-[120px]"></div>
                 <div class="absolute right-0 top-1/3 h-[28rem] w-[28rem] rounded-full bg-amber-400/10 blur-[140px]"></div>

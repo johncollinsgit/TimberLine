@@ -5,7 +5,8 @@
 @php
     $authTenantPresentation = $authTenantPresentation ?? [];
     $appMetaName = (string) ($authTenantPresentation['app_name'] ?? config('app.name', 'Modern Forestry Backstage'));
-    $mfPageTitle = $title ? $title.' · '.$appMetaName : $appMetaName;
+    $resolvedTitle = trim((string) ($title ?? ''));
+    $mfPageTitle = $resolvedTitle !== '' ? $resolvedTitle.' · '.$appMetaName : $appMetaName;
     $mfOgImage = asset('apple-touch-icon.png').'?v=bs4';
 @endphp
 
