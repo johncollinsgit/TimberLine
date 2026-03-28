@@ -917,6 +917,7 @@ test('sms message json send succeeds with shopify session token auth', function 
     config()->set('marketing.sms.enabled', true);
     config()->set('marketing.twilio.enabled', true);
     config()->set('marketing.sms.dry_run', true);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
 
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
     $profile->forceFill([
@@ -1016,6 +1017,7 @@ test('customer message json rejects invalid shopify session token auth', functio
     config()->set('marketing.sms.enabled', true);
     config()->set('marketing.twilio.enabled', true);
     config()->set('marketing.sms.dry_run', true);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
 
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
 
@@ -1045,6 +1047,7 @@ test('customer message json rejects expired shopify session token auth', functio
     config()->set('marketing.sms.enabled', true);
     config()->set('marketing.twilio.enabled', true);
     config()->set('marketing.sms.dry_run', true);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
 
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
     $expiredNow = time() - 120;
@@ -1107,6 +1110,7 @@ test('customer message json returns warning when sms consent is missing', functi
     config()->set('marketing.sms.enabled', true);
     config()->set('marketing.twilio.enabled', true);
     config()->set('marketing.sms.dry_run', true);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
 
     $profile = seedEmbeddedCustomerDetailFixture($tenant->id);
     $profile->forceFill([

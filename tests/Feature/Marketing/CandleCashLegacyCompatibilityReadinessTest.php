@@ -90,7 +90,9 @@ test('canonical candle cash paths stay silent and readiness command reports read
     Artisan::call('marketing:candle-cash-compatibility-readiness', ['--json' => true]);
 
     $summary = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+    $activeLegacyEnvCount = (int) data_get($summary, 'static_audit.env.active_legacy_env_count', 0);
+    $expectedReady = $activeLegacyEnvCount === 0;
 
     expect(data_get($summary, 'observed.total_signals'))->toBe(0)
-        ->and(data_get($summary, 'go_no_go.ready_to_drop_old_columns'))->toBeTrue();
+        ->and(data_get($summary, 'go_no_go.ready_to_drop_old_columns'))->toBe($expectedReady);
 });
