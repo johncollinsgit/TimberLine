@@ -36,7 +36,9 @@ test('landlord commercial page is host-locked and available to landlord operator
     $this->actingAs($user)
         ->get("http://{$host}/landlord/commercial")
         ->assertOk()
-        ->assertSeeText('Commercial Control Center');
+        ->assertSeeText('Commercial Revenue Configuration')
+        ->assertSeeText('Plans & pricing')
+        ->assertSeeText('Monthly price (USD cents)');
 });
 
 test('landlord commercial actions can assign plans and tenant overrides', function (): void {
@@ -197,7 +199,9 @@ test('landlord commercial page keeps billing lifecycle actions disabled', functi
     $this->actingAs($user)
         ->get("http://{$host}/landlord/commercial")
         ->assertOk()
-        ->assertSeeText('Configuration is ready for future billing mapping, but billing lifecycle is inactive in this phase.')
+        ->assertSeeText('Billing Readiness / Status')
+        ->assertSeeText('Revenue configuration is ready for mapping validation while broad lifecycle automation stays intentionally disabled.')
+        ->assertSeeText('Edit monthly prices, setup fees, and revenue configuration values in USD cents.')
         ->assertSeeText('Only one guarded live subscription create/sync action is available (landlord-triggered, prerequisite-gated).')
         ->assertSeeText('Broad subscription update/cancel automation is still disabled.')
         ->assertSeeText('Checkout remains disabled and broad lifecycle writes remain intentionally inactive in this phase.')

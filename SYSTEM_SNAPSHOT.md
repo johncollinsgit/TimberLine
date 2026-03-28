@@ -20,7 +20,7 @@ Quick-scan summary for future agents:
 - Product shell/commercialization surfaces are implemented:
   - embedded: `/shopify/app`, `/shopify/app/start`, `/shopify/app/plans`, `/shopify/app/integrations`
   - public: `/platform/promo`, `/platform/contact`
-  - landlord commercial: `/landlord/commercial`
+  - landlord commercial: `/landlord/commercial` (pricing-first admin layout)
 - Diagnostics/operator surfaces are implemented and actively used:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison

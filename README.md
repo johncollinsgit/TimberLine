@@ -14,7 +14,7 @@ Implemented and navigable now:
   - `/platform/promo`
   - `/platform/contact`
 - Landlord commercial control surface:
-  - `/landlord/commercial` (host-locked, configuration-first controls for plans/add-ons/templates/tenant overrides)
+  - `/landlord/commercial` (host-locked, pricing-first admin controls for plans/add-ons/templates/tenant overrides)
 - Operator diagnostics surfaces:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison flows

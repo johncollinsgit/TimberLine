@@ -14,7 +14,7 @@ Current implemented shell/diagnostics checkpoint:
   - `/platform/promo`
   - `/platform/contact`
 - Landlord commercial config surface is implemented:
-  - `/landlord/commercial` (host-locked, configuration-first controls)
+  - `/landlord/commercial` (host-locked, pricing-first admin controls)
 - Diagnostics/operator surfaces are implemented and test-covered:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison
