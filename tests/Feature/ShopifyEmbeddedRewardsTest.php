@@ -16,6 +16,7 @@ function retailRewardsApiHeaders(array $headers = []): array
 
 beforeEach(function () {
     $this->withoutVite();
+    config()->set('entitlements.default_plan', 'growth');
     configureEmbeddedRetailStore();
 });
 

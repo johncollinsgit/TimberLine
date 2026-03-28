@@ -4,6 +4,10 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\MarketingProfile;
 
+beforeEach(function (): void {
+    config()->set('entitlements.default_plan', 'growth');
+});
+
 test('embedded app navigation metadata matches each top-level section route', function (string $routeName, string $expectedSection, ?string $expectedChild, string $visibleText) {
     configureEmbeddedRetailStore();
 

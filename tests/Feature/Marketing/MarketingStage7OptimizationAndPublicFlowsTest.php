@@ -389,6 +389,7 @@ test('shopify integration endpoints return reward and consent responses with sig
     $consentPayload = [
         'email' => 'shopify.new@example.com',
         'phone' => '5551114444',
+        'shop' => 'modernforestry.myshopify.com',
         'consent_sms' => true,
         'consent_email' => true,
         'award_bonus' => true,

@@ -41,6 +41,14 @@ Quick-scan summary for future agents:
 - Latest repo-side validation status (2026-03-28):
   - real staging operator evidence is not attached by this pass
   - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+  - main-branch GitHub Actions tests failed on commit `dbf0762` before this fix pass
+  - local CI-equivalent rerun after this fix pass:
+    - `php -d memory_limit=512M ./vendor/bin/pest` => `845 passed`, `0 failed`
+  - GitHub Actions production deploy still fails when required secrets are missing:
+    - `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
+  - latest known production rollout for commit `dbf0762` was manual:
+    - `ssh forge@129.212.138.111 'bash /home/forge/deploy_backstage.sh'`
+    - `curl -sS https://backstage.theforestrystudio.com/up` => `Application up.`
 - Checkout and broad subscription lifecycle mutation flows remain intentionally disabled.
 - Public commercial model has been normalized:
   - tiers: `Starter`, `Growth`, `Pro`
@@ -62,6 +70,7 @@ Quick-scan summary for future agents:
 - Immediate next step is deploy + verify this release, not broad new feature expansion.
 - Staging operator UAT runbook for commercialization assignment hardening:
   - `docs/operations/staging-commercial-uat-runbook.md`
+- Multi-tenant completion estimate: `45%`.
 
 ## Strict Near-Term Execution Order (As of 2026-03-27)
 1. Candle Cash verified live and trustworthy for Modern Forestry.
@@ -115,6 +124,8 @@ Do not start yet:
 ## Deployment Reality
 - Production deploy path is GitHub Actions on push to `main`
 - Deploy workflow also supports manual `workflow_dispatch`
+- Deploy job is hard-blocked when `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, or `DEPLOY_SSH_KEY` are missing.
+- Manual SSH deploy may be required until those GitHub environment secrets are configured.
 - Server-side deploy pulls from GitHub, not from local branches
 - If code is not committed and pushed to `main`, it is not live
 - Practical rule: local changes on feature/agent branches are not deployed until merged/pushed to `main`

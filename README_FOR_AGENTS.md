@@ -35,7 +35,15 @@ Current implemented shell/diagnostics checkpoint:
   - latest repo-side validation status (2026-03-28):
     - real staging operator evidence is not attached by this pass
     - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+    - main-branch CI tests failed on commit `dbf0762` before this fix pass
+    - local CI-equivalent rerun after this fix pass:
+      - `php -d memory_limit=512M ./vendor/bin/pest` => `845 passed`, `0 failed`
+    - deploy automation still fails when `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, or `DEPLOY_SSH_KEY` are missing
+    - latest known production rollout for `dbf0762` was manual:
+      - `ssh forge@129.212.138.111 'bash /home/forge/deploy_backstage.sh'`
+      - `curl -sS https://backstage.theforestrystudio.com/up` => `Application up.`
   - checkout and broad subscription lifecycle mutation flows remain intentionally disabled
+- multi-tenant completion estimate is currently `45%`
 - Landlord/admin Phase 1 host foundation is now in place:
   - pre-auth host tenant context is globally resolved via middleware
   - landlord host (production): `app.forestrybackstage.com`

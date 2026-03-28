@@ -43,8 +43,18 @@ Commercialization/access state:
 - latest repo-side validation status (2026-03-28):
   - real staging operator evidence is not attached by this pass
   - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+  - main-branch CI tests failed on commit `dbf0762` in GitHub Actions before this follow-up fix pass
+  - local CI-equivalent rerun after the test fix pass:
+    - command: `php -d memory_limit=512M ./vendor/bin/pest`
+    - result: `845 passed`, `0 failed`
+  - deploy automation remains blocked when required GitHub `production` secrets are missing:
+    - `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
+  - latest production rollout for commit `dbf0762` was completed manually:
+    - deploy command: `ssh forge@129.212.138.111 'bash /home/forge/deploy_backstage.sh'`
+    - health check: `curl -sS https://backstage.theforestrystudio.com/up` returned `Application up.`
 - checkout and broad subscription lifecycle mutation writes are still intentionally disabled
 - upgrade prompts are informational routing only
+- multi-tenant completion estimate: `45%`
 
 Multi-tenant state:
 - tenant-aware semantics are now established in email/birthday/provider diagnostics and shell module-state presentation
