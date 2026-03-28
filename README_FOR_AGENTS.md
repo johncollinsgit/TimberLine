@@ -35,6 +35,7 @@ Current implemented shell/diagnostics checkpoint:
   - latest repo-side validation status (2026-03-28):
     - real staging operator evidence is not attached by this pass
     - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+    - staging follow-up revalidation (2026-03-28): landlord routes are reachable (`/landlord` and `/landlord/commercial` return `302` to `/login` when unauthenticated), but the guarded operator run is still blocked by missing landlord operator session plus missing runtime Stripe secret and disabled live-sync action flag
     - follow-up commit `9c2502c` (CI assertion alignment after dotenv bootstrap fix) is pushed to `main`
     - local CI-equivalent rerun for this pass:
       - `php -d memory_limit=512M ./vendor/bin/pest` => `845 passed`, `0 failed`
