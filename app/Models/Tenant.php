@@ -90,4 +90,14 @@ class Tenant extends Model
     {
         return $this->hasMany(TenantModuleState::class);
     }
+
+    public function commercialOverride(): HasOne
+    {
+        return $this->hasOne(TenantCommercialOverride::class);
+    }
+
+    public function usageCounters(): HasMany
+    {
+        return $this->hasMany(TenantUsageCounter::class);
+    }
 }

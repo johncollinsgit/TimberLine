@@ -2,6 +2,7 @@
 
 use App\Models\BirthdayMessageEvent;
 use App\Models\BirthdayRewardIssuance;
+use App\Models\CustomerExternalProfile;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
@@ -233,4 +234,77 @@ test('birthday issuance writes failed delivery when tenant email sending is disa
         ->and((int) $delivery->tenant_id)->toBe($tenant->id);
 
     Http::assertNothingSent();
+});
+
+test('birthday issuance resolves tenant-aware email provider from canonical external profile when profile tenant is missing', function () {
+    Http::fake([
+        'https://api.sendgrid.com/v3/mail/send' => Http::response('', 202, [
+            'X-Message-Id' => 'SG-BDAY-CTX-1',
+        ]),
+    ]);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Tenant Context',
+        'slug' => 'birthday-tenant-context',
+    ]);
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'email_provider' => 'sendgrid',
+        'email_enabled' => true,
+        'from_name' => 'Birthday Team',
+        'from_email' => 'hello@example.test',
+        'reply_to_email' => 'support@example.test',
+        'provider_status' => 'configured',
+        'provider_config' => [
+            'api_key' => 'SG.fake-api-key',
+            'verified_sender_email' => 'verified@example.test',
+            'verified_sender_name' => 'Birthday Team',
+            'reply_to_email' => 'support@example.test',
+            'tracking_enabled' => true,
+        ],
+        'analytics_enabled' => true,
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => null,
+        'first_name' => 'Riley',
+        'email' => 'riley.context@example.test',
+        'normalized_email' => 'riley.context@example.test',
+        'accepts_email_marketing' => true,
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify',
+        'store_key' => 'retail',
+        'external_customer_id' => 'shopify-customer-ctx-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'source_channels' => ['shopify'],
+        'synced_at' => now(),
+    ]);
+
+    $birthday = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => (int) now()->month,
+        'birth_day' => (int) now()->day,
+        'source' => 'test',
+        'source_captured_at' => now(),
+    ]);
+
+    $result = app(BirthdayRewardEngineService::class)->issueAnnualReward($birthday);
+    $delivery = MarketingEmailDelivery::query()->where('campaign_type', 'birthday')->latest('id')->firstOrFail();
+
+    expect((bool) ($result['ok'] ?? false))->toBeTrue()
+        ->and((bool) data_get($result, 'email_delivery.success'))->toBeTrue()
+        ->and((string) data_get($result, 'email_delivery.provider'))->toBe('sendgrid')
+        ->and((int) $delivery->tenant_id)->toBe($tenant->id)
+        ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('tenant')
+        ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeFalse()
+        ->and((string) data_get($delivery->metadata, 'shopify_store_key'))->toBe('retail');
+
+    Http::assertSentCount(1);
 });

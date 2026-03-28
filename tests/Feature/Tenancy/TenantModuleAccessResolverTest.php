@@ -6,7 +6,7 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleState;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 
-test('default resolver grants current shopify proof-of-concept modules', function () {
+test('default resolver grants starter plan modules', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -21,16 +21,16 @@ test('default resolver grants current shopify proof-of-concept modules', functio
         'settings',
     ]);
 
-    expect($resolved['plan_key'])->toBe('shopify_proof_of_concept')
+    expect($resolved['plan_key'])->toBe('starter')
         ->and($resolved['modules']['customers']['has_access'])->toBeTrue()
-        ->and($resolved['modules']['rewards']['has_access'])->toBeTrue()
-        ->and($resolved['modules']['birthdays']['has_access'])->toBeTrue()
+        ->and($resolved['modules']['rewards']['has_access'])->toBeFalse()
+        ->and($resolved['modules']['birthdays']['has_access'])->toBeFalse()
         ->and($resolved['modules']['reviews']['has_access'])->toBeTrue()
-        ->and($resolved['modules']['wishlist']['has_access'])->toBeTrue()
+        ->and($resolved['modules']['wishlist']['has_access'])->toBeFalse()
         ->and($resolved['modules']['settings']['has_access'])->toBeTrue();
 });
 
-test('resolver reports locked module with upgrade prompt eligibility', function () {
+test('resolver reports addon-gated module with upgrade prompt eligibility', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Direct Tier Tenant',
         'slug' => 'direct-tier-tenant',
@@ -38,16 +38,16 @@ test('resolver reports locked module with upgrade prompt eligibility', function 
 
     TenantAccessProfile::query()->create([
         'tenant_id' => $tenant->id,
-        'plan_key' => 'direct_starter',
+        'plan_key' => 'starter',
         'operating_mode' => 'direct',
         'source' => 'test',
     ]);
 
-    $shopify = app(TenantModuleAccessResolver::class)->module($tenant->id, 'shopify');
+    $sms = app(TenantModuleAccessResolver::class)->module($tenant->id, 'sms');
 
-    expect($shopify['has_access'])->toBeFalse()
-        ->and($shopify['ui_state'])->toBe('locked')
-        ->and($shopify['upgrade_prompt_eligible'])->toBeTrue();
+    expect($sms['has_access'])->toBeFalse()
+        ->and($sms['ui_state'])->toBe('locked')
+        ->and($sms['upgrade_prompt_eligible'])->toBeTrue();
 });
 
 test('resolver grants addon-enabled module access', function () {
@@ -58,14 +58,14 @@ test('resolver grants addon-enabled module access', function () {
 
     TenantAccessProfile::query()->create([
         'tenant_id' => $tenant->id,
-        'plan_key' => 'direct_starter',
+        'plan_key' => 'starter',
         'operating_mode' => 'direct',
         'source' => 'test',
     ]);
 
     TenantAccessAddon::query()->create([
         'tenant_id' => $tenant->id,
-        'addon_key' => 'ai_brain',
+        'addon_key' => 'future_niche_modules',
         'enabled' => true,
         'source' => 'test',
     ]);
@@ -73,7 +73,7 @@ test('resolver grants addon-enabled module access', function () {
     $ai = app(TenantModuleAccessResolver::class)->module($tenant->id, 'ai');
 
     expect($ai['has_access'])->toBeTrue()
-        ->and($ai['access_sources'])->toContain('addon:ai_brain')
+        ->and($ai['access_sources'])->toContain('addon:future_niche_modules')
         ->and($ai['ui_state'])->toBe('coming_soon');
 });
 
@@ -96,7 +96,7 @@ test('resolver keeps setup state distinct from entitlement access', function () 
         ->and($customers['ui_state'])->toBe('setup_needed');
 });
 
-test('resolver supports non shopify operating mode plans', function () {
+test('resolver preserves non-shopify operating mode while using canonical plan mapping', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Service Business',
         'slug' => 'service-business',
@@ -111,13 +111,13 @@ test('resolver supports non shopify operating mode plans', function () {
 
     $resolved = app(TenantModuleAccessResolver::class)->resolveForTenant($tenant->id, [
         'onboarding',
-        'shopify',
+        'sms',
     ]);
 
     expect($resolved['operating_mode'])->toBe('direct')
+        ->and($resolved['plan_key'])->toBe('starter')
         ->and($resolved['modules']['onboarding']['has_access'])->toBeTrue()
         ->and($resolved['modules']['onboarding']['ui_state'])->toBe('setup_needed')
-        ->and($resolved['modules']['shopify']['has_access'])->toBeFalse()
-        ->and($resolved['modules']['shopify']['ui_state'])->toBe('locked');
+        ->and($resolved['modules']['sms']['has_access'])->toBeFalse()
+        ->and($resolved['modules']['sms']['ui_state'])->toBe('locked');
 });
-

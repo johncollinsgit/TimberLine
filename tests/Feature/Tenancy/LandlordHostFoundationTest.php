@@ -7,14 +7,16 @@ function landlordHostForTests(): string
 {
     $host = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
 
-    return is_string($host) && $host !== '' ? strtolower($host) : 'app.fireforgetech.com';
+    return is_string($host) && $host !== '' ? strtolower($host) : 'forestrybackstage.com';
 }
 
 function tenantHostForTests(string $slug): string
 {
     $landlordHost = landlordHostForTests();
-    $baseHost = preg_replace('/^app\./', '', $landlordHost);
-    $baseHost = is_string($baseHost) && trim($baseHost) !== '' ? strtolower($baseHost) : 'fireforgetech.com';
+    $baseHost = str_starts_with($landlordHost, 'app.')
+        ? preg_replace('/^app\./', '', $landlordHost)
+        : 'forestrybackstage.com';
+    $baseHost = is_string($baseHost) && trim($baseHost) !== '' ? strtolower($baseHost) : 'forestrybackstage.com';
 
     return strtolower(trim($slug)).'.'.$baseHost;
 }
@@ -50,6 +52,7 @@ test('landlord host grants authorized operator access to landlord routes', funct
 
     foreach ([
         "http://{$landlordHost}/landlord",
+        "http://{$landlordHost}/landlord/commercial",
         "http://{$landlordHost}/landlord/tenants",
         "http://{$landlordHost}/landlord/tenants/{$tenant->id}",
     ] as $url) {
@@ -113,6 +116,7 @@ test('tenant hosts cannot access landlord host routes', function (): void {
 
     foreach ([
         "http://{$tenantHost}/landlord",
+        "http://{$tenantHost}/landlord/commercial",
         "http://{$tenantHost}/landlord/tenants",
         "http://{$tenantHost}/landlord/tenants/{$tenant->id}",
     ] as $url) {
@@ -138,6 +142,7 @@ test('non landlord authorized users are forbidden on landlord host routes', func
 
     foreach ([
         "http://{$landlordHost}/landlord",
+        "http://{$landlordHost}/landlord/commercial",
         "http://{$landlordHost}/landlord/tenants",
         "http://{$landlordHost}/landlord/tenants/{$tenant->id}",
     ] as $url) {

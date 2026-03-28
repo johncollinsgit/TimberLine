@@ -5,6 +5,8 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantCommercialOverride;
+use App\Models\TenantModuleState;
 
 beforeEach(function () {
     $this->withoutVite();
@@ -12,7 +14,7 @@ beforeEach(function () {
 
 test('promo page renders config-driven headline and pricing content', function () {
     config()->set('product_surfaces.promo.headline', 'Testable Platform Headline');
-    config()->set('product_surfaces.plans.cards.shopify_proof_of_concept.price_display', 'From $777/mo');
+    config()->set('product_surfaces.plans.cards.starter.price_display', 'From $777/mo');
 
     $this->get(route('platform.promo'))
         ->assertOk()
@@ -25,7 +27,7 @@ test('contact placeholder page renders configured channels', function () {
     $this->get(route('platform.contact'))
         ->assertOk()
         ->assertSeeText('Contact Fire Forge Tech')
-        ->assertSee('mailto:sales@fireforgetech.com?subject=Platform%20Demo%20Request', false)
+        ->assertSee('mailto:sales@forestrybackstage.com?subject=Platform%20Demo%20Request', false)
         ->assertSeeText('Back to Product Overview');
 });
 
@@ -37,6 +39,8 @@ test('embedded start-here page renders onboarding checklist surface', function (
     $response->assertOk()
         ->assertSeeText('Start Here')
         ->assertSeeText('Setup Checklist')
+        ->assertSeeText('Label source order: tenant override')
+        ->assertSeeText('entitlements default')
         ->assertSee('data-onboarding-surface="true"', false)
         ->assertSee('data-module-checklist="true"', false)
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
@@ -59,7 +63,7 @@ test('embedded plans page renders tenant-aware plan and addon state', function (
 
     TenantAccessAddon::query()->create([
         'tenant_id' => $tenant->id,
-        'addon_key' => 'integrations_pack',
+        'addon_key' => 'sms',
         'enabled' => true,
         'source' => 'test',
     ]);
@@ -70,13 +74,165 @@ test('embedded plans page renders tenant-aware plan and addon state', function (
 
     $response->assertOk()
         ->assertSeeText('Current Access Profile')
-        ->assertSeeText('Direct Starter')
+        ->assertSeeText('Starter')
         ->assertSeeText('Add-ons')
-        ->assertSeeText('Integrations Pack')
+        ->assertSeeText('SMS')
+        ->assertSeeText('Commercial configuration is active, but billing lifecycle remains inactive in this phase')
         ->assertSeeText('Locked Modules')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'plans' && ! empty($item['active']));
         });
+});
+
+test('assignment and label overrides propagate across start plans and integrations pages', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Propagation Tenant',
+        'slug' => 'propagation-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'pro',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    TenantCommercialOverride::query()->create([
+        'tenant_id' => $tenant->id,
+        'template_key' => 'law',
+        'display_labels' => [
+            'rewards' => 'Forest Credits',
+        ],
+    ]);
+
+    TenantModuleState::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'rewards',
+        'enabled_override' => false,
+        'setup_status' => 'configured',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · law')
+        ->assertSeeText('Labels · tenant override')
+        ->assertSeeText('Forest Credits')
+        ->assertSeeText('Locked Modules');
+
+    $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Current Access Profile')
+        ->assertSeeText('Pro')
+        ->assertSeeText('Template · law')
+        ->assertSeeText('Labels · tenant override')
+        ->assertSeeText('Forest Credits');
+
+    $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · law')
+        ->assertSeeText('Labels · tenant override')
+        ->assertSeeText('No live connector sync runs from this page yet.')
+        ->assertSeeText('This page is intentionally read-only and placeholder-first: no connector sync/OAuth writes and no billing lifecycle actions run here.')
+        ->assertSee('data-integrations-surface="true"', false);
+});
+
+test('commercialization pages use predictable entitlements fallback when no template override exists', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Fallback Tenant',
+        'slug' => 'fallback-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · none')
+        ->assertSeeText('Labels · entitlements default')
+        ->assertSeeText('Verify customer + Rewards operations');
+
+    $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Growth')
+        ->assertSeeText('Template · none')
+        ->assertSeeText('Labels · entitlements default');
+
+    $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · none')
+        ->assertSeeText('Labels · entitlements default');
+});
+
+test('commercialization pages ignore malformed label overrides and keep deterministic label source fallback', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Malformed Label Tenant',
+        'slug' => 'malformed-label-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    TenantCommercialOverride::query()->create([
+        'tenant_id' => $tenant->id,
+        'template_key' => 'law',
+        // Invalid shape for label overrides: should not be treated as tenant override.
+        'display_labels' => ['Forest Credits'],
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · law')
+        ->assertSeeText('Labels · template default')
+        ->assertSeeText('Client Credits');
+
+    $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · law')
+        ->assertSeeText('Labels · template default')
+        ->assertSeeText('Client Credits');
+
+    $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · law')
+        ->assertSeeText('Labels · template default')
+        ->assertSeeText('Client Credits');
+
+    TenantCommercialOverride::query()
+        ->where('tenant_id', $tenant->id)
+        ->update([
+            'template_key' => null,
+            'display_labels' => ['Forest Credits'],
+        ]);
+
+    $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · none')
+        ->assertSeeText('Labels · entitlements default')
+        ->assertSeeText('Verify customer + Rewards operations');
+
+    $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · none')
+        ->assertSeeText('Labels · entitlements default');
+
+    $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Template · none')
+        ->assertSeeText('Labels · entitlements default');
 });
 
 test('embedded integrations page renders placeholder-first cards and categories', function () {
@@ -135,9 +291,9 @@ test('embedded integrations page derives locked and coming soon states from enti
     $response = $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
-        ->assertSeeText('Direct Starter')
+        ->assertSeeText('Starter')
         ->assertSeeInOrder([
-            'data-integration-key="shopify_orders"',
+            'data-integration-key="sms_gateway"',
             'data-integration-state="locked"',
         ], false)
         ->assertSeeInOrder([
@@ -147,9 +303,9 @@ test('embedded integrations page derives locked and coming soon states from enti
         ->assertSee('href="/shopify/app/plans"', false)
         ->assertSee('data-integration-cta-state="locked"', false)
         ->assertSeeText('Upgrade to unlock')
-        ->assertSeeText('Shopify connector guidance is available under the current proof-of-concept access profile.')
-        ->assertSee('data-integration-card-status="shopify_orders"', false)
-        ->assertSee('data-integration-card-source="shopify_orders"', false)
+        ->assertSeeText('SMS access follows tenant entitlements and provider readiness configuration.')
+        ->assertSee('data-integration-card-status="sms_gateway"', false)
+        ->assertSee('data-integration-card-source="sms_gateway"', false)
         ->assertSeeText('Source: Plan entitlement')
         ->assertSee('data-integration-cta-state="coming_soon"', false)
         ->assertSeeText('Coming soon')

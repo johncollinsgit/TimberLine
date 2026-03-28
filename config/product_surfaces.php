@@ -12,7 +12,7 @@ return [
             ],
             [
                 'title' => 'Activate first-party modules',
-                'description' => 'Run Candle Cash, birthdays, reviews, and wishlist from canonical services and shared identity records.',
+                'description' => 'Run loyalty/rewards, birthdays, reviews, and wishlist from canonical services and shared identity records.',
             ],
             [
                 'title' => 'Scale with entitlements',
@@ -20,9 +20,9 @@ return [
             ],
         ],
         'plan_order' => [
-            'shopify_proof_of_concept',
-            'shopify_growth',
-            'direct_starter',
+            'starter',
+            'growth',
+            'pro',
         ],
         'ctas' => [
             'install' => [
@@ -45,7 +45,7 @@ return [
         'welcome_title' => 'Start Here',
         'welcome_body' => 'This workspace combines access profile, module setup state, and upgrade cues so teams can activate live modules first and track roadmap modules separately.',
         'orientation_points' => [
-            'Shopify proof-of-concept functionality remains live and unchanged while onboarding surfaces expand.',
+            'Shopify flagship functionality remains live and unchanged while onboarding surfaces expand.',
             'Module state comes from tenant entitlements plus setup status, not ad hoc page-level conditionals.',
             'Locked and coming-soon modules stay visible for planning, but do not pretend to be complete.',
         ],
@@ -68,14 +68,14 @@ return [
         ],
         'recommended_actions' => [
             [
-                'title' => 'Verify customer + rewards operations',
-                'description' => 'Confirm customers, rewards, and birthdays are configured for your current tenant context.',
+                'title' => 'Verify customer + {{rewards_label}} operations',
+                'description' => 'Confirm customers, {{rewards_label}}, and {{birthdays_label}} are configured for your current tenant context.',
                 'href' => '/shopify/app/customers/manage',
                 'module_key' => 'customers',
             ],
             [
-                'title' => 'Tune Candle Cash program settings',
-                'description' => 'Review earn/redeem rules and birthday behavior in the embedded rewards surfaces.',
+                'title' => 'Tune {{rewards_label}} settings',
+                'description' => 'Review earn/redeem rules and birthday behavior in the embedded {{rewards_label}} surfaces.',
                 'href' => '/shopify/app/rewards',
                 'module_key' => 'rewards',
             ],
@@ -102,79 +102,79 @@ return [
         'headline' => 'Plans & Add-ons',
         'subtitle' => 'Informational access profile view built from tenant entitlements and module state. Billing writes are intentionally deferred.',
         'plan_order' => [
-            'shopify_proof_of_concept',
-            'shopify_growth',
-            'direct_starter',
+            'starter',
+            'growth',
+            'pro',
         ],
         'cards' => [
-            'shopify_proof_of_concept' => [
-                'name' => 'Shopify Proof of Concept',
+            'starter' => [
+                'name' => 'Starter',
                 'price_display' => 'From $149/mo',
-                'summary' => 'Protect and productize the current Shopify-first module set while tenant hardening continues.',
+                'summary' => 'Core platform foundation with reviews, lead capture, and baseline diagnostics for one store/channel.',
                 'highlights' => [
-                    'Storefront proxy + embedded admin continuity',
-                    'Candle Cash + birthdays + reviews + wishlist foundations',
-                    'Entitlement-aware setup and upgrade visibility',
+                    'Core platform + reviews + intake/lead capture',
+                    'Basic moderation and diagnostics',
+                    '1 store/channel included',
                 ],
                 'cta' => [
                     'label' => 'Install / Reinstall',
                     'href' => '/shopify/reinstall/retail',
                 ],
             ],
-            'shopify_growth' => [
-                'name' => 'Shopify Growth',
+            'growth' => [
+                'name' => 'Growth',
                 'price_display' => 'From $249/mo',
-                'summary' => 'For merchants expanding reporting and lifecycle operations with stronger module governance.',
+                'summary' => 'Adds loyalty/rewards, birthdays, and eligibility for marketing/bulk email operations.',
                 'highlights' => [
-                    'Expanded campaigns and reporting posture',
+                    'Loyalty/rewards + birthday lifecycle',
+                    'Campaign and email-readiness expansion',
                     'Add-on ready packaging model',
-                    'Tenant-aware module setup tracking',
                 ],
                 'cta' => [
                     'label' => 'Request Upgrade',
                     'href' => '/platform/contact?intent=upgrade',
                 ],
             ],
-            'direct_starter' => [
-                'name' => 'Direct Starter',
-                'price_display' => 'From $199/mo',
-                'summary' => 'Future-facing track for businesses onboarding without Shopify while reusing canonical core services.',
+            'pro' => [
+                'name' => 'Pro',
+                'price_display' => 'From $399/mo',
+                'summary' => 'Highest standard tier with wishlist and advanced diagnostics/reporting/export troubleshooting.',
                 'highlights' => [
-                    'Shared core modules without Shopify dependency',
-                    'Upload/import and integration-ready direction',
-                    'Roadmap toward direct tenant onboarding',
+                    'Wishlist module included',
+                    'Advanced diagnostics and exports',
+                    'No bundled support tier or custom-work bundle',
                 ],
                 'cta' => [
-                    'label' => 'Book Discovery',
-                    'href' => '/platform/contact?intent=direct',
+                    'label' => 'Book Pro Review',
+                    'href' => '/platform/contact?intent=pro',
                 ],
             ],
         ],
         'addons' => [
-            'advanced_reporting' => [
-                'name' => 'Advanced Reporting',
+            'referrals' => [
+                'name' => 'Referrals',
+                'price_display' => '+$79/mo',
+                'summary' => 'Referral workflow packaging as launch-relevant pieces graduate from placeholder state.',
+            ],
+            'sms' => [
+                'name' => 'SMS',
                 'price_display' => '+$99/mo',
-                'summary' => 'Extended reporting depth and operational diagnostics overlays.',
+                'summary' => 'Tenant-scoped SMS channel package with Twilio readiness and diagnostics context.',
             ],
-            'referrals_pack' => [
-                'name' => 'Referrals Pack',
-                'price_display' => '+$79/mo',
-                'summary' => 'Referral configuration and reporting surfaces as they graduate from placeholders.',
+            'additional_channels' => [
+                'name' => 'Additional Stores/Channels',
+                'price_display' => '+$59/mo per channel',
+                'summary' => 'Starter includes one store/channel. Additional channels are separately priced add-ons.',
             ],
-            'vip_pack' => [
-                'name' => 'VIP Pack',
-                'price_display' => '+$79/mo',
-                'summary' => 'VIP and notifications lifecycle controls as modules become production-ready.',
-            ],
-            'integrations_pack' => [
-                'name' => 'Integrations Pack',
+            'bulk_email_marketing' => [
+                'name' => 'Bulk Marketing Email',
                 'price_display' => '+$129/mo',
-                'summary' => 'Connector expansion support for QuickBooks, Wix, and future mobile links.',
+                'summary' => 'Bulk/marketing email package remains separately controlled and is not auto-activated.',
             ],
-            'ai_brain' => [
-                'name' => 'AI Brain',
-                'price_display' => '+$249/mo',
-                'summary' => 'Future premium intelligence layer on top of structured module and event data.',
+            'future_niche_modules' => [
+                'name' => 'Future Niche Modules',
+                'price_display' => 'Custom',
+                'summary' => 'Reserved placeholder for future vertical packages without forking the core architecture.',
             ],
         ],
         'upgrade_ctas' => [
@@ -218,7 +218,7 @@ return [
                 'availability' => 'available',
                 'fallback_mode' => 'manual_import',
                 'fallback_href' => '/shopify/app/start',
-                'plan_requirement' => 'shopify_proof_of_concept',
+                'plan_requirement' => 'starter',
                 'ctas' => [
                     'connect_label' => 'Connect (Placeholder)',
                     'manual_label' => 'Continue with manual intake',
@@ -249,7 +249,7 @@ return [
                     'notes' => [
                         'This surface does not trigger any connector API writes in this phase.',
                     ],
-                    'upgrade_message' => 'Shopify connector guidance is available under the current proof-of-concept access profile.',
+                    'upgrade_message' => 'Shopify connector guidance is available under Starter/Growth/Pro access profiles.',
                 ],
             ],
             'square' => [
@@ -261,7 +261,7 @@ return [
                 'availability' => 'available',
                 'fallback_mode' => 'csv_upload',
                 'fallback_href' => '/shopify/app/start',
-                'plan_requirement' => 'shopify_growth',
+                'plan_requirement' => 'growth',
                 'ctas' => [
                     'connect_label' => 'Connect (Placeholder)',
                     'manual_label' => 'Upload CSV fallback',
@@ -304,7 +304,7 @@ return [
                 'availability' => 'available',
                 'fallback_mode' => 'manual_import',
                 'fallback_href' => '/shopify/app/settings',
-                'plan_requirement' => 'shopify_growth',
+                'plan_requirement' => 'bulk_email_marketing',
                 'ctas' => [
                     'connect_label' => 'Connect (Placeholder)',
                     'manual_label' => 'Configure manually',
@@ -346,7 +346,7 @@ return [
                 'availability' => 'available',
                 'fallback_mode' => 'none',
                 'fallback_href' => null,
-                'plan_requirement' => 'shopify_proof_of_concept',
+                'plan_requirement' => 'sms',
                 'ctas' => [
                     'connect_label' => 'Configure in Settings',
                     'manual_label' => 'Continue without SMS',
@@ -388,7 +388,7 @@ return [
                 'availability' => 'coming_soon',
                 'fallback_mode' => 'csv_upload',
                 'fallback_href' => '/shopify/app/start',
-                'plan_requirement' => 'integrations_pack',
+                'plan_requirement' => 'additional_channels',
                 'ctas' => [
                     'connect_label' => 'Connect (Placeholder)',
                     'manual_label' => 'Upload accounting CSV',
@@ -431,7 +431,7 @@ return [
                 'availability' => 'available',
                 'fallback_mode' => 'csv_upload',
                 'fallback_href' => '/shopify/app/start',
-                'plan_requirement' => 'direct_starter',
+                'plan_requirement' => 'starter',
                 'ctas' => [
                     'connect_label' => 'Open import flow (Placeholder)',
                     'manual_label' => 'Upload CSV',
@@ -474,7 +474,7 @@ return [
                 'availability' => 'available',
                 'fallback_mode' => 'manual_import',
                 'fallback_href' => '/shopify/app/start',
-                'plan_requirement' => 'direct_starter',
+                'plan_requirement' => 'starter',
                 'ctas' => [
                     'connect_label' => 'Open workflow (Placeholder)',
                     'manual_label' => 'Use manual intake',
@@ -518,7 +518,7 @@ return [
                 'availability' => 'coming_soon',
                 'fallback_mode' => 'none',
                 'fallback_href' => null,
-                'plan_requirement' => 'integrations_pack',
+                'plan_requirement' => 'additional_channels',
                 'ctas' => [
                     'connect_label' => 'Connect (Placeholder)',
                     'manual_label' => 'Continue without mobile',
@@ -561,18 +561,18 @@ return [
         'channels' => [
             [
                 'label' => 'Demo request',
-                'value' => 'sales@fireforgetech.com',
-                'href' => 'mailto:sales@fireforgetech.com?subject=Platform%20Demo%20Request',
+                'value' => 'sales@forestrybackstage.com',
+                'href' => 'mailto:sales@forestrybackstage.com?subject=Platform%20Demo%20Request',
             ],
             [
                 'label' => 'Upgrade request',
-                'value' => 'upgrades@fireforgetech.com',
-                'href' => 'mailto:upgrades@fireforgetech.com?subject=Plan%20Upgrade%20Request',
+                'value' => 'upgrades@forestrybackstage.com',
+                'href' => 'mailto:upgrades@forestrybackstage.com?subject=Plan%20Upgrade%20Request',
             ],
             [
                 'label' => 'General contact',
-                'value' => 'hello@fireforgetech.com',
-                'href' => 'mailto:hello@fireforgetech.com?subject=Platform%20Inquiry',
+                'value' => 'hello@forestrybackstage.com',
+                'href' => 'mailto:hello@forestrybackstage.com?subject=Platform%20Inquiry',
             ],
         ],
     ],

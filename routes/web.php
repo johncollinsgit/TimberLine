@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
@@ -101,7 +102,7 @@ Route::get('/', function (
     return redirect()->route('login');
 })->name('home');
 
-$landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.fireforgetech.com')));
+$landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.forestrybackstage.com')));
 
 if ($landlordHost !== '') {
     Route::domain($landlordHost)
@@ -110,10 +111,34 @@ if ($landlordHost !== '') {
         ->group(function (): void {
             Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
                 ->name('dashboard');
+            Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
+                ->name('commercial.index');
+            Route::post('/landlord/commercial/catalog/{type}/upsert', [LandlordCommercialConfigurationController::class, 'upsertCatalogEntry'])
+                ->name('commercial.catalog.upsert');
+            Route::post('/landlord/commercial/templates/{entryKey}/duplicate', [LandlordCommercialConfigurationController::class, 'duplicateTemplate'])
+                ->name('commercial.templates.duplicate');
+            Route::post('/landlord/commercial/templates/{entryKey}/state', [LandlordCommercialConfigurationController::class, 'setTemplateState'])
+                ->name('commercial.templates.state');
+            Route::post('/landlord/commercial/templates/reorder', [LandlordCommercialConfigurationController::class, 'reorderTemplates'])
+                ->name('commercial.templates.reorder');
             Route::get('/landlord/tenants', [LandlordTenantDirectoryController::class, 'index'])
                 ->name('tenants.index');
             Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
                 ->name('tenants.show');
+            Route::post('/landlord/tenants/{tenant}/commercial/plan', [LandlordCommercialConfigurationController::class, 'assignTenantPlan'])
+                ->name('tenants.commercial.plan');
+            Route::post('/landlord/tenants/{tenant}/commercial/override', [LandlordCommercialConfigurationController::class, 'updateTenantCommercialOverride'])
+                ->name('tenants.commercial.override');
+            Route::post('/landlord/tenants/{tenant}/commercial/modules/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleState'])
+                ->name('tenants.commercial.modules.update');
+            Route::post('/landlord/tenants/{tenant}/commercial/addons/{addonKey}', [LandlordCommercialConfigurationController::class, 'updateTenantAddonState'])
+                ->name('tenants.commercial.addons.update');
+            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/customer-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeCustomer'])
+                ->name('tenants.commercial.billing.stripe.customer-sync');
+            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-prep', [LandlordCommercialConfigurationController::class, 'syncTenantStripeSubscriptionPrep'])
+                ->name('tenants.commercial.billing.stripe.subscription-prep');
+            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-live-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeLiveSubscription'])
+                ->name('tenants.commercial.billing.stripe.subscription-live-sync');
         });
 }
 

@@ -14,12 +14,22 @@
         $payload = is_array($plansPayload ?? null) ? $plansPayload : [];
         $content = is_array($payload['content'] ?? null) ? $payload['content'] : [];
         $currentPlan = is_array($payload['current_plan'] ?? null) ? $payload['current_plan'] : ['label' => 'Unknown', 'track' => 'shopify', 'operating_mode' => 'shopify'];
+        $commercialContext = is_array($payload['commercial_context'] ?? null) ? $payload['commercial_context'] : [];
         $planCards = is_array($payload['plan_cards'] ?? null) ? $payload['plan_cards'] : [];
         $addonCards = is_array($payload['addon_cards'] ?? null) ? $payload['addon_cards'] : [];
         $currentPlanModules = is_array($payload['current_plan_modules'] ?? null) ? $payload['current_plan_modules'] : [];
         $lockedModules = is_array($payload['locked_modules'] ?? null) ? $payload['locked_modules'] : [];
         $addOnCapableModules = is_array($payload['add_on_capable_modules'] ?? null) ? $payload['add_on_capable_modules'] : [];
         $upgradeCtas = is_array($content['upgrade_ctas'] ?? null) ? $content['upgrade_ctas'] : [];
+        $templateKey = is_string($commercialContext['template_key'] ?? null) ? $commercialContext['template_key'] : null;
+        $labelSource = (string) ($commercialContext['label_source'] ?? 'entitlements_default');
+        $labelSourceDisplay = match ($labelSource) {
+            'tenant_override' => 'tenant override',
+            'template_default' => 'template default',
+            default => 'entitlements default',
+        };
+        $templateMissing = (bool) ($commercialContext['template_missing'] ?? false);
+        $contextLabels = is_array($commercialContext['labels'] ?? null) ? $commercialContext['labels'] : [];
     @endphp
 
     <style>
@@ -181,7 +191,21 @@
                 <span class="plans-pill">Plan · {{ $currentPlan['label'] ?? 'Unknown' }}</span>
                 <span class="plans-pill">Track · {{ strtoupper((string) ($currentPlan['track'] ?? 'shopify')) }}</span>
                 <span class="plans-pill">Mode · {{ strtoupper((string) ($currentPlan['operating_mode'] ?? 'shopify')) }}</span>
+                <span class="plans-pill">Template · {{ $templateKey ?: 'none' }}</span>
+                <span class="plans-pill">Labels · {{ $labelSourceDisplay }}</span>
             </div>
+            @if($templateMissing)
+                <p class="plans-copy">Template defaults were not found for this assignment, so entitlement labels are being used as fallback.</p>
+            @elseif($labelSource === 'entitlements_default')
+                <p class="plans-copy">No label overrides are active for this tenant, so entitlement defaults are in effect.</p>
+            @endif
+            <p class="plans-copy">
+                Effective labels:
+                {{ $contextLabels['rewards'] ?? 'Rewards' }} / {{ $contextLabels['birthdays'] ?? 'Birthdays / Lifecycle' }}.
+            </p>
+            <p class="plans-copy">
+                Commercial configuration is active, but billing lifecycle remains inactive in this phase (no checkout or subscription mutation).
+            </p>
             <div class="plans-meta">
                 @if(is_array($upgradeCtas['primary'] ?? null) && filled($upgradeCtas['primary']['href'] ?? null))
                     <a class="plans-link" href="{{ $upgradeCtas['primary']['href'] }}">{{ $upgradeCtas['primary']['label'] ?? 'Request upgrade' }}</a>

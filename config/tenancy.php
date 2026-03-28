@@ -16,14 +16,14 @@ if (is_string($hostMapRaw) && trim($hostMapRaw) !== '') {
 
 $flagshipHosts = array_values(array_filter(array_map(
     static fn (string $host): string => strtolower(trim($host)),
-    explode(',', (string) env('AUTH_FLAGSHIP_HOSTS', 'backstage.theforestrystudio.com,theforestrystudio.com'))
+    explode(',', (string) env('AUTH_FLAGSHIP_HOSTS', 'app.forestrybackstage.com,forestrybackstage.com'))
 )));
 
 $landlordHosts = array_values(array_filter(array_map(
     static fn (string $host): string => strtolower(trim($host)),
-    explode(',', (string) env('TENANCY_LANDLORD_HOSTS', 'app.fireforgetech.com'))
+    explode(',', (string) env('TENANCY_LANDLORD_HOSTS', 'app.forestrybackstage.com'))
 )));
-$landlordPrimaryHost = $landlordHosts[0] ?? 'app.fireforgetech.com';
+$landlordPrimaryHost = $landlordHosts[0] ?? 'app.forestrybackstage.com';
 $landlordOperatorRoles = array_values(array_filter(array_map(
     static fn (string $role): string => strtolower(trim($role)),
     explode(',', (string) env('TENANCY_LANDLORD_OPERATOR_ROLES', 'admin'))

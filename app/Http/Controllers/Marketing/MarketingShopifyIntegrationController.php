@@ -545,6 +545,9 @@ class MarketingShopifyIntegrationController extends Controller
         $flow = (string) ($data['flow'] ?? 'direct');
         $shopifyCustomerId = trim((string) ($data['shopify_customer_id'] ?? ''));
         $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('consent_request');
+        }
         $sourceId = $this->identityService->deterministicSourceId(
             prefix: 'shopify_widget_optin',
             email: (string) ($data['email'] ?? ''),
@@ -1008,6 +1011,11 @@ class MarketingShopifyIntegrationController extends Controller
             'source' => ['nullable', 'string', 'max:120'],
         ]);
 
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('birthday_capture');
+        }
+
         $resolved = $this->resolveProfile($request, scope: 'birthday_capture', allowCreate: true, allowBody: true);
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_birthday_capture', [
@@ -1110,6 +1118,11 @@ class MarketingShopifyIntegrationController extends Controller
         BirthdayRewardActivationService $activationService
     ): JsonResponse
     {
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('birthday_claim');
+        }
+
         $resolved = $this->resolveProfile($request, scope: 'birthday_claim', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {
             return $this->identityErrorResponse($resolved['status'], $request);
@@ -1497,6 +1510,11 @@ class MarketingShopifyIntegrationController extends Controller
             'shopify_customer_id' => ['nullable', 'string', 'max:120'],
         ]);
 
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('candle_cash_task_submit');
+        }
+
         $resolved = $this->resolveProfile($request, scope: 'candle_cash_task_submit', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {
             return $this->identityErrorResponse((string) $resolved['status'], $request);
@@ -1582,6 +1600,11 @@ class MarketingShopifyIntegrationController extends Controller
             'phone' => ['nullable', 'string', 'max:40'],
             'shopify_customer_id' => ['nullable', 'string', 'max:120'],
         ]);
+
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('google_business_review_start');
+        }
 
         $resolved = $this->resolveProfile($request, scope: 'google_business_review_start', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {

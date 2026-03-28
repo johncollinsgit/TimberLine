@@ -362,6 +362,8 @@ test('candle club membership is recognized from the live subscription product or
 test('email signup reward is awarded automatically on verified opt in without revoking sms consent', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Eden',
@@ -381,16 +383,17 @@ test('email signup reward is awarded automatically on verified opt in without re
         'flow' => 'direct',
     ];
 
+    $query = ['shop' => 'timberline.example.myshopify.com'];
     $headers = stage10SignedHeaders(
         'POST',
         '/shopify/marketing/v1/consent/request',
-        [],
+        $query,
         json_encode($payload),
         'stage10-secret'
     );
 
     $this->withHeaders($headers)
-        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->postJson(route('marketing.shopify.v1.consent.request', $query), $payload)
         ->assertOk()
         ->assertJsonPath('data.accepts_email_marketing', true)
         ->assertJsonPath('data.accepts_sms_marketing', true);
@@ -408,6 +411,8 @@ test('email signup reward is awarded automatically on verified opt in without re
 test('sms signup reward is awarded automatically once for the same verified opt in event', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     $payload = [
         'phone' => '5554441234',
@@ -417,22 +422,23 @@ test('sms signup reward is awarded automatically once for the same verified opt 
         'flow' => 'direct',
     ];
 
+    $query = ['shop' => 'timberline.example.myshopify.com'];
     $headers = stage10SignedHeaders(
         'POST',
         '/shopify/marketing/v1/consent/request',
-        [],
+        $query,
         json_encode($payload),
         'stage10-secret'
     );
 
     $firstResponse = $this->withHeaders($headers)
-        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->postJson(route('marketing.shopify.v1.consent.request', $query), $payload)
         ->assertOk()
         ->assertJsonPath('data.state', 'sms_confirmed')
         ->json();
 
     $this->withHeaders($headers)
-        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->postJson(route('marketing.shopify.v1.consent.request', $query), $payload)
         ->assertOk()
         ->assertJsonPath('data.state', 'sms_confirmed');
 

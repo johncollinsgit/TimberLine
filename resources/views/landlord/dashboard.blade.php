@@ -37,12 +37,20 @@
                     <h2 class="text-lg font-semibold text-white">Recent Tenants</h2>
                     <p class="mt-1 text-sm text-emerald-50/70">Most recently created tenants.</p>
                 </div>
-                <a
-                    href="{{ route('landlord.tenants.index') }}"
-                    class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90"
-                >
-                    Open Tenant Directory
-                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                    <a
+                        href="{{ route('landlord.commercial.index') }}"
+                        class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90"
+                    >
+                        Commercial Config
+                    </a>
+                    <a
+                        href="{{ route('landlord.tenants.index') }}"
+                        class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90"
+                    >
+                        Open Tenant Directory
+                    </a>
+                </div>
             </div>
 
             <div class="mt-4 overflow-hidden rounded-2xl border border-emerald-200/10">

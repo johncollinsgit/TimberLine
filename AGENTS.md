@@ -33,6 +33,26 @@ Dual-track product guardrail:
 - Broader Business Systems Track is an expansion path, not a rewrite.
 - Do not weaken currently working Shopify proof-of-concept flows while building broader platform direction.
 
+Current host and execution reality (required):
+- Production host direction:
+  - public: `forestrybackstage.com`
+  - landlord: `app.forestrybackstage.com`
+  - tenant pattern: `<slug>.forestrybackstage.com`
+- Landlord routes are host-locked.
+- Landlord tenant directory remains read-only; landlord commercial writes are limited to safe configuration scope (`/landlord/commercial`).
+- Current public commercial model:
+  - tiers: `Starter`, `Growth`, `Pro`
+  - add-ons: `referrals`, `sms`, `additional_channels`, `bulk_email_marketing`, `future_niche_modules`
+  - templates: `Candle`, `Law`, `Landscaping`, `Apparel`, `Generic`
+- Strict near-term order:
+  1. Candle Cash verified live and trustworthy
+  2. email reliability fixed for launch-critical reward/customer flows
+  3. only then broader expansion
+- Do not start yet:
+  - broad multi-tenant refactors
+  - Shopify App Store packaging
+  - speculative AI automation work
+
 Feature classification rules (required for every new major feature):
 - Classify as exactly one:
   - Shopify-only

@@ -4,6 +4,7 @@ use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingCampaignVariant;
@@ -278,6 +279,81 @@ test('email execution records unsupported tenant provider context without mislab
         ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('tenant')
         ->and((string) data_get($delivery->metadata, 'provider_readiness_status'))->toBe('unsupported')
         ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeFalse();
+});
+
+test('email execution resolves tenant provider context from canonical external profile when profile tenant is missing', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'External Context Tenant',
+        'slug' => 'external-context-tenant',
+    ]);
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'email_provider' => 'custom',
+        'email_enabled' => true,
+        'from_name' => 'Custom Sender',
+        'from_email' => 'custom@example.test',
+        'provider_status' => 'not_configured',
+        'provider_config' => [
+            'driver' => 'custom-http',
+            'api_endpoint' => 'https://api.custom-email.test/send',
+        ],
+        'analytics_enabled' => true,
+    ]);
+
+    $campaign = MarketingCampaign::query()->create([
+        'name' => 'External Context Campaign',
+        'status' => 'active',
+        'channel' => 'email',
+    ]);
+
+    $variant = MarketingCampaignVariant::query()->create([
+        'campaign_id' => $campaign->id,
+        'name' => 'External Context Variant',
+        'message_text' => 'Hi {{first_name}}',
+        'status' => 'active',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => null,
+        'first_name' => 'Context',
+        'email' => 'context.target@example.com',
+        'normalized_email' => 'context.target@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify',
+        'store_key' => 'retail',
+        'external_customer_id' => 'shopify-customer-context-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'source_channels' => ['shopify'],
+        'synced_at' => now(),
+    ]);
+
+    $recipient = MarketingCampaignRecipient::query()->create([
+        'campaign_id' => $campaign->id,
+        'marketing_profile_id' => $profile->id,
+        'variant_id' => $variant->id,
+        'channel' => 'email',
+        'status' => 'approved',
+    ]);
+
+    $result = app(MarketingEmailExecutionService::class)->sendRecipient($recipient);
+    $delivery = MarketingEmailDelivery::query()->where('marketing_campaign_recipient_id', $recipient->id)->firstOrFail();
+
+    expect($result['outcome'])->toBe('failed')
+        ->and((string) $result['reason'])->toBe('provider_failure')
+        ->and((int) $delivery->tenant_id)->toBe($tenant->id)
+        ->and($delivery->provider)->toBe('custom')
+        ->and((string) data_get($delivery->metadata, 'provider_resolution_source'))->toBe('tenant')
+        ->and((string) data_get($delivery->metadata, 'provider_readiness_status'))->toBe('unsupported')
+        ->and((bool) data_get($delivery->metadata, 'provider_using_fallback_config'))->toBeFalse()
+        ->and((string) data_get($delivery->metadata, 'shopify_store_key'))->toBe('retail');
 });
 
 test('group direct email send records tenant-resolved unsupported provider context', function () {

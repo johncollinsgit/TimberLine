@@ -14,10 +14,20 @@
         $payload = is_array($integrationsPayload ?? null) ? $integrationsPayload : [];
         $content = is_array($payload['content'] ?? null) ? $payload['content'] : [];
         $plan = is_array($payload['plan'] ?? null) ? $payload['plan'] : ['label' => 'Unknown', 'track' => 'shopify', 'operating_mode' => 'shopify'];
+        $commercialContext = is_array($payload['commercial_context'] ?? null) ? $payload['commercial_context'] : [];
         $categories = is_array($payload['categories'] ?? null) ? $payload['categories'] : [];
         $counts = is_array($payload['counts'] ?? null) ? $payload['counts'] : ['total' => 0, 'connected' => 0, 'setup_needed' => 0, 'locked' => 0, 'coming_soon' => 0];
         $upgradeCta = is_array($content['upgrade_cta'] ?? null) ? $content['upgrade_cta'] : [];
         $contactCta = is_array($content['contact_cta'] ?? null) ? $content['contact_cta'] : [];
+        $templateKey = is_string($commercialContext['template_key'] ?? null) ? $commercialContext['template_key'] : null;
+        $labelSource = (string) ($commercialContext['label_source'] ?? 'entitlements_default');
+        $labelSourceDisplay = match ($labelSource) {
+            'tenant_override' => 'tenant override',
+            'template_default' => 'template default',
+            default => 'entitlements default',
+        };
+        $templateMissing = (bool) ($commercialContext['template_missing'] ?? false);
+        $contextLabels = is_array($commercialContext['labels'] ?? null) ? $commercialContext['labels'] : [];
     @endphp
 
     <style>
@@ -395,11 +405,25 @@
             <p class="integrations-copy">{{ $content['description'] ?? '' }}</p>
             <div class="integrations-meta">
                 <span class="integrations-pill">Plan · {{ $plan['label'] ?? 'Unknown' }}</span>
+                <span class="integrations-pill">Template · {{ $templateKey ?: 'none' }}</span>
+                <span class="integrations-pill">Labels · {{ $labelSourceDisplay }}</span>
                 <span class="integrations-pill">Connected · {{ (int) ($counts['connected'] ?? 0) }}</span>
                 <span class="integrations-pill">Setup Needed · {{ (int) ($counts['setup_needed'] ?? 0) }}</span>
                 <span class="integrations-pill">Locked · {{ (int) ($counts['locked'] ?? 0) }}</span>
                 <span class="integrations-pill">Coming Soon · {{ (int) ($counts['coming_soon'] ?? 0) }}</span>
             </div>
+            @if($templateMissing)
+                <p class="integrations-copy">Template defaults were not found for this assignment, so entitlement labels are being used as fallback.</p>
+            @elseif($labelSource === 'entitlements_default')
+                <p class="integrations-copy">No label overrides are active for this tenant, so entitlement defaults are in effect.</p>
+            @endif
+            <p class="integrations-copy">
+                Effective labels:
+                {{ $contextLabels['integrations'] ?? 'Integrations' }} / {{ $contextLabels['rewards'] ?? 'Rewards' }}.
+            </p>
+            <p class="integrations-copy">
+                This page is intentionally read-only and placeholder-first: no connector sync/OAuth writes and no billing lifecycle actions run here.
+            </p>
             <div class="integrations-meta">
                 @if(is_array($upgradeCta) && filled($upgradeCta['href'] ?? null))
                     <a class="integration-card__link" href="{{ $upgradeCta['href'] }}">{{ $upgradeCta['label'] ?? 'Upgrade to unlock' }}</a>

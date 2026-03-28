@@ -345,6 +345,8 @@ test('project approval failure surfaces a clear admin error state', function () 
 test('storefront google review start route records a verified start and returns the review url', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
     seedGoogleBusinessConnection([
         'linked_location_place_id' => 'place-123',
@@ -362,16 +364,17 @@ test('storefront google review start route records a verified start and returns 
         'request_key' => 'google-review-start-1',
     ];
 
+    $query = ['shop' => 'timberline.example.myshopify.com'];
     $headers = gbpSignedHeaders(
         'POST',
         '/shopify/marketing/v1/google-business/review/start',
-        [],
+        $query,
         json_encode($payload),
         'stage10-secret'
     );
 
     $this->withHeaders($headers)
-        ->postJson(route('marketing.shopify.v1.google-business.review.start'), $payload)
+        ->postJson(route('marketing.shopify.v1.google-business.review.start', $query), $payload)
         ->assertOk()
         ->assertJsonPath('data.state', 'google_review_started')
         ->assertJsonPath('data.review_url', 'https://g.page/r/CTucm4R1-wmOEAI/review');

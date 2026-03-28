@@ -74,6 +74,21 @@ return [
         'api_key' => env('SENDGRID_API_KEY'),
     ],
 
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET'),
+        'publishable_key' => env('STRIPE_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'api_base' => env('STRIPE_API_BASE', 'https://api.stripe.com'),
+        'timeout' => (int) env('STRIPE_API_TIMEOUT', 20),
+    ],
+
+    'braintree' => [
+        'merchant_id' => env('BRAINTREE_MERCHANT_ID'),
+        'public_key' => env('BRAINTREE_PUBLIC_KEY'),
+        'private_key' => env('BRAINTREE_PRIVATE_KEY'),
+        'environment' => env('BRAINTREE_ENVIRONMENT', 'sandbox'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Shopify Configuration

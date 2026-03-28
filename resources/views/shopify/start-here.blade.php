@@ -17,9 +17,19 @@
         $moduleOrder = is_array($payload['module_order'] ?? null) ? $payload['module_order'] : [];
         $checklist = is_array($payload['checklist'] ?? null) ? $payload['checklist'] : \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates, $moduleOrder);
         $plan = is_array($payload['plan'] ?? null) ? $payload['plan'] : ['label' => 'Unknown plan', 'track' => 'shopify', 'operating_mode' => 'shopify'];
+        $commercialContext = is_array($payload['commercial_context'] ?? null) ? $payload['commercial_context'] : [];
         $recommendedActions = is_array($payload['recommended_actions'] ?? null) ? $payload['recommended_actions'] : [];
         $lockedModules = array_values((array) ($checklist['locked'] ?? []));
         $comingSoonModules = array_values((array) ($checklist['coming_soon'] ?? []));
+        $templateKey = is_string($commercialContext['template_key'] ?? null) ? $commercialContext['template_key'] : null;
+        $labelSource = (string) ($commercialContext['label_source'] ?? 'entitlements_default');
+        $labelSourceDisplay = match ($labelSource) {
+            'tenant_override' => 'tenant override',
+            'template_default' => 'template default',
+            default => 'entitlements default',
+        };
+        $templateMissing = (bool) ($commercialContext['template_missing'] ?? false);
+        $contextLabels = is_array($commercialContext['labels'] ?? null) ? $commercialContext['labels'] : [];
     @endphp
 
     <style>
@@ -168,7 +178,22 @@
                 <span class="start-here-pill">Plan · {{ $plan['label'] ?? 'Unknown' }}</span>
                 <span class="start-here-pill">Track · {{ strtoupper((string) ($plan['track'] ?? 'shopify')) }}</span>
                 <span class="start-here-pill">Mode · {{ strtoupper((string) ($plan['operating_mode'] ?? 'shopify')) }}</span>
+                <span class="start-here-pill">Template · {{ $templateKey ?: 'none' }}</span>
+                <span class="start-here-pill">Labels · {{ $labelSourceDisplay }}</span>
             </div>
+
+            @if($templateMissing)
+                <p class="start-here-copy">Template defaults were not found for this tenant assignment, so entitlement labels are being used as fallback.</p>
+            @elseif($labelSource === 'entitlements_default')
+                <p class="start-here-copy">No label overrides are active for this tenant, so entitlement defaults are being used.</p>
+            @endif
+            <p class="start-here-copy">
+                Effective labels:
+                {{ $contextLabels['rewards'] ?? 'Rewards' }} / {{ $contextLabels['birthdays'] ?? 'Birthdays / Lifecycle' }}.
+            </p>
+            <p class="start-here-copy">
+                Label source order: tenant override -> template default -> entitlements default.
+            </p>
 
             @if((array) ($content['orientation_points'] ?? []) !== [])
                 <ul class="start-here-list" aria-label="Orientation notes">

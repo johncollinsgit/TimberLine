@@ -68,7 +68,7 @@ class TenantModuleAccessResolver
     public function resolveForTenant(?int $tenantId, ?array $moduleKeys = null): array
     {
         $profile = $this->profileForTenant($tenantId);
-        $planKey = (string) ($profile['plan_key'] ?? $this->defaultPlanKey());
+        $planKey = $this->canonicalPlanKey((string) ($profile['plan_key'] ?? $this->defaultPlanKey()));
         $operatingMode = (string) ($profile['operating_mode'] ?? $this->defaultOperatingMode());
 
         $planIncludes = $this->planIncludes($planKey);
@@ -254,7 +254,7 @@ class TenantModuleAccessResolver
 
         return $this->profileCache[$cacheKey] = [
             'tenant_id' => (int) $row->tenant_id,
-            'plan_key' => strtolower(trim((string) $row->plan_key)) ?: $this->defaultPlanKey(),
+            'plan_key' => $this->canonicalPlanKey((string) $row->plan_key),
             'operating_mode' => strtolower(trim((string) $row->operating_mode)) ?: $this->defaultOperatingMode(),
             'source' => strtolower(trim((string) ($row->source ?? 'manual'))) ?: 'manual',
         ];
@@ -424,7 +424,22 @@ class TenantModuleAccessResolver
 
     protected function defaultPlanKey(): string
     {
-        return strtolower(trim((string) config('entitlements.default_plan', 'shopify_proof_of_concept')));
+        return strtolower(trim((string) config('entitlements.default_plan', 'starter')));
+    }
+
+    protected function canonicalPlanKey(string $planKey): string
+    {
+        $normalized = strtolower(trim($planKey));
+        if ($normalized === '') {
+            return $this->defaultPlanKey();
+        }
+
+        $alias = config('commercial.legacy_plan_aliases.'.$normalized);
+        if (is_string($alias) && trim($alias) !== '') {
+            return strtolower(trim($alias));
+        }
+
+        return $normalized;
     }
 
     protected function defaultOperatingMode(): string
@@ -504,4 +519,3 @@ class TenantModuleAccessResolver
         return $this->addonCatalog;
     }
 }
-

@@ -86,11 +86,14 @@
                 <div class="mt-2 text-xs text-zinc-400">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <h2 class="text-sm font-semibold text-white">Referral</h2>
+                <h2 class="text-sm font-semibold text-white">Referral (Legacy Snapshot)</h2>
                 @if($latestGrowaveExternal && $latestGrowaveExternal->referral_link)
                     <div class="mt-2 break-all text-sm text-sky-200">{{ $latestGrowaveExternal->referral_link }}</div>
+                    <div class="mt-2 text-xs text-zinc-500">
+                        Legacy Growave referral snapshot only (read-only). Live referral enrollment and editing are not enabled in this surface.
+                    </div>
                 @else
-                    <div class="mt-2 text-sm text-zinc-400">No referral link on file.</div>
+                    <div class="mt-2 text-sm text-zinc-400">No legacy Growave referral link on file.</div>
                 @endif
                 <div class="mt-3 text-xs text-zinc-400">
                     Legacy Growave ID: {{ $latestGrowaveExternal?->external_customer_id ?: '—' }}

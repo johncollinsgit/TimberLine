@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingEmailDelivery;
@@ -137,14 +138,25 @@ class MarketingEmailExecutionService
         $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->name ?: 'Timberline Update'));
         $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
-        $providerContext = $this->emailReadiness->providerContextForDelivery($this->positiveInt($profile->tenant_id));
+        $dispatchContext = $this->resolveProfileDispatchContext($profile);
+        $tenantId = $dispatchContext['tenant_id'];
+        $storeKey = $dispatchContext['store_key'];
+        $storeContext = $dispatchContext['store_context'];
+        $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId, [
+            'store_context' => $storeContext,
+            'store_key' => $storeKey,
+        ]);
+        $tenantId = $tenantId ?? $this->positiveInt($providerContext['tenant_id'] ?? null);
+        if ($tenantId !== null) {
+            $storeContext['tenant_id'] = $tenantId;
+        }
         $resolvedProvider = trim((string) ($providerContext['provider'] ?? 'sendgrid')) ?: 'sendgrid';
 
         if ($subject === '') {
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext): MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $tenantId, $storeKey): MarketingEmailDelivery {
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -154,7 +166,7 @@ class MarketingEmailExecutionService
             return MarketingEmailDelivery::query()->create([
                 'marketing_campaign_recipient_id' => $recipient->id,
                 'marketing_profile_id' => $profile->id,
-                'tenant_id' => $profile->tenant_id,
+                'tenant_id' => $tenantId,
                 'provider' => $resolvedProvider,
                 'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                 'template_key' => $recipient->variant?->variant_key,
@@ -165,11 +177,12 @@ class MarketingEmailExecutionService
                     'provider_resolution' => $providerContext,
                 ],
                 'metadata' => [
-                    'tenant_id' => $profile->tenant_id,
+                    'tenant_id' => $tenantId,
                     'customer_id' => $profile->id,
                     'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                     'template_key' => $recipient->variant?->variant_key,
                     'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
+                    'shopify_store_key' => $storeKey,
                     'provider' => $resolvedProvider,
                     'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
                     'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
@@ -181,7 +194,9 @@ class MarketingEmailExecutionService
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
             'dry_run' => $dryRun,
-            'tenant_id' => $profile->tenant_id,
+            'tenant_id' => $tenantId,
+            'store_context' => $storeContext,
+            'store_key' => $storeKey,
             'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
             'template_key' => $recipient->variant?->variant_key,
             'customer_id' => $profile->id,
@@ -189,6 +204,7 @@ class MarketingEmailExecutionService
             'metadata' => [
                 'campaign_id' => $campaign->id,
                 'campaign_recipient_id' => $recipient->id,
+                'shopify_store_key' => $storeKey,
                 'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
                 'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
             ],
@@ -270,6 +286,51 @@ class MarketingEmailExecutionService
         return ['outcome' => 'skipped', 'reason' => $reason, 'dry_run' => false];
     }
 
+    /**
+     * @return array{tenant_id:?int,store_key:?string,store_context:array<string,mixed>}
+     */
+    protected function resolveProfileDispatchContext(\App\Models\MarketingProfile $profile): array
+    {
+        $tenantId = $this->positiveInt($profile->tenant_id);
+        $storeKey = null;
+
+        $external = CustomerExternalProfile::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('provider', 'shopify')
+            ->orderByDesc('synced_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $external) {
+            $external = CustomerExternalProfile::query()
+                ->where('marketing_profile_id', $profile->id)
+                ->orderByDesc('synced_at')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if ($external instanceof CustomerExternalProfile) {
+            if ($tenantId === null) {
+                $tenantId = $this->positiveInt($external->tenant_id);
+            }
+            $storeKey = $this->normalizeStoreKey($external->store_key);
+        }
+
+        $storeContext = [];
+        if ($storeKey !== null) {
+            $storeContext['key'] = $storeKey;
+        }
+        if ($tenantId !== null) {
+            $storeContext['tenant_id'] = $tenantId;
+        }
+
+        return [
+            'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'store_context' => $storeContext,
+        ];
+    }
+
     protected function positiveInt(mixed $value): ?int
     {
         if (! is_numeric($value)) {
@@ -279,5 +340,12 @@ class MarketingEmailExecutionService
         $parsed = (int) $value;
 
         return $parsed > 0 ? $parsed : null;
+    }
+
+    protected function normalizeStoreKey(mixed $value): ?string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return $normalized !== '' ? $normalized : null;
     }
 }

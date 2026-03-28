@@ -68,8 +68,13 @@ Contains:
 - default plan/mode
 - allowed setup statuses
 
-Current default plan preserves existing Shopify proof-of-concept availability:
-- `shopify_proof_of_concept`
+Current default plan now maps to:
+- `starter`
+
+Legacy compatibility aliases remain accepted for existing rows:
+- `shopify_proof_of_concept` -> `starter`
+- `shopify_growth` -> `growth`
+- `direct_starter` -> `starter`
 
 ## Resolver (Implemented)
 Service:
@@ -205,6 +210,9 @@ This phase adds first user-facing commercialization surfaces on top of the entit
 - Embedded plans + add-ons informational page:
   - route: `/shopify/app/plans`
   - view: `resources/views/shopify/plans-addons.blade.php`
+- Landlord commercial configuration page:
+  - route: `/landlord/commercial`
+  - view: `resources/views/landlord/commercial/index.blade.php`
 
 ### Centralized content/config source
 - File: `config/product_surfaces.php`
@@ -217,6 +225,7 @@ This phase adds first user-facing commercialization surfaces on top of the entit
 
 Rule:
 - Keep promo/onboarding/plans copy in this config file so templates are not scattered with duplicated hardcoded pricing/copy text.
+- Tier/add-on/template defaults now also live in `config/commercial.php` for canonical product architecture metadata.
 
 ### Resolver + payload composition
 - Service: `App\Services\Tenancy\TenantCommercialExperienceService`
@@ -313,6 +322,47 @@ Status-registry derivation constraints:
   - external API sync writes
   - webhook-driven connector pipelines
   - billing checkout/activation writes
+
+## Landlord Commercial Configuration Layer (Phase 4)
+
+This phase extends host-locked landlord controls into safe configuration writes without activating billing checkout lifecycle actions.
+
+Implemented additions:
+- Route: `/landlord/commercial`
+- Controller: `App\Http\Controllers\Landlord\LandlordCommercialConfigurationController`
+- Service: `App\Services\Tenancy\LandlordCommercialConfigService`
+- Tables:
+  - `landlord_catalog_entries`
+  - `tenant_commercial_overrides`
+  - `tenant_usage_counters`
+
+Configuration scope (allowed writes):
+- plan/add-on/setup/template catalog metadata and pricing
+- template duplicate/activate/deactivate/archive actions
+- tenant plan assignment (via `tenant_access_profiles`)
+- tenant module enable/disable overrides (via `tenant_module_states`)
+- tenant add-on enable/disable (via `tenant_access_addons`)
+- tenant pricing/usage/display-label/billing-mapping overrides
+
+Safety boundary:
+- no checkout/subscription mutation
+- no connector live-write activation from integrations page
+- no parallel identity, loyalty, or billing profile systems
+
+Neutral module terminology support:
+- Canonical module keys remain stable (`rewards`, etc.).
+- Template defaults and tenant overrides can provide display labels.
+- Candle-specific wording (for example `Candle Cash`) is treated as template/default presentation, not a hard architecture requirement.
+
+### Staging UAT Hardening Addendum (2026-03-27)
+- Landlord commercial console now emphasizes operator-safe assignment verification:
+  - prefilled override JSON values
+  - visible effective module/add-on states
+  - included-usage display alongside observed usage counters
+- Commercialization payloads for `/shopify/app/start`, `/shopify/app/plans`, and `/shopify/app/integrations` now expose template/label-source context so operators can validate assignment propagation quickly.
+- Config-driven onboarding copy now supports label tokens (for example `{{rewards_label}}`) so tenant/template display labels propagate into high-traffic commercialization surfaces.
+- Deferred by design in this pass:
+  - deep legacy Candle Cash/admin/storefront copy outside commercialization UAT surfaces remains unchanged and should be handled in a dedicated legacy-label cleanup pass.
 
 ## How To Add A New Entitlement-Aware Module
 1. Add module key to `config/entitlements.php` under `modules`.

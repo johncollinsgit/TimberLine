@@ -88,6 +88,83 @@ test('shopify v1 customer-sensitive storefront reads require verified store cont
     }
 });
 
+test('shopify v1 customer-sensitive storefront writes require verified store context', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Store',
+        'email' => 'stage10.store.write.scope@example.com',
+        'normalized_email' => 'stage10.store.write.scope@example.com',
+        'phone' => '5554448899',
+        'normalized_phone' => '+15554448899',
+    ]);
+
+    $cases = [
+        [
+            'path' => '/shopify/marketing/v1/consent/request',
+            'route' => 'marketing.shopify.v1.consent.request',
+            'payload' => [
+                'email' => $profile->email,
+                'phone' => $profile->phone,
+                'consent_sms' => true,
+            ],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/birthday/capture',
+            'route' => 'marketing.shopify.v1.birthday.capture',
+            'payload' => [
+                'email' => $profile->email,
+                'phone' => $profile->phone,
+                'birth_month' => 1,
+                'birth_day' => 15,
+            ],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/birthday/claim',
+            'route' => 'marketing.shopify.v1.birthday.claim',
+            'payload' => [
+                'email' => $profile->email,
+                'phone' => $profile->phone,
+            ],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/candle-cash/tasks/submit',
+            'route' => 'marketing.shopify.v1.candle-cash.tasks.submit',
+            'payload' => [
+                'task_handle' => 'sms-signup',
+                'email' => $profile->email,
+                'phone' => $profile->phone,
+            ],
+        ],
+        [
+            'path' => '/shopify/marketing/v1/google-business/review/start',
+            'route' => 'marketing.shopify.v1.google-business.review.start',
+            'payload' => [
+                'request_key' => 'missing-store-context-check',
+                'email' => $profile->email,
+                'phone' => $profile->phone,
+            ],
+        ],
+    ];
+
+    foreach ($cases as $case) {
+        $headers = stage10SignedHeaders(
+            'POST',
+            $case['path'],
+            [],
+            json_encode($case['payload']),
+            'stage10-secret'
+        );
+
+        $this->withHeaders($headers)
+            ->postJson(route($case['route']), $case['payload'])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'missing_store_context')
+            ->assertJsonPath('error.states.0', 'store_context_required');
+    }
+});
+
 test('shopify v1 consent request alias and consent status endpoint share the same contract states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
@@ -105,16 +182,17 @@ test('shopify v1 consent request alias and consent status endpoint share the sam
         'flow' => 'verification',
         'award_bonus' => true,
     ];
+    $requestQuery = ['shop' => 'timberline.example.myshopify.com'];
     $requestHeaders = stage10SignedHeaders(
         'POST',
         '/shopify/marketing/v1/consent/request',
-        [],
+        $requestQuery,
         json_encode($payload),
         'stage10-secret'
     );
 
     $requested = $this->withHeaders($requestHeaders)
-        ->postJson(route('marketing.shopify.v1.consent.request'), $payload)
+        ->postJson(route('marketing.shopify.v1.consent.request', $requestQuery), $payload)
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.state', 'sms_requested')

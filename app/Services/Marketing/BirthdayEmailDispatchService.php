@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\BirthdayMessageEvent;
 use App\Models\BirthdayRewardIssuance;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\Email\TenantEmailDispatchService;
@@ -52,9 +53,21 @@ class BirthdayEmailDispatchService
 
         $profile = $issuance->marketingProfile;
         $birthdayProfile = $issuance->birthdayProfile;
-        $tenantId = $this->positiveInt($profile?->tenant_id);
+        $dispatchContext = $this->resolveProfileDispatchContext($profile, $this->normalizeStoreKey($issuance->shopify_store_key));
+        $tenantId = $dispatchContext['tenant_id'];
+        $storeKey = $dispatchContext['store_key'];
+        $storeContext = $dispatchContext['store_context'];
+
+        $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId, [
+            'store_context' => $storeContext,
+            'store_key' => $storeKey,
+        ]);
+        $tenantId = $tenantId ?? $this->positiveInt($providerContext['tenant_id'] ?? null);
+        if ($tenantId !== null) {
+            $storeContext['tenant_id'] = $tenantId;
+        }
+
         $settings = $this->emailSettingsService->resolvedForTenant($tenantId);
-        $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId);
         $selectedProvider = trim((string) ($providerContext['provider'] ?? ($settings['email_provider'] ?? 'sendgrid')));
         $selectedProvider = $selectedProvider !== '' ? strtolower($selectedProvider) : 'sendgrid';
 
@@ -87,6 +100,7 @@ class BirthdayEmailDispatchService
             'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
             'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
             'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
+            'shopify_store_key' => $storeKey,
         ];
 
         $failure = $this->preflightFailure($profile, $config);
@@ -143,6 +157,8 @@ class BirthdayEmailDispatchService
                 textBody: $textBody,
                 options: [
                     'tenant_id' => $tenantId,
+                    'store_context' => $storeContext,
+                    'store_key' => $storeKey,
                     'from_name' => $this->nullableString($settings['from_name'] ?? null),
                     'from_email' => $this->nullableString($settings['from_email'] ?? null),
                     'reply_to_email' => $this->nullableString($settings['reply_to_email'] ?? null),
@@ -365,6 +381,68 @@ class BirthdayEmailDispatchService
     }
 
     /**
+     * @return array{tenant_id:?int,store_key:?string,store_context:array<string,mixed>}
+     */
+    protected function resolveProfileDispatchContext(?MarketingProfile $profile, ?string $preferredStoreKey = null): array
+    {
+        $tenantId = $this->positiveInt($profile?->tenant_id);
+        $storeKey = $this->normalizeStoreKey($preferredStoreKey);
+
+        if ($profile) {
+            $external = null;
+            if ($storeKey !== null) {
+                $external = CustomerExternalProfile::query()
+                    ->where('marketing_profile_id', $profile->id)
+                    ->where('provider', 'shopify')
+                    ->where('store_key', $storeKey)
+                    ->orderByDesc('synced_at')
+                    ->orderByDesc('id')
+                    ->first();
+            }
+
+            if (! $external) {
+                $external = CustomerExternalProfile::query()
+                    ->where('marketing_profile_id', $profile->id)
+                    ->where('provider', 'shopify')
+                    ->orderByDesc('synced_at')
+                    ->orderByDesc('id')
+                    ->first();
+            }
+
+            if (! $external) {
+                $external = CustomerExternalProfile::query()
+                    ->where('marketing_profile_id', $profile->id)
+                    ->orderByDesc('synced_at')
+                    ->orderByDesc('id')
+                    ->first();
+            }
+
+            if ($external instanceof CustomerExternalProfile) {
+                if ($tenantId === null) {
+                    $tenantId = $this->positiveInt($external->tenant_id);
+                }
+                if ($storeKey === null) {
+                    $storeKey = $this->normalizeStoreKey($external->store_key);
+                }
+            }
+        }
+
+        $storeContext = [];
+        if ($storeKey !== null) {
+            $storeContext['key'] = $storeKey;
+        }
+        if ($tenantId !== null) {
+            $storeContext['tenant_id'] = $tenantId;
+        }
+
+        return [
+            'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'store_context' => $storeContext,
+        ];
+    }
+
+    /**
      * @return array{
      *   success:false,
      *   provider:string,
@@ -410,5 +488,10 @@ class BirthdayEmailDispatchService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function normalizeStoreKey(mixed $value): ?string
+    {
+        return $this->nullableString(strtolower(trim((string) $value)));
     }
 }

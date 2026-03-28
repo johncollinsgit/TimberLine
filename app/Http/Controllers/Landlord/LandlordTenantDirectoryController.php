@@ -159,7 +159,7 @@ class LandlordTenantDirectoryController extends Controller
             'id' => (int) $tenant->id,
             'name' => (string) $tenant->name,
             'slug' => (string) $tenant->slug,
-            'subdomain' => (string) $tenant->slug.'.fireforgetech.com',
+            'subdomain' => (string) $tenant->slug.'.'.$this->tenantBaseHost(),
             'created_at' => optional($tenant->created_at)->toDateTimeString(),
             'status' => $status,
             'status_label' => $this->statusLabel($status),
@@ -182,6 +182,22 @@ class LandlordTenantDirectoryController extends Controller
             ],
             'module_setup' => $moduleSetup,
         ];
+    }
+
+    protected function tenantBaseHost(): string
+    {
+        $landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.forestrybackstage.com')));
+        if ($landlordHost === '') {
+            return 'forestrybackstage.com';
+        }
+
+        if (str_starts_with($landlordHost, 'app.')) {
+            $base = substr($landlordHost, 4);
+
+            return $base !== '' ? $base : 'forestrybackstage.com';
+        }
+
+        return $landlordHost;
     }
 
     /**

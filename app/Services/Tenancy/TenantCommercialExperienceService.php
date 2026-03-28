@@ -3,6 +3,7 @@
 namespace App\Services\Tenancy;
 
 use App\Models\TenantAccessAddon;
+use App\Models\TenantCommercialOverride;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Tenancy\TenantModuleUi;
@@ -13,6 +14,7 @@ class TenantCommercialExperienceService
 {
     public function __construct(
         protected TenantModuleAccessResolver $accessResolver,
+        protected LandlordCommercialConfigService $commercialConfigService,
         protected TenantEmailSettingsService $tenantEmailSettingsService,
         protected TwilioSenderConfigService $twilioSenderConfigService
     ) {
@@ -41,6 +43,7 @@ class TenantCommercialExperienceService
      *   content:array<string,mixed>,
      *   tenant_id:?int,
      *   plan:array{key:string,label:string,track:string,operating_mode:string},
+     *   commercial_context:array<string,mixed>,
      *   module_states:array<string,array<string,mixed>>,
      *   module_order:array<int,string>,
      *   checklist:array<string,mixed>,
@@ -57,7 +60,11 @@ class TenantCommercialExperienceService
         }
 
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleOrder);
-        $moduleStates = (array) ($resolved['modules'] ?? []);
+        $moduleStates = $this->applyDisplayLabels(
+            tenantId: $tenantId,
+            moduleStates: (array) ($resolved['modules'] ?? [])
+        );
+        $content = $this->applyContentLabelTokens($content, $moduleStates);
         $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
 
         $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
@@ -74,6 +81,7 @@ class TenantCommercialExperienceService
                 'track' => (string) ($planDefinition['track'] ?? 'shopify'),
                 'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
             ],
+            'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
             'module_states' => $moduleStates,
             'module_order' => $moduleOrder,
             'checklist' => $checklist,
@@ -89,6 +97,7 @@ class TenantCommercialExperienceService
      *   content:array<string,mixed>,
      *   tenant_id:?int,
      *   current_plan:array<string,mixed>,
+     *   commercial_context:array<string,mixed>,
      *   module_states:array<string,array<string,mixed>>,
      *   checklist:array<string,mixed>,
      *   current_plan_modules:array<string,array<string,mixed>>,
@@ -106,7 +115,11 @@ class TenantCommercialExperienceService
         $moduleKeys = array_keys($moduleCatalog);
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
 
-        $moduleStates = (array) ($resolved['modules'] ?? []);
+        $moduleStates = $this->applyDisplayLabels(
+            tenantId: $tenantId,
+            moduleStates: (array) ($resolved['modules'] ?? [])
+        );
+        $content = $this->applyContentLabelTokens($content, $moduleStates);
         $checklist = TenantModuleUi::checklist($moduleStates, $moduleKeys);
 
         $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
@@ -180,6 +193,7 @@ class TenantCommercialExperienceService
                 'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
                 'includes' => $currentPlanIncludes,
             ],
+            'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
             'module_states' => $moduleStates,
             'checklist' => $checklist,
             'current_plan_modules' => $currentPlanModules,
@@ -200,6 +214,7 @@ class TenantCommercialExperienceService
      *   content:array<string,mixed>,
      *   tenant_id:?int,
      *   plan:array{key:string,label:string,track:string,operating_mode:string},
+     *   commercial_context:array<string,mixed>,
      *   module_states:array<string,array<string,mixed>>,
      *   cards:array<int,array<string,mixed>>,
      *   status_registry:array<string,array<string,mixed>>,
@@ -226,7 +241,11 @@ class TenantCommercialExperienceService
 
         $moduleKeys = $this->normalizeKeys($moduleKeys);
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
-        $moduleStates = (array) ($resolved['modules'] ?? []);
+        $moduleStates = $this->applyDisplayLabels(
+            tenantId: $tenantId,
+            moduleStates: (array) ($resolved['modules'] ?? [])
+        );
+        $content = $this->applyContentLabelTokens($content, $moduleStates);
         $statusContext = $this->integrationStatusContext($tenantId);
 
         $cards = $this->integrationCards(
@@ -295,6 +314,7 @@ class TenantCommercialExperienceService
                 'track' => (string) ($planDefinition['track'] ?? 'shopify'),
                 'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
             ],
+            'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
             'module_states' => $moduleStates,
             'cards' => $cards,
             'status_registry' => $statusRegistry,
@@ -352,6 +372,78 @@ class TenantCommercialExperienceService
         }
 
         return $cards;
+    }
+
+    /**
+     * @param  array<string,array<string,mixed>>  $moduleStates
+     * @return array<string,array<string,mixed>>
+     */
+    protected function applyDisplayLabels(?int $tenantId, array $moduleStates): array
+    {
+        if ($tenantId === null || $moduleStates === []) {
+            return $moduleStates;
+        }
+
+        $labels = $this->tenantDisplayLabels($tenantId);
+        if ($labels === []) {
+            return $moduleStates;
+        }
+
+        foreach ($moduleStates as $moduleKey => $state) {
+            if (! is_array($state)) {
+                continue;
+            }
+
+            $normalizedKey = strtolower(trim((string) ($state['module_key'] ?? $moduleKey)));
+            $label = trim((string) ($labels[$normalizedKey] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+
+            $moduleStates[$moduleKey]['label'] = $label;
+        }
+
+        return $moduleStates;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function tenantDisplayLabels(int $tenantId): array
+    {
+        if (! Schema::hasTable('tenant_commercial_overrides')) {
+            return [];
+        }
+
+        $override = TenantCommercialOverride::query()->forTenantId($tenantId)->first();
+        if (! $override) {
+            return [];
+        }
+
+        $labels = [];
+        $explicit = $this->normalizeDisplayLabels(
+            is_array($override->display_labels) ? $override->display_labels : []
+        );
+        if ($explicit !== []) {
+            $labels = $explicit;
+        }
+
+        $templateKey = strtolower(trim((string) ($override->template_key ?? '')));
+        if ($templateKey !== '') {
+            $template = $this->commercialConfigService->templateByKey($templateKey);
+            $templateLabels = $this->normalizeDisplayLabels(
+                is_array($template['payload']['default_labels'] ?? null)
+                    ? (array) $template['payload']['default_labels']
+                    : []
+            );
+
+            if ($templateLabels !== []) {
+                // Tenant explicit labels win, template labels fill remaining keys.
+                $labels = array_replace($templateLabels, $labels);
+            }
+        }
+
+        return $labels;
     }
 
     /**
@@ -1028,6 +1120,123 @@ class TenantCommercialExperienceService
     }
 
     /**
+     * @param  array<string,mixed>  $content
+     * @param  array<string,array<string,mixed>>  $moduleStates
+     * @return array<string,mixed>
+     */
+    protected function applyContentLabelTokens(array $content, array $moduleStates): array
+    {
+        $tokenMap = [];
+        foreach (['rewards', 'birthdays', 'customers', 'campaigns', 'integrations'] as $moduleKey) {
+            $label = trim((string) data_get($moduleStates, $moduleKey.'.label', $this->moduleLabel($moduleKey)));
+            if ($label === '') {
+                $label = $this->moduleLabel($moduleKey);
+            }
+
+            $tokenMap['{{'.$moduleKey.'_label}}'] = $label;
+        }
+
+        return $this->replaceTokensInArray($content, $tokenMap);
+    }
+
+    /**
+     * @param  array<string,array<string,mixed>>  $moduleStates
+     * @return array{
+     *   template_key:?string,
+     *   label_source:string,
+     *   labels:array<string,string>,
+     *   template_missing:bool
+     * }
+     */
+    protected function commercialContext(?int $tenantId, array $moduleStates): array
+    {
+        $resolvedDisplayLabels = $tenantId !== null
+            ? $this->tenantDisplayLabels($tenantId)
+            : [];
+
+        $labels = [];
+        foreach (['rewards', 'birthdays', 'customers', 'campaigns', 'integrations'] as $moduleKey) {
+            $overrideLabel = trim((string) ($resolvedDisplayLabels[$moduleKey] ?? ''));
+            $stateLabel = trim((string) data_get($moduleStates, $moduleKey.'.label', ''));
+            $defaultLabel = $this->moduleLabel($moduleKey);
+
+            $labels[$moduleKey] = $overrideLabel !== ''
+                ? $overrideLabel
+                : ($stateLabel !== '' ? $stateLabel : $defaultLabel);
+        }
+
+        if ($tenantId === null || ! Schema::hasTable('tenant_commercial_overrides')) {
+            return [
+                'template_key' => null,
+                'label_source' => 'entitlements_default',
+                'labels' => $labels,
+                'template_missing' => false,
+            ];
+        }
+
+        $override = TenantCommercialOverride::query()->forTenantId($tenantId)->first();
+        if (! $override) {
+            return [
+                'template_key' => null,
+                'label_source' => 'entitlements_default',
+                'labels' => $labels,
+                'template_missing' => false,
+            ];
+        }
+
+        $templateKey = $this->nullableString($override->template_key);
+        $explicitLabels = $this->normalizeDisplayLabels(
+            is_array($override->display_labels) ? $override->display_labels : []
+        );
+        $templateExists = true;
+        $templateLabels = [];
+        if ($templateKey !== null) {
+            $template = $this->commercialConfigService->templateByKey($templateKey);
+            $templateExists = $template !== null;
+            $templateLabels = $this->normalizeDisplayLabels(
+                is_array($template['payload']['default_labels'] ?? null)
+                    ? (array) $template['payload']['default_labels']
+                    : []
+            );
+        }
+
+        $labelSource = 'entitlements_default';
+        if ($explicitLabels !== []) {
+            $labelSource = 'tenant_override';
+        } elseif ($templateKey !== null && $templateExists && $templateLabels !== []) {
+            $labelSource = 'template_default';
+        }
+
+        return [
+            'template_key' => $templateKey,
+            'label_source' => $labelSource,
+            'labels' => $labels,
+            'template_missing' => $templateKey !== null && ! $templateExists,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $items
+     * @param  array<string,string>  $tokenMap
+     * @return array<string,mixed>
+     */
+    protected function replaceTokensInArray(array $items, array $tokenMap): array
+    {
+        foreach ($items as $key => $value) {
+            if (is_array($value)) {
+                $items[$key] = $this->replaceTokensInArray($value, $tokenMap);
+                continue;
+            }
+
+            if (is_string($value)) {
+                $items[$key] = strtr($value, $tokenMap);
+            }
+        }
+
+        return $items;
+    }
+
+    /**
      * @param  array<int,mixed>  $keys
      * @return array<int,string>
      */
@@ -1049,6 +1258,34 @@ class TenantCommercialExperienceService
             static fn ($item): string => trim((string) $item),
             $items
         ), static fn (string $item): bool => $item !== ''));
+    }
+
+    /**
+     * @param  array<mixed,mixed>  $labels
+     * @return array<string,string>
+     */
+    protected function normalizeDisplayLabels(array $labels): array
+    {
+        $normalized = [];
+        foreach ($labels as $key => $value) {
+            if (is_int($key)) {
+                continue;
+            }
+
+            $moduleKey = strtolower(trim((string) $key));
+            if ($moduleKey === '' || ctype_digit($moduleKey)) {
+                continue;
+            }
+
+            $label = trim((string) $value);
+            if ($label === '') {
+                continue;
+            }
+
+            $normalized[$moduleKey] = $label;
+        }
+
+        return $normalized;
     }
 
     protected function nullableString(mixed $value): ?string
