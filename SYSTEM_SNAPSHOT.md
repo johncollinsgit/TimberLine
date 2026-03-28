@@ -41,7 +41,7 @@ Quick-scan summary for future agents:
 - Latest repo-side validation status (2026-03-28):
   - real staging operator evidence is not attached by this pass
   - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
-  - staging follow-up revalidation (2026-03-28): landlord routes are reachable (`/landlord` and `/landlord/commercial` return `302` to `/login` when unauthenticated), but the guarded operator run is still blocked by missing landlord operator session plus missing runtime Stripe secret and disabled live-sync action flag
+  - staging Stripe sandbox wiring follow-up (2026-03-28): landlord routes are reachable and runtime guarded Stripe flags are enabled (`customer`, `prep`, `live`), and runtime Stripe publishable/secret keys are now present, but lookup-key verification against Stripe returned `401`, so the guarded operator evidence run remains blocked until Stripe sandbox API authentication is corrected and operator session is available
   - follow-up commit `9c2502c` (CI assertion alignment after dotenv bootstrap fix) is pushed to `main`
   - local CI-equivalent rerun for this pass:
     - `php -d memory_limit=512M ./vendor/bin/pest` => `845 passed`, `0 failed`
