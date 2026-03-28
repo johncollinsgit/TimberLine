@@ -43,10 +43,14 @@ Commercialization/access state:
 - latest repo-side validation status (2026-03-28):
   - real staging operator evidence is not attached by this pass
   - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
-  - main-branch CI tests failed on commit `dbf0762` in GitHub Actions before this follow-up fix pass
-  - local CI-equivalent rerun after the test fix pass:
+  - follow-up commit `9c2502c` (CI assertion alignment after dotenv bootstrap fix) is pushed to `main`
+  - local CI-equivalent rerun for this pass:
     - command: `php -d memory_limit=512M ./vendor/bin/pest`
     - result: `845 passed`, `0 failed`
+  - GitHub Actions results for commit `9c2502c`:
+    - `linter`: `success`
+    - `tests`: `success` (`ci (8.4)` and `ci (8.5)` passed)
+    - `Deploy Production`: `failure`
   - deploy automation remains blocked when required GitHub `production` secrets are missing:
     - `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
   - latest production rollout for commit `dbf0762` was completed manually:
