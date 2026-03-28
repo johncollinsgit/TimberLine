@@ -46,34 +46,29 @@ Run type: Repository-side operator-enablement pass (no real staging guarded sequ
   - root-cause follow-up: previous `401` was caused by runtime placeholder Stripe key/secret values (length/pattern mismatch versus intended sandbox keys), not request formatting.
   - runtime Stripe key + secret were corrected to intended sandbox credentials and config cache was rebuilt.
   - Stripe API auth now succeeds (`/v1/account` `200`; `/v1/prices` lookup probe `200`).
-  - lookup readiness result: no required recurring lookup keys were returned by Stripe for this account.
+  - follow-up setup/unblock (2026-03-28):
+    - created all required recurring monthly prices in Stripe sandbox with exact lookup keys listed above
+    - verification probe now resolves all required keys as `active=true`, `recurring.interval=month`, `currency=usd`
 - Local config mapping check:
   - `commercial.stripe_mapping` recurring lookup-key entries for tiers/add-ons are present in config.
-  - Stripe-account-side lookup-key existence is now verified as missing for all required recurring keys.
-  - supplementary probe: Stripe account currently returns `0` active prices (`/v1/prices?active=true&limit=3`).
+  - Stripe-account-side recurring lookup-key existence is now verified as present for all required keys.
 
 ## Blocking Reasons
 1. No authenticated landlord operator session/credentials were available from this environment, so guarded actions could not be executed through the landlord surface.
-2. Required Stripe recurring prices/lookup keys are missing in the sandbox account, so guarded live subscription create/sync cannot satisfy staging readiness.
-3. Local runtime is non-staging and does not carry staging guarded Stripe secrets/flags, so local execution cannot substitute for a real operator staging run.
+2. Real staging guarded evidence still requires interactive landlord execution in-browser; repository/runtime checks cannot substitute for operator-authenticated UI evidence capture.
 
 ## Validation Outcome
 - Real staging operator validation was not completed.
 - No real guarded 3-step evidence artifact (PASS/FAIL per permutation with screenshots + Stripe object references) was produced in this run.
 - Host/runtime reachability for landlord routes is no longer the blocker (`/landlord` and `/landlord/commercial` now resolve and redirect to login when unauthenticated).
-- Runtime guarded Stripe toggles are now loaded for the run window and Stripe sandbox authentication now works, but lookup-key readiness remains blocked because required recurring prices/lookup keys are missing.
+- Runtime guarded Stripe toggles are loaded for the run window, Stripe sandbox authentication works, and recurring lookup-key readiness is now satisfied.
+- Staging is runtime-ready for the guarded operator evidence run; the remaining blocker is authenticated landlord operator execution and evidence capture.
 
 ## Next Unblock Requirements
 1. Execute with a real landlord operator session on the intended staging landlord host.
-2. Create/enable Stripe sandbox recurring prices with these lookup keys:
-   - `tier_starter_monthly`
-   - `tier_growth_monthly`
-   - `tier_pro_monthly`
-   - `addon_referrals_monthly`
-   - `addon_sms_monthly`
-   - `addon_additional_channels_monthly`
-   - `addon_bulk_email_marketing_monthly`
-   - `addon_future_niche_modules_monthly`
-3. Re-run runtime lookup-key verification and confirm all required recurring prices resolve.
-4. Keep guarded live subscription sync enabled for the evidence run (`COMMERCIAL_STRIPE_LIVE_SUBSCRIPTION_SYNC_ENABLED=true`) while broad lifecycle remains disabled.
-5. Re-run full runbook and complete `docs/operations/staging-commercial-uat-evidence-template.md` for each required permutation.
+2. Keep guarded live subscription sync enabled for the evidence run (`COMMERCIAL_STRIPE_LIVE_SUBSCRIPTION_SYNC_ENABLED=true`) while broad lifecycle remains disabled.
+3. Run the guarded Stripe sequence in order from `/landlord/commercial`:
+   - customer sync
+   - subscription-prep sync
+   - live subscription create/sync
+4. Capture required screenshots and complete `docs/operations/staging-commercial-uat-evidence-template.md` for each required permutation.

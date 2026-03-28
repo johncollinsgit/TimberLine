@@ -35,7 +35,7 @@ Current implemented shell/diagnostics checkpoint:
   - latest repo-side validation status (2026-03-28):
     - real staging operator evidence is not attached by this pass
     - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
-    - staging Stripe sandbox auth follow-up (2026-03-28): runtime Stripe auth now succeeds after correcting runtime key/secret mismatch, but the sandbox account currently has no active prices and all required recurring lookup keys are missing, so the guarded operator evidence run remains blocked until Stripe lookup-key prices are created and operator session is available
+    - staging Stripe sandbox pricing follow-up (2026-03-28): runtime Stripe auth succeeds and all required recurring lookup-key prices are now present/verified (`tier_starter_monthly`, `tier_growth_monthly`, `tier_pro_monthly`, `addon_referrals_monthly`, `addon_sms_monthly`, `addon_additional_channels_monthly`, `addon_bulk_email_marketing_monthly`, `addon_future_niche_modules_monthly`); staging is runtime-ready for the guarded operator evidence run, but real evidence is still blocked until an authenticated landlord operator session executes the 3-step sequence
     - follow-up commit `9c2502c` (CI assertion alignment after dotenv bootstrap fix) is pushed to `main`
     - local CI-equivalent rerun for this pass:
       - `php -d memory_limit=512M ./vendor/bin/pest` => `845 passed`, `0 failed`
