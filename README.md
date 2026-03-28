@@ -50,12 +50,14 @@ Commercialization/access state:
   - GitHub Actions results for commit `9c2502c`:
     - `linter`: `success`
     - `tests`: `success` (`ci (8.4)` and `ci (8.5)` passed)
-    - `Deploy Production`: `failure`
-  - deploy automation remains blocked when required GitHub `production` secrets are missing:
-    - `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
-  - latest production rollout for commit `dbf0762` was completed manually:
+    - `Deploy Production`: initial `failure` on push, then `success` on rerun `23687500356` after deploy-ops unblock
+  - deploy-ops unblock completed in GitHub `production` environment:
+    - configured `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
+    - corrected server checkout branch at `DEPLOY_PATH` to `main` so workflow `git checkout main` succeeds
+  - latest production rollout for commit `dbf0762` had been completed manually before deploy automation was restored:
     - deploy command: `ssh forge@129.212.138.111 'bash /home/forge/deploy_backstage.sh'`
     - health check: `curl -sS https://backstage.theforestrystudio.com/up` returned `Application up.`
+  - manual SSH deploy remains available as fallback, but is no longer the primary required path while deploy secrets stay configured
 - checkout and broad subscription lifecycle mutation writes are still intentionally disabled
 - upgrade prompts are informational routing only
 - multi-tenant completion estimate: `45%`

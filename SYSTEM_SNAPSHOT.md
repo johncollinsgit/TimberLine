@@ -47,12 +47,14 @@ Quick-scan summary for future agents:
   - GitHub Actions results for commit `9c2502c`:
     - `linter`: `success`
     - `tests`: `success` (`ci (8.4)` and `ci (8.5)` passed)
-    - `Deploy Production`: `failure`
-  - GitHub Actions production deploy still fails when required secrets are missing:
-    - `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
-  - latest known production rollout for commit `dbf0762` was manual:
+    - `Deploy Production`: initial `failure` on push, then `success` on rerun `23687500356` after deploy-ops unblock
+  - Deploy-ops unblock completed in GitHub `production` environment:
+    - configured `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`
+    - corrected server checkout branch at `DEPLOY_PATH` to `main` so workflow `git checkout main` succeeds
+  - latest known production rollout for commit `dbf0762` was manual before deploy automation was restored:
     - `ssh forge@129.212.138.111 'bash /home/forge/deploy_backstage.sh'`
     - `curl -sS https://backstage.theforestrystudio.com/up` => `Application up.`
+  - manual SSH deploy remains available as fallback, but is no longer the primary required path while deploy secrets stay configured
 - Checkout and broad subscription lifecycle mutation flows remain intentionally disabled.
 - Public commercial model has been normalized:
   - tiers: `Starter`, `Growth`, `Pro`
@@ -128,8 +130,9 @@ Do not start yet:
 ## Deployment Reality
 - Production deploy path is GitHub Actions on push to `main`
 - Deploy workflow also supports manual `workflow_dispatch`
-- Deploy job is hard-blocked when `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, or `DEPLOY_SSH_KEY` are missing.
-- Manual SSH deploy may be required until those GitHub environment secrets are configured.
+- Deploy job fail-fast checks `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, and `DEPLOY_SSH_KEY`; missing values will block deploy.
+- Current state: those secrets are configured and deploy automation is passing (verified on rerun `23687500356`).
+- Manual SSH deploy remains available fallback if Actions deploy is unavailable.
 - Server-side deploy pulls from GitHub, not from local branches
 - If code is not committed and pushed to `main`, it is not live
 - Practical rule: local changes on feature/agent branches are not deployed until merged/pushed to `main`
