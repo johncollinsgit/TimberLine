@@ -72,3 +72,33 @@ Run type: Repository-side operator-enablement pass (no real staging guarded sequ
    - subscription-prep sync
    - live subscription create/sync
 4. Capture required screenshots and complete `docs/operations/staging-commercial-uat-evidence-template.md` for each required permutation.
+
+---
+
+## Follow-Up Attempt (2026-03-28, Real Operator Session)
+
+Status: Still blocked (new blocker class identified).
+
+What changed versus the earlier blocked run:
+- A real landlord operator session was executed with `modernforestryteam@gmail.com`.
+- Login succeeded and `/landlord/commercial` loaded in-browser.
+- Runtime Stripe preflight still passes:
+  - Stripe secret/publishable key present and prefix-valid.
+  - Guarded customer/prep/live flags enabled.
+  - Required 8 recurring lookup keys resolve (`HTTP 200`, all active monthly prices).
+
+New blocking truth:
+- The landlord commercial page currently has no tenant rows to select for guarded actions.
+- Read-only runtime check confirms:
+  - `App\Models\Tenant::query()->count() = 0`
+- Because there is no tenant target, guarded step 1 cannot be executed and steps 2/3 cannot start.
+
+Evidence artifacts for this follow-up:
+- `docs/operations/evidence/2026-03-28/guarded-stripe-run-2026-03-28T23-01-20.111Z/01-login-page.png`
+- `docs/operations/evidence/2026-03-28/guarded-stripe-run-2026-03-28T23-01-20.111Z/02-landlord-commercial-overview.png`
+- `docs/operations/evidence/2026-03-28/guarded-stripe-run-2026-03-28T23-01-20.111Z/run-summary.json`
+
+Updated unblock requirements:
+1. Create or sync at least one staging tenant record so a tenant row exists in `/landlord/commercial`.
+2. Re-run the guarded 3-step Stripe sequence with the same landlord operator account.
+3. Capture step-level screenshots/evidence and mark PASS/FAIL from actual step execution.
