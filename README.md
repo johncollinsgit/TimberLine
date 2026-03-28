@@ -1,6 +1,6 @@
 # Modern Forestry Backstage
 
-## Current Release State (2026-03-25)
+## Current Release State (2026-03-27)
 
 This branch now includes the first commercialization/operator shell on top of tenant entitlements.
 
@@ -13,6 +13,8 @@ Implemented and navigable now:
 - Public product surfaces:
   - `/platform/promo`
   - `/platform/contact`
+- Landlord commercial control surface:
+  - `/landlord/commercial` (host-locked, configuration-first controls for plans/add-ons/templates/tenant overrides)
 - Operator diagnostics surfaces:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison flows
@@ -27,7 +29,21 @@ Integrations surface behavior (intentional in this release):
 
 Commercialization/access state:
 - product shell and entitlement-aware UI are in place
-- billing/checkout/activation writes are not implemented yet
+- public tier model is now normalized to `Starter`, `Growth`, `Pro` (legacy keys are mapped for compatibility)
+- add-on model is now normalized to `referrals`, `sms`, `additional_channels`, `bulk_email_marketing`, `future_niche_modules`
+- template library foundation is now normalized to `Candle`, `Law`, `Landscaping`, `Apparel`, `Generic`
+- three guarded landlord-only Stripe actions are implemented:
+  - customer reference create/sync
+  - subscription-prep metadata sync
+  - guarded live subscription reference create/sync (explicit trigger only; disabled-by-default config flag)
+- guarded Stripe preflight now requires HTTPS for remote `services.stripe.api_base` endpoints (HTTP is loopback-only for local testing on `localhost`/`127.0.0.1`/`::1`)
+- staging validation support is now explicit for these guarded Stripe actions:
+  - run + evidence sequence is documented in `docs/operations/staging-commercial-uat-runbook.md`
+  - operator evidence template is documented in `docs/operations/staging-commercial-uat-evidence-template.md`
+- latest repo-side validation status (2026-03-28):
+  - real staging operator evidence is not attached by this pass
+  - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+- checkout and broad subscription lifecycle mutation writes are still intentionally disabled
 - upgrade prompts are informational routing only
 
 Multi-tenant state:
@@ -37,10 +53,62 @@ Multi-tenant state:
 
 Recommended next step after this push:
 - deploy and run manual production verification of shell navigation, diagnostics filters/export parity, and integrations placeholder/drawer behavior before adding new scope
+- use the staging operator runbook for landlord commercial assignment propagation checks:
+  - `docs/operations/staging-commercial-uat-runbook.md`
 
-## Production Auth Findings (2026-03-25)
+## Strict Near-Term Execution Order (As of 2026-03-27)
 
-Observed during live verification at `https://backstage.theforestrystudio.com/login`:
+1. Verify Candle Cash is trustworthy end to end for Modern Forestry (storefront truth, admin/backstage truth, reconciliation parity).
+2. Fix email reliability for launch-critical reward/customer workflows.
+3. Only then start broader platform expansion.
+
+Do not start yet:
+- broad multi-tenant refactors
+- Shopify App Store packaging
+- speculative AI automation work
+
+## Product Architecture References (2026-03-27 Pass)
+
+- Business concept and commercial model:
+  - `docs/architecture/business-concept-and-product-architecture.md`
+- Multi-tenant implementation inventory:
+  - `docs/architecture/multi-tenant-inventory-2026-03-27.md`
+- Entitlements/commercial shell foundation:
+  - `docs/architecture/tenant-entitlements-foundation.md`
+
+## Production Host Rules (Current Direction)
+
+- Public marketing site: `forestrybackstage.com`
+- Landlord/operator host: `app.forestrybackstage.com`
+- Tenant host pattern: `<slug>.forestrybackstage.com`
+- Landlord routes are host-locked; tenant directory remains read-only while commercial config writes are limited to safe scope (`/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`).
+- Unknown hosts must not silently fall back to the first tenant.
+
+## Production DNS + Wildcard TLS Verification (2026-03-27)
+
+Verified in production for Forestry Backstage:
+- Wildcard certificate issuance for `*.forestrybackstage.com` is working.
+- Tenant wildcard DNS now resolves through Cloudflare wildcard records.
+- Tenant HTTPS now negotiates the wildcard cert and routes into Laravel.
+
+Working production host model:
+- public site: `forestrybackstage.com`
+- landlord app: `app.forestrybackstage.com`
+- tenant apps: `<slug>.forestrybackstage.com`
+
+Operator notes (important):
+- Forge DNS-01 challenge must use:
+  - type: `CNAME`
+  - name: `_acme-challenge`
+  - target: Forge-provided `verify-<token>.ssl.on-forge.com`
+  - proxy status: `DNS only` (gray cloud)
+- Tenant wildcard record may stay proxied:
+  - `A * -> 129.212.138.111` (Cloudflare proxied is acceptable)
+- If Forge verification target returns `NXDOMAIN`, regenerate a fresh challenge in Forge and update only the CNAME target.
+
+## Historical Auth Findings (2026-03-25, Legacy Host Check)
+
+Observed during a historical live verification on legacy host `https://backstage.theforestrystudio.com/login` (kept for audit context; current production direction is `*.forestrybackstage.com`):
 - Password resets run locally do not affect production.
 - Production user `johncollinsemail@gmail.com` exists, is active/approved, and password reset was successfully applied on production (`PASSWORD_MATCH=1`).
 - Google login failure is currently external-credential based, not route/UI based:
@@ -114,13 +182,13 @@ What was added:
   - `app/Http/Middleware/ResolveHostTenantContext.php`
 - Middleware is prepended to the `web` stack in `bootstrap/app.php` so host context is available before auth/login handling.
 - Host behavior now supports:
-  - landlord host (`app.fireforgetech.com`) => landlord context (`isLandlordMode=true`), no tenant required
-  - tenant host (`<slug>.fireforgetech.com`) => resolves tenant by slug/subdomain
+  - landlord host (`app.forestrybackstage.com` in production, configurable) => landlord context (`isLandlordMode=true`), no tenant required
+  - tenant host (`<slug>.forestrybackstage.com` in production) => resolves tenant by slug/subdomain
   - unknown host => unresolved context, no fallback to first tenant
 - Existing auth tenant resolver (`GuestAuthTenantContextResolver`) now reuses this host resolver rather than duplicating host parsing logic.
 
 Configuration added:
-- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default `app.fireforgetech.com`)
+- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default `app.forestrybackstage.com`)
 - `TENANCY_LANDLORD_OPERATOR_ROLES` env var (comma-separated, default `admin`)
 - `TENANCY_LANDLORD_OPERATOR_EMAILS` env var (comma-separated, optional allowlist)
 - `config/tenancy.php` now exposes:
@@ -132,10 +200,10 @@ Configuration added:
 Local setup note:
 - In this implementation, the first host in `TENANCY_LANDLORD_HOSTS` is treated as the landlord route domain (`tenancy.landlord.primary_host`) and is what `Route::domain(...)` uses for `/landlord*` routes.
 - Host examples:
-  - production example: `TENANCY_LANDLORD_HOSTS=app.fireforgetech.com`
-  - local example: `TENANCY_LANDLORD_HOSTS=app.fireforgetech.test`
+  - production example: `TENANCY_LANDLORD_HOSTS=app.forestrybackstage.com`
+  - local example: `TENANCY_LANDLORD_HOSTS=forestrybackstage.test`
 - Recommended local baseline:
-  - `TENANCY_LANDLORD_HOSTS=app.fireforgetech.test`
+  - `TENANCY_LANDLORD_HOSTS=forestrybackstage.test`
   - `TENANCY_LANDLORD_OPERATOR_ROLES=admin`
   - `TENANCY_LANDLORD_OPERATOR_EMAILS=`
 - Fast local login bootstrap (if your expected admin login fails):
@@ -145,6 +213,7 @@ Local setup note:
 
 Landlord/operator routes added (landlord-host only):
 - `GET /landlord` => landlord dashboard (`landlord.dashboard`)
+- `GET /landlord/commercial` => landlord commercial configuration console (`landlord.commercial.index`)
 - `GET /landlord/tenants` => read-only tenant directory (`landlord.tenants.index`)
 - `GET /landlord/tenants/{tenant}` => read-only tenant detail (`landlord.tenants.show`)
 - Guarded by `auth`, `verified`, and `landlord.operator`
@@ -182,7 +251,7 @@ Tests added:
 
 Explicit non-goals in this phase:
 - no changes to post-auth `tenant.access` enforcement semantics
-- no billing/impersonation/write actions in landlord surfaces
+- no billing checkout/subscription lifecycle actions, impersonation, or unsafe landlord writes outside commercial configuration scope
 - no Candle Cash/campaign/birthdays core-table changes
 - no Shopify embedded/proxy/webhook behavior changes
 

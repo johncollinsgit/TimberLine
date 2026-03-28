@@ -14,12 +14,13 @@
   - `docs/architecture/operational-multi-tenant-direction.md`
   - `docs/architecture/tenant-entitlements-foundation.md`
 
-## Current Release State (2026-03-25)
+## Current Release State (2026-03-27)
 
 Quick-scan summary for future agents:
 - Product shell/commercialization surfaces are implemented:
   - embedded: `/shopify/app`, `/shopify/app/start`, `/shopify/app/plans`, `/shopify/app/integrations`
   - public: `/platform/promo`, `/platform/contact`
+  - landlord commercial: `/landlord/commercial`
 - Diagnostics/operator surfaces are implemented and actively used:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison
@@ -29,16 +30,53 @@ Quick-scan summary for future agents:
   - read-only deterministic status registry metadata
   - entitlement-aware card states (`connected`, `setup_needed`, `locked`, `coming_soon`)
   - no real connector sync/OAuth/jobs/webhooks/API writes from this surface
-- Commercialization direction is active but billing/checkout activation is not implemented yet.
+- Commercialization direction is active with three guarded landlord-only Stripe actions:
+  - customer-reference sync
+  - subscription-prep metadata sync
+  - live subscription reference create/sync (explicit landlord trigger; disabled-by-default config flag)
+  - guarded Stripe preflight requires HTTPS for remote `services.stripe.api_base` endpoints (HTTP is loopback-only for local testing on `localhost`/`127.0.0.1`/`::1`)
+- Staging validation support for those guarded actions is explicit:
+  - required run order + pass/fail matrix: `docs/operations/staging-commercial-uat-runbook.md`
+  - required evidence template: `docs/operations/staging-commercial-uat-evidence-template.md`
+- Latest repo-side validation status (2026-03-28):
+  - real staging operator evidence is not attached by this pass
+  - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+- Checkout and broad subscription lifecycle mutation flows remain intentionally disabled.
+- Public commercial model has been normalized:
+  - tiers: `Starter`, `Growth`, `Pro`
+  - add-ons: `referrals`, `sms`, `additional_channels`, `bulk_email_marketing`, `future_niche_modules`
+  - template library: `Candle`, `Law`, `Landscaping`, `Apparel`, `Generic`
 - Tenant-aware direction is established in shell + diagnostics, while full domain tenant isolation remains in progress.
 - Landlord/admin Phase 1 host foundation is implemented:
   - global pre-auth host context middleware resolves landlord/tenant/none host mode
-  - landlord host target is `app.fireforgetech.com` (configurable)
-  - tenant host target is `<slug>.fireforgetech.com`
+  - landlord host target in production is `app.forestrybackstage.com` (configurable)
+  - tenant host target in production is `<slug>.forestrybackstage.com`
   - unknown hosts resolve safely to `none` (no first-tenant fallback)
-  - landlord routes are host-locked and read-only in this phase: `/landlord`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
+  - landlord routes are host-locked: `/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
+  - landlord directory remains read-only while commercial writes are constrained to safe configuration scope
   - landlord route auth uses dedicated `landlord.operator` middleware (default `admin` role; optional email allowlist) instead of tenant-facing role groups
+- Production DNS/TLS verification completed on 2026-03-27:
+  - wildcard cert for `*.forestrybackstage.com` is active
+  - ACME `_acme-challenge` delegation is CNAME-based and must stay Cloudflare `DNS only`
+  - wildcard tenant DNS (`*`) resolves and tenant HTTPS reaches Laravel (`/login` redirects observed)
 - Immediate next step is deploy + verify this release, not broad new feature expansion.
+- Staging operator UAT runbook for commercialization assignment hardening:
+  - `docs/operations/staging-commercial-uat-runbook.md`
+
+## Strict Near-Term Execution Order (As of 2026-03-27)
+1. Candle Cash verified live and trustworthy for Modern Forestry.
+2. Email reliability fixed for launch-critical reward/customer workflows.
+3. Only then broader platform expansion.
+
+Do not start yet:
+- broad multi-tenant refactors
+- Shopify App Store packaging
+- speculative AI automation work
+
+## Product Architecture References (2026-03-27 Pass)
+- `docs/architecture/business-concept-and-product-architecture.md`
+- `docs/architecture/multi-tenant-inventory-2026-03-27.md`
+- `docs/architecture/tenant-entitlements-foundation.md`
 
 ## Current Shopify Proof-of-Concept Reality
 - Working now (proof-of-concept surfaces that must not be weakened):
@@ -341,7 +379,7 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 
 ## Current Priority TODOs
 ### Do Now — Candle Cash Launch-Critical Verification
-- [ ] Launch Candle Cash tomorrow in a way that is visibly working on the live storefront and in the Laravel admin/backstage system
+- [ ] Verify Candle Cash is visibly working on the live storefront and in the Laravel admin/backstage system (no date assumptions)
 - [ ] Confirm the full customer-facing reward loop is functioning end to end:
   - earn behavior occurs
   - reward state updates correctly
@@ -688,7 +726,11 @@ All future work should reinforce:
 
 Not just feature expansion.
 
-## SaaS Productization Direction (Shopify App + Multi-Tenant Expansion)
+## Historical Productization Notes (Not Active Scope)
+
+The following App Store/productization notes are historical strategy context only.
+They are not the active execution sequence for this release.
+Current order remains: Candle Cash verification -> email reliability -> then broader expansion.
 
 This system is evolving from a single-store internal tool into a multi-tenant SaaS application distributed via the Shopify App Store.
 

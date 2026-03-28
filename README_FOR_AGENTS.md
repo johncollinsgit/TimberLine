@@ -13,6 +13,8 @@ Current implemented shell/diagnostics checkpoint:
 - Public product surfaces are implemented:
   - `/platform/promo`
   - `/platform/contact`
+- Landlord commercial config surface is implemented:
+  - `/landlord/commercial` (host-locked, configuration-first controls)
 - Diagnostics/operator surfaces are implemented and test-covered:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison
@@ -22,18 +24,51 @@ Current implemented shell/diagnostics checkpoint:
   - read-only deterministic status registry exists
   - entitlement-aware states (`connected`, `setup_needed`, `locked`, `coming_soon`) exist
   - no real connector sync/OAuth/jobs/webhooks/API writes exist
-- Billing/checkout activation is intentionally not implemented yet.
+- Billing remains guarded and landlord-controlled:
+  - guarded Stripe customer-reference sync action exists on `/landlord/commercial`
+  - guarded Stripe subscription-prep metadata sync action exists on `/landlord/commercial`
+  - guarded Stripe live subscription create/sync action exists on `/landlord/commercial` (landlord-only, explicit trigger, disabled-by-default config flag)
+  - guarded Stripe preflight requires HTTPS for remote `services.stripe.api_base` endpoints (HTTP is loopback-only for local testing on `localhost`/`127.0.0.1`/`::1`)
+  - staging validation for the 3-step guarded Stripe sequence is documented and evidence-driven:
+    - `docs/operations/staging-commercial-uat-runbook.md`
+    - `docs/operations/staging-commercial-uat-evidence-template.md`
+  - latest repo-side validation status (2026-03-28):
+    - real staging operator evidence is not attached by this pass
+    - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
+  - checkout and broad subscription lifecycle mutation flows remain intentionally disabled
 - Landlord/admin Phase 1 host foundation is now in place:
   - pre-auth host tenant context is globally resolved via middleware
-  - landlord host: `app.fireforgetech.com`
-  - tenant host pattern: `<slug>.fireforgetech.com`
-  - landlord routes (host-locked): `/landlord`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
-  - landlord directory pages are read-only in this phase
+  - landlord host (production): `app.forestrybackstage.com`
+  - tenant host pattern (production): `<slug>.forestrybackstage.com`
+  - landlord routes (host-locked): `/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
+  - landlord directory pages remain read-only
+  - landlord commercial writes are limited to safe configuration scope (plan/add-on/template catalog, tenant assignment/overrides)
   - unknown hosts do not silently fallback to first tenant
+
+Commercial model normalization now in repo:
+- public tiers: `Starter`, `Growth`, `Pro`
+- add-ons: `referrals`, `sms`, `additional_channels`, `bulk_email_marketing`, `future_niche_modules`
+- template library: `Candle`, `Law`, `Landscaping`, `Apparel`, `Generic`
+- billing lifecycle remains guarded-first (Stripe primary with landlord-only guarded actions, Braintree secondary readiness, no checkout activation)
+
+Production DNS/TLS status (2026-03-27):
+- wildcard TLS for `*.forestrybackstage.com` was successfully issued via Forge DNS-01
+- `_acme-challenge` CNAME must remain `DNS only` in Cloudflare
+- wildcard tenant DNS is active (`* -> 129.212.138.111`) and tenant HTTPS reaches app login routes
 
 Current execution priority:
 - deploy/verify/stabilize this shell and diagnostics release
 - avoid new feature sprawl unless a concrete regression requires it
+
+Strict near-term execution order (current operator rule):
+1. Candle Cash verified live and trustworthy for Modern Forestry.
+2. Email reliability fixed for launch-critical reward/customer workflows.
+3. Only then broader platform expansion.
+
+Do not start yet:
+- broad multi-tenant refactors
+- Shopify App Store packaging
+- speculative AI automation work
 
 ## Landlord Host Foundation (2026-03-26)
 
@@ -57,8 +92,8 @@ Config:
 Local routing note:
 - `config('tenancy.landlord.primary_host')` is derived from the first host in `TENANCY_LANDLORD_HOSTS` and is what landlord `Route::domain(...)` bindings use.
 - Distinguish host examples in docs:
-  - production example: `app.fireforgetech.com`
-  - local example: `app.fireforgetech.test`
+  - production example: `app.forestrybackstage.com`
+  - local example: `forestrybackstage.test`
 - Keep local examples explicit in docs/config comments so operators do not assume the full `hosts` list is domain-bound in routing.
 - Fast local auth bootstrap path already exists and should be preferred over ad-hoc DB edits:
   - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin`
@@ -72,8 +107,13 @@ Authorization note:
 Important guardrails for future edits:
 - Do not bypass host-locked landlord routing by making landlord pages globally available.
 - Keep post-auth `tenant.access` middleware behavior unchanged unless explicitly requested.
-- Keep landlord directory read-only until explicit write safety requirements are defined.
+- Keep landlord writes constrained to commercial configuration scope only.
 - Keep Shopify embedded/storefront/proxy behavior unchanged while evolving landlord/admin surfaces.
+
+Architecture references for this pass:
+- `docs/architecture/business-concept-and-product-architecture.md`
+- `docs/architecture/multi-tenant-inventory-2026-03-27.md`
+- `docs/operations/staging-commercial-uat-runbook.md` (operator UAT sequence for landlord commercial assignment propagation)
 
 ## Auth Findings (2026-03-25)
 
@@ -239,7 +279,7 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 ## Historical TODO Backlog (Not Current Release Focus)
 
 ### Immediate launch goal
-- [ ] Launch Candle Cash tomorrow in a way that is visibly working on the live storefront and in the Laravel admin/backstage system
+- [ ] Verify Candle Cash is visibly working on the live storefront and in the Laravel admin/backstage system (no date assumptions)
 - [ ] Confirm the full customer-facing reward loop is functioning end to end:
   - earn behavior occurs
   - reward state updates correctly
