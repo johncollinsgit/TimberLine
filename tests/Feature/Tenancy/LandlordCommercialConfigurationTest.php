@@ -38,7 +38,7 @@ test('landlord commercial page is host-locked and available to landlord operator
         ->assertOk()
         ->assertSeeText('Commercial Revenue Configuration')
         ->assertSeeText('Plans & pricing')
-        ->assertSeeText('Monthly price (USD cents)')
+        ->assertSeeText('Monthly price (USD)')
         ->assertSeeText('Modules are grouped by top-level classification')
         ->assertSeeText('Shared Core Modules')
         ->assertSeeText('Integration Layer Modules')
@@ -207,7 +207,7 @@ test('landlord commercial page keeps billing lifecycle actions disabled', functi
         ->assertOk()
         ->assertSeeText('Billing Readiness / Status')
         ->assertSeeText('Revenue configuration is ready for mapping validation while broad lifecycle automation stays intentionally disabled.')
-        ->assertSeeText('Edit monthly prices, setup fees, and revenue configuration values in USD cents.')
+        ->assertSeeText('Edit monthly prices, setup fees, and revenue configuration values in USD (`0.00`) format.')
         ->assertSeeText('Only one guarded live subscription create/sync action is available (landlord-triggered, prerequisite-gated).')
         ->assertSeeText('Broad subscription update/cancel automation is still disabled.')
         ->assertSeeText('Checkout remains disabled and broad lifecycle writes remain intentionally inactive in this phase.')
@@ -249,6 +249,35 @@ test('landlord catalog upsert writes configuration entries', function (): void {
     expect($row)->not->toBeNull()
         ->and((int) ($row?->recurring_price_cents ?? 0))->toBe(45900)
         ->and((string) data_get($row?->payload ?? [], 'modules.0'))->toBe('wishlist');
+});
+
+test('landlord catalog upsert accepts dollar format pricing and stores cents', function (): void {
+    $host = commercialLandlordHost();
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->post("http://{$host}/landlord/commercial/catalog/addon/upsert", [
+            'entry_key' => 'sms',
+            'name' => 'SMS',
+            'position' => 20,
+            'recurring_price' => '89.50',
+            'setup_price' => '10.25',
+            'payload_json' => '{"modules":["sms"]}',
+        ])
+        ->assertRedirect();
+
+    $row = LandlordCatalogEntry::query()
+        ->where('entry_type', LandlordCatalogEntry::TYPE_ADDON)
+        ->where('entry_key', 'sms')
+        ->first();
+
+    expect($row)->not->toBeNull()
+        ->and((int) ($row?->recurring_price_cents ?? 0))->toBe(8950)
+        ->and((int) ($row?->setup_price_cents ?? 0))->toBe(1025);
 });
 
 test('landlord commercial page shows effective label source and missing-template fallback notice', function (): void {

@@ -330,7 +330,7 @@
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Plans &amp; Pricing</h3>
                         <p class="text-sm text-zinc-600">
-                            Edit monthly prices, setup fees, and revenue configuration values in USD cents.
+                            Edit monthly prices, setup fees, and revenue configuration values in USD (`0.00`) format.
                         </p>
                     </div>
 
@@ -343,6 +343,8 @@
                                     @php
                                         $monthlyCents = is_numeric($entry['recurring_price_cents'] ?? null) ? (int) $entry['recurring_price_cents'] : null;
                                         $setupCents = is_numeric($entry['setup_price_cents'] ?? null) ? (int) $entry['setup_price_cents'] : null;
+                                        $monthlyPrice = $monthlyCents !== null ? number_format($monthlyCents / 100, 2, '.', '') : '';
+                                        $setupPrice = $setupCents !== null ? number_format($setupCents / 100, 2, '.', '') : '';
                                     @endphp
                                     <form method="POST" action="{{ route('landlord.commercial.catalog.upsert', ['type' => 'plan']) }}" class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                                         @csrf
@@ -357,14 +359,15 @@
                                                 <input name="position" value="{{ (int) ($entry['position'] ?? 100) }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                             </label>
                                             <label class="text-xs text-zinc-700">
-                                                Monthly price (USD cents)
-                                                <input name="recurring_price_cents" value="{{ $entry['recurring_price_cents'] ?? '' }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
+                                                Monthly price (USD)
+                                                <input name="recurring_price" value="{{ $monthlyPrice }}" inputmode="decimal" placeholder="149.00" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                             </label>
                                             <label class="text-xs text-zinc-700">
-                                                One-time setup fee (USD cents)
-                                                <input name="setup_price_cents" value="{{ $entry['setup_price_cents'] ?? '' }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
+                                                One-time setup fee (USD)
+                                                <input name="setup_price" value="{{ $setupPrice }}" inputmode="decimal" placeholder="49.00" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                             </label>
                                         </div>
+                                        <p class="mt-2 text-[11px] text-zinc-600">Use standard dollar format like <code>149.00</code>.</p>
                                         <p class="mt-2 text-[11px] text-zinc-600">
                                             Monthly preview: {{ $monthlyCents !== null ? '$'.number_format($monthlyCents / 100, 2) : 'n/a' }}
                                             · Setup preview: {{ $setupCents !== null ? '$'.number_format($setupCents / 100, 2) : 'n/a' }}
@@ -387,6 +390,8 @@
                                     @php
                                         $monthlyCents = is_numeric($entry['recurring_price_cents'] ?? null) ? (int) $entry['recurring_price_cents'] : null;
                                         $setupCents = is_numeric($entry['setup_price_cents'] ?? null) ? (int) $entry['setup_price_cents'] : null;
+                                        $monthlyPrice = $monthlyCents !== null ? number_format($monthlyCents / 100, 2, '.', '') : '';
+                                        $setupPrice = $setupCents !== null ? number_format($setupCents / 100, 2, '.', '') : '';
                                     @endphp
                                     <form method="POST" action="{{ route('landlord.commercial.catalog.upsert', ['type' => 'addon']) }}" class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                                         @csrf
@@ -401,14 +406,15 @@
                                                 <input name="position" value="{{ (int) ($entry['position'] ?? 100) }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                             </label>
                                             <label class="text-xs text-zinc-700">
-                                                Monthly price (USD cents)
-                                                <input name="recurring_price_cents" value="{{ $entry['recurring_price_cents'] ?? '' }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
+                                                Monthly price (USD)
+                                                <input name="recurring_price" value="{{ $monthlyPrice }}" inputmode="decimal" placeholder="79.00" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                             </label>
                                             <label class="text-xs text-zinc-700">
-                                                One-time setup fee (USD cents)
-                                                <input name="setup_price_cents" value="{{ $entry['setup_price_cents'] ?? '' }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
+                                                One-time setup fee (USD)
+                                                <input name="setup_price" value="{{ $setupPrice }}" inputmode="decimal" placeholder="0.00" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                             </label>
                                         </div>
+                                        <p class="mt-2 text-[11px] text-zinc-600">Use standard dollar format like <code>79.00</code>.</p>
                                         <p class="mt-2 text-[11px] text-zinc-600">
                                             Monthly preview: {{ $monthlyCents !== null ? '$'.number_format($monthlyCents / 100, 2) : 'n/a' }}
                                             · Setup preview: {{ $setupCents !== null ? '$'.number_format($setupCents / 100, 2) : 'n/a' }}
@@ -431,6 +437,7 @@
                             @foreach ($setupPackages as $entry)
                                 @php
                                     $setupCents = is_numeric($entry['setup_price_cents'] ?? null) ? (int) $entry['setup_price_cents'] : null;
+                                    $setupPrice = $setupCents !== null ? number_format($setupCents / 100, 2, '.', '') : '';
                                 @endphp
                                 <form method="POST" action="{{ route('landlord.commercial.catalog.upsert', ['type' => 'setup_package']) }}" class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                                     @csrf
@@ -445,10 +452,11 @@
                                             <input name="position" value="{{ (int) ($entry['position'] ?? 100) }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                         </label>
                                         <label class="text-xs text-zinc-700 md:col-span-2">
-                                            One-time setup fee (USD cents)
-                                            <input name="setup_price_cents" value="{{ $entry['setup_price_cents'] ?? '' }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
+                                            One-time setup fee (USD)
+                                            <input name="setup_price" value="{{ $setupPrice }}" inputmode="decimal" placeholder="149.00" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900">
                                         </label>
                                     </div>
+                                    <p class="mt-2 text-[11px] text-zinc-600">Use standard dollar format like <code>149.00</code>.</p>
                                     <p class="mt-2 text-[11px] text-zinc-600">Setup preview: {{ $setupCents !== null ? '$'.number_format($setupCents / 100, 2) : 'n/a' }}</p>
                                     <button type="submit" class="mt-3 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800">Save package pricing</button>
                                 </form>

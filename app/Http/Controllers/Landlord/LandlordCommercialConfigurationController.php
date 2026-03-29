@@ -139,8 +139,10 @@ class LandlordCommercialConfigurationController extends Controller
             'is_public' => ['nullable', 'boolean'],
             'position' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'currency' => ['nullable', 'string', 'size:3'],
+            'recurring_price' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,2})?$/'],
             'recurring_price_cents' => ['nullable', 'integer', 'min:0'],
             'recurring_interval' => ['nullable', 'string', 'max:40'],
+            'setup_price' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,2})?$/'],
             'setup_price_cents' => ['nullable', 'integer', 'min:0'],
             'payload_json' => ['nullable', 'string', 'json'],
         ]);
@@ -149,6 +151,14 @@ class LandlordCommercialConfigurationController extends Controller
             type: $type,
             input: [
                 ...$validated,
+                'recurring_price_cents' => $this->resolvePriceCents(
+                    dollars: $validated['recurring_price'] ?? null,
+                    cents: $validated['recurring_price_cents'] ?? null
+                ),
+                'setup_price_cents' => $this->resolvePriceCents(
+                    dollars: $validated['setup_price'] ?? null,
+                    cents: $validated['setup_price_cents'] ?? null
+                ),
                 'payload' => $this->decodeJsonMap($validated['payload_json'] ?? ''),
             ],
             actorId: $request->user()?->id
@@ -440,5 +450,33 @@ class LandlordCommercialConfigurationController extends Controller
         }
 
         return $normalized;
+    }
+
+    protected function resolvePriceCents(?string $dollars, mixed $cents): ?int
+    {
+        $dollarsCents = $this->dollarsToCents($dollars);
+        if ($dollarsCents !== null) {
+            return $dollarsCents;
+        }
+
+        if ($cents === null || $cents === '') {
+            return null;
+        }
+
+        return max(0, (int) $cents);
+    }
+
+    protected function dollarsToCents(?string $value): ?int
+    {
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $parts = explode('.', $normalized, 2);
+        $whole = (int) ($parts[0] ?? '0');
+        $fraction = str_pad(substr((string) ($parts[1] ?? ''), 0, 2), 2, '0');
+
+        return ($whole * 100) + (int) $fraction;
     }
 }
