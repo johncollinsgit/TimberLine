@@ -1,0 +1,17 @@
+{
+  "operator_email": "modernforestryteam@gmail.com",
+  "environment": "https://app.forestrybackstage.com",
+  "run_started_at": "2026-03-29T13:14:43.036Z",
+  "evidence_dir": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T13-14-42.337Z",
+  "tenant": null,
+  "preflight": {
+    "landlord_page_header": "Commercial Revenue Configuration",
+    "landlord_route_reachable": true
+  },
+  "steps": [],
+  "shopify_surface_screens": {},
+  "errors": [
+    "No tenant rows found on landlord commercial page."
+  ],
+  "run_completed_at": "2026-03-29T13:14:47.109Z"
+}
