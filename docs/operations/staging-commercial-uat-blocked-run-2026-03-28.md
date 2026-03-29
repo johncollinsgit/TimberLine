@@ -132,3 +132,45 @@ Evidence artifacts for tenant-row unblock:
 Current truth after unblock:
 - `/landlord/commercial` is now operator-ready for guarded Stripe step execution.
 - Real PASS evidence for guarded customer sync, subscription-prep sync, and live subscription create/sync is still not attached in this pass.
+
+---
+
+## Follow-Up Real Guarded Run (2026-03-29, Modern Forestry Tenant)
+
+Status: Executed with partial failure (not preflight-blocked).
+
+What was validated in a real landlord operator session:
+- Operator: `modernforestryteam@gmail.com`
+- Host: `https://app.forestrybackstage.com/landlord/commercial`
+- Tenant: `Modern Forestry` (`modern-forestry`)
+- Preflight state at execution:
+  - tenant row visible (`tenant_rows_visible=1`)
+  - customer sync control enabled
+  - subscription-prep control enabled
+  - live subscription control enabled before step 1 in this run window
+
+Guarded step outcomes:
+1. Customer sync: `PASS`
+   - customer reference synced: `cus_UEpZQoP8cJadrs`
+   - metadata status: `billing_guarded_actions.stripe_customer_sync.status=succeeded`
+2. Subscription prep sync: `PASS`
+   - prep hash synced: `eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563`
+   - metadata status: `billing_guarded_actions.stripe_subscription_prep.status=succeeded` (`mode=noop`)
+3. Live subscription create/sync: `FAIL`
+   - metadata status: `billing_guarded_actions.stripe_live_subscription_sync.status=failed`
+   - failure message: `Missing email. In order to create invoices that are sent to the customer, the customer must have a valid email.`
+   - `billing_mapping.stripe.subscription_reference` remains empty/null
+
+Evidence artifacts:
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/01-login-page.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/02-landlord-commercial-overview.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/03-landlord-tenant-row-state-before-guarded-actions.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/04-landlord-guarded-customer-sync-state.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/05-landlord-guarded-subscription-prep-state.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/06-landlord-guarded-live-subscription-state.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/07-landlord-commercial-final-state.png`
+- `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/run-summary.json`
+
+Current blocker truth after this run:
+- The guarded 3-step path is executable on staging and no longer blocked by host/operator/tenant-row readiness.
+- Full guarded PASS evidence is still not available because step 3 failed on Stripe-side invoice prerequisites (customer email missing).

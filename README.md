@@ -41,13 +41,16 @@ Commercialization/access state:
   - run + evidence sequence is documented in `docs/operations/staging-commercial-uat-runbook.md`
   - operator evidence template is documented in `docs/operations/staging-commercial-uat-evidence-template.md`
 - latest repo-side validation status (2026-03-29):
-  - real staging operator evidence is not attached by this pass
+  - real staging landlord operator evidence is attached for a guarded run on tenant `modern-forestry`
   - blocked-run record: `docs/operations/staging-commercial-uat-blocked-run-2026-03-28.md`
   - staging Stripe sandbox + operator follow-up: runtime Stripe auth succeeds and all required recurring lookup-key prices are present/verified (`tier_starter_monthly`, `tier_growth_monthly`, `tier_pro_monthly`, `addon_referrals_monthly`, `addon_sms_monthly`, `addon_additional_channels_monthly`, `addon_bulk_email_marketing_monthly`, `addon_future_niche_modules_monthly`), and the landlord operator account `modernforestryteam@gmail.com` is route-ready
-  - tenant-row unblock follow-up (2026-03-29): existing `TenantSeeder` was executed on staging; `/landlord/commercial` now renders one selectable tenant row (`Modern Forestry`, slug `modern-forestry`) and is operator-ready for guarded-step rerun
-  - tenant-row probe evidence artifacts: `docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/`
-  - guarded Stripe 3-step PASS evidence is still not attached; the guarded sequence must be rerun from the now-available tenant row
-  - blocker evidence artifacts: `docs/operations/evidence/2026-03-28/guarded-stripe-run-2026-03-28T23-01-20.111Z/`
+  - tenant-row unblock follow-up (2026-03-29): existing `TenantSeeder` was executed on staging; `/landlord/commercial` now renders one selectable tenant row (`Modern Forestry`, slug `modern-forestry`)
+  - guarded run evidence artifacts (2026-03-29): `docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/`
+  - guarded step outcomes from the real run:
+    - step 1 customer sync: `PASS` (`cus_UEpZQoP8cJadrs`)
+    - step 2 subscription-prep sync: `PASS` (`eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563`)
+    - step 3 live subscription create/sync: `FAIL` (`Missing email. In order to create invoices that are sent to the customer, the customer must have a valid email.`)
+  - full guarded 3-step PASS evidence is still not attached because step 3 failed in real staging execution
   - follow-up commit `9c2502c` (CI assertion alignment after dotenv bootstrap fix) is pushed to `main`
   - local CI-equivalent rerun for this pass:
     - command: `php -d memory_limit=512M ./vendor/bin/pest`

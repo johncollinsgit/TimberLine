@@ -1,0 +1,90 @@
+{
+  "operator_email": "modernforestryteam@gmail.com",
+  "environment": "https://app.forestrybackstage.com",
+  "run_started_at": "2026-03-29T16:23:07.524Z",
+  "evidence_dir": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z",
+  "tenant_target_slug": "modern-forestry",
+  "tenant": {
+    "name": "Modern Forestry",
+    "summary": "modern-forestry · assigned plan: starter · effective plan: starter · template: none · labels: entitlements default",
+    "row_index": 0
+  },
+  "preflight": {
+    "landlord_page_header": "Commercial Revenue Configuration",
+    "landlord_route_reachable": true,
+    "tenant_rows_visible": 1,
+    "customer_button_enabled": true,
+    "prep_button_enabled_before_step1": true,
+    "live_button_enabled_before_step1": true,
+    "prep_button_enabled_after_step1": true,
+    "live_button_enabled_after_step2": true
+  },
+  "steps": [
+    {
+      "key": "step1_customer_sync",
+      "attempted_at": "2026-03-29T16:23:11.375Z",
+      "completed_at": "2026-03-29T16:23:12.838Z",
+      "disabled_before_click": false,
+      "button_label": "Sync Stripe Customer Reference",
+      "pass": true,
+      "row_last_status": "succeeded",
+      "status_message": "Stripe customer sync succeeded: cus_UEpZQoP8cJadrs LANDLORD Commercial Revenue Configuration Commercial Control Center for plan pricing, add-on pricing, tenant overrides, and guarded billing-readiness actions. Back to Dashboard Update Pricing Overview Billing readiness Plans & pricing Templates Modules & add-ons Usage / included limits Tenant overrides Overview Snapshot of current commercial pricing coverage and guarded Stripe prep status. TENANTS 1 Configured tenant rows ACTIVATION PREP READY 0 Billing readiness gate satisfied STRIPE CUSTOMERS 1 Customer references present LIVE SUBSCRIPTIONS 0 Guarded live sync references present",
+      "screenshot": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/04-landlord-guarded-customer-sync-state.png",
+      "row_state": {
+        "customer_sync_line": "cus_UEpZQoP8cJadrs · last status: succeeded · mode: update · synced at: 2026-03-29T16:23:11+00:00 · last attempt: 2026-03-29T16:23:11+00:00",
+        "subscription_prep_line": "succeeded · mode: sync · candidate hash: eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563",
+        "live_subscription_line": "not synced · last status: never",
+        "customer_reference_line": "cus_UEpZQoP8cJadrs",
+        "customer_prereq_line": "cus_UEpZQoP8cJadrs",
+        "prep_hash_line": "eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563",
+        "current_subscription_reference_line": "none",
+        "subscription_status_line": null
+      }
+    },
+    {
+      "key": "step2_subscription_prep",
+      "attempted_at": "2026-03-29T16:23:12.840Z",
+      "completed_at": "2026-03-29T16:23:14.016Z",
+      "disabled_before_click": false,
+      "button_label": "Sync Stripe Subscription Prep State",
+      "pass": true,
+      "row_last_status": "never",
+      "status_message": "Stripe subscription prep synced: eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563 LANDLORD Commercial Revenue Configuration Commercial Control Center for plan pricing, add-on pricing, tenant overrides, and guarded billing-readiness actions. Back to Dashboard Update Pricing Overview Billing readiness Plans & pricing Templates Modules & add-ons Usage / included limits Tenant overrides Overview Snapshot of current commercial pricing coverage and guarded Stripe prep status. TENANTS 1 Configured tenant rows ACTIVATION PREP READY 0 Billing readiness gate satisfied STRIPE CUSTOMERS 1 Customer references present LIVE SUBSCRIPTIONS 0 Guarded live sync references present",
+      "screenshot": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/05-landlord-guarded-subscription-prep-state.png",
+      "row_state": {
+        "customer_sync_line": "cus_UEpZQoP8cJadrs · last status: succeeded · mode: update · synced at: 2026-03-29T16:23:11+00:00 · last attempt: 2026-03-29T16:23:11+00:00",
+        "subscription_prep_line": "succeeded · mode: noop · candidate hash: eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563",
+        "live_subscription_line": "not synced · last status: never",
+        "customer_reference_line": "cus_UEpZQoP8cJadrs",
+        "customer_prereq_line": "cus_UEpZQoP8cJadrs",
+        "prep_hash_line": "eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563",
+        "current_subscription_reference_line": "none",
+        "subscription_status_line": null
+      }
+    },
+    {
+      "key": "step3_live_subscription_sync",
+      "attempted_at": "2026-03-29T16:23:14.017Z",
+      "completed_at": "2026-03-29T16:23:15.748Z",
+      "disabled_before_click": false,
+      "button_label": "Create Stripe Live Subscription Reference",
+      "pass": false,
+      "row_last_status": "failed",
+      "status_message": null,
+      "screenshot": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/guarded-stripe-run-2026-03-29T16-23-07.524Z/06-landlord-guarded-live-subscription-state.png",
+      "row_state": {
+        "customer_sync_line": "cus_UEpZQoP8cJadrs · last status: succeeded · mode: update · synced at: 2026-03-29T16:23:11+00:00 · last attempt: 2026-03-29T16:23:11+00:00",
+        "subscription_prep_line": "succeeded · mode: noop · candidate hash: eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563",
+        "live_subscription_line": "not synced · last status: failed · mode: create",
+        "customer_reference_line": "cus_UEpZQoP8cJadrs",
+        "customer_prereq_line": "cus_UEpZQoP8cJadrs",
+        "prep_hash_line": "eaaddd980cf88b07e7f52f3ce7db5856a7394ff9eb08c602ee87afeb4b6ad563",
+        "current_subscription_reference_line": "none",
+        "subscription_status_line": null
+      }
+    }
+  ],
+  "errors": [],
+  "overall_pass": false,
+  "run_completed_at": "2026-03-29T16:23:16.700Z"
+}
