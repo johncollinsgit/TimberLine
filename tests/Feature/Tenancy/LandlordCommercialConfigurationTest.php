@@ -38,7 +38,10 @@ test('landlord commercial page is host-locked and available to landlord operator
         ->assertOk()
         ->assertSeeText('Commercial Revenue Configuration')
         ->assertSeeText('Plans & pricing')
-        ->assertSeeText('Monthly price (USD cents)');
+        ->assertSeeText('Monthly price (USD cents)')
+        ->assertSeeText('Modules are grouped by top-level classification')
+        ->assertSeeText('Shared Core Modules')
+        ->assertSeeText('Integration Layer Modules');
 });
 
 test('landlord commercial actions can assign plans and tenant overrides', function (): void {

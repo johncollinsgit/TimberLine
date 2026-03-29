@@ -62,6 +62,24 @@ test('landlord host grants authorized operator access to landlord routes', funct
     }
 });
 
+test('landlord dashboard presents admin navigation matching commercial console style', function (): void {
+    $landlordHost = landlordHostForTests();
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get("http://{$landlordHost}/landlord")
+        ->assertOk()
+        ->assertSeeText('Landlord Operator Console')
+        ->assertSeeText('Open Commercial Config')
+        ->assertSeeText('Overview')
+        ->assertSeeText('Recent tenants');
+});
+
 test('tenant host resolves pre-auth tenant context from subdomain', function (): void {
     $tenantHost = tenantHostForTests('acme');
 

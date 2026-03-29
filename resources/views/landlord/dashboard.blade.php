@@ -1,92 +1,121 @@
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-xl font-semibold">Landlord Console</h1>
+        <h1 class="text-xl font-semibold text-zinc-900">Landlord Console</h1>
     </x-slot>
 
     <div class="space-y-6">
-        <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Landlord</div>
-            <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Landlord Operator Console</div>
-            <div class="mt-2 text-sm text-emerald-50/70">
-                Read-only tenant visibility for host-based operator access.
-            </div>
-        </section>
-
-        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <article class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
-                <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/50">Total Tenants</p>
-                <p class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) ($metrics['total_tenants'] ?? 0)) }}</p>
-            </article>
-            <article class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
-                <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/50">Healthy</p>
-                <p class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) ($metrics['healthy_tenants'] ?? 0)) }}</p>
-            </article>
-            <article class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
-                <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/50">Shopify Connected</p>
-                <p class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) ($metrics['tenants_with_connected_shopify'] ?? 0)) }}</p>
-            </article>
-            <article class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5">
-                <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/50">Needs Attention</p>
-                <p class="mt-2 text-3xl font-semibold text-white">{{ number_format((int) ($metrics['tenants_needing_attention'] ?? 0)) }}</p>
-            </article>
-        </section>
-
-        <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h2 class="text-lg font-semibold text-white">Recent Tenants</h2>
-                    <p class="mt-1 text-sm text-emerald-50/70">Most recently created tenants.</p>
+        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            <header class="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
+                <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Landlord</p>
+                        <h2 class="mt-1 text-2xl font-semibold text-zinc-950">Landlord Operator Console</h2>
+                        <p class="mt-1 max-w-3xl text-sm text-zinc-600">
+                            Operational overview for tenant health, commercial configuration access, and guarded landlord-only actions.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a
+                            href="{{ route('landlord.commercial.index') }}"
+                            class="inline-flex items-center rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
+                        >
+                            Open Commercial Config
+                        </a>
+                        <a
+                            href="{{ route('landlord.tenants.index') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Open Tenant Directory
+                        </a>
+                    </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <a
-                        href="{{ route('landlord.commercial.index') }}"
-                        class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90"
-                    >
-                        Commercial Config
-                    </a>
-                    <a
-                        href="{{ route('landlord.tenants.index') }}"
-                        class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90"
-                    >
-                        Open Tenant Directory
-                    </a>
-                </div>
-            </div>
+                <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
+                    <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
+                        <li><a href="#overview" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Overview</a></li>
+                        <li><a href="#recent-tenants" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Recent tenants</a></li>
+                    </ul>
+                </nav>
+            </header>
 
-            <div class="mt-4 overflow-hidden rounded-2xl border border-emerald-200/10">
-                <table class="w-full divide-y divide-emerald-200/10 text-sm">
-                    <thead class="bg-white/5 text-left text-xs uppercase tracking-[0.12em] text-emerald-100/60">
-                        <tr>
-                            <th class="px-4 py-3">Tenant</th>
-                            <th class="px-4 py-3">Slug</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Created</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-emerald-200/10">
-                        @forelse ($recent_tenants as $row)
-                            <tr class="text-emerald-50/85">
-                                <td class="px-4 py-3">
-                                    <a
-                                        href="{{ route('landlord.tenants.show', ['tenant' => $row['id']]) }}"
-                                        class="font-semibold text-white hover:text-emerald-200"
-                                    >
-                                        {{ $row['name'] }}
-                                    </a>
-                                </td>
-                                <td class="px-4 py-3 font-mono text-xs">{{ $row['slug'] }}</td>
-                                <td class="px-4 py-3">{{ $row['status_label'] }}</td>
-                                <td class="px-4 py-3">{{ $row['created_at'] ?? 'n/a' }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="px-4 py-5 text-sm text-emerald-50/65">
-                                    No tenants found.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+            <div class="space-y-8 p-6">
+                <section id="overview" class="space-y-4 scroll-mt-36">
+                    <div>
+                        <h3 class="text-lg font-semibold text-zinc-950">Overview</h3>
+                        <p class="text-sm text-zinc-600">
+                            Current landlord-host visibility across tenant health and connected Shopify stores.
+                        </p>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Total tenants</p>
+                            <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($metrics['total_tenants'] ?? 0)) }}</p>
+                        </article>
+                        <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Healthy</p>
+                            <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($metrics['healthy_tenants'] ?? 0)) }}</p>
+                        </article>
+                        <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Shopify connected</p>
+                            <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($metrics['tenants_with_connected_shopify'] ?? 0)) }}</p>
+                        </article>
+                        <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Needs attention</p>
+                            <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($metrics['tenants_needing_attention'] ?? 0)) }}</p>
+                        </article>
+                    </div>
+                </section>
+
+                <section id="recent-tenants" class="space-y-4 scroll-mt-36">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-zinc-950">Recent tenants</h3>
+                            <p class="text-sm text-zinc-600">Most recently created tenant records on landlord host.</p>
+                        </div>
+                        <a
+                            href="{{ route('landlord.tenants.index') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            View full directory
+                        </a>
+                    </div>
+
+                    <div class="overflow-hidden rounded-xl border border-zinc-200">
+                        <table class="w-full divide-y divide-zinc-200 text-sm">
+                            <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-600">
+                                <tr>
+                                    <th class="px-4 py-3">Tenant</th>
+                                    <th class="px-4 py-3">Slug</th>
+                                    <th class="px-4 py-3">Status</th>
+                                    <th class="px-4 py-3">Created</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-200 bg-white">
+                                @forelse ($recent_tenants as $row)
+                                    <tr class="text-zinc-700">
+                                        <td class="px-4 py-3">
+                                            <a
+                                                href="{{ route('landlord.tenants.show', ['tenant' => $row['id']]) }}"
+                                                class="font-semibold text-zinc-900 hover:text-zinc-600"
+                                            >
+                                                {{ $row['name'] }}
+                                            </a>
+                                        </td>
+                                        <td class="px-4 py-3 font-mono text-xs">{{ $row['slug'] }}</td>
+                                        <td class="px-4 py-3">{{ $row['status_label'] }}</td>
+                                        <td class="px-4 py-3">{{ $row['created_at'] ?? 'n/a' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="px-4 py-5 text-sm text-zinc-600">
+                                            No tenants found.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
         </section>
     </div>

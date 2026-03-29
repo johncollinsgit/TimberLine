@@ -14,6 +14,64 @@
         $tenantWithStripeSubscriptionCount = collect($tenants)->filter(
             fn (array $row): bool => trim((string) data_get($row, 'stripe_live_subscription_sync.subscription_reference', '')) !== ''
         )->count();
+        $moduleCategoryMeta = [
+            'shared-core' => [
+                'label' => 'Shared Core Modules',
+                'description' => 'Core tenant capabilities used across supported operating tracks.',
+            ],
+            'shopify-only' => [
+                'label' => 'Shopify Track Modules',
+                'description' => 'Shopify-specific module surfaces and tenant operations.',
+            ],
+            'integration-layer' => [
+                'label' => 'Integration Layer Modules',
+                'description' => 'Connectors and provider-linked module experiences.',
+            ],
+            'add-on' => [
+                'label' => 'Add-on Linked Modules',
+                'description' => 'Modules commonly enabled through add-on configuration.',
+            ],
+            'internal-admin' => [
+                'label' => 'Internal/Admin Modules',
+                'description' => 'Operational modules intended for internal workflows.',
+            ],
+            'uncategorized' => [
+                'label' => 'Uncategorized Modules',
+                'description' => 'Modules that do not currently have a classification.',
+            ],
+        ];
+        $categorizedModules = collect($moduleCatalog)
+            ->map(function (array $definition, string $moduleKey) use ($moduleCategoryMeta): array {
+                $classification = strtolower(trim((string) ($definition['classification'] ?? '')));
+                if (! array_key_exists($classification, $moduleCategoryMeta)) {
+                    $classification = 'uncategorized';
+                }
+
+                return [
+                    'module_key' => $moduleKey,
+                    'label' => (string) ($definition['label'] ?? $moduleKey),
+                    'classification' => $classification,
+                ];
+            })
+            ->sortBy(fn (array $module): string => strtolower((string) ($module['label'] ?? $module['module_key'])))
+            ->values();
+        $moduleCategories = [];
+        foreach (array_keys($moduleCategoryMeta) as $categoryKey) {
+            $items = $categorizedModules
+                ->where('classification', $categoryKey)
+                ->values()
+                ->all();
+            if ($items === []) {
+                continue;
+            }
+
+            $moduleCategories[] = [
+                'key' => $categoryKey,
+                'label' => (string) data_get($moduleCategoryMeta, $categoryKey.'.label', $categoryKey),
+                'description' => (string) data_get($moduleCategoryMeta, $categoryKey.'.description', ''),
+                'items' => $items,
+            ];
+        }
     @endphp
 
     <div class="space-y-6">
@@ -414,23 +472,36 @@
                     <div class="grid gap-4 xl:grid-cols-2">
                         <article class="rounded-2xl border border-zinc-200 bg-white p-5">
                             <h4 class="text-base font-semibold text-zinc-950">Module catalog</h4>
-                            <div class="mt-3 overflow-x-auto">
-                                <table class="min-w-full divide-y divide-zinc-200 text-xs text-zinc-700">
-                                    <thead class="bg-zinc-50 text-zinc-600">
-                                        <tr>
-                                            <th class="px-3 py-2 text-left font-semibold">Module key</th>
-                                            <th class="px-3 py-2 text-left font-semibold">Label</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-zinc-200">
-                                        @foreach ($moduleCatalog as $moduleKey => $definition)
-                                            <tr>
-                                                <td class="px-3 py-2 font-mono text-zinc-900">{{ $moduleKey }}</td>
-                                                <td class="px-3 py-2">{{ $definition['label'] ?? $moduleKey }}</td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
+                            <p class="mt-1 text-xs text-zinc-600">
+                                Modules are grouped by top-level classification to separate core, integration, and add-on linked information.
+                            </p>
+                            <div class="mt-3 space-y-3">
+                                @foreach ($moduleCategories as $category)
+                                    <section class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                                        <h5 class="text-xs font-semibold uppercase tracking-[0.1em] text-zinc-700">{{ $category['label'] }}</h5>
+                                        <p class="mt-1 text-[11px] text-zinc-600">{{ $category['description'] }}</p>
+                                        <div class="mt-2 overflow-x-auto">
+                                            <table class="min-w-full divide-y divide-zinc-200 text-xs text-zinc-700">
+                                                <thead class="bg-white text-zinc-600">
+                                                    <tr>
+                                                        <th class="px-3 py-2 text-left font-semibold">Module key</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Label</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Classification</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-zinc-200 bg-white">
+                                                    @foreach ((array) ($category['items'] ?? []) as $module)
+                                                        <tr>
+                                                            <td class="px-3 py-2 font-mono text-zinc-900">{{ $module['module_key'] }}</td>
+                                                            <td class="px-3 py-2">{{ $module['label'] }}</td>
+                                                            <td class="px-3 py-2">{{ str_replace('-', ' ', (string) ($module['classification'] ?? 'uncategorized')) }}</td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+                                @endforeach
                             </div>
                         </article>
 
@@ -849,32 +920,44 @@
                                 <div class="mt-4 grid gap-4 xl:grid-cols-2">
                                     <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                                         <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Module overrides</h5>
-                                        <div class="mt-2 grid gap-2">
-                                            @foreach ($moduleCatalog as $moduleKey => $definition)
-                                                @php
-                                                    $moduleOverride = (array) data_get($row, 'module_overrides.'.$moduleKey, []);
-                                                    $enabledOverride = array_key_exists('enabled_override', $moduleOverride) ? $moduleOverride['enabled_override'] : null;
-                                                    $setupStatus = (string) ($moduleOverride['setup_status'] ?? 'not_started');
-                                                    $effectiveModuleState = is_array(data_get($row, 'resolved_module_states.'.$moduleKey))
-                                                        ? (array) data_get($row, 'resolved_module_states.'.$moduleKey)
-                                                        : [];
-                                                @endphp
-                                                <form method="POST" action="{{ route('landlord.tenants.commercial.modules.update', ['tenant' => $tenant->id, 'moduleKey' => $moduleKey]) }}" class="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]">
-                                                    @csrf
-                                                    <div class="text-xs text-zinc-700">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $moduleKey) }}</div>
-                                                    <select name="enabled_override" class="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
-                                                        <option value="inherit" @selected($enabledOverride === null)>inherit</option>
-                                                        <option value="enabled" @selected($enabledOverride === true)>enabled</option>
-                                                        <option value="disabled" @selected($enabledOverride === false)>disabled</option>
-                                                    </select>
-                                                    <select name="setup_status" class="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
-                                                        @foreach (['not_started', 'in_progress', 'configured', 'blocked'] as $status)
-                                                            <option value="{{ $status }}" @selected($setupStatus === $status)>{{ $status }}</option>
+                                        <div class="mt-2 space-y-3">
+                                            @foreach ($moduleCategories as $category)
+                                                <section class="rounded-lg border border-zinc-200 bg-white p-3">
+                                                    <h6 class="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-700">{{ $category['label'] }}</h6>
+                                                    <p class="mt-1 text-[11px] text-zinc-600">{{ $category['description'] }}</p>
+                                                    <div class="mt-2 grid gap-2">
+                                                        @foreach ((array) ($category['items'] ?? []) as $module)
+                                                            @php
+                                                                $moduleKey = (string) ($module['module_key'] ?? '');
+                                                                $definition = is_array(data_get($moduleCatalog, $moduleKey))
+                                                                    ? (array) data_get($moduleCatalog, $moduleKey)
+                                                                    : [];
+                                                                $moduleOverride = (array) data_get($row, 'module_overrides.'.$moduleKey, []);
+                                                                $enabledOverride = array_key_exists('enabled_override', $moduleOverride) ? $moduleOverride['enabled_override'] : null;
+                                                                $setupStatus = (string) ($moduleOverride['setup_status'] ?? 'not_started');
+                                                                $effectiveModuleState = is_array(data_get($row, 'resolved_module_states.'.$moduleKey))
+                                                                    ? (array) data_get($row, 'resolved_module_states.'.$moduleKey)
+                                                                    : [];
+                                                            @endphp
+                                                            <form method="POST" action="{{ route('landlord.tenants.commercial.modules.update', ['tenant' => $tenant->id, 'moduleKey' => $moduleKey]) }}" class="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]">
+                                                                @csrf
+                                                                <div class="text-xs text-zinc-700">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $moduleKey) }}</div>
+                                                                <select name="enabled_override" class="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
+                                                                    <option value="inherit" @selected($enabledOverride === null)>inherit</option>
+                                                                    <option value="enabled" @selected($enabledOverride === true)>enabled</option>
+                                                                    <option value="disabled" @selected($enabledOverride === false)>disabled</option>
+                                                                </select>
+                                                                <select name="setup_status" class="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
+                                                                    @foreach (['not_started', 'in_progress', 'configured', 'blocked'] as $status)
+                                                                        <option value="{{ $status }}" @selected($setupStatus === $status)>{{ $status }}</option>
+                                                                    @endforeach
+                                                                </select>
+                                                                <x-tenancy.module-state-badge :module-state="$effectiveModuleState" size="sm" compact />
+                                                                <button type="submit" class="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100">Save</button>
+                                                            </form>
                                                         @endforeach
-                                                    </select>
-                                                    <x-tenancy.module-state-badge :module-state="$effectiveModuleState" size="sm" compact />
-                                                    <button type="submit" class="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100">Save</button>
-                                                </form>
+                                                    </div>
+                                                </section>
                                             @endforeach
                                         </div>
                                     </div>
