@@ -1,0 +1,29 @@
+{
+  "operator_email": "modernforestryteam@gmail.com",
+  "environment": "https://app.forestrybackstage.com",
+  "run_started_at": "2026-03-29T13:37:13.463Z",
+  "evidence_dir": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z",
+  "preflight": {
+    "login_page": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/01-login-page.png",
+    "commercial_overview": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/02-landlord-commercial-overview.png",
+    "landlord_page_header": "Commercial Revenue Configuration",
+    "landlord_route_reachable": true,
+    "tenant_overrides_view": "/Users/johncollins/Code/myapp/docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/03-landlord-tenant-overrides.png",
+    "tenant_row_count": 1
+  },
+  "tenant_rows": [
+    {
+      "index": 0,
+      "name": "Modern Forestry",
+      "summary": "modern-forestry · assigned plan: starter · effective plan: starter · template: none · labels: entitlements default",
+      "has_customer_action": true,
+      "has_prep_action": true,
+      "has_live_action": true,
+      "customer_action_enabled": true,
+      "prep_action_enabled": false,
+      "live_action_enabled": false
+    }
+  ],
+  "errors": [],
+  "run_completed_at": "2026-03-29T13:37:19.804Z"
+}

@@ -102,3 +102,33 @@ Updated unblock requirements:
 1. Create or sync at least one staging tenant record so a tenant row exists in `/landlord/commercial`.
 2. Re-run the guarded 3-step Stripe sequence with the same landlord operator account.
 3. Capture step-level screenshots/evidence and mark PASS/FAIL from actual step execution.
+
+---
+
+## Follow-Up Unblock Pass (2026-03-29, Tenant Row Restored)
+
+Status: Tenant-selection blocker resolved. Guarded 3-step sequence still pending rerun.
+
+What changed:
+- Existing staging mechanism was used (`php artisan db:seed --class=TenantSeeder --force`) to create/sync one canonical tenant row.
+- Post-seed runtime check confirms:
+  - `App\Models\Tenant::query()->count() = 1`
+  - `LandlordCommercialConfigService::tenantRowsForLandlord()` count = `1`
+  - tenant row: `Modern Forestry` (`slug=modern-forestry`)
+
+Browser/operator verification (no guarded actions executed in this pass):
+- Real landlord operator session (`modernforestryteam@gmail.com`) loaded `/landlord/commercial`.
+- `Tenant overrides` now shows one row with guarded action controls visible:
+  - customer sync action present and enabled
+  - subscription-prep action present (disabled until step 1 prerequisites are met)
+  - live subscription action present (disabled until step 1 + step 2 prerequisites are met)
+
+Evidence artifacts for tenant-row unblock:
+- `docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/01-login-page.png`
+- `docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/02-landlord-commercial-overview.png`
+- `docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/03-landlord-tenant-overrides.png`
+- `docs/operations/evidence/2026-03-29/tenant-row-probe-2026-03-29T13-37-13.461Z/tenant-row-probe-summary.json`
+
+Current truth after unblock:
+- `/landlord/commercial` is now operator-ready for guarded Stripe step execution.
+- Real PASS evidence for guarded customer sync, subscription-prep sync, and live subscription create/sync is still not attached in this pass.
