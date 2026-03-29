@@ -73,6 +73,17 @@
             ];
         }
         $defaultModuleCategoryTab = (string) data_get($moduleCategories, '0.key', '');
+        $sectionTabs = [
+            ['id' => 'overview', 'label' => 'Overview'],
+            ['id' => 'billing-readiness', 'label' => 'Billing readiness'],
+            ['id' => 'plans-pricing', 'label' => 'Plans & pricing'],
+            ['id' => 'templates', 'label' => 'Templates'],
+            ['id' => 'modules-addons', 'label' => 'Modules & add-ons'],
+            ['id' => 'usage-limits', 'label' => 'Usage / included limits'],
+            ['id' => 'tenant-overrides', 'label' => 'Tenant overrides'],
+        ];
+        $sectionTabIds = array_map(static fn (array $tab): string => (string) ($tab['id'] ?? ''), $sectionTabs);
+        $defaultSectionTab = (string) data_get($sectionTabs, '0.id', 'overview');
     @endphp
 
     <div class="space-y-6">
@@ -99,7 +110,33 @@
             </section>
         @endif
 
-        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        <section
+            class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
+            x-data="{
+                activeSection: @js($defaultSectionTab),
+                sectionIds: @js($sectionTabIds),
+                init() {
+                    const syncFromHash = () => {
+                        const hash = window.location.hash.replace('#', '');
+                        if (this.sectionIds.includes(hash)) {
+                            this.activeSection = hash;
+                        }
+                    };
+                    syncFromHash();
+                    window.addEventListener('hashchange', syncFromHash);
+                },
+                setSection(sectionId) {
+                    if (! this.sectionIds.includes(sectionId)) {
+                        return;
+                    }
+
+                    this.activeSection = sectionId;
+                    if (window.location.hash !== `#${sectionId}`) {
+                        history.replaceState(null, '', `#${sectionId}`);
+                    }
+                },
+            }"
+        >
             <header class="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
                 <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
                     <div>
@@ -126,19 +163,30 @@
                 </div>
                 <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
                     <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
-                        <li><a href="#overview" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Overview</a></li>
-                        <li><a href="#billing-readiness" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Billing readiness</a></li>
-                        <li><a href="#plans-pricing" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Plans &amp; pricing</a></li>
-                        <li><a href="#templates" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Templates</a></li>
-                        <li><a href="#modules-addons" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Modules &amp; add-ons</a></li>
-                        <li><a href="#usage-limits" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Usage / included limits</a></li>
-                        <li><a href="#tenant-overrides" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Tenant overrides</a></li>
+                        @foreach ($sectionTabs as $tab)
+                            @php
+                                $tabId = (string) ($tab['id'] ?? '');
+                                $tabLabel = (string) ($tab['label'] ?? $tabId);
+                            @endphp
+                            <li>
+                                <a
+                                    href="#{{ $tabId }}"
+                                    @click.prevent="setSection(@js($tabId))"
+                                    :class="activeSection === @js($tabId)
+                                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                                        : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100'"
+                                    class="rounded-md border px-3 py-1.5 transition"
+                                >
+                                    {{ $tabLabel }}
+                                </a>
+                            </li>
+                        @endforeach
                     </ul>
                 </nav>
             </header>
 
             <div class="space-y-8 p-6">
-                <section id="overview" class="space-y-4 scroll-mt-40">
+                <section id="overview" x-show="activeSection === 'overview'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Overview</h3>
                         <p class="text-sm text-zinc-600">
@@ -169,7 +217,7 @@
                     </div>
                 </section>
 
-                <section id="billing-readiness" class="space-y-4 scroll-mt-40">
+                <section id="billing-readiness" x-show="activeSection === 'billing-readiness'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Billing Readiness / Status</h3>
                         <p class="text-sm text-zinc-600">
@@ -278,7 +326,7 @@
                     @endif
                 </section>
 
-                <section id="plans-pricing" class="space-y-4 scroll-mt-40">
+                <section id="plans-pricing" x-show="activeSection === 'plans-pricing'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Plans &amp; Pricing</h3>
                         <p class="text-sm text-zinc-600">
@@ -409,7 +457,7 @@
                     </article>
                 </section>
 
-                <section id="templates" class="space-y-4 scroll-mt-40">
+                <section id="templates" x-show="activeSection === 'templates'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Templates</h3>
                         <p class="text-sm text-zinc-600">
@@ -462,7 +510,7 @@
                     </div>
                 </section>
 
-                <section id="modules-addons" class="space-y-4 scroll-mt-40">
+                <section id="modules-addons" x-show="activeSection === 'modules-addons'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Modules and Add-ons</h3>
                         <p class="text-sm text-zinc-600">
@@ -556,7 +604,7 @@
                     </div>
                 </section>
 
-                <section id="usage-limits" class="space-y-4 scroll-mt-40">
+                <section id="usage-limits" x-show="activeSection === 'usage-limits'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Usage / Included Limits</h3>
                         <p class="text-sm text-zinc-600">
@@ -612,7 +660,7 @@
                     </article>
                 </section>
 
-                <section id="tenant-overrides" class="space-y-4 scroll-mt-40">
+                <section id="tenant-overrides" x-show="activeSection === 'tenant-overrides'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Tenant Overrides</h3>
                         <p class="text-sm text-zinc-600">

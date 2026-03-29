@@ -42,7 +42,9 @@ test('landlord commercial page is host-locked and available to landlord operator
         ->assertSeeText('Modules are grouped by top-level classification')
         ->assertSeeText('Shared Core Modules')
         ->assertSeeText('Integration Layer Modules')
-        ->assertSee('moduleCategoryTab');
+        ->assertSee('moduleCategoryTab')
+        ->assertSee('activeSection')
+        ->assertSee('setSection');
 });
 
 test('landlord commercial actions can assign plans and tenant overrides', function (): void {
