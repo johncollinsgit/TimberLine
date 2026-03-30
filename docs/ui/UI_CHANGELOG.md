@@ -1,5 +1,31 @@
 # UI Changelog
 
+## 2026-03-30 — Public/Auth Brand Alignment (Approved Tree Logo + Route Behavior Verification)
+
+### What changed
+- Replaced interim public/auth brand SVGs with the approved Forestry Backstage tree-forward identity across canonical brand assets:
+  - `public/brand/forestry-backstage-mark.svg`
+  - `public/brand/forestry-backstage-lockup.svg`
+  - `public/brand/forestry-backstage-auth.svg`
+  - `public/brand/forestry-backstage-favicon.svg`
+- Updated shared logo references and cache-busting tags to `?v=fb2` in:
+  - head metadata/icons
+  - promo navigation lockup
+  - auth shell lockup
+  - shared app logo/topbar/sidebar logo references.
+- Kept root/public/login routing architecture intact while adding focused regression coverage proving:
+  - `/` defaults to the marketing landing for guests
+  - `/login` renders the dedicated light auth shell
+  - authenticated users are still redirected to their application workspace.
+
+### Why
+- The routing behavior and light template primitives were already correct; the remaining mismatch was brand asset drift against the approved logo system.
+- This pass makes the rendered UI reflect the approved identity without introducing any parallel theme or auth flow logic.
+
+### Scope boundary
+- No auth controller/Fortify workflow changes were introduced.
+- No tenant/Shopify boundary behavior was modified.
+
 ## 2026-03-30 — Merchant Experience Consolidation (Landing/Onboarding/Import/Customers)
 
 ### What changed

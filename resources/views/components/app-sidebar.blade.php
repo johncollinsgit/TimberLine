@@ -7,7 +7,7 @@
 <nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
     <div class="app-sidebar-brand">
         <img
-            src="{{ asset('brand/forestry-backstage-mark.svg') }}"
+            src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2"
             alt="Forestry Backstage"
             class="app-sidebar-brand-mark"
             loading="eager"

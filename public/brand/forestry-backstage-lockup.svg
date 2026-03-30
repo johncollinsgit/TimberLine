@@ -1,19 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 120" fill="none" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 280" fill="none" role="img" aria-labelledby="title desc">
   <title id="title">Forestry Backstage Logo</title>
-  <desc id="desc">Forestry Backstage lockup with brand mark and wordmark.</desc>
-
+  <desc id="desc">Forestry Backstage lockup with tree mark and wordmark.</desc>
   <defs>
-    <linearGradient id="fb-lockup-bg" x1="10" y1="8" x2="98" y2="94" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#123C43"/>
-      <stop offset="1" stop-color="#1E5A63"/>
+    <linearGradient id="fb-tree-lockup" x1="78" y1="24" x2="160" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D3F65"/>
+      <stop offset="0.55" stop-color="#0A5661"/>
+      <stop offset="1" stop-color="#0B7A43"/>
     </linearGradient>
   </defs>
-
-  <rect x="8" y="8" width="96" height="96" rx="24" fill="url(#fb-lockup-bg)"/>
-  <path d="M28 79L42 50L56 70L70 50L84 79H28Z" fill="#FFFFFF" fill-opacity="0.98"/>
-  <path d="M50 42L56 30L62 42H50Z" fill="#FFFFFF"/>
-  <rect x="52" y="69" width="8" height="20" rx="2.8" fill="#2F7D6B"/>
-
-  <text x="124" y="54" fill="#123C43" font-size="35" font-family="Fraunces, 'Times New Roman', serif" font-weight="600" letter-spacing="-0.3">Forestry</text>
-  <text x="124" y="88" fill="#1E5A63" font-size="31" font-family="Inter, 'Segoe UI', sans-serif" font-weight="600" letter-spacing="0.2">Backstage</text>
+  <path d="M119 20L147 63H131L162 103H142L186 149H133L119 184L105 149H52L96 103H76L107 63H91L119 20Z" fill="url(#fb-tree-lockup)"/>
+  <text x="238" y="132" fill="#0D4F5C" font-size="104" font-family="Fraunces, 'Times New Roman', serif" font-weight="600" letter-spacing="-0.5">FORESTRY</text>
+  <text x="242" y="202" fill="#0F515A" font-size="56" font-family="Inter, 'Segoe UI', sans-serif" font-weight="700" letter-spacing="15">BACKSTAGE</text>
 </svg>

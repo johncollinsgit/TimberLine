@@ -17,9 +17,8 @@
     <div class="fb-public-shell">
         <div class="fb-site-nav-wrap">
             <nav class="fb-site-nav" aria-label="Primary navigation">
-                <a href="#top" class="fb-site-brand">
-                    <img src="{{ asset('brand/forestry-backstage-mark.svg') }}" alt="Forestry Backstage" />
-                    <span>Forestry Backstage</span>
+                <a href="#top" class="fb-site-brand fb-site-brand--lockup">
+                    <img src="{{ asset('brand/forestry-backstage-lockup.svg') }}?v=fb2" alt="Forestry Backstage" />
                 </a>
                 <div class="fb-site-links">
                     <a href="#product">Product</a>

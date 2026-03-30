@@ -1,8 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="title desc">
   <title id="title">Forestry Backstage Favicon</title>
-  <desc id="desc">Compact Forestry Backstage brand icon.</desc>
-  <rect x="4" y="4" width="56" height="56" rx="15" fill="#123C43"/>
-  <path d="M16 44L24 28L32 38L40 28L48 44H16Z" fill="#FFFFFF"/>
-  <path d="M28 24L32 16L36 24H28Z" fill="#FFFFFF"/>
-  <rect x="30" y="37" width="4" height="10" rx="1.5" fill="#2F7D6B"/>
+  <desc id="desc">Tree favicon for Forestry Backstage.</desc>
+  <defs>
+    <linearGradient id="fb-tree-favicon" x1="18" y1="7" x2="43" y2="57" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D3F65"/>
+      <stop offset="0.55" stop-color="#0A5661"/>
+      <stop offset="1" stop-color="#0B7A43"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 5L41 19H35L44 32H38L50 44H36L32 57L28 44H14L26 32H20L29 19H23L32 5Z" fill="url(#fb-tree-favicon)"/>
 </svg>

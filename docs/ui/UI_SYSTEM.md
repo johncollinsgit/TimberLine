@@ -84,7 +84,6 @@ Transform Forestry Backstage into a premium, calm, high-trust software experienc
   4. `docs/ui/UI_CHANGELOG.md`
 
 ## Open Questions / Pending Assets
-- A high-resolution finalized uploaded logo source file should replace interim SVG lockups if currently unavailable.
 - PNG/favicon renditions can be regenerated from finalized vector assets for broader browser/platform compatibility.
 
 ## Design Principles
@@ -165,6 +164,7 @@ Brand asset directory: `public/brand/`
 - `forestry-backstage-mark.svg`: primary mark
 - `forestry-backstage-favicon.svg`: favicon SVG
 - `forestry-backstage-auth.svg`: auth lockup variant
+- Current approved asset pass is cache-tagged as `v=fb2` where referenced in shared views.
 
 Primary usage points:
 - `<head>` icons/OG image: `resources/views/partials/head.blade.php`

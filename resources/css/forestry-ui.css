@@ -125,6 +125,13 @@ a:hover {
   width: 2rem;
 }
 
+.fb-site-brand--lockup img {
+  border-radius: 0;
+  height: auto;
+  max-width: 100%;
+  width: 11.5rem;
+}
+
 .fb-site-brand span {
   color: var(--fb-brand);
   font-family: var(--fb-font-display);
@@ -516,6 +523,17 @@ a:hover {
   display: block;
   height: 2.3rem;
   width: 2.3rem;
+}
+
+.fb-auth-brand--lockup {
+  display: inline-flex;
+}
+
+.fb-auth-brand-lockup {
+  border-radius: 0 !important;
+  height: auto !important;
+  max-width: 100%;
+  width: 14rem !important;
 }
 
 .fb-auth-brand strong {
@@ -1950,6 +1968,10 @@ body.mf-app-shell {
     min-height: 280px;
   }
 
+  .fb-auth-brand-lockup {
+    width: 12.5rem !important;
+  }
+
   .app-shell--with-sidebar,
   .app-shell--no-sidebar {
     display: block;
@@ -2051,6 +2073,10 @@ body.mf-app-shell {
 
   .fb-site-links {
     justify-content: center;
+  }
+
+  .fb-site-brand--lockup img {
+    width: 10.2rem;
   }
 
   .fb-grid-3,

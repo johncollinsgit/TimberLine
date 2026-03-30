@@ -48,7 +48,7 @@
         <div class="app-topbar-shell">
             <div class="app-topbar-brand">
                 <img
-                    src="{{ asset('brand/forestry-backstage-mark.svg') }}"
+                    src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2"
                     alt="Forestry Backstage"
                     class="app-topbar-brand-mark"
                     loading="eager"

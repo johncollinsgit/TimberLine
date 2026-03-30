@@ -1,21 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title desc">
   <title id="title">Forestry Backstage Mark</title>
-  <desc id="desc">Rounded square brand mark with a stylized forest monogram.</desc>
+  <desc id="desc">Forestry Backstage tree mark.</desc>
   <defs>
-    <linearGradient id="fb-mark-bg" x1="16" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#123C43"/>
-      <stop offset="1" stop-color="#1E5A63"/>
-    </linearGradient>
-    <linearGradient id="fb-mark-accent" x1="58" y1="40" x2="64" y2="102" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7BC5A7"/>
-      <stop offset="1" stop-color="#2F7D6B"/>
+    <linearGradient id="fb-tree-mark" x1="35" y1="14" x2="87" y2="113" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D3F65"/>
+      <stop offset="0.55" stop-color="#0A5661"/>
+      <stop offset="1" stop-color="#0B7A43"/>
     </linearGradient>
   </defs>
-
-  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#fb-mark-bg)"/>
-
-  <path d="M33 88L50 53L64 77L78 53L95 88H33Z" fill="#FFFFFF" fill-opacity="0.98"/>
-  <path d="M58 42L64 28L70 42H58Z" fill="#FFFFFF"/>
-  <rect x="59" y="76" width="10" height="23" rx="3" fill="url(#fb-mark-accent)"/>
-  <path d="M32 93H96" stroke="#A8D7C8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M64 10L82 38H72L92 64H79L108 93H73L64 116L55 93H20L49 64H36L56 38H46L64 10Z" fill="url(#fb-tree-mark)"/>
 </svg>

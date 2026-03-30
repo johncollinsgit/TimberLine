@@ -5,7 +5,7 @@
 ])
 
 @php
-    $brandLogoSrc = $logoSrc ?: asset('brand/forestry-backstage-mark.svg').'?v=fb1';
+    $brandLogoSrc = $logoSrc ?: asset('brand/forestry-backstage-mark.svg').'?v=fb2';
 @endphp
 
 @if($sidebar)
