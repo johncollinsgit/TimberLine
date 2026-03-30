@@ -5,7 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\CandleCashReferral;
 use App\Models\MarketingProfile;
 use App\Models\Order;
-use App\Models\MarketingSetting;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Str;
 
@@ -16,18 +16,19 @@ class CandleCashReferralService
         protected CandleCashTaskService $taskService,
         protected MarketingIdentityNormalizer $normalizer,
         protected MarketingStorefrontEventLogger $eventLogger,
-        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver
     ) {
     }
 
-    public function config(): array
+    public function config(?int $tenantId = null): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', 'candle_cash_referral_config')->first())->value;
+        return $this->marketingSettingsResolver->array('candle_cash_referral_config', $tenantId);
     }
 
-    public function isEnabled(): bool
+    public function isEnabled(?int $tenantId = null): bool
     {
-        return (bool) data_get($this->config(), 'enabled', true);
+        return (bool) data_get($this->config($tenantId), 'enabled', true);
     }
 
     public function referralCodeForProfile(MarketingProfile $profile): string
@@ -35,8 +36,13 @@ class CandleCashReferralService
         return 'FOREST-' . Str::upper(base_convert((string) ($profile->id + 100000), 10, 36));
     }
 
-    public function profileFromCode(string $code): ?MarketingProfile
+    public function profileFromCode(string $code, ?int $tenantId = null): ?MarketingProfile
     {
+        if (! is_numeric($tenantId) || (int) $tenantId <= 0) {
+            return null;
+        }
+        $tenantId = (int) $tenantId;
+
         $normalized = Str::upper(trim($code));
         $normalized = preg_replace('/[^A-Z0-9-]/', '', $normalized) ?: '';
         if (! str_starts_with($normalized, 'FOREST-')) {
@@ -58,7 +64,9 @@ class CandleCashReferralService
             return null;
         }
 
-        return MarketingProfile::query()->find($profileId);
+        return MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->find($profileId);
     }
 
     public function referralLinkForProfile(MarketingProfile $profile, string $path = '/pages/rewards'): string
@@ -70,11 +78,16 @@ class CandleCashReferralService
 
     public function captureReferral(?MarketingProfile $referredProfile, string $code, array $identity = [], array $context = []): ?CandleCashReferral
     {
-        if (! $this->isEnabled()) {
+        $tenantId = $this->resolveTenantId($referredProfile, $context);
+        if ($tenantId === null) {
             return null;
         }
 
-        $referrer = $this->profileFromCode($code);
+        if (! $this->isEnabled($tenantId)) {
+            return null;
+        }
+
+        $referrer = $this->profileFromCode($code, $tenantId);
         if (! $referrer) {
             return null;
         }
@@ -116,7 +129,26 @@ class CandleCashReferralService
 
     public function qualifyFromOrder(Order $order, ?MarketingProfile $referredProfile, array $context = []): ?CandleCashReferral
     {
-        if (! $this->isEnabled()) {
+        $tenantId = $this->resolveTenantId($referredProfile, $context, $order);
+        if ($tenantId === null) {
+            $this->eventLogger->log('candle_cash_referral_skipped_missing_tenant', [
+                'status' => 'error',
+                'issue_type' => 'tenant_context_missing',
+                'source_surface' => 'ingestion',
+                'endpoint' => 'shopify_order_ingest',
+                'source_type' => 'referral_order',
+                'source_id' => (string) $order->id,
+                'resolution_status' => 'open',
+            ]);
+
+            return null;
+        }
+
+        if ($referredProfile && (int) ($referredProfile->tenant_id ?? 0) !== $tenantId) {
+            return null;
+        }
+
+        if (! $this->isEnabled($tenantId)) {
             return null;
         }
 
@@ -125,7 +157,7 @@ class CandleCashReferralService
             return null;
         }
 
-        $referrer = $this->profileFromCode($code);
+        $referrer = $this->profileFromCode($code, $tenantId);
         if (! $referrer) {
             $this->eventLogger->log('candle_cash_referral_unmatched', [
                 'status' => 'error',
@@ -134,7 +166,7 @@ class CandleCashReferralService
                 'endpoint' => 'shopify_order_ingest',
                 'source_type' => 'referral_order',
                 'source_id' => (string) $order->id,
-                'meta' => ['referral_code' => $code],
+                'meta' => ['referral_code' => $code, 'tenant_id' => $tenantId],
                 'resolution_status' => 'open',
             ]);
 
@@ -184,7 +216,7 @@ class CandleCashReferralService
             ),
         ])->save();
 
-        if (! $this->qualifiesOnCurrentOrder($order, $referredProfile)) {
+        if (! $this->qualifiesOnCurrentOrder($order, $referredProfile, $tenantId)) {
             return $referral->fresh();
         }
 
@@ -226,9 +258,9 @@ class CandleCashReferralService
         return $referral->fresh();
     }
 
-    protected function qualifiesOnCurrentOrder(Order $order, ?MarketingProfile $profile): bool
+    protected function qualifiesOnCurrentOrder(Order $order, ?MarketingProfile $profile, ?int $tenantId = null): bool
     {
-        $config = $this->config();
+        $config = $this->config($tenantId);
         $minTotal = data_get($config, 'qualifying_min_order_total');
         $orderTotal = (float) ($order->current_total_price ?? $order->total_price ?? 0);
         if ($minTotal !== null && $minTotal !== '' && $orderTotal < (float) $minTotal) {
@@ -239,13 +271,17 @@ class CandleCashReferralService
             return false;
         }
 
-        $linkedOrderCount = $profile->links()->where('source_type', 'order')->count();
+        $linkedOrderCount = $profile->links()
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
+            ->where('source_type', 'order')
+            ->count();
         if ($linkedOrderCount > 0) {
             return $linkedOrderCount === 1;
         }
 
         if ($order->shopify_customer_id) {
             $count = Order::query()
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->where('shopify_store_key', $order->shopify_store_key)
                 ->where('shopify_customer_id', $order->shopify_customer_id)
                 ->count();
@@ -254,7 +290,10 @@ class CandleCashReferralService
         }
 
         if ($profile->normalized_email) {
-            $count = Order::query()->where('email', $profile->email)->count();
+            $count = Order::query()
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
+                ->where('email', $profile->email)
+                ->count();
 
             return $count === 1;
         }
@@ -291,5 +330,26 @@ class CandleCashReferralService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function resolveTenantId(?MarketingProfile $profile, array $context = [], ?Order $order = null): ?int
+    {
+        if ($profile && is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0) {
+            return (int) $profile->tenant_id;
+        }
+
+        $contextTenantId = $context['tenant_id'] ?? data_get($context, 'metadata.tenant_id');
+        if (is_numeric($contextTenantId) && (int) $contextTenantId > 0) {
+            return (int) $contextTenantId;
+        }
+
+        $orderTenantId = data_get($order?->attribution_meta, 'tenant_id');
+        if (is_numeric($order?->tenant_id ?? null) && (int) ($order?->tenant_id ?? 0) > 0) {
+            return (int) $order->tenant_id;
+        }
+
+        return is_numeric($orderTenantId) && (int) $orderTenantId > 0
+            ? (int) $orderTenantId
+            : null;
     }
 }

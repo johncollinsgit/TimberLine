@@ -13,7 +13,10 @@ use App\Models\MarketingGroup;
 use App\Models\MarketingGroupMember;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\CandleCashService;
@@ -45,6 +48,21 @@ test('canonical event slug backfill and public route canonicalization work', fun
 test('shopify storefront endpoints require valid signature and hide internal-only data', function () {
     config()->set('marketing.shopify.signing_secret', 'stage8-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage8-retail-client');
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Stage8 Signature Tenant',
+        'slug' => 'stage8-signature-tenant',
+    ]);
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'modernforestry.myshopify.com',
+            'access_token' => 'stage8-retail-token',
+            'tenant_id' => $tenant->id,
+        ]
+    );
 
     $this->getJson(route('marketing.shopify.rewards.available'))
         ->assertStatus(401);
@@ -54,9 +72,10 @@ test('shopify storefront endpoints require valid signature and hide internal-onl
         ->getJson(route('marketing.shopify.rewards.available'))
         ->assertStatus(401);
 
-    $validHeaders = storefrontSignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'stage8-secret');
+    $query = ['shop' => 'modernforestry.myshopify.com'];
+    $validHeaders = storefrontSignedHeaders('GET', '/shopify/marketing/rewards/available', $query, '', 'stage8-secret');
     $this->withHeaders($validHeaders)
-        ->getJson(route('marketing.shopify.rewards.available'))
+        ->getJson(route('marketing.shopify.rewards.available', $query))
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('version', 'v1')
@@ -117,7 +136,13 @@ test('consent request confirm flow persists states and awards incentive only onc
 });
 
 test('shopify redemption reconciliation validates codes and stays idempotent', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Stage8 Reconciliation Tenant',
+        'slug' => 'stage8-reconciliation-tenant',
+    ]);
+
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Redeem',
         'email' => 'redeem.stage8@example.com',
         'normalized_email' => 'redeem.stage8@example.com',
@@ -130,12 +155,14 @@ test('shopify redemption reconciliation validates codes and stays idempotent', f
 
     $order = Order::query()->create([
         'source' => 'shopify',
+        'tenant_id' => $tenant->id,
         'shopify_store_key' => 'retail',
         'shopify_order_id' => 998877,
         'order_number' => '#998877',
         'status' => 'new',
     ]);
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
         'marketing_profile_id' => $profile->id,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
@@ -165,6 +192,120 @@ test('shopify redemption reconciliation validates codes and stays idempotent', f
         'codes' => [(string) ($issued2['code'] ?? '')],
     ]);
     expect($rejected['rejected'])->toBe(1);
+});
+
+test('reconciliation command scopes by tenant and cannot reconcile another tenant redemption', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Stage8 Tenant A',
+        'slug' => 'stage8-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Stage8 Tenant B',
+        'slug' => 'stage8-tenant-b',
+    ]);
+
+    $profileA = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
+        'first_name' => 'TenantA',
+        'email' => 'tenant-a-reconcile@example.com',
+        'normalized_email' => 'tenant-a-reconcile@example.com',
+    ]);
+    $profileB = MarketingProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'first_name' => 'TenantB',
+        'email' => 'tenant-b-reconcile@example.com',
+        'normalized_email' => 'tenant-b-reconcile@example.com',
+    ]);
+
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
+    app(CandleCashService::class)->addPoints($profileA, 400, 'earn', 'admin', 'seed-a', 'seed');
+    app(CandleCashService::class)->addPoints($profileB, 400, 'earn', 'admin', 'seed-b', 'seed');
+
+    $issuedA = app(CandleCashService::class)->redeemReward($profileA, $reward, 'shopify');
+    $issuedB = app(CandleCashService::class)->redeemReward($profileB, $reward, 'shopify');
+
+    $orderA = Order::query()->create([
+        'source' => 'shopify',
+        'tenant_id' => $tenantA->id,
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 881001,
+        'order_number' => '#881001',
+        'status' => 'new',
+    ]);
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantA->id,
+        'marketing_profile_id' => $profileA->id,
+        'source_type' => 'order',
+        'source_id' => (string) $orderA->id,
+        'match_method' => 'exact_email',
+    ]);
+
+    $orderB = Order::query()->create([
+        'source' => 'shopify',
+        'tenant_id' => $tenantB->id,
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 881002,
+        'order_number' => '#881002',
+        'status' => 'new',
+    ]);
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantB->id,
+        'marketing_profile_id' => $profileB->id,
+        'source_type' => 'order',
+        'source_id' => (string) $orderB->id,
+        'match_method' => 'exact_email',
+    ]);
+
+    $redemptionA = CandleCashRedemption::query()->findOrFail((int) ($issuedA['redemption_id'] ?? 0));
+    $redemptionB = CandleCashRedemption::query()->findOrFail((int) ($issuedB['redemption_id'] ?? 0));
+
+    $orderA->forceFill([
+        'internal_notes' => (string) ($issuedA['code'] ?? ''),
+        'updated_at' => now()->addSecond(),
+    ])->save();
+    $orderB->forceFill([
+        'internal_notes' => (string) ($issuedB['code'] ?? ''),
+        'updated_at' => now()->addSecond(),
+    ])->save();
+
+    $this->artisan('marketing:reconcile-redemptions', [
+        '--source' => 'shopify',
+        '--tenant-id' => $tenantA->id,
+        '--limit' => 20,
+    ])->assertSuccessful();
+
+    expect((string) $redemptionA->fresh()->status)->toBe('redeemed')
+        ->and((string) $redemptionB->fresh()->status)->toBe('issued');
+});
+
+test('shopify reconciliation fails closed when tenant context is missing', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Missing',
+        'email' => 'missing-tenant-reconcile@example.com',
+        'normalized_email' => 'missing-tenant-reconcile@example.com',
+    ]);
+    app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
+    $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => null,
+        'shopify_order_id' => 998878,
+        'order_number' => '#998878',
+        'status' => 'new',
+    ]);
+
+    $summary = app(CandleCashRedemptionReconciliationService::class)->reconcileShopifyOrder($order, [
+        'codes' => [(string) ($issued['code'] ?? '')],
+    ]);
+
+    expect((int) ($summary['tenant_context_missing'] ?? 0))->toBe(1)
+        ->and((int) ($summary['reconciled'] ?? 0))->toBe(0)
+        ->and((string) CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0))->status)->toBe('issued')
+        ->and(MarketingStorefrontEvent::query()
+            ->where('event_type', 'redemption_reconcile_skipped_missing_tenant')
+            ->exists())->toBeTrue();
 });
 
 test('manual square reconciliation actions persist status and audit fields', function () {
@@ -258,7 +399,21 @@ test('shopify customer status excludes internal groups from storefront payload',
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage8-retail-client');
 
+    $tenant = Tenant::query()->create([
+        'name' => 'Stage8 Group Tenant',
+        'slug' => 'stage8-group-tenant',
+    ]);
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'modernforestry.myshopify.com',
+            'access_token' => 'stage8-retail-token',
+            'tenant_id' => $tenant->id,
+        ]
+    );
+
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Group Visibility',
         'email' => 'group.visibility@example.com',
         'normalized_email' => 'group.visibility@example.com',

@@ -6,19 +6,20 @@ use App\Models\MarketingImportRun;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Services\Marketing\SquareClient;
+use App\Services\Tenancy\TenantSquareConfigResolver;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SquareMarketingSyncService
 {
     public function __construct(
-        protected SquareClient $client,
         protected MarketingProfileSyncService $profileSyncService,
         protected MarketingEventAttributionService $attributionService,
         protected MarketingConsentService $consentService,
         protected MarketingConversionAttributionService $conversionAttributionService,
-        protected CandleCashRedemptionReconciliationService $redemptionReconciliationService
+        protected CandleCashRedemptionReconciliationService $redemptionReconciliationService,
+        protected TenantSquareConfigResolver $configResolver
     ) {
     }
 
@@ -28,17 +29,30 @@ class SquareMarketingSyncService
      */
     public function syncCustomers(array $options = []): array
     {
+        $tenantId = $this->tenantIdFromOptions($options);
+        if ($tenantId === null) {
+            return $this->blockedResult('tenant_context_required');
+        }
+
+        $config = $this->requireTenantConfig($tenantId);
+        if ($config === null) {
+            return $this->blockedResult('tenant_square_config_missing');
+        }
+
         if (!config('marketing.square.enabled') || !config('marketing.square.sync_customers_enabled')) {
             return ['status' => 'skipped', 'reason' => 'square_customers_sync_disabled'];
         }
+
+        $fetchClient = $this->clientForConfig($config);
 
         return $this->runSync(
             type: 'square_customers_sync',
             sourceLabel: 'square_customers',
             options: $options,
-            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $this->client->fetchCustomers($cursor, $pageLimit),
-            handleItem: function (array $payload, bool $dryRun, array &$summary): void {
-                $customer = $this->upsertSquareCustomer($payload, $dryRun);
+            tenantId: $tenantId,
+            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $fetchClient->fetchCustomers($cursor, $pageLimit),
+            handleItem: function (array $payload, bool $dryRun, array &$summary) use ($tenantId): void {
+                $customer = $this->upsertSquareCustomer($payload, $dryRun, $tenantId);
                 $summary[$customer['action']]++;
 
                 $identity = $this->identityFromSquareCustomerPayload($payload);
@@ -74,11 +88,21 @@ class SquareMarketingSyncService
      */
     public function syncOrders(array $options = []): array
     {
+        $tenantId = $this->tenantIdFromOptions($options);
+        if ($tenantId === null) {
+            return $this->blockedResult('tenant_context_required');
+        }
+
+        $config = $this->requireTenantConfig($tenantId);
+        if ($config === null) {
+            return $this->blockedResult('tenant_square_config_missing');
+        }
+
         if (!config('marketing.square.enabled') || !config('marketing.square.sync_orders_enabled')) {
             return ['status' => 'skipped', 'reason' => 'square_orders_sync_disabled'];
         }
 
-        $locationIds = config('marketing.square.location_ids', []);
+        $locationIds = $config['location_ids'] ?? [];
         if ($locationIds === []) {
             $location = trim((string) config('marketing.square.location_id', ''));
             if ($location !== '') {
@@ -86,24 +110,30 @@ class SquareMarketingSyncService
             }
         }
 
+        $fetchClient = $this->clientForConfig($config);
+
         return $this->runSync(
             type: 'square_orders_sync',
             sourceLabel: 'square_orders',
             options: $options,
-            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $this->client->searchOrders(
+            tenantId: $tenantId,
+            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $fetchClient->searchOrders(
                 cursor: $cursor,
                 limit: $pageLimit,
                 since: $since,
                 locationIds: $locationIds
             ),
-            handleItem: function (array $payload, bool $dryRun, array &$summary): void {
-                $orderResult = $this->upsertSquareOrder($payload, $dryRun);
+            handleItem: function (array $payload, bool $dryRun, array &$summary) use ($tenantId): void {
+                $orderResult = $this->upsertSquareOrder($payload, $dryRun, $tenantId);
                 $summary[$orderResult['action']]++;
 
                 $customer = null;
                 $squareCustomerId = trim((string) ($payload['customer_id'] ?? ''));
                 if ($squareCustomerId !== '') {
-                    $customer = SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first();
+                    $customer = SquareCustomer::query()
+                        ->where('square_customer_id', $squareCustomerId)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
                 }
 
                 $identity = $this->identityFromSquareOrderPayload($payload, $customer);
@@ -134,23 +164,39 @@ class SquareMarketingSyncService
      */
     public function syncPayments(array $options = []): array
     {
+        $tenantId = $this->tenantIdFromOptions($options);
+        if ($tenantId === null) {
+            return $this->blockedResult('tenant_context_required');
+        }
+
+        $config = $this->requireTenantConfig($tenantId);
+        if ($config === null) {
+            return $this->blockedResult('tenant_square_config_missing');
+        }
+
         if (!config('marketing.square.enabled') || !config('marketing.square.sync_payments_enabled')) {
             return ['status' => 'skipped', 'reason' => 'square_payments_sync_disabled'];
         }
+
+        $fetchClient = $this->clientForConfig($config);
 
         return $this->runSync(
             type: 'square_payments_sync',
             sourceLabel: 'square_payments',
             options: $options,
-            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $this->client->fetchPayments($cursor, $pageLimit, $since),
-            handleItem: function (array $payload, bool $dryRun, array &$summary): void {
-                $paymentResult = $this->upsertSquarePayment($payload, $dryRun);
+            tenantId: $tenantId,
+            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $fetchClient->fetchPayments($cursor, $pageLimit, $since),
+            handleItem: function (array $payload, bool $dryRun, array &$summary) use ($tenantId): void {
+                $paymentResult = $this->upsertSquarePayment($payload, $dryRun, $tenantId);
                 $summary[$paymentResult['action']]++;
 
                 $customer = null;
                 $squareCustomerId = trim((string) ($payload['customer_id'] ?? ''));
                 if ($squareCustomerId !== '') {
-                    $customer = SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first();
+                    $customer = SquareCustomer::query()
+                        ->where('square_customer_id', $squareCustomerId)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
                 }
 
                 $identity = $this->identityFromSquarePaymentPayload($payload, $customer);
@@ -171,6 +217,7 @@ class SquareMarketingSyncService
      * @param callable(?string,int,?CarbonImmutable):array{items:array<int,array<string,mixed>>,cursor:?string} $fetchPage
      * @param callable(array<string,mixed>,bool,array<string,mixed>&):void $handleItem
      * @param array<string,mixed> $options
+     * @param int $tenantId
      * @return array<string,mixed>
      */
     protected function runSync(
@@ -178,7 +225,8 @@ class SquareMarketingSyncService
         string $sourceLabel,
         array $options,
         callable $fetchPage,
-        callable $handleItem
+        callable $handleItem,
+        int $tenantId
     ): array {
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $limit = $this->nullableInt($options['limit'] ?? null);
@@ -205,6 +253,7 @@ class SquareMarketingSyncService
             'status' => 'running',
             'source_label' => $sourceLabel,
             'started_at' => now(),
+            'tenant_id' => $tenantId,
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'live-sync',
                 'limit' => $limit,
@@ -286,7 +335,7 @@ class SquareMarketingSyncService
     /**
      * @return array{action:string}
      */
-    protected function upsertSquareCustomer(array $payload, bool $dryRun): array
+    protected function upsertSquareCustomer(array $payload, bool $dryRun, int $tenantId): array
     {
         $squareCustomerId = trim((string) ($payload['id'] ?? ''));
         if ($squareCustomerId === '') {
@@ -294,13 +343,22 @@ class SquareMarketingSyncService
         }
 
         if ($dryRun) {
-            $exists = SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->exists();
+            $exists = SquareCustomer::query()
+                ->where('square_customer_id', $squareCustomerId)
+                ->where('tenant_id', $tenantId)
+                ->exists();
             return ['action' => $exists ? 'updated' : 'created'];
         }
 
-        $existing = SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first();
+        $existing = SquareCustomer::query()
+            ->where('square_customer_id', $squareCustomerId)
+            ->where('tenant_id', $tenantId)
+            ->first();
         SquareCustomer::query()->updateOrCreate(
-            ['square_customer_id' => $squareCustomerId],
+            [
+                'square_customer_id' => $squareCustomerId,
+                'tenant_id' => $tenantId,
+            ],
             [
                 'given_name' => $this->nullableString($payload['given_name'] ?? null),
                 'family_name' => $this->nullableString($payload['family_name'] ?? null),
@@ -312,6 +370,7 @@ class SquareMarketingSyncService
                 'preferences' => is_array($payload['preferences'] ?? null) ? $payload['preferences'] : null,
                 'raw_payload' => $payload,
                 'synced_at' => now(),
+                'tenant_id' => $tenantId,
             ]
         );
 
@@ -321,7 +380,7 @@ class SquareMarketingSyncService
     /**
      * @return array{action:string,model:?SquareOrder}
      */
-    protected function upsertSquareOrder(array $payload, bool $dryRun): array
+    protected function upsertSquareOrder(array $payload, bool $dryRun, int $tenantId): array
     {
         $squareOrderId = trim((string) ($payload['id'] ?? ''));
         if ($squareOrderId === '') {
@@ -329,13 +388,22 @@ class SquareMarketingSyncService
         }
 
         if ($dryRun) {
-            $exists = SquareOrder::query()->where('square_order_id', $squareOrderId)->exists();
+            $exists = SquareOrder::query()
+                ->where('square_order_id', $squareOrderId)
+                ->where('tenant_id', $tenantId)
+                ->exists();
             return ['action' => $exists ? 'updated' : 'created', 'model' => null];
         }
 
-        $existing = SquareOrder::query()->where('square_order_id', $squareOrderId)->first();
+        $existing = SquareOrder::query()
+            ->where('square_order_id', $squareOrderId)
+            ->where('tenant_id', $tenantId)
+            ->first();
         $order = SquareOrder::query()->updateOrCreate(
-            ['square_order_id' => $squareOrderId],
+            [
+                'square_order_id' => $squareOrderId,
+                'tenant_id' => $tenantId,
+            ],
             [
                 'square_customer_id' => $this->nullableString($payload['customer_id'] ?? null),
                 'location_id' => $this->nullableString($payload['location_id'] ?? null),
@@ -347,6 +415,7 @@ class SquareMarketingSyncService
                 'raw_tax_names' => $this->extractTaxNames($payload),
                 'raw_payload' => $payload,
                 'synced_at' => now(),
+                'tenant_id' => $tenantId,
             ]
         );
 
@@ -356,7 +425,7 @@ class SquareMarketingSyncService
     /**
      * @return array{action:string}
      */
-    protected function upsertSquarePayment(array $payload, bool $dryRun): array
+    protected function upsertSquarePayment(array $payload, bool $dryRun, int $tenantId): array
     {
         $squarePaymentId = trim((string) ($payload['id'] ?? ''));
         if ($squarePaymentId === '') {
@@ -364,13 +433,22 @@ class SquareMarketingSyncService
         }
 
         if ($dryRun) {
-            $exists = SquarePayment::query()->where('square_payment_id', $squarePaymentId)->exists();
+            $exists = SquarePayment::query()
+                ->where('square_payment_id', $squarePaymentId)
+                ->where('tenant_id', $tenantId)
+                ->exists();
             return ['action' => $exists ? 'updated' : 'created'];
         }
 
-        $existing = SquarePayment::query()->where('square_payment_id', $squarePaymentId)->first();
+        $existing = SquarePayment::query()
+            ->where('square_payment_id', $squarePaymentId)
+            ->where('tenant_id', $tenantId)
+            ->first();
         SquarePayment::query()->updateOrCreate(
-            ['square_payment_id' => $squarePaymentId],
+            [
+                'square_payment_id' => $squarePaymentId,
+                'tenant_id' => $tenantId,
+            ],
             [
                 'square_order_id' => $this->nullableString($payload['order_id'] ?? null),
                 'square_customer_id' => $this->nullableString($payload['customer_id'] ?? null),
@@ -382,6 +460,7 @@ class SquareMarketingSyncService
                 'created_at_source' => $this->asDate($payload['created_at'] ?? null),
                 'raw_payload' => $payload,
                 'synced_at' => now(),
+                'tenant_id' => $tenantId,
             ]
         );
 
@@ -642,6 +721,55 @@ class SquareMarketingSyncService
     {
         $string = trim((string) $value);
         return $string !== '' ? $string : null;
+    }
+
+    protected function tenantIdFromOptions(array $options): ?int
+    {
+        $tenantId = $options['tenant_id'] ?? null;
+        if ($tenantId === null || $tenantId === '') {
+            return null;
+        }
+
+        if (! is_numeric($tenantId)) {
+            return null;
+        }
+
+        $tenant = (int) $tenantId;
+        return $tenant > 0 ? $tenant : null;
+    }
+
+    protected function requireTenantConfig(int $tenantId): ?array
+    {
+        return $this->configResolver->resolveForTenant($tenantId);
+    }
+
+    protected function clientForConfig(array $config): SquareClient
+    {
+        return new SquareClient(
+            $config['access_token'] ?? null,
+            $config['base_url'] ?? config('marketing.square.base_url')
+        );
+    }
+
+    protected function blockedResult(string $reason): array
+    {
+        return [
+            'status' => 'blocked',
+            'reason' => $reason,
+            'run_id' => null,
+            'summary' => [
+                'processed' => 0,
+                'created' => 0,
+                'updated' => 0,
+                'profiles_created' => 0,
+                'profiles_updated' => 0,
+                'links_created' => 0,
+                'links_reused' => 0,
+                'reviews_created' => 0,
+                'records_skipped' => 0,
+                'errors' => 0,
+            ],
+        ];
     }
 
     protected function nullableInt(mixed $value): ?int

@@ -4,6 +4,7 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\CandleCashTask;
 use App\Models\MarketingProfile;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -240,10 +241,10 @@ test('/customers/manage renders real customer rows from local data', function ()
     $response = $this->get(shopifyAppCustomersManageUrl());
 
     $response->assertOk()
-        ->assertSeeText('Manage customers')
+        ->assertSeeText('Customer workspace')
         ->assertSeeText($fixtures['alice']->email)
         ->assertSeeText($fixtures['bob']->email)
-        ->assertSeeText('Candle Cash')
+        ->assertSeeText('Rewards Balance')
         ->assertDontSeeText('Tier Name');
 });
 
@@ -264,7 +265,7 @@ test('/shopify/app/customers and /shopify/app/customers/manage match manage page
 
     $this->get(route($routeName, retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Manage customers')
+        ->assertSeeText('Customer workspace')
         ->assertSeeText($fixtures['alice']->email);
 })->with([
     'alias /shopify/app/customers' => ['shopify.app.customers'],
@@ -490,4 +491,106 @@ test('embedded manage json search requires an authenticated shopify session toke
     $response->assertStatus(401)
         ->assertJsonPath('ok', false)
         ->assertJsonPath('status', 'missing_api_auth');
+});
+
+test('embedded manage page and json search are tenant scoped by store tenant', function () {
+    $tenantOne = Tenant::query()->create([
+        'name' => 'Tenant One',
+        'slug' => 'tenant-one-manage',
+    ]);
+    $tenantTwo = Tenant::query()->create([
+        'name' => 'Tenant Two',
+        'slug' => 'tenant-two-manage',
+    ]);
+
+    configureEmbeddedRetailStore($tenantOne->id);
+
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenantOne->id,
+        'first_name' => 'Tenant',
+        'last_name' => 'One',
+        'email' => 'tenant.one@example.com',
+        'normalized_email' => 'tenant.one@example.com',
+    ]);
+
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenantTwo->id,
+        'first_name' => 'Tenant',
+        'last_name' => 'Two',
+        'email' => 'tenant.two@example.com',
+        'normalized_email' => 'tenant.two@example.com',
+    ]);
+
+    startEmbeddedCustomersSession($this);
+
+    $pageResponse = $this->get(shopifyAppCustomersManageUrl());
+
+    $pageResponse->assertOk()
+        ->assertSeeText('tenant.one@example.com')
+        ->assertDontSeeText('tenant.two@example.com');
+
+    $jsonResponse = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(shopifyAppCustomersManageUrl(['search' => 'tenant']));
+
+    $jsonResponse->assertOk()
+        ->assertJsonPath('ok', true);
+
+    $resultsHtml = (string) data_get($jsonResponse->json(), 'data.results_html', '');
+    $summaryLabel = (string) data_get($jsonResponse->json(), 'data.summary_label', '');
+
+    expect($resultsHtml)->toContain('tenant.one@example.com')
+        ->and($resultsHtml)->not->toContain('tenant.two@example.com')
+        ->and($summaryLabel)->toContain('1 customer loaded');
+});
+
+test('embedded manage tenant scoping keeps empty state when no customers belong to the current store tenant', function () {
+    $tenantOne = Tenant::query()->create([
+        'name' => 'Tenant One',
+        'slug' => 'tenant-one-empty',
+    ]);
+    $tenantTwo = Tenant::query()->create([
+        'name' => 'Tenant Two',
+        'slug' => 'tenant-two-empty',
+    ]);
+
+    configureEmbeddedRetailStore($tenantOne->id);
+
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenantTwo->id,
+        'first_name' => 'Out',
+        'last_name' => 'Of Scope',
+        'email' => 'outscope@example.com',
+        'normalized_email' => 'outscope@example.com',
+    ]);
+
+    startEmbeddedCustomersSession($this);
+
+    $pageResponse = $this->get(shopifyAppCustomersManageUrl());
+
+    $pageResponse->assertOk()
+        ->assertSeeText('No customers matched the current search or filters.')
+        ->assertDontSeeText('outscope@example.com');
+
+    $jsonResponse = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(shopifyAppCustomersManageUrl(['search' => 'outscope']));
+
+    $jsonResponse->assertOk()
+        ->assertJsonPath('ok', true);
+
+    $resultsHtml = (string) data_get($jsonResponse->json(), 'data.results_html', '');
+    $summaryLabel = (string) data_get($jsonResponse->json(), 'data.summary_label', '');
+
+    expect($resultsHtml)->toContain('No customers matched the current search or filters.')
+        ->and($resultsHtml)->not->toContain('outscope@example.com')
+        ->and($summaryLabel)->toContain('0 customers loaded');
 });

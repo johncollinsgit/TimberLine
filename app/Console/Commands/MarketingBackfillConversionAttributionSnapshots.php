@@ -11,6 +11,7 @@ use Throwable;
 class MarketingBackfillConversionAttributionSnapshots extends Command
 {
     protected $signature = 'marketing:backfill-conversion-attribution-snapshots
+        {--tenant-id= : Restrict execution to a tenant id (required)}
         {--dry-run : Report what would change without writing updates}
         {--chunk=200 : Number of conversions to inspect per batch}
         {--limit= : Maximum conversions to inspect}
@@ -23,6 +24,13 @@ class MarketingBackfillConversionAttributionSnapshots extends Command
 
     public function handle(MarketingCampaignConversionAttributionSnapshotBuilder $builder): int
     {
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Conversion attribution backfill is tenant-scoped in MT-2C.');
+
+            return self::FAILURE;
+        }
+
         $dryRun = (bool) $this->option('dry-run');
         $chunk = max(25, (int) $this->option('chunk'));
         $limit = $this->integerOption('limit');
@@ -40,7 +48,7 @@ class MarketingBackfillConversionAttributionSnapshots extends Command
             'failed' => 0,
         ];
 
-        $query = $this->scopedQuery($since, $until, $campaignChannel, $missingOnly)
+        $query = $this->scopedQuery($since, $until, $campaignChannel, $missingOnly, $tenantId)
             ->orderBy('id');
 
         $stream = $query->lazyById($chunk);
@@ -99,6 +107,7 @@ class MarketingBackfillConversionAttributionSnapshots extends Command
         $this->line('mode=' . ($dryRun ? 'dry-run' : 'live'));
         $this->line('chunk=' . $chunk);
         $this->line('limit=' . ($limit ?? 'none'));
+        $this->line('tenant_id=' . $tenantId);
         $this->line('missing_only=' . ($missingOnly ? 'yes' : 'no'));
         $this->line('since=' . ($since?->toIso8601String() ?? 'none'));
         $this->line('until=' . ($until?->toIso8601String() ?? 'none'));
@@ -115,9 +124,11 @@ class MarketingBackfillConversionAttributionSnapshots extends Command
         ?CarbonImmutable $since,
         ?CarbonImmutable $until,
         ?string $campaignChannel,
-        bool $missingOnly
+        bool $missingOnly,
+        int $tenantId
     ) {
         return MarketingCampaignConversion::query()
+            ->whereHas('profile', fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($since, fn ($query) => $query->where('converted_at', '>=', $since))
             ->when($until, fn ($query) => $query->where('converted_at', '<=', $until))
             ->when($campaignChannel, function ($query, string $campaignChannel): void {

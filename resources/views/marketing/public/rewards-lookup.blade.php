@@ -3,16 +3,33 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Rewards Account</title>
+    @php
+        $displayLabels = is_array($displayLabels ?? null) ? $displayLabels : [];
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+        $rewardsLabelLc = strtolower($rewardsLabel);
+        $rewardsBalanceLabel = trim((string) ($displayLabels['rewards_balance_label'] ?? ($rewardsLabel . ' balance')));
+        if ($rewardsBalanceLabel === '') {
+            $rewardsBalanceLabel = $rewardsLabel . ' balance';
+        }
+        $rewardCreditLabel = trim((string) ($displayLabels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
+        }
+        $rewardCreditLabelTitle = \Illuminate\Support\Str::title($rewardCreditLabel);
+    @endphp
+    <title>{{ $rewardsLabel }} Account</title>
     @vite(['resources/css/app.css'])
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100">
 <main class="mx-auto max-w-5xl px-4 py-8 space-y-5">
     <section class="rounded-3xl border border-white/10 bg-white/5 p-5">
-        <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine Rewards Account</div>
-        <h1 class="mt-2 text-2xl font-semibold text-white">Candle Cash Account Lookup</h1>
+        <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine {{ $rewardsLabel }} Account</div>
+        <h1 class="mt-2 text-2xl font-semibold text-white">{{ $rewardsLabel }} Account Lookup</h1>
         <p class="mt-2 text-sm text-zinc-300">
-            Check your Candle Cash balance, recent activity, referral details, and your current $10 redemption status.
+            Check your {{ $rewardsBalanceLabel }}, recent activity, referral details, and your current $10 redemption status.
         </p>
     </section>
 
@@ -80,9 +97,9 @@
         @endphp
         <section class="grid gap-4 lg:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <h2 class="text-sm font-semibold text-white">Balance</h2>
+                <h2 class="text-sm font-semibold text-white">{{ $rewardsBalanceLabel }}</h2>
                 <div class="mt-2 text-3xl font-semibold text-white">{{ data_get($balance, 'candle_cash_amount_formatted', '$0.00') }}</div>
-                <div class="mt-2 text-xs text-zinc-400">Redeem $10 Candle Cash at a time. Limit $10 Candle Cash per order.</div>
+                <div class="mt-2 text-xs text-zinc-400">Redeem $10 {{ $rewardsLabel }} at a time. Limit $10 {{ $rewardsLabel }} per order.</div>
                 <div class="mt-2 text-xs text-zinc-400">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
             </article>
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
@@ -106,7 +123,7 @@
                     · Avg {{ $activeReviewAverage !== null ? number_format((float) $activeReviewAverage, 2) : '—' }}
                 </div>
                 <div class="mt-2 text-xs text-zinc-400">
-                    Review rewards: {{ (int) ($reviewRewardStatus['count'] ?? 0) }}
+                    Review {{ $rewardsLabelLc }}: {{ (int) ($reviewRewardStatus['count'] ?? 0) }}
                     @if(! empty($reviewRewardStatus['last_rewarded_at'] ?? null))
                         · Last: {{ \Illuminate\Support\Carbon::parse((string) $reviewRewardStatus['last_rewarded_at'])->format('Y-m-d H:i') }}
                     @endif
@@ -128,14 +145,14 @@
                     <div class="mt-2 text-xs text-zinc-400">
                         Native: {{ $nativeReviewCount }} reviews
                         · Avg {{ $nativeReviewAverage !== null ? number_format((float) $nativeReviewAverage, 2) : '—' }}
-                        · Rewards {{ (int) ($nativeReviewRewardStatus['count'] ?? 0) }}
+                        · {{ $rewardsLabel }} {{ (int) ($nativeReviewRewardStatus['count'] ?? 0) }}
                     </div>
                 @endif
                 @if($legacyReviewCount > 0 || (int) ($legacyReviewRewardStatus['count'] ?? 0) > 0)
                     <div class="mt-2 text-xs text-zinc-500">
                         Legacy Growave (read-only): {{ $legacyReviewCount }} reviews
                         · Avg {{ $legacyReviewAverage !== null ? number_format((float) $legacyReviewAverage, 2) : '—' }}
-                        · Rewards {{ (int) ($legacyReviewRewardStatus['count'] ?? 0) }}
+                        · {{ $rewardsLabel }} {{ (int) ($legacyReviewRewardStatus['count'] ?? 0) }}
                     </div>
                 @endif
                 <div class="mt-2 text-xs text-zinc-500">
@@ -146,10 +163,10 @@
 
         <section class="grid gap-4 lg:grid-cols-2">
             <article class="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <h2 class="text-sm font-semibold text-white">Redeem Candle Cash</h2>
-                <p class="mt-2 text-xs text-zinc-400">Candle Cash is redeemed in $10 increments, with a limit of $10 per order.</p>
+                <h2 class="text-sm font-semibold text-white">Redeem {{ $rewardsLabel }}</h2>
+                <p class="mt-2 text-xs text-zinc-400">{{ $rewardCreditLabelTitle }} is redeemed in $10 increments, with a limit of $10 per order.</p>
                 @if(! data_get($redemptionAccess ?? [], 'redeem_enabled', true))
-                    <p class="mt-2 text-xs text-zinc-400">{{ data_get($redemptionAccess, 'message', 'Candle Cash is temporarily live for selected accounts only.') }}</p>
+                    <p class="mt-2 text-xs text-zinc-400">{{ data_get($redemptionAccess, 'message', $rewardsLabel . ' are temporarily available for selected accounts only.') }}</p>
                 @endif
                 <div class="mt-3 space-y-3">
                     @forelse($availableRewards as $reward)
@@ -159,12 +176,12 @@
                             $buttonEnabled = $canRedeem && $redeemEnabled;
                             $buttonLabel = ! $redeemEnabled
                                 ? 'COMING SOON!'
-                                : ($canRedeem ? 'Redeem $10 Candle Cash' : 'Need More Candle Cash');
+                                : ($canRedeem ? 'Redeem $10 ' . $rewardCreditLabelTitle : 'Need more balance');
                         @endphp
                         <div class="rounded-xl border border-white/10 bg-white/5 p-3">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div>
-                                    <div class="text-sm font-semibold text-white">{{ data_get($reward, 'name', 'Redeem $10 Candle Cash') }}</div>
+                                    <div class="text-sm font-semibold text-white">{{ data_get($reward, 'name', 'Redeem $10 ' . $rewardCreditLabelTitle) }}</div>
                                     <div class="text-xs text-zinc-400">{{ data_get($reward, 'candle_cash_amount_formatted', '$10.00') }} off this order · Limit $10 per order</div>
                                 </div>
                                 @if($redeemEnabled)
@@ -198,7 +215,7 @@
                 <div class="mt-3 space-y-2 text-sm text-white/80">
                     @forelse($redemptions as $redemption)
                         <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                            {{ data_get($redemption, 'name', 'Redeem $10 Candle Cash') }}
+                            {{ data_get($redemption, 'name', 'Redeem $10 ' . $rewardCreditLabelTitle) }}
                             · {{ data_get($redemption, 'candle_cash_amount_formatted', '$0.00') }}
                             · {{ strtoupper((string) data_get($redemption, 'status', 'issued')) }}
                             @if(data_get($redemption, 'redemption_code'))
@@ -220,7 +237,7 @@
                         <tr>
                             <th class="py-2 pr-4">When</th>
                             <th class="py-2 pr-4">Category</th>
-                            <th class="py-2 pr-4">Candle Cash</th>
+                            <th class="py-2 pr-4">{{ $rewardsLabel }}</th>
                             <th class="py-2">Details</th>
                         </tr>
                     </thead>

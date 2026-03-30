@@ -7,11 +7,13 @@ use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingProfileWishlistItem;
+use App\Services\Shopify\ShopifyStores;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class GrowaveWishlistBackfillService
 {
@@ -55,9 +57,13 @@ class GrowaveWishlistBackfillService
             'backoff_max_ms' => $this->nullableInt($options['backoff_max_ms'] ?? null),
         ], static fn (mixed $value): bool => $value !== null));
 
+        $providedTenantId = $this->nullableInt($options['tenant_id'] ?? null);
+        $tenantId = $this->resolveBackfillTenant($store, $providedTenantId);
+
         $summary = [
             'processed_candidates' => 0,
             'candidates_skipped_duplicate_snapshot' => 0,
+            'skipped_tenant_mismatch' => 0,
             'wishlists_seen' => 0,
             'wishlist_items_seen' => 0,
             'mapped_items' => 0,
@@ -80,6 +86,7 @@ class GrowaveWishlistBackfillService
             'status' => 'running',
             'source_label' => $store !== null ? 'growave:' . $store : 'growave:all',
             'started_at' => now(),
+            'tenant_id' => $tenantId,
             'summary' => [
                 'store' => $store,
                 'limit' => $limit,
@@ -97,7 +104,7 @@ class GrowaveWishlistBackfillService
         $seenCandidates = [];
 
         try {
-            $query = $this->candidateQuery($store, $profileId, $afterCandidateId);
+            $query = $this->candidateQuery($store, $tenantId, $profileId, $afterCandidateId);
 
             foreach ($query->cursor() as $candidate) {
                 if ($limit !== null && (int) $summary['processed_candidates'] >= $limit) {
@@ -125,7 +132,8 @@ class GrowaveWishlistBackfillService
                         maxWishlistPages: $maxWishlistPages,
                         maxItemPages: $maxItemPages,
                         pageDelayMs: $pageDelayMs,
-                        summary: $summary
+                        summary: $summary,
+                        tenantId: $tenantId
                     );
                 } catch (\Throwable $e) {
                     $summary['errors']++;
@@ -191,8 +199,24 @@ class GrowaveWishlistBackfillService
         int $maxWishlistPages,
         int $maxItemPages,
         int $pageDelayMs,
-        array &$summary
+        array &$summary,
+        int $tenantId
     ): void {
+        $candidateTenantId = is_numeric($candidate->tenant_id) ? (int) $candidate->tenant_id : null;
+        if ($candidateTenantId === null || $candidateTenantId !== $tenantId) {
+            $summary['errors']++;
+            $summary['skipped_tenant_mismatch']++;
+            $this->incrementReason($summary, 'tenant_mismatch');
+
+            Log::warning('growave wishlist backfill skipped candidate outside tenant owner', [
+                'candidate_id' => (int) $candidate->id,
+                'candidate_tenant_id' => $candidateTenantId,
+                'run_tenant_id' => $tenantId,
+            ]);
+
+            return;
+        }
+
         $storeKey = $this->nullableString($candidate->store_key);
         if ($storeKey === null) {
             $summary['skipped_missing_store_key']++;
@@ -201,7 +225,39 @@ class GrowaveWishlistBackfillService
             return;
         }
 
-        $profile = $this->resolveProfileForCandidate($candidate, $storeKey);
+        try {
+            $storeTenantId = $this->tenantIdFromStoreKey($storeKey);
+        } catch (\Throwable $e) {
+            $summary['errors']++;
+            $summary['skipped_tenant_mismatch']++;
+            $this->incrementReason($summary, 'store_owner_unresolved');
+
+            Log::warning('growave wishlist backfill skipped candidate with unresolved store owner', [
+                'candidate_id' => (int) $candidate->id,
+                'store_key' => $storeKey,
+                'run_tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($storeTenantId !== $tenantId) {
+            $summary['errors']++;
+            $summary['skipped_tenant_mismatch']++;
+            $this->incrementReason($summary, 'store_owner_mismatch');
+
+            Log::warning('growave wishlist backfill skipped candidate with cross-tenant store ownership', [
+                'candidate_id' => (int) $candidate->id,
+                'store_key' => $storeKey,
+                'store_tenant_id' => $storeTenantId,
+                'run_tenant_id' => $tenantId,
+            ]);
+
+            return;
+        }
+
+        $profile = $this->resolveProfileForCandidate($candidate, $storeKey, $tenantId);
         if (! $profile) {
             $summary['skipped_unresolved_profile']++;
             $this->incrementReason($summary, 'unresolved_profile');
@@ -261,7 +317,8 @@ class GrowaveWishlistBackfillService
                     item: $item,
                     wishlist: $wishlist,
                     candidate: $candidate,
-                    storeKey: $storeKey
+                    storeKey: $storeKey,
+                    tenantId: $tenantId
                 );
 
                 if ($mapped === null) {
@@ -277,7 +334,8 @@ class GrowaveWishlistBackfillService
                     profile: $profile,
                     mapped: $mapped,
                     dryRun: $dryRun,
-                    summary: $summary
+                    summary: $summary,
+                    tenantId: $tenantId
                 );
             }
         }
@@ -404,8 +462,13 @@ class GrowaveWishlistBackfillService
      * @param array<string,mixed> $wishlist
      * @return array<string,mixed>|null
      */
-    protected function mapWishlistItem(array $item, array $wishlist, CustomerExternalProfile $candidate, string $storeKey): ?array
-    {
+    protected function mapWishlistItem(
+        array $item,
+        array $wishlist,
+        CustomerExternalProfile $candidate,
+        string $storeKey,
+        int $tenantId
+    ): ?array {
         $productId = $this->normalizeShopifyId(
             $this->valueFromSources([$item, $wishlist], [
                 'product.shopifyProductId',
@@ -518,8 +581,6 @@ class GrowaveWishlistBackfillService
             $productId,
         ], static fn ($value): bool => trim((string) $value) !== ''))));
 
-        $tenantId = is_numeric($candidate->tenant_id) ? (int) $candidate->tenant_id : null;
-
         return [
             'tenant_id' => $tenantId,
             'store_key' => $storeKey,
@@ -552,11 +613,26 @@ class GrowaveWishlistBackfillService
      * @param array<string,mixed> $mapped
      * @param array<string,mixed> $summary
      */
-    protected function upsertMappedWishlistRow(MarketingProfile $profile, array $mapped, bool $dryRun, array &$summary): void
+    protected function upsertMappedWishlistRow(
+        MarketingProfile $profile,
+        array $mapped,
+        bool $dryRun,
+        array &$summary,
+        int $tenantId
+    ): void
     {
-        $tenantId = is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : null;
-        if ($tenantId === null && is_numeric($mapped['tenant_id'] ?? null)) {
-            $tenantId = (int) $mapped['tenant_id'];
+        $profileTenantId = is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : null;
+        if ($profileTenantId !== null && $profileTenantId !== $tenantId) {
+            throw new RuntimeException('Growave wishlist backfill profile owner mismatch detected.');
+        }
+
+        if (is_numeric($mapped['tenant_id'] ?? null) && (int) $mapped['tenant_id'] !== $tenantId) {
+            throw new RuntimeException('Growave wishlist backfill mapped row owner mismatch detected.');
+        }
+
+        $tenantId = $profileTenantId ?? $tenantId;
+        if ($tenantId === null) {
+            throw new RuntimeException('Growave wishlist backfill requires tenant ownership for wishlist row writes.');
         }
 
         $existing = MarketingProfileWishlistItem::query()
@@ -679,9 +755,8 @@ class GrowaveWishlistBackfillService
         ];
     }
 
-    protected function resolveProfileForCandidate(CustomerExternalProfile $candidate, string $storeKey): ?MarketingProfile
+    protected function resolveProfileForCandidate(CustomerExternalProfile $candidate, string $storeKey, int $tenantId): ?MarketingProfile
     {
-        $tenantId = is_numeric($candidate->tenant_id) ? (int) $candidate->tenant_id : null;
         $marketingProfileId = is_numeric($candidate->marketing_profile_id) ? (int) $candidate->marketing_profile_id : null;
 
         if ($marketingProfileId !== null && $marketingProfileId > 0) {
@@ -710,6 +785,7 @@ class GrowaveWishlistBackfillService
 
             $sourceId = $storeKey . ':' . $externalCustomerId;
             $linkProfileId = MarketingProfileLink::query()
+                ->forTenantId($tenantId)
                 ->whereIn('source_type', ['shopify_customer', 'growave_customer'])
                 ->where('source_id', $sourceId)
                 ->value('marketing_profile_id');
@@ -795,11 +871,12 @@ class GrowaveWishlistBackfillService
         return $storeKey . '|' . $identity;
     }
 
-    protected function candidateQuery(?string $store, ?int $profileId, ?int $afterCandidateId): Builder
+    protected function candidateQuery(?string $store, int $tenantId, ?int $profileId, ?int $afterCandidateId): Builder
     {
         return CustomerExternalProfile::query()
-            ->where('provider', 'shopify')
+            ->where('provider', 'growave')
             ->where('integration', 'growave')
+            ->forTenantId($tenantId)
             ->when($store !== null, fn (Builder $query) => $query->where('store_key', $store))
             ->when($profileId !== null, fn (Builder $query) => $query->where('marketing_profile_id', $profileId))
             ->when($afterCandidateId !== null, fn (Builder $query) => $query->where('id', '>', $afterCandidateId))
@@ -1141,5 +1218,41 @@ class GrowaveWishlistBackfillService
 
         usleep($milliseconds * 1000);
     }
-}
 
+    protected function resolveBackfillTenant(?string $storeKey, ?int $tenantId): int
+    {
+        $normalized = $this->nullableString($storeKey);
+
+        if ($tenantId !== null && $normalized !== null) {
+            $storeTenantId = $this->tenantIdFromStoreKey($normalized);
+            if ($storeTenantId !== $tenantId) {
+                throw new RuntimeException('Growave wishlist backfill store owner conflicts with provided tenant context.');
+            }
+        }
+
+        if ($tenantId !== null) {
+            return $tenantId;
+        }
+
+        if ($normalized === null) {
+            throw new RuntimeException('Growave wishlist backfill requires a tenant context or store key.');
+        }
+
+        return $this->tenantIdFromStoreKey($normalized);
+    }
+
+    protected function tenantIdFromStoreKey(string $storeKey): int
+    {
+        $store = ShopifyStores::find($storeKey);
+        if (! $store) {
+            throw new RuntimeException("Unknown Shopify store key '{$storeKey}'.");
+        }
+
+        $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        if ($tenantId === null) {
+            throw new RuntimeException("Shopify store '{$storeKey}' is not assigned to a tenant.");
+        }
+
+        return $tenantId;
+    }
+}

@@ -3,15 +3,18 @@
 namespace App\Services\Marketing;
 
 use App\Models\CandleCashRedemption;
+use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\SquareOrder;
+use App\Services\Tenancy\TenantResolver;
 
 class CandleCashRedemptionReconciliationService
 {
     public function __construct(
         protected MarketingStorefrontEventLogger $eventLogger,
-        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
+        protected TenantResolver $tenantResolver
     ) {
     }
 
@@ -22,6 +25,7 @@ class CandleCashRedemptionReconciliationService
     public function reconcileShopifyOrder(Order $order, array $options = []): array
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
+        $tenantId = $this->tenantIdForShopifyOrder($order, $options);
         $codes = $this->normalizeCodes((array) ($options['codes'] ?? []));
         if ($codes === []) {
             $codes = $this->extractCodesFromText(implode(' ', array_filter([
@@ -31,7 +35,7 @@ class CandleCashRedemptionReconciliationService
             ])));
         }
 
-        $profileIds = $this->profileIdsForOrder($order);
+        $profileIds = $this->profileIdsForOrder($order, $tenantId);
 
         return $this->reconcileCodes(
             codes: $codes,
@@ -40,11 +44,13 @@ class CandleCashRedemptionReconciliationService
             profileIds: $profileIds,
             redeemedChannel: 'shopify_ingest',
             context: [
+                'tenant_id' => $tenantId,
                 'order_id' => (int) $order->id,
                 'order_number' => (string) ($order->order_number ?? ''),
                 'shopify_order_id' => $order->shopify_order_id ? (string) $order->shopify_order_id : null,
                 'attribution_meta' => (array) ($options['attribution_meta'] ?? []),
             ],
+            tenantId: $tenantId,
             dryRun: $dryRun
         );
     }
@@ -56,6 +62,7 @@ class CandleCashRedemptionReconciliationService
     public function reconcileSquareOrder(SquareOrder $order, array $options = []): array
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
+        $tenantId = $this->tenantIdForSquareOrder($order, $options);
         $codes = $this->normalizeCodes((array) ($options['codes'] ?? []));
         if ($codes === []) {
             $raw = is_array($order->raw_payload) ? json_encode($order->raw_payload) : '';
@@ -66,7 +73,7 @@ class CandleCashRedemptionReconciliationService
             ])));
         }
 
-        $profileIds = $this->profileIdsForSquareOrder($order);
+        $profileIds = $this->profileIdsForSquareOrder($order, $tenantId);
 
         return $this->reconcileCodes(
             codes: $codes,
@@ -75,9 +82,11 @@ class CandleCashRedemptionReconciliationService
             profileIds: $profileIds,
             redeemedChannel: 'square_sync',
             context: [
+                'tenant_id' => $tenantId,
                 'square_order_id' => (string) $order->square_order_id,
                 'square_customer_id' => $order->square_customer_id ? (string) $order->square_customer_id : null,
             ],
+            tenantId: $tenantId,
             dryRun: $dryRun
         );
     }
@@ -180,6 +189,7 @@ class CandleCashRedemptionReconciliationService
         array $profileIds = [],
         string $redeemedChannel = 'ingest',
         array $context = [],
+        ?int $tenantId = null,
         bool $dryRun = false
     ): array {
         $summary = [
@@ -189,6 +199,7 @@ class CandleCashRedemptionReconciliationService
             'already_reconciled' => 0,
             'rejected' => 0,
             'not_found' => 0,
+            'tenant_context_missing' => 0,
         ];
 
         $codes = $this->normalizeCodes($codes);
@@ -196,11 +207,35 @@ class CandleCashRedemptionReconciliationService
             return $summary;
         }
 
+        if (! is_numeric($tenantId) || (int) $tenantId <= 0) {
+            $summary['tenant_context_missing'] = count($codes);
+            $this->eventLogger->log('redemption_reconcile_skipped_missing_tenant', [
+                'status' => 'error',
+                'issue_type' => 'tenant_context_missing',
+                'source_surface' => 'ingestion',
+                'endpoint' => $externalOrderSource,
+                'source_type' => $externalOrderSource,
+                'source_id' => $externalOrderId,
+                'dedupe_key' => sha1('tenant_missing|' . $externalOrderSource . '|' . $externalOrderId . '|' . implode(',', $codes)),
+                'meta' => [
+                    'codes' => $codes,
+                    'external_order_source' => $externalOrderSource,
+                    'external_order_id' => $externalOrderId,
+                ],
+            ]);
+
+            return $summary;
+        }
+        $tenantId = (int) $tenantId;
+
         foreach ($codes as $code) {
             $summary['processed']++;
 
             $redemption = CandleCashRedemption::query()
-                ->where('redemption_code', $code)
+                ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_redemptions.marketing_profile_id')
+                ->where('candle_cash_redemptions.redemption_code', $code)
+                ->where('mp.tenant_id', $tenantId)
+                ->select('candle_cash_redemptions.*')
                 ->first();
 
             if (! $redemption) {
@@ -212,9 +247,10 @@ class CandleCashRedemptionReconciliationService
                     'endpoint' => $externalOrderSource,
                     'source_type' => $externalOrderSource,
                     'source_id' => $externalOrderId,
-                    'dedupe_key' => sha1('nf|' . $code . '|' . $externalOrderSource . '|' . $externalOrderId),
+                    'dedupe_key' => sha1('nf|' . $code . '|' . $externalOrderSource . '|' . $externalOrderId . '|tenant:' . $tenantId),
                     'meta' => [
                         'code' => $code,
+                        'tenant_id' => $tenantId,
                         'external_order_source' => $externalOrderSource,
                         'external_order_id' => $externalOrderId,
                     ],
@@ -234,13 +270,14 @@ class CandleCashRedemptionReconciliationService
 
             if ($redemption->status === 'canceled' || $redemption->status === 'expired') {
                 $summary['rejected']++;
-                $this->logRejected(
-                    redemption: $redemption,
-                    reason: $redemption->status === 'canceled' ? 'code_canceled' : 'code_expired',
-                    code: $code,
-                    externalOrderSource: $externalOrderSource,
-                    externalOrderId: $externalOrderId
-                );
+                    $this->logRejected(
+                        redemption: $redemption,
+                        reason: $redemption->status === 'canceled' ? 'code_canceled' : 'code_expired',
+                        code: $code,
+                        externalOrderSource: $externalOrderSource,
+                        externalOrderId: $externalOrderId,
+                        tenantId: $tenantId
+                    );
                 continue;
             }
 
@@ -272,7 +309,8 @@ class CandleCashRedemptionReconciliationService
                         reason: 'code_already_used',
                         code: $code,
                         externalOrderSource: $externalOrderSource,
-                        externalOrderId: $externalOrderId
+                        externalOrderId: $externalOrderId,
+                        tenantId: $tenantId
                     );
                 }
                 continue;
@@ -285,7 +323,8 @@ class CandleCashRedemptionReconciliationService
                     reason: 'profile_mismatch',
                     code: $code,
                     externalOrderSource: $externalOrderSource,
-                    externalOrderId: $externalOrderId
+                    externalOrderId: $externalOrderId,
+                    tenantId: $tenantId
                 );
                 continue;
             }
@@ -363,11 +402,11 @@ class CandleCashRedemptionReconciliationService
     /**
      * @return array<int,int>
      */
-    protected function profileIdsForOrder(Order $order): array
+    protected function profileIdsForOrder(Order $order, ?int $tenantId = null): array
     {
         $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown') . ':' . $order->shopify_order_id;
 
-        return MarketingProfileLink::query()
+        $profileIds = MarketingProfileLink::query()
             ->where(function ($query) use ($order, $shopifySourceId): void {
                 $query->where(function ($nested) use ($order): void {
                     $nested->where('source_type', 'order')
@@ -387,14 +426,16 @@ class CandleCashRedemptionReconciliationService
             ->unique()
             ->values()
             ->all();
+
+        return $this->filterProfileIdsByTenant($profileIds, $tenantId);
     }
 
     /**
      * @return array<int,int>
      */
-    protected function profileIdsForSquareOrder(SquareOrder $order): array
+    protected function profileIdsForSquareOrder(SquareOrder $order, ?int $tenantId = null): array
     {
-        return MarketingProfileLink::query()
+        $profileIds = MarketingProfileLink::query()
             ->where(function ($query) use ($order): void {
                 $query->where(function ($nested) use ($order): void {
                     $nested->where('source_type', 'square_order')
@@ -414,6 +455,81 @@ class CandleCashRedemptionReconciliationService
             ->unique()
             ->values()
             ->all();
+
+        return $this->filterProfileIdsByTenant($profileIds, $tenantId);
+    }
+
+    /**
+     * @param array<int,int> $profileIds
+     * @return array<int,int>
+     */
+    protected function filterProfileIdsByTenant(array $profileIds, ?int $tenantId): array
+    {
+        if ($profileIds === [] || $tenantId === null) {
+            return $profileIds;
+        }
+
+        return MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->whereIn('id', $profileIds)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     */
+    protected function tenantIdForShopifyOrder(Order $order, array $options = []): ?int
+    {
+        $explicitTenantId = $options['tenant_id'] ?? data_get($options, 'attribution_meta.tenant_id');
+        if (is_numeric($explicitTenantId) && (int) $explicitTenantId > 0) {
+            return (int) $explicitTenantId;
+        }
+
+        $orderTenantId = $order->tenant_id ?? data_get($order->attribution_meta, 'tenant_id');
+        if (is_numeric($orderTenantId) && (int) $orderTenantId > 0) {
+            return (int) $orderTenantId;
+        }
+
+        $storeKey = trim((string) ($order->shopify_store_key ?? $order->shopify_store ?? ''));
+
+        return $storeKey !== ''
+            ? $this->tenantResolver->resolveTenantIdForStoreKey($storeKey)
+            : null;
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     */
+    protected function tenantIdForSquareOrder(SquareOrder $order, array $options = []): ?int
+    {
+        $explicitTenantId = $options['tenant_id'] ?? data_get($options, 'attribution_meta.tenant_id');
+        if (is_numeric($explicitTenantId) && (int) $explicitTenantId > 0) {
+            return (int) $explicitTenantId;
+        }
+
+        $profileIds = $this->profileIdsForSquareOrder($order, null);
+        if ($profileIds === []) {
+            return null;
+        }
+
+        $tenantIds = MarketingProfile::query()
+            ->whereIn('id', $profileIds)
+            ->pluck('tenant_id')
+            ->filter(fn ($value): bool => is_numeric($value) && (int) $value > 0)
+            ->map(fn ($value): int => (int) $value)
+            ->unique()
+            ->values();
+
+        if ($tenantIds->count() !== 1) {
+            return null;
+        }
+
+        return (int) $tenantIds->first();
     }
 
     protected function platformFromSource(string $externalOrderSource): string
@@ -440,7 +556,8 @@ class CandleCashRedemptionReconciliationService
         string $reason,
         string $code,
         string $externalOrderSource,
-        string $externalOrderId
+        string $externalOrderId,
+        ?int $tenantId = null
     ): void {
         $this->eventLogger->log('redemption_reconcile_rejected', [
             'status' => 'error',
@@ -455,6 +572,7 @@ class CandleCashRedemptionReconciliationService
             'meta' => [
                 'code' => $code,
                 'reason' => $reason,
+                'tenant_id' => $tenantId,
             ],
         ]);
     }

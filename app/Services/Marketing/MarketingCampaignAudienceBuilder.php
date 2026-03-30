@@ -6,12 +6,14 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingGroupMember;
 use App\Models\MarketingProfile;
+use Illuminate\Database\Eloquent\Builder;
 
 class MarketingCampaignAudienceBuilder
 {
     public function __construct(
         protected MarketingSegmentEvaluator $segmentEvaluator,
-        protected MarketingRecommendationEngine $recommendationEngine
+        protected MarketingRecommendationEngine $recommendationEngine,
+        protected MarketingTenantOwnershipService $ownershipService
     ) {
     }
 
@@ -34,11 +36,16 @@ class MarketingCampaignAudienceBuilder
             'updated' => 0,
         ];
 
+        $tenantId = $this->ownershipService->campaignOwnerTenantId((int) $campaign->id);
+        if ($this->ownershipService->strictModeEnabled() && $tenantId === null) {
+            return $summary;
+        }
+
         $campaign->loadMissing(['segment', 'groups:id,name']);
 
-        $segmentMatches = $this->segmentMatches($campaign);
-        $groupMatches = $this->groupMatches($campaign);
-        $manualProfileIds = $this->manualProfileIds($campaign);
+        $segmentMatches = $this->segmentMatches($campaign, $tenantId);
+        $groupMatches = $this->groupMatches($campaign, $tenantId);
+        $manualProfileIds = $this->manualProfileIds($campaign, $tenantId);
 
         $candidateIds = collect(array_keys($segmentMatches))
             ->merge(array_keys($groupMatches))
@@ -59,6 +66,7 @@ class MarketingCampaignAudienceBuilder
 
         $profiles = MarketingProfile::query()
             ->whereIn('id', $candidateIds->all())
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
             ->get()
             ->keyBy('id');
 
@@ -164,7 +172,9 @@ class MarketingCampaignAudienceBuilder
             }
 
             if ($recipient->status === 'queued_for_approval') {
-                $this->recommendationEngine->generateSendSuggestionForProfile($profile, $campaign);
+                $this->recommendationEngine->generateSendSuggestionForProfile($profile, $campaign, [
+                    'tenant_id' => $tenantId,
+                ]);
             }
         }
 
@@ -174,7 +184,7 @@ class MarketingCampaignAudienceBuilder
     /**
      * @return array<int,array<int,string>>
      */
-    protected function segmentMatches(MarketingCampaign $campaign): array
+    protected function segmentMatches(MarketingCampaign $campaign, ?int $tenantId = null): array
     {
         if (! $campaign->segment) {
             return [];
@@ -182,6 +192,7 @@ class MarketingCampaignAudienceBuilder
 
         $matches = [];
         MarketingProfile::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
             ->orderBy('id')
             ->chunkById(300, function ($profiles) use ($campaign, &$matches): void {
                 foreach ($profiles as $profile) {
@@ -200,7 +211,7 @@ class MarketingCampaignAudienceBuilder
     /**
      * @return array<int,array{group_ids:array<int,int>,group_names:array<int,string>}>
      */
-    protected function groupMatches(MarketingCampaign $campaign): array
+    protected function groupMatches(MarketingCampaign $campaign, ?int $tenantId = null): array
     {
         $groupIds = $campaign->groups->pluck('id')->map(fn ($id) => (int) $id)->filter(fn (int $id) => $id > 0)->all();
         if ($groupIds === []) {
@@ -214,6 +225,9 @@ class MarketingCampaignAudienceBuilder
         $matches = [];
         $members = MarketingGroupMember::query()
             ->whereIn('marketing_group_id', $groupIds)
+            ->when($tenantId !== null, function (Builder $query) use ($tenantId): void {
+                $query->whereHas('profile', fn (Builder $profileQuery) => $profileQuery->forTenantId($tenantId));
+            })
             ->get(['marketing_group_id', 'marketing_profile_id']);
 
         foreach ($members as $member) {
@@ -237,10 +251,13 @@ class MarketingCampaignAudienceBuilder
     /**
      * @return array<int,int>
      */
-    protected function manualProfileIds(MarketingCampaign $campaign): array
+    protected function manualProfileIds(MarketingCampaign $campaign, ?int $tenantId = null): array
     {
         return MarketingCampaignRecipient::query()
             ->where('campaign_id', $campaign->id)
+            ->when($tenantId !== null, function (Builder $query) use ($tenantId): void {
+                $query->whereHas('profile', fn (Builder $profileQuery) => $profileQuery->forTenantId($tenantId));
+            })
             ->get(['marketing_profile_id', 'reason_codes', 'segment_snapshot'])
             ->filter(function (MarketingCampaignRecipient $recipient): bool {
                 $reasonCodes = collect((array) $recipient->reason_codes)

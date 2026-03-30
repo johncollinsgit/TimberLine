@@ -14,6 +14,15 @@
   - `docs/architecture/operational-multi-tenant-direction.md`
   - `docs/architecture/tenant-entitlements-foundation.md`
 
+## Canonical UI System (2026-03-29)
+- A canonical UI/theming source of truth now exists.
+- Read before any UI edits:
+  - `docs/ui/UI_SYSTEM.md`
+  - `docs/ui/UI_CHANGELOG.md`
+- Canonical shell ownership remains:
+  - `resources/views/layouts/app/sidebar.blade.php` (backstage)
+  - `resources/views/components/shopify-embedded-shell.blade.php` + app shell primitives (embedded)
+
 ## Current Release State (2026-03-27)
 
 Quick-scan summary for future agents:

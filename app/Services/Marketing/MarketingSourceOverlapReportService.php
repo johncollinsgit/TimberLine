@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\Order;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -109,15 +110,15 @@ class MarketingSourceOverlapReportService
     /**
      * @return array<string,array<string,mixed>>
      */
-    public function summary(): array
+    public function summary(int $tenantId): array
     {
         $definitions = $this->bucketDefinitions();
-        $totalProfiles = MarketingProfile::query()->count();
+        $totalProfiles = MarketingProfile::query()->forTenantId($tenantId)->count();
         $bucketCase = $this->bucketCaseExpression('source_link_flags');
-        $squareCustomerMetrics = $this->squareCustomerMetricsSubquery();
-        $shopifyOrderMetrics = $this->shopifyOrderMetricsSubquery();
-        $reviewMetrics = $this->profileReviewMetricsSubquery();
-        $candleCashBalanceMetrics = $this->profileCandleCashBalanceSubquery();
+        $squareCustomerMetrics = $this->squareCustomerMetricsSubquery($tenantId);
+        $shopifyOrderMetrics = $this->shopifyOrderMetricsSubquery($tenantId);
+        $reviewMetrics = $this->profileReviewMetricsSubquery($tenantId);
+        $candleCashBalanceMetrics = $this->profileCandleCashBalanceSubquery($tenantId);
 
         $trackedSpendExpression = '(coalesce(square_customer_metrics.square_order_spend_cents, 0) + coalesce(square_customer_metrics.square_payment_spend_cents, 0)';
         if ($shopifyOrderMetrics !== null) {
@@ -126,8 +127,9 @@ class MarketingSourceOverlapReportService
         $trackedSpendExpression .= ')';
 
         $query = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->toBase()
-            ->leftJoinSub($this->sourceLinkFlagsSubquery(), 'source_link_flags', function ($join): void {
+            ->leftJoinSub($this->sourceLinkFlagsSubquery($tenantId), 'source_link_flags', function ($join): void {
                 $join->on('source_link_flags.marketing_profile_id', '=', 'marketing_profiles.id');
             })
             ->leftJoinSub($squareCustomerMetrics, 'square_customer_metrics', function ($join): void {
@@ -198,13 +200,13 @@ class MarketingSourceOverlapReportService
         return $summary;
     }
 
-    public function profilesQuery(string $filter, string $search): QueryBuilder
+    public function profilesQuery(int $tenantId, string $filter, string $search): QueryBuilder
     {
         $bucketCase = $this->bucketCaseExpression('source_link_flags');
-        $squareCustomerMetrics = $this->squareCustomerMetricsSubquery();
-        $shopifyOrderMetrics = $this->shopifyOrderMetricsSubquery();
-        $reviewMetrics = $this->profileReviewMetricsSubquery();
-        $candleCashBalanceMetrics = $this->profileCandleCashBalanceSubquery();
+        $squareCustomerMetrics = $this->squareCustomerMetricsSubquery($tenantId);
+        $shopifyOrderMetrics = $this->shopifyOrderMetricsSubquery($tenantId);
+        $reviewMetrics = $this->profileReviewMetricsSubquery($tenantId);
+        $candleCashBalanceMetrics = $this->profileCandleCashBalanceSubquery($tenantId);
 
         $trackedSpendExpression = '(coalesce(square_customer_metrics.square_order_spend_cents, 0) + coalesce(square_customer_metrics.square_payment_spend_cents, 0)';
         if ($shopifyOrderMetrics !== null) {
@@ -213,8 +215,9 @@ class MarketingSourceOverlapReportService
         $trackedSpendExpression .= ')';
 
         $query = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->toBase()
-            ->leftJoinSub($this->sourceLinkFlagsSubquery(), 'source_link_flags', function ($join): void {
+            ->leftJoinSub($this->sourceLinkFlagsSubquery($tenantId), 'source_link_flags', function ($join): void {
                 $join->on('source_link_flags.marketing_profile_id', '=', 'marketing_profiles.id');
             })
             ->leftJoinSub($squareCustomerMetrics, 'square_customer_metrics', function ($join): void {
@@ -352,11 +355,11 @@ class MarketingSourceOverlapReportService
         });
     }
 
-    protected function sourceLinkFlagsSubquery(): QueryBuilder
+    protected function sourceLinkFlagsSubquery(int $tenantId): QueryBuilder
     {
-        return MarketingProfileLink::query()
-            ->toBase()
-            ->select('marketing_profile_id')
+        return DB::table('marketing_profile_links as source_link_flags')
+            ->where('source_link_flags.tenant_id', $tenantId)
+            ->select('source_link_flags.marketing_profile_id')
             ->whereIn('source_type', [
                 'square_customer',
                 'square_order',
@@ -374,31 +377,35 @@ class MarketingSourceOverlapReportService
             ->selectRaw("max(case when source_type = 'growave_customer' then 1 else 0 end) as has_growave_link");
     }
 
-    protected function profileReviewMetricsSubquery(): ?QueryBuilder
+    protected function profileReviewMetricsSubquery(int $tenantId): ?QueryBuilder
     {
         if (! Schema::hasTable('marketing_review_summaries')) {
             return null;
         }
 
-        return DB::table('marketing_review_summaries')
-            ->select('marketing_profile_id')
-            ->whereNotNull('marketing_profile_id')
-            ->groupBy('marketing_profile_id')
+        return DB::table('marketing_review_summaries as review_summaries')
+            ->join('marketing_profiles as review_profiles', 'review_profiles.id', '=', 'review_summaries.marketing_profile_id')
+            ->where('review_profiles.tenant_id', $tenantId)
+            ->select('review_summaries.marketing_profile_id')
+            ->whereNotNull('review_summaries.marketing_profile_id')
+            ->groupBy('review_summaries.marketing_profile_id')
             ->selectRaw('max(1) as has_review_summary')
-            ->selectRaw('max(coalesce(review_count, 0)) as review_count');
+            ->selectRaw('max(coalesce(review_summaries.review_count, 0)) as review_count');
     }
 
-    protected function profileCandleCashBalanceSubquery(): ?QueryBuilder
+    protected function profileCandleCashBalanceSubquery(int $tenantId): ?QueryBuilder
     {
         if (! Schema::hasTable('candle_cash_balances')) {
             return null;
         }
 
-        return DB::table('candle_cash_balances')
-            ->select('marketing_profile_id', 'balance');
+        return DB::table('candle_cash_balances as candle_cash_balances')
+            ->join('marketing_profiles as balance_profiles', 'balance_profiles.id', '=', 'candle_cash_balances.marketing_profile_id')
+            ->where('balance_profiles.tenant_id', $tenantId)
+            ->select('candle_cash_balances.marketing_profile_id', 'candle_cash_balances.balance');
     }
 
-    protected function shopifyOrderMetricsSubquery(): ?QueryBuilder
+    protected function shopifyOrderMetricsSubquery(int $tenantId): ?QueryBuilder
     {
         if (! Schema::hasTable('orders') || ! Schema::hasColumn('orders', 'shopify_order_id')) {
             return null;
@@ -410,12 +417,15 @@ class MarketingSourceOverlapReportService
             return null;
         }
 
-        $orderRows = DB::table('orders')
+        $orderRows = Order::query()
+            ->forTenantId($tenantId)
+            ->toBase()
             ->selectRaw($this->shopifyOrderSourceIdExpression() . ' as shopify_source_id')
             ->whereNotNull('shopify_order_id')
             ->selectRaw('round(coalesce(' . $amountColumn . ', 0) * 100, 0) as spend_cents');
 
         return DB::table('marketing_profile_links as shopify_links')
+            ->where('shopify_links.tenant_id', $tenantId)
             ->leftJoinSub($orderRows, 'shopify_order_rows', function ($join): void {
                 $join->on('shopify_order_rows.shopify_source_id', '=', 'shopify_links.source_id');
             })
@@ -454,9 +464,10 @@ class MarketingSourceOverlapReportService
         return null;
     }
 
-    protected function squareCustomerMetricsSubquery(): QueryBuilder
+    protected function squareCustomerMetricsSubquery(int $tenantId): QueryBuilder
     {
         $orderMetrics = SquareOrder::query()
+            ->forTenantId($tenantId)
             ->toBase()
             ->select('square_customer_id')
             ->whereNotNull('square_customer_id')
@@ -467,6 +478,7 @@ class MarketingSourceOverlapReportService
             ->selectRaw('max(closed_at) as last_square_order_at');
 
         $paymentMetrics = SquarePayment::query()
+            ->forTenantId($tenantId)
             ->toBase()
             ->select('square_customer_id')
             ->whereNotNull('square_customer_id')
@@ -476,9 +488,8 @@ class MarketingSourceOverlapReportService
             ->selectRaw('coalesce(sum(amount_money), 0) as payment_spend_cents')
             ->selectRaw('max(created_at_source) as last_square_payment_at');
 
-        return MarketingProfileLink::query()
-            ->toBase()
-            ->from('marketing_profile_links as square_links')
+        return DB::table('marketing_profile_links as square_links')
+            ->where('square_links.tenant_id', $tenantId)
             ->leftJoinSub($orderMetrics, 'square_order_metrics', function ($join): void {
                 $join->on('square_order_metrics.square_customer_id', '=', 'square_links.source_id');
             })

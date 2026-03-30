@@ -14,20 +14,28 @@
         $payload = is_array($integrationsPayload ?? null) ? $integrationsPayload : [];
         $content = is_array($payload['content'] ?? null) ? $payload['content'] : [];
         $plan = is_array($payload['plan'] ?? null) ? $payload['plan'] : ['label' => 'Unknown', 'track' => 'shopify', 'operating_mode' => 'shopify'];
-        $commercialContext = is_array($payload['commercial_context'] ?? null) ? $payload['commercial_context'] : [];
         $categories = is_array($payload['categories'] ?? null) ? $payload['categories'] : [];
         $counts = is_array($payload['counts'] ?? null) ? $payload['counts'] : ['total' => 0, 'connected' => 0, 'setup_needed' => 0, 'locked' => 0, 'coming_soon' => 0];
         $upgradeCta = is_array($content['upgrade_cta'] ?? null) ? $content['upgrade_cta'] : [];
         $contactCta = is_array($content['contact_cta'] ?? null) ? $content['contact_cta'] : [];
-        $templateKey = is_string($commercialContext['template_key'] ?? null) ? $commercialContext['template_key'] : null;
-        $labelSource = (string) ($commercialContext['label_source'] ?? 'entitlements_default');
-        $labelSourceDisplay = match ($labelSource) {
-            'tenant_override' => 'tenant override',
-            'template_default' => 'template default',
-            default => 'entitlements default',
+        $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
+        $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
+        $importCta = is_array($importSummary['cta'] ?? null) ? $importSummary['cta'] : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
+        $activeNow = is_array($journey['active_now'] ?? null) ? $journey['active_now'] : [];
+        $availableNext = is_array($journey['available_next'] ?? null) ? $journey['available_next'] : [];
+        $purchasable = is_array($journey['purchasable'] ?? null) ? $journey['purchasable'] : [];
+
+        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+            request(),
+            filled($host ?? null) ? (string) $host : null
+        );
+        $embeddedUrl = static function (string $url) use ($embeddedContext): string {
+            if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+                return $url;
+            }
+
+            return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
         };
-        $templateMissing = (bool) ($commercialContext['template_missing'] ?? false);
-        $contextLabels = is_array($commercialContext['labels'] ?? null) ? $commercialContext['labels'] : [];
     @endphp
 
     <style>
@@ -401,32 +409,23 @@
     <section class="integrations-shell" data-integrations-surface="true">
         <article class="integrations-panel" aria-label="Integrations overview">
             <h2 class="integrations-title">{{ $content['headline'] ?? 'Integrations' }}</h2>
-            <p class="integrations-copy">{{ $content['subtitle'] ?? '' }}</p>
-            <p class="integrations-copy">{{ $content['description'] ?? '' }}</p>
+            <p class="integrations-copy">Connect customer data sources so import and customer workflows stay reliable.</p>
+            <p class="integrations-copy">{{ $importSummary['description'] ?? 'Import customers first to unlock customer management and lifecycle actions.' }}</p>
             <div class="integrations-meta">
                 <span class="integrations-pill">Plan · {{ $plan['label'] ?? 'Unknown' }}</span>
-                <span class="integrations-pill">Template · {{ $templateKey ?: 'none' }}</span>
-                <span class="integrations-pill">Labels · {{ $labelSourceDisplay }}</span>
+                <span class="integrations-pill">Import · {{ $importSummary['label'] ?? 'Not started' }}</span>
                 <span class="integrations-pill">Connected · {{ (int) ($counts['connected'] ?? 0) }}</span>
                 <span class="integrations-pill">Setup Needed · {{ (int) ($counts['setup_needed'] ?? 0) }}</span>
                 <span class="integrations-pill">Locked · {{ (int) ($counts['locked'] ?? 0) }}</span>
                 <span class="integrations-pill">Coming Soon · {{ (int) ($counts['coming_soon'] ?? 0) }}</span>
             </div>
-            @if($templateMissing)
-                <p class="integrations-copy">Template defaults were not found for this assignment, so entitlement labels are being used as fallback.</p>
-            @elseif($labelSource === 'entitlements_default')
-                <p class="integrations-copy">No label overrides are active for this tenant, so entitlement defaults are in effect.</p>
-            @endif
-            <p class="integrations-copy">
-                Effective labels:
-                {{ $contextLabels['integrations'] ?? 'Integrations' }} / {{ $contextLabels['rewards'] ?? 'Rewards' }}.
-            </p>
-            <p class="integrations-copy">
-                This page is intentionally read-only and placeholder-first: no connector sync/OAuth writes and no billing lifecycle actions run here.
-            </p>
+            <p class="integrations-copy">{{ $importSummary['progress_note'] ?? 'No import has run yet for this store context.' }}</p>
+            <p class="integrations-copy">Active now: {{ count($activeNow) }} · Setup next: {{ count($availableNext) }} · Upgrade opportunities: {{ count($purchasable) }}</p>
             <div class="integrations-meta">
+                <a class="integration-card__link" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $importCta['label'] ?? 'Import Customers' }}</a>
+                <a class="integration-card__link" href="{{ $embeddedUrl(route('shopify.app.start', [], false)) }}">Open Setup Checklist</a>
                 @if(is_array($upgradeCta) && filled($upgradeCta['href'] ?? null))
-                    <a class="integration-card__link" href="{{ $upgradeCta['href'] }}">{{ $upgradeCta['label'] ?? 'Upgrade to unlock' }}</a>
+                    <a class="integration-card__link" href="{{ $embeddedUrl($upgradeCta['href']) }}">{{ $upgradeCta['label'] ?? 'Upgrade to unlock' }}</a>
                 @endif
                 @if(is_array($contactCta) && filled($contactCta['href'] ?? null))
                     <a class="integration-card__link" href="{{ $contactCta['href'] }}">{{ $contactCta['label'] ?? 'Talk to sales' }}</a>
@@ -483,7 +482,7 @@
                                     <p class="integration-card__meta-line">
                                         Fallback: {{ $fallback['label'] ?? 'Manual fallback' }}
                                         @if(filled($fallback['href'] ?? null))
-                                            · <a class="integration-card__link" href="{{ $fallback['href'] }}">Open fallback</a>
+                                            · <a class="integration-card__link" href="{{ $embeddedUrl((string) $fallback['href']) }}">Open fallback</a>
                                         @endif
                                     </p>
                                 @else
@@ -492,15 +491,15 @@
 
                                 @if($statusRegistry !== [])
                                     <p class="integration-card__meta-line" data-integration-card-status="{{ $card['key'] ?? 'integration' }}">
-                                        Status profile: {{ $statusRegistry['status_label'] ?? 'Unknown' }}
+                                        Connection status: {{ $statusRegistry['status_label'] ?? 'Unknown' }}
                                     </p>
                                     <p class="integration-card__meta-line" data-integration-card-source="{{ $card['key'] ?? 'integration' }}">
-                                        Source: {{ $statusRegistry['source_label'] ?? 'Unspecified source' }}
+                                        Data path: {{ $statusRegistry['source_label'] ?? 'Unspecified source' }}
                                     </p>
                                     <p class="integration-card__meta-line" data-integration-card-setup-mode="{{ $card['key'] ?? 'integration' }}">
-                                        Setup mode: {{ strtoupper((string) ($statusRegistry['setup_mode'] ?? 'placeholder')) }}
+                                        Setup mode: {{ strtoupper((string) ($statusRegistry['setup_mode'] ?? 'guided')) }}
                                         @if((bool) ($statusRegistry['is_mocked'] ?? false))
-                                            · Placeholder status
+                                            · Preview status
                                         @endif
                                     </p>
                                     @if(filled($statusRegistry['last_checked_at'] ?? null))
@@ -512,7 +511,7 @@
                             </div>
 
                             @if(filled($cta['href'] ?? null))
-                                <a class="integration-card__link" href="{{ $cta['href'] }}">{{ $cta['label'] ?? 'Open' }}</a>
+                                <a class="integration-card__link" href="{{ $embeddedUrl((string) $cta['href']) }}">{{ $cta['label'] ?? 'Open' }}</a>
                             @endif
 
                             <p class="integration-card__detail-hint">Open setup details</p>
@@ -532,16 +531,16 @@
 
                                 @if($statusRegistry !== [])
                                     <section class="integration-drawer__section" data-integration-drawer-status="{{ $card['key'] ?? 'integration' }}">
-                                        <h3>Status Registry</h3>
+                                        <h3>Connection Status</h3>
                                         <ul class="integration-drawer__list">
                                             <li data-integration-drawer-status-label="{{ $card['key'] ?? 'integration' }}">
-                                                Status profile: {{ $statusRegistry['status_label'] ?? 'Unknown' }}
+                                                Connection status: {{ $statusRegistry['status_label'] ?? 'Unknown' }}
                                             </li>
                                             <li data-integration-drawer-source-label="{{ $card['key'] ?? 'integration' }}">
-                                                Source: {{ $statusRegistry['source_label'] ?? 'Unspecified source' }}
+                                                Data path: {{ $statusRegistry['source_label'] ?? 'Unspecified source' }}
                                             </li>
                                             <li data-integration-drawer-setup-mode="{{ $card['key'] ?? 'integration' }}">
-                                                Setup mode: {{ strtoupper((string) ($statusRegistry['setup_mode'] ?? 'placeholder')) }}
+                                                Setup mode: {{ strtoupper((string) ($statusRegistry['setup_mode'] ?? 'guided')) }}
                                             </li>
                                             @if(filled($statusRegistry['last_checked_at'] ?? null))
                                                 <li data-integration-drawer-last-checked="{{ $card['key'] ?? 'integration' }}">
@@ -598,16 +597,16 @@
                                 <section class="integration-drawer__cta" data-integration-cta-state="{{ $state }}">
                                     @if($state === 'setup_needed')
                                         <button type="button" class="integration-drawer__button" data-integration-placeholder-action="continue_setup">Continue setup</button>
-                                        <p class="integration-drawer__cta-copy">Setup actions are placeholder-only right now. No connector sync, API calls, or persisted connection state are triggered from this page.</p>
+                                        <p class="integration-drawer__cta-copy">Setup actions are guidance-only right now. Use this flow to plan setup and import safely.</p>
                                     @elseif($state === 'locked')
-                                        <a href="{{ route('shopify.app.plans', [], false) }}" class="integration-drawer__button integration-drawer__button--upgrade">Upgrade to unlock</a>
+                                        <a href="{{ $embeddedUrl(route('shopify.app.plans', [], false)) }}" class="integration-drawer__button integration-drawer__button--upgrade">Upgrade to unlock</a>
                                         <p class="integration-drawer__cta-copy">{{ $upgradeMessage !== '' ? $upgradeMessage : 'This integration is locked by the current access profile.' }}</p>
                                     @elseif($state === 'coming_soon')
                                         <button type="button" class="integration-drawer__button integration-drawer__button--coming-soon" disabled>Coming soon</button>
                                         <p class="integration-drawer__cta-copy">{{ $upgradeMessage !== '' ? $upgradeMessage : 'This integration is currently roadmap-visible only.' }}</p>
                                     @else
-                                        <a href="{{ route('shopify.app.integrations', ['integration' => $card['key']], false) }}" class="integration-drawer__button">View details</a>
-                                        <p class="integration-drawer__cta-copy">Connection details are informational in this phase. Live integration execution is intentionally not implemented.</p>
+                                        <a href="{{ $embeddedUrl(route('shopify.app.integrations', ['integration' => $card['key']], false)) }}" class="integration-drawer__button">View details</a>
+                                        <p class="integration-drawer__cta-copy">Use these details to confirm setup and data-readiness before relying on this integration in daily workflows.</p>
                                     @endif
                                 </section>
                             </div>

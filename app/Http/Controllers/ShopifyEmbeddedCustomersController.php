@@ -13,6 +13,8 @@ use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
+use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Support\Shopify\ShopifyEmbeddedContextQuery;
@@ -60,8 +62,6 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedCustomersGridService $gridService
     ): Response|JsonResponse {
-        $grid = $gridService->resolve($request);
-
         if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
             $context = $contextService->resolveAuthenticatedApiContext($request);
 
@@ -69,11 +69,25 @@ class ShopifyEmbeddedCustomersController extends Controller
                 return $this->invalidApiContextResponse($context);
             }
 
+            $tenantId = $this->resolveEmbeddedTenantId($context, app(TenantResolver::class));
+            $grid = $gridService->resolve($request, $tenantId);
+            $resolvedLabels = app(TenantDisplayLabelResolver::class)->resolve($tenantId);
+            $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
+
             return response()->json([
                 'ok' => true,
-                'data' => $this->customersManagePayload($grid),
+                'data' => $this->customersManagePayload($grid, $displayLabels),
             ]);
         }
+
+        $context = $contextService->resolvePageContext($request);
+        $authorized = (bool) ($context['ok'] ?? false);
+        $tenantId = $authorized
+            ? $this->resolveEmbeddedTenantId($context, app(TenantResolver::class))
+            : null;
+        $grid = $authorized
+            ? $gridService->resolve($request, $tenantId)
+            : $gridService->emptyResult($request);
 
         Log::info('shopify.embedded.manage.render', [
             'route' => $request->route()?->getName(),
@@ -86,14 +100,15 @@ class ShopifyEmbeddedCustomersController extends Controller
             view: 'shopify.customers-manage',
             subnavKey: 'manage',
             defaultHeadline: 'Customers',
-            defaultSubheadline: 'Manage Candle Cash customer records, statuses, and operational workflows from a single workspace.',
+            defaultSubheadline: 'Manage {{rewards_label_lc}} customer records, statuses, and operational workflows from a single workspace.',
             extraViewData: [
                 'customers' => $grid['paginator'],
                 'gridFilters' => $grid['filters'],
                 'gridSortOptions' => $grid['sort_options'],
                 'activeFilterCount' => $grid['active_filter_count'],
                 'customersManageEndpoint' => $request->url(),
-            ]
+            ],
+            resolvedContext: $context,
         );
     }
 
@@ -106,8 +121,8 @@ class ShopifyEmbeddedCustomersController extends Controller
             contextService: $contextService,
             view: 'shopify.customers-activity',
             subnavKey: 'activity',
-            defaultHeadline: 'Customers Activity',
-            defaultSubheadline: 'Track customer-facing Candle Cash and profile events with clear operational visibility.',
+            defaultHeadline: 'Customer Activity',
+            defaultSubheadline: 'Track meaningful customer events and identify the next best follow-up action.',
             extraViewData: []
         );
     }
@@ -122,7 +137,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             view: 'shopify.customers-questions',
             subnavKey: 'questions',
             defaultHeadline: 'Customer Questions',
-            defaultSubheadline: 'Reference support guidance and operational answers tied to customer rewards behavior.',
+            defaultSubheadline: 'Keep support answers and escalation paths organized for faster customer resolution.',
             extraViewData: []
         );
     }
@@ -138,6 +153,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         $criticalStartedAt = microtime(true);
         $context = $contextService->resolvePageContext($request);
         $authorized = (bool) ($context['ok'] ?? false);
+        $tenantId = $authorized
+            ? $this->resolveEmbeddedTenantId($context, $tenantResolver)
+            : null;
 
         if ($authorized) {
             abort_unless(
@@ -151,7 +169,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             $displayName = $this->customerDisplayName($marketingProfile);
         }
 
-        $detail = $authorized ? $detailService->buildCritical($marketingProfile) : [
+        $detail = $authorized ? $detailService->buildCritical($marketingProfile, $tenantId) : [
             'summary' => [],
             'statuses' => [],
             'activity' => [],
@@ -206,9 +224,9 @@ class ShopifyEmbeddedCustomersController extends Controller
             view: 'shopify.customers-detail',
             subnavKey: 'manage',
             defaultHeadline: 'Customer Detail',
-            defaultSubheadline: 'A dedicated customer workspace for identity, Candle Cash, and lifecycle status.',
+            defaultSubheadline: 'A dedicated customer workspace for identity, {{rewards_balance_label_lc}}, and lifecycle status.',
             extraViewData: [
-                'marketingProfile' => $marketingProfile,
+                'marketingProfile' => $authorized ? $marketingProfile : new MarketingProfile(),
                 'customerDisplayName' => $displayName,
                 'detail' => $detail,
                 'pageActions' => $authorized ? [
@@ -262,8 +280,9 @@ class ShopifyEmbeddedCustomersController extends Controller
             return $this->customerNotFoundResponse();
         }
 
+        $tenantId = $this->resolveEmbeddedTenantId($context, $tenantResolver);
         $startedAt = microtime(true);
-        $deferred = $detailService->buildDeferredSections($marketingProfile);
+        $deferred = $detailService->buildDeferredSections($marketingProfile, $tenantId);
         $durationMs = round((microtime(true) - $startedAt) * 1000, 2);
 
         $response = response()->json([
@@ -391,7 +410,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         try {
             $data = $this->validatedAdjustmentData($request);
         } catch (ValidationException $exception) {
-            return $this->validationFailureResponse('Candle Cash adjustment could not be saved.', $exception);
+            return $this->validationFailureResponse('Reward balance adjustment could not be saved.', $exception);
         }
 
         $result = $this->applyCandleCashAdjustment(
@@ -545,7 +564,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         try {
             $data = $this->validatedSendCandleCashData($request);
         } catch (ValidationException $exception) {
-            return $this->validationFailureResponse('Send Candle Cash could not be saved.', $exception);
+            return $this->validationFailureResponse('Send reward credit could not be saved.', $exception);
         }
 
         $result = $this->applySendCandleCash(
@@ -592,6 +611,30 @@ class ShopifyEmbeddedCustomersController extends Controller
         $tenantId = $authorized
             ? app(TenantResolver::class)->resolveTenantIdForStoreContext($store)
             : null;
+        $displayLabels = app(TenantDisplayLabelResolver::class)->resolve($tenantId);
+        $labels = is_array($displayLabels['labels'] ?? null) ? (array) $displayLabels['labels'] : [];
+        $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+        $rewardsBalanceLabel = trim((string) ($labels['rewards_balance_label'] ?? ($rewardsLabel.' balance')));
+        if ($rewardsBalanceLabel === '') {
+            $rewardsBalanceLabel = $rewardsLabel.' balance';
+        }
+        $rewardCreditLabel = trim((string) ($labels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
+        }
+
+        $tokenMap = [
+            '{{rewards_label}}' => $rewardsLabel,
+            '{{rewards_label_lc}}' => strtolower($rewardsLabel),
+            '{{rewards_balance_label}}' => $rewardsBalanceLabel,
+            '{{rewards_balance_label_lc}}' => strtolower($rewardsBalanceLabel),
+            '{{reward_credit_label}}' => $rewardCreditLabel,
+        ];
+        $resolvedHeadline = strtr($this->headlineForStatus($status, $defaultHeadline), $tokenMap);
+        $resolvedSubheadline = strtr($this->subheadlineForStatus($status, $defaultSubheadline), $tokenMap);
 
         return $this->embeddedResponse(
             response()->view($view, array_merge([
@@ -603,11 +646,16 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'storeLabel' => $authorized
                     ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
                     : 'Shopify Admin',
-                'headline' => $this->headlineForStatus($status, $defaultHeadline),
-                'subheadline' => $this->subheadlineForStatus($status, $defaultSubheadline),
+                'headline' => $resolvedHeadline,
+                'subheadline' => $resolvedSubheadline,
                 'appNavigation' => $this->embeddedAppNavigation('customers', null, $tenantId),
                 'pageSubnav' => $this->customerSubnav($subnavKey, $tenantId),
                 'pageActions' => [],
+                'displayLabels' => $labels,
+                'rewardsLabel' => $rewardsLabel,
+                'rewardsBalanceLabel' => $rewardsBalanceLabel,
+                'rewardCreditLabel' => $rewardCreditLabel,
+                'merchantJourney' => app(TenantCommercialExperienceService::class)->merchantJourneyPayload($tenantId),
             ], $extraViewData)),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );
@@ -836,7 +884,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         $balance = (int) ($result['balance'] ?? 0);
         $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
         $noticeStyle = 'success';
-        $noticeMessage = 'Candle Cash adjusted. New balance: ' . $balanceDisplay . '.';
+        $noticeMessage = 'Balance adjusted. New balance: ' . $balanceDisplay . '.';
 
         Log::info('Shopify embedded Candle Cash adjustment applied', [
             'profile_id' => $profile->id,
@@ -856,7 +904,7 @@ class ShopifyEmbeddedCustomersController extends Controller
 
             if (! $smsResult['ok']) {
                 $noticeStyle = 'warning';
-                $noticeMessage .= ' (Reward message not sent: ' . $smsResult['message'] . ')';
+                $noticeMessage .= ' (Program message not sent: ' . $smsResult['message'] . ')';
 
                 Log::warning('Shopify embedded Candle Cash adjustment reward notification failed', [
                     'profile_id' => $profile->id,
@@ -864,7 +912,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                     'failure_message' => $smsResult['message'] ?? 'unknown',
                 ]);
             } else {
-                $noticeMessage .= ' Reward message sent.';
+                $noticeMessage .= ' Program message sent.';
 
                 Log::info('Shopify embedded Candle Cash adjustment reward notification sent', [
                     'profile_id' => $profile->id,
@@ -983,7 +1031,7 @@ class ShopifyEmbeddedCustomersController extends Controller
 
         $balance = round((float) ($result['balance'] ?? 0), 3);
         $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
-        $noticeMessage = 'Candle Cash sent. New balance: ' . $balanceDisplay . '.';
+        $noticeMessage = 'Credit sent. New balance: ' . $balanceDisplay . '.';
         $noticeStyle = 'success';
         $transactionId = isset($result['transaction_id']) ? (int) $result['transaction_id'] : null;
 
@@ -1028,12 +1076,22 @@ class ShopifyEmbeddedCustomersController extends Controller
         array $context,
         TenantResolver $tenantResolver
     ): bool {
-        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        $tenantId = $this->resolveEmbeddedTenantId($context, $tenantResolver);
+        $query = MarketingProfile::query()->whereKey($marketingProfile->id);
+
         if ($tenantId === null) {
-            return true;
+            return $query->whereNull('tenant_id')->exists();
         }
 
-        return (int) ($marketingProfile->tenant_id ?? 0) === $tenantId;
+        return $query->where('tenant_id', $tenantId)->exists();
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     */
+    protected function resolveEmbeddedTenantId(array $context, TenantResolver $tenantResolver): ?int
+    {
+        return $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
     }
 
     /**
@@ -1134,9 +1192,10 @@ class ShopifyEmbeddedCustomersController extends Controller
      *   sort_options:array<int,array{value:string,label:string}>,
      *   active_filter_count:int
      * } $grid
+     * @param  array<string,string>  $displayLabels
      * @return array{results_html:string,summary_label:string,page_label:string}
      */
-    protected function customersManagePayload(array $grid): array
+    protected function customersManagePayload(array $grid, array $displayLabels = []): array
     {
         $customers = $grid['paginator'];
         $filters = $grid['filters'];
@@ -1147,6 +1206,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'filters' => $filters,
                 'sort' => (string) ($filters['sort'] ?? 'last_activity'),
                 'direction' => (string) ($filters['direction'] ?? 'desc'),
+                'displayLabels' => $displayLabels,
             ])->render(),
             'summary_label' => $this->customersSummaryLabel($customers),
             'page_label' => $this->customersPageLabel($customers),
@@ -1206,9 +1266,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         $resolvedStates = (array) ($moduleStates['modules'] ?? []);
 
         $items = [
-            ['key' => 'manage', 'label' => 'Manage customers', 'href' => route('shopify.app.customers.manage', [], false)],
+            ['key' => 'manage', 'label' => 'Manage', 'href' => route('shopify.app.customers.manage', [], false)],
             ['key' => 'activity', 'label' => 'Activity', 'href' => route('shopify.app.customers.activity', [], false)],
-            ['key' => 'questions', 'label' => 'Questions', 'href' => route('shopify.app.customers.questions', [], false)],
+            ['key' => 'questions', 'label' => 'Questions & Support', 'href' => route('shopify.app.customers.questions', [], false)],
         ];
 
         $subnavModuleMap = [

@@ -427,7 +427,7 @@ class GoogleBusinessProfileConnectionService
             ['key' => 'candle_cash_integration_config'],
             [
                 'value' => $value,
-                'description' => 'Integration and verification settings for automatic-first Candle Cash tasks.',
+                'description' => 'Integration and verification settings for automatic-first Rewards tasks.',
             ]
         );
     }

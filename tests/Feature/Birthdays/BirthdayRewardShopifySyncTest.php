@@ -9,6 +9,7 @@ use App\Models\MarketingSetting;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardRedemptionReconciliationService;
@@ -38,8 +39,14 @@ beforeEach(function () {
 
 test('birthday reward activation creates exactly one shopify discount and stays idempotent', function () {
     [$profile, $birthday, $issuance] = birthdayRewardFixture();
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Activation Tenant',
+        'slug' => 'birthday-activation-tenant',
+    ]);
+    $profile->forceFill(['tenant_id' => $tenant->id])->save();
 
     ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
         'store_key' => 'retail',
         'shop_domain' => 'retail.example.myshopify.com',
         'access_token' => 'shpat_test',
@@ -47,6 +54,7 @@ test('birthday reward activation creates exactly one shopify discount and stays 
     ]);
 
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
         'marketing_profile_id' => $profile->id,
         'source_type' => 'shopify_customer',
         'source_id' => 'retail:12345',
@@ -134,6 +142,20 @@ test('storefront birthday payload reflects activated reward state correctly', fu
         'claimed_at' => now()->subHour(),
         'activated_at' => now()->subHour(),
     ]);
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Storefront Tenant',
+        'slug' => 'birthday-storefront-tenant',
+    ]);
+    $profile->forceFill(['tenant_id' => $tenant->id])->save();
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'retail.example.myshopify.com',
+            'access_token' => 'birthday-retail-token',
+            'tenant_id' => $tenant->id,
+            'installed_at' => now(),
+        ]
+    );
 
     $query = birthdayAppProxySignedQuery([
         'shop' => 'retail.example.myshopify.com',
@@ -200,6 +222,29 @@ test('storefront reward event endpoint logs idempotent interaction telemetry', f
         ->count())->toBe(1);
 });
 
+test('storefront birthday status fails closed when tenant mapping is missing', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'birthday-signing-secret');
+    configureStorefrontRetailStoreContext();
+
+    [$profile, $birthday, $issuance] = birthdayRewardFixture([
+        'status' => 'claimed',
+        'shopify_store_key' => 'retail',
+        'discount_sync_status' => 'synced',
+    ], suffix: 44);
+
+    $query = birthdayAppProxySignedQuery([
+        'shop' => 'retail.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'marketing_profile_id' => $profile->id,
+    ], 'birthday-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.birthday.status', $query))
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'tenant_context_required');
+});
+
 test('order sync job closes birthday reward redemption loop and ignores replay', function () {
     [$profile, $birthday, $issuance] = birthdayRewardFixture([
         'status' => 'claimed',
@@ -210,9 +255,15 @@ test('order sync job closes birthday reward redemption loop and ignores replay',
         'claimed_at' => now()->subHour(),
         'activated_at' => now()->subHour(),
     ]);
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Sync Tenant',
+        'slug' => 'birthday-sync-tenant',
+    ]);
+    $profile->forceFill(['tenant_id' => $tenant->id])->save();
 
     $order = Order::query()->create([
         'source' => 'shopify',
+        'tenant_id' => $tenant->id,
         'shopify_store_key' => 'retail',
         'shopify_order_id' => 900001,
         'order_number' => '#900001',
@@ -220,6 +271,7 @@ test('order sync job closes birthday reward redemption loop and ignores replay',
     ]);
 
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
         'marketing_profile_id' => $profile->id,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
@@ -266,9 +318,59 @@ test('order sync job closes birthday reward redemption loop and ignores replay',
         ->count())->toBe(1);
 });
 
-test('unmatched birthday discount code is logged safely', function () {
+test('order sync job skips reward reconciliation when tenant context is missing', function () {
+    [$profile, $birthday, $issuance] = birthdayRewardFixture([
+        'status' => 'claimed',
+        'shopify_discount_id' => 'gid://shopify/DiscountCodeBasic/444',
+        'shopify_discount_node_id' => 'gid://shopify/DiscountCodeNode/444',
+        'shopify_store_key' => 'retail',
+        'discount_sync_status' => 'synced',
+        'claimed_at' => now()->subHour(),
+        'activated_at' => now()->subHour(),
+    ], 77);
+
     $order = Order::query()->create([
         'source' => 'shopify',
+        'shopify_store_key' => null,
+        'shopify_order_id' => 900078,
+        'order_number' => '#900078',
+        'status' => 'new',
+    ]);
+
+    $syncService = \Mockery::mock(MarketingProfileSyncService::class);
+    $syncService->shouldReceive('syncOrder')->once();
+
+    $conversionService = \Mockery::mock(MarketingConversionAttributionService::class);
+    $conversionService->shouldReceive('attributeForOrder')->once();
+
+    $job = new SyncMarketingProfileFromOrder($order->id, [
+        'coupon_signals' => [(string) $issuance->reward_code],
+        'order_total' => '48.50',
+    ]);
+
+    $job->handle(
+        $syncService,
+        $conversionService,
+        app(CandleCashOrderEventService::class),
+        app(CandleCashRedemptionReconciliationService::class),
+        app(BirthdayRewardRedemptionReconciliationService::class)
+    );
+
+    expect((string) $issuance->fresh()->status)->toBe('claimed')
+        ->and(MarketingStorefrontEvent::query()
+            ->where('event_type', 'candle_cash_order_event_skipped_missing_tenant')
+            ->exists())->toBeTrue();
+});
+
+test('unmatched birthday discount code is logged safely', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Unmatched Tenant',
+        'slug' => 'birthday-unmatched-tenant',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'tenant_id' => $tenant->id,
         'shopify_store_key' => 'retail',
         'shopify_order_id' => 900002,
         'order_number' => '#900002',
@@ -290,17 +392,46 @@ test('unmatched birthday discount code is logged safely', function () {
         ->and((string) data_get($event->meta, 'reward_code'))->toBe('BDAY-2026-MISSING1');
 });
 
+test('birthday reward reconciliation fails closed when tenant context is missing', function () {
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => null,
+        'shopify_order_id' => 900099,
+        'order_number' => '#900099',
+        'status' => 'new',
+    ]);
+
+    $summary = app(BirthdayRewardRedemptionReconciliationService::class)->reconcileShopifyOrder($order, [
+        'codes' => ['BDAY-2026-MISSING1'],
+    ]);
+
+    expect((int) ($summary['tenant_context_missing'] ?? 0))->toBe(1)
+        ->and((int) ($summary['not_found'] ?? 0))->toBe(0)
+        ->and(MarketingStorefrontEvent::query()
+            ->where('event_type', 'birthday_reward_reconcile_skipped_missing_tenant')
+            ->exists())->toBeTrue();
+});
+
 test('birthday reporting includes activation redemption and revenue metrics', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Birthday Reporting Tenant A',
+        'slug' => 'birthday-reporting-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Birthday Reporting Tenant B',
+        'slug' => 'birthday-reporting-tenant-b',
+    ]);
+
     [$profileA, $birthdayA, $issuanceA] = birthdayRewardFixture([
         'status' => 'issued',
         'reward_code' => 'BDAY-2026-AAA111',
-    ]);
+    ], 1, $tenantA->id);
     [$profileB, $birthdayB, $issuanceB] = birthdayRewardFixture([
         'status' => 'claimed',
         'reward_code' => 'BDAY-2026-BBB222',
         'claimed_at' => now()->subDay(),
         'activated_at' => now()->subDay(),
-    ], 2);
+    ], 2, $tenantA->id);
     [$profileC, $birthdayC, $issuanceC] = birthdayRewardFixture([
         'status' => 'redeemed',
         'reward_code' => 'BDAY-2026-CCC333',
@@ -309,17 +440,27 @@ test('birthday reporting includes activation redemption and revenue metrics', fu
         'redeemed_at' => now()->subDay(),
         'attributed_revenue' => 75.00,
         'order_total' => 75.00,
-    ], 3);
+    ], 3, $tenantA->id);
+    [$profileForeign, $birthdayForeign, $issuanceForeign] = birthdayRewardFixture([
+        'status' => 'redeemed',
+        'reward_code' => 'BDAY-2026-FOREIGN',
+        'claimed_at' => now()->subDays(2),
+        'activated_at' => now()->subDays(2),
+        'redeemed_at' => now()->subDay(),
+        'attributed_revenue' => 999.00,
+        'order_total' => 999.00,
+    ], 4, $tenantB->id);
 
-    $summary = app(BirthdayReportingService::class)->summary(now());
-    $rewardSummary = app(BirthdayReportingService::class)->rewardSummary();
+    $summary = app(BirthdayReportingService::class)->summary($tenantA->id, now());
+    $rewardSummary = app(BirthdayReportingService::class)->rewardSummary($tenantA->id);
 
     expect((int) data_get($summary, 'rewards_activated_this_year'))->toBe(2)
         ->and((int) data_get($summary, 'rewards_redeemed_this_year'))->toBe(1)
         ->and((float) data_get($summary, 'attributed_revenue'))->toBe(75.0)
         ->and((float) data_get($summary, 'reward_average_order_value'))->toBe(75.0)
         ->and((float) data_get($rewardSummary, 'activation_rate'))->toBeGreaterThan(0)
-        ->and((float) data_get($rewardSummary, 'redemption_rate'))->toBeGreaterThan(0);
+        ->and((float) data_get($rewardSummary, 'redemption_rate'))->toBeGreaterThan(0)
+        ->and((float) data_get($rewardSummary, 'attributed_revenue'))->toBe(75.0);
 });
 
 test('expired and cancelled rewards cannot be activated improperly', function () {
@@ -365,14 +506,15 @@ test('expired and cancelled rewards cannot be activated improperly', function ()
 /**
  * @return array{0:MarketingProfile,1:CustomerBirthdayProfile,2:BirthdayRewardIssuance}
  */
-function birthdayRewardFixture(array $issuanceOverrides = [], int $suffix = 1): array
+function birthdayRewardFixture(array $issuanceOverrides = [], int $suffix = 1, ?int $tenantId = null): array
 {
-    $profile = MarketingProfile::query()->create([
+    $profile = MarketingProfile::query()->create(array_filter([
+        'tenant_id' => $tenantId,
         'first_name' => 'Birthday' . $suffix,
         'last_name' => 'Tester',
         'email' => "birthday-{$suffix}@example.com",
         'normalized_email' => "birthday-{$suffix}@example.com",
-    ]);
+    ], static fn ($value): bool => $value !== null));
 
     $birthday = CustomerBirthdayProfile::query()->create([
         'marketing_profile_id' => $profile->id,

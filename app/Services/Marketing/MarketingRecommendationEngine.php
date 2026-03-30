@@ -16,7 +16,8 @@ class MarketingRecommendationEngine
         protected MarketingPerformanceAnalyticsService $performanceAnalyticsService,
         protected MarketingTimingRecommendationService $timingRecommendationService,
         protected MarketingSegmentOpportunityService $segmentOpportunityService,
-        protected MarketingEventOpportunityService $eventOpportunityService
+        protected MarketingEventOpportunityService $eventOpportunityService,
+        protected MarketingTenantOwnershipService $ownershipService
     ) {
     }
 
@@ -27,6 +28,13 @@ class MarketingRecommendationEngine
     public function generateForCampaign(MarketingCampaign $campaign, array $options = []): array
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
+        $tenantId = isset($options['tenant_id']) && is_numeric($options['tenant_id'])
+            ? (int) $options['tenant_id']
+            : null;
+        if ($tenantId !== null && ! $this->ownershipService->campaignOwnedByTenant((int) $campaign->id, $tenantId)) {
+            throw new \RuntimeException('Campaign recommendation generation requires tenant-owned campaign context.');
+        }
+        $campaignTenantId = $tenantId ?? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id);
         $run = $this->startRun('campaign:' . $campaign->id, $dryRun);
 
         $created = 0;
@@ -82,6 +90,7 @@ class MarketingRecommendationEngine
 
         if (! $campaign->segment_id) {
             $eventBuyerCount = MarketingProfile::query()
+                ->when($campaignTenantId !== null, fn ($query) => $query->forTenantId($campaignTenantId))
                 ->whereJsonContains('source_channels', 'event')
                 ->count();
             if ($eventBuyerCount >= 10) {
@@ -178,6 +187,7 @@ class MarketingRecommendationEngine
 
         if ($campaign->objective === 'consent_capture') {
             $profiles = MarketingProfile::query()
+                ->when($campaignTenantId !== null, fn ($query) => $query->forTenantId($campaignTenantId))
                 ->where('accepts_email_marketing', true)
                 ->where('accepts_sms_marketing', false)
                 ->orderByDesc('updated_at')
@@ -187,6 +197,7 @@ class MarketingRecommendationEngine
             foreach ($profiles as $profile) {
                 $result = $this->generateConsentCaptureSuggestionForProfile($profile, $campaign, [
                     'dry_run' => $dryRun,
+                    'tenant_id' => $campaignTenantId,
                 ]);
                 $created += (int) ($result['created'] ?? 0);
                 $potential += (int) ($result['potential'] ?? 0);
@@ -213,12 +224,17 @@ class MarketingRecommendationEngine
     public function generateGlobal(array $options = []): array
     {
         $dryRun = (bool) ($options['dry_run'] ?? false);
-        $run = $this->startRun('global', $dryRun);
+        $tenantId = isset($options['tenant_id']) && is_numeric($options['tenant_id'])
+            ? (int) $options['tenant_id']
+            : null;
+        $runType = $tenantId !== null ? 'tenant:' . $tenantId . ':global' : 'global';
+        $run = $this->startRun($runType, $dryRun);
 
         $created = 0;
         $potential = 0;
 
         $squareOnlyBuyers = MarketingProfile::query()
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->whereJsonContains('source_channels', 'square')
             ->whereJsonDoesntContain('source_channels', 'shopify')
             ->count();
@@ -239,6 +255,7 @@ class MarketingRecommendationEngine
         }
 
         $consentCaptureProfiles = MarketingProfile::query()
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->where('accepts_email_marketing', true)
             ->where('accepts_sms_marketing', false)
             ->whereNotNull('normalized_email')
@@ -249,12 +266,14 @@ class MarketingRecommendationEngine
         foreach ($consentCaptureProfiles as $profile) {
             $result = $this->generateConsentCaptureSuggestionForProfile($profile, null, [
                 'dry_run' => $dryRun,
+                'tenant_id' => $tenantId,
             ]);
             $created += (int) ($result['created'] ?? 0);
             $potential += (int) ($result['potential'] ?? 0);
         }
 
         $channelSuggestionCount = MarketingProfile::query()
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->where('accepts_email_marketing', true)
             ->where('accepts_sms_marketing', false)
             ->whereNotNull('normalized_email')
@@ -275,12 +294,17 @@ class MarketingRecommendationEngine
             $potential += $result['potential'];
         }
 
-        $nearThresholdCount = (int) CandleCashBalance::query()->where('balance', '>=', 50)->count();
+        $nearThresholdCount = (int) CandleCashBalance::query()
+            ->when($tenantId !== null, function ($query) use ($tenantId): void {
+                $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
+            })
+            ->where('balance', '>=', 50)
+            ->count();
         if ($nearThresholdCount >= 8) {
             $result = $this->createRecommendation([
                 'type' => 'reward_opportunity',
                 'title' => 'Reward-balance nudges can improve repeat purchases',
-                'summary' => 'Customers with existing Candle Cash balance are strong candidates for reward reminder campaigns.',
+                'summary' => 'Customers with existing Rewards balance are strong candidates for reward reminder campaigns.',
                 'details_json' => [
                     'profiles_with_balance' => $nearThresholdCount,
                     'suggestion' => 'Launch a balance reminder campaign for event and lapsed buyers.',
@@ -291,7 +315,10 @@ class MarketingRecommendationEngine
             $potential += $result['potential'];
         }
 
-        $timing = $this->timingRecommendationService->generateInsights(['dry_run' => $dryRun]);
+        $timing = ['processed' => 0, 'created' => 0, 'updated' => 0];
+        if ($tenantId === null || ! $this->ownershipService->strictModeEnabled()) {
+            $timing = $this->timingRecommendationService->generateInsights(['dry_run' => $dryRun]);
+        }
         if ((int) ($timing['processed'] ?? 0) > 0) {
             $result = $this->createRecommendation([
                 'type' => 'timing_suggestion',
@@ -308,8 +335,12 @@ class MarketingRecommendationEngine
             $potential += $result['potential'];
         }
 
-        $segmentOpportunities = $this->segmentOpportunityService->generate(['dry_run' => $dryRun]);
-        $eventOpportunities = $this->eventOpportunityService->generate(['dry_run' => $dryRun]);
+        $segmentOpportunities = ['created' => 0, 'potential' => 0];
+        $eventOpportunities = ['created' => 0, 'potential' => 0];
+        if ($tenantId === null || ! $this->ownershipService->strictModeEnabled()) {
+            $segmentOpportunities = $this->segmentOpportunityService->generate(['dry_run' => $dryRun]);
+            $eventOpportunities = $this->eventOpportunityService->generate(['dry_run' => $dryRun]);
+        }
         $created += (int) ($segmentOpportunities['created'] ?? 0) + (int) ($eventOpportunities['created'] ?? 0);
         $potential += (int) ($segmentOpportunities['potential'] ?? 0) + (int) ($eventOpportunities['potential'] ?? 0);
 
@@ -338,6 +369,12 @@ class MarketingRecommendationEngine
         array $options = []
     ): array {
         $dryRun = (bool) ($options['dry_run'] ?? false);
+        $tenantId = isset($options['tenant_id']) && is_numeric($options['tenant_id'])
+            ? (int) $options['tenant_id']
+            : null;
+        if ($tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            return ['created' => 0, 'recommendation_id' => null];
+        }
         $scoreResult = $this->scoreService->refreshForProfile($profile);
         $metrics = $this->analyticsService->metricsForProfile($profile);
 
@@ -380,6 +417,12 @@ class MarketingRecommendationEngine
         array $options = []
     ): array {
         $dryRun = (bool) ($options['dry_run'] ?? false);
+        $tenantId = isset($options['tenant_id']) && is_numeric($options['tenant_id'])
+            ? (int) $options['tenant_id']
+            : null;
+        if ($tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            return ['created' => 0, 'recommendation_id' => null];
+        }
         if (! (bool) $profile->accepts_email_marketing || (bool) $profile->accepts_sms_marketing) {
             return ['created' => 0, 'recommendation_id' => null];
         }

@@ -49,12 +49,12 @@ class CandleCashRewardsOverviewService
 
         $primaryReward = $activeRewards->first();
         $programSummary = $primaryReward
-            ? 'Customers earn Candle Cash through live tasks, then redeem Candle Cash for rewards like '.$primaryReward->name.'.'
-            : 'Customers earn Candle Cash through live tasks and can redeem it against the reward rows configured in Backstage.';
+            ? 'Customers earn reward credit through live tasks, then redeem it for rewards like '.$primaryReward->name.'.'
+            : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Backstage.';
 
         return [
-            'program_name' => 'Candle Cash',
-            'measurement_label' => '1 Candle Cash = 1 Candle Cash',
+            'program_name' => 'Rewards',
+            'measurement_label' => '1 reward credit = $1.00',
             'earning_rules_active' => $activeTasks->isNotEmpty(),
             'earning_rule_count' => $activeTasks->count(),
             'redeem_rules_active' => $activeRewards->isNotEmpty(),

@@ -4,13 +4,20 @@
 @endphp
 
 <div class="space-y-4 sm:space-y-6">
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] sm:p-6">
-    <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Administration</div>
-    <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">Admin Workspace</div>
-    <div class="mt-2 text-sm text-emerald-50/70">System controls, scent intake, and canonical master data now live in one place.</div>
+  <section class="fb-card p-4 sm:p-6">
+    <div class="text-[11px] uppercase tracking-[0.35em] text-[var(--fb-muted)]">Administration</div>
+    <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-[var(--fb-text)] sm:text-3xl">Admin Workspace</div>
+    <div class="mt-2 text-sm text-[var(--fb-muted)]">Use this area to manage data quality, imports, and team-facing system controls.</div>
   </section>
 
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-3 sm:p-4 md:p-6">
+  <x-ui.page-explainer
+    title="Admin page guide"
+    what="Run admin tasks like data cleanup, intake review, and catalog maintenance."
+    why="These settings affect downstream operations, reporting quality, and operator confidence."
+    when="Use this page when launching new catalog entries, resolving import issues, or updating admin controls."
+  />
+
+  <section class="fb-card p-3 sm:p-4 md:p-6">
     <div class="space-y-4 sm:space-y-6">
       @if($tab === 'users' && $isAdmin)
         <livewire:admin.users.users-index />

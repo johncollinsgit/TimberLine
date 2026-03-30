@@ -12,7 +12,7 @@ class MarketingSnapshotVariantPerformance extends Command
         {--window-start= : Optional window start datetime}
         {--window-end= : Optional window end datetime}
         {--dry-run : Compute without writing snapshots}
-        {--verbose : Output per-row snapshot payload}';
+        {--show-details : Output per-row snapshot payload}';
 
     protected $description = 'Create/update marketing variant performance snapshots from deliveries and conversions.';
 
@@ -20,7 +20,7 @@ class MarketingSnapshotVariantPerformance extends Command
     {
         $campaignId = $this->option('campaign-id');
         $dryRun = (bool) $this->option('dry-run');
-        $verbose = (bool) $this->option('verbose');
+        $showDetails = (bool) $this->option('show-details');
 
         $summary = $performanceAnalytics->snapshotVariantPerformance([
             'campaign_id' => is_numeric($campaignId) ? (int) $campaignId : null,
@@ -37,7 +37,7 @@ class MarketingSnapshotVariantPerformance extends Command
             (int) $summary['skipped']
         ));
 
-        if ($verbose) {
+        if ($showDetails) {
             foreach ((array) $summary['rows'] as $row) {
                 $this->line(json_encode($row));
             }
@@ -50,4 +50,3 @@ class MarketingSnapshotVariantPerformance extends Command
         return self::SUCCESS;
     }
 }
-

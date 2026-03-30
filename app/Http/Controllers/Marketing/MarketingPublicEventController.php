@@ -24,6 +24,7 @@ use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Support\Marketing\MarketingEventContextResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -41,16 +42,19 @@ class MarketingPublicEventController extends Controller
         protected MarketingStorefrontEventLogger $eventLogger,
         protected GrowaveProjectionService $growaveProjectionService,
         protected CandleCashAccessGate $candleCashAccessGate,
-        protected TenantResolver $tenantResolver
+        protected TenantResolver $tenantResolver,
+        protected TenantDisplayLabelResolver $displayLabelResolver
     ) {
     }
 
-    public function showOptin(string $eventSlug): View|RedirectResponse
+    public function showOptin(string $eventSlug, Request $request): View|RedirectResponse
     {
         $eventContext = $this->eventContextResolver->resolve($eventSlug);
         if ($eventContext && (string) $eventContext['slug'] !== Str::slug($eventSlug)) {
             return redirect()->route('marketing.public.events.optin', ['eventSlug' => $eventContext['slug']]);
         }
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        $displayLabels = $this->displayLabelsForTenantId($tenantContext['tenant_id']);
 
         $this->eventLogger->log('public_event_optin_view', [
             'status' => 'ok',
@@ -65,6 +69,7 @@ class MarketingPublicEventController extends Controller
         return view('marketing/public/event-optin', [
             'eventContext' => $eventContext,
             'eventSlug' => $eventContext['slug'] ?? $eventSlug,
+            'displayLabels' => $displayLabels,
         ]);
     }
 
@@ -228,15 +233,29 @@ class MarketingPublicEventController extends Controller
     {
         $eventContext = $this->eventContextResolver->resolve($eventSlug);
         if ($eventContext && (string) $eventContext['slug'] !== Str::slug($eventSlug)) {
+            $storeKey = trim((string) $request->query('store_key', ''));
+
             return redirect()->route('marketing.public.events.rewards', [
                 'eventSlug' => $eventContext['slug'],
                 'email' => (string) $request->query('email', ''),
                 'phone' => (string) $request->query('phone', ''),
+                'store_key' => $storeKey !== '' ? $storeKey : null,
             ]);
+        }
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        $displayLabels = $this->displayLabelsForTenantId($tenantContext['tenant_id']);
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+        $rewardCreditLabel = trim((string) ($displayLabels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
         }
         $resolution = $this->resolveProfileFromRequest($request, 'event_reward_lookup:' . ($eventContext['slug'] ?? Str::slug($eventSlug)));
         $profile = $resolution['profile'];
         $lookupState = $resolution['state'];
+        $tenantId = $this->resolvedTenantId($profile, $tenantContext);
 
         $this->eventLogger->log('public_reward_lookup', [
             'status' => $profile ? 'ok' : ($lookupState === 'verification_required' ? 'verification_required' : 'pending'),
@@ -261,19 +280,22 @@ class MarketingPublicEventController extends Controller
             'profile' => $profile,
             'lookupState' => $lookupState,
             'balance' => $profile ? $candleCashService->balancePayloadFromPoints($candleCashService->currentBalance($profile)) : null,
-            'availableRewards' => array_values(array_filter([
-                $candleCashService->storefrontRewardPayload(
-                    $candleCashService->storefrontReward(),
-                    $profile ? $candleCashService->currentBalance($profile) : null
-                ),
-            ])),
+            'availableRewards' => $tenantId !== null
+                ? array_values(array_filter([
+                    $candleCashService->storefrontRewardPayload(
+                        $candleCashService->storefrontReward($tenantId),
+                        $profile ? $candleCashService->currentBalance($profile) : null,
+                        $tenantId
+                    ),
+                ]))
+                : [],
             'redemptions' => $profile
                 ? $profile->candleCashRedemptions()->with('reward:id,name,reward_type,reward_value')->orderByDesc('id')->limit(10)->get()
                     ->map(fn ($row): array => [
                         'id' => (int) $row->id,
-                        'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward)
-                            ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
-                            : (string) ($row->reward?->name ?: 'Candle Cash'),
+                        'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward, $tenantId)
+                            ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted($tenantId) . ' ' . Str::title($rewardCreditLabel)
+                            : (string) ($row->reward?->name ?: $rewardsLabel),
                         'status' => (string) ($row->status ?: 'issued'),
                         'candle_cash_amount' => $candleCashService->amountFromPoints($row->candle_cash_spent),
                         'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($row->candle_cash_spent)),
@@ -281,7 +303,8 @@ class MarketingPublicEventController extends Controller
                         'redemption_code' => $row->redemption_code ? (string) $row->redemption_code : null,
                     ])->all()
                 : [],
-            'redemptionRules' => $candleCashService->redemptionRulesPayload(),
+            'redemptionRules' => $tenantId !== null ? $candleCashService->redemptionRulesPayload($tenantId) : [],
+            'displayLabels' => $displayLabels,
         ]);
     }
 
@@ -290,6 +313,11 @@ class MarketingPublicEventController extends Controller
         $resolution = $this->resolveProfileFromRequest($request, 'reward_lookup');
         $profile = $resolution['profile'];
         $lookupState = $resolution['state'];
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        $tenantId = is_numeric($profile?->tenant_id) && (int) ($profile?->tenant_id ?? 0) > 0
+            ? (int) $profile->tenant_id
+            : $tenantContext['tenant_id'];
+        $displayLabels = $this->displayLabelsForTenantId($tenantId);
 
         [
             $balance,
@@ -306,7 +334,7 @@ class MarketingPublicEventController extends Controller
             $lastGrowaveSyncAt,
             $reviewDataSource,
         ] =
-            $this->rewardsLookupData($profile, $candleCashService);
+            $this->rewardsLookupData($profile, $candleCashService, $displayLabels, $tenantId);
         $redemptionAccess = $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
 
         $this->eventLogger->log('public_reward_lookup', [
@@ -342,8 +370,9 @@ class MarketingPublicEventController extends Controller
             'lastGrowaveSyncAt' => $lastGrowaveSyncAt,
             'reviewDataSource' => $reviewDataSource,
             'redeemResult' => session('redeem_result'),
-            'redemptionRules' => $candleCashService->redemptionRulesPayload(),
+            'redemptionRules' => $tenantId !== null ? $candleCashService->redemptionRulesPayload($tenantId) : [],
             'redemptionAccess' => $redemptionAccess,
+            'displayLabels' => $displayLabels,
         ]);
     }
 
@@ -361,11 +390,16 @@ class MarketingPublicEventController extends Controller
 
         $email = trim((string) ($data['email'] ?? ''));
         $phone = trim((string) ($data['phone'] ?? ''));
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
         $query = ['email' => $email, 'phone' => $phone];
+        if (($tenantContext['store_key'] ?? null) !== null) {
+            $query['store_key'] = $tenantContext['store_key'];
+        }
 
         $resolution = $this->resolveProfileFromRequest($request, 'reward_lookup_redeem', true);
         $profile = $resolution['profile'];
         $lookupState = $resolution['state'];
+        $tenantId = $this->resolvedTenantId($profile, $tenantContext);
 
         if (! $profile) {
             $this->eventLogger->log('public_reward_redeem', [
@@ -392,14 +426,14 @@ class MarketingPublicEventController extends Controller
 
         /** @var CandleCashReward $requestedReward */
         $requestedReward = CandleCashReward::query()->findOrFail((int) $data['reward_id']);
-        $reward = $candleCashService->storefrontReward();
+        $reward = $tenantId !== null ? $candleCashService->storefrontReward($tenantId) : null;
         if (! $reward || (int) $requestedReward->id !== (int) $reward->id) {
             return redirect()
                 ->route('marketing.public.rewards-lookup', $query)
                 ->with('redeem_result', [
                     'ok' => false,
                     'state' => 'reward_unavailable',
-                    'message' => 'That Candle Cash redemption is not available right now.',
+                    'message' => 'That reward redemption is not available right now.',
                 ]);
         }
 
@@ -421,7 +455,7 @@ class MarketingPublicEventController extends Controller
                 ->with('redeem_result', [
                     'ok' => false,
                     'state' => 'coming_soon',
-                    'message' => 'Candle Cash redemption is coming soon for this account.',
+                    'message' => 'Reward redemption is coming soon for this account.',
                     'balance' => $candleCashService->balancePayloadFromPoints($candleCashService->currentBalance($profile)),
                     'cta_label' => $redemptionAccess['cta_label'] ?? 'COMING SOON!',
                 ]);
@@ -431,7 +465,8 @@ class MarketingPublicEventController extends Controller
             profile: $profile,
             reward: $reward,
             platform: 'public_lookup',
-            reuseActiveCode: true
+            reuseActiveCode: true,
+            tenantId: $tenantId
         );
 
         $state = strtolower(trim((string) ($result['state'] ?? 'try_again_later')));
@@ -463,16 +498,22 @@ class MarketingPublicEventController extends Controller
                     $discountSyncStatus = 'sync_failed';
                     $restore = $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
                         $redemption,
-                        'Canceled automatically because Shopify could not prepare the Candle Cash discount yet.'
+                        'Canceled automatically because Shopify could not prepare the reward discount yet.'
                     );
                     $result['balance'] = round((float) ($restore['balance'] ?? $candleCashService->currentBalance($profile)), 3);
                     $ok = false;
                     $state = 'discount_not_ready';
-                    $message = 'Your Candle Cash balance is safe. We could not prepare the Shopify discount yet.';
+                    $message = 'Your reward balance is safe. We could not prepare the Shopify discount yet.';
                     $eventStatus = 'error';
                     $eventIssue = 'shopify_discount_sync_failed';
                 }
             }
+        }
+
+        $displayLabels = $this->displayLabelsForTenantId($tenantId);
+        $rewardCreditLabel = trim((string) ($displayLabels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
         }
 
         $this->eventLogger->log('public_reward_redeem', [
@@ -499,7 +540,7 @@ class MarketingPublicEventController extends Controller
                 'state' => $state,
                 'message' => $message,
                 'balance' => $candleCashService->balancePayloadFromPoints($result['balance'] ?? 0),
-                'reward_name' => 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash',
+                'reward_name' => 'Redeem ' . $candleCashService->fixedRedemptionFormatted($tenantId) . ' ' . Str::title($rewardCreditLabel),
                 'redemption_code' => $ok ? (string) ($result['code'] ?? '') : null,
                 'redemption_id' => $ok ? (int) ($result['redemption_id'] ?? 0) : null,
                 'discount_sync_status' => $discountSyncStatus,
@@ -513,6 +554,12 @@ class MarketingPublicEventController extends Controller
         $profileId = (int) $request->query('profile', 0);
         $eventContext = $eventSlug !== '' ? $this->eventContextResolver->resolve($eventSlug) : null;
         $bonusPoints = max(0, (int) $request->query('bonus', 0));
+        $profile = $profileId > 0 ? MarketingProfile::query()->find($profileId) : null;
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        $tenantId = is_numeric($profile?->tenant_id) && (int) ($profile?->tenant_id ?? 0) > 0
+            ? (int) $profile->tenant_id
+            : $tenantContext['tenant_id'];
+        $displayLabels = $this->displayLabelsForTenantId($tenantId);
 
         $this->eventLogger->log('public_consent_confirm_view', [
             'status' => 'ok',
@@ -528,11 +575,24 @@ class MarketingPublicEventController extends Controller
         return view('marketing/public/consent-confirm', [
             'eventContext' => $eventContext,
             'eventSlug' => $eventContext['slug'] ?? $eventSlug,
-            'profile' => $profileId > 0 ? MarketingProfile::query()->find($profileId) : null,
+            'profile' => $profile,
             'bonus' => $bonusPoints,
             'bonusAmount' => $candleCashService->amountFromPoints($bonusPoints),
             'bonusFormatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($bonusPoints)),
+            'displayLabels' => $displayLabels,
         ]);
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function displayLabelsForTenantId(?int $tenantId): array
+    {
+        $resolved = $this->displayLabelResolver->resolve($tenantId);
+
+        return is_array($resolved['labels'] ?? null)
+            ? (array) $resolved['labels']
+            : [];
     }
 
     /**
@@ -541,6 +601,10 @@ class MarketingPublicEventController extends Controller
     protected function resolveProfileFromRequest(Request $request, string $scope, bool $allowBody = false): array
     {
         $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        if (! is_numeric($tenantContext['tenant_id'] ?? null) || (int) ($tenantContext['tenant_id'] ?? 0) <= 0) {
+            return ['profile' => null, 'state' => 'missing_tenant_context'];
+        }
+
         $rawEmail = trim((string) ($allowBody ? $request->input('email', $request->query('email', '')) : $request->query('email', '')));
         $rawPhone = trim((string) ($allowBody ? $request->input('phone', $request->query('phone', '')) : $request->query('phone', '')));
         $email = $this->normalizer->normalizeEmail($rawEmail);
@@ -582,6 +646,20 @@ class MarketingPublicEventController extends Controller
             'profile' => $resolved['profile'],
             'state' => $resolved['profile'] ? 'linked_customer' : ($resolved['status'] === 'review_required' ? 'needs_verification' : 'unknown_customer'),
         ];
+    }
+
+    /**
+     * @param array{store_key:?string,tenant_id:?int} $tenantContext
+     */
+    protected function resolvedTenantId(?MarketingProfile $profile, array $tenantContext): ?int
+    {
+        if ($profile && is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0) {
+            return (int) $profile->tenant_id;
+        }
+
+        return is_numeric($tenantContext['tenant_id'] ?? null) && (int) ($tenantContext['tenant_id'] ?? 0) > 0
+            ? (int) $tenantContext['tenant_id']
+            : null;
     }
 
     /**
@@ -765,11 +843,31 @@ class MarketingPublicEventController extends Controller
      *   12:string
      * }
      */
-    protected function rewardsLookupData(?MarketingProfile $profile, CandleCashService $candleCashService): array
+    protected function rewardsLookupData(?MarketingProfile $profile, CandleCashService $candleCashService, array $displayLabels = [], ?int $tenantId = null): array
     {
-        $availableRewards = array_values(array_filter([
-            $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward()),
-        ]));
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+        $rewardCreditLabel = trim((string) ($displayLabels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
+        }
+
+        $resolvedTenantId = $tenantId;
+        if ($resolvedTenantId === null && $profile && is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0) {
+            $resolvedTenantId = (int) $profile->tenant_id;
+        }
+
+        $availableRewards = $resolvedTenantId !== null
+            ? array_values(array_filter([
+                $candleCashService->storefrontRewardPayload(
+                    $candleCashService->storefrontReward($resolvedTenantId),
+                    null,
+                    $resolvedTenantId
+                ),
+            ]))
+            : [];
 
         if (! $profile) {
             return [
@@ -793,9 +891,15 @@ class MarketingPublicEventController extends Controller
         $balance = $candleCashService->balancePayloadFromPoints($balancePoints);
         $redemptionAccess = $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
         $revealRedemptionCodes = (bool) ($redemptionAccess['redeem_enabled'] ?? false);
-        $availableRewards = array_values(array_filter([
-            $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward(), $balancePoints),
-        ]));
+        $availableRewards = $resolvedTenantId !== null
+            ? array_values(array_filter([
+                $candleCashService->storefrontRewardPayload(
+                    $candleCashService->storefrontReward($resolvedTenantId),
+                    $balancePoints,
+                    $resolvedTenantId
+                ),
+            ]))
+            : [];
         $redemptions = $profile->candleCashRedemptions()
             ->with('reward:id,name,reward_type,reward_value')
             ->orderByDesc('id')
@@ -803,9 +907,9 @@ class MarketingPublicEventController extends Controller
             ->get()
             ->map(fn ($row): array => [
                 'id' => (int) $row->id,
-                'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward)
-                    ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted() . ' Candle Cash'
-                    : (string) ($row->reward?->name ?: 'Candle Cash'),
+                'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward, $resolvedTenantId)
+                    ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted($resolvedTenantId) . ' ' . Str::title($rewardCreditLabel)
+                    : (string) ($row->reward?->name ?: $rewardsLabel),
                 'status' => (string) ($row->status ?: 'issued'),
                 'redemption_code' => $revealRedemptionCodes && $row->redemption_code ? (string) $row->redemption_code : null,
                 'issued_at' => optional($row->issued_at)->toDateTimeString(),
@@ -973,9 +1077,10 @@ class MarketingPublicEventController extends Controller
     protected function redemptionMessageForState(string $state): string
     {
         return match ($state) {
-            'code_issued' => 'Candle Cash redeemed successfully. Your $10 reward code is ready to use.',
-            'already_has_active_code' => 'You already have a $10 Candle Cash reward waiting for you.',
-            'insufficient_candle_cash' => 'You need a little more Candle Cash before the $10 redemption is ready.',
+            'code_issued' => 'Reward credit redeemed successfully. Your $10 reward code is ready to use.',
+            'already_has_active_code' => 'You already have a $10 reward credit waiting for you.',
+            'insufficient_candle_cash' => 'You need a little more reward balance before the $10 redemption is ready.',
+            'missing_tenant_context' => 'This rewards lookup needs a valid store context before it can continue.',
             'reward_unavailable' => 'This reward is currently unavailable.',
             'redemption_blocked' => 'Redemption is temporarily blocked. Please try again later.',
             default => 'Could not process redemption right now. Please try again shortly.',

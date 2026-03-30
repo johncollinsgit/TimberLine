@@ -6,20 +6,24 @@ use App\Models\MarketingEventSourceMapping;
 use App\Models\MarketingOrderEventAttribution;
 use App\Models\MarketingProfile;
 use App\Models\SquareOrder;
+use App\Models\Tenant;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class MarketingEventAttributionService
 {
     /**
      * @return array{created:int,updated:int,removed:int}
      */
-    public function refreshSquareOrderAttributions(?int $limit = null): array
+    public function refreshSquareOrderAttributions(?int $limit = null, ?int $tenantId = null): array
     {
         $created = 0;
         $updated = 0;
         $removed = 0;
 
-        $query = SquareOrder::query()->orderBy('id');
+        $query = SquareOrder::query()
+            ->when($tenantId !== null, fn ($builder) => $builder->forTenantId($tenantId))
+            ->orderBy('id');
         if ($limit !== null) {
             $query->limit(max(1, $limit));
         }
@@ -43,7 +47,12 @@ class MarketingEventAttributionService
         $updated = 0;
         $removed = 0;
 
-        $matches = $this->resolvedMappingsForSquareOrder($order);
+        $orderTenantId = $this->positiveInt($order->tenant_id);
+        if ($this->strictModeEnabled() && $orderTenantId === null) {
+            return compact('created', 'updated', 'removed');
+        }
+
+        $matches = $this->resolvedMappingsForSquareOrder($order, $orderTenantId);
         $matchedEventIds = [];
 
         foreach ($matches as $match) {
@@ -53,14 +62,20 @@ class MarketingEventAttributionService
             }
 
             $matchedEventIds[] = $mappedEventId;
-            $record = MarketingOrderEventAttribution::query()->firstOrNew([
+            $attributes = [
                 'source_type' => 'square_order',
                 'source_id' => $order->square_order_id,
                 'event_instance_id' => $mappedEventId,
-            ]);
+            ];
+            if ($this->orderAttributionTenantRailAvailable()) {
+                $attributes['tenant_id'] = $orderTenantId;
+            }
+
+            $record = MarketingOrderEventAttribution::query()->firstOrNew($attributes);
 
             $wasExisting = $record->exists;
             $record->fill([
+                'tenant_id' => $this->orderAttributionTenantRailAvailable() ? $orderTenantId : null,
                 'attribution_method' => 'mapping:' . $match['source_system'],
                 'confidence' => $match['confidence'],
                 'meta' => [
@@ -81,6 +96,13 @@ class MarketingEventAttributionService
         $toDelete = MarketingOrderEventAttribution::query()
             ->where('source_type', 'square_order')
             ->where('source_id', $order->square_order_id)
+            ->when(
+                $this->orderAttributionTenantRailAvailable() && $orderTenantId !== null,
+                fn ($query) => $query->where('tenant_id', $orderTenantId),
+                fn ($query) => $this->orderAttributionTenantRailAvailable()
+                    ? $query->whereNull('tenant_id')
+                    : $query
+            )
             ->when($matchedEventIds !== [], fn ($q) => $q->whereNotIn('event_instance_id', $matchedEventIds))
             ->get();
 
@@ -104,6 +126,7 @@ class MarketingEventAttributionService
      */
     public function eventSummaryForProfile(MarketingProfile $profile): array
     {
+        $tenantId = $this->positiveInt($profile->tenant_id);
         $squareOrderIds = $profile->links()
             ->where('source_type', 'square_order')
             ->pluck('source_id')
@@ -113,9 +136,25 @@ class MarketingEventAttributionService
             return [];
         }
 
+        if ($tenantId !== null) {
+            $squareOrderIds = SquareOrder::query()
+                ->forTenantId($tenantId)
+                ->whereIn('square_order_id', $squareOrderIds->all())
+                ->pluck('square_order_id')
+                ->values();
+        }
+
+        if ($squareOrderIds->isEmpty()) {
+            return [];
+        }
+
         $records = MarketingOrderEventAttribution::query()
             ->where('source_type', 'square_order')
             ->whereIn('source_id', $squareOrderIds->all())
+            ->when(
+                $this->orderAttributionTenantRailAvailable() && $tenantId !== null,
+                fn ($query) => $query->where('tenant_id', $tenantId)
+            )
             ->with('eventInstance:id,title,starts_at')
             ->get();
 
@@ -141,6 +180,7 @@ class MarketingEventAttributionService
      */
     public function unresolvedValuesForProfile(MarketingProfile $profile): array
     {
+        $tenantId = $this->positiveInt($profile->tenant_id);
         $squareOrderIds = $profile->links()
             ->where('source_type', 'square_order')
             ->pluck('source_id')
@@ -151,19 +191,35 @@ class MarketingEventAttributionService
         }
 
         $orders = SquareOrder::query()
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->whereIn('square_order_id', $squareOrderIds->all())
             ->get();
 
-        return $this->unmappedValuesFromOrders($orders)->values()->all();
+        return $this->unmappedValuesFromOrders($orders, $tenantId)->values()->all();
     }
 
     /**
      * @return Collection<int,array{source_system:string,raw_value:string,normalized_value:string}>
      */
-    public function unmappedValuesFromOrders(?Collection $orders = null): Collection
+    public function unmappedValuesFromOrders(?Collection $orders = null, ?int $tenantId = null): Collection
     {
-        $orders = $orders ?: SquareOrder::query()->orderByDesc('id')->limit(500)->get();
-        $existing = MarketingEventSourceMapping::query()
+        $orders = $orders ?: SquareOrder::query()
+            ->when($tenantId !== null, fn ($builder) => $builder->forTenantId($tenantId))
+            ->orderByDesc('id')
+            ->limit(500)
+            ->get();
+        $effectiveTenantId = $this->resolveTenantIdFromOrders($orders, $tenantId);
+
+        $existingQuery = MarketingEventSourceMapping::query();
+        if ($this->eventSourceMappingTenantRailAvailable()) {
+            if ($effectiveTenantId !== null) {
+                $existingQuery->where('tenant_id', $effectiveTenantId);
+            } elseif ($this->strictModeEnabled()) {
+                $existingQuery->whereRaw('1 = 0');
+            }
+        }
+
+        $existing = $existingQuery
             ->get(['source_system', 'raw_value'])
             ->map(fn (MarketingEventSourceMapping $row): string => $row->source_system . '|' . trim((string) $row->raw_value))
             ->unique()
@@ -193,17 +249,30 @@ class MarketingEventAttributionService
      *  confidence:?float
      * }>
      */
-    protected function resolvedMappingsForSquareOrder(SquareOrder $order): array
+    protected function resolvedMappingsForSquareOrder(SquareOrder $order, ?int $tenantId = null): array
     {
+        if ($this->strictModeEnabled() && $tenantId === null) {
+            return [];
+        }
+
         $resolved = [];
         foreach ($this->candidateSourcesForOrder($order) as $candidate) {
-            $mapping = MarketingEventSourceMapping::query()
+            $mappingQuery = MarketingEventSourceMapping::query()
                 ->where('source_system', $candidate['source_system'])
                 ->where(function ($query) use ($candidate): void {
                     $query->where('raw_value', $candidate['raw_value'])
                         ->orWhere('normalized_value', $candidate['normalized_value']);
                 })
-                ->where('is_active', true)
+                ->where('is_active', true);
+            if ($this->eventSourceMappingTenantRailAvailable()) {
+                if ($tenantId !== null) {
+                    $mappingQuery->where('tenant_id', $tenantId);
+                } elseif ($this->strictModeEnabled()) {
+                    $mappingQuery->whereRaw('1 = 0');
+                }
+            }
+
+            $mapping = $mappingQuery
                 ->orderByDesc('confidence')
                 ->orderByDesc('id')
                 ->first();
@@ -263,5 +332,53 @@ class MarketingEventAttributionService
         $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
 
         return trim($normalized);
+    }
+
+    protected function strictModeEnabled(): bool
+    {
+        if (! Schema::hasTable('tenants')) {
+            return false;
+        }
+
+        return (int) Tenant::query()->count() > 0;
+    }
+
+    protected function eventSourceMappingTenantRailAvailable(): bool
+    {
+        return Schema::hasTable('marketing_event_source_mappings')
+            && Schema::hasColumn('marketing_event_source_mappings', 'tenant_id');
+    }
+
+    protected function orderAttributionTenantRailAvailable(): bool
+    {
+        return Schema::hasTable('marketing_order_event_attributions')
+            && Schema::hasColumn('marketing_order_event_attributions', 'tenant_id');
+    }
+
+    protected function resolveTenantIdFromOrders(Collection $orders, ?int $explicitTenantId): ?int
+    {
+        $tenantId = $this->positiveInt($explicitTenantId);
+        if ($tenantId !== null) {
+            return $tenantId;
+        }
+
+        $tenantIds = $orders
+            ->map(fn ($order): ?int => $this->positiveInt($order->tenant_id ?? null))
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $tenantIds->count() === 1 ? (int) $tenantIds->first() : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 }

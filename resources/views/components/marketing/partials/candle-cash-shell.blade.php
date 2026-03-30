@@ -5,6 +5,14 @@
 
 @php
     $sectionGroups = \App\Support\Marketing\CandleCashSectionRegistry::groupNavigationItems($sections);
+    $tenantId = request()?->attributes->get('current_tenant_id');
+    $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+    $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
+    $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
+    $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+    if ($rewardsLabel === '') {
+        $rewardsLabel = 'Rewards';
+    }
     $accentStyles = [
         'amber' => [
             'dot' => 'bg-amber-300 shadow-[0_0_0_5px_rgba(252,211,77,0.12)]',
@@ -27,12 +35,12 @@
 <section class="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.04))] p-5 sm:p-6 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.6)] backdrop-blur-xl">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-            <div class="text-[11px] uppercase tracking-[0.32em] text-white/55">Candle Cash</div>
+            <div class="text-[11px] uppercase tracking-[0.32em] text-white/55">{{ $rewardsLabel }}</div>
             <h1 class="mt-2 text-2xl font-semibold text-white">{{ $section['label'] }}</h1>
             <p class="mt-2 max-w-3xl text-sm text-white/70">{{ $section['description'] }}</p>
         </div>
         <a href="{{ route('marketing.candle-cash') }}" wire:navigate class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
-            Open Rewards
+            Open {{ $rewardsLabel }}
         </a>
     </div>
 </section>

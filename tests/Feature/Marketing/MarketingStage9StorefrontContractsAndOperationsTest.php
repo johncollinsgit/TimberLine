@@ -17,8 +17,10 @@ test('storefront contract responses include standardized envelope states and rec
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['stage9.contract@example.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-contract-tenant');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Stage9',
         'email' => 'stage9.contract@example.com',
         'normalized_email' => 'stage9.contract@example.com',
@@ -40,7 +42,7 @@ test('storefront contract responses include standardized envelope states and rec
         ->assertJsonPath('version', 'v1')
         ->assertJsonStructure(['ok', 'version', 'data', 'meta' => ['states']]);
 
-    $reward = app(CandleCashService::class)->storefrontReward();
+    $reward = app(CandleCashService::class)->storefrontReward($tenant->id);
     expect($reward)->not->toBeNull();
     $errorPayload = [
         'email' => $profile->email,
@@ -61,20 +63,24 @@ test('storefront contract responses include standardized envelope states and rec
 test('storefront security supports valid signatures and rejects invalid or stale requests', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-security-tenant');
 
-    $valid = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'stage9-secret');
+    $query = ['shop' => 'modernforestry.myshopify.com'];
+    $valid = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', $query, '', 'stage9-secret');
     $this->withHeaders($valid)
-        ->getJson(route('marketing.shopify.rewards.available'))
+        ->getJson(route('marketing.shopify.rewards.available', $query))
         ->assertOk();
 
-    $bad = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'wrong-secret');
+    $bad = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', $query, '', 'wrong-secret');
     $this->withHeaders($bad)
-        ->getJson(route('marketing.shopify.rewards.available'))
+        ->getJson(route('marketing.shopify.rewards.available', $query))
         ->assertStatus(401);
 
-    $stale = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', [], '', 'stage9-secret', time() - 3600);
+    $stale = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', $query, '', 'stage9-secret', time() - 3600);
     $this->withHeaders($stale)
-        ->getJson(route('marketing.shopify.rewards.available'))
+        ->getJson(route('marketing.shopify.rewards.available', $query))
         ->assertStatus(401)
         ->assertJsonPath('error.code', 'unauthorized_storefront_request');
 });
@@ -98,6 +104,7 @@ test('storefront app proxy signature mode is accepted when enabled', function ()
     config()->set('marketing.shopify.allow_legacy_token', false);
     config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    stage9MapStore('retail', 'timberline.example.myshopify.com', 'stage9-proxy-tenant');
 
     $query = stage9AppProxySignedQuery([
         'shop' => 'timberline.example.myshopify.com',
@@ -178,14 +185,41 @@ test('storefront reward balance stays isolated to the verified shop tenant', fun
         ->assertJsonPath('error.details.status', 'not_found');
 });
 
+test('storefront rewards fail closed when the shop is known but no tenant mapping exists', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'modernforestry.myshopify.com',
+            'access_token' => 'stage9-retail-token',
+            'tenant_id' => null,
+            'installed_at' => now(),
+        ]
+    );
+
+    $query = ['shop' => 'modernforestry.myshopify.com'];
+    $headers = stage9SignedHeaders('GET', '/shopify/marketing/rewards/available', $query, '', 'stage9-secret');
+
+    $this->withHeaders($headers)
+        ->getJson(route('marketing.shopify.rewards.available', $query))
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'tenant_context_required');
+});
+
 test('reward redemption feedback loop returns code issued and already has active code states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['reward.feedback@example.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-feedback-tenant');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Reward',
         'email' => 'reward.feedback@example.com',
         'normalized_email' => 'reward.feedback@example.com',
@@ -194,7 +228,7 @@ test('reward redemption feedback loop returns code issued and already has active
         'accepts_sms_marketing' => true,
     ]);
     app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
-    $reward = app(CandleCashService::class)->storefrontReward();
+    $reward = app(CandleCashService::class)->storefrontReward($tenant->id);
     expect($reward)->not->toBeNull();
 
     $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
@@ -318,8 +352,10 @@ test('shopify reward redemption is gated to the temporary beta email allowlist',
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-gated-tenant');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Blocked',
         'email' => 'blocked.stage9@example.com',
         'normalized_email' => 'blocked.stage9@example.com',
@@ -328,7 +364,7 @@ test('shopify reward redemption is gated to the temporary beta email allowlist',
     ]);
     app(CandleCashService::class)->addPoints($profile, 400, 'earn', 'admin', 'seed', 'seed');
 
-    $reward = app(CandleCashService::class)->storefrontReward();
+    $reward = app(CandleCashService::class)->storefrontReward($tenant->id);
     expect($reward)->not->toBeNull();
 
     $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
@@ -359,8 +395,10 @@ test('ambiguous storefront identity returns verification required instead of sil
     config()->set('marketing.shopify.allow_legacy_token', false);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-ambiguous-tenant');
 
     $left = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Left',
         'email' => 'left.stage9@example.com',
         'normalized_email' => 'left.stage9@example.com',
@@ -368,6 +406,7 @@ test('ambiguous storefront identity returns verification required instead of sil
         'normalized_phone' => '+15553001000',
     ]);
     $right = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Right',
         'email' => 'right.stage9@example.com',
         'normalized_email' => 'right.stage9@example.com',
@@ -393,8 +432,14 @@ test('ambiguous storefront identity returns verification required instead of sil
 });
 
 test('reconciliation dashboard surfaces unresolved issues and supports resolution actions', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Stage9 Reconciliation Tenant',
+        'slug' => 'stage9-reconciliation-tenant',
+    ]);
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Ops',
         'email' => 'ops.stage9@example.com',
         'normalized_email' => 'ops.stage9@example.com',
@@ -405,6 +450,7 @@ test('reconciliation dashboard surfaces unresolved issues and supports resolutio
     $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
 
     $event = MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
         'event_type' => 'widget_redeem_request',
         'status' => 'error',
         'issue_type' => 'redemption_blocked',
@@ -435,10 +481,16 @@ test('reconciliation dashboard surfaces unresolved issues and supports resolutio
 });
 
 test('storefront redemption debug endpoint summarizes latest redeem issue', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Stage9 Debug Tenant',
+        'slug' => 'stage9-debug-tenant',
+    ]);
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['debug.stage9@example.com']);
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Debug',
         'email' => 'debug.stage9@example.com',
         'normalized_email' => 'debug.stage9@example.com',
@@ -449,6 +501,7 @@ test('storefront redemption debug endpoint summarizes latest redeem issue', func
     app(CandleCashService::class)->addPoints($profile, 1000, 'earn', 'admin', 'seed', 'seed');
 
     MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
         'event_type' => 'widget_redeem_request',
         'status' => 'error',
         'issue_type' => 'shopify_discount_sync_failed',
@@ -469,8 +522,16 @@ test('storefront redemption debug endpoint summarizes latest redeem issue', func
 });
 
 test('dashboard mark redeemed action reconciles issued code for staff-assisted cases', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Stage9 Manual Redemption Tenant',
+        'slug' => 'stage9-manual-redemption-tenant',
+    ]);
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
-    $profile = MarketingProfile::query()->create(['first_name' => 'Manual']);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Manual',
+    ]);
     app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'seed');
     $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
     $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'square');
@@ -496,9 +557,12 @@ test('storefront and public touchpoints are logged and visible on customer timel
     config()->set('marketing.shopify.allow_legacy_token', false);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-timeline-tenant');
 
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Timeline',
         'email' => 'timeline.stage9@example.com',
         'normalized_email' => 'timeline.stage9@example.com',
@@ -517,9 +581,9 @@ test('storefront and public touchpoints are logged and visible on customer timel
         ->getJson(route('marketing.shopify.rewards.balance', $query))
         ->assertOk();
 
-    $this->get(route('marketing.public.rewards-lookup', ['email' => $profile->email, 'phone' => $profile->phone]))
+    $this->get(route('marketing.public.rewards-lookup', ['email' => $profile->email, 'phone' => $profile->phone, 'store_key' => 'retail']))
         ->assertOk()
-        ->assertSeeText('Candle Cash Account Lookup');
+        ->assertSeeText('Rewards Account Lookup');
 
     expect(MarketingStorefrontEvent::query()
         ->where('marketing_profile_id', $profile->id)
@@ -535,6 +599,26 @@ test('storefront and public touchpoints are logged and visible on customer timel
         ->assertSeeText('Widget/Public Event Timeline')
         ->assertSeeText('widget_balance_lookup');
 });
+
+function stage9MapStore(string $storeKey, string $shopDomain, string $slug): Tenant
+{
+    $tenant = Tenant::query()->create([
+        'name' => str_replace('-', ' ', ucfirst($slug)),
+        'slug' => $slug,
+    ]);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => $storeKey],
+        [
+            'shop_domain' => $shopDomain,
+            'access_token' => 'stage9-token-' . $storeKey,
+            'tenant_id' => $tenant->id,
+            'installed_at' => now(),
+        ]
+    );
+
+    return $tenant;
+}
 
 test('festival public flow uses canonical slug and logs event context', function () {
     $event = EventInstance::query()->create([

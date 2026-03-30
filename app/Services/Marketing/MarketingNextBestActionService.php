@@ -85,7 +85,7 @@ class MarketingNextBestActionService
             return [
                 'action_key' => 'send_reward_code_reminder',
                 'title' => 'Send reward code reminder',
-                'summary' => 'Profile has issued Candle Cash code(s) that are not yet reconciled as redeemed.',
+                'summary' => 'Profile has issued Rewards code(s) that are not yet reconciled as redeemed.',
                 'confidence' => 0.77,
                 'reasons' => ['issued_reward_codes', 'no_reconciliation_yet'],
                 'suggested_channel' => $hasSmsConsent && $hasPhone ? 'sms' : ($hasEmailConsent && $hasEmail ? 'email' : null),

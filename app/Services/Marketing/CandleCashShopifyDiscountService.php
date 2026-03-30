@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\CandleCashRedemption;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
 use Carbon\Carbon;
@@ -63,12 +64,12 @@ GRAPHQL;
     {
         $rewardCode = trim((string) $redemption->redemption_code);
         if ($rewardCode === '') {
-            throw new RuntimeException('Candle Cash redemption is missing a reward code.');
+            throw new RuntimeException('Reward redemption is missing a reward code.');
         }
 
         $store = $this->resolveStoreConfig($redemption, $preferredStoreKey);
         if (! $store) {
-            throw new RuntimeException('No Shopify store could be resolved for this Candle Cash redemption.');
+            throw new RuntimeException('No Shopify store could be resolved for this reward redemption.');
         }
 
         $client = new ShopifyGraphqlClient(
@@ -98,17 +99,17 @@ GRAPHQL;
 
         $payload = $data['discountCodeBasicCreate'] ?? null;
         if (! is_array($payload)) {
-            throw new RuntimeException('Shopify Candle Cash discount create response was invalid.');
+            throw new RuntimeException('Shopify reward discount create response was invalid.');
         }
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify Candle Cash discount create failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify reward discount create failed: ' . implode(' | ', $errors));
         }
 
         $created = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
         if ($created === null) {
-            throw new RuntimeException('Shopify Candle Cash discount create did not return a discount identifier.');
+            throw new RuntimeException('Shopify reward discount create did not return a discount identifier.');
         }
 
         return [
@@ -125,6 +126,11 @@ GRAPHQL;
      */
     protected function resolveStoreConfig(CandleCashRedemption $redemption, ?string $preferredStoreKey = null): ?array
     {
+        $tenantId = $this->tenantIdForRedemption($redemption);
+        if ($tenantId === null || $tenantId <= 0) {
+            return null;
+        }
+
         $candidates = [];
         $preferredStoreKey = strtolower(trim((string) $preferredStoreKey));
         if ($preferredStoreKey !== '') {
@@ -142,6 +148,7 @@ GRAPHQL;
         }
 
         $linkedStoreKeys = MarketingProfileLink::query()
+            ->forTenantId($tenantId)
             ->where('marketing_profile_id', $redemption->marketing_profile_id)
             ->where('source_type', 'shopify_customer')
             ->pluck('source_id')
@@ -163,6 +170,7 @@ GRAPHQL;
         }
 
         $externalStoreKeys = CustomerExternalProfile::query()
+            ->forTenantId($tenantId)
             ->where('marketing_profile_id', $redemption->marketing_profile_id)
             ->pluck('store_key')
             ->map(fn ($storeKey): ?string => strtolower(trim((string) $storeKey)) ?: null)
@@ -177,7 +185,7 @@ GRAPHQL;
 
         foreach (array_values(array_unique(array_filter($candidates))) as $storeKey) {
             $store = ShopifyStores::find($storeKey);
-            if ($store) {
+            if ($store && $this->storeOwnedByTenant($store, $tenantId)) {
                 return $store;
             }
         }
@@ -192,7 +200,7 @@ GRAPHQL;
     {
         $amount = $this->candleCashService->redemptionAmountForIssuedCode($redemption, $redemption->reward);
         if ($amount <= 0) {
-            throw new RuntimeException('Candle Cash redemption amount is missing or invalid.');
+            throw new RuntimeException('Reward redemption amount is missing or invalid.');
         }
 
         return [
@@ -226,7 +234,7 @@ GRAPHQL;
 
     protected function discountTitle(CandleCashRedemption $redemption): string
     {
-        return 'Candle Cash Applied';
+        return 'Reward Credit Applied';
     }
 
     /**
@@ -275,5 +283,33 @@ GRAPHQL;
             ->filter()
             ->values()
             ->all();
+    }
+
+    protected function tenantIdForRedemption(CandleCashRedemption $redemption): ?int
+    {
+        $profile = $redemption->relationLoaded('profile')
+            ? $redemption->profile
+            : $redemption->profile()->first(['id', 'tenant_id']);
+
+        return $profile && is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0
+            ? (int) $profile->tenant_id
+            : null;
+    }
+
+    /**
+     * @param array<string,mixed> $store
+     */
+    protected function storeOwnedByTenant(array $store, int $tenantId): bool
+    {
+        $resolvedTenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        $storeKey = strtolower(trim((string) ($store['key'] ?? '')));
+
+        if (($resolvedTenantId === null || $resolvedTenantId <= 0) && $storeKey !== '') {
+            $resolvedTenantId = (int) (ShopifyStore::query()
+                ->where('store_key', $storeKey)
+                ->value('tenant_id') ?? 0);
+        }
+
+        return $resolvedTenantId !== null && $resolvedTenantId > 0 && $resolvedTenantId === $tenantId;
     }
 }

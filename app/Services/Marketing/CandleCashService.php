@@ -7,7 +7,7 @@ use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
-use App\Models\MarketingSetting;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Support\Marketing\CandleCashMeasurement;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,16 +17,24 @@ class CandleCashService
     public const DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH = 30;
     public const CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR = 1;
 
-    protected ?array $programConfigCache = null;
+    /**
+     * @var array<string,array<string,mixed>>
+     */
+    protected array $programConfigCache = [];
 
-    public function programConfig(): array
+    public function __construct(
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver
+    ) {
+    }
+
+    public function programConfig(?int $tenantId = null): array
     {
-        if ($this->programConfigCache !== null) {
-            return $this->programConfigCache;
+        $cacheKey = $tenantId === null ? 'global' : 'tenant:' . $tenantId;
+        if (array_key_exists($cacheKey, $this->programConfigCache)) {
+            return $this->programConfigCache[$cacheKey];
         }
 
-        $setting = MarketingSetting::query()->where('key', 'candle_cash_program_config')->first();
-        $configured = (array) ($setting?->value ?? []);
+        $configured = $this->marketingSettingsResolver->array('candle_cash_program_config', $tenantId);
         $fallback = (array) data_get(config('marketing', []), 'candle_cash', []);
         $usesLegacyStorefrontConfig = ! array_key_exists('redeem_increment_dollars', $configured)
             || ! array_key_exists('max_redeemable_per_order_dollars', $configured)
@@ -80,7 +88,7 @@ class CandleCashService
             ? (string) data_get($fallback, 'storefront_reward_value', '10USD')
             : (string) data_get($configured, 'storefront_reward_value', data_get($fallback, 'storefront_reward_value', '10USD'));
 
-        return $this->programConfigCache = [
+        return $this->programConfigCache[$cacheKey] = [
             'candle_cash_units_per_dollar' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'legacy_points_per_candle_cash' => max(1, $legacyPointsPerCandleCash),
             'canonical_candle_cash_ratio' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
@@ -97,9 +105,9 @@ class CandleCashService
         return self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR;
     }
 
-    public function legacyPointsPerCandleCash(): int
+    public function legacyPointsPerCandleCash(?int $tenantId = null): int
     {
-        return (int) data_get($this->programConfig(), 'legacy_points_per_candle_cash', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH);
+        return (int) data_get($this->programConfig($tenantId), 'legacy_points_per_candle_cash', self::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH);
     }
 
     public function pointsFromAmount(float|int|string $amount): int
@@ -122,39 +130,39 @@ class CandleCashService
         return CandleCashMeasurement::displayAmount($points);
     }
 
-    public function legacyPointsFromCandleCash(float|int|string $amount): int
+    public function legacyPointsFromCandleCash(float|int|string $amount, ?int $tenantId = null): int
     {
-        return max(0, (int) round(((float) $amount) * $this->legacyPointsPerCandleCash()));
+        return max(0, (int) round(((float) $amount) * $this->legacyPointsPerCandleCash($tenantId)));
     }
 
-    public function candleCashFromLegacyPoints(int|float $points): float
+    public function candleCashFromLegacyPoints(int|float $points, ?int $tenantId = null): float
     {
-        return round(((float) $points) / $this->legacyPointsPerCandleCash(), 2);
+        return round(((float) $points) / $this->legacyPointsPerCandleCash($tenantId), 2);
     }
 
-    public function fixedRedemptionAmount(): float
+    public function fixedRedemptionAmount(?int $tenantId = null): float
     {
-        return (float) data_get($this->programConfig(), 'redeem_increment_dollars', 10);
+        return (float) data_get($this->programConfig($tenantId), 'redeem_increment_dollars', 10);
     }
 
-    public function fixedRedemptionFormatted(): string
+    public function fixedRedemptionFormatted(?int $tenantId = null): string
     {
-        return $this->formatRewardCurrency($this->fixedRedemptionAmount());
+        return $this->formatRewardCurrency($this->fixedRedemptionAmount($tenantId));
     }
 
-    public function fixedRedemptionPoints(): int
+    public function fixedRedemptionPoints(?int $tenantId = null): int
     {
-        return $this->pointsFromAmount($this->fixedRedemptionAmount());
+        return $this->pointsFromAmount($this->fixedRedemptionAmount($tenantId));
     }
 
-    public function maxRedeemablePerOrderAmount(): float
+    public function maxRedeemablePerOrderAmount(?int $tenantId = null): float
     {
-        return (float) data_get($this->programConfig(), 'max_redeemable_per_order_dollars', 10);
+        return (float) data_get($this->programConfig($tenantId), 'max_redeemable_per_order_dollars', 10);
     }
 
-    public function maxOpenStorefrontCodes(): int
+    public function maxOpenStorefrontCodes(?int $tenantId = null): int
     {
-        return (int) data_get($this->programConfig(), 'max_open_codes', 1);
+        return (int) data_get($this->programConfig($tenantId), 'max_open_codes', 1);
     }
 
     public function formatCurrency(float|int|string $amount): string
@@ -172,7 +180,7 @@ class CandleCashService
 
     public function formatCandleCash(float|int|string $amount): string
     {
-        return $this->formatRewardCurrency($amount) . ' Candle Cash';
+        return $this->formatRewardCurrency($amount) . ' reward credit';
     }
 
     public function signedCurrencyLabel(float|int|string $amount): string
@@ -230,16 +238,16 @@ class CandleCashService
      *   max_redemptions_per_order:int
      * }
      */
-    public function redemptionRulesPayload(): array
+    public function redemptionRulesPayload(?int $tenantId = null): array
     {
         return [
-            'canonical_measurement_label' => '1 Candle Cash = 1 Candle Cash',
-            'redeem_increment_dollars' => $this->fixedRedemptionAmount(),
-            'redeem_increment_formatted' => $this->formatRewardCurrency($this->fixedRedemptionAmount()),
-            'redeem_increment_candle_cash' => $this->fixedRedemptionAmount(),
-            'redeem_increment_candle_cash_formatted' => $this->formatCandleCash($this->fixedRedemptionAmount()),
-            'max_redeemable_per_order_dollars' => $this->maxRedeemablePerOrderAmount(),
-            'max_redeemable_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount()),
+            'canonical_measurement_label' => '1 reward credit = $1.00',
+            'redeem_increment_dollars' => $this->fixedRedemptionAmount($tenantId),
+            'redeem_increment_formatted' => $this->formatRewardCurrency($this->fixedRedemptionAmount($tenantId)),
+            'redeem_increment_candle_cash' => $this->fixedRedemptionAmount($tenantId),
+            'redeem_increment_candle_cash_formatted' => $this->formatCandleCash($this->fixedRedemptionAmount($tenantId)),
+            'max_redeemable_per_order_dollars' => $this->maxRedeemablePerOrderAmount($tenantId),
+            'max_redeemable_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)),
             'max_redemptions_per_order' => 1,
         ];
     }
@@ -261,32 +269,32 @@ class CandleCashService
         return 0.0;
     }
 
-    public function isStorefrontReward(?CandleCashReward $reward): bool
+    public function isStorefrontReward(?CandleCashReward $reward, ?int $tenantId = null): bool
     {
         if (! $reward) {
             return false;
         }
 
         $type = strtolower(trim((string) $reward->reward_type));
-        $expectedType = (string) data_get($this->programConfig(), 'storefront_reward_type', 'coupon');
+        $expectedType = (string) data_get($this->programConfig($tenantId), 'storefront_reward_type', 'coupon');
         $amount = $this->rewardValueAmount($reward);
 
-        if ($type === $expectedType && abs($amount - $this->fixedRedemptionAmount()) < 0.01) {
+        if ($type === $expectedType && abs($amount - $this->fixedRedemptionAmount($tenantId)) < 0.01) {
             return true;
         }
 
         return $type === 'coupon' && str_contains(strtolower((string) $reward->name), '$10');
     }
 
-    public function storefrontReward(): ?CandleCashReward
+    public function storefrontReward(?int $tenantId = null): ?CandleCashReward
     {
         /** @var CandleCashReward|null $reward */
         $reward = CandleCashReward::query()
             ->where('is_active', true)
             ->get(['id', 'name', 'description', 'candle_cash_cost', 'reward_type', 'reward_value', 'is_active'])
-            ->sortBy(function (CandleCashReward $row): array {
-                $isExact = $this->isStorefrontReward($row) ? 0 : 1;
-                $amountDelta = abs($this->rewardValueAmount($row) - $this->fixedRedemptionAmount());
+            ->sortBy(function (CandleCashReward $row) use ($tenantId): array {
+                $isExact = $this->isStorefrontReward($row, $tenantId) ? 0 : 1;
+                $amountDelta = abs($this->rewardValueAmount($row) - $this->fixedRedemptionAmount($tenantId));
                 $typePriority = strtolower(trim((string) $row->reward_type)) === 'coupon' ? 0 : 1;
 
                 return [$isExact, $typePriority, $amountDelta, (int) $row->id];
@@ -296,34 +304,38 @@ class CandleCashService
         return $reward instanceof CandleCashReward ? $reward : null;
     }
 
-    public function storefrontRewardPointsCost(CandleCashReward $reward): int
+    public function storefrontRewardPointsCost(CandleCashReward $reward, ?int $tenantId = null): int
     {
-        return $this->isStorefrontReward($reward)
-            ? $this->fixedRedemptionPoints()
+        return $this->isStorefrontReward($reward, $tenantId)
+            ? $this->fixedRedemptionPoints($tenantId)
             : (int) $reward->candle_cash_cost;
     }
 
     public function storefrontRedemptionMatchesCurrentRules(
         CandleCashRedemption $redemption,
-        ?CandleCashReward $reward = null
+        ?CandleCashReward $reward = null,
+        ?int $tenantId = null
     ): bool {
         $reward = $reward ?: $redemption->reward;
+        $tenantId = $this->resolvedTenantId($tenantId, null, $redemption);
 
-        if (! $this->isStorefrontReward($reward)) {
+        if (! $this->isStorefrontReward($reward, $tenantId)) {
             return true;
         }
 
-        return (int) $redemption->candle_cash_spent === $this->fixedRedemptionPoints();
+        return (int) $redemption->candle_cash_spent === $this->fixedRedemptionPoints($tenantId);
     }
 
     public function redemptionAmountForIssuedCode(
         CandleCashRedemption $redemption,
-        ?CandleCashReward $reward = null
+        ?CandleCashReward $reward = null,
+        ?int $tenantId = null
     ): float {
         $reward = $reward ?: $redemption->reward;
+        $tenantId = $this->resolvedTenantId($tenantId, null, $redemption);
 
-        if ($this->isStorefrontReward($reward)) {
-            return $this->fixedRedemptionAmount();
+        if ($this->isStorefrontReward($reward, $tenantId)) {
+            return $this->fixedRedemptionAmount($tenantId);
         }
 
         return $this->amountFromPoints($redemption->candle_cash_spent);
@@ -332,9 +344,12 @@ class CandleCashService
     public function cancelStaleStorefrontRedemptions(
         MarketingProfile $profile,
         CandleCashReward $reward,
-        string $platform = 'shopify'
+        string $platform = 'shopify',
+        ?int $tenantId = null
     ): int {
-        if (! $this->isStorefrontReward($reward)) {
+        $tenantId = $this->resolvedTenantId($tenantId, $profile);
+
+        if (! $this->isStorefrontReward($reward, $tenantId)) {
             return 0;
         }
 
@@ -348,17 +363,17 @@ class CandleCashService
             ->where(function ($query): void {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
-            ->where('candle_cash_spent', '!=', $this->fixedRedemptionPoints())
+            ->where('candle_cash_spent', '!=', $this->fixedRedemptionPoints($tenantId))
             ->update([
                 'status' => 'canceled',
                 'canceled_at' => now(),
-                'reconciliation_notes' => 'Canceled automatically after Candle Cash storefront standardization.',
+                'reconciliation_notes' => 'Canceled automatically after reward storefront standardization.',
             ]);
     }
 
     public function cancelIssuedRedemptionAndRestoreBalance(
         CandleCashRedemption $redemption,
-        string $reason = 'Canceled automatically because Shopify could not prepare the Candle Cash discount.'
+        string $reason = 'Canceled automatically because Shopify could not prepare the reward discount.'
     ): array {
         return DB::transaction(function () use ($redemption, $reason): array {
             /** @var CandleCashRedemption|null $lockedRedemption */
@@ -417,20 +432,20 @@ class CandleCashService
     /**
      * @return array<string,mixed>|null
      */
-    public function storefrontRewardPayload(?CandleCashReward $reward, float|int|string|null $balancePoints = null): ?array
+    public function storefrontRewardPayload(?CandleCashReward $reward, float|int|string|null $balancePoints = null, ?int $tenantId = null): ?array
     {
         if (! $reward) {
             return null;
         }
 
-        $pointsCost = $this->storefrontRewardPointsCost($reward);
-        $amount = $this->fixedRedemptionAmount();
+        $pointsCost = $this->storefrontRewardPointsCost($reward, $tenantId);
+        $amount = $this->fixedRedemptionAmount($tenantId);
         $normalizedBalance = $balancePoints !== null ? CandleCashMeasurement::normalizeStoredAmount($balancePoints) : null;
 
         return [
             'id' => (int) $reward->id,
-            'name' => 'Redeem ' . $this->formatRewardCurrency($amount) . ' Candle Cash',
-            'description' => 'Apply ' . $this->formatRewardCurrency($amount) . ' off this order. Candle Cash is redeemed in $10 increments, with a limit of $10 per order.',
+            'name' => 'Redeem ' . $this->formatRewardCurrency($amount) . ' Reward Credit',
+            'description' => 'Apply ' . $this->formatRewardCurrency($amount) . ' off this order. Reward credit is redeemed in $10 increments, with a limit of $10 per order.',
             'reward_type' => (string) $reward->reward_type,
             'reward_value' => $reward->reward_value !== null ? (string) $reward->reward_value : null,
             'candle_cash_cost' => $amount,
@@ -440,8 +455,8 @@ class CandleCashService
             'is_redeemable_now' => $normalizedBalance !== null ? $normalizedBalance >= $pointsCost : null,
             'redeem_increment_dollars' => $amount,
             'redeem_increment_formatted' => $this->formatRewardCurrency($amount),
-            'limit_per_order_dollars' => $this->maxRedeemablePerOrderAmount(),
-            'limit_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount()),
+            'limit_per_order_dollars' => $this->maxRedeemablePerOrderAmount($tenantId),
+            'limit_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)),
             'max_redemptions_per_order' => 1,
         ];
     }
@@ -585,9 +600,11 @@ class CandleCashService
         MarketingProfile $profile,
         CandleCashReward $reward,
         string $platform = 'shopify',
-        bool $reuseActiveCode = true
+        bool $reuseActiveCode = true,
+        ?int $tenantId = null
     ): array {
         $platform = strtolower(trim($platform)) ?: 'shopify';
+        $tenantId = $this->resolvedTenantId($tenantId, $profile);
 
         if (! $reward->is_active) {
             return [
@@ -600,7 +617,7 @@ class CandleCashService
             ];
         }
 
-        if (! $this->isStorefrontReward($reward)) {
+        if (! $this->isStorefrontReward($reward, $tenantId)) {
             return [
                 'ok' => false,
                 'balance' => $this->currentBalance($profile),
@@ -611,10 +628,10 @@ class CandleCashService
             ];
         }
 
-        $this->cancelStaleStorefrontRedemptions($profile, $reward, $platform);
+        $this->cancelStaleStorefrontRedemptions($profile, $reward, $platform, $tenantId);
 
         if ($reuseActiveCode) {
-            $active = $this->activeRedemptionForReward($profile, $reward, $platform);
+            $active = $this->activeRedemptionForReward($profile, $reward, $platform, $tenantId);
             if ($active) {
                 return [
                     'ok' => true,
@@ -634,7 +651,7 @@ class CandleCashService
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
             ->count();
-        if ($openIssuedCount >= $this->maxOpenStorefrontCodes()) {
+        if ($openIssuedCount >= $this->maxOpenStorefrontCodes($tenantId)) {
             return [
                 'ok' => false,
                 'balance' => $this->currentBalance($profile),
@@ -681,7 +698,8 @@ class CandleCashService
     protected function activeRedemptionForReward(
         MarketingProfile $profile,
         CandleCashReward $reward,
-        string $platform
+        string $platform,
+        ?int $tenantId = null
     ): ?CandleCashRedemption {
         $redemption = CandleCashRedemption::query()
             ->where('marketing_profile_id', $profile->id)
@@ -700,8 +718,39 @@ class CandleCashService
             return null;
         }
 
-        return $this->storefrontRedemptionMatchesCurrentRules($redemption, $reward)
+        return $this->storefrontRedemptionMatchesCurrentRules($redemption, $reward, $tenantId)
             ? $redemption
+            : null;
+    }
+
+    protected function resolvedTenantId(
+        ?int $tenantId = null,
+        ?MarketingProfile $profile = null,
+        ?CandleCashRedemption $redemption = null
+    ): ?int {
+        if ($tenantId !== null && $tenantId > 0) {
+            return $tenantId;
+        }
+
+        if ($profile && is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0) {
+            return (int) $profile->tenant_id;
+        }
+
+        if (! $redemption) {
+            return null;
+        }
+
+        $contextTenantId = data_get($redemption->redemption_context, 'tenant_id');
+        if (is_numeric($contextTenantId) && (int) $contextTenantId > 0) {
+            return (int) $contextTenantId;
+        }
+
+        $loadedProfile = $redemption->relationLoaded('profile')
+            ? $redemption->profile
+            : $redemption->profile()->first(['id', 'tenant_id']);
+
+        return $loadedProfile && is_numeric($loadedProfile->tenant_id) && (int) $loadedProfile->tenant_id > 0
+            ? (int) $loadedProfile->tenant_id
             : null;
     }
 

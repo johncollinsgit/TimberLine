@@ -6,7 +6,7 @@ use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
 use App\Models\MarketingProfile;
-use App\Models\MarketingSetting;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +18,8 @@ class CandleCashTaskService
         protected CandleCashService $candleCashService,
         protected CandleCashTaskEligibilityService $eligibilityService,
         protected MarketingStorefrontEventLogger $eventLogger,
-        protected CandleCashTaskEventService $taskEventService
+        protected CandleCashTaskEventService $taskEventService,
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver
     ) {
     }
 
@@ -52,25 +53,24 @@ class CandleCashTaskService
             ->values();
     }
 
-    public function programConfig(): array
+    public function programConfig(?int $tenantId = null): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', 'candle_cash_program_config')->first())->value;
+        return $this->marketingSettingsResolver->array('candle_cash_program_config', $tenantId);
     }
 
-    public function referralConfig(): array
+    public function referralConfig(?int $tenantId = null): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', 'candle_cash_referral_config')->first())->value;
+        return $this->marketingSettingsResolver->array('candle_cash_referral_config', $tenantId);
     }
 
-    public function frontendConfig(): array
+    public function frontendConfig(?int $tenantId = null): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', 'candle_cash_frontend_config')->first())->value;
+        return $this->marketingSettingsResolver->array('candle_cash_frontend_config', $tenantId);
     }
 
-    public function integrationConfig(): array
+    public function integrationConfig(?int $tenantId = null): array
     {
-        $value = optional(MarketingSetting::query()->where('key', 'candle_cash_integration_config')->first())->value;
-        $config = is_array($value) ? $value : [];
+        $config = $this->marketingSettingsResolver->array('candle_cash_integration_config', $tenantId);
 
         $nested = $config[0] ?? $config['0'] ?? null;
         if (is_string($nested)) {
@@ -166,7 +166,7 @@ class CandleCashTaskService
                 type: 'earn',
                 source: 'candle_cash_task',
                 sourceId: $completion->completion_key ?: ('task-completion:' . $completion->id),
-                description: trim((string) ($task->title ?: 'Candle Cash task')) . ' reward'
+                description: trim((string) ($task->title ?: 'Rewards task')) . ' reward'
             );
 
             $completion->forceFill([

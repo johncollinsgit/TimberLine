@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\BirthdayRewardIssuance;
 use App\Models\MarketingProfileLink;
+use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
 use Carbon\Carbon;
@@ -177,7 +178,8 @@ GRAPHQL;
             if ($locked->reward_code === null || trim((string) $locked->reward_code) === '') {
                 $locked->reward_code = $this->rewardEngine->generateUniqueCodeForRewardType(
                     (string) $locked->reward_type,
-                    (int) $locked->cycle_year
+                    (int) $locked->cycle_year,
+                    tenantId: $this->tenantIdForIssuance($locked)
                 );
             }
 
@@ -418,6 +420,11 @@ GRAPHQL;
      */
     protected function resolveStoreConfig(BirthdayRewardIssuance $issuance, array $options = []): ?array
     {
+        $tenantId = $this->tenantIdForIssuance($issuance);
+        if ($tenantId === null || $tenantId <= 0) {
+            return null;
+        }
+
         $candidates = [];
 
         $explicitStoreKey = strtolower(trim((string) ($options['store_key'] ?? '')));
@@ -431,6 +438,7 @@ GRAPHQL;
         }
 
         $linkedStoreKeys = MarketingProfileLink::query()
+            ->forTenantId($tenantId)
             ->where('marketing_profile_id', $issuance->marketing_profile_id)
             ->where('source_type', 'shopify_customer')
             ->pluck('source_id')
@@ -457,12 +465,12 @@ GRAPHQL;
 
         foreach (array_values(array_unique(array_filter($candidates))) as $storeKey) {
             $store = ShopifyStores::find($storeKey);
-            if ($store) {
+            if ($store && $this->storeOwnedByTenant($store, $tenantId)) {
                 return $store;
             }
         }
 
-        return ShopifyStores::find('retail') ?: (ShopifyStores::all()[0] ?? null);
+        return null;
     }
 
     /**
@@ -593,5 +601,33 @@ GRAPHQL;
             isUncertain: false,
             payload: $payload
         );
+    }
+
+    protected function tenantIdForIssuance(BirthdayRewardIssuance $issuance): ?int
+    {
+        $profile = $issuance->relationLoaded('marketingProfile')
+            ? $issuance->marketingProfile
+            : $issuance->marketingProfile()->first(['id', 'tenant_id']);
+
+        return $profile && is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0
+            ? (int) $profile->tenant_id
+            : null;
+    }
+
+    /**
+     * @param array<string,mixed> $store
+     */
+    protected function storeOwnedByTenant(array $store, int $tenantId): bool
+    {
+        $resolvedTenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        $storeKey = strtolower(trim((string) ($store['key'] ?? '')));
+
+        if (($resolvedTenantId === null || $resolvedTenantId <= 0) && $storeKey !== '') {
+            $resolvedTenantId = (int) (ShopifyStore::query()
+                ->where('store_key', $storeKey)
+                ->value('tenant_id') ?? 0);
+        }
+
+        return $resolvedTenantId !== null && $resolvedTenantId > 0 && $resolvedTenantId === $tenantId;
     }
 }

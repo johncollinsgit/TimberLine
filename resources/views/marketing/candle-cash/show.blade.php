@@ -3,9 +3,19 @@
 
     $section = $section ?? \App\Support\Marketing\CandleCashSectionRegistry::section($sectionKey ?? 'dashboard');
     $sections = $sections ?? [];
+    $displayLabels = is_array($displayLabels ?? null) ? $displayLabels : [];
+    $resolvedRewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+    if ($resolvedRewardsLabel === '') {
+        $resolvedRewardsLabel = 'Rewards';
+    }
+    $resolvedRewardCreditLabel = trim((string) ($displayLabels['reward_credit_label'] ?? 'reward credit'));
+    if ($resolvedRewardCreditLabel === '') {
+        $resolvedRewardCreditLabel = 'reward credit';
+    }
+    $resolvedRewardCreditLabelTitle = \Illuminate\Support\Str::title($resolvedRewardCreditLabel);
 @endphp
 
-<x-layouts::app :title="'Candle Cash - ' . ($section['label'] ?? 'Candle Cash')">
+<x-layouts::app :title="$resolvedRewardsLabel . ' - ' . ($section['label'] ?? $resolvedRewardsLabel)">
     <div class="space-y-6">
         <x-marketing.partials.candle-cash-shell :section="$section" :sections="$sections" />
 
@@ -23,7 +33,7 @@
                     <div>
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Earn</div>
                         <h2 class="mt-2 text-lg font-semibold text-white">Review and manage live earn rules</h2>
-                        <p class="mt-2 max-w-2xl text-sm text-white/65">These are the live Candle Cash tasks currently powering how customers earn Candle Cash.</p>
+                        <p class="mt-2 max-w-2xl text-sm text-white/65">These are the live reward tasks currently powering how customers earn {{ $resolvedRewardCreditLabel }}.</p>
                     </div>
                     <form method="GET" action="{{ route('marketing.candle-cash.tasks') }}" class="grid gap-3 sm:grid-cols-3">
                         <select name="filter" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
@@ -108,7 +118,7 @@
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Ways to Redeem</div>
                         <h2 class="mt-2 text-lg font-semibold text-white">Review and manage live reward rows</h2>
                         <p class="mt-2 text-sm leading-7 text-white/65">
-                            These are the live Candle Cash reward rows customers can currently redeem against.
+                            These are the live reward rows customers can currently redeem.
                         </p>
                     </div>
                     <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
@@ -121,7 +131,7 @@
                 @foreach([
                     ['label' => 'Active rewards', 'value' => number_format((int) data_get($redeemSummary, 'enabled', 0)), 'detail' => 'Reward rows currently available to customers.'],
                     ['label' => 'Inactive rewards', 'value' => number_format((int) data_get($redeemSummary, 'disabled', 0)), 'detail' => 'Rows kept in Backstage but not currently active.'],
-                    ['label' => 'Reward rows', 'value' => number_format((int) data_get($redeemSummary, 'total', 0)), 'detail' => 'Total redeem options currently stored in Candle Cash.'],
+                    ['label' => 'Reward rows', 'value' => number_format((int) data_get($redeemSummary, 'total', 0)), 'detail' => 'Total redeem options currently stored in the rewards program.'],
                 ] as $card)
                     <article class="rounded-[1.7rem] border border-white/10 bg-black/15 p-5">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
@@ -156,7 +166,7 @@
                             </label>
 
                             <label class="block text-sm text-white/75">
-                                Candle Cash cost
+                                {{ $resolvedRewardsLabel }} cost
                                 <input type="number" step="0.01" min="0" max="50000" name="candle_cash_cost" value="{{ old('candle_cash_cost', $reward['candle_cash_cost'] ?? 0) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" />
                             </label>
 
@@ -456,8 +466,8 @@
                         <form method="POST" action="{{ route('marketing.candle-cash.customers.adjust', $selectedProfile) }}" class="mt-5 grid gap-3 md:grid-cols-4">
                             @csrf
                             <select name="adjustment_type" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
-                                <option value="add">Add Candle Cash</option>
-                                <option value="deduct">Deduct Candle Cash</option>
+                                <option value="add">Add {{ $resolvedRewardCreditLabel }}</option>
+                                <option value="deduct">Deduct {{ $resolvedRewardCreditLabel }}</option>
                             </select>
                             <input type="number" step="0.01" min="0.01" max="500" name="amount" placeholder="Amount" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/35" />
                             <input type="text" name="note" placeholder="Reason" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/35 md:col-span-2" />
@@ -490,7 +500,7 @@
                                             <div class="mt-1 text-xs text-white/50">{{ app(\App\Services\Marketing\CandleCashService::class)->candleCashAmountLabelFromPoints((int) $transaction->candle_cash_delta, true) }} · {{ optional($transaction->created_at)->format('Y-m-d H:i') }}</div>
                                         </div>
                                     @empty
-                                        <div class="text-sm text-white/55">No Candle Cash transactions yet.</div>
+                                        <div class="text-sm text-white/55">No reward transactions yet.</div>
                                     @endforelse
                                 </div>
                                 @if($selectedProfile->candleCashReferralsMade->isNotEmpty())
@@ -531,7 +541,7 @@
                                 <th class="px-4 py-3">Friend</th>
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Order</th>
-                                <th class="px-4 py-3">Rewards</th>
+                                <th class="px-4 py-3">{{ $resolvedRewardsLabel }}</th>
                                 <th class="px-4 py-3">Actions</th>
                             </tr>
                         </thead>
@@ -571,7 +581,7 @@
                     <div>
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gifts</div>
                         <h2 class="mt-2 text-lg font-semibold text-white">Gift Attribution & Post-Gift Revenue</h2>
-                        <p class="mt-2 text-sm text-white/65">Track why Candle Cash gifts were sent, how notifications performed, and whether those recipients later converted.</p>
+                        <p class="mt-2 text-sm text-white/65">Track why {{ strtolower($resolvedRewardCreditLabelTitle) }} were sent, how notifications performed, and whether those recipients later converted.</p>
                     </div>
                     <form method="GET" action="{{ route('marketing.candle-cash.gifts-report') }}" class="flex flex-wrap items-center gap-2">
                         <input type="date" name="from" value="{{ $reportFilters['from'] ?? '' }}" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white" />
@@ -586,14 +596,14 @@
                         <p class="mt-2 text-xs text-white/60">Total gifts in the selected range.</p>
                     </article>
                     <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift Candle Cash</div>
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift Credits</div>
                         <div class="mt-2 text-3xl font-semibold text-white">${{ number_format((float) data_get($giftReport, 'totals.gift_amount', 0), 2) }}</div>
-                        <p class="mt-2 text-xs text-white/60">Candle Cash granted via gift send activity.</p>
+                        <p class="mt-2 text-xs text-white/60">Reward credit granted via gift send activity.</p>
                     </article>
                     <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gift amount</div>
                         <div class="mt-2 text-3xl font-semibold text-white">${{ number_format((float) data_get($giftReport, 'totals.gift_amount', 0), 2) }}</div>
-                        <p class="mt-2 text-xs text-white/60">Approximate Candle Cash liability from gifts.</p>
+                        <p class="mt-2 text-xs text-white/60">Approximate reward-credit liability from gifts.</p>
                     </article>
                     <article class="rounded-[1.6rem] border border-white/10 bg-black/15 p-4">
                         <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Gifted customers with orders</div>
@@ -610,7 +620,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Intent</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Candle Cash</th>
+                                        <th class="px-3 py-2">{{ $resolvedRewardsLabel }}</th>
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm text-white/70">
@@ -637,7 +647,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Origin</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Candle Cash</th>
+                                        <th class="px-3 py-2">{{ $resolvedRewardsLabel }}</th>
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm text-white/70">
@@ -664,7 +674,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Status</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Candle Cash</th>
+                                        <th class="px-3 py-2">{{ $resolvedRewardsLabel }}</th>
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm text-white/70">
@@ -695,7 +705,7 @@
                                     <tr>
                                         <th class="px-3 py-2">Actor</th>
                                         <th class="px-3 py-2">Gifts</th>
-                                        <th class="px-3 py-2">Candle Cash</th>
+                                        <th class="px-3 py-2">{{ $resolvedRewardsLabel }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -737,7 +747,7 @@
                             <thead class="bg-white/5 text-xs uppercase tracking-[0.18em] text-white/45">
                                 <tr>
                                     <th class="px-3 py-2">Date</th>
-                                    <th class="px-3 py-2">Candle Cash</th>
+                                    <th class="px-3 py-2">{{ $resolvedRewardsLabel }}</th>
                                     <th class="px-3 py-2">Intent</th>
                                     <th class="px-3 py-2">Origin</th>
                                     <th class="px-3 py-2">Notification</th>
@@ -780,8 +790,8 @@
                     <form method="POST" action="{{ route('marketing.candle-cash.settings.save') }}" class="mt-4 space-y-3">
                         @csrf
                         <input type="hidden" name="scope" value="program" />
-                        <label class="block text-sm text-white/75">Label<input type="text" name="label" value="{{ data_get($programConfig, 'label', 'Candle Cash') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
-                        <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">Candle Cash is displayed 1:1 across the app. Legacy storage conversion remains internal for existing records.</div>
+                        <label class="block text-sm text-white/75">Label<input type="text" name="label" value="{{ data_get($programConfig, 'label', $resolvedRewardsLabel) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">Reward credit is displayed 1:1 across the app. Legacy storage conversion remains internal for existing records.</div>
                         <label class="block text-sm text-white/75">Email signup reward<input type="number" step="0.01" min="0" max="50" name="email_signup_reward_amount" value="{{ data_get($programConfig, 'email_signup_reward_amount', 5) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">SMS signup reward<input type="number" step="0.01" min="0" max="50" name="sms_signup_reward_amount" value="{{ data_get($programConfig, 'sms_signup_reward_amount', 2) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Google review reward<input type="number" step="0.01" min="0" max="50" name="google_review_reward_amount" value="{{ data_get($programConfig, 'google_review_reward_amount', 3) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
@@ -816,7 +826,7 @@
 
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Customer copy</div>
-                    <h2 class="mt-2 text-lg font-semibold text-white">Candle Cash Central text</h2>
+                    <h2 class="mt-2 text-lg font-semibold text-white">{{ $resolvedRewardsLabel }} program text</h2>
                     <form method="POST" action="{{ route('marketing.candle-cash.settings.save') }}" class="mt-4 space-y-3">
                         @csrf
                         <input type="hidden" name="scope" value="frontend" />
@@ -943,7 +953,7 @@
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="email_signup_enabled" value="1" @checked(data_get($integrationConfig, 'email_signup_enabled', true)) /> Email signup task enabled</label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="sms_signup_enabled" value="1" @checked(data_get($integrationConfig, 'sms_signup_enabled', true)) /> SMS signup task enabled</label>
                         <label class="block text-sm text-white/75">Candle Club locked CTA URL<input type="text" name="vote_locked_join_url" value="{{ data_get($integrationConfig, 'vote_locked_join_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
-                        <div class="rounded-2xl border border-amber-300/25 bg-amber-500/10 p-4 text-sm text-amber-100">Google Business Q&amp;A is intentionally excluded here. The Q&amp;A API is discontinued, so it is not part of the active Candle Cash rewards program.</div>
+                        <div class="rounded-2xl border border-amber-300/25 bg-amber-500/10 p-4 text-sm text-amber-100">Google Business Q&amp;A is intentionally excluded here. The Q&amp;A API is discontinued, so it is not part of the active rewards program.</div>
                         <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Save integration settings</button>
                     </form>
                 </article>

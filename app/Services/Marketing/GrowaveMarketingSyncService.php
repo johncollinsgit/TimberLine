@@ -11,11 +11,13 @@ use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Support\Marketing\CandleCashMeasurement;
+use App\Services\Shopify\ShopifyStores;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class GrowaveMarketingSyncService
 {
@@ -60,6 +62,8 @@ class GrowaveMarketingSyncService
             'backoff_max_ms' => $this->nullableInt($options['backoff_max_ms'] ?? null),
         ], static fn (mixed $value): bool => $value !== null));
 
+        $tenantId = $this->tenantIdForStore($store);
+
         $summary = [
             'processed' => 0,
             'growave_found' => 0,
@@ -84,6 +88,7 @@ class GrowaveMarketingSyncService
             'status' => 'running',
             'source_label' => $store !== null ? 'growave:' . $store : 'growave:all',
             'started_at' => now(),
+            'tenant_id' => $tenantId,
             'summary' => [
                 'store' => $store,
                 'limit' => $limit,
@@ -107,7 +112,7 @@ class GrowaveMarketingSyncService
         $lastCandidateId = $afterCandidateId;
 
         try {
-            $candidateQuery = $this->candidateQuery($store, $afterCandidateId, $onlyMissing);
+            $candidateQuery = $this->candidateQuery($store, $tenantId, $afterCandidateId, $onlyMissing);
             if ($limit !== null) {
                 $candidateQuery->limit($limit);
             }
@@ -124,7 +129,8 @@ class GrowaveMarketingSyncService
                         $activitiesPerPage,
                         $maxReviewPages,
                         $maxActivityPages,
-                        $pageDelayMs
+                        $pageDelayMs,
+                        $tenantId
                     );
                 } catch (\Throwable $e) {
                     $summary['errors']++;
@@ -206,7 +212,8 @@ class GrowaveMarketingSyncService
         int $activitiesPerPage,
         int $maxReviewPages,
         int $maxActivityPages,
-        int $pageDelayMs
+        int $pageDelayMs,
+        int $tenantId
     ): void {
         $lookup = $this->lookupCustomer($candidate);
         $customer = $lookup['customer'];
@@ -224,7 +231,7 @@ class GrowaveMarketingSyncService
         $customerId = $this->resolveCustomerId($customer, $candidate);
         $customerQueryIdentifier = $this->preferredCustomerQueryIdentifier($customer, $candidate, $lookupIdentifier);
 
-        $profileId = $this->resolveMarketingProfileId($candidate, $customerId, $customer, $storeKey);
+        $profileId = $this->resolveMarketingProfileId($candidate, $customerId, $customer, $storeKey, $tenantId);
         if ($profileId !== null) {
             $summary['profiles_resolved']++;
         } else {
@@ -261,7 +268,8 @@ class GrowaveMarketingSyncService
             customerId: $customerId,
             marketingProfileId: $profileId,
             rawMetafields: $rawMetafields,
-            storeKey: $storeKey
+            storeKey: $storeKey,
+            tenantId: $tenantId
         );
         $summary[$externalAction]++;
 
@@ -289,17 +297,19 @@ class GrowaveMarketingSyncService
         $summary['candle_balance_delta'] += $activityCounters['balance_delta'];
     }
 
-    protected function candidateQuery(?string $store, ?int $afterCandidateId = null, bool $onlyMissing = false): Builder
+    protected function candidateQuery(?string $store, ?int $tenantId, ?int $afterCandidateId = null, bool $onlyMissing = false): Builder
     {
         return CustomerExternalProfile::query()
             ->where('provider', 'shopify')
             ->where('integration', 'shopify_customer')
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
             ->when($store !== null, fn (Builder $query) => $query->where('store_key', $store))
             ->when($afterCandidateId !== null, fn (Builder $query) => $query->where('id', '>', $afterCandidateId))
             ->when($onlyMissing, function (Builder $query): void {
                 $query->whereNotExists(function ($subQuery): void {
                     $subQuery->selectRaw('1')
                         ->from('customer_external_profiles as growave_profiles')
+                        ->whereColumn('growave_profiles.tenant_id', 'customer_external_profiles.tenant_id')
                         ->whereColumn('growave_profiles.store_key', 'customer_external_profiles.store_key')
                         ->whereColumn('growave_profiles.external_customer_id', 'customer_external_profiles.external_customer_id')
                         ->where('growave_profiles.provider', 'shopify')
@@ -410,15 +420,22 @@ class GrowaveMarketingSyncService
         CustomerExternalProfile $candidate,
         string $customerId,
         array $customer,
-        ?string $storeKey
+        ?string $storeKey,
+        int $tenantId
     ): ?int {
         $existingProfileId = (int) ($candidate->marketing_profile_id ?? 0);
         if ($existingProfileId > 0) {
-            return $existingProfileId;
+            $inTenant = MarketingProfile::query()
+                ->forTenantId($tenantId)
+                ->whereKey($existingProfileId)
+                ->value('id');
+
+            return is_numeric($inTenant) && (int) $inTenant > 0 ? (int) $inTenant : null;
         }
 
         $sourceId = $storeKey !== null ? $storeKey . ':' . $customerId : $customerId;
         $linkedProfileId = MarketingProfileLink::query()
+            ->forTenantId($tenantId)
             ->where('source_type', 'shopify_customer')
             ->where('source_id', $sourceId)
             ->value('marketing_profile_id');
@@ -430,6 +447,7 @@ class GrowaveMarketingSyncService
         $normalizedEmail = $this->normalizer->normalizeEmail($this->nullableString($customer['email'] ?? null));
         if ($normalizedEmail !== null) {
             $profileId = MarketingProfile::query()
+                ->forTenantId($tenantId)
                 ->where('normalized_email', $normalizedEmail)
                 ->value('id');
             if (is_numeric($profileId) && (int) $profileId > 0) {
@@ -440,6 +458,7 @@ class GrowaveMarketingSyncService
         $normalizedPhone = $this->normalizer->normalizePhone($this->nullableString($customer['phone'] ?? null));
         if ($normalizedPhone !== null) {
             $profileId = MarketingProfile::query()
+                ->forTenantId($tenantId)
                 ->where('normalized_phone', $normalizedPhone)
                 ->value('id');
             if (is_numeric($profileId) && (int) $profileId > 0) {
@@ -650,9 +669,11 @@ class GrowaveMarketingSyncService
         string $customerId,
         ?int $marketingProfileId,
         array $rawMetafields,
-        ?string $storeKey
+        ?string $storeKey,
+        int $tenantId
     ): string {
         $lookup = [
+            'tenant_id' => $tenantId,
             'provider' => 'shopify',
             'integration' => 'growave',
             'store_key' => $storeKey,
@@ -698,6 +719,7 @@ class GrowaveMarketingSyncService
                 'referral_link' => $referralLink,
                 'last_activity_at' => $this->asDate($customer['pointsExpiresAt'] ?? null),
                 'synced_at' => now(),
+                'tenant_id' => $tenantId,
             ]
         );
 
@@ -1025,5 +1047,25 @@ class GrowaveMarketingSyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function tenantIdForStore(?string $storeKey): int
+    {
+        $normalized = $this->nullableString($storeKey);
+        if ($normalized === null) {
+            throw new RuntimeException('Growave sync requires a Shopify store key to resolve tenant context.');
+        }
+
+        $store = ShopifyStores::find($normalized);
+        if (! $store) {
+            throw new RuntimeException("Unknown Shopify store key '{$normalized}'.");
+        }
+
+        $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        if ($tenantId === null) {
+            throw new RuntimeException("Shopify store '{$normalized}' is not assigned to a tenant.");
+        }
+
+        return $tenantId;
     }
 }

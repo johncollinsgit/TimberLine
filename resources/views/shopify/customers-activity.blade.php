@@ -9,66 +9,60 @@
     :app-navigation="$appNavigation"
     :customer-subnav="$pageSubnav"
     :page-actions="$pageActions"
+    :merchant-journey="$merchantJourney ?? []"
 >
-    <style>
-        .customers-activity-shell {
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.95);
-            overflow: hidden;
-        }
+    @php
+        $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
+        $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
+        $importState = (string) ($importSummary['state'] ?? 'not_started');
+        $customerSummary = is_array($journey['customer_summary'] ?? null) ? $journey['customer_summary'] : ['total_profiles' => 0, 'reachable_profiles' => 0, 'linked_external_profiles' => 0];
 
-        .customers-activity-shell table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .customers-activity-shell th,
-        .customers-activity-shell td {
-            padding: 12px 14px;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-            text-align: left;
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.66);
-            white-space: nowrap;
-        }
-
-        .customers-activity-shell th {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(15, 23, 42, 0.5);
-            background: rgba(246, 249, 245, 0.92);
-            font-weight: 640;
-        }
-    </style>
+        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+            request(),
+            filled($host ?? null) ? (string) $host : null
+        );
+        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+    @endphp
 
     <section class="customers-surface">
-        <h2>Activity</h2>
-        <p>
-            Review customer-facing reward lifecycle events, admin touches, and operational outcomes in one timeline.
-            This shell prepares the activity feed structure without inventing new data sources.
-        </p>
+        <h2>Customer Activity</h2>
+        <p>Track the most important customer events so your team knows who to follow up with and what to do next.</p>
+        <div class="start-here-meta">
+            <span class="start-here-pill">Import · {{ $importSummary['label'] ?? 'Not started' }}</span>
+            <span class="start-here-pill">Profiles · {{ number_format((int) ($customerSummary['total_profiles'] ?? 0)) }}</span>
+            <span class="start-here-pill">Reachable · {{ number_format((int) ($customerSummary['reachable_profiles'] ?? 0)) }}</span>
+        </div>
     </section>
 
-    <section class="customers-activity-shell" aria-label="Customers activity shell">
+    <section class="customers-activity-shell" aria-label="Customer activity feed">
         <table>
             <thead>
                 <tr>
                     <th>When</th>
                     <th>Customer</th>
-                    <th>Channel</th>
-                    <th>Event</th>
-                    <th>Outcome</th>
-                    <th>Actor</th>
+                    <th>Activity Type</th>
+                    <th>Business Meaning</th>
+                    <th>Recommended Action</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td colspan="6" style="padding: 30px 18px; text-align: center; font-size: 14px; color: rgba(15, 23, 42, 0.6);">
-                        Activity feed wiring is planned for Phase 2.
-                    </td>
-                </tr>
+                @if($importState !== 'imported')
+                    <tr>
+                        <td colspan="5" class="customers-activity-empty">
+                            Import customers to start seeing timeline activity. Once import is complete, this view will surface lifecycle and engagement events.
+                            <br />
+                            <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.integrations', [], false)) }}">Import customers</a>
+                        </td>
+                    </tr>
+                @else
+                    <tr>
+                        <td colspan="5" class="customers-activity-empty">
+                            Activity feed scaffolding is ready. Next step is wiring live event rows into this timeline while preserving tenant-safe filters and visibility.
+                            <br />
+                            <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', [], false)) }}">Open customers workspace</a>
+                        </td>
+                    </tr>
+                @endif
             </tbody>
         </table>
     </section>

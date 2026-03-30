@@ -26,7 +26,7 @@ class CandleCashLedgerNormalizationService
             ],
             'birthday_earn' => [
                 'label' => 'Birthday earn',
-                'definition' => 'Earned from birthday reward credits applied in Candle Cash.',
+                'definition' => 'Earned from birthday reward credits applied as reward credit.',
             ],
             'bonus_promo_earn' => [
                 'label' => 'Bonus / Promo earn',
@@ -34,7 +34,7 @@ class CandleCashLedgerNormalizationService
             ],
             'manual_adjustment_earn' => [
                 'label' => 'Manual adjustment earn',
-                'definition' => 'Manually granted positive Candle Cash adjustments by Backstage operators.',
+                'definition' => 'Manually granted positive reward balance adjustments by Backstage operators.',
             ],
             'other_earn' => [
                 'label' => 'Other earn',

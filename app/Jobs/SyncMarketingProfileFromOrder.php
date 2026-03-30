@@ -59,28 +59,53 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
             'tenant_id' => $tenantId,
         ]);
 
-        $candleCashOrderEventService->handle($order, array_replace($this->identityContext, [
-            'attribution_meta' => $attributionMeta,
-            'tenant_id' => $tenantId,
-        ]));
-
-        $rewardSummary = $reconciliationService->reconcileShopifyOrder($order, [
-            'codes' => (array) ($this->identityContext['applied_reward_codes'] ?? []),
+        $tenantAwareIdentityContext = array_replace($this->identityContext, [
             'attribution_meta' => $attributionMeta,
             'tenant_id' => $tenantId,
         ]);
 
-        $birthdayRewardSummary = $birthdayReconciliationService->reconcileShopifyOrder($order, [
-            'codes' => (array) ($this->identityContext['coupon_signals'] ?? []),
-            'order_total' => $this->identityContext['order_total'] ?? null,
-            'attribution_meta' => $attributionMeta,
-            'tenant_id' => $tenantId,
-        ]);
+        $candleCashOrderEventService->handle($order, $tenantAwareIdentityContext);
+
+        $rewardSummary = $this->missingTenantSummary();
+        $birthdayRewardSummary = $this->missingTenantSummary();
+
+        if ($tenantId !== null && $tenantId > 0) {
+            $rewardSummary = $reconciliationService->reconcileShopifyOrder($order, [
+                'codes' => (array) ($this->identityContext['applied_reward_codes'] ?? []),
+                'attribution_meta' => $attributionMeta,
+                'tenant_id' => $tenantId,
+            ]);
+
+            $birthdayRewardSummary = $birthdayReconciliationService->reconcileShopifyOrder($order, [
+                'codes' => (array) ($this->identityContext['coupon_signals'] ?? []),
+                'order_total' => $this->identityContext['order_total'] ?? null,
+                'attribution_meta' => $attributionMeta,
+                'tenant_id' => $tenantId,
+            ]);
+        }
 
         $conversionAttributionService->attributeForOrder($order, [
             'coupon_signals' => (array) ($this->identityContext['coupon_signals'] ?? []),
             'reward_reconcile_summary' => $rewardSummary,
             'birthday_reward_reconcile_summary' => $birthdayRewardSummary,
         ]);
+    }
+
+    /**
+     * @return array<string,int>
+     */
+    protected function missingTenantSummary(): array
+    {
+        return [
+            'processed' => 0,
+            'matched' => 0,
+            'reconciled' => 0,
+            'already_reconciled' => 0,
+            'rejected' => 0,
+            'not_found' => 0,
+            'redeemed' => 0,
+            'already_redeemed' => 0,
+            'tenant_context_missing' => 1,
+        ];
     }
 }

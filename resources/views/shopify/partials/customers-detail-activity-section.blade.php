@@ -1,8 +1,16 @@
 @php
     $activity = (array) ($activity ?? []);
     $activityCount = (int) ($activityCount ?? count($activity));
+    $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', 'Rewards')));
+    if ($resolvedRewardsLabel === '') {
+        $resolvedRewardsLabel = 'Rewards';
+    }
+    $resolvedRewardsBalanceLabel = trim((string) ($rewardsBalanceLabel ?? data_get($displayLabels ?? [], 'rewards_balance_label', $resolvedRewardsLabel . ' balance')));
+    if ($resolvedRewardsBalanceLabel === '') {
+        $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
+    }
     $activitySummary = $activityCount > 0
-        ? number_format($activityCount) . ' recent item' . ($activityCount === 1 ? '' : 's') . ' across rewards, adjustments, and messaging activity.'
+        ? number_format($activityCount) . ' recent item' . ($activityCount === 1 ? '' : 's') . ' across ' . strtolower($resolvedRewardsLabel) . ', adjustments, and messaging activity.'
         : 'No recent activity recorded yet.';
 @endphp
 
@@ -20,7 +28,7 @@
                 <th>Date</th>
                 <th>Type</th>
                 <th>Label</th>
-                <th>Candle Cash</th>
+                <th>{{ \Illuminate\Support\Str::title($resolvedRewardsBalanceLabel) }}</th>
                 <th>Actor</th>
                 <th>Status</th>
                 <th>Detail</th>

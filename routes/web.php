@@ -5,6 +5,7 @@ use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
+use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
@@ -77,6 +78,8 @@ use App\Models\WholesaleCustomScent;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantCommercialExperienceService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
 use App\Support\Wiki\WikiRepository;
@@ -89,17 +92,20 @@ Route::get('/', function (
     Request $request,
     ShopifyEmbeddedAppContext $contextService,
     ShopifyEmbeddedAppController $controller,
-    TenantResolver $tenantResolver
+    TenantResolver $tenantResolver,
+    TenantDisplayLabelResolver $displayLabelResolver,
+    PlatformProductPagesController $platformPagesController,
+    TenantCommercialExperienceService $experienceService
 ) {
     if ($contextService->hasPageContext($request)) {
-        return $controller->show($request, $contextService, $tenantResolver);
+        return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService);
     }
 
     if (auth()->check()) {
         return redirect()->to(HomeRedirect::pathFor(auth()->user()));
     }
 
-    return redirect()->route('login');
+    return $platformPagesController->promo($experienceService);
 })->name('home');
 
 $landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.forestrybackstage.com')));
@@ -125,6 +131,18 @@ if ($landlordHost !== '') {
                 ->name('tenants.index');
             Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
                 ->name('tenants.show');
+            Route::post('/landlord/tenants/select', [LandlordTenantOperationsController::class, 'selectTenant'])
+                ->name('tenants.select');
+            Route::post('/landlord/tenants/{tenant}/operations/export', [LandlordTenantOperationsController::class, 'export'])
+                ->name('tenants.operations.export');
+            Route::post('/landlord/tenants/{tenant}/operations/restore', [LandlordTenantOperationsController::class, 'restore'])
+                ->name('tenants.operations.restore');
+            Route::post('/landlord/tenants/{tenant}/operations/customers/modify', [LandlordTenantOperationsController::class, 'modifyCustomer'])
+                ->name('tenants.operations.customers.modify');
+            Route::post('/landlord/tenants/{tenant}/operations/customers/archive', [LandlordTenantOperationsController::class, 'archiveCustomer'])
+                ->name('tenants.operations.customers.archive');
+            Route::get('/landlord/tenants/{tenant}/operations/exports/{action}', [LandlordTenantOperationsController::class, 'downloadExport'])
+                ->name('tenants.operations.exports.download');
             Route::post('/landlord/tenants/{tenant}/commercial/plan', [LandlordCommercialConfigurationController::class, 'assignTenantPlan'])
                 ->name('tenants.commercial.plan');
             Route::post('/landlord/tenants/{tenant}/commercial/override', [LandlordCommercialConfigurationController::class, 'updateTenantCommercialOverride'])
@@ -413,16 +431,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::post('/google-business/sync', [GoogleBusinessProfileController::class, 'sync'])->name('google-business.sync');
                     Route::post('/google-business/select-location', [GoogleBusinessProfileController::class, 'selectLocation'])->name('google-business.select-location');
                 });
-            Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
-                ->name('operations.reconciliation');
-            Route::post('/operations/reconciliation/issues/{event}/resolve', [MarketingOperationsController::class, 'resolveIssue'])
-                ->name('operations.reconciliation.issues.resolve');
-            Route::post('/operations/reconciliation/retry', [MarketingOperationsController::class, 'retryReconciliation'])
-                ->name('operations.reconciliation.retry');
-            Route::post('/operations/reconciliation/redemptions/{redemption}/mark-redeemed', [MarketingOperationsController::class, 'markRedemptionRedeemed'])
-                ->name('operations.reconciliation.redemptions.mark-redeemed');
-            Route::get('/operations/storefront/redemption-debug', [MarketingOperationsController::class, 'storefrontRedemptionDebug'])
-                ->name('operations.storefront-redemption-debug');
+            Route::middleware(['tenant.access'])->group(function (): void {
+                Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
+                    ->name('operations.reconciliation');
+                Route::post('/operations/reconciliation/issues/{event}/resolve', [MarketingOperationsController::class, 'resolveIssue'])
+                    ->name('operations.reconciliation.issues.resolve');
+                Route::post('/operations/reconciliation/retry', [MarketingOperationsController::class, 'retryReconciliation'])
+                    ->name('operations.reconciliation.retry');
+                Route::post('/operations/reconciliation/redemptions/{redemption}/mark-redeemed', [MarketingOperationsController::class, 'markRedemptionRedeemed'])
+                    ->name('operations.reconciliation.redemptions.mark-redeemed');
+                Route::get('/operations/storefront/redemption-debug', [MarketingOperationsController::class, 'storefrontRedemptionDebug'])
+                    ->name('operations.storefront-redemption-debug');
+            });
             Route::get('/reviews', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'reviews')
                 ->name('reviews');
@@ -462,8 +482,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('birthdays.')
         ->group(function () {
             Route::get('/', [BirthdayPagesController::class, 'customers'])->name('customers');
-            Route::post('/customers/import/preview', [BirthdayPagesController::class, 'previewImport'])->name('customers.import.preview');
-            Route::post('/customers/import', [BirthdayPagesController::class, 'runImport'])->name('customers.import.run');
             Route::post('/customers/{marketingProfile}/issue-reward', [BirthdayPagesController::class, 'issueReward'])->name('customers.issue-reward');
 
             Route::get('/analytics', [BirthdayPagesController::class, 'analytics'])->name('analytics');
@@ -473,7 +491,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/rewards/{issuance}/status', [BirthdayPagesController::class, 'updateRewardStatus'])->name('rewards.status');
             Route::get('/settings', [BirthdayPagesController::class, 'settings'])->name('settings');
             Route::post('/settings', [BirthdayPagesController::class, 'saveSettings'])->name('settings.save');
-            Route::get('/activity', [BirthdayPagesController::class, 'activity'])->name('activity');
+
+            Route::middleware(['tenant.access'])->group(function (): void {
+                Route::post('/customers/import/preview', [BirthdayPagesController::class, 'previewImport'])->name('customers.import.preview');
+                Route::post('/customers/import', [BirthdayPagesController::class, 'runImport'])->name('customers.import.run');
+                Route::get('/activity', [BirthdayPagesController::class, 'activity'])->name('activity');
+            });
         });
 
     // Inventory

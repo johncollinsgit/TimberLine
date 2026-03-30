@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CustomerBirthdayProfile;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,7 +15,8 @@ class BirthdayRewardEngineService
     public function __construct(
         protected CandleCashService $candleCashService,
         protected BirthdayProfileService $birthdayProfileService,
-        protected BirthdayEmailDispatchService $birthdayEmailDispatchService
+        protected BirthdayEmailDispatchService $birthdayEmailDispatchService,
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver
     ) {
     }
 
@@ -35,7 +37,8 @@ class BirthdayRewardEngineService
             ];
         }
 
-        $config = $this->rewardConfig();
+        $tenantId = $this->tenantIdForBirthdayProfile($birthdayProfile, $options);
+        $config = $this->rewardConfig($tenantId);
         $rewardType = (string) ($config['reward_type'] ?? 'candle_cash');
         $cycleYear = (int) ($options['cycle_year'] ?? now()->year);
         $window = $this->claimWindow($birthdayProfile, $cycleYear, $config);
@@ -119,7 +122,8 @@ class BirthdayRewardEngineService
      */
     public function issueAnnualReward(CustomerBirthdayProfile $birthdayProfile, array $options = []): array
     {
-        $config = $this->rewardConfig();
+        $tenantId = $this->tenantIdForBirthdayProfile($birthdayProfile, $options);
+        $config = $this->rewardConfig($tenantId);
         if (! (bool) ($config['enabled'] ?? true)) {
             return [
                 'ok' => false,
@@ -223,7 +227,7 @@ class BirthdayRewardEngineService
             if ($rewardType === 'candle_cash') {
                 $candleCash = max(0, (int) ($config['candle_cash_amount'] ?? 0));
                 if ($candleCash <= 0) {
-                    throw new RuntimeException('Birthday Candle Cash reward is misconfigured.');
+                    throw new RuntimeException('Birthday reward credit is misconfigured.');
                 }
 
                 $result = $this->candleCashService->addPoints(
@@ -232,7 +236,7 @@ class BirthdayRewardEngineService
                     type: 'earn',
                     source: 'birthday_reward',
                     sourceId: 'birthday:'.$locked->id.':'.$cycleYear,
-                    description: 'Birthday Candle Cash reward'
+                    description: 'Birthday reward credit'
                 );
 
                 $issuancePayload['status'] = 'claimed';
@@ -305,12 +309,12 @@ class BirthdayRewardEngineService
         return $result;
     }
 
-    public function generateUniqueCodeForRewardType(string $rewardType, int $cycleYear, ?array $config = null): string
+    public function generateUniqueCodeForRewardType(string $rewardType, int $cycleYear, ?array $config = null, ?int $tenantId = null): string
     {
         return $this->generateCode(
             $this->normalizeRewardType($rewardType),
             $cycleYear,
-            $config ?: $this->rewardConfig()
+            $config ?: $this->rewardConfig($tenantId)
         );
     }
 
@@ -320,7 +324,7 @@ class BirthdayRewardEngineService
     public function claimIssuedReward(CustomerBirthdayProfile $birthdayProfile, ?int $cycleYear = null): array
     {
         $cycleYear = $cycleYear ?: (int) now()->year;
-        $config = $this->rewardConfig();
+        $config = $this->rewardConfig($this->tenantIdForBirthdayProfile($birthdayProfile));
         $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'candle_cash'));
 
         return DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType): array {
@@ -448,16 +452,15 @@ class BirthdayRewardEngineService
     /**
      * @return array<string,mixed>
      */
-    public function rewardConfig(): array
+    public function rewardConfig(?int $tenantId = null): array
     {
         $fallback = (array) config('marketing.birthday_rewards', []);
-
-        $configured = (array) optional(\App\Models\MarketingSetting::query()->where('key', 'birthday_reward_config')->first())->value;
+        $configured = $this->marketingSettingsResolver->array('birthday_reward_config', $tenantId);
 
         return array_merge([
             'enabled' => true,
             'reward_type' => 'discount_code',
-            'reward_name' => 'Birthday Candle Cash',
+            'reward_name' => 'Birthday Reward Credit',
             'reward_value' => 10.00,
             'candle_cash_amount' => 50,
             'discount_code_prefix' => 'BDAY',
@@ -465,6 +468,29 @@ class BirthdayRewardEngineService
             'claim_window_days_before' => 0,
             'claim_window_days_after' => 14,
         ], $fallback, $configured);
+    }
+
+    /**
+     * @param  array<string,mixed>  $options
+     */
+    protected function tenantIdForBirthdayProfile(?CustomerBirthdayProfile $birthdayProfile, array $options = []): ?int
+    {
+        $tenantId = $options['tenant_id'] ?? null;
+        if (is_numeric($tenantId) && (int) $tenantId > 0) {
+            return (int) $tenantId;
+        }
+
+        if (! $birthdayProfile) {
+            return null;
+        }
+
+        $marketingProfile = $birthdayProfile->relationLoaded('marketingProfile')
+            ? $birthdayProfile->marketingProfile
+            : $birthdayProfile->marketingProfile()->first(['id', 'tenant_id']);
+
+        return $marketingProfile && is_numeric($marketingProfile->tenant_id) && (int) $marketingProfile->tenant_id > 0
+            ? (int) $marketingProfile->tenant_id
+            : null;
     }
 
     public function cycleBirthdayDate(CustomerBirthdayProfile $birthdayProfile, int $cycleYear): ?CarbonImmutable
@@ -530,7 +556,7 @@ class BirthdayRewardEngineService
     {
         $name = trim((string) ($config['reward_name'] ?? ''));
 
-        return $name !== '' ? $name : 'Birthday Candle Cash';
+        return $name !== '' ? $name : 'Birthday Reward Credit';
     }
 
     /**

@@ -13,12 +13,11 @@ beforeEach(function () {
 });
 
 test('promo page renders config-driven headline and pricing content', function () {
-    config()->set('product_surfaces.promo.headline', 'Testable Platform Headline');
     config()->set('product_surfaces.plans.cards.starter.price_display', 'From $777/mo');
 
     $this->get(route('platform.promo'))
         ->assertOk()
-        ->assertSeeText('Testable Platform Headline')
+        ->assertSeeText('Production, shipping, and wholesale in one place.')
         ->assertSeeText('From $777/mo')
         ->assertSeeText('Install on Shopify');
 });
@@ -26,9 +25,9 @@ test('promo page renders config-driven headline and pricing content', function (
 test('contact placeholder page renders configured channels', function () {
     $this->get(route('platform.contact'))
         ->assertOk()
-        ->assertSeeText('Contact Fire Forge Tech')
+        ->assertSeeText('Contact Forestry Backstage')
         ->assertSee('mailto:sales@forestrybackstage.com?subject=Platform%20Demo%20Request', false)
-        ->assertSeeText('Back to Product Overview');
+        ->assertSeeText('Back to homepage');
 });
 
 test('embedded start-here page renders onboarding checklist surface', function () {
@@ -39,8 +38,8 @@ test('embedded start-here page renders onboarding checklist surface', function (
     $response->assertOk()
         ->assertSeeText('Start Here')
         ->assertSeeText('Setup Checklist')
-        ->assertSeeText('Label source order: tenant override')
-        ->assertSeeText('entitlements default')
+        ->assertSeeText('Customer import status')
+        ->assertSeeText('Unlock Next')
         ->assertSee('data-onboarding-surface="true"', false)
         ->assertSee('data-module-checklist="true"', false)
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
@@ -73,12 +72,12 @@ test('embedded plans page renders tenant-aware plan and addon state', function (
     $response = $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
-        ->assertSeeText('Current Access Profile')
+        ->assertSeeText('Current Plan')
         ->assertSeeText('Starter')
         ->assertSeeText('Add-ons')
         ->assertSeeText('SMS')
-        ->assertSeeText('Commercial configuration is active, but billing lifecycle remains inactive in this phase')
-        ->assertSeeText('Locked Modules')
+        ->assertSeeText('Unlock Next')
+        ->assertSeeText('Upgrade Opportunities')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'plans' && ! empty($item['active']));
         });
@@ -116,25 +115,17 @@ test('assignment and label overrides propagate across start plans and integratio
 
     $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · law')
-        ->assertSeeText('Labels · tenant override')
-        ->assertSeeText('Forest Credits')
-        ->assertSeeText('Locked Modules');
+        ->assertSeeText('Customer import status');
 
     $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Current Access Profile')
-        ->assertSeeText('Pro')
-        ->assertSeeText('Template · law')
-        ->assertSeeText('Labels · tenant override')
-        ->assertSeeText('Forest Credits');
+        ->assertSeeText('Current Plan')
+        ->assertSeeText('Pro');
 
     $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · law')
-        ->assertSeeText('Labels · tenant override')
-        ->assertSeeText('No live connector sync runs from this page yet.')
-        ->assertSeeText('This page is intentionally read-only and placeholder-first: no connector sync/OAuth writes and no billing lifecycle actions run here.')
+        ->assertSeeText('Connect customer data sources so import and customer workflows stay reliable.')
+        ->assertSeeText('Import')
         ->assertSee('data-integrations-surface="true"', false);
 });
 
@@ -155,20 +146,26 @@ test('commercialization pages use predictable entitlements fallback when no temp
 
     $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · none')
-        ->assertSeeText('Labels · entitlements default')
-        ->assertSeeText('Verify customer + Rewards operations');
+        ->assertSeeText('Customer import status')
+        ->assertViewHas('onboardingPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'global_fallback'
+                && data_get($payload, 'commercial_context.labels.rewards') === 'Rewards';
+        });
 
     $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('Growth')
-        ->assertSeeText('Template · none')
-        ->assertSeeText('Labels · entitlements default');
+        ->assertViewHas('plansPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'global_fallback';
+        });
 
     $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · none')
-        ->assertSeeText('Labels · entitlements default');
+        ->assertSeeText('Integrations')
+        ->assertSeeText('Import')
+        ->assertViewHas('integrationsPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'global_fallback';
+        });
 });
 
 test('commercialization pages ignore malformed label overrides and keep deterministic label source fallback', function () {
@@ -195,21 +192,25 @@ test('commercialization pages ignore malformed label overrides and keep determin
 
     $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · law')
-        ->assertSeeText('Labels · template default')
-        ->assertSeeText('Client Credits');
+        ->assertSeeText('Customer import status')
+        ->assertViewHas('onboardingPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'template_default'
+                && data_get($payload, 'commercial_context.labels.rewards') === 'Client Credits';
+        });
 
     $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · law')
-        ->assertSeeText('Labels · template default')
-        ->assertSeeText('Client Credits');
+        ->assertViewHas('plansPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'template_default';
+        });
 
     $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · law')
-        ->assertSeeText('Labels · template default')
-        ->assertSeeText('Client Credits');
+        ->assertSeeText('Integrations')
+        ->assertSeeText('Import')
+        ->assertViewHas('integrationsPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'template_default';
+        });
 
     TenantCommercialOverride::query()
         ->where('tenant_id', $tenant->id)
@@ -220,19 +221,23 @@ test('commercialization pages ignore malformed label overrides and keep determin
 
     $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · none')
-        ->assertSeeText('Labels · entitlements default')
-        ->assertSeeText('Verify customer + Rewards operations');
+        ->assertSeeText('Customer import status')
+        ->assertViewHas('onboardingPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'global_fallback'
+                && data_get($payload, 'commercial_context.labels.rewards') === 'Rewards';
+        });
 
     $this->get(route('shopify.app.plans', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · none')
-        ->assertSeeText('Labels · entitlements default');
+        ->assertSeeText('Current Plan');
 
     $this->get(route('shopify.app.integrations', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Template · none')
-        ->assertSeeText('Labels · entitlements default');
+        ->assertSeeText('Integrations')
+        ->assertSeeText('Import')
+        ->assertViewHas('integrationsPayload', function (array $payload): bool {
+            return data_get($payload, 'commercial_context.label_source') === 'global_fallback';
+        });
 });
 
 test('embedded integrations page renders placeholder-first cards and categories', function () {
@@ -264,8 +269,8 @@ test('embedded integrations page renders placeholder-first cards and categories'
             'data-integration-state="connected"',
         ], false)
         ->assertSee('data-integration-drawer-status="manual_entry"', false)
-        ->assertSeeText('Source: CSV upload fallback')
-        ->assertSeeText('Source: Built-in manual workflow')
+        ->assertSeeText('Data path: CSV upload fallback')
+        ->assertSeeText('Data path: Built-in manual workflow')
         ->assertSeeText('You can still use this system without this integration.')
         ->assertSeeText('Continue setup')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
@@ -300,19 +305,19 @@ test('embedded integrations page derives locked and coming soon states from enti
             'data-integration-key="quickbooks"',
             'data-integration-state="coming_soon"',
         ], false)
-        ->assertSee('href="/shopify/app/plans"', false)
+        ->assertSee('href="/shopify/app/plans?', false)
         ->assertSee('data-integration-cta-state="locked"', false)
         ->assertSeeText('Upgrade to unlock')
         ->assertSeeText('SMS access follows tenant entitlements and provider readiness configuration.')
         ->assertSee('data-integration-card-status="sms_gateway"', false)
         ->assertSee('data-integration-card-source="sms_gateway"', false)
-        ->assertSeeText('Source: Plan entitlement')
+        ->assertSeeText('Data path: Plan entitlement')
         ->assertSee('data-integration-cta-state="coming_soon"', false)
         ->assertSeeText('Coming soon')
         ->assertSeeText('QuickBooks is currently a roadmap-visible placeholder.')
         ->assertSee('data-integration-card-status="quickbooks"', false)
         ->assertSee('data-integration-drawer-status="quickbooks"', false)
-        ->assertSeeText('Source: Roadmap placeholder');
+        ->assertSeeText('Data path: Roadmap placeholder');
 });
 
 test('dashboard now exposes overview start-here and plans subnav links', function () {
@@ -321,7 +326,6 @@ test('dashboard now exposes overview start-here and plans subnav links', functio
     $response = $this->get(route('home', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
-        ->assertSeeText('Rewards performance snapshot')
         ->assertSeeText('Start Here')
         ->assertSeeText('Plans & Add-ons')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {

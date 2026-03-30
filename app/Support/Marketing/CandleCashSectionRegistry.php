@@ -2,6 +2,8 @@
 
 namespace App\Support\Marketing;
 
+use App\Services\Tenancy\TenantDisplayLabelResolver;
+
 class CandleCashSectionRegistry
 {
     /**
@@ -9,15 +11,15 @@ class CandleCashSectionRegistry
      */
     public static function groups(): array
     {
-        return [
+        return self::replaceLabelTokens([
             'command' => [
                 'label' => 'Program',
-                'description' => 'Simple overview of how Candle Cash is currently structured.',
+                'description' => 'Simple overview of how {{rewards_label_lc}} are currently structured.',
                 'accent' => 'amber',
             ],
             'work' => [
                 'label' => 'Live Rules',
-                'description' => 'Review the live earn and redeem rows already maintained in Backstage.',
+                'description' => 'Review the live earn and redeem rows already maintained for {{rewards_label_lc}}.',
                 'accent' => 'emerald',
             ],
             'growth' => [
@@ -25,7 +27,7 @@ class CandleCashSectionRegistry
                 'description' => 'Referrals, conversion tasks, and program rules.',
                 'accent' => 'sky',
             ],
-        ];
+        ]);
     }
 
     /**
@@ -33,23 +35,23 @@ class CandleCashSectionRegistry
      */
     public static function sections(): array
     {
-        return [
+        return self::replaceLabelTokens([
             'dashboard' => [
-                'label' => 'Rewards',
+                'label' => '{{rewards_label}}',
                 'route' => 'marketing.candle-cash',
-                'description' => 'Manage Candle Cash rewards and program settings.',
+                'description' => 'Manage {{rewards_label_lc}} and program settings.',
                 'group' => 'command',
             ],
             'tasks' => [
                 'label' => 'Ways to Earn',
                 'route' => 'marketing.candle-cash.tasks',
-                'description' => 'Review and manage the live earn rules already powering Candle Cash.',
+                'description' => 'Review and manage the live earn rules already powering {{rewards_label_lc}}.',
                 'group' => 'work',
             ],
             'redeem' => [
                 'label' => 'Ways to Redeem',
                 'route' => 'marketing.candle-cash.redeem',
-                'description' => 'Review and manage the live reward rows customers can currently redeem.',
+                'description' => 'Review and manage the live redemption rows customers can currently redeem.',
                 'group' => 'work',
             ],
             'queue' => [
@@ -79,16 +81,16 @@ class CandleCashSectionRegistry
             'gifts-report' => [
                 'label' => 'Gift insights',
                 'route' => 'marketing.candle-cash.gifts-report',
-                'description' => 'Surface Candle Cash send intent, notification status, and post-gift conversions.',
+                'description' => 'Surface reward-credit send intent, notification status, and post-gift conversions.',
                 'group' => 'growth',
             ],
             'settings' => [
                 'label' => 'Settings',
                 'route' => 'marketing.candle-cash.settings',
-                'description' => 'Configure Candle Cash copy, referral amounts, integration matching, and fraud rules.',
+                'description' => 'Configure {{rewards_label_lc}} copy, referral amounts, integration matching, and fraud rules.',
                 'group' => 'growth',
             ],
-        ];
+        ]);
     }
 
     public static function section(string $key): array
@@ -134,5 +136,57 @@ class CandleCashSectionRegistry
         }
 
         return array_values($grouped);
+    }
+
+    /**
+     * @param  array<mixed,mixed>  $value
+     * @return array<mixed,mixed>
+     */
+    protected static function replaceLabelTokens(array $value): array
+    {
+        $tokens = self::labelTokens();
+
+        $replace = function (mixed $item) use (&$replace, $tokens): mixed {
+            if (is_array($item)) {
+                $updated = [];
+                foreach ($item as $key => $nested) {
+                    $updated[$key] = $replace($nested);
+                }
+
+                return $updated;
+            }
+
+            if (is_string($item)) {
+                return strtr($item, $tokens);
+            }
+
+            return $item;
+        };
+
+        return $replace($value);
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected static function labelTokens(): array
+    {
+        $tenantId = request()?->attributes->get('current_tenant_id');
+        $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+        $resolved = $resolver->resolve($resolvedTenantId);
+        $labels = is_array($resolved['labels'] ?? null) ? (array) $resolved['labels'] : [];
+
+        $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+
+        return [
+            '{{rewards_label}}' => $rewardsLabel,
+            '{{rewards_label_lc}}' => strtolower($rewardsLabel),
+        ];
     }
 }

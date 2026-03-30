@@ -5,6 +5,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
+use App\Models\Tenant;
 use App\Services\Marketing\BirthdayRewardEngineService;
 
 beforeEach(function () {
@@ -130,4 +131,67 @@ test('birthday reward engine blocks issuance outside claim window', function () 
     expect((bool) ($result['ok'] ?? true))->toBeFalse()
         ->and((string) ($result['state'] ?? ''))->toBe('outside_claim_window')
         ->and(BirthdayRewardIssuance::query()->count())->toBe(0);
+});
+
+test('birthday issuance command requires tenant context and scopes issuance by tenant', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Birthday Command Tenant A',
+        'slug' => 'birthday-command-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Birthday Command Tenant B',
+        'slug' => 'birthday-command-tenant-b',
+    ]);
+
+    $profileA = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
+        'first_name' => 'TenantA',
+        'email' => 'birthday-command-a@example.com',
+        'normalized_email' => 'birthday-command-a@example.com',
+    ]);
+    $profileB = MarketingProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'first_name' => 'TenantB',
+        'email' => 'birthday-command-b@example.com',
+        'normalized_email' => 'birthday-command-b@example.com',
+    ]);
+
+    CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profileA->id,
+        'birth_month' => (int) now()->month,
+        'birth_day' => (int) now()->day,
+        'source' => 'test',
+        'source_captured_at' => now(),
+    ]);
+    CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profileB->id,
+        'birth_month' => (int) now()->month,
+        'birth_day' => (int) now()->day,
+        'source' => 'test',
+        'source_captured_at' => now(),
+    ]);
+
+    $this->artisan('marketing:issue-birthday-rewards', [
+        '--limit' => 10,
+        '--dry-run' => true,
+    ])
+        ->expectsOutputToContain('Missing required --tenant-id')
+        ->assertExitCode(1);
+
+    $this->artisan('marketing:issue-birthday-rewards', [
+        '--tenant-id' => $tenantA->id,
+        '--limit' => 10,
+    ])->assertSuccessful();
+
+    $tenantAIssuances = BirthdayRewardIssuance::query()
+        ->join('marketing_profiles as mp', 'mp.id', '=', 'birthday_reward_issuances.marketing_profile_id')
+        ->where('mp.tenant_id', $tenantA->id)
+        ->count();
+    $tenantBIssuances = BirthdayRewardIssuance::query()
+        ->join('marketing_profiles as mp', 'mp.id', '=', 'birthday_reward_issuances.marketing_profile_id')
+        ->where('mp.tenant_id', $tenantB->id)
+        ->count();
+
+    expect($tenantAIssuances)->toBe(1)
+        ->and($tenantBIssuances)->toBe(0);
 });

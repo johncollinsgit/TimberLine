@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,7 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketingCampaign extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'name',
         'slug',
         'description',
@@ -28,11 +32,17 @@ class MarketingCampaign extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'send_window_json' => 'array',
         'quiet_hours_override_json' => 'array',
         'launched_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 
     public function segment(): BelongsTo
     {

@@ -9,6 +9,7 @@ use App\Models\MarketingRecommendation;
 use App\Models\MarketingRecommendationRun;
 use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingRecommendationEngine;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -16,38 +17,68 @@ use Illuminate\Http\Request;
 
 class MarketingRecommendationsController extends Controller
 {
+    public function __construct(
+        protected MarketingTenantOwnershipService $ownershipService
+    ) {
+    }
+
     public function index(Request $request): View
     {
+        $tenantId = $this->resolveTenantId($request);
+        $strict = $this->strictTenantMode();
         $status = trim((string) $request->query('status', 'pending'));
         $type = trim((string) $request->query('type', 'all'));
 
-        $recommendations = MarketingRecommendation::query()
+        $recommendationsQuery = MarketingRecommendation::query()
             ->with(['campaign:id,name', 'profile:id,first_name,last_name,email', 'variant:id,name'])
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($type !== 'all', fn ($query) => $query->where('type', $type))
             ->orderByRaw("case when status='pending' then 0 else 1 end")
-            ->orderByDesc('id')
+            ->orderByDesc('id');
+
+        if ($strict && $tenantId !== null) {
+            $recommendationIds = $this->ownershipService->tenantRecommendationIds($tenantId);
+            if ($recommendationIds->isEmpty()) {
+                $recommendationsQuery->whereRaw('1 = 0');
+            } else {
+                $recommendationsQuery->whereIn('id', $recommendationIds->all());
+            }
+        }
+
+        $recommendations = $recommendationsQuery
             ->paginate(30)
             ->withQueryString();
 
-        $approvalRecipients = MarketingCampaignRecipient::query()
+        $approvalRecipientsQuery = MarketingCampaignRecipient::query()
             ->with(['campaign:id,name', 'profile:id,first_name,last_name,email,phone', 'variant:id,name'])
             ->where('status', 'queued_for_approval')
             ->orderByDesc('id')
-            ->limit(100)
-            ->get();
+            ->limit(100);
+        if ($strict && $tenantId !== null) {
+            $approvalRecipientsQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
+        }
+        $approvalRecipients = $approvalRecipientsQuery->get();
 
-        $typeSummary = MarketingRecommendation::query()
+        $typeSummaryQuery = MarketingRecommendation::query()
             ->selectRaw('type, count(*) as aggregate')
             ->where('status', 'pending')
-            ->groupBy('type')
-            ->pluck('aggregate', 'type')
-            ->all();
+            ->groupBy('type');
+        if ($strict && $tenantId !== null) {
+            $recommendationIds = $this->ownershipService->tenantRecommendationIds($tenantId);
+            if ($recommendationIds->isEmpty()) {
+                $typeSummaryQuery->whereRaw('1 = 0');
+            } else {
+                $typeSummaryQuery->whereIn('id', $recommendationIds->all());
+            }
+        }
+        $typeSummary = $typeSummaryQuery->pluck('aggregate', 'type')->all();
 
-        $latestRuns = MarketingRecommendationRun::query()
-            ->orderByDesc('id')
-            ->limit(12)
-            ->get();
+        $latestRuns = $strict
+            ? collect()
+            : MarketingRecommendationRun::query()
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get();
 
         return view('marketing/recommendations/index', [
             'section' => MarketingSectionRegistry::section('recommendations'),
@@ -61,9 +92,12 @@ class MarketingRecommendationsController extends Controller
         ]);
     }
 
-    public function generateGlobal(MarketingRecommendationEngine $engine): RedirectResponse
+    public function generateGlobal(Request $request, MarketingRecommendationEngine $engine): RedirectResponse
     {
-        $result = $engine->generateGlobal();
+        $tenantId = $this->resolveTenantId($request);
+        $result = $engine->generateGlobal([
+            'tenant_id' => $tenantId,
+        ]);
 
         return redirect()
             ->route('marketing.recommendations')
@@ -78,8 +112,17 @@ class MarketingRecommendationsController extends Controller
         Request $request,
         MarketingRecommendationEngine $engine
     ): RedirectResponse {
-        $sendResult = $engine->generateSendSuggestionForProfile($profile);
-        $consentResult = $engine->generateConsentCaptureSuggestionForProfile($profile);
+        $tenantId = $this->resolveTenantId($request);
+        if ($this->strictTenantMode() && $tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            abort(404);
+        }
+
+        $sendResult = $engine->generateSendSuggestionForProfile($profile, null, [
+            'tenant_id' => $tenantId,
+        ]);
+        $consentResult = $engine->generateConsentCaptureSuggestionForProfile($profile, null, [
+            'tenant_id' => $tenantId,
+        ]);
 
         $created = (int) ($sendResult['created'] ?? 0) + (int) ($consentResult['created'] ?? 0);
         $message = $created > 0
@@ -103,6 +146,9 @@ class MarketingRecommendationsController extends Controller
         Request $request,
         MarketingApprovalService $approvalService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertRecommendationAccess($recommendation, $tenantId);
+
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -119,6 +165,9 @@ class MarketingRecommendationsController extends Controller
         Request $request,
         MarketingApprovalService $approvalService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertRecommendationAccess($recommendation, $tenantId);
+
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -135,6 +184,9 @@ class MarketingRecommendationsController extends Controller
         Request $request,
         MarketingApprovalService $approvalService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertRecommendationAccess($recommendation, $tenantId);
+
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -162,5 +214,26 @@ class MarketingRecommendationsController extends Controller
         }
 
         return $items;
+    }
+
+    protected function strictTenantMode(): bool
+    {
+        return $this->ownershipService->strictModeEnabled();
+    }
+
+    protected function resolveTenantId(Request $request): ?int
+    {
+        return $this->ownershipService->resolveTenantId($request, $this->strictTenantMode());
+    }
+
+    protected function assertRecommendationAccess(MarketingRecommendation $recommendation, ?int $tenantId): void
+    {
+        if (! $this->strictTenantMode() || $tenantId === null) {
+            return;
+        }
+
+        if (! $this->ownershipService->recommendationOwnedByTenant((int) $recommendation->id, $tenantId)) {
+            abort(404);
+        }
     }
 }

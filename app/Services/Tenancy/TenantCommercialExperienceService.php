@@ -2,8 +2,12 @@
 
 namespace App\Services\Tenancy;
 
+use App\Models\CustomerExternalProfile;
+use App\Models\MarketingImportRun;
+use App\Models\MarketingProfile;
+use App\Models\ShopifyImportRun;
+use App\Models\ShopifyStore;
 use App\Models\TenantAccessAddon;
-use App\Models\TenantCommercialOverride;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Tenancy\TenantModuleUi;
@@ -15,6 +19,7 @@ class TenantCommercialExperienceService
     public function __construct(
         protected TenantModuleAccessResolver $accessResolver,
         protected LandlordCommercialConfigService $commercialConfigService,
+        protected TenantDisplayLabelResolver $displayLabelResolver,
         protected TenantEmailSettingsService $tenantEmailSettingsService,
         protected TwilioSenderConfigService $twilioSenderConfigService
     ) {
@@ -64,7 +69,7 @@ class TenantCommercialExperienceService
             tenantId: $tenantId,
             moduleStates: (array) ($resolved['modules'] ?? [])
         );
-        $content = $this->applyContentLabelTokens($content, $moduleStates);
+        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
         $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
 
         $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
@@ -89,6 +94,76 @@ class TenantCommercialExperienceService
                 actions: (array) ($content['recommended_actions'] ?? []),
                 moduleStates: $moduleStates
             ),
+        ];
+    }
+
+    /**
+     * @return array{
+     *   tenant_id:?int,
+     *   plan:array{key:string,label:string,track:string,operating_mode:string},
+     *   module_states:array<string,array<string,mixed>>,
+     *   module_order:array<int,string>,
+     *   checklist:array<string,mixed>,
+     *   recommended_actions:array<int,array<string,mixed>>,
+     *   customer_summary:array{
+     *     total_profiles:int,
+     *     reachable_profiles:int,
+     *     linked_external_profiles:int
+     *   },
+     *   import_summary:array<string,mixed>,
+     *   active_now:array<int,array<string,mixed>>,
+     *   available_next:array<int,array<string,mixed>>,
+     *   purchasable:array<int,array<string,mixed>>
+     * }
+     */
+    public function merchantJourneyPayload(?int $tenantId): array
+    {
+        $content = (array) config('product_surfaces.onboarding', []);
+        $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
+
+        if ($moduleOrder === []) {
+            $moduleOrder = array_keys((array) config('entitlements.modules', []));
+        }
+
+        $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleOrder);
+        $moduleStates = $this->applyDisplayLabels(
+            tenantId: $tenantId,
+            moduleStates: (array) ($resolved['modules'] ?? [])
+        );
+        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
+        $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
+
+        $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
+        $planDefinition = is_array(config('entitlements.plans.'.$planKey))
+            ? (array) config('entitlements.plans.'.$planKey)
+            : [];
+
+        $customerSummary = $this->customerSummary($tenantId);
+        $importSummary = $this->importSummary($tenantId, (int) ($customerSummary['total_profiles'] ?? 0));
+
+        return [
+            'tenant_id' => $tenantId,
+            'plan' => [
+                'key' => $planKey,
+                'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
+                'track' => (string) ($planDefinition['track'] ?? 'shopify'),
+                'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
+            ],
+            'module_states' => $moduleStates,
+            'module_order' => $moduleOrder,
+            'checklist' => $checklist,
+            'recommended_actions' => $this->recommendedActions(
+                actions: (array) ($content['recommended_actions'] ?? []),
+                moduleStates: $moduleStates
+            ),
+            'customer_summary' => $customerSummary,
+            'import_summary' => $importSummary,
+            'active_now' => array_values((array) ($checklist['active'] ?? [])),
+            'available_next' => array_values((array) ($checklist['setup'] ?? [])),
+            'purchasable' => array_values(array_filter(
+                (array) ($checklist['locked'] ?? []),
+                static fn (array $module): bool => (bool) ($module['upgrade_prompt_eligible'] ?? false)
+            )),
         ];
     }
 
@@ -119,7 +194,7 @@ class TenantCommercialExperienceService
             tenantId: $tenantId,
             moduleStates: (array) ($resolved['modules'] ?? [])
         );
-        $content = $this->applyContentLabelTokens($content, $moduleStates);
+        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
         $checklist = TenantModuleUi::checklist($moduleStates, $moduleKeys);
 
         $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
@@ -245,7 +320,7 @@ class TenantCommercialExperienceService
             tenantId: $tenantId,
             moduleStates: (array) ($resolved['modules'] ?? [])
         );
-        $content = $this->applyContentLabelTokens($content, $moduleStates);
+        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
         $statusContext = $this->integrationStatusContext($tenantId);
 
         $cards = $this->integrationCards(
@@ -380,11 +455,11 @@ class TenantCommercialExperienceService
      */
     protected function applyDisplayLabels(?int $tenantId, array $moduleStates): array
     {
-        if ($tenantId === null || $moduleStates === []) {
+        if ($moduleStates === []) {
             return $moduleStates;
         }
 
-        $labels = $this->tenantDisplayLabels($tenantId);
+        $labels = $this->displayLabelResolver->moduleLabels($tenantId);
         if ($labels === []) {
             return $moduleStates;
         }
@@ -404,46 +479,6 @@ class TenantCommercialExperienceService
         }
 
         return $moduleStates;
-    }
-
-    /**
-     * @return array<string,string>
-     */
-    protected function tenantDisplayLabels(int $tenantId): array
-    {
-        if (! Schema::hasTable('tenant_commercial_overrides')) {
-            return [];
-        }
-
-        $override = TenantCommercialOverride::query()->forTenantId($tenantId)->first();
-        if (! $override) {
-            return [];
-        }
-
-        $labels = [];
-        $explicit = $this->normalizeDisplayLabels(
-            is_array($override->display_labels) ? $override->display_labels : []
-        );
-        if ($explicit !== []) {
-            $labels = $explicit;
-        }
-
-        $templateKey = strtolower(trim((string) ($override->template_key ?? '')));
-        if ($templateKey !== '') {
-            $template = $this->commercialConfigService->templateByKey($templateKey);
-            $templateLabels = $this->normalizeDisplayLabels(
-                is_array($template['payload']['default_labels'] ?? null)
-                    ? (array) $template['payload']['default_labels']
-                    : []
-            );
-
-            if ($templateLabels !== []) {
-                // Tenant explicit labels win, template labels fill remaining keys.
-                $labels = array_replace($templateLabels, $labels);
-            }
-        }
-
-        return $labels;
     }
 
     /**
@@ -1081,6 +1116,291 @@ class TenantCommercialExperienceService
     }
 
     /**
+     * @return array{
+     *   total_profiles:int,
+     *   reachable_profiles:int,
+     *   linked_external_profiles:int
+     * }
+     */
+    protected function customerSummary(?int $tenantId): array
+    {
+        if (! Schema::hasTable('marketing_profiles')) {
+            return [
+                'total_profiles' => 0,
+                'reachable_profiles' => 0,
+                'linked_external_profiles' => 0,
+            ];
+        }
+
+        $profilesQuery = MarketingProfile::query();
+        if ($tenantId === null) {
+            $profilesQuery->whereNull('tenant_id');
+        } else {
+            $profilesQuery->where('tenant_id', $tenantId);
+        }
+
+        $totalProfiles = (int) (clone $profilesQuery)->count();
+        $reachableProfiles = (int) (clone $profilesQuery)
+            ->where(function ($query): void {
+                $query
+                    ->where(function ($emailQuery): void {
+                        $emailQuery
+                            ->whereNotNull('normalized_email')
+                            ->where('normalized_email', '!=', '');
+                    })
+                    ->orWhere(function ($phoneQuery): void {
+                        $phoneQuery
+                            ->whereNotNull('normalized_phone')
+                            ->where('normalized_phone', '!=', '');
+                    });
+            })
+            ->count();
+
+        $linkedExternalProfiles = 0;
+        if (Schema::hasTable('customer_external_profiles')) {
+            $externalQuery = CustomerExternalProfile::query();
+
+            if (Schema::hasColumn('customer_external_profiles', 'tenant_id')) {
+                if ($tenantId === null) {
+                    $externalQuery->whereNull('tenant_id');
+                } else {
+                    $externalQuery->where('tenant_id', $tenantId);
+                }
+
+                $linkedExternalProfiles = (int) $externalQuery->count();
+            } else {
+                $profileIds = (clone $profilesQuery)->pluck('id')->all();
+                $linkedExternalProfiles = $profileIds === []
+                    ? 0
+                    : (int) $externalQuery
+                        ->whereIn('marketing_profile_id', $profileIds)
+                        ->count();
+            }
+        }
+
+        return [
+            'total_profiles' => $totalProfiles,
+            'reachable_profiles' => $reachableProfiles,
+            'linked_external_profiles' => $linkedExternalProfiles,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   state:string,
+     *   label:string,
+     *   description:string,
+     *   progress_note:string,
+     *   cta:array{label:string,href:string},
+     *   latest_run:?array<string,mixed>
+     * }
+     */
+    protected function importSummary(?int $tenantId, int $profileCount): array
+    {
+        $latestMarketingRun = $this->latestMarketingImportRun($tenantId);
+        $latestShopifyRun = $this->latestShopifyImportRun($tenantId);
+        $latestRun = $this->latestImportRunPayload($latestMarketingRun, $latestShopifyRun);
+
+        $status = strtolower(trim((string) ($latestRun['status'] ?? '')));
+        $isRunning = in_array($status, ['running', 'queued', 'pending'], true)
+            || (($latestRun['source'] ?? null) === 'shopify_import'
+                && ! empty($latestRun['started_at'])
+                && empty($latestRun['finished_at']));
+        $isFailed = in_array($status, ['failed', 'error', 'blocked'], true);
+
+        $state = 'not_started';
+        if ($profileCount > 0) {
+            $state = 'imported';
+        } elseif ($latestRun !== null && $isRunning) {
+            $state = 'in_progress';
+        } elseif ($latestRun !== null && $isFailed) {
+            $state = 'attention';
+        }
+
+        $label = match ($state) {
+            'imported' => 'Imported',
+            'in_progress' => 'In progress',
+            'attention' => 'Needs attention',
+            default => 'Not started',
+        };
+
+        $description = match ($state) {
+            'imported' => 'Customers are available now. You can manage customer profiles, loyalty context, and lifecycle actions.',
+            'in_progress' => 'A customer import is currently running. This workspace will update as soon as data is available.',
+            'attention' => 'The most recent import did not complete successfully. Review import options and retry safely.',
+            default => 'Import customers first to unlock customer management, segmentation, and lifecycle workflows.',
+        };
+
+        $progressNote = match ($state) {
+            'imported' => number_format($profileCount).' customer profile'.($profileCount === 1 ? '' : 's').' available.',
+            'in_progress' => ! empty($latestRun['started_at_display'])
+                ? 'Latest import started '.$latestRun['started_at_display'].'.'
+                : 'Latest import is running.',
+            'attention' => ! empty($latestRun['status_label'])
+                ? 'Latest import status: '.$latestRun['status_label'].'.'
+                : 'Latest import requires review before retry.',
+            default => $latestRun !== null
+                ? 'A prior import exists, but no customer profiles are available yet.'
+                : 'No customer import has run yet for this store context.',
+        };
+
+        $cta = $state === 'imported'
+            ? ['label' => 'Open Customers', 'href' => route('shopify.app.customers.manage', [], false)]
+            : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
+
+        return [
+            'state' => $state,
+            'label' => $label,
+            'description' => $description,
+            'progress_note' => $progressNote,
+            'cta' => $cta,
+            'latest_run' => $latestRun,
+        ];
+    }
+
+    protected function latestMarketingImportRun(?int $tenantId): ?MarketingImportRun
+    {
+        if (! Schema::hasTable('marketing_import_runs')) {
+            return null;
+        }
+
+        $query = MarketingImportRun::query()->orderByDesc('id');
+
+        if (Schema::hasColumn('marketing_import_runs', 'tenant_id')) {
+            if ($tenantId === null) {
+                $query->whereNull('tenant_id');
+            } else {
+                $query->where('tenant_id', $tenantId);
+            }
+        } elseif ($tenantId !== null) {
+            return null;
+        }
+
+        return $query->first();
+    }
+
+    protected function latestShopifyImportRun(?int $tenantId): ?ShopifyImportRun
+    {
+        if (! Schema::hasTable('shopify_import_runs') || ! Schema::hasTable('shopify_stores')) {
+            return null;
+        }
+
+        $storeKeys = $this->shopifyStoreKeysForTenant($tenantId);
+        if ($storeKeys === []) {
+            return null;
+        }
+
+        return ShopifyImportRun::query()
+            ->whereIn('store_key', $storeKeys)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function shopifyStoreKeysForTenant(?int $tenantId): array
+    {
+        if (! Schema::hasTable('shopify_stores')) {
+            return [];
+        }
+
+        $query = ShopifyStore::query()->select('store_key');
+
+        if ($tenantId === null) {
+            $query->whereNull('tenant_id');
+        } else {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        return $query->pluck('store_key')
+            ->map(static fn ($key): string => strtolower(trim((string) $key)))
+            ->filter(static fn (string $key): bool => $key !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function latestImportRunPayload(?MarketingImportRun $marketingRun, ?ShopifyImportRun $shopifyRun): ?array
+    {
+        if ($marketingRun === null && $shopifyRun === null) {
+            return null;
+        }
+
+        $marketingMoment = $marketingRun
+            ? ($marketingRun->finished_at ?? $marketingRun->started_at ?? $marketingRun->updated_at ?? $marketingRun->created_at)
+            : null;
+        $shopifyMoment = $shopifyRun
+            ? ($shopifyRun->finished_at ?? $shopifyRun->started_at ?? $shopifyRun->updated_at ?? $shopifyRun->created_at)
+            : null;
+
+        if ($marketingRun !== null && ($shopifyMoment === null || ($marketingMoment !== null && $marketingMoment->greaterThanOrEqualTo($shopifyMoment)))) {
+            return $this->marketingImportRunPayload($marketingRun);
+        }
+
+        return $shopifyRun !== null
+            ? $this->shopifyImportRunPayload($shopifyRun)
+            : null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function marketingImportRunPayload(MarketingImportRun $run): array
+    {
+        $summary = is_array($run->summary) ? $run->summary : [];
+        $status = strtolower(trim((string) ($run->status ?? 'unknown'))) ?: 'unknown';
+        $processed = data_get($summary, 'checkpoint.processed')
+            ?? data_get($summary, 'processed')
+            ?? data_get($summary, 'candidates_scanned')
+            ?? data_get($summary, 'created')
+            ?? data_get($summary, 'rows_processed')
+            ?? null;
+        $errors = data_get($summary, 'checkpoint.errors')
+            ?? data_get($summary, 'errors')
+            ?? null;
+
+        return [
+            'source' => 'marketing_import',
+            'source_label' => (string) ($run->source_label ?: 'Customer import'),
+            'status' => $status,
+            'status_label' => Str::headline(str_replace('_', ' ', $status)),
+            'started_at' => optional($run->started_at)->toIso8601String(),
+            'started_at_display' => optional($run->started_at)->format('M j, g:i A'),
+            'finished_at' => optional($run->finished_at)->toIso8601String(),
+            'finished_at_display' => optional($run->finished_at)->format('M j, g:i A'),
+            'processed' => $processed !== null ? (int) $processed : null,
+            'errors' => $errors !== null ? (int) $errors : null,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function shopifyImportRunPayload(ShopifyImportRun $run): array
+    {
+        $status = $run->finished_at === null && $run->started_at !== null ? 'running' : 'completed';
+
+        return [
+            'source' => 'shopify_import',
+            'source_label' => 'Shopify sync',
+            'status' => $status,
+            'status_label' => Str::headline($status),
+            'started_at' => optional($run->started_at)->toIso8601String(),
+            'started_at_display' => optional($run->started_at)->format('M j, g:i A'),
+            'finished_at' => optional($run->finished_at)->toIso8601String(),
+            'finished_at_display' => optional($run->finished_at)->format('M j, g:i A'),
+            'processed' => (int) (($run->imported_count ?? 0) + ($run->updated_count ?? 0)),
+            'errors' => (int) ($run->mapping_exceptions_count ?? 0),
+            'imported_count' => (int) ($run->imported_count ?? 0),
+            'updated_count' => (int) ($run->updated_count ?? 0),
+        ];
+    }
+
+    /**
      * @return array<int,string>
      */
     protected function enabledAddonKeys(?int $tenantId): array
@@ -1124,16 +1444,18 @@ class TenantCommercialExperienceService
      * @param  array<string,array<string,mixed>>  $moduleStates
      * @return array<string,mixed>
      */
-    protected function applyContentLabelTokens(array $content, array $moduleStates): array
+    protected function applyContentLabelTokens(array $content, array $moduleStates, ?int $tenantId = null): array
     {
-        $tokenMap = [];
-        foreach (['rewards', 'birthdays', 'customers', 'campaigns', 'integrations'] as $moduleKey) {
-            $label = trim((string) data_get($moduleStates, $moduleKey.'.label', $this->moduleLabel($moduleKey)));
-            if ($label === '') {
-                $label = $this->moduleLabel($moduleKey);
-            }
+        $resolvedLabels = $this->displayLabelResolver->resolve($tenantId);
+        $tokenMap = is_array($resolvedLabels['token_map'] ?? null)
+            ? (array) $resolvedLabels['token_map']
+            : [];
 
-            $tokenMap['{{'.$moduleKey.'_label}}'] = $label;
+        foreach (['rewards', 'birthdays', 'customers', 'campaigns', 'integrations', 'settings'] as $moduleKey) {
+            $stateLabel = trim((string) data_get($moduleStates, $moduleKey.'.label', ''));
+            if ($stateLabel !== '') {
+                $tokenMap['{{'.$moduleKey.'_label}}'] = $stateLabel;
+            }
         }
 
         return $this->replaceTokensInArray($content, $tokenMap);
@@ -1150,68 +1472,24 @@ class TenantCommercialExperienceService
      */
     protected function commercialContext(?int $tenantId, array $moduleStates): array
     {
-        $resolvedDisplayLabels = $tenantId !== null
-            ? $this->tenantDisplayLabels($tenantId)
+        $resolved = $this->displayLabelResolver->resolve($tenantId);
+        $labels = is_array($resolved['labels'] ?? null)
+            ? (array) $resolved['labels']
             : [];
 
-        $labels = [];
-        foreach (['rewards', 'birthdays', 'customers', 'campaigns', 'integrations'] as $moduleKey) {
-            $overrideLabel = trim((string) ($resolvedDisplayLabels[$moduleKey] ?? ''));
+        foreach (['rewards', 'birthdays', 'customers', 'campaigns', 'integrations', 'settings'] as $moduleKey) {
             $stateLabel = trim((string) data_get($moduleStates, $moduleKey.'.label', ''));
-            $defaultLabel = $this->moduleLabel($moduleKey);
-
-            $labels[$moduleKey] = $overrideLabel !== ''
-                ? $overrideLabel
-                : ($stateLabel !== '' ? $stateLabel : $defaultLabel);
-        }
-
-        if ($tenantId === null || ! Schema::hasTable('tenant_commercial_overrides')) {
-            return [
-                'template_key' => null,
-                'label_source' => 'entitlements_default',
-                'labels' => $labels,
-                'template_missing' => false,
-            ];
-        }
-
-        $override = TenantCommercialOverride::query()->forTenantId($tenantId)->first();
-        if (! $override) {
-            return [
-                'template_key' => null,
-                'label_source' => 'entitlements_default',
-                'labels' => $labels,
-                'template_missing' => false,
-            ];
-        }
-
-        $templateKey = $this->nullableString($override->template_key);
-        $explicitLabels = $this->normalizeDisplayLabels(
-            is_array($override->display_labels) ? $override->display_labels : []
-        );
-        $templateExists = true;
-        $templateLabels = [];
-        if ($templateKey !== null) {
-            $template = $this->commercialConfigService->templateByKey($templateKey);
-            $templateExists = $template !== null;
-            $templateLabels = $this->normalizeDisplayLabels(
-                is_array($template['payload']['default_labels'] ?? null)
-                    ? (array) $template['payload']['default_labels']
-                    : []
-            );
-        }
-
-        $labelSource = 'entitlements_default';
-        if ($explicitLabels !== []) {
-            $labelSource = 'tenant_override';
-        } elseif ($templateKey !== null && $templateExists && $templateLabels !== []) {
-            $labelSource = 'template_default';
+            if ($stateLabel !== '') {
+                $labels[$moduleKey] = $stateLabel;
+                $labels[$moduleKey.'_label'] = $stateLabel;
+            }
         }
 
         return [
-            'template_key' => $templateKey,
-            'label_source' => $labelSource,
+            'template_key' => $resolved['template_key'] ?? null,
+            'label_source' => (string) ($resolved['source'] ?? 'global_fallback'),
             'labels' => $labels,
-            'template_missing' => $templateKey !== null && ! $templateExists,
+            'template_missing' => (bool) ($resolved['template_missing'] ?? false),
         ];
     }
 
@@ -1258,34 +1536,6 @@ class TenantCommercialExperienceService
             static fn ($item): string => trim((string) $item),
             $items
         ), static fn (string $item): bool => $item !== ''));
-    }
-
-    /**
-     * @param  array<mixed,mixed>  $labels
-     * @return array<string,string>
-     */
-    protected function normalizeDisplayLabels(array $labels): array
-    {
-        $normalized = [];
-        foreach ($labels as $key => $value) {
-            if (is_int($key)) {
-                continue;
-            }
-
-            $moduleKey = strtolower(trim((string) $key));
-            if ($moduleKey === '' || ctype_digit($moduleKey)) {
-                continue;
-            }
-
-            $label = trim((string) $value);
-            if ($label === '') {
-                continue;
-            }
-
-            $normalized[$moduleKey] = $label;
-        }
-
-        return $normalized;
     }
 
     protected function nullableString(mixed $value): ?string

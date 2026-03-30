@@ -7,6 +7,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use Carbon\Carbon;
 
@@ -55,6 +56,7 @@ function makeAttributionTouch(MarketingProfile $profile, string $campaignChannel
 function makeAttributedOrder(MarketingProfile $profile, array $sourceMeta = [], array $orderOverrides = []): Order
 {
     $order = Order::query()->create(array_merge([
+        'tenant_id' => is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : null,
         'source' => 'shopify_retail',
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
@@ -66,6 +68,7 @@ function makeAttributedOrder(MarketingProfile $profile, array $sourceMeta = [], 
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : null,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
         'source_meta' => $sourceMeta,
@@ -445,9 +448,15 @@ test('dashboard attribution prefers persisted conversion snapshot over changed l
 });
 
 test('conversion attribution snapshot backfill fills missing snapshots conservatively', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Snapshot Backfill Tenant',
+        'slug' => 'snapshot-backfill-tenant',
+    ]);
+
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Bree',
         'email' => 'bree.snapshot@example.com',
+        'tenant_id' => $tenant->id,
     ]);
 
     $campaign = MarketingCampaign::query()->create([
@@ -484,12 +493,19 @@ test('conversion attribution snapshot backfill fills missing snapshots conservat
         'order_total' => 88.00,
     ]);
 
-    $this->artisan('marketing:backfill-conversion-attribution-snapshots --dry-run --chunk=50')
+    $this->artisan('marketing:backfill-conversion-attribution-snapshots', [
+        '--tenant-id' => $tenant->id,
+        '--dry-run' => true,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($conversion->fresh()->attribution_snapshot)->toBeNull();
 
-    $this->artisan('marketing:backfill-conversion-attribution-snapshots --chunk=50')
+    $this->artisan('marketing:backfill-conversion-attribution-snapshots', [
+        '--tenant-id' => $tenant->id,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($conversion->fresh()->attribution_snapshot['channel'])->toBe('instagram')

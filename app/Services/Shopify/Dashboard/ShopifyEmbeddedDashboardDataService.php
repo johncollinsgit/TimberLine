@@ -3,6 +3,7 @@
 namespace App\Services\Shopify\Dashboard;
 
 use App\Models\BirthdayRewardIssuance;
+use App\Models\CandleCashReferral;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingCampaignConversion;
@@ -17,6 +18,7 @@ use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Reporting\AnalyticsComparisonService;
 use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -134,7 +136,8 @@ class ShopifyEmbeddedDashboardDataService
                 $primaryWindow['from'],
                 $primaryWindow['to'],
                 $comparisonWindow,
-                $resolvedQuery
+                $resolvedQuery,
+                $tenantId
             ),
             'attribution' => $this->attributionSection($primarySnapshot, $comparisonSnapshot, $config),
             'locationOrigins' => $this->locationSection($primarySnapshot, $resolvedQuery),
@@ -215,23 +218,24 @@ class ShopifyEmbeddedDashboardDataService
      */
     protected function windowSnapshot(CarbonImmutable $from, CarbonImmutable $to, string $locationGrouping, ?int $tenantId): array
     {
-        $conversionRows = $this->conversionRows($from, $to);
-        $birthdayRows = $this->birthdayRows($from, $to);
-        $referralRows = $this->referralRows($from, $to);
+        $conversionRows = $this->conversionRows($from, $to, $tenantId);
+        $birthdayRows = $this->birthdayRows($from, $to, $tenantId);
+        $referralRows = $this->referralRows($from, $to, $tenantId);
         $revenueRows = $this->normalizedRevenueRows($conversionRows, $birthdayRows, $referralRows);
         $classifiedAttribution = $this->classifyAttributionRows(
             $revenueRows,
-            (array) $this->config->payload()['visibleAttributionSources']
+            (array) $this->config->payload()['visibleAttributionSources'],
+            $tenantId
         );
         $revenueRows = $classifiedAttribution['rows'];
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
-        $candleCash = $this->candleCashProvider->snapshot($from, $to);
-        $candleCashEngagement = $this->candleCashEarnedAnalyticsService->snapshot($from, $to);
+        $candleCash = $this->candleCashProvider->snapshot($from, $to, $tenantId);
+        $candleCashEngagement = $this->candleCashEarnedAnalyticsService->snapshot($from, $to, $tenantId);
         $emailReadiness = $this->marketingEmailReadiness->summary($tenantId);
-        $returningCustomerRate = $this->returningCustomerRate($from, $to);
+        $returningCustomerRate = $this->returningCustomerRate($from, $to, $tenantId);
         $realizedRewardCost = max(0.0, (float) data_get($candleCash, 'realizedRewardCost', 0));
         $birthdayRewardLiability = round((float) data_get($candleCash, 'issuedBirthdayValue', 0), 2);
-        $profit = $this->profitSummary($revenueRows, $realizedRewardCost);
+        $profit = $this->profitSummary($revenueRows, $realizedRewardCost, $tenantId);
 
         return [
             'revenueRows' => $revenueRows,
@@ -289,7 +293,7 @@ class ShopifyEmbeddedDashboardDataService
      * @param  Collection<int,array<string,mixed>>  $revenueRows
      * @return array<string,mixed>
      */
-    protected function profitSummary(Collection $revenueRows, float $realizedRewardCost): array
+    protected function profitSummary(Collection $revenueRows, float $realizedRewardCost, ?int $tenantId): array
     {
         $orderIds = $revenueRows
             ->pluck('orderId')
@@ -331,6 +335,11 @@ class ShopifyEmbeddedDashboardDataService
         $orders = Order::query()
             ->with(['lines.size'])
             ->whereIn('id', $orderIds->all())
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('orders.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('orders.tenant_id', $tenantId)
+            )
             ->get()
             ->keyBy('id');
 
@@ -455,10 +464,19 @@ class ShopifyEmbeddedDashboardDataService
         return 'high';
     }
 
-    protected function conversionRows(CarbonImmutable $from, CarbonImmutable $to): Collection
+    protected function conversionRows(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId): Collection
     {
         return MarketingCampaignConversion::query()
             ->with(['campaign:id,channel', 'profile:id,country,state,city'])
+            ->whereHas('profile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->whereBetween('converted_at', [$from, $to])
             ->get()
             ->map(function (MarketingCampaignConversion $conversion): array {
@@ -496,13 +514,22 @@ class ShopifyEmbeddedDashboardDataService
             });
     }
 
-    protected function birthdayRows(CarbonImmutable $from, CarbonImmutable $to): Collection
+    protected function birthdayRows(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId): Collection
     {
         return BirthdayRewardIssuance::query()
             ->with([
                 'marketingProfile:id,country,state,city',
                 'birthdayProfile:id,signup_source,source,metadata',
             ])
+            ->whereHas('marketingProfile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->whereBetween('redeemed_at', [$from, $to])
             ->get()
             ->map(function (BirthdayRewardIssuance $issuance): array {
@@ -538,14 +565,23 @@ class ShopifyEmbeddedDashboardDataService
             });
     }
 
-    protected function referralRows(CarbonImmutable $from, CarbonImmutable $to): Collection
+    protected function referralRows(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId): Collection
     {
-        return \App\Models\CandleCashReferral::query()
+        return CandleCashReferral::query()
             ->with(['referredProfile:id,country,state,city'])
+            ->whereHas('referredProfile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->whereNotNull('qualified_at')
             ->whereBetween('qualified_at', [$from, $to])
             ->get()
-            ->map(function (\App\Models\CandleCashReferral $referral): array {
+            ->map(function (CandleCashReferral $referral): array {
                 return [
                     'sourceKey' => $this->revenueKey(
                         (string) ($referral->qualifying_order_source ?? 'referral'),
@@ -616,7 +652,7 @@ class ShopifyEmbeddedDashboardDataService
      * @param  array<int,string>  $visibleSources
      * @return array{rows:Collection<int,array<string,mixed>>,rowsForSection:array<int,array<string,mixed>>,summary:array<string,mixed>}
      */
-    protected function classifyAttributionRows(Collection $revenueRows, array $visibleSources): array
+    protected function classifyAttributionRows(Collection $revenueRows, array $visibleSources, ?int $tenantId): array
     {
         if ($revenueRows->isEmpty()) {
             $empty = $this->attributionAggregator->aggregate(collect(), $visibleSources);
@@ -628,7 +664,7 @@ class ShopifyEmbeddedDashboardDataService
             ];
         }
 
-        $orderSignals = $this->orderAttributionSignals($revenueRows);
+        $orderSignals = $this->orderAttributionSignals($revenueRows, $tenantId);
 
         $classifiedRows = $revenueRows
             ->map(function (array $row) use ($orderSignals): array {
@@ -730,10 +766,15 @@ class ShopifyEmbeddedDashboardDataService
             ->values();
     }
 
-    protected function returningCustomerRate(CarbonImmutable $from, CarbonImmutable $to): float
+    protected function returningCustomerRate(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId): float
     {
         $orderIds = Order::query()
             ->whereBetween('ordered_at', [$from, $to])
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('orders.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('orders.tenant_id', $tenantId)
+            )
             ->pluck('id')
             ->map(fn ($id) => (string) $id)
             ->all();
@@ -745,6 +786,11 @@ class ShopifyEmbeddedDashboardDataService
         $profileIds = MarketingProfileLink::query()
             ->where('source_type', 'order')
             ->whereIn('source_id', $orderIds)
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('marketing_profile_links.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('marketing_profile_links.tenant_id', $tenantId)
+            )
             ->pluck('marketing_profile_id')
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id): bool => $id > 0)
@@ -760,6 +806,11 @@ class ShopifyEmbeddedDashboardDataService
             ->selectRaw('count(*) as order_count')
             ->where('source_type', 'order')
             ->whereIn('marketing_profile_id', $profileIds->all())
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('marketing_profile_links.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('marketing_profile_links.tenant_id', $tenantId)
+            )
             ->groupBy('marketing_profile_id')
             ->pluck('order_count', 'marketing_profile_id');
 
@@ -825,14 +876,14 @@ class ShopifyEmbeddedDashboardDataService
             ],
             [
                 'key' => 'candle_cash_used',
-                'label' => 'Candle Cash Used',
+                'label' => 'Rewards Redeemed',
                 'value' => (float) data_get($primarySnapshot, 'candleCash.used.amount', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCash.used.amount', 0)),
                 'comparisonValue' => data_get($metrics, 'candle_cash_used.comparison'),
                 'deltaPct' => data_get($metrics, 'candle_cash_used.delta_pct'),
                 'deltaLabel' => $this->formatDelta(data_get($metrics, 'candle_cash_used.delta_pct')),
                 'tone' => $this->toneForDelta(data_get($metrics, 'candle_cash_used.delta_pct')),
-                'caption' => 'Redeemed Candle Cash value using the normalized local redemption ledger.',
+                'caption' => 'Redeemed rewards value using the normalized local redemption ledger.',
             ],
             [
                 'key' => 'net_profit_created',
@@ -847,25 +898,25 @@ class ShopifyEmbeddedDashboardDataService
             ],
             [
                 'key' => 'candle_cash_earned',
-                'label' => 'Candle Cash Earned',
+                'label' => 'Rewards Earned',
                 'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0)),
                 'comparisonValue' => data_get($metrics, 'candle_cash_earned.comparison'),
                 'deltaPct' => data_get($metrics, 'candle_cash_earned.delta_pct'),
                 'deltaLabel' => $this->formatDelta(data_get($metrics, 'candle_cash_earned.delta_pct')),
                 'tone' => $this->toneForDelta(data_get($metrics, 'candle_cash_earned.delta_pct')),
-                'caption' => (string) data_get($primarySnapshot, 'candleCashEngagement.earned.sourceSummary', 'No new program-earned Candle Cash events in this window.'),
+                'caption' => (string) data_get($primarySnapshot, 'candleCashEngagement.earned.sourceSummary', 'No new program-earned rewards events in this window.'),
             ],
             [
                 'key' => 'earned_candle_cash_outstanding',
-                'label' => 'Earned Candle Cash Outstanding',
+                'label' => 'Outstanding Earned Rewards',
                 'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.outstanding.amount', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCashEngagement.outstanding.amount', 0)),
                 'comparisonValue' => null,
                 'deltaPct' => null,
                 'deltaLabel' => 'Point-in-time metric',
                 'tone' => 'neutral',
-                'caption' => (string) data_get($primarySnapshot, 'candleCashEngagement.outstanding.helperText', 'Currently outstanding earned Candle Cash excludes imported opening balances.'),
+                'caption' => (string) data_get($primarySnapshot, 'candleCashEngagement.outstanding.helperText', 'Currently outstanding earned rewards excludes imported opening balances.'),
             ],
             [
                 'key' => 'time_to_first_redemption',
@@ -880,14 +931,14 @@ class ShopifyEmbeddedDashboardDataService
             ],
             [
                 'key' => 'customers_with_unredeemed_earned',
-                'label' => 'Customers With Unredeemed Earned Candle Cash',
+                'label' => 'Customers With Outstanding Earned Rewards',
                 'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.customersWithOutstandingEarned.count', 0),
                 'formattedValue' => number_format((float) data_get($primarySnapshot, 'candleCashEngagement.customersWithOutstandingEarned.count', 0)),
                 'comparisonValue' => null,
                 'deltaPct' => null,
                 'deltaLabel' => 'Point-in-time metric',
                 'tone' => 'neutral',
-                'caption' => 'Only customers with program-earned Candle Cash still outstanding are counted. Grandfathered-only balances are excluded.',
+                'caption' => 'Only customers with program-earned rewards still outstanding are counted. Grandfathered-only balances are excluded.',
             ],
         ];
     }
@@ -904,7 +955,8 @@ class ShopifyEmbeddedDashboardDataService
         CarbonImmutable $from,
         CarbonImmutable $to,
         ?array $comparisonWindow,
-        array $resolvedQuery
+        array $resolvedQuery,
+        ?int $tenantId
     ): array {
         $unit = (string) data_get($resolvedQuery, 'interval.unit', 'day');
         $definitions = $this->chartSeriesDefinitions();
@@ -917,14 +969,16 @@ class ShopifyEmbeddedDashboardDataService
             collect($primarySnapshot['revenueRows'] ?? []),
             $from,
             $to,
-            $unit
+            $unit,
+            $tenantId
         );
         $comparisonSeries = $comparisonWindow && $comparisonSnapshot
             ? $this->chartSeriesMap(
                 collect($comparisonSnapshot['revenueRows'] ?? []),
                 $comparisonWindow['from'],
                 $comparisonWindow['to'],
-                $unit
+                $unit,
+                $tenantId
             )
             : [];
 
@@ -965,7 +1019,7 @@ class ShopifyEmbeddedDashboardDataService
 
         return [
             'title' => 'Performance trend',
-            'subtitle' => 'Compare reward-attributed sales, birthday and referral revenue, plus Candle Cash earned and redeemed across the same timeframe and comparison window.',
+            'subtitle' => 'Compare reward-attributed sales, birthday and referral revenue, plus rewards earned and redeemed across the same timeframe and comparison window.',
             'metric' => [
                 'key' => $focusMetricKey,
                 'label' => $definitions[$focusMetricKey]['label'],
@@ -1003,27 +1057,27 @@ class ShopifyEmbeddedDashboardDataService
                 'color' => '#2563eb',
             ],
             'candle_cash_earned' => [
-                'label' => 'Candle Cash Earned',
-                'description' => 'Program-earned Candle Cash credited in the selected period, excluding imported opening balances.',
+                'label' => 'Rewards Earned',
+                'description' => 'Program-earned rewards credited in the selected period, excluding imported opening balances.',
                 'color' => '#0f766e',
             ],
             'candle_cash_redeemed' => [
-                'label' => 'Candle Cash Redeemed',
-                'description' => 'Candle Cash converted into redeemed Shopify discount value in the selected period.',
+                'label' => 'Rewards Redeemed',
+                'description' => 'Rewards converted into redeemed Shopify discount value in the selected period.',
                 'color' => '#7c3aed',
             ],
         ];
     }
 
     /**
-     * Build the chart from live reward-attributed revenue rows plus Candle Cash
+     * Build the chart from live reward-attributed revenue rows plus Rewards
      * earn/redemption ledger activity so the embedded chart stays backed by
      * real order and rewards data instead of front-end placeholder series.
      *
      * @param  Collection<int,array<string,mixed>>  $revenueRows
      * @return array<string,array<int,array{label:string,value:float,start:string,end:string}>>
      */
-    protected function chartSeriesMap(Collection $revenueRows, CarbonImmutable $from, CarbonImmutable $to, string $unit): array
+    protected function chartSeriesMap(Collection $revenueRows, CarbonImmutable $from, CarbonImmutable $to, string $unit, ?int $tenantId): array
     {
         return [
             'rewards_sales' => $this->bucketRevenueSeries($revenueRows, $from, $to, $unit),
@@ -1039,8 +1093,8 @@ class ShopifyEmbeddedDashboardDataService
                 $to,
                 $unit
             ),
-            'candle_cash_earned' => $this->candleCashEarnedSeries($from, $to, $unit),
-            'candle_cash_redeemed' => $this->candleCashRedeemedSeries($from, $to, $unit),
+            'candle_cash_earned' => $this->candleCashEarnedSeries($from, $to, $unit, $tenantId),
+            'candle_cash_redeemed' => $this->candleCashRedeemedSeries($from, $to, $unit, $tenantId),
         ];
     }
 
@@ -1113,9 +1167,18 @@ class ShopifyEmbeddedDashboardDataService
     /**
      * @return array<int,array{label:string,value:float,start:string,end:string}>
      */
-    protected function candleCashEarnedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit): array
+    protected function candleCashEarnedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit, ?int $tenantId): array
     {
         $rows = CandleCashTransaction::query()
+            ->whereHas('profile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->where('candle_cash_delta', '>', 0)
             ->whereBetween('created_at', [$from, $to])
             ->orderBy('created_at')
@@ -1136,9 +1199,18 @@ class ShopifyEmbeddedDashboardDataService
     /**
      * @return array<int,array{label:string,value:float,start:string,end:string}>
      */
-    protected function candleCashRedeemedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit): array
+    protected function candleCashRedeemedSeries(CarbonImmutable $from, CarbonImmutable $to, string $unit, ?int $tenantId): array
     {
         $rows = CandleCashRedemption::query()
+            ->whereHas('profile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->where('status', 'redeemed')
             ->whereNotNull('redeemed_at')
             ->whereBetween('redeemed_at', [$from, $to])
@@ -1187,9 +1259,18 @@ class ShopifyEmbeddedDashboardDataService
         return array_values($buckets);
     }
 
-    protected function birthdayRedemptionDailySeries(CarbonImmutable $from, CarbonImmutable $to): Collection
+    protected function birthdayRedemptionDailySeries(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId): Collection
     {
         $aggregated = BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->where('status', 'redeemed')
             ->whereNotNull('redeemed_at')
             ->whereBetween('redeemed_at', [$from, $to])
@@ -1370,7 +1451,7 @@ class ShopifyEmbeddedDashboardDataService
      * @param  Collection<int,array<string,mixed>>  $revenueRows
      * @return array<int,array<string,mixed>>
      */
-    protected function orderAttributionSignals(Collection $revenueRows): array
+    protected function orderAttributionSignals(Collection $revenueRows, ?int $tenantId): array
     {
         $orderIds = $revenueRows
             ->pluck('orderId')
@@ -1385,6 +1466,11 @@ class ShopifyEmbeddedDashboardDataService
 
         $orders = Order::query()
             ->whereIn('id', $orderIds->all())
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('orders.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('orders.tenant_id', $tenantId)
+            )
             ->get(['id', 'source', 'attribution_meta', 'shopify_store_key', 'shopify_store', 'shopify_order_id'])
             ->keyBy('id');
 
@@ -1404,6 +1490,11 @@ class ShopifyEmbeddedDashboardDataService
         $pairs = collect($pairs)->unique(fn (array $pair): string => $pair['source_type'].'|'.$pair['source_id'])->values();
 
         $links = MarketingProfileLink::query()
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('marketing_profile_links.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('marketing_profile_links.tenant_id', $tenantId)
+            )
             ->where(function ($query) use ($pairs): void {
                 foreach ($pairs as $pair) {
                     $query->orWhere(function ($nested) use ($pair): void {
@@ -1485,7 +1576,7 @@ class ShopifyEmbeddedDashboardDataService
                 'label' => 'Reward cost absorbed',
                 'value' => (float) data_get($primarySnapshot, 'financials.rewardCostAbsorbed', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'financials.rewardCostAbsorbed', 0)),
-                'detail' => 'Redeemed Candle Cash plus issued birthday reward cost normalized through the current local rewards domain.',
+                'detail' => 'Redeemed rewards plus issued birthday reward cost normalized through the current local rewards domain.',
             ],
             [
                 'label' => 'Incremental retained revenue',

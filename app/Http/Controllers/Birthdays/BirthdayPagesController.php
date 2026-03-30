@@ -9,14 +9,15 @@ use App\Models\CustomerBirthdayAudit;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
-use App\Models\MarketingSetting;
 use App\Models\MarketingStorefrontEvent;
+use App\Models\TenantMarketingSetting;
 use App\Services\Marketing\BirthdayCsvImportService;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\CandleCashLegacyCompatibilityService;
 use App\Support\Birthdays\BirthdaySectionRegistry;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -27,7 +28,9 @@ class BirthdayPagesController extends Controller
 {
     public function customers(Request $request, BirthdayReportingService $reportingService): View
     {
-        return $this->renderCustomersPage($request, $reportingService);
+        $tenantId = $this->requireTenantId($request);
+
+        return $this->renderCustomersPage($request, $reportingService, $tenantId);
     }
 
     public function previewImport(
@@ -39,9 +42,10 @@ class BirthdayPagesController extends Controller
             'import_file' => ['required', 'file', 'mimes:csv,txt'],
         ]);
 
+        $tenantId = $this->requireTenantId($request);
         $preview = $importService->storePreviewUpload($data['import_file']);
 
-        return $this->renderCustomersPage($request, $reportingService, [
+        return $this->renderCustomersPage($request, $reportingService, $tenantId, [
             'importPreview' => [
                 ...$preview,
                 'fieldOptions' => $importService->fieldOptions(),
@@ -57,11 +61,14 @@ class BirthdayPagesController extends Controller
             'mapping.*' => ['nullable', 'string'],
         ]);
 
+        $tenantId = $this->requireTenantId($request);
+
         $result = $importService->importStoredFile(
             storedPath: (string) $data['temp_path'],
             mapping: array_map(static fn ($value): string => trim((string) $value), (array) $data['mapping']),
             createdBy: auth()->id(),
             dryRun: false,
+            tenantId: $tenantId,
         );
 
         $summary = (array) ($result['summary'] ?? []);
@@ -81,8 +88,9 @@ class BirthdayPagesController extends Controller
 
     public function analytics(BirthdayReportingService $reportingService): View
     {
-        $summary = $reportingService->summary();
-        $campaignSummary = $reportingService->campaignSummary();
+        $tenantId = $this->requireTenantId(request());
+        $summary = $reportingService->summary($tenantId);
+        $campaignSummary = $reportingService->campaignSummary($tenantId);
 
         return view('birthdays/show', [
             'sectionKey' => 'analytics',
@@ -90,30 +98,35 @@ class BirthdayPagesController extends Controller
             'sections' => $this->navigationItems(),
             'summary' => $summary,
             'campaignSummary' => $campaignSummary,
-            'rewardSummary' => $reportingService->rewardSummary(),
+            'rewardSummary' => $reportingService->rewardSummary($tenantId),
         ]);
     }
 
     public function campaigns(BirthdayReportingService $reportingService): View
     {
+        $tenantId = $this->requireTenantId(request());
+
         return view('birthdays/show', [
             'sectionKey' => 'campaigns',
             'section' => BirthdaySectionRegistry::section('campaigns'),
             'sections' => $this->navigationItems(),
-            'campaignSummary' => $reportingService->campaignSummary(),
-            'campaignConfig' => $this->campaignConfig(),
+            'campaignSummary' => $reportingService->campaignSummary($tenantId),
+            'campaignConfig' => $this->campaignConfig($tenantId),
         ]);
     }
 
     public function rewards(BirthdayReportingService $reportingService): View
     {
+        $tenantId = $this->requireTenantId(request());
+
         return view('birthdays/show', [
             'sectionKey' => 'rewards',
             'section' => BirthdaySectionRegistry::section('rewards'),
             'sections' => $this->navigationItems(),
-            'rewardSummary' => $reportingService->rewardSummary(),
-            'rewardConfig' => $this->rewardConfig(),
+            'rewardSummary' => $reportingService->rewardSummary($tenantId),
+            'rewardConfig' => $this->rewardConfig($tenantId),
             'rewardIssuances' => BirthdayRewardIssuance::query()
+                ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
                 ->with('marketingProfile:id,first_name,last_name,email,phone', 'birthdayProfile:id,marketing_profile_id')
                 ->latest('id')
                 ->paginate(25)
@@ -123,22 +136,25 @@ class BirthdayPagesController extends Controller
 
     public function settings(): View
     {
+        $tenantId = $this->requireTenantId(request());
+
         return view('birthdays/show', [
             'sectionKey' => 'settings',
             'section' => BirthdaySectionRegistry::section('settings'),
             'sections' => $this->navigationItems(),
-            'rewardConfig' => $this->rewardConfig(),
-            'campaignConfig' => $this->campaignConfig(),
-            'captureConfig' => $this->captureConfig(),
+            'rewardConfig' => $this->rewardConfig($tenantId),
+            'campaignConfig' => $this->campaignConfig($tenantId),
+            'captureConfig' => $this->captureConfig($tenantId),
         ]);
     }
 
     public function saveSettings(Request $request): RedirectResponse
     {
+        $tenantId = $this->requireTenantId($request);
         $scope = trim((string) $request->input('scope', 'reward'));
 
         if ($scope === 'reward') {
-            $existing = $this->rewardConfig();
+            $existing = $this->rewardConfig($tenantId);
             $data = $request->validate([
                 'enabled' => ['nullable', 'boolean'],
                 'reward_type' => ['required', 'in:candle_cash,discount_code,free_shipping'],
@@ -151,8 +167,8 @@ class BirthdayPagesController extends Controller
                 'claim_window_days_after' => ['nullable', 'integer', 'min:1', 'max:365'],
             ]);
 
-            MarketingSetting::query()->updateOrCreate(
-                ['key' => 'birthday_reward_config'],
+            TenantMarketingSetting::query()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'key' => 'birthday_reward_config'],
                 ['value' => [
                     'enabled' => (bool) ($data['enabled'] ?? data_get($existing, 'enabled', false)),
                     'reward_type' => $data['reward_type'],
@@ -166,7 +182,7 @@ class BirthdayPagesController extends Controller
                 ]]
             );
         } elseif ($scope === 'campaign') {
-            $existing = $this->campaignConfig();
+            $existing = $this->campaignConfig($tenantId);
             $data = $request->validate([
                 'email_enabled' => ['nullable', 'boolean'],
                 'sms_enabled' => ['nullable', 'boolean'],
@@ -180,8 +196,8 @@ class BirthdayPagesController extends Controller
                 'followup_sms_body' => ['nullable', 'string', 'max:500'],
             ]);
 
-            MarketingSetting::query()->updateOrCreate(
-                ['key' => 'birthday_campaign_config'],
+            TenantMarketingSetting::query()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'key' => 'birthday_campaign_config'],
                 ['value' => [
                     'email_enabled' => array_key_exists('email_enabled', $data) ? (bool) $data['email_enabled'] : (bool) data_get($existing, 'email_enabled', false),
                     'sms_enabled' => array_key_exists('sms_enabled', $data) ? (bool) $data['sms_enabled'] : (bool) data_get($existing, 'sms_enabled', false),
@@ -196,15 +212,15 @@ class BirthdayPagesController extends Controller
                 ]]
             );
         } else {
-            $existing = $this->captureConfig();
+            $existing = $this->captureConfig($tenantId);
             $data = $request->validate([
                 'year_optional' => ['nullable', 'boolean'],
                 'match_priority' => ['nullable', 'string', 'max:500'],
                 'required_fields' => ['nullable', 'string', 'max:500'],
             ]);
 
-            MarketingSetting::query()->updateOrCreate(
-                ['key' => 'birthday_capture_config'],
+            TenantMarketingSetting::query()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'key' => 'birthday_capture_config'],
                 ['value' => [
                     'year_optional' => array_key_exists('year_optional', $data) ? (bool) $data['year_optional'] : (bool) data_get($existing, 'year_optional', false),
                     'match_priority' => trim((string) ($data['match_priority'] ?? data_get($existing, 'match_priority', 'shopify_customer_id,email,phone,first_name+last_name+birthday'))),
@@ -220,26 +236,32 @@ class BirthdayPagesController extends Controller
 
     public function activity(): View
     {
+        $tenantId = $this->requireTenantId(request());
+
         return view('birthdays/show', [
             'sectionKey' => 'activity',
             'section' => BirthdaySectionRegistry::section('activity'),
             'sections' => $this->navigationItems(),
             'recentAudits' => CustomerBirthdayAudit::query()
+                ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
                 ->with('marketingProfile:id,first_name,last_name,email')
                 ->latest('id')
                 ->paginate(20, ['*'], 'audits_page')
                 ->withQueryString(),
             'recentEvents' => BirthdayMessageEvent::query()
+                ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
                 ->with('marketingProfile:id,first_name,last_name,email', 'rewardIssuance:id,reward_code,status')
                 ->latest('id')
                 ->paginate(20, ['*'], 'events_page')
                 ->withQueryString(),
             'recentRewardSignals' => MarketingStorefrontEvent::query()
+                ->forTenantId($tenantId)
                 ->where('event_type', 'like', 'birthday_reward_%')
                 ->latest('id')
                 ->paginate(20, ['*'], 'signals_page')
                 ->withQueryString(),
             'recentImports' => MarketingImportRun::query()
+                ->where('tenant_id', $tenantId)
                 ->where('type', 'birthday_customers_import')
                 ->latest('id')
                 ->limit(15)
@@ -249,6 +271,11 @@ class BirthdayPagesController extends Controller
 
     public function issueReward(MarketingProfile $marketingProfile, BirthdayRewardEngineService $engine): RedirectResponse
     {
+        $tenantId = $this->requireTenantId(request());
+        if ((int) ($marketingProfile->tenant_id ?? 0) !== $tenantId) {
+            abort(404);
+        }
+
         $birthdayProfile = $marketingProfile->birthdayProfile;
         if (! $birthdayProfile) {
             return back()->with('toast', ['style' => 'danger', 'message' => 'Birthday is missing for this customer.']);
@@ -264,7 +291,12 @@ class BirthdayPagesController extends Controller
 
     public function activateReward(BirthdayRewardIssuance $issuance, BirthdayRewardActivationService $activationService): RedirectResponse
     {
+        $tenantId = $this->requireTenantId(request());
         $birthdayProfile = $issuance->birthdayProfile;
+        if (! $birthdayProfile || (int) ($birthdayProfile->marketingProfile?->tenant_id ?? 0) !== $tenantId) {
+            abort(404);
+        }
+
         if (! $birthdayProfile) {
             return back()->with('toast', ['style' => 'danger', 'message' => 'Birthday reward has no linked profile.']);
         }
@@ -284,6 +316,11 @@ class BirthdayPagesController extends Controller
 
     public function updateRewardStatus(Request $request, BirthdayRewardIssuance $issuance): RedirectResponse
     {
+        $tenantId = $this->requireTenantId($request);
+        if ((int) ($issuance->marketingProfile?->tenant_id ?? 0) !== $tenantId) {
+            abort(404);
+        }
+
         $data = $request->validate([
             'status' => ['required', 'in:claimed,redeemed,expired,cancelled'],
         ]);
@@ -307,6 +344,7 @@ class BirthdayPagesController extends Controller
     protected function renderCustomersPage(
         Request $request,
         BirthdayReportingService $reportingService,
+        int $tenantId,
         array $extra = []
     ): View {
         $search = trim((string) $request->query('search', ''));
@@ -317,6 +355,7 @@ class BirthdayPagesController extends Controller
         $source = trim((string) $request->query('source', 'all'));
 
         $query = CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $builder) => $builder->forTenantId($tenantId))
             ->with([
                 'marketingProfile.links:id,marketing_profile_id,source_type,source_id',
                 'rewardIssuances' => fn ($builder) => $builder->latest('id'),
@@ -367,7 +406,7 @@ class BirthdayPagesController extends Controller
             'sectionKey' => 'customers',
             'section' => BirthdaySectionRegistry::section('customers'),
             'sections' => $this->navigationItems(),
-            'summary' => $reportingService->summary(),
+            'summary' => $reportingService->summary($tenantId),
             'profiles' => $profiles,
             'filters' => [
                 'search' => $search,
@@ -378,6 +417,7 @@ class BirthdayPagesController extends Controller
                 'source' => $source,
             ],
             'sourceOptions' => CustomerBirthdayProfile::query()
+                ->whereHas('marketingProfile', fn (Builder $builder) => $builder->forTenantId($tenantId))
                 ->whereNotNull('signup_source')
                 ->distinct()
                 ->orderBy('signup_source')
@@ -407,13 +447,14 @@ class BirthdayPagesController extends Controller
     /**
      * @return array<string,mixed>
      */
-    protected function rewardConfig(): array
+    protected function rewardConfig(int $tenantId): array
     {
+        $resolver = app(TenantMarketingSettingsResolver::class);
         $config = array_merge(
             [
                 'enabled' => true,
                 'reward_type' => 'discount_code',
-                'reward_name' => 'Birthday Candle Cash',
+                'reward_name' => 'Birthday Reward Credit',
                 'reward_value' => 10.00,
                 'candle_cash_amount' => 50,
                 'discount_code_prefix' => 'BDAY',
@@ -421,7 +462,7 @@ class BirthdayPagesController extends Controller
                 'claim_window_days_before' => 0,
                 'claim_window_days_after' => 14,
             ],
-            (array) optional(MarketingSetting::query()->where('key', 'birthday_reward_config')->first())->value
+            $resolver->array('birthday_reward_config', $tenantId, [])
         );
 
         if (($config['reward_type'] ?? null) === 'points') {
@@ -439,8 +480,9 @@ class BirthdayPagesController extends Controller
     /**
      * @return array<string,mixed>
      */
-    protected function campaignConfig(): array
+    protected function campaignConfig(int $tenantId): array
     {
+        $resolver = app(TenantMarketingSettingsResolver::class);
         return array_merge(
             [
                 'email_enabled' => true,
@@ -454,22 +496,86 @@ class BirthdayPagesController extends Controller
                 'followup_email_body' => 'Your birthday reward is still available if you want to use it.',
                 'followup_sms_body' => 'Your birthday reward is still waiting for you.',
             ],
-            (array) optional(MarketingSetting::query()->where('key', 'birthday_campaign_config')->first())->value
+            $resolver->array('birthday_campaign_config', $tenantId, [])
         );
     }
 
     /**
      * @return array<string,mixed>
      */
-    protected function captureConfig(): array
+    protected function captureConfig(int $tenantId): array
     {
+        $resolver = app(TenantMarketingSettingsResolver::class);
         return array_merge(
             [
                 'year_optional' => true,
                 'match_priority' => 'shopify_customer_id,email,phone,first_name+last_name+birthday',
                 'required_fields' => 'email,first_name,last_name,birthday',
             ],
-            (array) optional(MarketingSetting::query()->where('key', 'birthday_capture_config')->first())->value
+            $resolver->array('birthday_capture_config', $tenantId, [])
         );
+    }
+
+    protected function requireTenantId(Request $request): int
+    {
+        $tenantId = $this->currentTenantId($request, true);
+
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required for birthday pages.');
+        }
+
+        return $tenantId;
+    }
+
+    protected function currentTenantId(Request $request, bool $required = false): ?int
+    {
+        foreach (['current_tenant_id', 'host_tenant_id'] as $attribute) {
+            $tenantId = $this->positiveInt($request->attributes->get($attribute));
+            if ($tenantId !== null) {
+                $request->attributes->set('current_tenant_id', $tenantId);
+
+                return $tenantId;
+            }
+        }
+
+        $sessionTenantId = $this->positiveInt($request->session()->get('tenant_id'));
+        if ($sessionTenantId !== null) {
+            $request->attributes->set('current_tenant_id', $sessionTenantId);
+
+            return $sessionTenantId;
+        }
+
+        $user = $request->user();
+        if ($user) {
+            $tenantIds = $user->tenants()
+                ->pluck('tenants.id')
+                ->map(fn ($value): int => (int) $value)
+                ->filter(fn (int $value): bool => $value > 0)
+                ->values();
+
+            if ($tenantIds->count() === 1) {
+                $tenantId = (int) $tenantIds->first();
+                $request->attributes->set('current_tenant_id', $tenantId);
+
+                return $tenantId;
+            }
+        }
+
+        if ($required) {
+            abort(403, 'Tenant context is required for birthday pages.');
+        }
+
+        return null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 }

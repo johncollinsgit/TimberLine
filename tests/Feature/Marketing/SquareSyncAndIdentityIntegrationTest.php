@@ -2,11 +2,14 @@
 
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
+use App\Models\MarketingSetting;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\SquareCustomer;
+use App\Models\Tenant;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     config()->set('marketing.square.enabled', true);
@@ -15,6 +18,20 @@ beforeEach(function () {
     config()->set('marketing.square.sync_payments_enabled', true);
     config()->set('marketing.square.access_token', 'test-token');
     config()->set('marketing.square.base_url', 'https://connect.squareup.com');
+    MarketingSetting::query()->updateOrCreate(
+        ['key' => 'square_config'],
+        [
+            'value' => [
+                'access_token' => 'test-token',
+                'location_ids' => ['LOC-1'],
+                'base_url' => 'https://connect.squareup.com',
+            ],
+        ]
+    );
+    $this->tenant = Tenant::query()->create([
+        'name' => 'Square Tenant ' . Str::random(4),
+        'slug' => 'square-tenant-' . strtolower(Str::random(6)),
+    ]);
 });
 
 test('square customer sync creates and updates source records idempotently', function () {
@@ -31,11 +48,14 @@ test('square customer sync creates and updates source records idempotently', fun
         ], 200),
     ]);
 
-    $this->artisan('marketing:sync-square-customers --limit=50')->assertExitCode(0);
-    $this->artisan('marketing:sync-square-customers --limit=50')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=50')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=50')->assertExitCode(0);
 
     expect(\App\Models\SquareCustomer::query()->count())->toBe(1)
-        ->and(MarketingImportRun::query()->where('type', 'square_customers_sync')->count())->toBe(2)
+        ->and(MarketingImportRun::query()
+            ->where('type', 'square_customers_sync')
+            ->where('tenant_id', $this->tenant->id)
+            ->count())->toBe(2)
         ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->where('source_id', 'SQ-CUST-1')->count())->toBe(1);
 });
 
@@ -56,7 +76,7 @@ test('square customer exact email links to existing marketing profile', function
         ], 200),
     ]);
 
-    $this->artisan('marketing:sync-square-customers --limit=1')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=1')->assertExitCode(0);
 
     expect(MarketingProfile::query()->count())->toBe(1)
         ->and(MarketingProfileLink::query()
@@ -83,7 +103,7 @@ test('square customer exact phone links to existing marketing profile', function
         ], 200),
     ]);
 
-    $this->artisan('marketing:sync-square-customers --limit=1')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=1')->assertExitCode(0);
 
     expect(MarketingProfile::query()->count())->toBe(1)
         ->and(MarketingProfileLink::query()
@@ -110,7 +130,7 @@ test('square customer with visible phone defaults to sms consent when sms prefer
         ], 200),
     ]);
 
-    $this->artisan('marketing:sync-square-customers --limit=1')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=1')->assertExitCode(0);
 
     $profile = MarketingProfile::query()->sole();
 
@@ -139,13 +159,14 @@ test('square customer conflicting identifiers create identity review', function 
         ], 200),
     ]);
 
-    $this->artisan('marketing:sync-square-customers --limit=1')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=1')->assertExitCode(0);
 
     expect(MarketingIdentityReview::query()->where('source_type', 'square_customer')->where('source_id', 'SQ-CUST-CONFLICT')->exists())->toBeTrue();
 });
 
 test('square order sync creates records and profile links', function () {
     \App\Models\SquareCustomer::query()->create([
+        'tenant_id' => $this->tenant->id,
         'square_customer_id' => 'SQ-CUST-ORDER',
         'given_name' => 'Order',
         'family_name' => 'Buyer',
@@ -171,7 +192,7 @@ test('square order sync creates records and profile links', function () {
         ], 200),
     ]);
 
-    $this->artisan('marketing:sync-square-orders --limit=5')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-orders --tenant-id=' . $this->tenant->id . ' --limit=5')->assertExitCode(0);
 
     expect(\App\Models\SquareOrder::query()->where('square_order_id', 'SQ-ORDER-1')->exists())->toBeTrue()
         ->and(MarketingProfileLink::query()->where('source_type', 'square_order')->where('source_id', 'SQ-ORDER-1')->exists())->toBeTrue();
@@ -201,9 +222,13 @@ test('square customer sync without limit exhausts paginated results and stores c
         };
     });
 
-    $this->artisan('marketing:sync-square-customers')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id)->assertExitCode(0);
 
-    $run = MarketingImportRun::query()->where('type', 'square_customers_sync')->latest('id')->firstOrFail();
+    $run = MarketingImportRun::query()
+        ->where('type', 'square_customers_sync')
+        ->where('tenant_id', $this->tenant->id)
+        ->latest('id')
+        ->firstOrFail();
 
     expect(SquareCustomer::query()->count())->toBe(2)
         ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(2)
@@ -240,13 +265,108 @@ test('square customer sync resumes from prior run checkpoint cursor', function (
         };
     });
 
-    $this->artisan('marketing:sync-square-customers --limit=1 --checkpoint-every=1')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=1 --checkpoint-every=1')->assertExitCode(0);
 
-    $firstRun = MarketingImportRun::query()->where('type', 'square_customers_sync')->latest('id')->firstOrFail();
+    $firstRun = MarketingImportRun::query()
+        ->where('type', 'square_customers_sync')
+        ->where('tenant_id', $this->tenant->id)
+        ->latest('id')
+        ->firstOrFail();
 
-    $this->artisan('marketing:sync-square-customers --resume-run-id=' . $firstRun->id)->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --resume-run-id=' . $firstRun->id)->assertExitCode(0);
 
     expect($requestedCursors)->toBe([null, 'CUR-2'])
         ->and(SquareCustomer::query()->count())->toBe(2)
         ->and(data_get($firstRun->fresh()->summary, 'checkpoint.cursor'))->toBe('CUR-2');
+});
+
+test('square customer sync resume fails closed when run belongs to another tenant', function () {
+    $tenantB = Tenant::query()->create([
+        'name' => 'Square Tenant B ' . Str::random(4),
+        'slug' => 'square-tenant-b-' . strtolower(Str::random(5)),
+    ]);
+
+    $foreignRun = MarketingImportRun::query()->create([
+        'tenant_id' => $tenantB->id,
+        'type' => 'square_customers_sync',
+        'status' => 'completed',
+        'source_label' => 'square:customers',
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(5),
+        'summary' => [
+            'checkpoint' => [
+                'cursor' => 'CUR-FOREIGN',
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://connect.squareup.com/v2/customers*' => Http::response([
+            'customers' => [],
+            'cursor' => null,
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --resume-run-id=' . $foreignRun->id)
+        ->expectsOutputToContain('not accessible for tenant')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('square customer sync resume fails closed when run has no tenant ownership', function () {
+    $orphanRun = MarketingImportRun::query()->create([
+        'tenant_id' => null,
+        'type' => 'square_customers_sync',
+        'status' => 'completed',
+        'source_label' => 'square:customers',
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(5),
+        'summary' => [
+            'checkpoint' => [
+                'cursor' => 'CUR-ORPHAN',
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://connect.squareup.com/v2/customers*' => Http::response([
+            'customers' => [],
+            'cursor' => null,
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --resume-run-id=' . $orphanRun->id)
+        ->expectsOutputToContain('not accessible for tenant')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('square sync isolates source rows by tenant', function () {
+    $tenantB = Tenant::query()->create([
+        'name' => 'Square Tenant B ' . Str::random(4),
+        'slug' => 'square-tenant-b-' . strtolower(Str::random(5)),
+    ]);
+
+    Http::fake([
+        'https://connect.squareup.com/v2/customers*' => Http::response([
+            'customers' => [[
+                'id' => 'SQ-CUST-SHARED',
+                'given_name' => 'Shared',
+                'family_name' => 'Customer',
+                'email_address' => 'shared@example.com',
+            ]],
+            'cursor' => null,
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $this->tenant->id . ' --limit=1')->assertExitCode(0);
+    $this->artisan('marketing:sync-square-customers --tenant-id=' . $tenantB->id . ' --limit=1')->assertExitCode(0);
+
+    expect(SquareCustomer::query()->where('tenant_id', $this->tenant->id)->count())->toBe(1)
+        ->and(SquareCustomer::query()->where('tenant_id', $tenantB->id)->count())->toBe(1)
+        ->and(SquareCustomer::query()->where('square_customer_id', 'SQ-CUST-SHARED')->count())->toBe(2)
+        ->and(MarketingImportRun::query()->where('type', 'square_customers_sync')->where('tenant_id', $this->tenant->id)->exists())->toBeTrue()
+        ->and(MarketingImportRun::query()->where('type', 'square_customers_sync')->where('tenant_id', $tenantB->id)->exists())->toBeTrue();
 });

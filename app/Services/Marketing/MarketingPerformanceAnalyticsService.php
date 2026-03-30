@@ -28,6 +28,9 @@ class MarketingPerformanceAnalyticsService
     public function snapshotVariantPerformance(array $options = []): array
     {
         $campaignId = isset($options['campaign_id']) ? (int) $options['campaign_id'] : null;
+        $tenantId = isset($options['tenant_id']) && is_numeric($options['tenant_id'])
+            ? (int) $options['tenant_id']
+            : null;
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $windowStart = $this->asDate($options['window_start'] ?? null);
         $windowEnd = $this->asDate($options['window_end'] ?? null);
@@ -42,6 +45,7 @@ class MarketingPerformanceAnalyticsService
         $recipientGroups = MarketingCampaignRecipient::query()
             ->selectRaw('campaign_id, variant_id, channel, count(*) as recipients_count')
             ->when($campaignId !== null && $campaignId > 0, fn ($query) => $query->where('campaign_id', $campaignId))
+            ->when($tenantId !== null, fn ($query) => $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId)))
             ->groupBy('campaign_id', 'variant_id', 'channel')
             ->get();
 
@@ -67,10 +71,10 @@ class MarketingPerformanceAnalyticsService
             }
 
             $metrics = $channel === 'sms'
-                ? $this->smsMetrics($campaignIdValue, $variantIdValue, $windowStart, $windowEnd)
-                : $this->emailMetrics($campaignIdValue, $variantIdValue, $windowStart, $windowEnd);
+                ? $this->smsMetrics($campaignIdValue, $variantIdValue, $windowStart, $windowEnd, $tenantId)
+                : $this->emailMetrics($campaignIdValue, $variantIdValue, $windowStart, $windowEnd, $tenantId);
 
-            $conversion = $this->conversionMetrics($campaignIdValue, $variantIdValue, $windowStart, $windowEnd);
+            $conversion = $this->conversionMetrics($campaignIdValue, $variantIdValue, $windowStart, $windowEnd, $tenantId);
 
             $row = [
                 'campaign_id' => $campaignIdValue,
@@ -164,12 +168,13 @@ class MarketingPerformanceAnalyticsService
      *  top_variant:?array<string,mixed>
      * }
      */
-    public function campaignSummary(MarketingCampaign $campaign, int $windowDays = 120): array
+    public function campaignSummary(MarketingCampaign $campaign, int $windowDays = 120, ?int $tenantId = null): array
     {
         $windowEnd = now()->toImmutable();
         $windowStart = $windowEnd->subDays(max(7, $windowDays));
         $snapshot = $this->snapshotVariantPerformance([
             'campaign_id' => (int) $campaign->id,
+            'tenant_id' => $tenantId,
             'window_start' => $windowStart,
             'window_end' => $windowEnd,
             'dry_run' => true,
@@ -218,11 +223,16 @@ class MarketingPerformanceAnalyticsService
         int $campaignId,
         ?int $variantId,
         ?CarbonImmutable $windowStart,
-        ?CarbonImmutable $windowEnd
+        ?CarbonImmutable $windowEnd,
+        ?int $tenantId = null
     ): array {
         $query = MarketingMessageDelivery::query()
             ->where('campaign_id', $campaignId)
             ->where('channel', 'sms');
+
+        if ($tenantId !== null) {
+            $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
+        }
 
         $query = $variantId === null
             ? $query->whereNull('variant_id')
@@ -246,15 +256,20 @@ class MarketingPerformanceAnalyticsService
         int $campaignId,
         ?int $variantId,
         ?CarbonImmutable $windowStart,
-        ?CarbonImmutable $windowEnd
+        ?CarbonImmutable $windowEnd,
+        ?int $tenantId = null
     ): array {
         $query = MarketingEmailDelivery::query()
-            ->whereHas('recipient', function ($recipientQuery) use ($campaignId, $variantId): void {
+            ->whereHas('recipient', function ($recipientQuery) use ($campaignId, $variantId, $tenantId): void {
                 $recipientQuery->where('campaign_id', $campaignId);
                 if ($variantId === null) {
                     $recipientQuery->whereNull('variant_id');
                 } else {
                     $recipientQuery->where('variant_id', $variantId);
+                }
+
+                if ($tenantId !== null) {
+                    $recipientQuery->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
                 }
             });
 
@@ -276,10 +291,15 @@ class MarketingPerformanceAnalyticsService
         int $campaignId,
         ?int $variantId,
         ?CarbonImmutable $windowStart,
-        ?CarbonImmutable $windowEnd
+        ?CarbonImmutable $windowEnd,
+        ?int $tenantId = null
     ): array {
         $query = MarketingCampaignConversion::query()
             ->where('campaign_id', $campaignId);
+
+        if ($tenantId !== null) {
+            $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
+        }
 
         if ($variantId === null) {
             $query->where(function ($nested): void {
@@ -367,4 +387,3 @@ class MarketingPerformanceAnalyticsService
         }
     }
 }
-

@@ -2,6 +2,15 @@
     $theme = $theme ?? 'backstage';
     $wireNavigate = (bool) ($wireNavigate ?? false);
     $overview = $overview ?? [];
+    $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', data_get($overview, 'program_name', 'Rewards'))));
+    if ($resolvedRewardsLabel === '') {
+        $resolvedRewardsLabel = 'Rewards';
+    }
+    $resolvedRewardsLabelLower = strtolower($resolvedRewardsLabel);
+    $resolvedRewardsBalanceLabel = trim((string) ($rewardsBalanceLabel ?? data_get($displayLabels ?? [], 'rewards_balance_label', $resolvedRewardsLabel . ' balance')));
+    if ($resolvedRewardsBalanceLabel === '') {
+        $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
+    }
 
     $earnPreview = collect(data_get($overview, 'earn_preview', []));
     $redeemPreview = collect(data_get($overview, 'redeem_preview', []));
@@ -13,8 +22,8 @@
     $cards = [
         [
             'label' => 'Program name',
-            'value' => data_get($overview, 'program_name', 'Candle Cash'),
-            'detail' => 'The live Candle Cash label customers see across the program.',
+            'value' => data_get($overview, 'program_name', $resolvedRewardsLabel),
+            'detail' => 'The live program label customers see across this workspace.',
         ],
         [
             'label' => 'Ways to earn',
@@ -29,7 +38,7 @@
         [
             'label' => 'Program structure',
             'value' => $earningModes !== '' ? $earningModes : 'Task-based',
-            'detail' => 'Customers earn through configured tasks, then spend Candle Cash on available rewards.',
+            'detail' => 'Customers earn through configured tasks, then spend '.$resolvedRewardsBalanceLabel.' on available offers.',
         ],
     ];
 
@@ -95,13 +104,13 @@
         <div class="{{ $classes['intro_body'] }}">
             <div>
                 <div class="{{ $classes['eyebrow'] }}">Program overview</div>
-                <h2 class="{{ $classes['title'] }}">Rewards</h2>
+                <h2 class="{{ $classes['title'] }}">{{ $resolvedRewardsLabel }}</h2>
             </div>
             <p class="{{ $classes['copy'] }}">
-                This page reflects the live Candle Cash tasks and reward rows currently managed by Backstage.
+                This page reflects the live earn and redeem rows currently managed by Backstage.
             </p>
             <p class="{{ $classes['copy'] }}">
-                Use it to quickly review how the Candle Cash program is currently structured, including how customers earn Candle Cash and what rewards are available.
+                Use it to quickly review how the {{ $resolvedRewardsLabelLower }} program is currently structured, including how customers earn and what offers are available.
             </p>
             <p class="{{ $classes['copy'] }}">
                 For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
@@ -112,7 +121,7 @@
     <section class="{{ $classes['overview'] }}">
         <div class="{{ $classes['overview_header'] }}">
             <div class="{{ $classes['eyebrow'] }}">Overview</div>
-            <h2 class="{{ $classes['title'] }}">How Candle Cash works today</h2>
+            <h2 class="{{ $classes['title'] }}">How {{ $resolvedRewardsLabelLower }} works today</h2>
             <p class="{{ $classes['copy_spaced'] }}">{{ data_get($overview, 'program_summary') }}</p>
         </div>
 
@@ -134,7 +143,7 @@
                     <div class="{{ $classes['eyebrow'] }}">Ways to Earn</div>
                     <h2 class="{{ $classes['title'] }}">Live earn rules</h2>
                     <p class="{{ $classes['copy_spaced'] }}">
-                        Review the live Candle Cash tasks customers can currently complete to earn Candle Cash.
+                        Review the live tasks customers can currently complete to earn {{ $resolvedRewardsLabelLower }}.
                     </p>
                 </div>
                 <a href="{{ $earnUrl }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">
@@ -160,7 +169,7 @@
                     <div class="{{ $classes['eyebrow'] }}">Ways to Redeem</div>
                     <h2 class="{{ $classes['title'] }}">Live reward rows</h2>
                     <p class="{{ $classes['copy_spaced'] }}">
-                        Review the reward rows customers can currently redeem with their Candle Cash balance.
+                        Review the rows customers can currently redeem with their {{ strtolower($resolvedRewardsBalanceLabel) }}.
                     </p>
                 </div>
                 <a href="{{ $redeemUrl }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">

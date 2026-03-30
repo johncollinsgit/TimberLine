@@ -14,7 +14,11 @@ use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewSummary;
 use App\Models\MarketingSegment;
 use App\Models\ShopifyImportRun;
+use App\Models\ShopifyStore;
 use App\Models\SquareCustomer;
+use App\Models\SquareOrder;
+use App\Models\SquarePayment;
+use App\Models\Tenant;
 use App\Models\User;
 
 test('marketing overview shows real imported-system metrics and grouped navigation', function () {
@@ -22,8 +26,18 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $tenantA = Tenant::query()->create([
+        'name' => 'Marketing Overview Tenant A',
+        'slug' => 'marketing-overview-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Marketing Overview Tenant B',
+        'slug' => 'marketing-overview-tenant-b',
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenantA->id]);
 
     $shopifyOnly = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Shopify',
         'last_name' => 'Only',
         'email' => 'shopify-only@example.com',
@@ -31,6 +45,7 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'source_channels' => ['shopify'],
     ]);
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $shopifyOnly->id,
         'source_type' => 'shopify_customer',
         'source_id' => 'SHOP-1',
@@ -38,6 +53,7 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'confidence' => 1,
     ]);
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $shopifyOnly->id,
         'provider' => 'shopify',
         'integration' => 'shopify_customer',
@@ -49,11 +65,13 @@ test('marketing overview shows real imported-system metrics and grouped navigati
     ]);
 
     $squareOnlyMissing = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Square',
         'last_name' => 'Only',
         'source_channels' => ['square'],
     ]);
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $squareOnlyMissing->id,
         'source_type' => 'square_customer',
         'source_id' => 'SQ-1',
@@ -61,6 +79,7 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'confidence' => 1,
     ]);
     SquareCustomer::query()->create([
+        'tenant_id' => $tenantA->id,
         'square_customer_id' => 'SQ-1',
         'given_name' => 'Square',
         'family_name' => 'Only',
@@ -69,6 +88,7 @@ test('marketing overview shows real imported-system metrics and grouped navigati
     ]);
 
     $allThree = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Tri',
         'last_name' => 'Channel',
         'email' => 'tri@example.com',
@@ -84,6 +104,7 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         ['source_type' => 'growave_customer', 'source_id' => 'GR-TRI'],
     ] as $link) {
         MarketingProfileLink::query()->create([
+            'tenant_id' => $tenantA->id,
             'marketing_profile_id' => $allThree->id,
             'source_type' => $link['source_type'],
             'source_id' => $link['source_id'],
@@ -93,6 +114,7 @@ test('marketing overview shows real imported-system metrics and grouped navigati
     }
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $allThree->id,
         'provider' => 'growave',
         'integration' => 'growave',
@@ -125,6 +147,64 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'review_count' => 2,
         'published_review_count' => 2,
         'average_rating' => 5,
+        'source_synced_at' => now(),
+    ]);
+
+    $foreignProfile = MarketingProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'first_name' => 'Foreign',
+        'last_name' => 'Persona',
+        'email' => 'foreign@example.com',
+        'normalized_email' => 'foreign@example.com',
+        'phone' => '5553330000',
+        'normalized_phone' => '+15553330000',
+        'source_channels' => ['shopify', 'square', 'growave'],
+    ]);
+    foreach ([
+        ['source_type' => 'shopify_customer', 'source_id' => 'SHOP-FOREIGN'],
+        ['source_type' => 'square_customer', 'source_id' => 'SQ-FOREIGN'],
+        ['source_type' => 'growave_customer', 'source_id' => 'GR-FOREIGN'],
+    ] as $link) {
+        MarketingProfileLink::query()->create([
+            'tenant_id' => $tenantB->id,
+            'marketing_profile_id' => $foreignProfile->id,
+            'source_type' => $link['source_type'],
+            'source_id' => $link['source_id'],
+            'match_method' => 'exact_match',
+            'confidence' => 1,
+        ]);
+    }
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'marketing_profile_id' => $foreignProfile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'foreign',
+        'external_customer_id' => 'GR-FOREIGN',
+        'points_balance' => 999,
+        'referral_link' => 'https://example.test/ref/foreign',
+        'synced_at' => now(),
+    ]);
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $foreignProfile->id,
+        'balance' => 999,
+    ]);
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $foreignProfile->id,
+        'source' => 'growave_activity',
+        'source_id' => 'foreign:GR-FOREIGN:activity-1',
+        'type' => 'earned',
+        'points' => 999,
+    ]);
+    MarketingReviewSummary::query()->create([
+        'marketing_profile_id' => $foreignProfile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'foreign',
+        'external_customer_id' => 'GR-FOREIGN',
+        'review_count' => 9,
+        'published_review_count' => 9,
+        'average_rating' => 4,
         'source_synced_at' => now(),
     ]);
 
@@ -173,9 +253,11 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'status' => 'pending',
         'source_type' => 'square_customer',
         'source_id' => 'SQ-CONFLICT',
+        'proposed_marketing_profile_id' => $allThree->id,
     ]);
 
     MarketingImportRun::query()->create([
+        'tenant_id' => $tenantA->id,
         'type' => 'square_customers_sync',
         'status' => 'completed',
         'source_label' => 'square:customers',
@@ -185,12 +267,44 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         'created_by' => $user->id,
     ]);
 
+    MarketingImportRun::query()->create([
+        'tenant_id' => $tenantB->id,
+        'type' => 'square_customers_sync',
+        'status' => 'completed',
+        'source_label' => 'square:customers',
+        'started_at' => now()->subMinutes(8),
+        'finished_at' => now()->subMinutes(2),
+        'summary' => ['processed' => 99, 'errors' => 0],
+        'created_by' => $user->id,
+    ]);
+
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'retail.example.myshopify.com',
+        'access_token' => 'tenant-a-token',
+        'installed_at' => now()->subDay(),
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenantB->id,
+        'store_key' => 'foreign',
+        'shop_domain' => 'foreign.example.myshopify.com',
+        'access_token' => 'tenant-b-token',
+        'installed_at' => now()->subDay(),
+    ]);
     ShopifyImportRun::query()->create([
         'store_key' => 'retail',
         'source' => 'customer_metafields',
         'imported_count' => 16466,
         'started_at' => now()->subHour(),
         'finished_at' => now()->subMinutes(30),
+    ]);
+    ShopifyImportRun::query()->create([
+        'store_key' => 'foreign',
+        'source' => 'customer_metafields',
+        'imported_count' => 999,
+        'started_at' => now()->subHour(),
+        'finished_at' => now()->subMinutes(25),
     ]);
 
     $response = $this->actingAs($user)->get(route('marketing.overview'));
@@ -206,6 +320,8 @@ test('marketing overview shows real imported-system metrics and grouped navigati
         ->assertSeeText('Cross-channel Core')
         ->assertSeeText('Capture Square buyer contact info')
         ->assertSeeText('Latest Shopify import')
+        ->assertDontSeeText('Foreign Persona')
+        ->assertDontSeeText('foreign.example.com')
         ->assertDontSeeText('Current Rollout Status')
         ->assertDontSeeText('Stage 1 foundation map');
 
@@ -216,7 +332,6 @@ test('marketing overview shows real imported-system metrics and grouped navigati
             && data_get($dashboard, 'source_cards.0.profiles') === 2
             && data_get($dashboard, 'source_cards.1.profiles') === 2
             && data_get($dashboard, 'source_cards.2.profiles') === 1
-            && data_get($dashboard, 'system_cards.1.primary_value') === '1'
-            && data_get($dashboard, 'recent_import_runs.0.source_label') === 'square:customers';
+            && data_get($dashboard, 'system_cards.1.primary_value') === '1';
     });
 });

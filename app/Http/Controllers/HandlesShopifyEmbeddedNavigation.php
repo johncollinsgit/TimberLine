@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 
 trait HandlesShopifyEmbeddedNavigation
 {
     protected function embeddedAppNavigation(string $activeSection, ?string $activeChild = null, ?int $tenantId = null): array
     {
-        $items = $this->embeddedAppNavigationItems();
+        $displayLabels = $this->embeddedDisplayLabels($tenantId);
+        $items = $this->embeddedAppNavigationItems($displayLabels);
         $moduleStates = $this->embeddedNavigationModuleStates($tenantId);
         $items = $this->attachEmbeddedNavigationModuleStates($items, $moduleStates);
 
@@ -18,11 +20,20 @@ trait HandlesShopifyEmbeddedNavigation
             'activeChild' => $activeChild,
             'moduleStates' => $moduleStates,
             'tenantId' => $tenantId,
+            'displayLabels' => $displayLabels,
         ];
     }
 
-    protected function embeddedAppNavigationItems(): array
+    /**
+     * @param  array<string,string>  $displayLabels
+     */
+    protected function embeddedAppNavigationItems(array $displayLabels = []): array
     {
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? ''));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+
         return [
             [
                 'key' => 'dashboard',
@@ -32,7 +43,7 @@ trait HandlesShopifyEmbeddedNavigation
             ],
             [
                 'key' => 'rewards',
-                'label' => 'Rewards',
+                'label' => $rewardsLabel,
                 'href' => route('shopify.embedded.rewards', [], false),
                 'children' => [
                     ['key' => 'overview', 'label' => 'Overview', 'href' => route('shopify.embedded.rewards', [], false)],
@@ -57,6 +68,20 @@ trait HandlesShopifyEmbeddedNavigation
                 'children' => [],
             ],
         ];
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function embeddedDisplayLabels(?int $tenantId): array
+    {
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+        $resolved = $resolver->resolve($tenantId);
+
+        return is_array($resolved['labels'] ?? null)
+            ? (array) $resolved['labels']
+            : [];
     }
 
     /**

@@ -40,11 +40,12 @@ class MarketingConversionAttributionCoverageReport
      */
     public function report(array $filters = []): array
     {
+        $tenantId = $this->positiveInt($filters['tenant_id'] ?? null);
         $since = $this->dateValue($filters['since'] ?? null);
         $until = $this->dateValue($filters['until'] ?? null);
         $campaignChannel = $this->stringValue($filters['campaign_channel'] ?? null);
 
-        $baseQuery = $this->scopedQuery($since, $until, $campaignChannel);
+        $baseQuery = $this->scopedQuery($since, $until, $campaignChannel, $tenantId);
 
         $total = (clone $baseQuery)->count();
         $withSnapshot = (clone $baseQuery)->whereNotNull('attribution_snapshot')->count();
@@ -97,6 +98,7 @@ class MarketingConversionAttributionCoverageReport
 
         return [
             'scope' => [
+                'tenant_id' => $tenantId,
                 'since' => $since?->toIso8601String(),
                 'until' => $until?->toIso8601String(),
                 'campaign_channel' => $campaignChannel,
@@ -120,9 +122,13 @@ class MarketingConversionAttributionCoverageReport
     protected function scopedQuery(
         ?CarbonImmutable $since,
         ?CarbonImmutable $until,
-        ?string $campaignChannel
+        ?string $campaignChannel,
+        ?int $tenantId
     ) {
         return MarketingCampaignConversion::query()
+            ->when($tenantId !== null, function ($query) use ($tenantId): void {
+                $query->whereHas('profile', fn ($profileQuery) => $profileQuery->where('tenant_id', $tenantId));
+            })
             ->when($since, fn ($query) => $query->where('converted_at', '>=', $since))
             ->when($until, fn ($query) => $query->where('converted_at', '<=', $until))
             ->when($campaignChannel, function ($query, string $campaignChannel): void {
@@ -157,5 +163,16 @@ class MarketingConversionAttributionCoverageReport
         }
 
         return trim((string) $value) === '';
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $tenantId = (int) $value;
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 }

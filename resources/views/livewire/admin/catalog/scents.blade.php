@@ -1,4 +1,4 @@
-<section class="rounded-3xl border border-emerald-200/10 bg-[#0f1412]/70 p-5">
+<section class="mf-app-card rounded-3xl border border-emerald-200/10 p-5">
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
       <div class="text-lg font-semibold text-white">Scents</div>
@@ -56,7 +56,7 @@
     @endforeach
   </datalist>
 
-  <div class="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0c1210]/55">
+  <div class="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white">
     <div class="overflow-x-auto">
       <table class="min-w-[112rem] w-full table-fixed text-sm">
         <colgroup>

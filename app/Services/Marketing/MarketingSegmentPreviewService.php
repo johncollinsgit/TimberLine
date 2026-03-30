@@ -16,11 +16,13 @@ class MarketingSegmentPreviewService
     /**
      * @return array{count:int,profiles:Collection<int,MarketingProfile>,matches:array<int,array{profile_id:int,reasons:array<int,string>}>}
      */
-    public function preview(MarketingSegment $segment, int $sampleSize = 25, string $search = ''): array
+    public function preview(MarketingSegment $segment, int $sampleSize = 25, string $search = '', ?int $tenantId = null): array
     {
         $sampleSize = max(1, min($sampleSize, 100));
 
-        $query = MarketingProfile::query()->orderByDesc('updated_at');
+        $query = MarketingProfile::query()
+            ->when($tenantId !== null, fn ($builder) => $builder->forTenantId($tenantId))
+            ->orderByDesc('updated_at');
         $search = trim($search);
         if ($search !== '') {
             $query->where(function ($nested) use ($search): void {

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Services\Marketing\MarketingEmailExecutionService;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use Illuminate\Console\Command;
 
 class MarketingSendApprovedEmail extends Command
@@ -12,17 +13,29 @@ class MarketingSendApprovedEmail extends Command
     protected $signature = 'marketing:send-approved-email
         {--campaign-id= : Send only for a specific campaign}
         {--recipient-id= : Send only for a specific recipient}
+        {--tenant-id= : Restrict execution to a tenant-owned campaign surface}
         {--limit=200 : Maximum recipients to process}
         {--dry-run : Simulate successful sends without calling SendGrid}';
 
     protected $description = 'Send approved email campaign recipients through SendGrid with delivery logging.';
 
-    public function handle(MarketingEmailExecutionService $executionService): int
+    public function handle(
+        MarketingEmailExecutionService $executionService,
+        MarketingTenantOwnershipService $ownershipService
+    ): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $campaignId = $this->integerOption('campaign-id');
         $recipientId = $this->integerOption('recipient-id');
+        $tenantId = $this->integerOption('tenant-id');
         $limit = max(1, (int) ($this->option('limit') ?: 200));
+        $strict = $ownershipService->strictModeEnabled();
+
+        if ($strict && $tenantId === null) {
+            $this->error('This command requires --tenant-id once tenant strict mode is active.');
+
+            return self::FAILURE;
+        }
 
         $summary = [
             'processed' => 0,
@@ -40,19 +53,53 @@ class MarketingSendApprovedEmail extends Command
                 return self::FAILURE;
             }
 
-            $this->accumulate($summary, $executionService->sendRecipient($recipient, ['dry_run' => $dryRun]));
+            if (
+                $tenantId !== null
+                && (
+                    ! $ownershipService->recipientOwnedByTenant((int) $recipient->id, $tenantId)
+                    || ! $ownershipService->campaignOwnedByTenant((int) ($recipient->campaign_id ?? 0), $tenantId)
+                )
+            ) {
+                $this->error("Recipient {$recipientId} is outside tenant {$tenantId} ownership scope.");
+
+                return self::FAILURE;
+            }
+
+            $this->accumulate($summary, $executionService->sendRecipient($recipient, [
+                'dry_run' => $dryRun,
+                'tenant_id' => $tenantId,
+            ]));
 
             return $this->renderSummary($summary, $dryRun);
         }
 
-        $campaigns = MarketingCampaign::query()
+        $campaignsQuery = MarketingCampaign::query()
             ->when($campaignId, fn ($query) => $query->where('id', $campaignId))
             ->where('channel', 'email')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
+
+        if ($tenantId !== null) {
+            $tenantCampaignIds = $ownershipService->tenantCampaignIds($tenantId);
+            if ($tenantCampaignIds->isEmpty()) {
+                if ($campaignId) {
+                    $this->error("Campaign {$campaignId} is outside tenant {$tenantId} ownership scope.");
+
+                    return self::FAILURE;
+                }
+
+                $this->line('No tenant-owned email campaigns available for processing.');
+
+                return self::SUCCESS;
+            }
+
+            $campaignsQuery->whereIn('id', $tenantCampaignIds->all());
+        }
+
+        $campaigns = $campaignsQuery->get();
 
         if ($campaignId && $campaigns->isEmpty()) {
-            $this->error("Campaign {$campaignId} not found or not email-enabled.");
+            $scopeSuffix = $tenantId !== null ? " for tenant {$tenantId}" : '';
+            $this->error("Campaign {$campaignId} not found, not email-enabled, or outside ownership scope{$scopeSuffix}.");
 
             return self::FAILURE;
         }
@@ -66,6 +113,7 @@ class MarketingSendApprovedEmail extends Command
             $campaignSummary = $executionService->sendApprovedForCampaign($campaign, [
                 'dry_run' => $dryRun,
                 'limit' => $remaining,
+                'tenant_id' => $tenantId,
             ]);
 
             foreach (array_keys($summary) as $key) {
@@ -124,4 +172,3 @@ class MarketingSendApprovedEmail extends Command
         return self::SUCCESS;
     }
 }
-

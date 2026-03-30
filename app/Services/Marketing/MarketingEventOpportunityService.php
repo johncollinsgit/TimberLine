@@ -94,8 +94,8 @@ class MarketingEventOpportunityService
                             profile: $profile,
                             payload: [
                                 'type' => 'reward_opportunity',
-                                'title' => 'Event buyer has Candle Cash balance with no redemption',
-                                'summary' => 'Profile has event purchase activity and unredeemed Candle Cash balance.',
+                                'title' => 'Event buyer has Rewards balance with no redemption',
+                                'summary' => 'Profile has event purchase activity and unredeemed Rewards balance.',
                                 'details_json' => [
                                     'current_balance' => $balance,
                                     'suggested_action' => 'Send reward reminder message',

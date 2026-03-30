@@ -10,6 +10,7 @@ use Throwable;
 class MarketingReportAttributionCoverageComparison extends Command
 {
     protected $signature = 'marketing:report-attribution-coverage-comparison
+        {--tenant-id= : Restrict to a tenant id (required)}
         {--since= : Only include orders/conversions on or after this datetime}
         {--until= : Only include orders/conversions on or before this datetime}
         {--store= : Restrict to one Shopify store key}
@@ -21,6 +22,13 @@ class MarketingReportAttributionCoverageComparison extends Command
 
     public function handle(MarketingAttributionCoverageComparisonReport $reporter): int
     {
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Attribution comparison reporting is tenant-scoped in MT-2C.');
+
+            return self::FAILURE;
+        }
+
         $since = $this->parseDateOption('since');
         $until = $this->parseDateOption('until');
         $store = $this->stringOption('store');
@@ -31,6 +39,7 @@ class MarketingReportAttributionCoverageComparison extends Command
         $report = $reporter->report([
             'since' => $since?->toIso8601String(),
             'until' => $until?->toIso8601String(),
+            'tenant_id' => $tenantId,
             'store' => $store,
             'campaign_channel' => $campaignChannel,
             'chunk' => $chunk,
@@ -38,6 +47,7 @@ class MarketingReportAttributionCoverageComparison extends Command
 
         $this->line('since=' . ($report['scope']['since'] ?? 'none'));
         $this->line('until=' . ($report['scope']['until'] ?? 'none'));
+        $this->line('tenant_id=' . ($report['scope']['tenant_id'] ?? 'none'));
         $this->line('store=' . ($report['scope']['store'] ?? 'any'));
         $this->line('campaign_channel=' . ($report['scope']['campaign_channel'] ?? 'any'));
         $this->line('chunk=' . ($report['scope']['chunk'] ?? $chunk));

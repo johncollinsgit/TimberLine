@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
 use App\Models\MarketingSegment;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use App\Services\Marketing\MarketingSegmentPreviewService;
 use Illuminate\Contracts\View\View;
@@ -13,12 +14,28 @@ use Illuminate\Support\Str;
 
 class MarketingSegmentsController extends Controller
 {
-    public function index(): View
+    public function __construct(
+        protected MarketingTenantOwnershipService $ownershipService
+    ) {
+    }
+
+    public function index(Request $request): View
     {
-        $segments = MarketingSegment::query()
+        $tenantId = $this->resolveTenantId($request);
+        $segmentsQuery = MarketingSegment::query()
             ->orderByDesc('is_system')
-            ->orderBy('name')
-            ->paginate(30);
+            ->orderBy('name');
+
+        if ($this->strictTenantMode() && $tenantId !== null) {
+            $segmentIds = $this->ownershipService->tenantSegmentIds($tenantId);
+            if ($segmentIds->isEmpty()) {
+                $segmentsQuery->whereRaw('1 = 0');
+            } else {
+                $segmentsQuery->whereIn('id', $segmentIds->all());
+            }
+        }
+
+        $segments = $segmentsQuery->paginate(30);
 
         return view('marketing/segments/index', [
             'section' => MarketingSectionRegistry::section('segments'),
@@ -27,8 +44,10 @@ class MarketingSegmentsController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
+        $this->resolveTenantId($request);
+
         return view('marketing/segments/form', [
             'section' => MarketingSectionRegistry::section('segments'),
             'sections' => $this->navigationItems(),
@@ -49,6 +68,8 @@ class MarketingSegmentsController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -62,6 +83,7 @@ class MarketingSegmentsController extends Controller
         ]);
 
         $segment = MarketingSegment::query()->create([
+            'tenant_id' => $tenantId,
             'name' => trim((string) $data['name']),
             'slug' => Str::slug((string) $data['name']),
             'description' => trim((string) ($data['description'] ?? '')) ?: null,
@@ -78,8 +100,11 @@ class MarketingSegmentsController extends Controller
             ->with('toast', ['style' => 'success', 'message' => 'Segment created.']);
     }
 
-    public function edit(MarketingSegment $segment): View
+    public function edit(Request $request, MarketingSegment $segment): View
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertSegmentAccess($segment, $tenantId);
+
         return view('marketing/segments/form', [
             'section' => MarketingSectionRegistry::section('segments'),
             'sections' => $this->navigationItems(),
@@ -90,6 +115,9 @@ class MarketingSegmentsController extends Controller
 
     public function update(Request $request, MarketingSegment $segment): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertSegmentAccess($segment, $tenantId);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -122,9 +150,12 @@ class MarketingSegmentsController extends Controller
         Request $request,
         MarketingSegmentPreviewService $previewService
     ): View {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertSegmentAccess($segment, $tenantId);
+
         $search = trim((string) $request->query('search', ''));
         $sampleSize = max(5, min(100, (int) $request->query('sample_size', 25)));
-        $preview = $previewService->preview($segment, $sampleSize, $search);
+        $preview = $previewService->preview($segment, $sampleSize, $search, $tenantId);
 
         $segment->forceFill([
             'last_previewed_at' => now(),
@@ -141,13 +172,17 @@ class MarketingSegmentsController extends Controller
         ]);
     }
 
-    public function duplicate(MarketingSegment $segment): RedirectResponse
+    public function duplicate(Request $request, MarketingSegment $segment): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertSegmentAccess($segment, $tenantId);
+
         $clone = $segment->replicate(['slug', 'last_previewed_at']);
         $clone->name = $segment->name . ' (Copy)';
         $clone->slug = Str::slug($clone->name . '-' . Str::random(4));
         $clone->is_system = false;
         $clone->status = 'draft';
+        $clone->tenant_id = $tenantId;
         $clone->created_by = auth()->id();
         $clone->updated_by = auth()->id();
         $clone->save();
@@ -157,8 +192,11 @@ class MarketingSegmentsController extends Controller
             ->with('toast', ['style' => 'success', 'message' => 'Segment duplicated.']);
     }
 
-    public function archive(MarketingSegment $segment): RedirectResponse
+    public function archive(Request $request, MarketingSegment $segment): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertSegmentAccess($segment, $tenantId);
+
         $segment->forceFill([
             'status' => 'archived',
             'updated_by' => auth()->id(),
@@ -240,5 +278,26 @@ class MarketingSegmentsController extends Controller
         }
 
         return $items;
+    }
+
+    protected function strictTenantMode(): bool
+    {
+        return $this->ownershipService->strictModeEnabled();
+    }
+
+    protected function resolveTenantId(Request $request): ?int
+    {
+        return $this->ownershipService->resolveTenantId($request, $this->strictTenantMode());
+    }
+
+    protected function assertSegmentAccess(MarketingSegment $segment, ?int $tenantId): void
+    {
+        if (! $this->strictTenantMode() || $tenantId === null) {
+            return;
+        }
+
+        if (! $this->ownershipService->segmentOwnedByTenant((int) $segment->id, $tenantId)) {
+            abort(404);
+        }
     }
 }

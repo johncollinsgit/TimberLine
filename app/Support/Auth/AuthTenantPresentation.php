@@ -25,7 +25,7 @@ class AuthTenantPresentation
             ? $tenantName
             : (string) config('tenancy.auth.fallback_tenant_label', 'Modern Forestry');
 
-        $portalName = (string) config('tenancy.auth.portal_name', 'Backstage');
+        $portalName = (string) config('tenancy.auth.portal_name', 'Forestry Backstage');
 
         if ($context->classification === AuthTenantContext::GENERIC) {
             return [
@@ -33,29 +33,29 @@ class AuthTenantPresentation
                 'app_name' => $resolvedTenantName.' '.$portalName,
                 'tenant_label' => $resolvedTenantName,
                 'portal_name' => $portalName,
-                'hero_title' => $resolvedTenantName.' operations in one place.',
-                'hero_subtitle' => 'Sign in to access your workspace tools and operational dashboards.',
+                'hero_title' => 'Run operations, shipping, and fulfillment in one place.',
+                'hero_subtitle' => 'Track orders, inventory, fulfillment, and customer growth from one place built for real operations.',
                 'hero_tagline' => 'Tenant Console',
                 'login_eyebrow' => 'Sign in',
                 'login_title' => 'Welcome back',
-                'login_subtitle' => 'Sign in to continue to your workspace.',
+                'login_subtitle' => 'Sign in to continue to your Forestry Backstage workspace.',
             ];
         }
 
         // Preserve the richer flagship/default Modern Forestry experience.
         return [
             'variant' => $context->classification === AuthTenantContext::FLAGSHIP
-                ? AuthTenantContext::FLAGSHIP
+            ? AuthTenantContext::FLAGSHIP
                 : AuthTenantContext::NONE,
             'app_name' => $resolvedTenantName.' '.$portalName,
             'tenant_label' => $resolvedTenantName,
             'portal_name' => $portalName,
-            'hero_title' => 'Production, shipping, and wholesale operations in one calm place.',
-            'hero_subtitle' => 'Built for real inventory flow. Track orders, line items, and fulfillment without the noise.',
+            'hero_title' => 'Production, shipping, and wholesale in one place.',
+            'hero_subtitle' => 'Track orders, inventory, fulfillment, and customer growth from one place built for real operations.',
             'hero_tagline' => 'Operations Console',
             'login_eyebrow' => 'Sign in',
             'login_title' => 'Welcome back',
-            'login_subtitle' => 'Sign in to continue to your account and pick up where you left off.',
+            'login_subtitle' => 'Sign in to continue to your Forestry Backstage workspace.',
         ];
     }
 }

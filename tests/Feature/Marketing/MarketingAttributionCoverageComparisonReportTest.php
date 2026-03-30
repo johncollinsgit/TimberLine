@@ -4,6 +4,7 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingProfile;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingAttributionCoverageComparisonReport;
 use Carbon\Carbon;
 
@@ -17,11 +18,12 @@ function makeComparisonCampaign(string $name, string $channel = 'push'): Marketi
     ]);
 }
 
-function makeComparisonProfile(string $email): MarketingProfile
+function makeComparisonProfile(string $email, ?int $tenantId = null): MarketingProfile
 {
     return MarketingProfile::query()->create([
         'first_name' => 'Compare',
         'email' => $email,
+        'tenant_id' => $tenantId,
     ]);
 }
 
@@ -214,9 +216,14 @@ test('cross layer attribution comparison report supports date store and campaign
 });
 
 test('cross layer attribution comparison command outputs operator friendly summary and detail lines', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Comparison Command Tenant',
+        'slug' => 'comparison-command-tenant',
+    ]);
     $campaign = makeComparisonCampaign('Comparison Command', 'sms');
-    $profile = makeComparisonProfile('command@example.com');
+    $profile = makeComparisonProfile('command@example.com', $tenant->id);
     $order = makeComparisonOrder(9301, [
+        'tenant_id' => $tenant->id,
         'attribution_meta' => [
             'utm_source' => 'instagram',
             'utm_medium' => 'social',
@@ -228,7 +235,11 @@ test('cross layer attribution comparison command outputs operator friendly summa
         'channel' => 'unknown',
     ]);
 
-    $this->artisan('marketing:report-attribution-coverage-comparison --campaign-channel=sms --detail')
+    $this->artisan('marketing:report-attribution-coverage-comparison', [
+        '--tenant-id' => $tenant->id,
+        '--campaign-channel' => 'sms',
+        '--detail' => true,
+    ])
         ->expectsOutputToContain('total_orders=1')
         ->expectsOutputToContain('orders_with_attribution_meta=1')
         ->expectsOutputToContain('total_conversions=1')

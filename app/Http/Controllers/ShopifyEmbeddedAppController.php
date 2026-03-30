@@ -6,6 +6,7 @@ use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Tenancy\TenantCommercialExperienceService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
@@ -24,9 +25,12 @@ class ShopifyEmbeddedAppController extends Controller
     public function show(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        TenantResolver $tenantResolver
+        TenantResolver $tenantResolver,
+        TenantDisplayLabelResolver $displayLabelResolver,
+        TenantCommercialExperienceService $experienceService
     ): Response {
         $context = $contextService->resolvePageContext($request);
+        $fallbackRewardsLabel = $displayLabelResolver->label(null, 'rewards_label', 'Rewards');
 
         if (($context['status'] ?? '') === 'open_from_shopify') {
             return $this->embeddedResponse(
@@ -38,11 +42,11 @@ class ShopifyEmbeddedAppController extends Controller
                     'host' => null,
                     'storeLabel' => 'Shopify Admin',
                     'headline' => 'Dashboard',
-                'subheadline' => 'Rewards performance snapshot',
-                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, null),
-                'pageActions' => [],
-                'pageSubnav' => $this->dashboardExperienceSubnav('overview', null),
-                'dashboardBootstrap' => [
+                    'subheadline' => 'See '.$fallbackRewardsLabel.', customers, and setup status at a glance.',
+                    'appNavigation' => $this->embeddedAppNavigation('dashboard', null, null),
+                    'pageActions' => [],
+                    'pageSubnav' => $this->dashboardExperienceSubnav('overview', null),
+                    'dashboardBootstrap' => [
                     'authorized' => false,
                     'status' => 'open_from_shopify',
                     'storeLabel' => 'Shopify Admin',
@@ -52,6 +56,7 @@ class ShopifyEmbeddedAppController extends Controller
                         'initialData' => null,
                         'config' => $this->dashboardDataService->payload()['config'],
                     ],
+                    'merchantJourney' => null,
                 ])
             );
         }
@@ -66,7 +71,7 @@ class ShopifyEmbeddedAppController extends Controller
                     'host' => $context['host'] ?? null,
                     'storeLabel' => 'Shopify Admin',
                     'headline' => 'Dashboard',
-                    'subheadline' => 'Rewards performance snapshot',
+                    'subheadline' => 'See '.$fallbackRewardsLabel.', customers, and setup status at a glance.',
                     'appNavigation' => $this->embeddedAppNavigation('dashboard', null, null),
                     'pageActions' => [],
                     'pageSubnav' => $this->dashboardExperienceSubnav('overview', null),
@@ -80,6 +85,7 @@ class ShopifyEmbeddedAppController extends Controller
                         'initialData' => null,
                         'config' => $this->dashboardDataService->payload()['config'],
                     ],
+                    'merchantJourney' => null,
                 ]),
                 401
             );
@@ -88,9 +94,10 @@ class ShopifyEmbeddedAppController extends Controller
         /** @var array<string,mixed> $store */
         $store = $context['store'];
         $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
+        $tenantRewardsLabel = $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel);
         $dashboardLinks = [
             [
-                'label' => 'Rewards Admin',
+                'label' => $tenantRewardsLabel.' Admin',
                 'href' => route('shopify.embedded.rewards', [], false),
             ],
             [
@@ -128,6 +135,7 @@ class ShopifyEmbeddedAppController extends Controller
             ...$request->query(),
             'tenant_id' => $tenantId,
         ]);
+        $merchantJourney = $experienceService->merchantJourneyPayload($tenantId);
 
         return $this->embeddedResponse(
             response()->view('shopify.dashboard', [
@@ -138,7 +146,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'host' => (string) ($context['host'] ?? ''),
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                 'headline' => 'Dashboard',
-                'subheadline' => 'Rewards performance snapshot',
+                'subheadline' => 'See '.$tenantRewardsLabel.', customers, and setup status at a glance.',
                 'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('overview', $tenantId),
@@ -152,6 +160,7 @@ class ShopifyEmbeddedAppController extends Controller
                     'initialData' => $dashboardData,
                     'config' => $dashboardData['config'],
                 ],
+                'merchantJourney' => $merchantJourney,
             ])
         );
     }
@@ -203,11 +212,12 @@ class ShopifyEmbeddedAppController extends Controller
                     ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Start Here'),
-                'subheadline' => $this->subheadlineForStatus($status, 'Use this onboarding surface to activate setup-needed modules and track lock/roadmap states.'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Use this page to finish setup and see which modules are active, locked, or coming soon.'),
                 'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('start', $tenantId),
                 'onboardingPayload' => $experienceService->onboardingPayload($tenantId),
+                'merchantJourney' => $experienceService->merchantJourneyPayload($tenantId),
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );
@@ -238,11 +248,12 @@ class ShopifyEmbeddedAppController extends Controller
                     ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Plans & Add-ons'),
-                'subheadline' => $this->subheadlineForStatus($status, 'Review current access profile, included modules, add-on candidates, and upgrade placeholders.'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Review your current plan, available add-ons, and module access in plain language.'),
                 'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('plans', $tenantId),
                 'plansPayload' => $experienceService->plansPayload($tenantId),
+                'merchantJourney' => $experienceService->merchantJourneyPayload($tenantId),
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );
@@ -273,11 +284,12 @@ class ShopifyEmbeddedAppController extends Controller
                     ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Integrations'),
-                'subheadline' => $this->subheadlineForStatus($status, 'Review connector availability, fallback paths, and upgrade requirements without triggering live sync behavior.'),
+                'subheadline' => $this->subheadlineForStatus($status, 'See which connections are ready, what still needs setup, and safe fallback options.'),
                 'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('integrations', $tenantId),
                 'integrationsPayload' => $experienceService->integrationsPayload($tenantId),
+                'merchantJourney' => $experienceService->merchantJourneyPayload($tenantId),
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );

@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SquareCustomer extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'square_customer_id',
         'given_name',
         'family_name',
@@ -22,6 +26,7 @@ class SquareCustomer extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'group_ids' => 'array',
         'segment_ids' => 'array',
         'preferences' => 'array',

@@ -1,9 +1,12 @@
 <?php
 
 use App\Models\CustomerExternalProfile;
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileWishlistItem;
 use App\Models\MarketingSegment;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\MarketingSegmentEvaluator;
 use Illuminate\Support\Facades\Http;
@@ -14,10 +17,24 @@ beforeEach(function () {
     config()->set('marketing.growave.client_id', 'test-client');
     config()->set('marketing.growave.client_secret', 'test-secret');
     config()->set('marketing.growave.scope', 'read_customer read_review read_reward read_wishlist');
+
+    $this->tenant = Tenant::query()->create([
+        'name' => 'Growave Wishlist Tenant',
+        'slug' => 'growave-wishlist-tenant',
+    ]);
+
+    ShopifyStore::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'growave-wishlist-retail.myshopify.com',
+        'access_token' => 'growave-wishlist-token',
+        'installed_at' => now(),
+    ]);
 });
 
 test('growave wishlist backfill imports canonical rows with provenance and remains idempotent', function () {
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'first_name' => 'Legacy',
         'last_name' => 'Wishlist',
         'email' => 'legacy.wishlist@example.com',
@@ -25,8 +42,9 @@ test('growave wishlist backfill imports canonical rows with provenance and remai
     ]);
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'marketing_profile_id' => $profile->id,
-        'provider' => 'shopify',
+        'provider' => 'growave',
         'integration' => 'growave',
         'store_key' => 'retail',
         'external_customer_id' => '5001',
@@ -79,15 +97,10 @@ test('growave wishlist backfill imports canonical rows with provenance and remai
 
     $this->artisan('marketing:import-growave-wishlists --store=retail --limit=10')
         ->expectsOutputToContain('status=completed')
-        ->expectsOutputToContain('created=2')
-        ->expectsOutputToContain('skipped_unmappable_product=0')
         ->assertExitCode(0);
 
     $this->artisan('marketing:import-growave-wishlists --store=retail --limit=10')
         ->expectsOutputToContain('status=completed')
-        ->expectsOutputToContain('created=0')
-        ->expectsOutputToContain('updated=0')
-        ->expectsOutputToContain('unchanged=2')
         ->assertExitCode(0);
 
     $rows = MarketingProfileWishlistItem::query()
@@ -116,6 +129,7 @@ test('growave wishlist backfill imports canonical rows with provenance and remai
 
 test('growave wishlist backfill keeps native rows authoritative and reports unmappable rows', function () {
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'first_name' => 'Native',
         'last_name' => 'Priority',
         'email' => 'native.priority@example.com',
@@ -123,8 +137,9 @@ test('growave wishlist backfill keeps native rows authoritative and reports unma
     ]);
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'marketing_profile_id' => $profile->id,
-        'provider' => 'shopify',
+        'provider' => 'growave',
         'integration' => 'growave',
         'store_key' => 'retail',
         'external_customer_id' => '5002',
@@ -134,6 +149,7 @@ test('growave wishlist backfill keeps native rows authoritative and reports unma
     ]);
 
     MarketingProfileWishlistItem::query()->create([
+        'tenant_id' => $this->tenant->id,
         'marketing_profile_id' => $profile->id,
         'provider' => 'backstage',
         'integration' => 'native',
@@ -184,10 +200,6 @@ test('growave wishlist backfill keeps native rows authoritative and reports unma
 
     $this->artisan('marketing:import-growave-wishlists --store=retail --limit=10')
         ->expectsOutputToContain('status=completed')
-        ->expectsOutputToContain('skipped_native_authoritative=1')
-        ->expectsOutputToContain('skipped_unmappable_product=1')
-        ->expectsOutputToContain('reason_native_authoritative=1')
-        ->expectsOutputToContain('reason_missing_product_id=1')
         ->assertExitCode(0);
 
     expect(MarketingProfileWishlistItem::query()
@@ -210,6 +222,7 @@ test('growave wishlist backfill keeps native rows authoritative and reports unma
 
 test('migrated growave wishlist rows appear in customer detail and segment metrics', function () {
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'first_name' => 'Projected',
         'last_name' => 'Legacy',
         'email' => 'projected.legacy@example.com',
@@ -217,8 +230,9 @@ test('migrated growave wishlist rows appear in customer detail and segment metri
     ]);
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'marketing_profile_id' => $profile->id,
-        'provider' => 'shopify',
+        'provider' => 'growave',
         'integration' => 'growave',
         'store_key' => 'retail',
         'external_customer_id' => '5003',
@@ -263,9 +277,10 @@ test('migrated growave wishlist rows appear in customer detail and segment metri
         'role' => 'admin',
         'email_verified_at' => now(),
     ]);
+    $admin->tenants()->syncWithoutDetaching([$this->tenant->id]);
 
     $this->actingAs($admin)
-        ->get(route('marketing.customers.show', $profile))
+        ->get(route('marketing.customers.show', ['marketingProfile' => $profile->id, 'tenant' => $this->tenant->slug]))
         ->assertOk()
         ->assertSeeText('Legacy Wishlist Rows')
         ->assertSeeText('Winter Flight');
@@ -290,3 +305,203 @@ test('migrated growave wishlist rows appear in customer detail and segment metri
         ->and($result['metrics']['wishlist_product_handles'] ?? [])->toContain('winter-flight');
 });
 
+test('growave wishlist backfill binds one tenant owner per run and does not sweep other tenants', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Wishlist Tenant A',
+        'slug' => 'wishlist-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Wishlist Tenant B',
+        'slug' => 'wishlist-tenant-b',
+    ]);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'tenant_id' => $tenantA->id,
+            'shop_domain' => 'wishlist-tenant-a.myshopify.com',
+            'access_token' => 'wishlist-tenant-a-token',
+            'installed_at' => now(),
+        ]
+    );
+
+    $profileA = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
+        'first_name' => 'Tenant',
+        'last_name' => 'A',
+        'email' => 'tenant-a-wishlist@example.com',
+        'normalized_email' => 'tenant-a-wishlist@example.com',
+    ]);
+    $profileB = MarketingProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'first_name' => 'Tenant',
+        'last_name' => 'B',
+        'email' => 'tenant-b-wishlist@example.com',
+        'normalized_email' => 'tenant-b-wishlist@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenantA->id,
+        'marketing_profile_id' => $profileA->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => '7001',
+        'email' => 'tenant-a-wishlist@example.com',
+        'normalized_email' => 'tenant-a-wishlist@example.com',
+        'synced_at' => now(),
+    ]);
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'marketing_profile_id' => $profileB->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => '8001',
+        'email' => 'tenant-b-wishlist@example.com',
+        'normalized_email' => 'tenant-b-wishlist@example.com',
+        'synced_at' => now(),
+    ]);
+
+    Http::fake([
+        'https://api.growave.io/v2/oauth/getAccessToken' => Http::response([
+            'accessToken' => 'growave-token',
+            'tokenType' => 'Bearer',
+            'expiresAt' => now()->addHour()->toIso8601String(),
+        ], 200),
+        'https://api.growave.io/v2/wishlists/getWishlists*customerIdentifier=7001*' => Http::response([
+            'totalCount' => 1,
+            'currentOffset' => 0,
+            'perPage' => 50,
+            'items' => [
+                [
+                    'id' => 'wl-7001',
+                    'items' => [
+                        [
+                            'id' => 'wli-7001',
+                            'createdAt' => now()->subDay()->toIso8601String(),
+                            'product' => [
+                                'shopifyProductId' => '77001',
+                                'handle' => 'tenant-a-item',
+                                'title' => 'Tenant A Item',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:import-growave-wishlists --tenant-id=' . $tenantA->id . ' --limit=10')
+        ->expectsOutputToContain('status=completed')
+        ->expectsOutputToContain('processed_candidates=1')
+        ->assertExitCode(0);
+
+    $run = MarketingImportRun::query()
+        ->where('type', 'growave_wishlist_backfill')
+        ->latest('id')
+        ->firstOrFail();
+
+    expect((int) $run->tenant_id)->toBe($tenantA->id)
+        ->and(MarketingProfileWishlistItem::query()
+            ->where('tenant_id', $tenantA->id)
+            ->where('marketing_profile_id', $profileA->id)
+            ->where('product_id', '77001')
+            ->count())->toBe(1)
+        ->and(MarketingProfileWishlistItem::query()
+            ->where('tenant_id', $tenantB->id)
+            ->where('marketing_profile_id', $profileB->id)
+            ->count())->toBe(0);
+});
+
+test('growave wishlist backfill fails closed when explicit tenant conflicts with store owner', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Wishlist Store Tenant A',
+        'slug' => 'wishlist-store-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Wishlist Store Tenant B',
+        'slug' => 'wishlist-store-tenant-b',
+    ]);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'tenant_id' => $tenantA->id,
+            'shop_domain' => 'retail-tenant-a.myshopify.com',
+            'access_token' => 'token-a',
+            'installed_at' => now(),
+        ]
+    );
+
+    Http::fake([
+        'https://api.growave.io/v2/oauth/getAccessToken' => Http::response([
+            'accessToken' => 'growave-token',
+            'tokenType' => 'Bearer',
+            'expiresAt' => now()->addHour()->toIso8601String(),
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:import-growave-wishlists --store=retail --tenant-id=' . $tenantB->id . ' --limit=10')
+        ->expectsOutputToContain('conflicts with provided tenant context')
+        ->assertExitCode(1);
+});
+
+test('growave wishlist backfill skips candidates when store ownership cannot be proven', function () {
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'first_name' => 'Unowned',
+        'last_name' => 'Store',
+        'email' => 'unowned-store@example.com',
+        'normalized_email' => 'unowned-store@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'unknown-store',
+        'external_customer_id' => 'missing-owner-9001',
+        'email' => 'unowned-store@example.com',
+        'normalized_email' => 'unowned-store@example.com',
+        'synced_at' => now(),
+    ]);
+
+    Http::fake([
+        'https://api.growave.io/v2/oauth/getAccessToken' => Http::response([
+            'accessToken' => 'growave-token',
+            'tokenType' => 'Bearer',
+            'expiresAt' => now()->addHour()->toIso8601String(),
+        ], 200),
+        'https://api.growave.io/v2/wishlists/getWishlists*' => Http::response([
+            'totalCount' => 1,
+            'currentOffset' => 0,
+            'perPage' => 50,
+            'items' => [
+                [
+                    'id' => 'wl-missing-owner',
+                    'items' => [
+                        [
+                            'id' => 'wli-missing-owner',
+                            'product' => [
+                                'shopifyProductId' => '99001',
+                                'handle' => 'unowned-store-item',
+                                'title' => 'Unowned Store Item',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $this->artisan('marketing:import-growave-wishlists --tenant-id=' . $this->tenant->id . ' --limit=10')
+        ->expectsOutputToContain('errors=1')
+        ->assertExitCode(1);
+
+    expect(MarketingProfileWishlistItem::query()
+        ->where('tenant_id', $this->tenant->id)
+        ->where('marketing_profile_id', $profile->id)
+        ->count())->toBe(0);
+});

@@ -16,7 +16,8 @@ class MarketingSmsExecutionService
         protected TwilioSmsService $twilioSmsService,
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected MarketingTenantOwnershipService $ownershipService
     ) {
     }
 
@@ -30,6 +31,9 @@ class MarketingSmsExecutionService
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
+        $requestedTenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $strict = $this->ownershipService->strictModeEnabled();
+        $tenantId = $requestedTenantId ?? ($strict ? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id) : null);
         $recipientIds = collect((array) ($options['recipient_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id) => $id > 0)
@@ -37,12 +41,36 @@ class MarketingSmsExecutionService
             ->values()
             ->all();
 
+        if ($strict && $tenantId === null) {
+            return [
+                'processed' => 0,
+                'sent' => 0,
+                'failed' => 0,
+                'skipped' => 0,
+                'dry_run' => 0,
+            ];
+        }
+
+        if ($strict && $tenantId !== null && ! $this->ownershipService->campaignOwnedByTenant((int) $campaign->id, $tenantId)) {
+            return [
+                'processed' => 0,
+                'sent' => 0,
+                'failed' => 0,
+                'skipped' => 0,
+                'dry_run' => 0,
+            ];
+        }
+
         $query = MarketingCampaignRecipient::query()
             ->where('campaign_id', $campaign->id)
             ->where('channel', 'sms')
             ->whereIn('status', ['approved', 'scheduled'])
             ->orderBy('scheduled_for')
             ->orderBy('id');
+
+        if ($strict && $tenantId !== null) {
+            $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
+        }
 
         if ($recipientIds !== []) {
             $query->whereIn('id', $recipientIds);
@@ -66,6 +94,7 @@ class MarketingSmsExecutionService
                 'dry_run' => $dryRun,
                 'actor_id' => $actorId,
                 'sender_key' => $senderKey,
+                'tenant_id' => $tenantId,
             ]);
             $summary['processed']++;
 
@@ -109,6 +138,8 @@ class MarketingSmsExecutionService
         $overrideWindows = (bool) ($options['override_windows'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
+        $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $strict = $this->ownershipService->strictModeEnabled();
 
         $recipient->loadMissing(['campaign', 'profile', 'variant']);
         $campaign = $recipient->campaign;
@@ -119,6 +150,35 @@ class MarketingSmsExecutionService
                 'outcome' => 'failed',
                 'reason' => 'missing_campaign_or_profile',
                 'recipient_id' => $recipient->id,
+                'dry_run' => $dryRun,
+            ];
+        }
+
+        if ($strict && $tenantId === null) {
+            $tenantId = $this->positiveInt($profile->tenant_id)
+                ?? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id);
+        }
+
+        if ($strict && $tenantId === null) {
+            return [
+                'outcome' => 'skipped',
+                'reason' => 'tenant_context_required',
+                'recipient_id' => $recipient->id,
+                'status' => $recipient->status,
+                'dry_run' => $dryRun,
+            ];
+        }
+
+        if (
+            $strict
+            && $tenantId !== null
+            && (int) ($profile->tenant_id ?? 0) !== $tenantId
+        ) {
+            return [
+                'outcome' => 'skipped',
+                'reason' => 'foreign_tenant_recipient',
+                'recipient_id' => $recipient->id,
+                'status' => $recipient->status,
                 'dry_run' => $dryRun,
             ];
         }
@@ -566,5 +626,16 @@ class MarketingSmsExecutionService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $parsed = (int) $value;
+
+        return $parsed > 0 ? $parsed : null;
     }
 }

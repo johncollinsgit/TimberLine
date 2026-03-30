@@ -10,15 +10,23 @@ use Illuminate\Console\Command;
 class MarketingScanUnresolvedMarketingIssues extends Command
 {
     protected $signature = 'marketing:scan-unresolved-marketing-issues
+        {--tenant-id= : Restrict execution to a tenant id (required)}
         {--limit=2000 : Max issued redemptions to scan}
         {--platform=all : all|shopify|square}
         {--dry-run : Evaluate without writing issue rows}
-        {--verbose : Print per-row detail}';
+        {--show-rows : Print per-row detail}';
 
     protected $description = 'Scan and materialize unresolved marketing reconciliation issues for operational dashboard review.';
 
     public function handle(MarketingStorefrontEventLogger $logger): int
     {
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Unresolved issue scan is tenant-scoped in MT-2C.');
+
+            return self::FAILURE;
+        }
+
         $limit = max(1, (int) $this->option('limit'));
         $platform = strtolower(trim((string) $this->option('platform')));
         if (! in_array($platform, ['all', 'shopify', 'square'], true)) {
@@ -28,10 +36,11 @@ class MarketingScanUnresolvedMarketingIssues extends Command
         }
 
         $dryRun = (bool) $this->option('dry-run');
-        $verbose = (bool) $this->option('verbose');
+        $showRows = (bool) $this->option('show-rows');
 
         $issued = CandleCashRedemption::query()
             ->where('status', 'issued')
+            ->whereHas('profile', fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($platform !== 'all', fn ($query) => $query->where('platform', $platform))
             ->orderBy('issued_at')
             ->orderBy('id')
@@ -55,6 +64,7 @@ class MarketingScanUnresolvedMarketingIssues extends Command
                     'issue_type' => 'issued_not_reconciled',
                     'source_surface' => 'ingestion',
                     'endpoint' => 'reward_reconciliation_scan',
+                    'tenant_id' => $tenantId,
                     'marketing_profile_id' => (int) $row->marketing_profile_id,
                     'candle_cash_redemption_id' => (int) $row->id,
                     'source_type' => 'candle_cash_redemption',
@@ -70,25 +80,27 @@ class MarketingScanUnresolvedMarketingIssues extends Command
             }
 
             $summary['pending_created_or_updated']++;
-            if ($verbose) {
+            if ($showRows) {
                 $this->line('pending_issue: redemption_id=' . $row->id . ' platform=' . ($row->platform ?: 'n/a'));
             }
         }
 
         $summary['open_events'] = (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
             ->where('resolution_status', 'open')
             ->whereIn('status', ['error', 'verification_required', 'pending'])
             ->count();
         $summary['resolved_events'] = (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
             ->where('resolution_status', 'resolved')
             ->count();
 
         foreach ($summary as $key => $value) {
             $this->line($key . '=' . (int) $value);
         }
+        $this->line('tenant_id=' . $tenantId);
         $this->line('mode=' . ($dryRun ? 'dry-run' : 'live'));
 
         return self::SUCCESS;
     }
 }
-

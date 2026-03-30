@@ -8,6 +8,7 @@ use App\Models\CandleCashTransaction;
 use App\Services\Marketing\CandleCashService;
 use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 
 class ShopifyEmbeddedDashboardCandleCashValueProvider
 {
@@ -19,9 +20,18 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
     /**
      * @return array<string,mixed>
      */
-    public function snapshot(CarbonImmutable $from, CarbonImmutable $to): array
+    public function snapshot(CarbonImmutable $from, CarbonImmutable $to, ?int $tenantId): array
     {
         $redeemedRows = CandleCashRedemption::query()
+            ->whereHas('profile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->where('status', 'redeemed')
             ->whereBetween('redeemed_at', [$from, $to])
             ->get(['id', 'candle_cash_spent', 'redeemed_at', 'external_order_source', 'external_order_id']);
@@ -30,6 +40,15 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
         $redeemedAmount = round($this->candleCashService->amountFromPoints($redeemedCandleCash), 2);
 
         $giftRows = CandleCashTransaction::query()
+            ->whereHas('profile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->where('type', 'gift')
             ->whereBetween('created_at', [$from, $to])
             ->get(['id', 'candle_cash_delta', 'created_at']);
@@ -38,6 +57,15 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
         $giftAmount = round($this->candleCashService->amountFromPoints($giftCandleCash), 2);
 
         $birthdayRows = BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', function (EloquentBuilder $query) use ($tenantId): void {
+                if ($tenantId === null) {
+                    $query->whereNull('marketing_profiles.tenant_id');
+
+                    return;
+                }
+
+                $query->where('marketing_profiles.tenant_id', $tenantId);
+            })
             ->whereBetween('issued_at', [$from, $to])
             ->get(['id', 'reward_type', 'reward_value', 'candle_cash_awarded', 'issued_at']);
 
@@ -54,7 +82,7 @@ class ShopifyEmbeddedDashboardCandleCashValueProvider
         return [
             'provider' => [
                 'key' => 'discount_redemptions',
-                'label' => 'Discount-based Candle Cash',
+                'label' => 'Discount-based rewards',
                 'supportedModels' => [
                     'discount_based',
                     'gift_card_style',

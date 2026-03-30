@@ -33,14 +33,15 @@ class MarketingAttributionCoverageComparisonReport
      */
     public function report(array $filters = []): array
     {
+        $tenantId = $this->positiveInt($filters['tenant_id'] ?? null);
         $since = $this->dateValue($filters['since'] ?? null);
         $until = $this->dateValue($filters['until'] ?? null);
         $store = $this->stringValue($filters['store'] ?? null);
         $campaignChannel = $this->stringValue($filters['campaign_channel'] ?? null);
         $chunk = max(25, (int) ($filters['chunk'] ?? 500));
 
-        $orderQuery = $this->ordersQuery($since, $until, $store);
-        $conversionQuery = $this->conversionsQuery($since, $until, $campaignChannel, $store);
+        $orderQuery = $this->ordersQuery($since, $until, $store, $tenantId);
+        $conversionQuery = $this->conversionsQuery($since, $until, $campaignChannel, $store, $tenantId);
 
         $totalOrders = (clone $orderQuery)->count();
         $ordersWithAttribution = (clone $orderQuery)->whereNotNull('attribution_meta')->count();
@@ -56,6 +57,7 @@ class MarketingAttributionCoverageComparisonReport
             ->values();
 
         $orders = Order::query()
+            ->forTenantId($tenantId)
             ->whereIn('id', $linkedOrderIds->all())
             ->get(['id', 'shopify_store_key', 'shopify_store', 'attribution_meta'])
             ->keyBy('id');
@@ -211,6 +213,7 @@ class MarketingAttributionCoverageComparisonReport
 
         return [
             'scope' => [
+                'tenant_id' => $tenantId,
                 'since' => $since?->toIso8601String(),
                 'until' => $until?->toIso8601String(),
                 'store' => $store,
@@ -251,9 +254,10 @@ class MarketingAttributionCoverageComparisonReport
         ];
     }
 
-    protected function ordersQuery(?CarbonImmutable $since, ?CarbonImmutable $until, ?string $store)
+    protected function ordersQuery(?CarbonImmutable $since, ?CarbonImmutable $until, ?string $store, ?int $tenantId)
     {
         return Order::query()
+            ->forTenantId($tenantId)
             ->when($since, fn ($query) => $query->where('ordered_at', '>=', $since))
             ->when($until, fn ($query) => $query->where('ordered_at', '<=', $until))
             ->when($store, function ($query, string $store): void {
@@ -264,18 +268,28 @@ class MarketingAttributionCoverageComparisonReport
             });
     }
 
-    protected function conversionsQuery(?CarbonImmutable $since, ?CarbonImmutable $until, ?string $campaignChannel, ?string $store)
+    protected function conversionsQuery(
+        ?CarbonImmutable $since,
+        ?CarbonImmutable $until,
+        ?string $campaignChannel,
+        ?string $store,
+        ?int $tenantId
+    )
     {
         return MarketingCampaignConversion::query()
+            ->when($tenantId !== null, function ($query) use ($tenantId): void {
+                $query->whereHas('profile', fn ($profileQuery) => $profileQuery->where('tenant_id', $tenantId));
+            })
             ->when($since, fn ($query) => $query->where('converted_at', '>=', $since))
             ->when($until, fn ($query) => $query->where('converted_at', '<=', $until))
             ->when($campaignChannel, function ($query, string $campaignChannel): void {
                 $query->whereHas('campaign', fn ($campaignQuery) => $campaignQuery->where('channel', $campaignChannel));
             })
-            ->when($store, function ($query, string $store): void {
-                $query->where(function ($scoped) use ($store): void {
+            ->when($store, function ($query, string $store) use ($tenantId): void {
+                $query->where(function ($scoped) use ($store, $tenantId): void {
                     $scoped->where('source_type', 'order')
                         ->whereIn('source_id', Order::query()
+                            ->forTenantId($tenantId)
                             ->where(function ($nested) use ($store): void {
                                 $nested->where('shopify_store_key', $store)
                                     ->orWhere('shopify_store', $store);
@@ -445,5 +459,16 @@ class MarketingAttributionCoverageComparisonReport
         }
 
         return trim((string) $value) === '';
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $tenantId = (int) $value;
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 }

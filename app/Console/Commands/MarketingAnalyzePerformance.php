@@ -13,7 +13,7 @@ class MarketingAnalyzePerformance extends Command
         {--window-start= : Optional window start datetime}
         {--window-end= : Optional window end datetime}
         {--dry-run : Compute without storing snapshot or insight rows}
-        {--verbose : Output per-row detail}';
+        {--show-details : Output per-row detail}';
 
     protected $description = 'Analyze campaign performance across SMS/email deliveries and conversion outcomes.';
 
@@ -25,7 +25,7 @@ class MarketingAnalyzePerformance extends Command
         $windowStart = $this->option('window-start');
         $windowEnd = $this->option('window-end');
         $dryRun = (bool) $this->option('dry-run');
-        $verbose = (bool) $this->option('verbose');
+        $showDetails = (bool) $this->option('show-details');
 
         $snapshot = $performanceAnalytics->snapshotVariantPerformance([
             'campaign_id' => is_numeric($campaignId) ? (int) $campaignId : null,
@@ -54,7 +54,7 @@ class MarketingAnalyzePerformance extends Command
             (int) $timing['skipped']
         ));
 
-        if ($verbose) {
+        if ($showDetails) {
             foreach ((array) $snapshot['rows'] as $row) {
                 $this->line(json_encode($row));
             }
@@ -67,4 +67,3 @@ class MarketingAnalyzePerformance extends Command
         return self::SUCCESS;
     }
 }
-

@@ -18,14 +18,19 @@
     );
     $embeddedNavUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
     $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
+    $displayLabels = is_array($appNavigation['displayLabels'] ?? null) ? $appNavigation['displayLabels'] : [];
+    $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+    if ($rewardsLabel === '') {
+        $rewardsLabel = 'Rewards';
+    }
     $moduleChecklist = \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates);
+    $title = filled($headline) ? (string) $headline : 'Forestry Backstage';
 @endphp
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    @include('partials.head', ['title' => $title])
     @if($authorized && filled($shopifyApiKey))
         <meta name="shopify-api-key" content="{{ $shopifyApiKey }}">
     @endif
@@ -39,33 +44,18 @@
     @if($authorized && filled($shopifyApiKey) && filled($host))
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
     @endif
-
-    <style>
-        body {
-            margin: 0;
-            font-family: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #eef1ec;
-            min-height: 100vh;
-        }
-
-        button,
-        input,
-        select,
-        textarea {
-            font: inherit;
-        }
-    </style>
 </head>
 <body>
     @if($authorized && filled($shopifyApiKey) && filled($host))
         <s-app-nav>
             <s-link href="{{ $embeddedNavUrl(route('home', [], false)) }}" rel="home">Home</s-link>
             <s-link href="{{ $embeddedNavUrl(route('shopify.app', [], false)) }}">Dashboard</s-link>
-            <s-link href="{{ $embeddedNavUrl(route('shopify.app.rewards', [], false)) }}">Rewards</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app.rewards', [], false)) }}">{{ $rewardsLabel }}</s-link>
             <s-link href="{{ $embeddedNavUrl(route('shopify.app.customers.manage', [], false)) }}">Customers</s-link>
             <s-link href="{{ $embeddedNavUrl(route('shopify.app.settings', [], false)) }}">Settings</s-link>
         </s-app-nav>
     @endif
+
     <x-app-shell
         :navigation="$appNavigation"
         :page-title="$headline"

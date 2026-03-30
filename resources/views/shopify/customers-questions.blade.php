@@ -9,59 +9,45 @@
     :app-navigation="$appNavigation"
     :customer-subnav="$pageSubnav"
     :page-actions="$pageActions"
+    :merchant-journey="$merchantJourney ?? []"
 >
-    <style>
-        .customers-questions-grid {
-            display: grid;
-            gap: 14px;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        }
+    @php
+        $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
+        $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
 
-        .customers-question-card {
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 16px 16px 14px;
-            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
-        }
-
-        .customers-question-card h3 {
-            margin: 0;
-            font-size: 14px;
-            font-weight: 640;
-            color: rgba(15, 23, 42, 0.9);
-        }
-
-        .customers-question-card p {
-            margin: 8px 0 0;
-            font-size: 13px;
-            line-height: 1.6;
-            color: rgba(15, 23, 42, 0.64);
-        }
-    </style>
+        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+            request(),
+            filled($host ?? null) ? (string) $host : null
+        );
+        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+    @endphp
 
     <section class="customers-surface">
-        <h2>Questions</h2>
-        <p>
-            Keep customer-facing rewards support organized in one place. This section is wired now so live FAQs,
-            issue templates, and known resolutions can be added without changing the navigation architecture again.
-        </p>
+        <h2>Customer Questions</h2>
+        <p>Keep support answers consistent so your team can respond quickly and confidently across customer channels.</p>
+        <div class="start-here-meta">
+            <span class="start-here-pill">Import · {{ $importSummary['label'] ?? 'Not started' }}</span>
+            <span class="start-here-pill">Goal · Faster support replies</span>
+        </div>
     </section>
 
-    <section class="customers-questions-grid" aria-label="Customer questions sections">
-        <article class="customers-question-card">
-            <h3>Common reward questions</h3>
-            <p>
-                This panel will list the top operational questions customers ask about Candle Cash earning, redeeming,
-                and verification.
-            </p>
+    <section class="plans-addon-grid" aria-label="Customer questions guidance cards">
+        <article class="plans-card">
+            <h3>Most common customer questions</h3>
+            <p>Use this section for recurring questions about enrollment, rewards balance, redemptions, and eligibility.</p>
+            <a class="plans-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', [], false)) }}">Open customer profiles</a>
         </article>
-        <article class="customers-question-card">
-            <h3>Support workflows</h3>
-            <p>
-                Escalation paths and internal response playbooks will be surfaced here once the underlying data
-                contracts are finalized.
-            </p>
+
+        <article class="plans-card">
+            <h3>Response playbooks</h3>
+            <p>Keep templated answer paths for common situations so support outcomes stay consistent.</p>
+            <a class="plans-link" href="{{ $embeddedUrl(route('shopify.app.start', [], false)) }}">Review setup checklist</a>
+        </article>
+
+        <article class="plans-card">
+            <h3>Escalation path</h3>
+            <p>Define when customer issues should move from standard support to a deeper profile review.</p>
+            <a class="plans-link" href="{{ $embeddedUrl(route('shopify.app.customers.activity', [], false)) }}">Open activity workspace</a>
         </article>
     </section>
 </x-shopify.customers-layout>

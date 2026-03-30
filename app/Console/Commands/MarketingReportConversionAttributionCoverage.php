@@ -10,6 +10,7 @@ use Throwable;
 class MarketingReportConversionAttributionCoverage extends Command
 {
     protected $signature = 'marketing:report-conversion-attribution-coverage
+        {--tenant-id= : Restrict to a tenant id (required)}
         {--since= : Only include conversions on or after this datetime}
         {--until= : Only include conversions on or before this datetime}
         {--campaign-channel= : Restrict to one campaign channel}
@@ -19,6 +20,13 @@ class MarketingReportConversionAttributionCoverage extends Command
 
     public function handle(MarketingConversionAttributionCoverageReport $reporter): int
     {
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Conversion attribution coverage reporting is tenant-scoped in MT-2C.');
+
+            return self::FAILURE;
+        }
+
         $since = $this->parseDateOption('since');
         $until = $this->parseDateOption('until');
         $campaignChannel = $this->stringOption('campaign-channel');
@@ -27,11 +35,13 @@ class MarketingReportConversionAttributionCoverage extends Command
         $report = $reporter->report([
             'since' => $since?->toIso8601String(),
             'until' => $until?->toIso8601String(),
+            'tenant_id' => $tenantId,
             'campaign_channel' => $campaignChannel,
         ]);
 
         $this->line('since=' . ($report['scope']['since'] ?? 'none'));
         $this->line('until=' . ($report['scope']['until'] ?? 'none'));
+        $this->line('tenant_id=' . ($report['scope']['tenant_id'] ?? 'none'));
         $this->line('campaign_channel=' . ($report['scope']['campaign_channel'] ?? 'any'));
 
         foreach ((array) $report['totals'] as $key => $value) {

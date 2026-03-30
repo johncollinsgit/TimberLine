@@ -104,7 +104,7 @@ class ShopifyEmbeddedCustomerMessagingService
 
             return [
                 'ok' => false,
-                'message' => 'SMS not sent: the Candle Cash rewards link could not be prepared.',
+                'message' => 'SMS not sent: the rewards link could not be prepared.',
             ];
         }
 
@@ -123,6 +123,6 @@ class ShopifyEmbeddedCustomerMessagingService
             . '/pages/rewards';
         $shortened = $this->linkShortenerService->shortenUrl($destinationUrl, $actorId);
 
-        return "Modern Forestry Just Rewarded you {$rewardValue} in Candle Cash! Click To Redeem! {$shortened['short_url']} Stop to Opt out";
+        return "Modern Forestry just added {$rewardValue} in rewards credit to your account. Redeem here: {$shortened['short_url']} Reply STOP to opt out.";
     }
 }

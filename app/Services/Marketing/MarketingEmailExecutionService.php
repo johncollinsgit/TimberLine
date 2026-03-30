@@ -13,7 +13,8 @@ class MarketingEmailExecutionService
     public function __construct(
         protected SendGridEmailService $sendGridEmailService,
         protected MarketingTemplateRenderer $templateRenderer,
-        protected MarketingEmailReadiness $emailReadiness
+        protected MarketingEmailReadiness $emailReadiness,
+        protected MarketingTenantOwnershipService $ownershipService
     ) {
     }
 
@@ -26,6 +27,9 @@ class MarketingEmailExecutionService
         $limit = max(1, (int) ($options['limit'] ?? 250));
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $requestedTenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $strict = $this->ownershipService->strictModeEnabled();
+        $tenantId = $requestedTenantId ?? ($strict ? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id) : null);
         $recipientIds = collect((array) ($options['recipient_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id) => $id > 0)
@@ -33,12 +37,36 @@ class MarketingEmailExecutionService
             ->values()
             ->all();
 
+        if ($strict && $tenantId === null) {
+            return [
+                'processed' => 0,
+                'sent' => 0,
+                'failed' => 0,
+                'skipped' => 0,
+                'dry_run' => 0,
+            ];
+        }
+
+        if ($strict && $tenantId !== null && ! $this->ownershipService->campaignOwnedByTenant((int) $campaign->id, $tenantId)) {
+            return [
+                'processed' => 0,
+                'sent' => 0,
+                'failed' => 0,
+                'skipped' => 0,
+                'dry_run' => 0,
+            ];
+        }
+
         $query = MarketingCampaignRecipient::query()
             ->where('campaign_id', $campaign->id)
             ->where('channel', 'email')
             ->whereIn('status', ['approved', 'scheduled'])
             ->orderBy('scheduled_for')
             ->orderBy('id');
+
+        if ($strict && $tenantId !== null) {
+            $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
+        }
 
         if ($recipientIds !== []) {
             $query->whereIn('id', $recipientIds);
@@ -56,6 +84,7 @@ class MarketingEmailExecutionService
             $result = $this->sendRecipient($recipient, [
                 'dry_run' => $dryRun,
                 'actor_id' => $actorId,
+                'tenant_id' => $tenantId,
             ]);
             $summary['processed']++;
             if (($result['outcome'] ?? '') === 'sent') {
@@ -94,6 +123,9 @@ class MarketingEmailExecutionService
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $forceRetry = (bool) ($options['force_retry'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $strict = $this->ownershipService->strictModeEnabled();
+        $dispatchContext = null;
 
         $recipient->loadMissing(['campaign', 'profile', 'variant']);
         $campaign = $recipient->campaign;
@@ -101,6 +133,39 @@ class MarketingEmailExecutionService
 
         if (! $campaign || ! $profile) {
             return ['outcome' => 'failed', 'reason' => 'missing_campaign_or_profile', 'dry_run' => $dryRun];
+        }
+
+        if ($strict && $tenantId === null) {
+            $dispatchContext = $this->resolveProfileDispatchContext($profile);
+            $tenantId = $this->positiveInt($dispatchContext['tenant_id'] ?? null)
+                ?? $this->positiveInt($profile->tenant_id)
+                ?? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id);
+        }
+
+        if ($strict && $tenantId === null) {
+            return [
+                'outcome' => 'skipped',
+                'reason' => 'tenant_context_required',
+                'dry_run' => $dryRun,
+            ];
+        }
+
+        $profileOwnerTenantId = $this->positiveInt($profile->tenant_id);
+        if ($profileOwnerTenantId === null && $tenantId !== null) {
+            $dispatchContext = is_array($dispatchContext) ? $dispatchContext : $this->resolveProfileDispatchContext($profile);
+            $profileOwnerTenantId = $this->positiveInt($dispatchContext['tenant_id'] ?? null);
+        }
+
+        if (
+            $strict
+            && $tenantId !== null
+            && $profileOwnerTenantId !== $tenantId
+        ) {
+            return [
+                'outcome' => 'skipped',
+                'reason' => 'foreign_tenant_recipient',
+                'dry_run' => $dryRun,
+            ];
         }
 
         if ($recipient->channel !== 'email' || strtolower((string) $campaign->channel) !== 'email') {
@@ -138,17 +203,17 @@ class MarketingEmailExecutionService
         $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->name ?: 'Timberline Update'));
         $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
-        $dispatchContext = $this->resolveProfileDispatchContext($profile);
-        $tenantId = $dispatchContext['tenant_id'];
+        $dispatchContext = is_array($dispatchContext) ? $dispatchContext : $this->resolveProfileDispatchContext($profile);
+        $dispatchTenantId = $dispatchContext['tenant_id'];
         $storeKey = $dispatchContext['store_key'];
         $storeContext = $dispatchContext['store_context'];
-        $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId, [
+        $providerContext = $this->emailReadiness->providerContextForDelivery($dispatchTenantId, [
             'store_context' => $storeContext,
             'store_key' => $storeKey,
         ]);
-        $tenantId = $tenantId ?? $this->positiveInt($providerContext['tenant_id'] ?? null);
-        if ($tenantId !== null) {
-            $storeContext['tenant_id'] = $tenantId;
+        $dispatchTenantId = $dispatchTenantId ?? $this->positiveInt($providerContext['tenant_id'] ?? null);
+        if ($dispatchTenantId !== null) {
+            $storeContext['tenant_id'] = $dispatchTenantId;
         }
         $resolvedProvider = trim((string) ($providerContext['provider'] ?? 'sendgrid')) ?: 'sendgrid';
 
@@ -156,7 +221,7 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $tenantId, $storeKey): MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey): MarketingEmailDelivery {
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -166,7 +231,7 @@ class MarketingEmailExecutionService
             return MarketingEmailDelivery::query()->create([
                 'marketing_campaign_recipient_id' => $recipient->id,
                 'marketing_profile_id' => $profile->id,
-                'tenant_id' => $tenantId,
+                'tenant_id' => $dispatchTenantId,
                 'provider' => $resolvedProvider,
                 'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                 'template_key' => $recipient->variant?->variant_key,
@@ -177,7 +242,7 @@ class MarketingEmailExecutionService
                     'provider_resolution' => $providerContext,
                 ],
                 'metadata' => [
-                    'tenant_id' => $tenantId,
+                    'tenant_id' => $dispatchTenantId,
                     'customer_id' => $profile->id,
                     'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                     'template_key' => $recipient->variant?->variant_key,
@@ -194,7 +259,7 @@ class MarketingEmailExecutionService
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
             'dry_run' => $dryRun,
-            'tenant_id' => $tenantId,
+            'tenant_id' => $dispatchTenantId,
             'store_context' => $storeContext,
             'store_key' => $storeKey,
             'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',

@@ -21,7 +21,27 @@ class CandleCashOrderEventService
      */
     public function handle(Order $order, array $identityContext = []): void
     {
-        $profile = $this->profileForOrder($order);
+        $tenantId = is_numeric($identityContext['tenant_id'] ?? null) && (int) ($identityContext['tenant_id'] ?? 0) > 0
+            ? (int) $identityContext['tenant_id']
+            : (is_numeric($order->tenant_id ?? null) && (int) $order->tenant_id > 0 ? (int) $order->tenant_id : null);
+
+        if ($tenantId === null) {
+            $this->eventLogger->log('candle_cash_order_event_skipped_missing_tenant', [
+                'status' => 'error',
+                'issue_type' => 'tenant_context_missing',
+                'source_surface' => 'ingestion',
+                'endpoint' => 'shopify_order_ingest',
+                'source_type' => 'order',
+                'source_id' => (string) $order->id,
+                'meta' => [
+                    'shopify_order_id' => $order->shopify_order_id ? (string) $order->shopify_order_id : null,
+                ],
+            ]);
+
+            return;
+        }
+
+        $profile = $this->profileForOrder($order, $tenantId);
 
         if ($profile) {
             $this->awardSecondOrderTask($profile, $order);
@@ -32,20 +52,39 @@ class CandleCashOrderEventService
         if ($referralCode !== '') {
             $this->referralService->qualifyFromOrder($order, $profile, [
                 'referral_code' => $referralCode,
+                'tenant_id' => $tenantId,
                 'attribution_meta' => (array) ($identityContext['attribution_meta'] ?? []),
             ]);
         }
     }
 
-    protected function profileForOrder(Order $order): ?MarketingProfile
+    protected function profileForOrder(Order $order, int $tenantId): ?MarketingProfile
     {
+        $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown') . ':' . $order->shopify_order_id;
+
         $link = MarketingProfileLink::query()
             ->with('marketingProfile')
-            ->where('source_type', 'order')
-            ->where('source_id', (string) $order->id)
+            ->where(function ($query) use ($order, $shopifySourceId): void {
+                $query->where(function ($nested) use ($order): void {
+                    $nested->where('source_type', 'order')
+                        ->where('source_id', (string) $order->id);
+                });
+
+                if ($order->shopify_order_id) {
+                    $query->orWhere(function ($nested) use ($shopifySourceId): void {
+                        $nested->where('source_type', 'shopify_order')
+                            ->where('source_id', $shopifySourceId);
+                    });
+                }
+            })
             ->first();
 
-        return $link?->marketingProfile;
+        $profile = $link?->marketingProfile;
+        if (! $profile || (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            return null;
+        }
+
+        return $profile;
     }
 
     protected function awardSecondOrderTask(MarketingProfile $profile, Order $order): void

@@ -20,9 +20,10 @@ class MarketingImportGrowaveWishlists extends Command
         {--page-delay-ms=150 : Milliseconds to pause between paginated API requests}
         {--request-min-interval-ms= : Override minimum milliseconds between Growave API requests}
         {--request-jitter-ms= : Override request pacing jitter in milliseconds}
-        {--retry-attempts= : Override Growave API retry attempts}
+    {--retry-attempts= : Override Growave API retry attempts}
         {--backoff-base-ms= : Override Growave API retry backoff base milliseconds}
-        {--backoff-max-ms= : Override Growave API retry backoff max milliseconds}';
+        {--backoff-max-ms= : Override Growave API retry backoff max milliseconds}
+        {--tenant-id= : Optional tenant ID when --store is not provided}';
 
     protected $description = 'Backfill legacy Growave wishlist data into canonical marketing_profile_wishlist_items rows.';
 
@@ -31,23 +32,40 @@ class MarketingImportGrowaveWishlists extends Command
         $latestOnly = $this->option('latest-only');
         $latestOnly = ! in_array(strtolower(trim((string) $latestOnly)), ['0', 'false', 'no'], true);
 
-        $result = $service->backfill([
-            'store' => $this->option('store'),
-            'limit' => $this->optionalInt($this->option('limit')),
-            'profile_id' => $this->optionalInt($this->option('profile-id')),
-            'after_candidate_id' => $this->optionalInt($this->option('after-candidate-id')),
-            'latest_only' => $latestOnly,
-            'dry_run' => (bool) $this->option('dry-run'),
-            'per_page' => max(1, (int) $this->option('per-page')),
-            'max_wishlist_pages' => max(1, (int) $this->option('max-wishlist-pages')),
-            'max_item_pages' => max(1, (int) $this->option('max-item-pages')),
-            'page_delay_ms' => max(0, (int) $this->option('page-delay-ms')),
-            'request_min_interval_ms' => $this->optionalInt($this->option('request-min-interval-ms')),
-            'request_jitter_ms' => $this->optionalInt($this->option('request-jitter-ms')),
-            'retry_attempts' => $this->optionalInt($this->option('retry-attempts')),
-            'backoff_base_ms' => $this->optionalInt($this->option('backoff-base-ms')),
-            'backoff_max_ms' => $this->optionalInt($this->option('backoff-max-ms')),
-        ]);
+        $storeKey = $this->normalizeStoreKey($this->option('store'));
+        $tenantIdOption = $this->option('tenant-id');
+        $tenantId = is_numeric($tenantIdOption) ? (int) $tenantIdOption : null;
+
+        if ($storeKey === null && $tenantId === null) {
+            $this->error('A Shopify store key (--store) or --tenant-id is required for the wishlist backfill.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            $result = $service->backfill([
+                'store' => $storeKey,
+                'tenant_id' => $tenantId,
+                'limit' => $this->optionalInt($this->option('limit')),
+                'profile_id' => $this->optionalInt($this->option('profile-id')),
+                'after_candidate_id' => $this->optionalInt($this->option('after-candidate-id')),
+                'latest_only' => $latestOnly,
+                'dry_run' => (bool) $this->option('dry-run'),
+                'per_page' => max(1, (int) $this->option('per-page')),
+                'max_wishlist_pages' => max(1, (int) $this->option('max-wishlist-pages')),
+                'max_item_pages' => max(1, (int) $this->option('max-item-pages')),
+                'page_delay_ms' => max(0, (int) $this->option('page-delay-ms')),
+                'request_min_interval_ms' => $this->optionalInt($this->option('request-min-interval-ms')),
+                'request_jitter_ms' => $this->optionalInt($this->option('request-jitter-ms')),
+                'retry_attempts' => $this->optionalInt($this->option('retry-attempts')),
+                'backoff_base_ms' => $this->optionalInt($this->option('backoff-base-ms')),
+                'backoff_max_ms' => $this->optionalInt($this->option('backoff-max-ms')),
+            ]);
+        } catch (\Throwable $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
 
         $summary = is_array($result['summary'] ?? null) ? $result['summary'] : [];
 
@@ -105,5 +123,14 @@ class MarketingImportGrowaveWishlists extends Command
 
         return $int > 0 ? $int : null;
     }
-}
 
+    protected function normalizeStoreKey(?string $value): ?string
+    {
+        $storeKey = strtolower(trim((string) ($value ?? '')));
+        if ($storeKey === '' || $storeKey === 'all') {
+            return null;
+        }
+
+        return $storeKey;
+    }
+}

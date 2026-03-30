@@ -22,6 +22,11 @@ class MarketingPreviewCandleCashLifecycle extends Command
     public function handle(CandleCashLifecycleService $service): int
     {
         $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Lifecycle preview is tenant-scoped in MT-2B.');
+
+            return self::FAILURE;
+        }
         $storeKey = $this->stringOption('store');
         $trigger = $this->stringOption('trigger');
         $channel = $this->stringOption('channel');
@@ -103,4 +108,3 @@ class MarketingPreviewCandleCashLifecycle extends Command
         return $value !== '' ? $value : null;
     }
 }
-

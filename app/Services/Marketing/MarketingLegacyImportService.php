@@ -27,6 +27,7 @@ class MarketingLegacyImportService
     public function importFile(
         UploadedFile $file,
         string $type,
+        ?int $tenantId,
         ?int $createdBy = null,
         bool $dryRun = false
     ): array {
@@ -39,6 +40,7 @@ class MarketingLegacyImportService
             path: $path,
             fileName: $file->getClientOriginalName(),
             type: $type,
+            tenantId: $tenantId,
             createdBy: $createdBy,
             dryRun: $dryRun,
         );
@@ -50,6 +52,7 @@ class MarketingLegacyImportService
     public function importPath(
         string $path,
         string $type,
+        ?int $tenantId,
         ?int $createdBy = null,
         bool $dryRun = false
     ): array {
@@ -62,6 +65,7 @@ class MarketingLegacyImportService
             path: $absolutePath,
             fileName: basename($absolutePath),
             type: $type,
+            tenantId: $tenantId,
             createdBy: $createdBy,
             dryRun: $dryRun,
         );
@@ -74,10 +78,12 @@ class MarketingLegacyImportService
         string $path,
         string $fileName,
         string $type,
+        ?int $tenantId,
         ?int $createdBy = null,
         bool $dryRun = false
     ): array {
         $normalizedType = $this->normalizeType($type);
+        $resolvedTenantId = $this->requireTenantId($tenantId);
 
         $run = MarketingImportRun::query()->create([
             'type' => $normalizedType,
@@ -85,6 +91,7 @@ class MarketingLegacyImportService
             'source_label' => $normalizedType === 'yotpo_contacts_import' ? 'yotpo' : 'square_marketing',
             'file_name' => $fileName,
             'started_at' => now(),
+            'tenant_id' => $resolvedTenantId,
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'import',
             ],
@@ -139,7 +146,7 @@ class MarketingLegacyImportService
                 $externalKey = $this->externalKeyForRow($normalizedType, $row, $rowNumber);
 
                 try {
-                    $result = $this->importRow($normalizedType, $row, $externalKey, $dryRun);
+                    $result = $this->importRow($normalizedType, $row, $externalKey, $dryRun, $resolvedTenantId);
                     $summary[$result['status']]++;
                     foreach ([
                         'profiles_created',
@@ -213,16 +220,17 @@ class MarketingLegacyImportService
      *  email_suppressed:int
      * }
      */
-    protected function importRow(string $type, array $row, string $externalKey, bool $dryRun): array
+    protected function importRow(string $type, array $row, string $externalKey, bool $dryRun, int $tenantId): array
     {
         $channelSnapshot = $this->consentSnapshotForRow($type, $row);
-        $identity = $this->identityPayloadForRow($type, $row, $externalKey);
+        $identity = $this->identityPayloadForRow($type, $row, $externalKey, $tenantId);
         $syncResult = $this->profileSyncService->syncExternalIdentity($identity, [
             'dry_run' => $dryRun,
             'review_context' => [
                 'source_label' => $type,
                 'source_id' => $externalKey,
             ],
+            'tenant_id' => $tenantId,
         ]);
 
         $messages = [];
@@ -406,7 +414,7 @@ class MarketingLegacyImportService
      * @param array<string,mixed> $row
      * @return array<string,mixed>
      */
-    protected function identityPayloadForRow(string $type, array $row, string $externalKey): array
+    protected function identityPayloadForRow(string $type, array $row, string $externalKey, int $tenantId): array
     {
         $fullName = $this->nullableString($row['name'] ?? $row['full_name'] ?? null);
         [$splitFirst, $splitLast] = $this->normalizer->splitName($fullName);
@@ -431,6 +439,7 @@ class MarketingLegacyImportService
                 'source_type' => $sourceType,
                 'source_id' => $externalKey,
             ],
+            'tenant_id' => $tenantId,
         ];
     }
 
@@ -695,5 +704,14 @@ class MarketingLegacyImportService
         }
 
         return null;
+    }
+
+    protected function requireTenantId(?int $tenantId): int
+    {
+        if (! is_numeric($tenantId) || (int) $tenantId <= 0) {
+            throw new \RuntimeException('Legacy marketing imports require an explicit tenant context.');
+        }
+
+        return (int) $tenantId;
     }
 }

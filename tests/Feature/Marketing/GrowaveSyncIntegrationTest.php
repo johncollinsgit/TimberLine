@@ -3,10 +3,13 @@
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -16,7 +19,22 @@ beforeEach(function () {
     config()->set('marketing.growave.client_secret', 'test-secret');
     config()->set('marketing.growave.scope', 'read_customer read_review read_reward');
 
+    $tenant = Tenant::query()->create([
+        'name' => 'Growave Sync Tenant',
+        'slug' => 'growave-sync-tenant',
+    ]);
+    $this->tenant = $tenant;
+
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'growave-sync-retail.myshopify.com',
+        'access_token' => 'growave-sync-token',
+        'installed_at' => now(),
+    ]);
+
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Retail',
         'last_name' => 'Customer',
         'email' => 'retail.customer@example.com',
@@ -35,6 +53,7 @@ beforeEach(function () {
     ]);
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'marketing_profile_id' => $profile->id,
         'provider' => 'shopify',
         'integration' => 'shopify_customer',
@@ -308,6 +327,7 @@ test('growave sync falls back to email lookup when the Shopify customer id is no
 
 test('growave sync without limit processes all Shopify-linked customer candidates', function () {
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'first_name' => 'Second',
         'last_name' => 'Retail',
         'email' => 'retail.second@example.com',
@@ -326,6 +346,7 @@ test('growave sync without limit processes all Shopify-linked customer candidate
     ]);
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'marketing_profile_id' => $profile->id,
         'provider' => 'shopify',
         'integration' => 'shopify_customer',
@@ -415,6 +436,7 @@ test('growave sync only-missing mode skips Shopify candidates that already have 
     $profileId = (int) MarketingProfile::query()->value('id');
 
     CustomerExternalProfile::query()->create([
+        'tenant_id' => $this->tenant->id,
         'marketing_profile_id' => $profileId > 0 ? $profileId : null,
         'provider' => 'shopify',
         'integration' => 'growave',
@@ -443,4 +465,63 @@ test('growave sync only-missing mode skips Shopify candidates that already have 
         ->assertExitCode(0);
 
     Http::assertSentCount(0);
+});
+
+test('growave sync resume fails closed when run belongs to another tenant', function () {
+    $tenantB = Tenant::query()->create([
+        'name' => 'Growave Sync Tenant B',
+        'slug' => 'growave-sync-tenant-b',
+    ]);
+
+    $foreignRun = MarketingImportRun::query()->create([
+        'tenant_id' => $tenantB->id,
+        'type' => 'growave_customer_sync',
+        'status' => 'completed',
+        'source_label' => 'growave:retail',
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(5),
+        'summary' => [
+            'store' => 'retail',
+            'checkpoint' => [
+                'last_candidate_id' => 45,
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://api.growave.io/*' => Http::response([], 200),
+    ]);
+
+    $this->artisan('marketing:sync-growave --store=retail --resume-run-id=' . $foreignRun->id)
+        ->expectsOutputToContain('not accessible for tenant')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('growave sync resume fails closed when run has no tenant ownership', function () {
+    $orphanRun = MarketingImportRun::query()->create([
+        'tenant_id' => null,
+        'type' => 'growave_customer_sync',
+        'status' => 'completed',
+        'source_label' => 'growave:retail',
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(5),
+        'summary' => [
+            'store' => 'retail',
+            'checkpoint' => [
+                'last_candidate_id' => 55,
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://api.growave.io/*' => Http::response([], 200),
+    ]);
+
+    $this->artisan('marketing:sync-growave --store=retail --resume-run-id=' . $orphanRun->id)
+        ->expectsOutputToContain('not accessible for tenant')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
 });

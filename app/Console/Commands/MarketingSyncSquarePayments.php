@@ -14,16 +14,29 @@ class MarketingSyncSquarePayments extends Command
         {--cursor= : Resume from a provider cursor}
         {--resume-run-id= : Resume from the checkpoint of a previous square_payments_sync run}
         {--checkpoint-every=100 : Persist run checkpoint every N processed rows}
-        {--dry-run : Preview changes without writing source/profile rows}';
+        {--dry-run : Preview changes without writing source/profile rows}
+        {--tenant-id= : Restrict execution to a tenant id (required)}';
 
     protected $description = 'Sync Square payments into marketing source tables and identity layer.';
 
     public function handle(SquareMarketingSyncService $syncService): int
     {
+        $tenantId = $this->tenantIdOption();
+        if ($tenantId === null) {
+            $this->error('Missing required --tenant-id. Square payment sync is tenant-scoped in MT-2D.');
+            return self::FAILURE;
+        }
+
         $cursor = trim((string) $this->option('cursor')) ?: null;
         $resumeRunId = $this->optionalInt($this->option('resume-run-id'));
         if ($cursor === null && $resumeRunId !== null) {
-            $cursor = $this->checkpointCursorFromRun($resumeRunId, 'square_payments_sync');
+            try {
+                $cursor = $this->checkpointCursorFromRun($resumeRunId, 'square_payments_sync', $tenantId);
+            } catch (\RuntimeException $exception) {
+                $this->error($exception->getMessage());
+
+                return self::FAILURE;
+            }
         }
 
         $result = $syncService->syncPayments([
@@ -32,6 +45,7 @@ class MarketingSyncSquarePayments extends Command
             'cursor' => $cursor,
             'checkpoint_every' => max(1, (int) ($this->optionalInt($this->option('checkpoint-every')) ?? 100)),
             'dry_run' => (bool) $this->option('dry-run'),
+            'tenant_id' => $tenantId,
         ]);
 
         return $this->renderResult($result);
@@ -70,15 +84,16 @@ class MarketingSyncSquarePayments extends Command
         return self::SUCCESS;
     }
 
-    protected function checkpointCursorFromRun(int $runId, string $type): ?string
+    protected function checkpointCursorFromRun(int $runId, string $type, int $tenantId): ?string
     {
-        $run = \App\Models\MarketingImportRun::query()
-            ->where('id', $runId)
-            ->where('type', $type)
-            ->first();
+        $run = \App\Models\MarketingImportRun::tenantScopedRun($runId, $type, $tenantId);
 
         if (! $run) {
-            return null;
+            throw new \RuntimeException("Run {$runId} is not accessible for tenant {$tenantId} ({$type}).");
+        }
+
+        if (! is_numeric($run->tenant_id) || (int) $run->tenant_id <= 0) {
+            throw new \RuntimeException("Run {$runId} is missing tenant ownership and cannot be resumed safely.");
         }
 
         $cursor = data_get($run->summary, 'checkpoint.cursor');
@@ -87,6 +102,20 @@ class MarketingSyncSquarePayments extends Command
 
     protected function optionalInt(mixed $value): ?int
     {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return max(1, (int) $value);
+    }
+
+    protected function tenantIdOption(): ?int
+    {
+        $value = $this->option('tenant-id');
         if ($value === null || $value === '') {
             return null;
         }

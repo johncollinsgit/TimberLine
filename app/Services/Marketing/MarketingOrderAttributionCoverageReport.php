@@ -35,6 +35,7 @@ class MarketingOrderAttributionCoverageReport
      */
     public function report(array $filters = []): array
     {
+        $tenantId = $this->positiveInt($filters['tenant_id'] ?? null);
         $since = $this->dateValue($filters['since'] ?? null);
         $until = $this->dateValue($filters['until'] ?? null);
         $store = $this->stringValue($filters['store'] ?? null);
@@ -42,7 +43,7 @@ class MarketingOrderAttributionCoverageReport
         $withAttributionOnly = (bool) ($filters['with_attribution_only'] ?? false);
         $missingOnly = (bool) ($filters['missing_only'] ?? false);
 
-        $baseQuery = $this->scopedQuery($since, $until, $store);
+        $baseQuery = $this->scopedQuery($since, $until, $store, $tenantId);
         $scopedQuery = $this->applyScopeFilters(clone $baseQuery, $withAttributionOnly, $missingOnly);
 
         $total = (clone $scopedQuery)->count();
@@ -104,6 +105,7 @@ class MarketingOrderAttributionCoverageReport
 
         return [
             'scope' => [
+                'tenant_id' => $tenantId,
                 'since' => $since?->toIso8601String(),
                 'until' => $until?->toIso8601String(),
                 'store' => $store,
@@ -129,9 +131,10 @@ class MarketingOrderAttributionCoverageReport
         ];
     }
 
-    protected function scopedQuery(?CarbonImmutable $since, ?CarbonImmutable $until, ?string $store)
+    protected function scopedQuery(?CarbonImmutable $since, ?CarbonImmutable $until, ?string $store, ?int $tenantId)
     {
         return Order::query()
+            ->forTenantId($tenantId)
             ->when($since, fn ($query) => $query->where('ordered_at', '>=', $since))
             ->when($until, fn ($query) => $query->where('ordered_at', '<=', $until))
             ->when($store, function ($query, string $store): void {
@@ -234,5 +237,16 @@ class MarketingOrderAttributionCoverageReport
         }
 
         $counts[$key] = (int) ($counts[$key] ?? 0) + 1;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $tenantId = (int) $value;
+
+        return $tenantId > 0 ? $tenantId : null;
     }
 }

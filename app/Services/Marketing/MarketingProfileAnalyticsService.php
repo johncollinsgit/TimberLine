@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\SquareOrder;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class MarketingProfileAnalyticsService
 {
@@ -26,6 +27,9 @@ class MarketingProfileAnalyticsService
         if (isset($this->cache[$profileId])) {
             return $this->cache[$profileId];
         }
+        $profileTenantId = is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0
+            ? (int) $profile->tenant_id
+            : null;
 
         $links = $profile->links()->get(['source_type', 'source_id']);
         $sourceTypes = $links->pluck('source_type')->filter()->unique()->values()->all();
@@ -53,16 +57,32 @@ class MarketingProfileAnalyticsService
             ->filter()
             ->unique()
             ->values();
+        $squareOrdersQuery = SquareOrder::query();
+        if (Schema::hasColumn('square_orders', 'tenant_id')) {
+            if ($profileTenantId !== null) {
+                $squareOrdersQuery->forTenantId($profileTenantId);
+            } else {
+                $squareOrdersQuery->whereNull('tenant_id');
+            }
+        }
         $squareOrders = $squareOrderIds->isEmpty()
             ? collect()
-            : SquareOrder::query()
+            : $squareOrdersQuery
                 ->whereIn('square_order_id', $squareOrderIds->all())
                 ->get(['square_order_id', 'closed_at', 'total_money_amount', 'source_name']);
 
         $squareOrderIdList = $squareOrders->pluck('square_order_id')->filter()->values();
+        $attributionsQuery = MarketingOrderEventAttribution::query();
+        if (Schema::hasColumn('marketing_order_event_attributions', 'tenant_id')) {
+            if ($profileTenantId !== null) {
+                $attributionsQuery->forTenantId($profileTenantId);
+            } else {
+                $attributionsQuery->whereNull('tenant_id');
+            }
+        }
         $attributions = $squareOrderIdList->isEmpty()
             ? collect()
-            : MarketingOrderEventAttribution::query()
+            : $attributionsQuery
                 ->with('eventInstance:id,title,starts_at')
                 ->where('source_type', 'square_order')
                 ->whereIn('source_id', $squareOrderIdList->all())

@@ -3,30 +3,30 @@
         $authTenantPresentation = $authTenantPresentation ?? [];
         $loginEyebrow = $authTenantPresentation['login_eyebrow'] ?? 'Sign in';
         $loginTitle = $authTenantPresentation['login_title'] ?? 'Welcome back';
-        $loginSubtitle = $authTenantPresentation['login_subtitle'] ?? 'Sign in to continue to your account and pick up where you left off.';
+        $loginSubtitle = $authTenantPresentation['login_subtitle'] ?? 'Sign in to open your workspace and continue where you left off.';
     @endphp
 
     <div class="flex flex-col gap-6">
         <div class="space-y-2">
-            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">{{ $loginEyebrow }}</div>
-            <h1 class="text-3xl font-['Fraunces'] font-semibold text-white">{{ $loginTitle }}</h1>
-            <p class="text-sm text-emerald-50/70">{{ $loginSubtitle }}</p>
+            <p class="fb-auth-eyebrow">{{ $loginEyebrow }}</p>
+            <h1 class="fb-auth-title">{{ $loginTitle }}</h1>
+            <p class="fb-auth-subtitle">{{ $loginSubtitle }}</p>
         </div>
 
         <x-auth-session-status class="text-center" :status="session('status')" />
 
         @if (session('status'))
-            <div class="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-3 text-xs text-emerald-50/85">
-                <div class="font-semibold">You're almost in</div>
-                <div class="mt-1">Check your email for next steps if you just requested access. When you're ready, return here and log in.</div>
+            <div class="rounded-2xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-3 text-xs text-[var(--fb-muted)]">
+                <div class="font-semibold text-[var(--fb-brand)]">You're almost in</div>
+                <div class="mt-1">Check your email for next steps if you just requested access. When you're ready, return here and sign in.</div>
                 <div class="mt-2 flex flex-wrap gap-3">
                     @if (Route::has('password.request'))
-                        <a href="{{ route('password.request') }}" class="underline decoration-emerald-200/60 underline-offset-2" wire:navigate>
+                        <a href="{{ route('password.request') }}" class="underline underline-offset-2" wire:navigate>
                             Reset password
                         </a>
                     @endif
                     @if (Route::has('register'))
-                        <a href="{{ route('register') }}" class="underline decoration-emerald-200/60 underline-offset-2" wire:navigate>
+                        <a href="{{ route('register') }}" class="underline underline-offset-2" wire:navigate>
                             Request access
                         </a>
                     @endif
@@ -43,15 +43,14 @@
 
         @if ($googleLoginEnabled)
             <div class="space-y-3">
-                <a href="{{ route('auth.google.redirect') }}"
-                   class="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 hover:bg-white/10 transition">
-                    <span aria-hidden="true" class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-black text-[11px] font-semibold">G</span>
+                <a href="{{ route('auth.google.redirect') }}" class="fb-auth-google-btn">
+                    <span aria-hidden="true" class="fb-auth-google-mark">G</span>
                     <span>Continue with Google</span>
                 </a>
-                <div class="flex items-center gap-3 text-xs text-emerald-100/40">
-                    <span class="h-px flex-1 bg-white/10"></span>
+                <div class="flex items-center gap-3 text-xs text-[var(--fb-muted)]">
+                    <span class="h-px flex-1 bg-[var(--fb-border)]"></span>
                     <span>or</span>
-                    <span class="h-px flex-1 bg-white/10"></span>
+                    <span class="h-px flex-1 bg-[var(--fb-border)]"></span>
                 </div>
             </div>
         @endif
@@ -91,14 +90,14 @@
             <flux:checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
 
             <div class="flex items-center justify-end">
-                <flux:button variant="primary" type="submit" class="w-full" data-test="login-button">
-                    {{ __('Login') }}
+                <flux:button variant="primary" type="submit" class="w-full fb-auth-submit" data-test="login-button">
+                    {{ __('Sign in') }}
                 </flux:button>
             </div>
         </form>
 
         @if (Route::has('register'))
-            <div class="space-x-1 text-sm text-center text-emerald-50/70">
+            <div class="space-x-1 text-sm text-center text-[var(--fb-muted)]">
                 <span>{{ __('Need an account?') }}</span>
                 <flux:link :href="route('register')" wire:navigate>{{ __('Request access') }}</flux:link>
             </div>

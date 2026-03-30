@@ -1,5 +1,12 @@
 @extends('shopify.rewards-layout')
 
+@php
+    $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', data_get($displayLabels ?? [], 'rewards', 'Rewards'))));
+    if ($resolvedRewardsLabel === '') {
+        $resolvedRewardsLabel = 'Rewards';
+    }
+@endphp
+
 @section('rewards-content')
     <style>
         .rewards-note {
@@ -447,11 +454,11 @@
 
     @if(! $authorized)
         <div class="rewards-empty">
-            Open the app from Shopify Admin to verify the store context before managing Candle Cash rewards.
+            Open the app from Shopify Admin to verify the store context before managing rewards.
         </div>
     @elseif(! $rewardsEditorAvailable)
         <div class="rewards-empty">
-            {{ $rewardsEditorMessage ?: 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.' }}
+            {{ $rewardsEditorMessage ?: 'This embedded rewards editor is unavailable until rewards are isolated per tenant.' }}
         </div>
     @else
         <div
@@ -474,7 +481,7 @@
                     <div class="rewards-panel-head">
                         <div>
                             <h2>Ways to Earn</h2>
-                            <p>Live Candle Cash earn rules from Backstage. Edit titles, Candle Cash values, descriptions, status, and order without recreating rows.</p>
+                            <p>Live reward earn rules from Backstage. Edit titles, reward values, descriptions, status, and order without recreating rows.</p>
                         </div>
                         <div id="earn-summary" class="rewards-panel-summary"></div>
                     </div>
@@ -485,7 +492,7 @@
                     <div class="rewards-panel-head">
                         <div>
                             <h2>Ways to Redeem</h2>
-                            <p>Current Candle Cash reward rows already used by the live system. Storefront redemption rules stay aligned with the existing Backstage logic.</p>
+                            <p>Current reward rows already used by the live system. Storefront redemption rules stay aligned with the existing Backstage logic.</p>
                         </div>
                         <div id="redeem-summary" class="rewards-panel-summary"></div>
                     </div>
@@ -537,9 +544,9 @@
                         </div>
 
                         <div class="rewards-field" data-earn-only>
-                            <label for="rule-candle-cash-value">Candle Cash Value</label>
+                            <label for="rule-candle-cash-value">Reward value</label>
                             <input id="rule-candle-cash-value" name="candle_cash_value" type="number" min="0" max="50000" step="0.01" />
-                            <p class="rewards-field-note">Displayed to staff and customers as direct Candle Cash value.</p>
+                            <p class="rewards-field-note">Displayed to staff and customers as direct reward value.</p>
                             <p class="rewards-field-error" data-error-for="candle_cash_value"></p>
                         </div>
 
@@ -550,9 +557,9 @@
                         </div>
 
                         <div class="rewards-field" data-redeem-only>
-                            <label for="rule-candle-cash-cost">Candle Cash Cost</label>
+                            <label for="rule-candle-cash-cost">Reward cost</label>
                             <input id="rule-candle-cash-cost" name="candle_cash_cost" type="number" min="0" max="50000" step="0.01" />
-                            <p class="rewards-field-note" id="rule-candle-cash-cost-note">Displayed as direct Candle Cash cost everywhere in the app.</p>
+                            <p class="rewards-field-note" id="rule-candle-cash-cost-note">Displayed as direct reward cost everywhere in the app.</p>
                             <p class="rewards-field-error" data-error-for="candle_cash_cost"></p>
                         </div>
 
@@ -565,7 +572,7 @@
 
                         <div class="rewards-field rewards-field--full rewards-hidden" data-redeem-only id="minimum-order-field">
                             <label for="rule-minimum-order">Minimum Order Requirement</label>
-                            <input id="rule-minimum-order" name="minimum_order_amount" type="text" readonly value="Unavailable in current Candle Cash reward schema" />
+                            <input id="rule-minimum-order" name="minimum_order_amount" type="text" readonly value="Unavailable in current reward schema" />
                             <p class="rewards-field-note">This field is not currently stored on `candle_cash_rewards`, so the embedded page leaves it read-only.</p>
                         </div>
 
@@ -617,6 +624,8 @@
                     earnTemplate: root.dataset.earnUpdateEndpointTemplate,
                     redeemTemplate: root.dataset.redeemUpdateEndpointTemplate,
                 };
+                const rewardsLabel = @json($resolvedRewardsLabel);
+                const loadErrorMessage = `${rewardsLabel} could not be loaded.`;
 
                 function escapeHtml(value) {
                     return String(value ?? "")
@@ -789,7 +798,7 @@
                         ),
                         summaryCardMarkup(
                             "Measurement",
-                            escapeHtml(program.measurement_label || "1 Candle Cash = 1 Candle Cash"),
+                            escapeHtml(program.measurement_label || "1 reward credit = 1 reward credit"),
                             "Legacy storage values are normalized before display."
                         ),
                         summaryCardMarkup(
@@ -819,8 +828,8 @@
                         ? escapeHtml(item.candle_cash_value_formatted || item.reward_amount_formatted || "$0")
                         : escapeHtml(item.candle_cash_cost_formatted || "$0");
                     const candleCashCaption = kind === "earn"
-                        ? "Displayed as direct Candle Cash value."
-                        : (item.is_storefront_reward ? "Storefront rule" : "Displayed as direct Candle Cash cost.");
+                        ? "Displayed as direct reward value."
+                        : (item.is_storefront_reward ? "Storefront rule" : "Displayed as direct reward cost.");
                     const typeLabel = kind === "earn"
                         ? (item.action_type_label || item.task_type_label || "Earn rule")
                         : (item.reward_type_label || "Reward");
@@ -851,7 +860,7 @@
                                     <small>${escapeHtml(typeNote)}</small>
                                 </div>
                                 <div>
-                                    <span>${kind === "earn" ? "Candle Cash Value" : "Candle Cash Cost"}</span>
+                                    <span>${kind === "earn" ? "Reward value" : "Reward cost"}</span>
                                     <strong>${candleCashLabel}</strong>
                                     <small>${escapeHtml(candleCashCaption)}</small>
                                 </div>
@@ -938,11 +947,11 @@
                         const candleCashCostNote = document.getElementById("rule-candle-cash-cost-note");
 
                         if (rule.is_storefront_reward) {
-                            rewardValueNote.textContent = "This row is the live storefront Candle Cash reward. Keep the discount value numeric, like 10USD.";
-                            candleCashCostNote.textContent = "Storefront cost is derived from the discount value and the current Candle Cash value.";
+                            rewardValueNote.textContent = "This row is the live storefront reward. Keep the discount value numeric, like 10USD.";
+                            candleCashCostNote.textContent = "Storefront cost is derived from the discount value and the current reward value.";
                         } else {
                             rewardValueNote.textContent = "Use the current value format already stored on the reward.";
-                            candleCashCostNote.textContent = "Displayed as direct Candle Cash cost everywhere in the app.";
+                            candleCashCostNote.textContent = "Displayed as direct reward cost everywhere in the app.";
                         }
                     }
                 }
@@ -1012,7 +1021,7 @@
 
                     if (payload.kind === "earn") {
                         if (Number.isNaN(payload.candle_cash_value) || payload.candle_cash_value < 0) {
-                            errors.candle_cash_value = ["Candle Cash value must be zero or more."];
+                            errors.candle_cash_value = ["Reward value must be zero or more."];
                         }
 
                         if (!Number.isInteger(payload.sort_order) || payload.sort_order < 0) {
@@ -1020,7 +1029,7 @@
                         }
                     } else {
                         if (Number.isNaN(payload.candle_cash_cost) || payload.candle_cash_cost < 0) {
-                            errors.candle_cash_cost = ["Candle Cash cost must be zero or more."];
+                            errors.candle_cash_cost = ["Reward cost must be zero or more."];
                         }
                     }
 
@@ -1043,20 +1052,20 @@
                                 status: "error",
                                 items: [],
                                 summary: {},
-                                message: error?.payload?.message || error.message || "Rewards could not be loaded.",
+                                message: error?.payload?.message || error.message || loadErrorMessage,
                             },
                             redeem: {
                                 status: "error",
                                 items: [],
                                 summary: {},
-                                message: error?.payload?.message || error.message || "Rewards could not be loaded.",
+                                message: error?.payload?.message || error.message || loadErrorMessage,
                             },
                             meta: {
                                 program: {},
                             },
                         };
 
-                        window.ForestryEmbeddedApp?.showToast(error?.payload?.message || "Rewards could not be loaded.", "error");
+                        window.ForestryEmbeddedApp?.showToast(error?.payload?.message || loadErrorMessage, "error");
                     } finally {
                         state.loading = false;
                         render();

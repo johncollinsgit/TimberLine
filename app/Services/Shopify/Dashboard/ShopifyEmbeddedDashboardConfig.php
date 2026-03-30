@@ -55,7 +55,7 @@ class ShopifyEmbeddedDashboardConfig
             ],
             'widgetRegistry' => [
                 'metricCards' => ['title' => 'Top metrics'],
-                'candleCashEngagement' => ['title' => 'Candle Cash earn activity'],
+                'candleCashEngagement' => ['title' => 'Rewards earn activity'],
                 'performanceChart' => ['title' => 'Performance chart'],
                 'locationOrigins' => ['title' => 'Location origins'],
                 'attribution' => ['title' => 'Attribution'],

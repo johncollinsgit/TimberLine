@@ -77,14 +77,15 @@ class BirthdayCsvImportService
         string $storedPath,
         array $mapping,
         ?int $createdBy = null,
-        bool $dryRun = false
+        bool $dryRun = false,
+        ?int $tenantId = null
     ): array {
         $absolutePath = Storage::disk('local')->path($storedPath);
         if (! is_file($absolutePath)) {
             throw new \RuntimeException('Stored birthday import file could not be found.');
         }
 
-        return $this->importPath($absolutePath, basename($absolutePath), $mapping, $createdBy, $dryRun);
+        return $this->importPath($absolutePath, basename($absolutePath), $mapping, $createdBy, $dryRun, $tenantId);
     }
 
     /**
@@ -96,18 +97,21 @@ class BirthdayCsvImportService
         string $fileName,
         array $mapping,
         ?int $createdBy = null,
-        bool $dryRun = false
+        bool $dryRun = false,
+        ?int $tenantId = null
     ): array {
         if (! is_file($path)) {
             throw new \RuntimeException('Birthday import file could not be read: ' . $path);
         }
 
+        $resolvedTenantId = $this->requireTenantId($tenantId);
         $run = MarketingImportRun::query()->create([
             'type' => 'birthday_customers_import',
             'status' => 'running',
             'source_label' => 'birthday_import',
             'file_name' => $fileName,
             'started_at' => now(),
+            'tenant_id' => $resolvedTenantId,
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'import',
             ],
@@ -173,7 +177,8 @@ class BirthdayCsvImportService
                         rawRow: $row,
                         externalKey: $externalKey,
                         fileName: $fileName,
-                        dryRun: $dryRun
+                        dryRun: $dryRun,
+                        tenantId: $resolvedTenantId
                     );
 
                     $summary[$result['status']]++;
@@ -347,9 +352,16 @@ class BirthdayCsvImportService
      * @param array<string,mixed> $rawRow
      * @return array<string,mixed>
      */
-    protected function importRow(array $row, array $rawRow, string $externalKey, string $fileName, bool $dryRun): array
+    protected function importRow(
+        array $row,
+        array $rawRow,
+        string $externalKey,
+        string $fileName,
+        bool $dryRun,
+        int $tenantId
+    ): array
     {
-        $identity = $this->identityPayloadForRow($row, $externalKey);
+        $identity = $this->identityPayloadForRow($row, $externalKey, $tenantId);
         $syncResult = $this->profileSyncService->syncExternalIdentity($identity, [
             'dry_run' => $dryRun,
             'review_context' => [
@@ -577,7 +589,7 @@ class BirthdayCsvImportService
             ],
             [
                 'customer_birthday_profile_id' => $birthdayProfile->id,
-                'reward_name' => (string) ($config['reward_name'] ?? 'Birthday Candle Cash'),
+                'reward_name' => (string) ($config['reward_name'] ?? 'Birthday Reward Credit'),
                 'status' => $used ? 'redeemed' : 'claimed',
                 'candle_cash_awarded' => null,
                 'reward_value' => number_format((float) ($config['reward_value'] ?? 10), 2, '.', ''),
@@ -697,12 +709,13 @@ class BirthdayCsvImportService
     /**
      * @param array<string,mixed> $row
      */
-    protected function identityPayloadForRow(array $row, string $externalKey): array
+    protected function identityPayloadForRow(array $row, string $externalKey, int $tenantId): array
     {
         $fullName = $this->nullableString($row['full_name'] ?? null);
         [$splitFirst, $splitLast] = $this->normalizer->splitName($fullName);
 
         return [
+            'tenant_id' => $this->requireTenantId($tenantId),
             'first_name' => $this->nullableString($row['first_name'] ?? null) ?: $splitFirst,
             'last_name' => $this->nullableString($row['last_name'] ?? null) ?: $splitLast,
             'raw_email' => $this->nullableString($row['email'] ?? null),
@@ -900,6 +913,15 @@ class BirthdayCsvImportService
             'messages' => $messages,
             'payload' => config('marketing.imports.store_row_payloads') ? $row : null,
         ]);
+    }
+
+    protected function requireTenantId(?int $tenantId): int
+    {
+        if (! is_numeric($tenantId) || (int) $tenantId <= 0) {
+            throw new RuntimeException('Tenant context is required for birthday imports.');
+        }
+
+        return (int) $tenantId;
     }
 
     protected function nullableString(mixed $value): ?string

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingOrderAttributionCoverageReport;
 use Carbon\Carbon;
 
@@ -138,7 +139,13 @@ test('order attribution coverage report supports date range and store filtering'
 });
 
 test('order attribution coverage command outputs operator friendly summary and detail lines', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Order Coverage Command Tenant',
+        'slug' => 'order-coverage-command-tenant',
+    ]);
+
     makeOrderCoverageRow([
+        'tenant_id' => $tenant->id,
         'attribution_meta' => [
             'utm_source' => 'google',
             'utm_medium' => 'cpc',
@@ -151,7 +158,10 @@ test('order attribution coverage command outputs operator friendly summary and d
         ],
     ]);
 
-    $this->artisan('marketing:report-order-attribution-coverage --detail')
+    $this->artisan('marketing:report-order-attribution-coverage', [
+        '--tenant-id' => $tenant->id,
+        '--detail' => true,
+    ])
         ->expectsOutputToContain('total_orders=1')
         ->expectsOutputToContain('with_attribution_meta=1')
         ->expectsOutputToContain('attribution_coverage_rate=100')

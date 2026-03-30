@@ -3,6 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    @php
+        $displayLabels = is_array($displayLabels ?? null) ? $displayLabels : [];
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+    @endphp
     <title>Marketing SMS Consent Verify</title>
     @vite(['resources/css/app.css'])
 </head>
@@ -12,7 +19,7 @@
             <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine Marketing</div>
             <h1 class="mt-2 text-2xl font-semibold text-white">SMS Consent Verification (Scaffold)</h1>
             <p class="mt-2 text-sm text-zinc-300">
-                Verification confirms SMS consent on the matched marketing profile. If configured, a Candle Cash bonus is awarded only after successful verify.
+                Verification confirms SMS consent on the matched marketing profile. If configured, a {{ $rewardsLabel }} bonus is awarded only after successful verify.
             </p>
         </section>
 
@@ -38,7 +45,7 @@
                 <p class="mt-2 text-sm text-emerald-50/90">
                     SMS consent was confirmed and recorded for profile #{{ $profile?->id ?? '—' }}.
                     @if((int) request()->query('bonus', 0) > 0)
-                        Candle Cash bonus awarded: ${{ number_format((float) app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) request()->query('bonus', 0)), 2) }}.
+                        {{ $rewardsLabel }} bonus awarded: ${{ number_format((float) app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) request()->query('bonus', 0)), 2) }}.
                     @endif
                 </p>
             </section>

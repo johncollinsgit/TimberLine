@@ -10,6 +10,7 @@ use Throwable;
 class MarketingReportOrderAttributionCoverage extends Command
 {
     protected $signature = 'marketing:report-order-attribution-coverage
+        {--tenant-id= : Restrict to a tenant id (required)}
         {--since= : Only include orders on or after this datetime}
         {--until= : Only include orders on or before this datetime}
         {--store= : Restrict to one Shopify store key}
@@ -22,6 +23,13 @@ class MarketingReportOrderAttributionCoverage extends Command
 
     public function handle(MarketingOrderAttributionCoverageReport $reporter): int
     {
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Order attribution coverage reporting is tenant-scoped in MT-2C.');
+
+            return self::FAILURE;
+        }
+
         $since = $this->parseDateOption('since');
         $until = $this->parseDateOption('until');
         $store = $this->stringOption('store');
@@ -34,6 +42,7 @@ class MarketingReportOrderAttributionCoverage extends Command
             'since' => $since?->toIso8601String(),
             'until' => $until?->toIso8601String(),
             'store' => $store,
+            'tenant_id' => $tenantId,
             'chunk' => $chunk,
             'with_attribution_only' => $withAttributionOnly,
             'missing_only' => $missingOnly,
@@ -41,6 +50,7 @@ class MarketingReportOrderAttributionCoverage extends Command
 
         $this->line('since=' . ($report['scope']['since'] ?? 'none'));
         $this->line('until=' . ($report['scope']['until'] ?? 'none'));
+        $this->line('tenant_id=' . ($report['scope']['tenant_id'] ?? 'none'));
         $this->line('store=' . ($report['scope']['store'] ?? 'any'));
         $this->line('chunk=' . ($report['scope']['chunk'] ?? $chunk));
         $this->line('with_attribution_only=' . (($report['scope']['with_attribution_only'] ?? false) ? 'yes' : 'no'));

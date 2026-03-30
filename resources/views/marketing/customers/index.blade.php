@@ -1,3 +1,14 @@
+@php
+    $tenantId = request()?->attributes->get('current_tenant_id');
+    $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+    $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
+    $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
+    $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+    if ($rewardsLabel === '') {
+        $rewardsLabel = 'Rewards';
+    }
+@endphp
+
 <x-layouts::app :title="'Customers'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
@@ -15,7 +26,7 @@
                 <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.2em] text-white/55">Candle Cash Holders</div>
+                <div class="text-xs uppercase tracking-[0.2em] text-white/55">{{ $rewardsLabel }} Holders</div>
                 <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($quickStats['candle_cash_holders'] ?? 0)) }}</div>
             </article>
             <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -43,7 +54,7 @@
                         <h2 class="mt-2 text-lg font-semibold text-white">Manage Customers</h2>
                         <div class="mt-1 text-sm text-white/65">
                             {{ number_format((int) ($totalProfiles ?? 0)) }} customer profile{{ (int) ($totalProfiles ?? 0) === 1 ? '' : 's' }} indexed.
-                            Search-first results load in the live grid below, and Candle Cash stays separate from the legacy Growave balance.
+                            Search-first results load in the live grid below, and {{ $rewardsLabel }} stays separate from the legacy Growave balance.
                         </div>
                     </div>
                     <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">

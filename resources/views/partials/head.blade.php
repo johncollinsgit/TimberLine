@@ -4,10 +4,10 @@
 
 @php
     $authTenantPresentation = $authTenantPresentation ?? [];
-    $appMetaName = (string) ($authTenantPresentation['app_name'] ?? config('app.name', 'Modern Forestry Backstage'));
+    $appMetaName = (string) ($authTenantPresentation['app_name'] ?? config('app.name', 'Forestry Backstage'));
     $resolvedTitle = trim((string) ($title ?? ''));
     $mfPageTitle = $resolvedTitle !== '' ? $resolvedTitle.' · '.$appMetaName : $appMetaName;
-    $mfOgImage = asset('apple-touch-icon.png').'?v=bs4';
+    $mfOgImage = asset('brand/forestry-backstage-lockup.svg').'?v=fb1';
 @endphp
 
 <title>{{ $mfPageTitle }}</title>
@@ -22,13 +22,12 @@
 <meta name="twitter:title" content="{{ $mfPageTitle }}">
 <meta name="twitter:image" content="{{ $mfOgImage }}">
 
-<link rel="icon" href="{{ asset('favicon.svg') }}?v=bs4" type="image/svg+xml">
-<link rel="icon" href="{{ asset('favicon.png') }}?v=bs4" type="image/png" sizes="512x512">
-<link rel="shortcut icon" href="{{ asset('favicon.png') }}?v=bs4">
-<link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=bs4">
+<link rel="icon" href="{{ asset('brand/forestry-backstage-favicon.svg') }}?v=fb1" type="image/svg+xml">
+<link rel="shortcut icon" href="{{ asset('brand/forestry-backstage-favicon.svg') }}?v=fb1">
+<link rel="apple-touch-icon" href="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb1">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
-<link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600&family=fraunces:400,500,600,700" rel="stylesheet" />
+<link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&family=fraunces:400,500,600,700" rel="stylesheet" />
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 

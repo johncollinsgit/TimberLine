@@ -3,6 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    @php
+        $displayLabels = is_array($displayLabels ?? null) ? $displayLabels : [];
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+    @endphp
     <title>Event Opt-In</title>
     @vite(['resources/css/app.css'])
 </head>
@@ -19,7 +26,7 @@
             @endif
         </p>
         <p class="mt-2 text-sm text-zinc-300">
-            This is a lightweight public capture flow for event customers. It records profile identity + consent and can award an optional Candle Cash bonus.
+            This is a lightweight public capture flow for event customers. It records profile identity + consent and can award an optional {{ $rewardsLabel }} bonus.
             Event opt-in here is direct-confirmed consent and does not create a customer account page.
         </p>
     </section>
@@ -73,7 +80,7 @@
                 </label>
                 <label class="flex items-center gap-2">
                     <input type="checkbox" name="award_bonus" value="1" class="rounded border-white/20 bg-white/10" checked>
-                    Award optional Candle Cash signup bonus (if enabled)
+                    Award optional {{ $rewardsLabel }} signup bonus (if enabled)
                 </label>
             </div>
 

@@ -7,6 +7,7 @@ use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\MarketingProfileSyncService;
 use App\Services\Shopify\ShopifyOrderIngestor;
@@ -205,13 +206,20 @@ test('shopify order ingest persists raw attribution meta on orders and downstrea
 });
 
 test('attribution backfill command is dry run safe and enriches order linked records when executed', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Attribution Backfill Tenant',
+        'slug' => 'attribution-backfill-tenant',
+    ]);
+
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Ari',
         'email' => 'ari@example.com',
+        'tenant_id' => $tenant->id,
     ]);
 
     $order = Order::query()->create([
         'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
         'shopify_order_id' => 5101,
@@ -223,6 +231,7 @@ test('attribution backfill command is dry run safe and enriches order linked rec
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
         'source_meta' => [
@@ -242,6 +251,7 @@ test('attribution backfill command is dry run safe and enriches order linked rec
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
         'source_type' => 'shopify_order',
         'source_id' => 'retail:5101',
         'source_meta' => [],
@@ -249,6 +259,7 @@ test('attribution backfill command is dry run safe and enriches order linked rec
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
         'source_type' => 'shopify_customer',
         'source_id' => 'retail:9101',
         'source_meta' => [],
@@ -304,14 +315,21 @@ test('attribution backfill command is dry run safe and enriches order linked rec
         'redemption_context' => [],
     ]);
 
-    $this->artisan('marketing:backfill-attribution-source-meta --dry-run --chunk=50')
+    $this->artisan('marketing:backfill-attribution-source-meta', [
+        '--tenant-id' => $tenant->id,
+        '--dry-run' => true,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($referral->fresh()->metadata)->toBe([])
         ->and($issuance->fresh()->metadata)->toBe([])
         ->and($redemption->fresh()->redemption_context)->toBe([]);
 
-    $this->artisan('marketing:backfill-attribution-source-meta --chunk=50')
+    $this->artisan('marketing:backfill-attribution-source-meta', [
+        '--tenant-id' => $tenant->id,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($referral->fresh()->metadata['utm_source'])->toBe('facebook')
@@ -325,13 +343,20 @@ test('attribution backfill command is dry run safe and enriches order linked rec
 });
 
 test('attribution backfill command is a no-op when no stronger source metadata exists', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Attribution No-op Tenant',
+        'slug' => 'attribution-noop-tenant',
+    ]);
+
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Nora',
         'email' => 'nora@example.com',
+        'tenant_id' => $tenant->id,
     ]);
 
     $order = Order::query()->create([
         'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
         'shopify_order_id' => 5201,
@@ -342,25 +367,36 @@ test('attribution backfill command is a no-op when no stronger source metadata e
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
         'source_meta' => [],
     ]);
 
-    $this->artisan('marketing:backfill-attribution-source-meta --chunk=50')
+    $this->artisan('marketing:backfill-attribution-source-meta', [
+        '--tenant-id' => $tenant->id,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect(MarketingProfileLink::query()->sole()->source_meta)->toBe([]);
 });
 
 test('order attribution backfill command is dry run safe and fills missing order attribution meta', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Order Attribution Backfill Tenant',
+        'slug' => 'order-attribution-backfill-tenant',
+    ]);
+
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Moss',
         'email' => 'moss@example.com',
+        'tenant_id' => $tenant->id,
     ]);
 
     $order = Order::query()->create([
         'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
         'shopify_order_id' => 5301,
@@ -373,6 +409,7 @@ test('order attribution backfill command is dry run safe and fills missing order
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
         'source_meta' => [
@@ -388,18 +425,28 @@ test('order attribution backfill command is dry run safe and fills missing order
         ],
     ]);
 
-    $this->artisan('marketing:backfill-order-attribution-meta --dry-run --chunk=50')
+    $this->artisan('marketing:backfill-order-attribution-meta', [
+        '--tenant-id' => $tenant->id,
+        '--dry-run' => true,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($order->fresh()->attribution_meta)->toBeNull();
 
-    $this->artisan('marketing:backfill-order-attribution-meta --chunk=50')
+    $this->artisan('marketing:backfill-order-attribution-meta', [
+        '--tenant-id' => $tenant->id,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($order->fresh()->attribution_meta['utm_source'])->toBe('instagram')
         ->and($order->fresh()->attribution_meta['utm_medium'])->toBe('social');
 
-    $this->artisan('marketing:backfill-order-attribution-meta --chunk=50')
+    $this->artisan('marketing:backfill-order-attribution-meta', [
+        '--tenant-id' => $tenant->id,
+        '--chunk' => 50,
+    ])
         ->assertExitCode(0);
 
     expect($order->fresh()->attribution_meta['utm_source'])->toBe('instagram');

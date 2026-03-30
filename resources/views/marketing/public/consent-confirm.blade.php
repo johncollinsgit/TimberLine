@@ -3,6 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    @php
+        $displayLabels = is_array($displayLabels ?? null) ? $displayLabels : [];
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+    @endphp
     <title>Consent Confirmation</title>
     @vite(['resources/css/app.css'])
 </head>
@@ -27,7 +34,7 @@
             <h2 class="text-lg font-semibold">Thanks, you're in.</h2>
             <p class="mt-2 text-sm">{{ session('status') }}</p>
             @if($bonus > 0)
-                <p class="mt-2 text-sm">Bonus awarded: {{ $bonusFormatted }} Candle Cash.</p>
+                <p class="mt-2 text-sm">Bonus awarded: {{ $bonusFormatted }} {{ $rewardsLabel }}.</p>
             @endif
             @if($profile)
                 <p class="mt-2 text-xs text-emerald-100/80">Profile reference: #{{ $profile->id }}</p>
@@ -49,11 +56,11 @@
                     Back to Event Opt-In
                 </a>
                 <a href="{{ route('marketing.public.events.rewards', ['eventSlug' => $eventSlug]) }}" class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-zinc-200">
-                    Check Event Rewards
+                    Check Event {{ $rewardsLabel }}
                 </a>
             @endif
             <a href="{{ route('marketing.public.rewards-lookup') }}" class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold text-zinc-200">
-                Rewards Lookup
+                {{ $rewardsLabel }} Lookup
             </a>
         </div>
     </section>

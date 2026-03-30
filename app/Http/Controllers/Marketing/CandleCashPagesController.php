@@ -22,11 +22,13 @@ use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Services\Marketing\ProductReviewService;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Support\Marketing\CandleCashSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Collection;
 use Carbon\CarbonImmutable;
@@ -71,7 +73,7 @@ class CandleCashPagesController extends Controller
             return back()
                 ->withErrors($exception->errors())
                 ->withInput()
-                ->with('toast', ['style' => 'danger', 'message' => 'Reward rule could not be saved.']);
+                ->with('toast', ['style' => 'danger', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' rule could not be saved.']);
         }
 
         return back()->with('toast', ['style' => 'success', 'message' => 'Redeem rule updated.']);
@@ -125,7 +127,7 @@ class CandleCashPagesController extends Controller
         $task = CandleCashTask::query()->create($this->validatedTaskPayload($request));
 
         return redirect()->route('marketing.candle-cash.tasks')
-            ->with('toast', ['style' => 'success', 'message' => 'Candle Cash task created: ' . $task->title]);
+            ->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' task created: ' . $task->title]);
     }
 
     public function updateTask(Request $request, CandleCashTask $task): RedirectResponse
@@ -196,7 +198,7 @@ class CandleCashPagesController extends Controller
 
         $taskService->approveCompletion($completion, auth()->id(), $data['review_notes'] ?? null);
 
-        return back()->with('toast', ['style' => 'success', 'message' => 'Task approved and Candle Cash credited.']);
+        return back()->with('toast', ['style' => 'success', 'message' => 'Task approved and ' . strtolower($this->displayLabel('reward_credit_label', 'reward credit')) . ' credited.']);
     }
 
     public function rejectCompletion(Request $request, CandleCashTaskCompletion $completion, CandleCashTaskService $taskService): RedirectResponse
@@ -376,7 +378,7 @@ class CandleCashPagesController extends Controller
         if ($data['adjustment_type'] === 'deduct') {
             $points *= -1;
             if ($candleCashService->currentBalance($marketingProfile) < abs($points)) {
-                return back()->with('toast', ['style' => 'danger', 'message' => 'Cannot deduct more Candle Cash than the current balance.']);
+                return back()->with('toast', ['style' => 'danger', 'message' => 'Cannot deduct more ' . strtolower($this->displayLabel('reward_credit_label', 'reward credit')) . ' than the current balance.']);
             }
         }
 
@@ -386,10 +388,10 @@ class CandleCashPagesController extends Controller
             type: $points >= 0 ? 'earn' : 'adjustment',
             source: 'admin_adjustment',
             sourceId: 'profile:' . $marketingProfile->id . ':user:' . auth()->id() . ':' . now()->timestamp,
-            description: trim((string) ($data['note'] ?? '')) ?: 'Manual Candle Cash adjustment'
+            description: trim((string) ($data['note'] ?? '')) ?: 'Manual ' . strtolower($this->displayLabel('rewards_balance_label', 'Rewards balance')) . ' adjustment'
         );
 
-        return back()->with('toast', ['style' => 'success', 'message' => 'Candle Cash adjusted.']);
+        return back()->with('toast', ['style' => 'success', 'message' => Str::title($this->displayLabel('rewards_balance_label', 'Rewards balance')) . ' adjusted.']);
     }
 
     public function referrals(Request $request): View
@@ -504,7 +506,7 @@ class CandleCashPagesController extends Controller
                 'homepage_signup_copy' => trim((string) $data['homepage_signup_copy']),
                 'homepage_central_title' => trim((string) $data['homepage_central_title']),
                 'homepage_central_copy' => trim((string) $data['homepage_central_copy']),
-            ]), 'Candle Cash program settings.');
+            ]), $this->displayLabel('rewards_program_label', 'Rewards program') . ' settings.');
         } elseif ($scope === 'referral') {
             $existing = $this->settingValue('candle_cash_referral_config');
             $data = $request->validate([
@@ -525,7 +527,7 @@ class CandleCashPagesController extends Controller
                 'qualifying_min_order_total' => $data['qualifying_min_order_total'] !== null ? (float) $data['qualifying_min_order_total'] : null,
                 'program_headline' => trim((string) $data['program_headline']),
                 'program_copy' => trim((string) $data['program_copy']),
-            ]), 'Candle Cash referral settings.');
+            ]), $this->displayLabel('rewards_label', 'Rewards') . ' referral settings.');
         } elseif ($scope === 'frontend') {
             $existing = $this->settingValue('candle_cash_frontend_config');
             $data = $request->validate([
@@ -544,7 +546,7 @@ class CandleCashPagesController extends Controller
                 'faq_stack_copy' => trim((string) $data['faq_stack_copy']),
                 'faq_pending_copy' => trim((string) $data['faq_pending_copy']),
                 'faq_verification_copy' => trim((string) $data['faq_verification_copy']),
-            ]), 'Candle Cash frontend copy settings.');
+            ]), $this->displayLabel('rewards_label', 'Rewards') . ' frontend copy settings.');
         } else {
             $existing = $this->settingValue('candle_cash_integration_config');
             $data = $request->validate([
@@ -579,10 +581,10 @@ class CandleCashPagesController extends Controller
                 'sms_signup_enabled' => array_key_exists('sms_signup_enabled', $data) ? (bool) $data['sms_signup_enabled'] : false,
                 'email_signup_enabled' => array_key_exists('email_signup_enabled', $data) ? (bool) $data['email_signup_enabled'] : false,
                 'vote_locked_join_url' => trim((string) ($data['vote_locked_join_url'] ?? '')) ?: null,
-            ]), 'Candle Cash integration settings.');
+            ]), $this->displayLabel('rewards_label', 'Rewards') . ' integration settings.');
         }
 
-        return back()->with('toast', ['style' => 'success', 'message' => 'Candle Cash settings saved.']);
+        return back()->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' settings saved.']);
     }
 
     /**
@@ -775,5 +777,20 @@ class CandleCashPagesController extends Controller
                 'description' => $description,
             ]
         );
+    }
+
+    protected function currentTenantId(Request $request): ?int
+    {
+        $tenantId = $request->attributes->get('current_tenant_id');
+
+        return is_numeric($tenantId) ? (int) $tenantId : null;
+    }
+
+    protected function displayLabel(string $key, string $fallback): string
+    {
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+
+        return $resolver->label($this->currentTenantId(request()), $key, $fallback);
     }
 }

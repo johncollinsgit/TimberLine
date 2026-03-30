@@ -6,6 +6,7 @@ use App\Models\MarketingImportRow;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 
@@ -21,6 +22,11 @@ test('yotpo legacy import creates profiles, links, consent, and run logs', funct
         'role' => 'admin',
         'email_verified_at' => now(),
     ]);
+    $tenant = Tenant::query()->create([
+        'name' => 'Legacy Import Tenant A',
+        'slug' => 'legacy-import-tenant-a',
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
 
     $this->actingAs($user)
         ->post(route('marketing.providers-integrations.import-legacy'), [
@@ -64,6 +70,12 @@ test('square marketing legacy import updates existing profile by phone and sets 
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $tenant = Tenant::query()->create([
+        'name' => 'Legacy Import Tenant B',
+        'slug' => 'legacy-import-tenant-b',
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
+    $existing->forceFill(['tenant_id' => $tenant->id])->save();
 
     $this->actingAs($user)
         ->post(route('marketing.providers-integrations.import-legacy'), [
@@ -105,6 +117,12 @@ test('yotpo export import maps consent sources timestamps and suppression safely
         'role' => 'admin',
         'email_verified_at' => now(),
     ]);
+    $tenant = Tenant::query()->create([
+        'name' => 'Legacy Import Tenant C',
+        'slug' => 'legacy-import-tenant-c',
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
+    $existing->forceFill(['tenant_id' => $tenant->id])->save();
 
     $this->actingAs($user)
         ->post(route('marketing.providers-integrations.import-legacy'), [
@@ -164,13 +182,18 @@ test('yotpo export import maps consent sources timestamps and suppression safely
 });
 
 test('marketing import legacy file command imports yotpo export from disk', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Legacy Import Command Tenant',
+        'slug' => 'legacy-import-command-tenant',
+    ]);
+
     $path = storage_path('framework/testing/yotpo-command.csv');
     file_put_contents($path, implode("\n", [
         '"Name","Email","Phone Number","Date Created","Time Created","SMS marketing consent","Email marketing consent","SMS suppressed","Email suppressed","SMS consent source","SMS consent timestamp","Email consent source","Email consent timestamp"',
         '"Cmd User","cmd@example.com","+15554445555","Nov 30, 2022","11:05 AM","Subscribed","Subscribed","Not Suppressed","Not Suppressed","checkout","Nov 30, 2022, 11:05 AM","signup","Nov 30, 2022, 11:05 AM"',
     ]));
 
-    $this->artisan('marketing:import-legacy-file yotpo_contacts_import ' . escapeshellarg($path))
+    $this->artisan('marketing:import-legacy-file yotpo_contacts_import ' . escapeshellarg($path) . ' --tenant-id=' . $tenant->id)
         ->expectsOutputToContain('status=completed')
         ->expectsOutputToContain('processed=1')
         ->expectsOutputToContain('sms_marketable=1')
@@ -178,6 +201,24 @@ test('marketing import legacy file command imports yotpo export from disk', func
         ->assertExitCode(0);
 
     expect(MarketingProfile::query()->where('normalized_email', 'cmd@example.com')->exists())->toBeTrue();
+
+    @unlink($path);
+});
+
+test('marketing import legacy file command fails closed without tenant ownership context', function () {
+    $path = storage_path('framework/testing/yotpo-command-missing-tenant.csv');
+    file_put_contents($path, implode("\n", [
+        '"Name","Email","Phone Number"',
+        '"No Tenant","no-tenant@example.com","+15554445556"',
+    ]));
+
+    $this->artisan('marketing:import-legacy-file yotpo_contacts_import ' . escapeshellarg($path))
+        ->expectsOutputToContain('requires a tenant context')
+        ->assertExitCode(1);
+
+    expect(MarketingImportRun::query()
+        ->where('type', 'yotpo_contacts_import')
+        ->count())->toBe(0);
 
     @unlink($path);
 });

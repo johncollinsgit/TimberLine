@@ -7,8 +7,6 @@ use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
-use App\Models\Event;
-use App\Models\EventInstance;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingGroup;
@@ -18,19 +16,22 @@ use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use App\Models\MarketingReviewSummary;
-use App\Models\MarketingSegment;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\ShopifyStore;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\ShopifyImportRun;
-use App\Models\WholesaleCustomScent;
+use App\Models\Tenant;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
 use App\Services\Marketing\TwilioSenderConfigService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\RedirectResponse;
@@ -40,12 +41,22 @@ class MarketingPagesController extends Controller
 {
     public function __construct(
         protected MarketingSourceOverlapReportService $sourceOverlapReportService,
-        protected TwilioSenderConfigService $senderConfigService
+        protected TwilioSenderConfigService $senderConfigService,
+        protected MarketingTenantOwnershipService $ownershipService
     ) {
     }
 
     public function show(string $section = 'overview'): View
     {
+        $requiresTenant = $this->sectionRequiresTenant($section);
+        $tenantId = $requiresTenant
+            ? $this->requireTenantId(request())
+            : $this->currentTenantId(request());
+
+        if ($tenantId !== null) {
+            request()->attributes->set('current_tenant_id', $tenantId);
+        }
+
         $sections = MarketingSectionRegistry::sections();
         abort_unless(array_key_exists($section, $sections), 404);
 
@@ -64,10 +75,16 @@ class MarketingPagesController extends Controller
             'currentSectionKey' => $section,
             'currentSection' => $sectionConfig,
             'sections' => $this->buildNavigation($sections),
-            'overviewDashboard' => $section === 'overview' ? $this->overviewDashboard() : [],
-            'messagesDashboard' => $section === 'messages' ? $this->messagesDashboard() : [],
+            'overviewDashboard' => $section === 'overview' && $tenantId !== null
+                ? $this->overviewDashboard($tenantId)
+                : [],
+            'messagesDashboard' => $section === 'messages' && $tenantId !== null
+                ? $this->messagesDashboard((int) $tenantId)
+                : [],
             'customersFocusAreas' => $section === 'customers' ? $this->customersFocusAreas() : [],
-            'customersDiscoverySummary' => $section === 'customers' ? $this->customersDiscoverySummary() : [],
+            'customersDiscoverySummary' => $section === 'customers' && $tenantId !== null
+                ? $this->customersDiscoverySummary((int) $tenantId)
+                : [],
             'candleCashDashboard' => $section === 'candle-cash' ? $this->candleCashDashboard() : [],
         ]);
     }
@@ -121,13 +138,15 @@ class MarketingPagesController extends Controller
     /**
      * @return array<string,mixed>
      */
-    protected function overviewDashboard(): array
+    protected function overviewDashboard(int $tenantId): array
     {
+        $rewardsLabel = $this->displayLabel('rewards_label', 'Rewards');
         $totalProfiles = Schema::hasTable('marketing_profiles')
-            ? (int) MarketingProfile::query()->count()
+            ? (int) MarketingProfile::query()->forTenantId($tenantId)->count()
             : 0;
         $missingBothContact = Schema::hasTable('marketing_profiles')
             ? (int) MarketingProfile::query()
+                ->forTenantId($tenantId)
                 ->where(function ($query): void {
                     $query->whereNull('email')->orWhere('email', '');
                 })
@@ -138,7 +157,7 @@ class MarketingPagesController extends Controller
             : 0;
         $reachableProfiles = max(0, $totalProfiles - $missingBothContact);
 
-        $overlapSummary = $this->sourceOverlapReportService->summary();
+        $overlapSummary = $this->sourceOverlapReportService->summary($tenantId);
         $bucketDefinitions = $this->sourceOverlapReportService->bucketDefinitions();
 
         $sourcePresence = [
@@ -147,37 +166,48 @@ class MarketingPagesController extends Controller
             'growave' => $this->profileCountForSource($overlapSummary, 'growave', $bucketDefinitions),
         ];
 
-        $groupsCount = Schema::hasTable('marketing_groups') ? (int) MarketingGroup::query()->count() : 0;
-        $campaignCount = Schema::hasTable('marketing_campaigns') ? (int) MarketingCampaign::query()->count() : 0;
-        $templateCount = Schema::hasTable('marketing_message_templates') ? (int) MarketingMessageTemplate::query()->count() : 0;
-        $segmentCount = Schema::hasTable('marketing_segments') ? (int) MarketingSegment::query()->count() : 0;
-        $queuedApprovals = Schema::hasTable('marketing_campaign_recipients')
-            ? (int) MarketingCampaignRecipient::query()->where('status', 'queued_for_approval')->count()
-            : 0;
+        $messagesDashboard = $this->tenantMessagingSummary($tenantId);
+        $groupsCount = (int) data_get($messagesDashboard, 'counts.groups', 0);
+        $campaignCount = (int) data_get($messagesDashboard, 'counts.campaigns', 0);
+        $templateCount = (int) data_get($messagesDashboard, 'counts.templates', 0);
+        $segmentCount = (int) data_get($messagesDashboard, 'counts.segment_count', 0);
+        $queuedApprovals = (int) data_get($messagesDashboard, 'counts.queued_approvals', 0);
 
         $positiveBalanceProfiles = Schema::hasTable('candle_cash_balances')
-            ? (int) CandleCashBalance::query()->where('balance', '>', 0)->count()
+            ? (int) CandleCashBalance::query()
+                ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId))
+                ->where('balance', '>', 0)
+                ->count()
             : 0;
         $totalCandleCashBalance = Schema::hasTable('candle_cash_balances')
-            ? round((float) CandleCashBalance::query()->sum('balance'), 3)
+            ? round((float) CandleCashBalance::query()
+                ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId))
+                ->sum('balance'), 3)
             : 0;
         $growaveActivityCount = Schema::hasTable('candle_cash_transactions')
-            ? (int) CandleCashTransaction::query()->where('source', 'growave_activity')->count()
+            ? (int) CandleCashTransaction::query()
+                ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId))
+                ->where('source', 'growave_activity')
+                ->count()
             : 0;
         $reviewSummaryCount = Schema::hasTable('marketing_review_summaries')
-            ? (int) MarketingReviewSummary::query()->where('integration', 'growave')->count()
+            ? (int) MarketingReviewSummary::query()
+                ->where('integration', 'growave')
+                ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId))
+                ->count()
             : 0;
 
         $pendingIdentityReviews = Schema::hasTable('marketing_identity_reviews')
-            ? (int) MarketingIdentityReview::query()->where('status', 'pending')->count()
+            ? (int) MarketingIdentityReview::query()
+                ->where('status', 'pending')
+                ->whereHas('proposedMarketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                ->count()
             : 0;
 
         $latestShopifyRun = Schema::hasTable('shopify_import_runs')
-            ? ShopifyImportRun::query()->orderByDesc('id')->first()
+            ? $this->latestShopifyRunForTenant($tenantId)
             : null;
-        $recentImportRuns = Schema::hasTable('marketing_import_runs')
-            ? MarketingImportRun::query()->orderByDesc('id')->limit(6)->get()
-            : collect();
+        $recentImportRuns = $this->recentImportRunsForTenant($tenantId);
 
         $topBuckets = collect([
             'shopify_square_growave',
@@ -194,7 +224,10 @@ class MarketingPagesController extends Controller
                 'label' => 'Shopify',
                 'profiles' => $sourcePresence['shopify'],
                 'supporting_value' => Schema::hasTable('customer_external_profiles')
-                    ? (int) CustomerExternalProfile::query()->where('integration', 'shopify_customer')->count()
+                    ? (int) CustomerExternalProfile::query()
+                        ->forTenantId($tenantId)
+                        ->where('integration', 'shopify_customer')
+                        ->count()
                     : 0,
                 'supporting_label' => 'external customer rows',
                 'detail' => 'Canonical profiles with ecommerce customer or order linkage.',
@@ -203,7 +236,7 @@ class MarketingPagesController extends Controller
             [
                 'label' => 'Square',
                 'profiles' => $sourcePresence['square'],
-                'supporting_value' => Schema::hasTable('square_customers') ? (int) SquareCustomer::query()->count() : 0,
+                'supporting_value' => Schema::hasTable('square_customers') ? (int) SquareCustomer::query()->forTenantId($tenantId)->count() : 0,
                 'supporting_label' => 'directory customers',
                 'detail' => 'POS and event buyers landed through the source-table ingestion path.',
                 'tone' => 'sky',
@@ -212,7 +245,10 @@ class MarketingPagesController extends Controller
                 'label' => 'Growave',
                 'profiles' => $sourcePresence['growave'],
                 'supporting_value' => Schema::hasTable('customer_external_profiles')
-                    ? (int) CustomerExternalProfile::query()->where('integration', 'growave')->count()
+                    ? (int) CustomerExternalProfile::query()
+                        ->forTenantId($tenantId)
+                        ->where('integration', 'growave')
+                        ->count()
                     : 0,
                 'supporting_label' => 'loyalty external rows',
                 'detail' => 'Imported loyalty, referral, review, and historical activity attached locally.',
@@ -261,14 +297,14 @@ class MarketingPagesController extends Controller
                     'tone' => 'sky',
                 ],
                 [
-                    'title' => 'Rewards',
+                    'title' => $rewardsLabel,
                     'primary_label' => 'Positive Balance Profiles',
                     'primary_value' => number_format($positiveBalanceProfiles),
                     'secondary' => number_format($totalCandleCashBalance) . ' total balance · '
                         . number_format($growaveActivityCount) . ' Growave activity rows · '
                         . number_format($reviewSummaryCount) . ' review summaries',
                     'href' => route('marketing.candle-cash'),
-                    'cta' => 'Open Rewards',
+                    'cta' => 'Open ' . $rewardsLabel,
                     'tone' => 'amber',
                 ],
                 [
@@ -334,11 +370,14 @@ class MarketingPagesController extends Controller
                 $overlapSummary
             )),
             'source_metrics' => [
-                'square_customers' => Schema::hasTable('square_customers') ? (int) SquareCustomer::query()->count() : 0,
-                'square_orders' => Schema::hasTable('square_orders') ? (int) SquareOrder::query()->count() : 0,
-                'square_payments' => Schema::hasTable('square_payments') ? (int) SquarePayment::query()->count() : 0,
+                'square_customers' => Schema::hasTable('square_customers') ? (int) SquareCustomer::query()->forTenantId($tenantId)->count() : 0,
+                'square_orders' => Schema::hasTable('square_orders') ? (int) SquareOrder::query()->forTenantId($tenantId)->count() : 0,
+                'square_payments' => Schema::hasTable('square_payments') ? (int) SquarePayment::query()->forTenantId($tenantId)->count() : 0,
                 'growave_external_profiles' => Schema::hasTable('customer_external_profiles')
-                    ? (int) CustomerExternalProfile::query()->where('integration', 'growave')->count()
+                    ? (int) CustomerExternalProfile::query()
+                        ->forTenantId($tenantId)
+                        ->where('integration', 'growave')
+                        ->count()
                     : 0,
                 'review_summaries' => $reviewSummaryCount,
             ],
@@ -427,43 +466,9 @@ class MarketingPagesController extends Controller
     /**
      * @return array<string,mixed>
      */
-    protected function messagesDashboard(): array
+    protected function messagesDashboard(int $tenantId): array
     {
-        $groups = MarketingGroup::query()
-            ->withCount('members')
-            ->orderByDesc('updated_at')
-            ->limit(8)
-            ->get(['id', 'name', 'description', 'is_internal', 'updated_at']);
-
-        $internalGroups = $groups
-            ->where('is_internal', true)
-            ->values();
-
-        $campaigns = MarketingCampaign::query()
-            ->withCount('recipients')
-            ->orderByDesc('updated_at')
-            ->limit(8)
-            ->get(['id', 'name', 'status', 'channel', 'updated_at']);
-
-        $templates = MarketingMessageTemplate::query()
-            ->orderByDesc('updated_at')
-            ->limit(8)
-            ->get(['id', 'name', 'channel', 'objective', 'is_active', 'updated_at']);
-
-        return [
-            'counts' => [
-                'groups' => MarketingGroup::query()->count(),
-                'internal_groups' => MarketingGroup::query()->where('is_internal', true)->count(),
-                'campaigns' => MarketingCampaign::query()->count(),
-                'queued_approvals' => MarketingCampaignRecipient::query()->where('status', 'queued_for_approval')->count(),
-                'templates' => MarketingMessageTemplate::query()->count(),
-                'active_templates' => MarketingMessageTemplate::query()->where('is_active', true)->count(),
-            ],
-            'groups' => $groups,
-            'internal_groups' => $internalGroups,
-            'campaigns' => $campaigns,
-            'templates' => $templates,
-        ];
+        return $this->tenantMessagingSummary($tenantId);
     }
 
     /**
@@ -471,6 +476,8 @@ class MarketingPagesController extends Controller
      */
     protected function customersFocusAreas(): array
     {
+        $rewardsLabel = $this->displayLabel('rewards_label', 'Rewards');
+
         return [
             [
                 'title' => 'Unified Identity Layer',
@@ -489,8 +496,8 @@ class MarketingPagesController extends Controller
                 'detail' => 'Future event and market purchase context connected to customer identity.',
             ],
             [
-                'title' => 'Candle Cash Balance/Activity',
-                'detail' => 'Future rewards snapshots and activity feeds tied to marketing profile state.',
+                'title' => $rewardsLabel . ' Balance/Activity',
+                'detail' => 'Future ' . strtolower($rewardsLabel) . ' snapshots and activity feeds tied to marketing profile state.',
             ],
             [
                 'title' => 'Campaign/Message History',
@@ -506,21 +513,23 @@ class MarketingPagesController extends Controller
     /**
      * @return array<int,array{label:string,value:int,note:string}>
      */
-    protected function customersDiscoverySummary(): array
+    protected function customersDiscoverySummary(int $tenantId): array
     {
+        $shopifyStoreKeys = $this->tenantShopifyStoreKeys($tenantId);
         $rows = [];
 
         try {
             if (Schema::hasTable('orders')) {
                 $rows[] = [
                     'label' => 'Orders (existing operational table)',
-                    'value' => (int) Order::query()->count(),
+                    'value' => (int) Order::query()->forTenantId($tenantId)->count(),
                     'note' => 'All order records currently available for downstream marketing linkage.',
                 ];
 
                 $rows[] = [
                     'label' => 'Distinct customer_name values in orders',
                     'value' => (int) Order::query()
+                        ->forTenantId($tenantId)
                         ->whereNotNull('customer_name')
                         ->where('customer_name', '!=', '')
                         ->distinct()
@@ -530,7 +539,10 @@ class MarketingPagesController extends Controller
 
                 $rows[] = [
                     'label' => 'Shopify-linked orders',
-                    'value' => (int) Order::query()->whereNotNull('shopify_order_id')->count(),
+                    'value' => (int) Order::query()
+                        ->forTenantId($tenantId)
+                        ->whereNotNull('shopify_order_id')
+                        ->count(),
                     'note' => 'Orders tied to Shopify identifiers in the existing ingestion pipeline.',
                 ];
             }
@@ -538,42 +550,25 @@ class MarketingPagesController extends Controller
             if (Schema::hasTable('order_lines')) {
                 $rows[] = [
                     'label' => 'Order lines',
-                    'value' => (int) OrderLine::query()->count(),
+                    'value' => (int) OrderLine::query()
+                        ->whereHas('order', fn (Builder $query) => $query->forTenantId($tenantId))
+                        ->count(),
                     'note' => 'Line-item detail currently available for profile/order enrichment.',
-                ];
-            }
-
-            if (Schema::hasTable('events')) {
-                $rows[] = [
-                    'label' => 'Events',
-                    'value' => (int) Event::query()->count(),
-                    'note' => 'Event records that can later support attribution and lifecycle analysis.',
-                ];
-            }
-
-            if (Schema::hasTable('event_instances')) {
-                $rows[] = [
-                    'label' => 'Event instances',
-                    'value' => (int) EventInstance::query()->count(),
-                    'note' => 'Imported historical event instances available for mapping and analytics.',
                 ];
             }
 
             if (Schema::hasTable('shopify_import_runs')) {
                 $rows[] = [
                     'label' => 'Shopify import runs',
-                    'value' => (int) ShopifyImportRun::query()->count(),
+                    'value' => $shopifyStoreKeys === []
+                        ? 0
+                        : (int) ShopifyImportRun::query()
+                            ->whereIn('store_key', $shopifyStoreKeys)
+                            ->count(),
                     'note' => 'Operational sync runs currently tracked for Shopify imports.',
                 ];
             }
 
-            if (Schema::hasTable('wholesale_custom_scents')) {
-                $rows[] = [
-                    'label' => 'Wholesale custom scent records',
-                    'value' => (int) WholesaleCustomScent::query()->count(),
-                    'note' => 'Existing account-linked scent records that may influence profile linking rules.',
-                ];
-            }
         } catch (\Throwable $e) {
             return [];
         }
@@ -590,36 +585,46 @@ class MarketingPagesController extends Controller
             return [];
         }
 
-        $statusBreakdown = CandleCashRedemption::query()
+        $tenantId = $this->currentTenantId(request(), true);
+
+        $redemptionQuery = CandleCashRedemption::query()
+            ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId));
+
+        $statusBreakdown = (clone $redemptionQuery)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status')
             ->map(fn ($value) => (int) $value)
             ->all();
 
-        $platformBreakdown = CandleCashRedemption::query()
+        $platformBreakdown = (clone $redemptionQuery)
             ->selectRaw("coalesce(platform, 'unknown') as platform_key, count(*) as aggregate")
             ->groupBy('platform_key')
             ->pluck('aggregate', 'platform_key')
             ->map(fn ($value) => (int) $value)
             ->all();
 
-        $outstanding = CandleCashRedemption::query()
+        $outstanding = (clone $redemptionQuery)
             ->where('status', 'issued')
             ->count();
 
-        $recentRedemptions = CandleCashRedemption::query()
+        $recentRedemptions = (clone $redemptionQuery)
             ->with(['profile:id,first_name,last_name,email,phone', 'reward:id,name'])
             ->orderByDesc('id')
             ->limit(25)
             ->get();
 
         $recentTransactions = Schema::hasTable('candle_cash_transactions')
-            ? CandleCashTransaction::query()->orderByDesc('id')->limit(25)->get()
+            ? CandleCashTransaction::query()
+                ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId))
+                ->orderByDesc('id')
+                ->limit(25)
+                ->get()
             : collect();
 
         $openIssues = Schema::hasTable('marketing_storefront_events')
             ? (int) MarketingStorefrontEvent::query()
+                ->forTenantId($tenantId)
                 ->where('resolution_status', 'open')
                 ->whereIn('status', ['error', 'verification_required', 'pending'])
                 ->count()
@@ -627,12 +632,13 @@ class MarketingPagesController extends Controller
 
         $widgetEvents24h = Schema::hasTable('marketing_storefront_events')
             ? (int) MarketingStorefrontEvent::query()
+                ->forTenantId($tenantId)
                 ->where('source_surface', 'shopify_widget')
                 ->where('occurred_at', '>=', now()->subDay())
                 ->count()
             : 0;
 
-        $rewardAssistedOrders = (int) (CandleCashRedemption::query()
+        $rewardAssistedOrders = (int) ((clone $redemptionQuery)
             ->where('status', 'redeemed')
             ->whereNotNull('external_order_id')
             ->where('external_order_id', '!=', '')
@@ -640,7 +646,7 @@ class MarketingPagesController extends Controller
             ->value('aggregate') ?? 0);
 
         return [
-            'profiles_count' => Schema::hasTable('marketing_profiles') ? (int) MarketingProfile::query()->count() : 0,
+            'profiles_count' => Schema::hasTable('marketing_profiles') ? (int) MarketingProfile::query()->forTenantId($tenantId)->count() : 0,
             'status_breakdown' => $statusBreakdown,
             'platform_breakdown' => $platformBreakdown,
             'outstanding_issued' => (int) $outstanding,
@@ -650,5 +656,205 @@ class MarketingPagesController extends Controller
             'widget_events_24h' => $widgetEvents24h,
             'reward_assisted_orders' => $rewardAssistedOrders,
         ];
+    }
+
+    protected function displayLabel(string $key, string $fallback): string
+    {
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+
+        return $resolver->label($this->currentTenantId(request()), $key, $fallback);
+    }
+
+    protected function recentImportRunsForTenant(?int $tenantId): \Illuminate\Support\Collection
+    {
+        if ($tenantId === null || ! Schema::hasTable('marketing_import_runs')) {
+            return collect();
+        }
+
+        return MarketingImportRun::query()
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get();
+    }
+
+    protected function currentTenantId(Request $request, bool $required = false): ?int
+    {
+        foreach (['current_tenant_id', 'host_tenant_id'] as $attribute) {
+            $tenantId = $this->positiveInt($request->attributes->get($attribute));
+            if ($tenantId !== null) {
+                $request->attributes->set('current_tenant_id', $tenantId);
+
+                return $tenantId;
+            }
+        }
+
+        $sessionTenantId = $this->positiveInt($request->session()->get('tenant_id'));
+        if ($sessionTenantId !== null) {
+            $request->attributes->set('current_tenant_id', $sessionTenantId);
+
+            return $sessionTenantId;
+        }
+
+        $user = $request->user();
+        if ($user) {
+            $tenantIds = $user->tenants()
+                ->pluck('tenants.id')
+                ->map(fn ($value): int => (int) $value)
+                ->filter(fn (int $value): bool => $value > 0)
+                ->values();
+
+            if ($tenantIds->count() === 1) {
+                $tenantId = (int) $tenantIds->first();
+                $request->attributes->set('current_tenant_id', $tenantId);
+
+                return $tenantId;
+            }
+        }
+
+        if ($required) {
+            abort(403, 'Tenant context is required to view this page.');
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function tenantShopifyStoreKeys(int $tenantId): array
+    {
+        if (! Schema::hasTable('shopify_stores')) {
+            return [];
+        }
+
+        return ShopifyStore::query()
+            ->forTenantId($tenantId)
+            ->pluck('store_key')
+            ->map(fn (mixed $value): string => strtolower(trim((string) $value)))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->values()
+            ->all();
+    }
+
+    protected function latestShopifyRunForTenant(int $tenantId): ?ShopifyImportRun
+    {
+        $storeKeys = $this->tenantShopifyStoreKeys($tenantId);
+        if ($storeKeys === []) {
+            return null;
+        }
+
+        return ShopifyImportRun::query()
+            ->whereIn('store_key', $storeKeys)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function tenantMessagingSummary(int $tenantId): array
+    {
+        $campaignIds = $this->ownershipService->tenantCampaignIds($tenantId);
+        $groupIds = $this->ownershipService->tenantGroupIds($tenantId);
+        $templateIds = $this->ownershipService->tenantTemplateIds($tenantId);
+        $segmentIds = $this->ownershipService->tenantSegmentIds($tenantId);
+
+        $groups = $groupIds->isEmpty()
+            ? collect()
+            : MarketingGroup::query()
+                ->whereIn('id', $groupIds->all())
+                ->withCount([
+                    'members as members_count' => function (Builder $query) use ($tenantId): void {
+                        $query->whereHas('profile', fn (Builder $profileQuery) => $profileQuery->forTenantId($tenantId));
+                    },
+                ])
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
+                ->limit(8)
+                ->get(['id', 'name', 'description', 'is_internal', 'updated_at']);
+
+        $internalGroups = $groups
+            ->where('is_internal', true)
+            ->values();
+
+        $campaigns = $campaignIds->isEmpty()
+            ? collect()
+            : MarketingCampaign::query()
+                ->whereIn('id', $campaignIds->all())
+                ->withCount([
+                    'recipients as recipients_count' => function (Builder $query) use ($tenantId): void {
+                        $query->whereHas('profile', fn (Builder $profileQuery) => $profileQuery->forTenantId($tenantId));
+                    },
+                ])
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
+                ->limit(8)
+                ->get(['id', 'name', 'status', 'channel', 'updated_at']);
+
+        $templates = $templateIds->isEmpty()
+            ? collect()
+            : MarketingMessageTemplate::query()
+                ->whereIn('id', $templateIds->all())
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
+                ->limit(8)
+                ->get(['id', 'name', 'channel', 'objective', 'is_active', 'updated_at']);
+
+        return [
+            'counts' => [
+                'groups' => (int) $groupIds->count(),
+                'internal_groups' => (int) $internalGroups->count(),
+                'campaigns' => (int) $campaignIds->count(),
+                'queued_approvals' => Schema::hasTable('marketing_campaign_recipients')
+                    ? (int) MarketingCampaignRecipient::query()
+                        ->where('status', 'queued_for_approval')
+                        ->whereHas('profile', fn (Builder $query) => $query->forTenantId($tenantId))
+                        ->count()
+                    : 0,
+                'templates' => (int) $templateIds->count(),
+                'active_templates' => (int) $templates->where('is_active', true)->count(),
+                'segment_count' => (int) $segmentIds->count(),
+            ],
+            'groups' => $groups,
+            'internal_groups' => $internalGroups,
+            'campaigns' => $campaigns,
+            'templates' => $templates,
+        ];
+    }
+
+    protected function sectionRequiresTenant(string $section): bool
+    {
+        if (! array_key_exists($section, MarketingSectionRegistry::sections())) {
+            return false;
+        }
+
+        if (! Schema::hasTable('tenants')) {
+            return false;
+        }
+
+        return Tenant::query()->count() > 0;
+    }
+
+    protected function requireTenantId(Request $request): int
+    {
+        $tenantId = $this->currentTenantId($request, true);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required to view this page.');
+        }
+
+        return $tenantId;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 }

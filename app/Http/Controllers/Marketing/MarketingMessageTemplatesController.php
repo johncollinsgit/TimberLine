@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingMessageTemplate;
 use App\Models\MarketingProfile;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Services\Marketing\MarketingTemplateRenderer;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
@@ -13,11 +14,28 @@ use Illuminate\Http\Request;
 
 class MarketingMessageTemplatesController extends Controller
 {
+    public function __construct(
+        protected MarketingTenantOwnershipService $ownershipService
+    ) {
+    }
+
     public function index(Request $request): View
     {
-        $templates = MarketingMessageTemplate::query()
+        $tenantId = $this->resolveTenantId($request);
+        $templatesQuery = MarketingMessageTemplate::query()
             ->orderByDesc('updated_at')
-            ->paginate(30);
+            ->orderByDesc('id');
+
+        if ($this->strictTenantMode() && $tenantId !== null) {
+            $templateIds = $this->ownershipService->tenantTemplateIds($tenantId);
+            if ($templateIds->isEmpty()) {
+                $templatesQuery->whereRaw('1 = 0');
+            } else {
+                $templatesQuery->whereIn('id', $templateIds->all());
+            }
+        }
+
+        $templates = $templatesQuery->paginate(30);
 
         return view('marketing/templates/index', [
             'section' => MarketingSectionRegistry::section('message-templates'),
@@ -28,6 +46,8 @@ class MarketingMessageTemplatesController extends Controller
 
     public function create(Request $request): View
     {
+        $tenantId = $this->resolveTenantId($request);
+
         $channel = strtolower(trim((string) $request->query('channel', 'sms')));
         if (!in_array($channel, ['sms', 'email'], true)) {
             $channel = 'sms';
@@ -37,7 +57,9 @@ class MarketingMessageTemplatesController extends Controller
         $previewText = null;
         $profileId = (int) $request->query('profile_id', 0);
         if ($profileId > 0) {
-            $profile = MarketingProfile::query()->find($profileId);
+            $profile = MarketingProfile::query()
+                ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
+                ->find($profileId);
         }
 
         $template = new MarketingMessageTemplate([
@@ -65,9 +87,12 @@ class MarketingMessageTemplatesController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+
         $data = $this->validated($request);
         $template = MarketingMessageTemplate::query()->create([
             ...$data,
+            'tenant_id' => $tenantId,
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),
         ]);
@@ -77,8 +102,11 @@ class MarketingMessageTemplatesController extends Controller
             ->with('toast', ['style' => 'success', 'message' => 'Template created.']);
     }
 
-    public function edit(MarketingMessageTemplate $template): View
+    public function edit(Request $request, MarketingMessageTemplate $template): View
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertTemplateAccess($template, $tenantId);
+
         return view('marketing/templates/form', [
             'section' => MarketingSectionRegistry::section('message-templates'),
             'sections' => $this->navigationItems(),
@@ -90,6 +118,9 @@ class MarketingMessageTemplatesController extends Controller
 
     public function update(Request $request, MarketingMessageTemplate $template): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertTemplateAccess($template, $tenantId);
+
         $data = $this->validated($request);
         $template->fill([
             ...$data,
@@ -106,8 +137,18 @@ class MarketingMessageTemplatesController extends Controller
         Request $request,
         MarketingTemplateRenderer $renderer
     ): View {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertTemplateAccess($template, $tenantId);
+
         $profileId = (int) $request->query('profile_id', 0);
-        $profile = $profileId > 0 ? MarketingProfile::query()->find($profileId) : MarketingProfile::query()->orderByDesc('id')->first();
+        $profile = $profileId > 0
+            ? MarketingProfile::query()
+                ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
+                ->find($profileId)
+            : MarketingProfile::query()
+                ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
+                ->orderByDesc('id')
+                ->first();
         $previewText = $profile ? $renderer->renderTemplate($template, $profile) : null;
 
         return view('marketing/templates/form', [
@@ -173,5 +214,26 @@ class MarketingMessageTemplatesController extends Controller
     protected function resolveRenderer(): MarketingTemplateRenderer
     {
         return app(MarketingTemplateRenderer::class);
+    }
+
+    protected function strictTenantMode(): bool
+    {
+        return $this->ownershipService->strictModeEnabled();
+    }
+
+    protected function resolveTenantId(Request $request): ?int
+    {
+        return $this->ownershipService->resolveTenantId($request, $this->strictTenantMode());
+    }
+
+    protected function assertTemplateAccess(MarketingMessageTemplate $template, ?int $tenantId): void
+    {
+        if (! $this->strictTenantMode() || $tenantId === null) {
+            return;
+        }
+
+        if (! $this->ownershipService->templateOwnedByTenant((int) $template->id, $tenantId)) {
+            abort(404);
+        }
     }
 }

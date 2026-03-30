@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\CandleCashService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -37,11 +38,11 @@ class ShopifyEmbeddedCustomerDetailService
      *   external_profiles:Collection<int,CustomerExternalProfile>
      * }
      */
-    public function build(MarketingProfile $profile): array
+    public function build(MarketingProfile $profile, ?int $tenantId = null): array
     {
         return array_merge(
-            $this->buildCritical($profile),
-            $this->buildDeferredSections($profile),
+            $this->buildCritical($profile, $tenantId),
+            $this->buildDeferredSections($profile, $tenantId),
         );
     }
 
@@ -53,8 +54,10 @@ class ShopifyEmbeddedCustomerDetailService
      *   messaging:array<string,mixed>
      * }
      */
-    public function buildCritical(MarketingProfile $profile): array
+    public function buildCritical(MarketingProfile $profile, ?int $tenantId = null): array
     {
+        $this->assertTenantScopedProfile($profile->id, $tenantId);
+
         $profile->loadMissing([
             'candleCashBalance',
             'birthdayProfile',
@@ -98,8 +101,10 @@ class ShopifyEmbeddedCustomerDetailService
      *   deferred_meta:array{last_activity_at:?CarbonImmutable,last_activity_display:string}
      * }
      */
-    public function buildDeferredSections(MarketingProfile $profile): array
+    public function buildDeferredSections(MarketingProfile $profile, ?int $tenantId = null): array
     {
+        $this->assertTenantScopedProfile($profile->id, $tenantId);
+
         $profile->loadMissing([
             'externalProfiles' => fn ($query) => $query->orderByDesc('synced_at')->orderByDesc('id')->limit(self::DEFERRED_EXTERNAL_PROFILE_LIMIT),
         ]);
@@ -117,6 +122,26 @@ class ShopifyEmbeddedCustomerDetailService
                 'last_activity_display' => $lastActivityAt ? $this->formatTimestamp($lastActivityAt) : 'No recent activity',
             ],
         ];
+    }
+
+    protected function assertTenantScopedProfile(int $profileId, ?int $tenantId): void
+    {
+        $query = MarketingProfile::query()->whereKey($profileId);
+
+        if ($tenantId === null) {
+            $query->whereNull('tenant_id');
+        } else {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        if ($query->exists()) {
+            return;
+        }
+
+        $exception = new ModelNotFoundException();
+        $exception->setModel(MarketingProfile::class, [$profileId]);
+
+        throw $exception;
     }
 
     protected function balancePoints(MarketingProfile $profile): int
@@ -330,15 +355,15 @@ class ShopifyEmbeddedCustomerDetailService
 
                 if ($this->isManualAdjustment($transaction)) {
                     $type = 'Manual Adjustment';
-                    $label = 'Candle Cash';
+                    $label = 'Rewards';
                     $status = 'Admin';
                     $actor = $this->resolveActorLabel($transaction->source_id, $actorLabels);
                 } elseif ($this->isCandleCashSend($transaction)) {
-                    $type = 'Candle Cash Sent';
-                    $label = 'Candle Cash';
+                    $type = 'Reward Credit Sent';
+                    $label = 'Rewards';
                     $status = 'Admin';
                     $actor = $this->resolveActorLabel($transaction->source_id, $actorLabels);
-                    $giftDetailParts = [$transaction->description ?: 'Gifted Candle Cash'];
+                    $giftDetailParts = [$transaction->description ?: 'Sent reward credit'];
                     if ($transaction->gift_intent !== null && trim((string) $transaction->gift_intent) !== '') {
                         $giftDetailParts[] = 'Intent: ' . Str::headline(str_replace('_', ' ', (string) $transaction->gift_intent));
                     }
@@ -355,10 +380,10 @@ class ShopifyEmbeddedCustomerDetailService
                     }
                 } elseif ($transaction->type === 'earn') {
                     $type = 'Reward Earned';
-                    $label = $transaction->description ?: 'Candle Cash';
+                    $label = $transaction->description ?: 'Rewards';
                 } elseif ($transaction->type === 'redeem') {
                     $type = 'Redemption';
-                    $label = $transaction->description ?: 'Candle Cash';
+                    $label = $transaction->description ?: 'Rewards';
                 }
 
                 $detailText = $giftDetailParts !== null ? implode(' · ', $giftDetailParts) : ($transaction->description ?: '—');

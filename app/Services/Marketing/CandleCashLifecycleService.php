@@ -110,6 +110,13 @@ class CandleCashLifecycleService
                     return null;
                 }
 
+                $resolvedTenantId = (int) ($profile->tenant_id ?? 0);
+                if ($resolvedTenantId <= 0) {
+                    $excludedReasons['tenant_context_missing'] = ($excludedReasons['tenant_context_missing'] ?? 0) + 1;
+
+                    return null;
+                }
+
                 $latestEarnedAt = $this->parseDate($row['latest_earned_date'] ?? null);
                 if (! $latestEarnedAt) {
                     $excludedReasons['latest_earned_at_missing'] = ($excludedReasons['latest_earned_at_missing'] ?? 0) + 1;
@@ -151,7 +158,7 @@ class CandleCashLifecycleService
                 }
 
                 if ($trigger === self::TRIGGER_REMINDER) {
-                    if ($this->hasRecentLifecycleEvent($profileId, (int) ($profile->tenant_id ?? 0), $channel, $cooldownCutoff)) {
+                    if ($this->hasRecentLifecycleEvent($profileId, $resolvedTenantId, $channel, $cooldownCutoff)) {
                         $excludedReasons['cooldown_active'] = ($excludedReasons['cooldown_active'] ?? 0) + 1;
 
                         return null;
@@ -160,7 +167,7 @@ class CandleCashLifecycleService
 
                 return [
                     'marketing_profile_id' => $profileId,
-                    'tenant_id' => (int) ($profile->tenant_id ?? 0) ?: null,
+                    'tenant_id' => $resolvedTenantId,
                     'first_name' => (string) ($profile->first_name ?? ''),
                     'last_name' => (string) ($profile->last_name ?? ''),
                     'email' => $this->normalizedEmailForProfile($profile),
@@ -176,8 +183,8 @@ class CandleCashLifecycleService
                     'last_order_at' => ($lastOrderByProfile[$profileId] ?? null)?->toIso8601String(),
                     'top_sources' => (array) ($row['top_sources'] ?? []),
                     'qualification_reason' => $trigger === self::TRIGGER_LAPSED_WITH_VALUE
-                        ? 'Customer has outstanding program-earned Candle Cash, has not redeemed after latest earn, and is lapsed by the configured purchaser window.'
-                        : 'Customer has outstanding program-earned Candle Cash and no post-earn redemption in the configured window.',
+                        ? 'Customer has outstanding program-earned reward credit, has not redeemed after latest earn, and is lapsed by the configured purchaser window.'
+                        : 'Customer has outstanding program-earned reward credit and no post-earn redemption in the configured window.',
                 ];
             })
             ->filter(fn (?array $row): bool => is_array($row))
@@ -223,6 +230,12 @@ class CandleCashLifecycleService
             $trigger = $this->resolveTrigger($row['trigger_key'] ?? null);
             $channel = $this->resolveChannel($row['channel'] ?? null);
             if ($profileId <= 0) {
+                $skipped++;
+
+                continue;
+            }
+
+            if ($tenantId === null || $tenantId <= 0) {
                 $skipped++;
 
                 continue;
@@ -390,6 +403,10 @@ class CandleCashLifecycleService
 
     protected function hasRecentLifecycleEvent(int $profileId, int $tenantId, string $channel, CarbonImmutable $cutoff): bool
     {
+        if ($tenantId <= 0) {
+            return true;
+        }
+
         return MarketingAutomationEvent::query()
             ->forTenantId($tenantId > 0 ? $tenantId : null)
             ->where('marketing_profile_id', $profileId)

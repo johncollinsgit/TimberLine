@@ -726,7 +726,7 @@
                                             · assigned plan: {{ $row['plan_key'] }}
                                             · effective plan: {{ $row['resolved_plan_key'] }}
                                             · template: {{ $row['template_key'] !== '' ? $row['template_key'] : 'none' }}
-                                            · labels: {{ str_replace('_', ' ', (string) ($row['label_source'] ?? 'entitlements_default')) }}
+                                            · labels: {{ str_replace('_', ' ', (string) ($row['label_source'] ?? 'global_fallback')) }}
                                         </p>
                                         <p class="mt-1 text-[11px] text-zinc-600">
                                             Billing readiness:
@@ -891,10 +891,10 @@
                                         </label>
                                         <label class="mt-2 block text-xs text-zinc-700">
                                             Display labels JSON
-                                            <textarea name="display_labels_json" rows="2" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-900" placeholder='{"rewards":"Rewards","birthdays":"Lifecycle"}'>{{ old('display_labels_json', (string) ($row['display_labels_json'] ?? '')) }}</textarea>
+                                            <textarea name="display_labels_json" rows="2" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-900" placeholder='{"rewards_label":"Candle Cash","rewards_balance_label":"Candle Cash balance","reward_credit_label":"Candle Cash credit"}'>{{ old('display_labels_json', (string) ($row['display_labels_json'] ?? '')) }}</textarea>
                                         </label>
                                         <p class="text-[11px] text-zinc-600">
-                                            Use a JSON object keyed by module (for example: <code>rewards</code>, <code>birthdays</code>). Invalid keys/values are ignored and fallback labels are used.
+                                            Use a JSON object keyed by display-label tokens (for example: <code>rewards_label</code>, <code>rewards_balance_label</code>, <code>reward_credit_label</code>, <code>birthdays_label</code>). Invalid keys/values are ignored and global fallback labels are used.
                                         </p>
                                         <label class="mt-2 block text-xs text-zinc-700">
                                             Plan pricing overrides JSON

@@ -20,12 +20,14 @@ class MarketingOperationsController extends Controller
 {
     public function reconciliation(Request $request): View
     {
+        $tenantId = $this->requireTenantId($request);
         $status = trim((string) $request->query('status', 'open'));
         $issueType = trim((string) $request->query('issue_type', 'all'));
         $platform = trim((string) $request->query('platform', 'all'));
         $search = trim((string) $request->query('search', ''));
 
         $events = MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
             ->with([
                 'profile:id,first_name,last_name,email,phone',
                 'redemption:id,marketing_profile_id,reward_id,redemption_code,status,platform,external_order_source,external_order_id',
@@ -60,6 +62,7 @@ class MarketingOperationsController extends Controller
 
         $issuedRedemptions = CandleCashRedemption::query()
             ->with(['profile:id,first_name,last_name,email,phone', 'reward:id,name'])
+            ->whereHas('profile', fn ($query) => $query->forTenantId($tenantId))
             ->where('status', 'issued')
             ->when($platform !== 'all' && $platform !== '', fn ($query) => $query->where('platform', $platform))
             ->orderByDesc('issued_at')
@@ -68,6 +71,7 @@ class MarketingOperationsController extends Controller
             ->get();
 
         $issueTypes = MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
             ->whereNotNull('issue_type')
             ->distinct()
             ->orderBy('issue_type')
@@ -75,11 +79,13 @@ class MarketingOperationsController extends Controller
             ->values();
 
         $openCount = (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
             ->where('resolution_status', 'open')
             ->whereIn('status', ['error', 'verification_required', 'pending'])
             ->count();
 
         $reconciledToday = (int) CandleCashRedemption::query()
+            ->whereHas('profile', fn ($query) => $query->forTenantId($tenantId))
             ->where('status', 'redeemed')
             ->whereDate('redeemed_at', now()->toDateString())
             ->count();
@@ -102,6 +108,9 @@ class MarketingOperationsController extends Controller
 
     public function resolveIssue(MarketingStorefrontEvent $event, Request $request): RedirectResponse
     {
+        $tenantId = $this->requireTenantId($request);
+        $this->assertEventTenant($event, $tenantId);
+
         $data = $request->validate([
             'resolution_status' => ['required', 'in:resolved,ignored'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -122,6 +131,7 @@ class MarketingOperationsController extends Controller
 
     public function retryReconciliation(Request $request): RedirectResponse
     {
+        $tenantId = $this->requireTenantId($request);
         $data = $request->validate([
             'source' => ['nullable', 'in:all,shopify,square'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:5000'],
@@ -134,6 +144,7 @@ class MarketingOperationsController extends Controller
 
         Artisan::call('marketing:reconcile-redemptions', [
             '--source' => $source,
+            '--tenant-id' => $tenantId,
             '--limit' => $limit,
             '--dry-run' => $dryRun,
         ]);
@@ -154,6 +165,9 @@ class MarketingOperationsController extends Controller
         Request $request,
         CandleCashRedemptionReconciliationService $service
     ): RedirectResponse {
+        $tenantId = $this->requireTenantId($request);
+        $this->assertRedemptionTenant($redemption, $tenantId);
+
         $data = $request->validate([
             'platform' => ['nullable', 'in:shopify,square,manual'],
             'external_order_source' => ['nullable', 'string', 'max:80'],
@@ -179,6 +193,7 @@ class MarketingOperationsController extends Controller
         CandleCashService $candleCashService,
         CandleCashAccessGate $accessGate
     ): JsonResponse {
+        $tenantId = $this->requireTenantId($request);
         $data = $request->validate([
             'email' => ['nullable', 'string', 'max:255'],
             'profile_id' => ['nullable', 'integer'],
@@ -189,13 +204,16 @@ class MarketingOperationsController extends Controller
         $email = strtolower(trim((string) ($data['email'] ?? '')));
 
         $profile = $profileId > 0
-            ? MarketingProfile::query()->find($profileId)
+            ? MarketingProfile::query()->forTenantId($tenantId)->find($profileId)
             : null;
 
         if (! $profile && $email !== '') {
             $profile = MarketingProfile::query()
-                ->where('normalized_email', $email)
-                ->orWhere('email', $email)
+                ->forTenantId($tenantId)
+                ->where(function ($query) use ($email): void {
+                    $query->where('normalized_email', $email)
+                        ->orWhere('email', $email);
+                })
                 ->first();
         }
 
@@ -211,14 +229,16 @@ class MarketingOperationsController extends Controller
 
         $limit = (int) ($data['limit'] ?? 5);
         $balance = $candleCashService->currentBalance($profile);
-        $reward = $candleCashService->storefrontReward();
-        $rewardCost = $reward ? $candleCashService->storefrontRewardPointsCost($reward) : null;
+        $reward = $candleCashService->storefrontReward($tenantId);
+        $rewardCost = $reward ? $candleCashService->storefrontRewardPointsCost($reward, $tenantId) : null;
         $openIssuedCount = (int) CandleCashRedemption::query()
             ->where('marketing_profile_id', $profile->id)
+            ->whereHas('profile', fn ($query) => $query->forTenantId($tenantId))
             ->where('status', 'issued')
             ->count();
 
         $events = MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
             ->where('marketing_profile_id', $profile->id)
             ->whereIn('event_type', ['widget_redeem_request', 'public_redeem_request'])
             ->orderByDesc('occurred_at')
@@ -325,5 +345,35 @@ class MarketingOperationsController extends Controller
         }
 
         return null;
+    }
+
+    protected function requireTenantId(Request $request): int
+    {
+        $tenantId = $request->attributes->get('current_tenant_id');
+        if (! is_numeric($tenantId) || (int) $tenantId <= 0) {
+            abort(403, 'Operations reconciliation requires a tenant context.');
+        }
+
+        return (int) $tenantId;
+    }
+
+    protected function assertEventTenant(MarketingStorefrontEvent $event, int $tenantId): void
+    {
+        $eventTenantId = is_numeric($event->tenant_id) ? (int) $event->tenant_id : null;
+        if ($eventTenantId === null || $eventTenantId !== $tenantId) {
+            abort(404);
+        }
+    }
+
+    protected function assertRedemptionTenant(CandleCashRedemption $redemption, int $tenantId): void
+    {
+        $owned = MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->whereKey((int) $redemption->marketing_profile_id)
+            ->exists();
+
+        if (! $owned) {
+            abort(404);
+        }
     }
 }

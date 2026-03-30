@@ -1032,17 +1032,25 @@ class BirthdayReportingService
     /**
      * @return array<string,mixed>
      */
-    public function summary(?CarbonInterface $asOf = null): array
+    public function summary(int $tenantId, ?CarbonInterface $asOf = null): array
     {
+        $this->requireTenantId($tenantId);
         $asOf = $asOf ?: now();
         $year = (int) $asOf->year;
 
-        $totalProfiles = (int) MarketingProfile::query()->count();
-        $withBirthday = (int) $this->baseBirthdayQuery()->count();
+        $totalProfiles = (int) MarketingProfile::query()->forTenantId($tenantId)->count();
+        $withBirthday = (int) $this->baseBirthdayQuery($tenantId)->count();
         $missingBirthday = max(0, $totalProfiles - $withBirthday);
-        $emailSubscribed = (int) CustomerBirthdayProfile::query()->where('email_subscribed', true)->count();
-        $smsSubscribed = (int) CustomerBirthdayProfile::query()->where('sms_subscribed', true)->count();
+        $emailSubscribed = (int) CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+            ->where('email_subscribed', true)
+            ->count();
+        $smsSubscribed = (int) CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+            ->where('sms_subscribed', true)
+            ->count();
         $shopifyMatched = (int) CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->whereHas('marketingProfile.links', fn (Builder $query) => $query->where('source_type', 'shopify_customer'))
             ->count();
         $nonShopify = max(0, $withBirthday - $shopifyMatched);
@@ -1056,17 +1064,17 @@ class BirthdayReportingService
 
         $tomorrow = $asOf->copy()->addDay();
 
-        $birthdaysToday = (int) $this->baseBirthdayQuery()
+        $birthdaysToday = (int) $this->baseBirthdayQuery($tenantId)
             ->where('birth_month', (int) $asOf->month)
             ->where('birth_day', (int) $asOf->day)
             ->count();
 
-        $birthdaysTomorrow = (int) $this->baseBirthdayQuery()
+        $birthdaysTomorrow = (int) $this->baseBirthdayQuery($tenantId)
             ->where('birth_month', (int) $tomorrow->month)
             ->where('birth_day', (int) $tomorrow->day)
             ->count();
 
-        $birthdaysThisWeek = (int) $this->baseBirthdayQuery()
+        $birthdaysThisWeek = (int) $this->baseBirthdayQuery($tenantId)
             ->where(function (Builder $query) use ($weekDates): void {
                 foreach ($weekDates as [$month, $day]) {
                     $query->orWhere(function (Builder $dayQuery) use ($month, $day): void {
@@ -1076,25 +1084,29 @@ class BirthdayReportingService
             })
             ->count();
 
-        $birthdaysThisMonth = (int) $this->baseBirthdayQuery()
+        $birthdaysThisMonth = (int) $this->baseBirthdayQuery($tenantId)
             ->where('birth_month', (int) $asOf->month)
             ->count();
 
         $issuedThisYear = (int) BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('cycle_year', $year)
             ->count();
 
         $activatedThisYear = (int) BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('cycle_year', $year)
             ->whereIn('status', ['claimed', 'redeemed'])
             ->count();
 
         $redeemedThisYear = (int) BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('cycle_year', $year)
             ->where('status', 'redeemed')
             ->count();
 
         $attributedRevenue = (float) (BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('cycle_year', $year)
             ->where('status', 'redeemed')
             ->sum('attributed_revenue') ?? 0);
@@ -1104,11 +1116,13 @@ class BirthdayReportingService
             : 0.0;
 
         $syncFailures = (int) BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('cycle_year', $year)
             ->where('discount_sync_status', 'failed')
             ->count();
 
         $emailEventsThisYear = BirthdayMessageEvent::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('channel', 'email')
             ->whereYear('created_at', $year);
 
@@ -1117,6 +1131,7 @@ class BirthdayReportingService
         $emailsClicked = (int) (clone $emailEventsThisYear)->whereNotNull('clicked_at')->count();
 
         $segmentsByMonth = CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->selectRaw('birth_month, count(*) as total')
             ->whereNotNull('birth_month')
             ->whereNotNull('birth_day')
@@ -1131,6 +1146,7 @@ class BirthdayReportingService
             ->all();
 
         $signupSources = CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->selectRaw('signup_source, count(*) as total')
             ->whereNotNull('signup_source')
             ->groupBy('signup_source')
@@ -1144,7 +1160,7 @@ class BirthdayReportingService
             ->values()
             ->all();
 
-        $recentTrend = $this->recentTrend($asOf);
+        $recentTrend = $this->recentTrend($tenantId, $asOf);
 
         return [
             'total_profiles' => $totalProfiles,
@@ -1181,12 +1197,14 @@ class BirthdayReportingService
     /**
      * @return array<string,mixed>
      */
-    public function campaignSummary(?CarbonInterface $asOf = null): array
+    public function campaignSummary(int $tenantId, ?CarbonInterface $asOf = null): array
     {
+        $this->requireTenantId($tenantId);
         $asOf = $asOf ?: now();
         $start = $asOf->copy()->startOfMonth();
 
         $events = BirthdayMessageEvent::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('created_at', '>=', $start)
             ->get();
 
@@ -1209,26 +1227,33 @@ class BirthdayReportingService
     /**
      * @return array<string,mixed>
      */
-    public function rewardSummary(): array
+    public function rewardSummary(int $tenantId): array
     {
-        $issued = (int) BirthdayRewardIssuance::query()->count();
-        $activated = (int) BirthdayRewardIssuance::query()->whereIn('status', ['claimed', 'redeemed'])->count();
-        $redeemed = (int) BirthdayRewardIssuance::query()->where('status', 'redeemed')->count();
+        $this->requireTenantId($tenantId);
+
+        $issuedQuery = BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId));
+
+        $issued = (int) $issuedQuery->count();
+        $activated = (int) (clone $issuedQuery)->whereIn('status', ['claimed', 'redeemed'])->count();
+        $redeemed = (int) (clone $issuedQuery)->where('status', 'redeemed')->count();
         $revenue = (float) (BirthdayRewardIssuance::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->where('status', 'redeemed')
             ->sum('attributed_revenue') ?? 0);
 
         return [
-            'available' => (int) BirthdayRewardIssuance::query()->where('status', 'issued')->count(),
+            'available' => (int) (clone $issuedQuery)->where('status', 'issued')->count(),
             'activated' => $activated,
             'redeemed' => $redeemed,
-            'expired' => (int) BirthdayRewardIssuance::query()->where('status', 'expired')->count(),
-            'sync_failures' => (int) BirthdayRewardIssuance::query()->where('discount_sync_status', 'failed')->count(),
+            'expired' => (int) (clone $issuedQuery)->where('status', 'expired')->count(),
+            'sync_failures' => (int) (clone $issuedQuery)->where('discount_sync_status', 'failed')->count(),
             'activation_rate' => $issued > 0 ? round(($activated / $issued) * 100, 2) : 0.0,
             'redemption_rate' => $activated > 0 ? round(($redeemed / $activated) * 100, 2) : 0.0,
             'attributed_revenue' => round($revenue, 2),
             'average_order_value' => $redeemed > 0 ? round($revenue / $redeemed, 2) : 0.0,
             'latest' => BirthdayRewardIssuance::query()
+                ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
                 ->with('marketingProfile:id,first_name,last_name,email')
                 ->latest('id')
                 ->limit(10)
@@ -1239,8 +1264,9 @@ class BirthdayReportingService
     /**
      * @return Collection<int,array{date:string,signups:int,sends:int,opens:int,clicks:int,issued:int,redeemed:int}>
      */
-    protected function recentTrend(CarbonInterface $asOf): Collection
+    protected function recentTrend(int $tenantId, CarbonInterface $asOf): Collection
     {
+        $this->requireTenantId($tenantId);
         $start = $asOf->copy()->subDays(29)->startOfDay();
         $days = collect();
 
@@ -1248,21 +1274,40 @@ class BirthdayReportingService
             $dateKey = $cursor->toDateString();
             $days->push([
                 'date' => $dateKey,
-                'signups' => (int) CustomerBirthdayProfile::query()->whereDate('created_at', $dateKey)->count(),
-                'sends' => (int) BirthdayMessageEvent::query()->whereDate('sent_at', $dateKey)->count(),
-                'opens' => (int) BirthdayMessageEvent::query()->whereDate('opened_at', $dateKey)->count(),
-                'clicks' => (int) BirthdayMessageEvent::query()->whereDate('clicked_at', $dateKey)->count(),
-                'issued' => (int) BirthdayRewardIssuance::query()->whereDate('issued_at', $dateKey)->count(),
-                'redeemed' => (int) BirthdayRewardIssuance::query()->whereDate('redeemed_at', $dateKey)->count(),
+                'signups' => (int) CustomerBirthdayProfile::query()
+                    ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                    ->whereDate('created_at', $dateKey)
+                    ->count(),
+                'sends' => (int) BirthdayMessageEvent::query()
+                    ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                    ->whereDate('sent_at', $dateKey)
+                    ->count(),
+                'opens' => (int) BirthdayMessageEvent::query()
+                    ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                    ->whereDate('opened_at', $dateKey)
+                    ->count(),
+                'clicks' => (int) BirthdayMessageEvent::query()
+                    ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                    ->whereDate('clicked_at', $dateKey)
+                    ->count(),
+                'issued' => (int) BirthdayRewardIssuance::query()
+                    ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                    ->whereDate('issued_at', $dateKey)
+                    ->count(),
+                'redeemed' => (int) BirthdayRewardIssuance::query()
+                    ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
+                    ->whereDate('redeemed_at', $dateKey)
+                    ->count(),
             ]);
         }
 
         return $days;
     }
 
-    protected function baseBirthdayQuery(): Builder
+    protected function baseBirthdayQuery(int $tenantId): Builder
     {
         return CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn (Builder $query) => $query->forTenantId($tenantId))
             ->whereNotNull('birth_month')
             ->whereNotNull('birth_day');
     }
@@ -2440,6 +2485,13 @@ class BirthdayReportingService
         }
 
         return $value / $periodDays;
+    }
+
+    protected function requireTenantId(int $tenantId): void
+    {
+        if ($tenantId <= 0) {
+            throw new \RuntimeException('Tenant context is required for birthday reporting.');
+        }
     }
 
     protected function positiveInt(mixed $value): ?int

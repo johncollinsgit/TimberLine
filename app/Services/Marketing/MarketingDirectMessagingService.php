@@ -7,6 +7,7 @@ use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
 use App\Models\MarketingProfile;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -60,6 +61,7 @@ class MarketingDirectMessagingService
         $groupId = isset($options['group_id']) ? (int) $options['group_id'] : null;
         $sourceLabel = trim((string) ($options['source_label'] ?? 'direct_message_wizard'));
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
+        $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
 
         $summary = [
             'processed' => 0,
@@ -80,7 +82,7 @@ class MarketingDirectMessagingService
         foreach ($recipients as $recipient) {
             $summary['processed']++;
 
-            $resolved = $this->resolveRecipient($recipient);
+            $resolved = $this->resolveRecipient($recipient, $tenantId);
             if (! $resolved['sendable']) {
                 $summary['skipped']++;
                 continue;
@@ -201,14 +203,15 @@ class MarketingDirectMessagingService
         array $members,
         bool $isReusable = true,
         ?int $createdBy = null,
-        ?string $description = null
+        ?string $description = null,
+        ?int $tenantId = null
     ): MarketingMessageGroup {
         $channel = strtolower(trim($channel));
         if (!in_array($channel, ['sms', 'email'], true)) {
             throw new \InvalidArgumentException("Unsupported group channel '{$channel}'.");
         }
 
-        return DB::transaction(function () use ($name, $channel, $members, $isReusable, $createdBy, $description): MarketingMessageGroup {
+        return DB::transaction(function () use ($name, $channel, $members, $isReusable, $createdBy, $description, $tenantId): MarketingMessageGroup {
             $group = MarketingMessageGroup::query()->create([
                 'name' => trim($name),
                 'channel' => $channel,
@@ -217,7 +220,7 @@ class MarketingDirectMessagingService
                 'created_by' => $createdBy,
             ]);
 
-            $rows = $this->normalizedMembersForStorage($members)
+            $rows = $this->normalizedMembersForStorage($members, $tenantId)
                 ->map(function (array $row) use ($group): array {
                     return [
                         'marketing_message_group_id' => (int) $group->id,
@@ -260,19 +263,30 @@ class MarketingDirectMessagingService
      *   source_type:string
      * }>
      */
-    protected function normalizedMembersForStorage(array $members): Collection
+    protected function normalizedMembersForStorage(array $members, ?int $tenantId = null): Collection
     {
         $rows = collect($members)
-            ->map(function (array $member): ?array {
+            ->map(function (array $member) use ($tenantId): ?array {
                 $normalizedPhone = $this->identityNormalizer->normalizePhone((string) ($member['normalized_phone'] ?? $member['phone'] ?? ''));
                 if ($normalizedPhone === null) {
                     return null;
                 }
 
+                $profileId = isset($member['profile_id']) ? (int) $member['profile_id'] : null;
+                if ($tenantId !== null && $profileId !== null && $profileId > 0) {
+                    $belongsToTenant = MarketingProfile::query()
+                        ->forTenantId($tenantId)
+                        ->where('id', $profileId)
+                        ->exists();
+                    if (! $belongsToTenant) {
+                        return null;
+                    }
+                }
+
                 $rawPhone = trim((string) ($member['phone'] ?? ''));
 
                 return [
-                    'profile_id' => isset($member['profile_id']) ? (int) $member['profile_id'] : null,
+                    'profile_id' => $profileId,
                     'name' => $this->nullableString($member['name'] ?? null),
                     'email' => $this->nullableString($member['email'] ?? null),
                     'phone' => $rawPhone !== '' ? $rawPhone : $normalizedPhone,
@@ -298,11 +312,13 @@ class MarketingDirectMessagingService
      * } $recipient
      * @return array{sendable:bool,profile:?MarketingProfile,to_phone:?string,requires_consent:bool}
      */
-    protected function resolveRecipient(array $recipient): array
+    protected function resolveRecipient(array $recipient, ?int $tenantId = null): array
     {
         $profileId = isset($recipient['profile_id']) ? (int) $recipient['profile_id'] : null;
         if ($profileId) {
-            $profile = MarketingProfile::query()->find($profileId);
+            $profile = MarketingProfile::query()
+                ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
+                ->find($profileId);
             if (! $profile) {
                 return ['sendable' => false, 'profile' => null, 'to_phone' => null, 'requires_consent' => true];
             }
@@ -323,6 +339,7 @@ class MarketingDirectMessagingService
 
         $phoneCandidates = $this->identityNormalizer->phoneMatchCandidates($phone);
         $profile = MarketingProfile::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
             ->whereIn('normalized_phone', $phoneCandidates)
             ->first();
 
@@ -330,6 +347,7 @@ class MarketingDirectMessagingService
             $normalizedE164 = $this->identityNormalizer->toE164($normalized) ?: $normalized;
             $rawPhone = trim((string) ($recipient['phone'] ?? ''));
             $profile = MarketingProfile::query()->create([
+                'tenant_id' => $tenantId,
                 'first_name' => $this->firstName((string) ($recipient['name'] ?? '')),
                 'last_name' => $this->lastName((string) ($recipient['name'] ?? '')),
                 'email' => $this->nullableString($recipient['email'] ?? null),
@@ -381,5 +399,16 @@ class MarketingDirectMessagingService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $resolved = (int) $value;
+
+        return $resolved > 0 ? $resolved : null;
     }
 }

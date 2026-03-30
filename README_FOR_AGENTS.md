@@ -2,6 +2,28 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## UI Editing Guide (Required)
+
+Read these before any UI/theme change:
+1. `docs/ui/UI_SYSTEM.md`
+2. `docs/ui/UI_CHANGELOG.md`
+
+Canonical UI ownership:
+- Canonical backstage shell: `resources/views/layouts/app/sidebar.blade.php`
+- Public landing pages: `resources/views/platform/promo.blade.php` and `resources/views/platform/contact.blade.php`
+- Auth branding shell: `resources/views/layouts/auth/simple.blade.php`
+- Shared tokens + component styles: `resources/css/forestry-ui.css` (imported via `resources/css/app.css`)
+- Embedded shell primitives:
+  - `resources/views/components/shopify-embedded-shell.blade.php`
+  - `resources/views/components/app-shell.blade.php`
+  - `resources/views/components/app-topbar.blade.php`
+  - `resources/views/components/app-sidebar.blade.php`
+
+UI maintenance rules:
+- Do not add large inline `<style>` blocks to shell/layout files.
+- Prefer shared tokenized classes and reusable components.
+- Every UI-affecting change must update `docs/ui/UI_CHANGELOG.md`.
+
 ## Current Release State (Scan First)
 
 Current implemented shell/diagnostics checkpoint:

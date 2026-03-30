@@ -211,3 +211,30 @@ test('preview command lists eligible customers and records intents when requeste
         ->where('trigger_key', CandleCashLifecycleService::TRIGGER_REMINDER)
         ->count())->toBe(1);
 });
+
+test('preview command fails closed when tenant context is missing', function (): void {
+    $this->artisan('marketing:candle-cash-lifecycle-preview', [
+        '--trigger' => CandleCashLifecycleService::TRIGGER_REMINDER,
+        '--channel' => 'email',
+    ])
+        ->expectsOutputToContain('Missing required --tenant-id')
+        ->assertExitCode(1);
+});
+
+test('record queued intents skips rows missing tenant context', function (): void {
+    $rows = collect([
+        [
+            'marketing_profile_id' => 999,
+            'tenant_id' => null,
+            'trigger_key' => CandleCashLifecycleService::TRIGGER_REMINDER,
+            'channel' => 'email',
+            'outstanding_candle_cash' => 10,
+        ],
+    ]);
+
+    $result = app(CandleCashLifecycleService::class)->recordQueuedIntents($rows);
+
+    expect((int) ($result['recorded'] ?? 0))->toBe(0)
+        ->and((int) ($result['skipped'] ?? 0))->toBe(1)
+        ->and(MarketingAutomationEvent::query()->count())->toBe(0);
+});

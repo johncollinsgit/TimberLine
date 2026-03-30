@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 class MarketingIssueBirthdayRewards extends Command
 {
     protected $signature = 'marketing:issue-birthday-rewards
+        {--tenant-id= : Restrict issuance to a tenant id}
         {--cycle-year= : Reward cycle year override}
         {--limit=500 : Maximum profiles to evaluate}
         {--dry-run : Evaluate only without issuing rewards}';
@@ -20,8 +21,16 @@ class MarketingIssueBirthdayRewards extends Command
         $cycleYear = (int) ($this->option('cycle-year') ?: now()->year);
         $limit = max(1, (int) $this->option('limit'));
         $dryRun = (bool) $this->option('dry-run');
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('Missing required --tenant-id. Birthday reward issuance is tenant-scoped in MT-2B.');
+
+            return self::FAILURE;
+        }
 
         $profiles = CustomerBirthdayProfile::query()
+            ->whereHas('marketingProfile', fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereNotNull('birth_month')
             ->whereNotNull('birth_day')
             ->orderBy('reward_last_issued_year')
@@ -44,7 +53,10 @@ class MarketingIssueBirthdayRewards extends Command
 
         foreach ($profiles as $profile) {
             $summary['evaluated']++;
-            $status = $engine->statusForProfile($profile, ['cycle_year' => $cycleYear]);
+            $status = $engine->statusForProfile($profile, [
+                'cycle_year' => $cycleYear,
+                'tenant_id' => $tenantId,
+            ]);
             $state = (string) ($status['state'] ?? 'birthday_saved');
 
             if ($state !== 'birthday_reward_eligible') {
@@ -65,7 +77,10 @@ class MarketingIssueBirthdayRewards extends Command
             }
 
             try {
-                $result = $engine->issueAnnualReward($profile, ['cycle_year' => $cycleYear]);
+                $result = $engine->issueAnnualReward($profile, [
+                    'cycle_year' => $cycleYear,
+                    'tenant_id' => $tenantId,
+                ]);
             } catch (\Throwable $e) {
                 $this->error('Birthday reward issuance failed: '.$e->getMessage());
 
@@ -94,6 +109,7 @@ class MarketingIssueBirthdayRewards extends Command
             }
         }
 
+        $this->line('tenant_id='.$tenantId);
         $this->line('cycle_year='.$cycleYear);
         $this->line('mode='.($dryRun ? 'dry-run' : 'live'));
         foreach ($summary as $key => $value) {

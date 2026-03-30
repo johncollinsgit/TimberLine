@@ -9,6 +9,7 @@
     :app-navigation="$appNavigation"
     :customer-subnav="$pageSubnav"
     :page-actions="$pageActions"
+    :merchant-journey="$merchantJourney ?? []"
 >
     @php
         $summary = (array) ($detail['summary'] ?? []);
@@ -39,9 +40,22 @@
         $activityCount = count($activity);
         $externalProfilesCount = $externalProfiles instanceof \Illuminate\Support\Collection ? $externalProfiles->count() : count((array) $externalProfiles);
         $lastActivityDisplay = (string) ($summary['last_activity_display'] ?? 'Loading recent activity…');
+        $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', 'Rewards')));
+        if ($resolvedRewardsLabel === '') {
+            $resolvedRewardsLabel = 'Rewards';
+        }
+        $resolvedRewardsBalanceLabel = trim((string) ($rewardsBalanceLabel ?? data_get($displayLabels ?? [], 'rewards_balance_label', $resolvedRewardsLabel . ' balance')));
+        if ($resolvedRewardsBalanceLabel === '') {
+            $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
+        }
+        $resolvedRewardCreditLabel = trim((string) ($rewardCreditLabel ?? data_get($displayLabels ?? [], 'reward_credit_label', 'reward credit')));
+        if ($resolvedRewardCreditLabel === '') {
+            $resolvedRewardCreditLabel = 'reward credit';
+        }
+        $resolvedRewardsActionsLabel = $resolvedRewardsLabel . ' actions';
         $activitySummary = $activityCount > 0
-            ? number_format($activityCount) . ' recent item' . ($activityCount === 1 ? '' : 's') . ' across rewards, adjustments, and messaging activity.'
-            : 'Loading recent items across rewards, adjustments, and messaging activity.';
+            ? number_format($activityCount) . ' recent item' . ($activityCount === 1 ? '' : 's') . ' across ' . strtolower($resolvedRewardsLabel) . ', adjustments, and messaging activity.'
+            : 'Loading recent items across ' . strtolower($resolvedRewardsLabel) . ', adjustments, and messaging activity.';
         $externalProfilesSummary = $externalProfilesCount > 0
             ? number_format($externalProfilesCount) . ' linked provider profile' . ($externalProfilesCount === 1 ? '' : 's') . ' currently attached to this customer.'
             : 'Loading linked source records…';
@@ -744,9 +758,9 @@
 
             <section class="customers-detail-stat-strip" aria-label="Customer snapshot metrics">
                 <article class="customers-detail-stat">
-                    <p class="customers-detail-stat-label">Candle Cash</p>
+                    <p class="customers-detail-stat-label">{{ \Illuminate\Support\Str::title($resolvedRewardsBalanceLabel) }}</p>
                     <p class="customers-detail-stat-value" data-customer-balance-display>{{ $summary['candle_cash_display'] ?? '0' }}</p>
-                    <p class="customers-detail-stat-detail">Current balance available for rewards and gifting workflows.</p>
+                    <p class="customers-detail-stat-detail">Current balance available for {{ strtolower($resolvedRewardsLabel) }} and gifting workflows.</p>
                 </article>
                 <article class="customers-detail-stat">
                     <p class="customers-detail-stat-label">Candle Club</p>
@@ -754,7 +768,7 @@
                     <p class="customers-detail-stat-detail">Membership status for recurring loyalty participation.</p>
                 </article>
                 <article class="customers-detail-stat">
-                    <p class="customers-detail-stat-label">Rewards actions</p>
+                    <p class="customers-detail-stat-label">{{ \Illuminate\Support\Str::title($resolvedRewardsActionsLabel) }}</p>
                     <p class="customers-detail-stat-value">{{ number_format((int) ($summary['rewards_actions_count'] ?? 0)) }}</p>
                     <p class="customers-detail-stat-detail">Tracked reward-side actions and operational touches.</p>
                 </article>
@@ -777,7 +791,7 @@
                             <div>
                                 <p class="customers-detail-eyebrow">Identity</p>
                                 <h3 class="customers-detail-card-title">Identity and loyalty profile</h3>
-                                <p class="customers-detail-card-copy">Core profile information and current rewards posture in one place.</p>
+                    <p class="customers-detail-card-copy">Core profile information and current {{ strtolower($resolvedRewardsLabel) }} posture in one place.</p>
                             </div>
                         </div>
 
@@ -799,7 +813,7 @@
                                 <span class="customers-detail-mini-value" data-customer-updated-display>{{ optional($marketingProfile->updated_at)->format('Y-m-d H:i') ?: '—' }}</span>
                             </div>
                             <div class="customers-detail-mini-item">
-                                <span class="customers-detail-mini-label">Candle Cash balance</span>
+                                <span class="customers-detail-mini-label">{{ \Illuminate\Support\Str::title($resolvedRewardsBalanceLabel) }}</span>
                                 <span class="customers-detail-mini-value" data-customer-balance-display>{{ $summary['candle_cash_display'] ?? '0' }}</span>
                             </div>
                             <div class="customers-detail-mini-item">
@@ -862,7 +876,7 @@
                         <div class="customers-detail-section-header">
                             <div>
                                 <p class="customers-detail-eyebrow">Operations</p>
-                                <h3 class="customers-detail-card-title">Candle Cash tools</h3>
+                                <h3 class="customers-detail-card-title">{{ \Illuminate\Support\Str::title($resolvedRewardsLabel) }} tools</h3>
                                 <p class="customers-detail-card-copy">Operational adjustments and one-off gifting live together so the balance workflow stays easy to scan.</p>
                             </div>
                         </div>
@@ -871,7 +885,7 @@
                             <div class="customers-detail-card">
                                 <div class="customers-detail-card-header">
                                     <div>
-                                        <h4 class="customers-detail-card-title">Candle Cash Adjustment</h4>
+                                <h4 class="customers-detail-card-title">Reward balance adjustment</h4>
                                         <p class="customers-detail-card-copy">Manual changes are logged in activity and require a reason.</p>
                                     </div>
                                 </div>
@@ -888,8 +902,8 @@
                                         <div class="customers-detail-form-field">
                                             <label for="adjustment-direction">Adjustment type</label>
                                             <select id="adjustment-direction" name="direction">
-                                                <option value="add" @selected(old('direction') === 'add')>Add Candle Cash</option>
-                                                <option value="subtract" @selected(old('direction') === 'subtract')>Subtract Candle Cash</option>
+                                                <option value="add" @selected(old('direction') === 'add')>Add {{ strtolower($resolvedRewardsBalanceLabel) }}</option>
+                                                <option value="subtract" @selected(old('direction') === 'subtract')>Subtract {{ strtolower($resolvedRewardsBalanceLabel) }}</option>
                                             </select>
                                             <p class="customers-detail-field-error" data-error-for="direction">{{ $errors->first('direction') }}</p>
                                         </div>
@@ -905,7 +919,7 @@
                                         </div>
                                     </div>
                                     <div class="customers-detail-button-row">
-                                        <p class="customers-detail-form-helper">Positive additions can text the rewards link automatically when phone + SMS consent are present.</p>
+                                        <p class="customers-detail-form-helper">Positive additions can text the {{ strtolower($resolvedRewardsLabel) }} link automatically when phone + SMS consent are present.</p>
                                         <button type="submit" class="customers-detail-button is-primary">Apply adjustment</button>
                                     </div>
                                     <div
@@ -921,8 +935,8 @@
                             <div class="customers-detail-card">
                                 <div class="customers-detail-card-header">
                                     <div>
-                                        <h4 class="customers-detail-card-title">Send Candle Cash</h4>
-                                        <p class="customers-detail-card-copy">Reward-style crediting with optional campaign context and follow-up SMS.</p>
+                                        <h4 class="customers-detail-card-title">Send {{ $resolvedRewardCreditLabel }}</h4>
+                                        <p class="customers-detail-card-copy">{{ \Illuminate\Support\Str::title($resolvedRewardCreditLabel) }} with optional campaign context and follow-up SMS.</p>
                                     </div>
                                 </div>
                                 <form
@@ -983,7 +997,7 @@
                                         </div>
                                         <div class="customers-detail-form-field is-full">
                                             <label for="gift-message">Optional SMS message</label>
-                                            <textarea id="gift-message" name="message" rows="3" placeholder="Optional message to send after crediting Candle Cash">{{ old('message') }}</textarea>
+                                            <textarea id="gift-message" name="message" rows="3" placeholder="Optional message to send after crediting {{ strtolower($resolvedRewardsBalanceLabel) }}">{{ old('message') }}</textarea>
                                             <p class="customers-detail-field-error" data-error-for="message">{{ $errors->first('message') }}</p>
                                         </div>
                                     </div>
@@ -995,8 +1009,8 @@
                                         <p class="customers-detail-form-helper">SMS message will not send because the customer has not consented.</p>
                                     @endif
                                     <div class="customers-detail-button-row">
-                                        <p class="customers-detail-form-helper">This credits Candle Cash as a distinct reward action instead of a manual balance adjustment.</p>
-                                        <button type="submit" class="customers-detail-button is-primary">Send Candle Cash</button>
+                                        <p class="customers-detail-form-helper">This credits {{ strtolower($resolvedRewardsBalanceLabel) }} as a distinct action instead of a manual balance adjustment.</p>
+                                        <button type="submit" class="customers-detail-button is-primary">Send {{ $resolvedRewardCreditLabel }}</button>
                                     </div>
                                     <div
                                         class="customers-detail-notice is-warning"
@@ -1252,6 +1266,7 @@
                 const deferredEndpoint = String(root.dataset.deferredSectionsEndpoint || "");
                 const profileId = String(root.dataset.profileId || "");
                 const perfDebug = root.dataset.perfDebug === "true";
+                const rewardsLabelLower = @json(strtolower($resolvedRewardsLabel));
                 const activityShell = root.querySelector("[data-customer-activity-shell]");
                 const activitySection = root.querySelector("[data-customer-activity-section]");
                 const activityError = root.querySelector("[data-customer-activity-error]");
@@ -1369,7 +1384,7 @@
                 function activitySummaryLabel(count) {
                     const value = Number.isFinite(count) ? Number(count) : 0;
                     return value > 0
-                        ? `${value.toLocaleString()} recent item${value === 1 ? "" : "s"} across rewards, adjustments, and messaging activity.`
+                        ? `${value.toLocaleString()} recent item${value === 1 ? "" : "s"} across ${rewardsLabelLower}, adjustments, and messaging activity.`
                         : "No recent activity recorded yet.";
                 }
 

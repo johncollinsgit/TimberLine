@@ -48,11 +48,16 @@ class MarketingStorefrontEventLogger
         if ($dedupe !== '') {
             $attributes['request_key'] = $attributes['request_key'] ?: $dedupe;
 
+            $match = [
+                'event_type' => $eventType,
+                'request_key' => $dedupe,
+            ];
+            if ($tenantId !== null) {
+                $match['tenant_id'] = $tenantId;
+            }
+
             return MarketingStorefrontEvent::query()->updateOrCreate(
-                [
-                    'event_type' => $eventType,
-                    'request_key' => $dedupe,
-                ],
+                $match,
                 $attributes
             );
         }

@@ -37,6 +37,9 @@ class MarketingProvidersIntegrationsController extends Controller
     ): View
     {
         $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required to view integrations.');
+        }
         $search = trim((string) $request->query('search', ''));
         $sourceSystem = trim((string) $request->query('source_system', 'all'));
         $mapped = trim((string) $request->query('mapped', 'all'));
@@ -60,6 +63,7 @@ class MarketingProvidersIntegrationsController extends Controller
         $overlapSearch = trim((string) $request->query('overlap_search', ''));
 
         $mappings = MarketingEventSourceMapping::query()
+            ->where('tenant_id', $tenantId)
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
                     $nested->where('raw_value', 'like', '%' . $search . '%')
@@ -75,15 +79,26 @@ class MarketingProvidersIntegrationsController extends Controller
             ->paginate(25, ['*'], 'mappings_page')
             ->withQueryString();
 
-        $unmappedValues = $attributionService->unmappedValuesFromOrders();
+        $unmappedValues = $attributionService->unmappedValuesFromOrders(null, $tenantId);
 
         $sourceSystems = MarketingEventSourceMapping::query()
+            ->where('tenant_id', $tenantId)
             ->distinct()
-            ->orderBy('source_system')
             ->pluck('source_system')
+            ->merge(
+                $unmappedValues
+                    ->pluck('source_system')
+                    ->map(fn ($value): string => trim((string) $value))
+                    ->filter()
+            )
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->sort()
             ->values();
 
         $recentRuns = MarketingImportRun::query()
+            ->where('tenant_id', $tenantId)
             ->orderByDesc('id')
             ->limit(15)
             ->get();
@@ -97,8 +112,8 @@ class MarketingProvidersIntegrationsController extends Controller
 
         $normalizedOverlapFilter = $sourceOverlapReportService->normalizeFilter($overlapFilter);
         $sourceOverlap = [
-            'summary' => $sourceOverlapReportService->summary(),
-            'profiles' => $sourceOverlapReportService->profilesQuery($normalizedOverlapFilter, $overlapSearch)
+            'summary' => $sourceOverlapReportService->summary($tenantId),
+            'profiles' => $sourceOverlapReportService->profilesQuery($tenantId, $normalizedOverlapFilter, $overlapSearch)
                 ->paginate(25, ['*'], 'overlap_page')
                 ->withQueryString(),
             'filters' => $sourceOverlapReportService->filterOptions(),
@@ -118,9 +133,15 @@ class MarketingProvidersIntegrationsController extends Controller
             'unmappedValues' => $unmappedValues,
             'recentRuns' => $recentRuns,
             'squareCounts' => [
-                'customers' => SquareCustomer::query()->count(),
-                'orders' => SquareOrder::query()->count(),
-                'payments' => SquarePayment::query()->count(),
+                'customers' => SquareCustomer::query()
+                    ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
+                    ->count(),
+                'orders' => SquareOrder::query()
+                    ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
+                    ->count(),
+                'payments' => SquarePayment::query()
+                    ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
+                    ->count(),
             ],
             'squareAudit' => $squareAudit,
             'squareProfileFilter' => $squareProfileFilter,
@@ -148,7 +169,13 @@ class MarketingProvidersIntegrationsController extends Controller
 
     public function createMapping(Request $request): View
     {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required to manage event source mappings.');
+        }
+
         $mapping = new MarketingEventSourceMapping([
+            'tenant_id' => $tenantId,
             'source_system' => (string) $request->query('source_system', 'square_tax_name'),
             'raw_value' => (string) $request->query('raw_value', ''),
             'normalized_value' => (string) $request->query('normalized_value', ''),
@@ -166,6 +193,11 @@ class MarketingProvidersIntegrationsController extends Controller
 
     public function storeMapping(Request $request, MarketingEventAttributionService $attributionService): RedirectResponse
     {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required to manage event source mappings.');
+        }
+
         $data = $request->validate([
             'source_system' => ['required', 'string', 'max:100'],
             'raw_value' => ['required', 'string', 'max:255'],
@@ -178,10 +210,12 @@ class MarketingProvidersIntegrationsController extends Controller
 
         MarketingEventSourceMapping::query()->updateOrCreate(
             [
+                'tenant_id' => $tenantId,
                 'source_system' => trim((string) $data['source_system']),
                 'raw_value' => trim((string) $data['raw_value']),
             ],
             [
+                'tenant_id' => $tenantId,
                 'normalized_value' => trim((string) ($data['normalized_value'] ?? '')) ?: null,
                 'event_instance_id' => $data['event_instance_id'] ?? null,
                 'confidence' => $data['confidence'] ?? null,
@@ -190,15 +224,21 @@ class MarketingProvidersIntegrationsController extends Controller
             ]
         );
 
-        $attributionService->refreshSquareOrderAttributions(500);
+        $attributionService->refreshSquareOrderAttributions(500, $tenantId);
 
         return redirect()
             ->route('marketing.providers-integrations')
             ->with('toast', ['style' => 'success', 'message' => 'Event source mapping created.']);
     }
 
-    public function editMapping(MarketingEventSourceMapping $mapping): View
+    public function editMapping(Request $request, MarketingEventSourceMapping $mapping): View
     {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required to manage event source mappings.');
+        }
+        $this->assertMappingAccess($mapping, $tenantId);
+
         return view('marketing/providers-integrations/mapping-form', [
             'section' => MarketingSectionRegistry::section('providers-integrations'),
             'sections' => $this->navigationItems(),
@@ -214,6 +254,12 @@ class MarketingProvidersIntegrationsController extends Controller
         MarketingEventAttributionService $attributionService
     ): RedirectResponse
     {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required to manage event source mappings.');
+        }
+        $this->assertMappingAccess($mapping, $tenantId);
+
         $data = $request->validate([
             'source_system' => ['required', 'string', 'max:100'],
             'raw_value' => ['required', 'string', 'max:255'],
@@ -225,6 +271,7 @@ class MarketingProvidersIntegrationsController extends Controller
         ]);
 
         $mapping->fill([
+            'tenant_id' => $tenantId,
             'source_system' => trim((string) $data['source_system']),
             'raw_value' => trim((string) $data['raw_value']),
             'normalized_value' => trim((string) ($data['normalized_value'] ?? '')) ?: null,
@@ -234,7 +281,7 @@ class MarketingProvidersIntegrationsController extends Controller
             'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
         ])->save();
 
-        $attributionService->refreshSquareOrderAttributions(500);
+        $attributionService->refreshSquareOrderAttributions(500, $tenantId);
 
         return redirect()
             ->route('marketing.providers-integrations')
@@ -243,6 +290,16 @@ class MarketingProvidersIntegrationsController extends Controller
 
     public function runSquareSync(Request $request, SquareMarketingSyncService $syncService): RedirectResponse
     {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'error',
+                    'message' => 'Square sync requires an explicit tenant context before running.',
+                ]);
+        }
+
         $data = $request->validate([
             'sync_type' => ['required', 'in:customers,orders,payments'],
             'limit' => ['nullable', 'integer', 'min:1'],
@@ -255,21 +312,37 @@ class MarketingProvidersIntegrationsController extends Controller
             'since' => $data['since'] ?? null,
             'dry_run' => (bool) ($data['dry_run'] ?? false),
             'created_by' => auth()->id(),
+            'tenant_id' => $tenantId,
         ];
 
-        match ($data['sync_type']) {
+        $result = match ($data['sync_type']) {
             'customers' => $syncService->syncCustomers($options),
             'orders' => $syncService->syncOrders($options),
             'payments' => $syncService->syncPayments($options),
         };
 
+        $toastStyle = $result['status'] === 'blocked' ? 'error' : 'success';
+        $toastMessage = $result['status'] === 'blocked'
+            ? 'Square sync blocked: ' . ($result['reason'] ?? 'missing tenant context or configuration.')
+            : 'Square sync started and logged.';
+
         return redirect()
             ->route('marketing.providers-integrations')
-            ->with('toast', ['style' => 'success', 'message' => 'Square sync started and logged.']);
+            ->with('toast', ['style' => $toastStyle, 'message' => $toastMessage]);
     }
 
     public function importLegacy(Request $request, MarketingLegacyImportService $importService): RedirectResponse
     {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'error',
+                    'message' => 'Legacy imports require an explicit tenant context before running.',
+                ]);
+        }
+
         $data = $request->validate([
             'import_type' => ['required', 'in:yotpo_contacts_import,square_marketing_import'],
             'file' => ['required', 'file', 'mimes:csv,txt'],
@@ -280,6 +353,7 @@ class MarketingProvidersIntegrationsController extends Controller
             file: $data['file'],
             type: (string) $data['import_type'],
             createdBy: auth()->id(),
+            tenantId: $tenantId,
             dryRun: (bool) ($data['dry_run'] ?? false)
         );
 
@@ -329,7 +403,7 @@ class MarketingProvidersIntegrationsController extends Controller
      *   manual_follow_up_order_count:int
      * }
      */
-    protected function squareContactAudit(string $filter, string $search, int $minSpendCents, ?int $tenantId = null): array
+    protected function squareContactAudit(string $filter, string $search, int $minSpendCents, int $tenantId): array
     {
         $profiles = $this->squareContactProfilesQuery($filter, $search, $minSpendCents, $tenantId)
             ->paginate(25, ['*'], 'square_page')
@@ -346,13 +420,13 @@ class MarketingProvidersIntegrationsController extends Controller
                 ['value' => 'high_value_missing_contact', 'label' => 'High-value Missing Contact'],
                 ['value' => 'all', 'label' => 'All Square-linked Profiles'],
             ],
-            'payload_diagnostics' => $this->squarePayloadDiagnostics(),
-            'manual_follow_up_orders' => $this->manualFollowUpOrders($minSpendCents),
-            'manual_follow_up_order_count' => $this->manualFollowUpOrdersCount($minSpendCents),
+            'payload_diagnostics' => $this->squarePayloadDiagnostics($tenantId),
+            'manual_follow_up_orders' => $this->manualFollowUpOrders($minSpendCents, $tenantId),
+            'manual_follow_up_order_count' => $this->manualFollowUpOrdersCount($minSpendCents, $tenantId),
         ];
     }
 
-    protected function squareContactProfilesQuery(string $filter, string $search, int $minSpendCents, ?int $tenantId = null): QueryBuilder
+    protected function squareContactProfilesQuery(string $filter, string $search, int $minSpendCents, int $tenantId): QueryBuilder
     {
         $squareLinkFlags = $this->sourceLinkFlagsSubquery($tenantId);
         $squareCustomerMetrics = $this->squareCustomerMetricsSubquery($tenantId);
@@ -366,7 +440,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 $join->on('square_customer_metrics.marketing_profile_id', '=', 'marketing_profiles.id');
             })
             ->whereRaw('coalesce(square_link_flags.has_square_link, 0) = 1')
-            ->when($tenantId !== null, fn (QueryBuilder $query) => $query->where('marketing_profiles.tenant_id', $tenantId))
+            ->where('marketing_profiles.tenant_id', $tenantId)
             ->select([
                 'marketing_profiles.id',
                 'marketing_profiles.first_name',
@@ -440,12 +514,12 @@ class MarketingProvidersIntegrationsController extends Controller
         });
     }
 
-    protected function sourceLinkFlagsSubquery(?int $tenantId = null): QueryBuilder
+    protected function sourceLinkFlagsSubquery(int $tenantId): QueryBuilder
     {
         return MarketingProfileLink::query()
             ->toBase()
             ->select('marketing_profile_id')
-            ->when($tenantId !== null, fn (QueryBuilder $query) => $query->where('tenant_id', $tenantId))
+            ->where('tenant_id', $tenantId)
             ->whereIn('source_type', [
                 'square_customer',
                 'square_order',
@@ -543,13 +617,14 @@ class MarketingProvidersIntegrationsController extends Controller
         return null;
     }
 
-    protected function squareCustomerMetricsSubquery(?int $tenantId = null): QueryBuilder
+    protected function squareCustomerMetricsSubquery(int $tenantId): QueryBuilder
     {
         $orderMetrics = SquareOrder::query()
             ->toBase()
             ->select('square_customer_id')
             ->whereNotNull('square_customer_id')
             ->where('square_customer_id', '<>', '')
+            ->where('tenant_id', $tenantId)
             ->groupBy('square_customer_id')
             ->selectRaw('count(*) as order_count')
             ->selectRaw('coalesce(sum(total_money_amount), 0) as order_spend_cents')
@@ -560,6 +635,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->select('square_customer_id')
             ->whereNotNull('square_customer_id')
             ->where('square_customer_id', '<>', '')
+            ->where('tenant_id', $tenantId)
             ->groupBy('square_customer_id')
             ->selectRaw('count(*) as payment_count')
             ->selectRaw('coalesce(sum(amount_money), 0) as payment_spend_cents')
@@ -575,7 +651,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 $join->on('square_payment_metrics.square_customer_id', '=', 'square_links.source_id');
             })
             ->where('square_links.source_type', 'square_customer')
-            ->when($tenantId !== null, fn (QueryBuilder $query) => $query->where('square_links.tenant_id', $tenantId))
+            ->where('square_links.tenant_id', $tenantId)
             ->groupBy('square_links.marketing_profile_id')
             ->selectRaw('square_links.marketing_profile_id')
             ->selectRaw('count(distinct square_links.source_id) as square_customer_link_count')
@@ -591,7 +667,7 @@ class MarketingProvidersIntegrationsController extends Controller
     /**
      * @return array<string,int>
      */
-    protected function squareContactAuditSummary(int $minSpendCents, ?int $tenantId = null): array
+    protected function squareContactAuditSummary(int $minSpendCents, int $tenantId): array
     {
         $profilesWithSquareLink = MarketingProfile::query()
             ->forTenantId($tenantId)
@@ -654,28 +730,34 @@ class MarketingProvidersIntegrationsController extends Controller
             'square_order_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_order')->count(),
             'square_payment_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_payment')->count(),
             'square_identity_reviews' => MarketingIdentityReview::query()
-                ->when($tenantId !== null && Schema::hasColumn('marketing_identity_reviews', 'tenant_id'), fn ($query) => $query->where('tenant_id', $tenantId))
+                ->when(Schema::hasColumn('marketing_identity_reviews', 'tenant_id'), fn ($query) => $query->where('tenant_id', $tenantId))
                 ->whereIn('source_type', ['square_customer', 'square_order', 'square_payment'])
                 ->count(),
             'square_only_profiles' => $squareOnlyProfiles,
             'square_only_missing_contact' => $squareOnlyMissingContact,
             'no_shopify_or_growave' => $noShopifyOrGrowave,
             'high_value_missing_contact' => $highValueMissingContact,
-            'square_orders_without_customer_id' => SquareOrder::query()->where(function ($query): void {
-                $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
-            })->count(),
-            'square_payments_without_customer_id' => SquarePayment::query()->where(function ($query): void {
-                $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
-            })->count(),
+            'square_orders_without_customer_id' => SquareOrder::query()
+                ->where('tenant_id', $tenantId)
+                ->where(function ($query): void {
+                    $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
+                })->count(),
+            'square_payments_without_customer_id' => SquarePayment::query()
+                ->where('tenant_id', $tenantId)
+                ->where(function ($query): void {
+                    $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
+                })->count(),
         ];
     }
 
     /**
      * @return array<string,mixed>
      */
-    protected function squarePayloadDiagnostics(): array
+    protected function squarePayloadDiagnostics(int $tenantId): array
     {
-        return Cache::remember('marketing:square-contact-quality:payload-diagnostics', now()->addMinutes(15), function (): array {
+        $cacheKey = 'marketing:square-contact-quality:payload-diagnostics:tenant:' . $tenantId;
+
+        return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($tenantId): array {
             $orders = [
                 'total' => 0,
                 'no_customer_id' => 0,
@@ -686,7 +768,10 @@ class MarketingProvidersIntegrationsController extends Controller
                 'tender_customer_id' => 0,
             ];
 
-            foreach (SquareOrder::query()->select(['id', 'square_customer_id', 'raw_payload'])->cursor() as $row) {
+            foreach (SquareOrder::query()
+                ->where('tenant_id', $tenantId)
+                ->select(['id', 'square_customer_id', 'raw_payload'])
+                ->cursor() as $row) {
                 $orders['total']++;
                 $payload = is_array($row->raw_payload) ? $row->raw_payload : [];
 
@@ -723,7 +808,10 @@ class MarketingProvidersIntegrationsController extends Controller
                 'billing_address_line_1' => 0,
             ];
 
-            foreach (SquarePayment::query()->select(['id', 'square_customer_id', 'raw_payload'])->cursor() as $row) {
+            foreach (SquarePayment::query()
+                ->where('tenant_id', $tenantId)
+                ->select(['id', 'square_customer_id', 'raw_payload'])
+                ->cursor() as $row) {
                 $payments['total']++;
                 $payload = is_array($row->raw_payload) ? $row->raw_payload : [];
 
@@ -754,11 +842,12 @@ class MarketingProvidersIntegrationsController extends Controller
     /**
      * @return Collection<int,array<string,mixed>>
      */
-    protected function manualFollowUpOrders(int $minSpendCents): Collection
+    protected function manualFollowUpOrders(int $minSpendCents, int $tenantId): Collection
     {
         return SquareOrder::query()
             ->with(['payments' => fn ($query) => $query->orderByDesc('created_at_source')])
             ->withCount('attributions')
+            ->where('tenant_id', $tenantId)
             ->where(function ($query): void {
                 $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
             })
@@ -792,9 +881,10 @@ class MarketingProvidersIntegrationsController extends Controller
             });
     }
 
-    protected function manualFollowUpOrdersCount(int $minSpendCents): int
+    protected function manualFollowUpOrdersCount(int $minSpendCents, int $tenantId): int
     {
         return SquareOrder::query()
+            ->where('tenant_id', $tenantId)
             ->where(function ($query): void {
                 $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
             })
@@ -810,9 +900,41 @@ class MarketingProvidersIntegrationsController extends Controller
 
     protected function currentTenantId(Request $request): ?int
     {
-        $tenantId = $request->attributes->get('current_tenant_id');
+        foreach (['current_tenant_id', 'host_tenant_id'] as $attribute) {
+            $tenantId = $request->attributes->get($attribute);
+            if (is_numeric($tenantId) && (int) $tenantId > 0) {
+                $resolved = (int) $tenantId;
+                $request->attributes->set('current_tenant_id', $resolved);
 
-        return is_numeric($tenantId) ? (int) $tenantId : null;
+                return $resolved;
+            }
+        }
+
+        $sessionTenantId = $request->session()->get('tenant_id');
+        if (is_numeric($sessionTenantId) && (int) $sessionTenantId > 0) {
+            $resolved = (int) $sessionTenantId;
+            $request->attributes->set('current_tenant_id', $resolved);
+
+            return $resolved;
+        }
+
+        $user = $request->user();
+        if ($user) {
+            $tenantIds = $user->tenants()
+                ->pluck('tenants.id')
+                ->map(fn ($value): int => (int) $value)
+                ->filter(fn (int $value): bool => $value > 0)
+                ->values();
+
+            if ($tenantIds->count() === 1) {
+                $resolved = (int) $tenantIds->first();
+                $request->attributes->set('current_tenant_id', $resolved);
+
+                return $resolved;
+            }
+        }
+
+        return null;
     }
 
     protected function nullableString(mixed $value): ?string
@@ -820,6 +942,15 @@ class MarketingProvidersIntegrationsController extends Controller
         $value = trim((string) $value);
 
         return $value !== '' ? $value : null;
+    }
+
+    protected function assertMappingAccess(MarketingEventSourceMapping $mapping, int $tenantId): void
+    {
+        if ((int) ($mapping->tenant_id ?? 0) === $tenantId) {
+            return;
+        }
+
+        abort(404);
     }
 
     /**

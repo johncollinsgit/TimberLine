@@ -8,6 +8,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Services\Shopify\ShopifyCustomerMetafieldFetcher;
 use App\Services\Shopify\ShopifyGraphqlClient;
+use App\Services\Shopify\ShopifyStores;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +35,7 @@ class ShopifyCustomerBirthdaySyncService
         $shopDomain = $this->requiredString($store['shop'] ?? null, "Shopify shop domain missing for store '{$storeKey}'.");
         $token = $this->requiredString($store['token'] ?? null, "Shopify token missing for store '{$storeKey}'.");
         $apiVersion = $this->nullableString($store['api_version'] ?? null) ?: '2026-01';
+        $tenantId = $this->tenantIdFromStore($store);
 
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $writeBack = (bool) ($options['write_back'] ?? false);
@@ -60,6 +62,7 @@ class ShopifyCustomerBirthdaySyncService
             'status' => 'running',
             'source_label' => 'shopify_birthday_customers:'.$storeKey,
             'started_at' => now(),
+            'tenant_id' => $tenantId,
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'live-sync',
                 'store_key' => $storeKey,
@@ -112,19 +115,19 @@ class ShopifyCustomerBirthdaySyncService
                     }
 
                     if ($dryRun) {
-                        $mapping = $this->resolveProfileMapping($storeKey, $customer, true);
+                        $mapping = $this->resolveProfileMapping($storeKey, $customer, true, $tenantId);
                         $snapshot = CustomerBirthdayProfile::query()
                             ->where('marketing_profile_id', (int) $mapping['marketing_profile_id'])
                             ->first();
 
                         $action = $snapshot ? 'updated' : 'created';
                         $birthdayProfile = $snapshot;
-                        $profile = MarketingProfile::query()->find((int) $mapping['marketing_profile_id']);
+                        $profile = MarketingProfile::query()->forTenantId($tenantId)->find((int) $mapping['marketing_profile_id']);
                     } else {
-                        [$mapping, $action, $birthdayProfile, $profile] = DB::transaction(function () use ($storeKey, $customer, $parsed): array {
-                            $mapping = $this->resolveProfileMapping($storeKey, $customer, false);
+                        [$mapping, $action, $birthdayProfile, $profile] = DB::transaction(function () use ($storeKey, $customer, $parsed, $tenantId): array {
+                            $mapping = $this->resolveProfileMapping($storeKey, $customer, false, $tenantId);
 
-                            $profile = MarketingProfile::query()->findOrFail((int) $mapping['marketing_profile_id']);
+                            $profile = MarketingProfile::query()->forTenantId($tenantId)->findOrFail((int) $mapping['marketing_profile_id']);
                             [$action, $birthdayProfile] = $this->upsertBirthdayFromParsed($profile, $parsed);
 
                             return [$mapping, $action, $birthdayProfile, $profile];
@@ -210,7 +213,7 @@ class ShopifyCustomerBirthdaySyncService
      * } $customer
      * @return array{marketing_profile_id:int,links_created:int,links_reused:int}
      */
-    protected function resolveProfileMapping(string $storeKey, array $customer, bool $dryRun): array
+    protected function resolveProfileMapping(string $storeKey, array $customer, bool $dryRun, int $tenantId): array
     {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -240,7 +243,7 @@ class ShopifyCustomerBirthdaySyncService
         $matchMethod = 'shopify_customer_id';
 
         if ($distinctProfileIds->count() === 1) {
-            $profile = MarketingProfile::query()->find((int) $distinctProfileIds->first());
+            $profile = MarketingProfile::query()->forTenantId($tenantId)->find((int) $distinctProfileIds->first());
             if (! $profile) {
                 throw new RuntimeException(
                     "Mapping error for Shopify customer {$shopifyCustomerId}: linked marketing profile no longer exists."
@@ -249,6 +252,7 @@ class ShopifyCustomerBirthdaySyncService
 
             if ($normalizedEmail !== null) {
                 $emailMatches = MarketingProfile::query()
+                    ->forTenantId($tenantId)
                     ->where('normalized_email', $normalizedEmail)
                     ->get();
 
@@ -271,9 +275,10 @@ class ShopifyCustomerBirthdaySyncService
                 );
             }
 
-            $emailMatches = MarketingProfile::query()
-                ->where('normalized_email', $normalizedEmail)
-                ->get();
+                $emailMatches = MarketingProfile::query()
+                    ->forTenantId($tenantId)
+                    ->where('normalized_email', $normalizedEmail)
+                    ->get();
 
             if ($emailMatches->isEmpty()) {
                 throw new RuntimeException(
@@ -444,5 +449,15 @@ class ShopifyCustomerBirthdaySyncService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function tenantIdFromStore(array $store): int
+    {
+        $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        if ($tenantId === null) {
+            throw new RuntimeException('Tenant context missing for Shopify birthday sync store.');
+        }
+
+        return $tenantId;
     }
 }

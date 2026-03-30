@@ -39,6 +39,7 @@ use App\Services\Marketing\MarketingProfileScoreService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Carbon\CarbonInterface;
@@ -79,7 +80,7 @@ class MarketingCustomersController extends Controller
 
     public function index(Request $request): View
     {
-        $tenantId = $this->currentTenantId($request);
+        $tenantId = $this->requireTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
         $totalProfiles = MarketingProfile::query()
             ->forTenantId($tenantId)
@@ -112,7 +113,7 @@ class MarketingCustomersController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $tenantId = $this->currentTenantId($request);
+        $tenantId = $this->requireTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
         $profiles = $this->customerIndexQuery($filters, $tenantId)
             ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
@@ -334,10 +335,12 @@ class MarketingCustomersController extends Controller
      */
     protected function customerIndexSortOptions(): array
     {
+        $rewardsBalanceLabel = $this->displayLabel('rewards_balance_label', 'Rewards balance');
+
         return [
             ['value' => 'updated_at', 'label' => 'Updated'],
             ['value' => 'created_at', 'label' => 'Created'],
-            ['value' => 'candle_cash_balance', 'label' => 'Candle Cash balance'],
+            ['value' => 'candle_cash_balance', 'label' => $rewardsBalanceLabel],
             ['value' => 'email', 'label' => 'Email'],
             ['value' => 'first_name', 'label' => 'First name'],
             ['value' => 'last_name', 'label' => 'Last name'],
@@ -349,11 +352,13 @@ class MarketingCustomersController extends Controller
      */
     protected function customerGridColumns(): array
     {
+        $rewardsLabel = $this->displayLabel('rewards_label', 'Rewards');
+
         return [
             ['key' => 'customer', 'label' => 'Customer', 'type' => 'text'],
             ['key' => 'email', 'label' => 'Email', 'type' => 'text'],
             ['key' => 'phone', 'label' => 'Phone', 'type' => 'text'],
-            ['key' => 'candle_cash_points', 'label' => 'Candle Cash', 'type' => 'number'],
+            ['key' => 'candle_cash_points', 'label' => $rewardsLabel, 'type' => 'number'],
             ['key' => 'candle_cash_amount', 'label' => 'Value ($)', 'type' => 'number'],
             ['key' => 'legacy_growave_points', 'label' => 'Legacy Growave', 'type' => 'number'],
             ['key' => 'tier', 'label' => 'Tier', 'type' => 'text'],
@@ -596,6 +601,7 @@ class MarketingCustomersController extends Controller
     public function show(MarketingProfile $marketingProfile, Request $request): View
     {
         $this->assertProfileInTenantScope($marketingProfile, $request);
+        $tenantId = $this->currentTenantId($request);
         $marketingProfile->load([
             'links' => fn ($query) => $query->orderByDesc('id'),
             'groups:id,name,is_internal',
@@ -637,14 +643,46 @@ class MarketingCustomersController extends Controller
             ->filter()
             ->values();
 
+        $squareOrdersQuery = SquareOrder::query();
+        if (Schema::hasColumn('square_orders', 'tenant_id')) {
+            if ($tenantId !== null) {
+                $squareOrdersQuery->forTenantId($tenantId);
+            } else {
+                $squareOrdersQuery->whereNull('tenant_id');
+            }
+        }
         $squareOrders = $squareOrderIds->isEmpty()
             ? collect()
-            : SquareOrder::query()
-                ->with(['attributions.eventInstance'])
+            : $squareOrdersQuery
                 ->whereIn('square_order_id', $squareOrderIds->all())
                 ->orderByDesc('closed_at')
                 ->orderByDesc('id')
                 ->get();
+
+        if ($squareOrders->isNotEmpty()) {
+            $attributionsQuery = MarketingOrderEventAttribution::query()
+                ->with('eventInstance')
+                ->where('source_type', 'square_order')
+                ->whereIn('source_id', $squareOrders->pluck('square_order_id')->all());
+            if (Schema::hasColumn('marketing_order_event_attributions', 'tenant_id')) {
+                if ($tenantId !== null) {
+                    $attributionsQuery->where('tenant_id', $tenantId);
+                } else {
+                    $attributionsQuery->whereNull('tenant_id');
+                }
+            }
+
+            $attributionsBySource = $attributionsQuery
+                ->get()
+                ->groupBy('source_id');
+
+            $squareOrders->each(function (SquareOrder $order) use ($attributionsBySource): void {
+                $order->setRelation(
+                    'attributions',
+                    $attributionsBySource->get((string) $order->square_order_id, collect())->values()
+                );
+            });
+        }
 
         $squarePaymentIds = $marketingProfile->links
             ->where('source_type', 'square_payment')
@@ -783,7 +821,15 @@ class MarketingCustomersController extends Controller
         $latestScore = $this->scoreService->latestScoreForProfile($marketingProfile);
 
         $matchingSegments = [];
-        $segmentCandidates = MarketingSegment::query()->where('status', 'active')->orderBy('name')->limit(50)->get();
+        $segmentCandidates = MarketingSegment::query()
+            ->where('status', 'active')
+            ->when(
+                $tenantId !== null && Schema::hasColumn('marketing_segments', 'tenant_id'),
+                fn ($query) => $query->forTenantId($tenantId)
+            )
+            ->orderBy('name')
+            ->limit(50)
+            ->get();
         foreach ($segmentCandidates as $segment) {
             $evaluation = $this->segmentEvaluator->evaluateProfile($segment, $marketingProfile);
             if ($evaluation['matched']) {
@@ -796,6 +842,10 @@ class MarketingCustomersController extends Controller
         }
         $campaignOptions = MarketingCampaign::query()
             ->whereIn('status', ['draft', 'ready_for_review', 'active'])
+            ->when(
+                $tenantId !== null && Schema::hasColumn('marketing_campaigns', 'tenant_id'),
+                fn ($query) => $query->forTenantId($tenantId)
+            )
             ->orderByDesc('updated_at')
             ->limit(12)
             ->get(['id', 'name', 'status']);
@@ -1862,7 +1912,7 @@ class MarketingCustomersController extends Controller
         if ($type === 'earn' && $points < 0) {
             return redirect()
                 ->route('marketing.customers.show', $marketingProfile)
-                ->with('toast', ['style' => 'warning', 'message' => 'Earn entries must use positive Candle Cash.']);
+                ->with('toast', ['style' => 'warning', 'message' => 'Earn entries must use positive reward credit.']);
         }
 
         $result = $this->candleCashService->addPoints(
@@ -1878,7 +1928,7 @@ class MarketingCustomersController extends Controller
             ->route('marketing.customers.show', $marketingProfile)
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Candle Cash updated. New balance: ' . $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints($result['balance'] ?? 0)),
+                'message' => 'Reward balance updated. New balance: ' . $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints($result['balance'] ?? 0)),
             ]);
     }
 
@@ -1900,7 +1950,7 @@ class MarketingCustomersController extends Controller
         if (! (bool) ($result['ok'] ?? false)) {
             $error = (string) ($result['error'] ?? 'redemption_failed');
             $message = match ($error) {
-                'insufficient_balance' => 'Not enough Candle Cash balance for that reward.',
+                'insufficient_balance' => 'Not enough reward balance for that reward.',
                 'inactive_reward' => 'Reward is inactive.',
                 default => 'Reward redemption failed.',
             };
@@ -2506,18 +2556,46 @@ class MarketingCustomersController extends Controller
             ->filter()
             ->unique()
             ->values();
+        $profileTenantIds = $profiles
+            ->pluck('tenant_id')
+            ->map(fn ($value): int => is_numeric($value) ? (int) $value : 0)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+
+        $squareOrdersQuery = SquareOrder::query();
+        if (Schema::hasColumn('square_orders', 'tenant_id')) {
+            if ($profileTenantIds->count() === 1) {
+                $squareOrdersQuery->forTenantId((int) $profileTenantIds->first());
+            } elseif ($profileTenantIds->count() > 1) {
+                $squareOrdersQuery->whereIn('tenant_id', $profileTenantIds->all());
+            } else {
+                $squareOrdersQuery->whereNull('tenant_id');
+            }
+        }
 
         $squareOrdersById = $squareOrderIds->isEmpty()
             ? collect()
-            : SquareOrder::query()
+            : $squareOrdersQuery
                 ->whereIn('square_order_id', $squareOrderIds->all())
                 ->get(['square_order_id', 'closed_at'])
                 ->keyBy('square_order_id');
 
+        $attributionQuery = MarketingOrderEventAttribution::query()
+            ->where('source_type', 'square_order');
+        if (Schema::hasColumn('marketing_order_event_attributions', 'tenant_id')) {
+            if ($profileTenantIds->count() === 1) {
+                $attributionQuery->where('tenant_id', (int) $profileTenantIds->first());
+            } elseif ($profileTenantIds->count() > 1) {
+                $attributionQuery->whereIn('tenant_id', $profileTenantIds->all());
+            } else {
+                $attributionQuery->whereNull('tenant_id');
+            }
+        }
+
         $attributedSquareOrderIds = $squareOrderIds->isEmpty()
             ? collect()
-            : MarketingOrderEventAttribution::query()
-                ->where('source_type', 'square_order')
+            : $attributionQuery
                 ->whereIn('source_id', $squareOrderIds->all())
                 ->pluck('source_id')
                 ->unique()
@@ -2770,8 +2848,14 @@ class MarketingCustomersController extends Controller
             return null;
         }
 
+        $tenantId = $this->currentTenantId(request());
+        if ($tenantId === null) {
+            return null;
+        }
+
         $shopifyOrderCandidates = Schema::hasTable('orders')
             ? (int) Order::query()
+                ->forTenantId($tenantId)
                 ->where(function ($query): void {
                     $query->whereNotNull('shopify_order_id')
                         ->orWhere('source', 'like', 'shopify%');
@@ -2781,24 +2865,26 @@ class MarketingCustomersController extends Controller
 
         $shopifyCustomerCandidates = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
+                ->forTenantId($tenantId)
                 ->where('integration', 'shopify_customer')
                 ->count()
             : 0;
 
         $growaveCandidates = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
+                ->forTenantId($tenantId)
                 ->where('integration', 'growave')
                 ->count()
             : 0;
 
         $squareCustomerCandidates = Schema::hasTable('square_customers')
-            ? (int) SquareCustomer::query()->count()
+            ? (int) SquareCustomer::query()->forTenantId($tenantId)->count()
             : 0;
         $squareOrderCandidates = Schema::hasTable('square_orders')
-            ? (int) SquareOrder::query()->count()
+            ? (int) SquareOrder::query()->forTenantId($tenantId)->count()
             : 0;
         $squarePaymentCandidates = Schema::hasTable('square_payments')
-            ? (int) SquarePayment::query()->count()
+            ? (int) SquarePayment::query()->forTenantId($tenantId)->count()
             : 0;
 
         $upstreamCandidates = $shopifyOrderCandidates
@@ -2811,8 +2897,10 @@ class MarketingCustomersController extends Controller
             return null;
         }
 
-        $lastSyncRun = Schema::hasTable('marketing_import_runs')
-            ? MarketingImportRun::query()
+        $lastSyncRun = null;
+        if (Schema::hasTable('marketing_import_runs')) {
+            $lastSyncRun = MarketingImportRun::query()
+                ->where('tenant_id', $tenantId)
                 ->whereIn('type', [
                     'marketing_profiles_sync',
                     'shopify_customer_metafields_sync',
@@ -2822,8 +2910,8 @@ class MarketingCustomersController extends Controller
                 ])
                 ->orderByDesc('finished_at')
                 ->orderByDesc('id')
-                ->first()
-            : null;
+                ->first();
+        }
 
         return [
             'shopify_order_candidates' => $shopifyOrderCandidates,
@@ -2857,9 +2945,68 @@ class MarketingCustomersController extends Controller
 
     protected function currentTenantId(Request $request): ?int
     {
-        $tenantId = $request->attributes->get('current_tenant_id');
+        foreach (['current_tenant_id', 'host_tenant_id'] as $attribute) {
+            $tenantId = $this->positiveInt($request->attributes->get($attribute));
+            if ($tenantId !== null) {
+                $request->attributes->set('current_tenant_id', $tenantId);
 
-        return is_numeric($tenantId) ? (int) $tenantId : null;
+                return $tenantId;
+            }
+        }
+
+        $sessionTenantId = $this->positiveInt($request->session()->get('tenant_id'));
+        if ($sessionTenantId !== null) {
+            $request->attributes->set('current_tenant_id', $sessionTenantId);
+
+            return $sessionTenantId;
+        }
+
+        $user = $request->user();
+        if ($user) {
+            $tenantIds = $user->tenants()
+                ->pluck('tenants.id')
+                ->map(fn ($value): int => (int) $value)
+                ->filter(fn (int $value): bool => $value > 0)
+                ->values();
+
+            if ($tenantIds->count() === 1) {
+                $tenantId = (int) $tenantIds->first();
+                $request->attributes->set('current_tenant_id', $tenantId);
+
+                return $tenantId;
+            }
+        }
+
+        return null;
+    }
+
+    protected function requireTenantId(Request $request): int
+    {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            abort(403, 'Tenant context is required for customer management.');
+        }
+
+        return $tenantId;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
+    }
+
+    protected function displayLabel(string $key, string $fallback): string
+    {
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+
+        return $resolver->label($this->currentTenantId(request()), $key, $fallback);
     }
 
     protected function assertProfileInTenantScope(MarketingProfile $profile, Request $request): void

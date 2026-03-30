@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CandleCashReward;
-use App\Models\CandleCashTask;
 use App\Services\Marketing\BirthdayReportingService;
-use App\Services\Marketing\CandleCashRewardsOverviewService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedRewardsController extends Controller
@@ -32,7 +32,7 @@ class ShopifyEmbeddedRewardsController extends Controller
     public function index(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        CandleCashRewardsOverviewService $overviewService,
+        ShopifyEmbeddedRewardsService $rewardsService,
         TenantResolver $tenantResolver
     ): Response
     {
@@ -42,6 +42,10 @@ class ShopifyEmbeddedRewardsController extends Controller
         $configState = $authorized
             ? $this->rewardsConfigState($store, $tenantResolver)
             : ['available' => false];
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        $overview = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
+            ? $rewardsService->overview($tenantId)
+            : [];
 
         return $this->renderSection(
             $request,
@@ -50,9 +54,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'overview',
             'shopify.rewards-overview',
             [
-                'dashboard' => $authorized && ($configState['available'] ?? false)
-                    ? $overviewService->build()
-                    : [],
+                'dashboard' => $overview,
                 'setupNote' => null,
             ]
         );
@@ -102,7 +104,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'shopify.rewards-placeholder',
             [
                 'title' => 'Referrals coming soon',
-                'message' => 'Referral tracking and rewards will arrive here once the next phase of the embedded admin is ready.',
+                'message' => 'Referral tracking and program controls will arrive here once the next phase of the embedded admin is ready.',
             ]
         );
     }
@@ -289,7 +291,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'shopify.rewards-placeholder',
             [
                 'title' => 'VIP experiences coming soon',
-                'message' => 'VIP program controls will be surfaced here once we reuse the existing Candle Cash VIP logic.',
+                'message' => 'VIP program controls will be surfaced here once we reuse the existing VIP logic.',
             ]
         );
     }
@@ -308,7 +310,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'shopify.rewards-placeholder',
             [
                 'title' => 'Notifications coming soon',
-                'message' => 'Notification settings for Candle Cash will appear here in a later phase.',
+                'message' => 'Notification settings for this program will appear here in a later phase.',
             ]
         );
     }
@@ -329,7 +331,15 @@ class ShopifyEmbeddedRewardsController extends Controller
             return $this->unsupportedRewardsConfigResponse($configState);
         }
 
-        $payload = $rewardsService->payload();
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        $payload = $rewardsService->payload($tenantId);
 
         return response()->json([
             'ok' => true,
@@ -339,7 +349,7 @@ class ShopifyEmbeddedRewardsController extends Controller
 
     public function updateEarnRule(
         Request $request,
-        CandleCashTask $task,
+        int $task,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedRewardsService $rewardsService,
         TenantResolver $tenantResolver
@@ -354,18 +364,36 @@ class ShopifyEmbeddedRewardsController extends Controller
             return $this->unsupportedRewardsConfigResponse($configState);
         }
 
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
         try {
             $data = $this->validateEarnPayload($request);
-            $rule = $rewardsService->updateEarnRule($task, $data);
+            $rule = $rewardsService->updateEarnRule(
+                $rewardsService->resolveEarnRule($task, $tenantId),
+                $data,
+                $tenantId
+            );
         } catch (ValidationException $exception) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Earn rule could not be saved.',
                 'errors' => $exception->errors(),
             ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'reward_rule_not_found',
+                'message' => 'This earn rule was not found for the current tenant.',
+            ], 404);
         }
 
-        $payload = $rewardsService->payload();
+        $payload = $rewardsService->payload($tenantId);
 
         return response()->json([
             'ok' => true,
@@ -377,7 +405,7 @@ class ShopifyEmbeddedRewardsController extends Controller
 
     public function updateRedeemRule(
         Request $request,
-        CandleCashReward $reward,
+        int $reward,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedRewardsService $rewardsService,
         TenantResolver $tenantResolver
@@ -392,18 +420,36 @@ class ShopifyEmbeddedRewardsController extends Controller
             return $this->unsupportedRewardsConfigResponse($configState);
         }
 
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
         try {
             $data = $this->validateRedeemPayload($request);
-            $rule = $rewardsService->updateRedeemRule($reward, $data);
+            $rule = $rewardsService->updateRedeemRule(
+                $rewardsService->resolveRedeemRule($reward, $tenantId),
+                $data,
+                $tenantId
+            );
         } catch (ValidationException $exception) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Redeem rule could not be saved.',
                 'errors' => $exception->errors(),
             ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'reward_rule_not_found',
+                'message' => 'This redeem rule was not found for the current tenant.',
+            ], 404);
         }
 
-        $payload = $rewardsService->payload();
+        $payload = $rewardsService->payload($tenantId);
 
         return response()->json([
             'ok' => true,
@@ -428,6 +474,32 @@ class ShopifyEmbeddedRewardsController extends Controller
         $configState = $authorized
             ? $this->rewardsConfigState($store, $tenantResolver)
             : ['available' => false, 'tenant_id' => null, 'status' => null, 'message' => null];
+        $displayLabels = app(TenantDisplayLabelResolver::class)->resolve($configState['tenant_id'] ?? null);
+        $labels = is_array($displayLabels['labels'] ?? null) ? (array) $displayLabels['labels'] : [];
+        $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+        $rewardsBalanceLabel = trim((string) ($labels['rewards_balance_label'] ?? ($rewardsLabel.' balance')));
+        if ($rewardsBalanceLabel === '') {
+            $rewardsBalanceLabel = $rewardsLabel.' balance';
+        }
+        $rewardsProgramLabel = trim((string) ($labels['rewards_program_label'] ?? ($rewardsLabel.' program')));
+        if ($rewardsProgramLabel === '') {
+            $rewardsProgramLabel = $rewardsLabel.' program';
+        }
+        $rewardsRedemptionLabel = trim((string) ($labels['rewards_redemption_label'] ?? ($rewardsLabel.' redemption')));
+        if ($rewardsRedemptionLabel === '') {
+            $rewardsRedemptionLabel = $rewardsLabel.' redemption';
+        }
+        $rewardCreditLabel = trim((string) ($labels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
+        }
+        $birthdayRewardLabel = trim((string) ($labels['birthday_reward_label'] ?? 'Birthday reward'));
+        if ($birthdayRewardLabel === '') {
+            $birthdayRewardLabel = 'Birthday reward';
+        }
 
         $viewData = [
             'authorized' => $authorized,
@@ -438,17 +510,17 @@ class ShopifyEmbeddedRewardsController extends Controller
             'storeLabel' => $authorized
                 ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
                 : 'Shopify Admin',
-            'headline' => $this->headlineForStatus($status),
-            'subheadline' => $this->subheadlineForStatus($status),
+            'headline' => $this->headlineForStatus($status, $rewardsLabel),
+            'subheadline' => $this->subheadlineForStatus($status, $rewardsProgramLabel),
             'dataEndpoint' => route('shopify.app.api.rewards'),
             'earnUpdateEndpointTemplate' => route('shopify.app.api.rewards.earn.update', ['task' => '__TASK__']),
             'redeemUpdateEndpointTemplate' => route('shopify.app.api.rewards.redeem.update', ['reward' => '__REWARD__']),
             'setupNote' => $authorized
                 ? (($configState['available'] ?? false)
-                    ? 'This embedded page updates the live Candle Cash task and reward rows already used by Backstage.'
+                    ? 'This embedded page updates earn rows, redeem rows, and program settings scoped to this tenant.'
                     : null)
                 : ($status === 'open_from_shopify'
-                    ? 'Open the app from Shopify Admin so the store context can be verified before editing rewards.'
+                    ? 'Open the app from Shopify Admin so the store context can be verified before editing this program.'
                     : null),
             'rewardsEditorAvailable' => $authorized && (bool) ($configState['available'] ?? false),
             'rewardsEditorStatus' => $configState['status'] ?? null,
@@ -460,7 +532,7 @@ class ShopifyEmbeddedRewardsController extends Controller
                         'href' => route('marketing.customers'),
                     ],
                     [
-                        'label' => 'Birthday Rewards',
+                        'label' => Str::title($birthdayRewardLabel),
                         'href' => route('birthdays.rewards'),
                     ],
                 ]
@@ -471,6 +543,13 @@ class ShopifyEmbeddedRewardsController extends Controller
                 $configState['tenant_id'] ?? null
             ),
             'pageActions' => [],
+            'displayLabels' => $labels,
+            'rewardsLabel' => $rewardsLabel,
+            'rewardsBalanceLabel' => $rewardsBalanceLabel,
+            'rewardsProgramLabel' => $rewardsProgramLabel,
+            'rewardsRedemptionLabel' => $rewardsRedemptionLabel,
+            'rewardCreditLabel' => $rewardCreditLabel,
+            'birthdayRewardLabel' => $birthdayRewardLabel,
         ];
 
         $viewData = array_merge($viewData, $extra);
@@ -621,12 +700,12 @@ class ShopifyEmbeddedRewardsController extends Controller
 
         $messages = [
             'open_from_shopify' => 'Open the app from Shopify Admin to load this page.',
-            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload rewards from Shopify Admin and try again.',
+            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload this program page from Shopify Admin and try again.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
             'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
-            'invalid_session_token' => 'Shopify Admin verification failed. Reload rewards from Shopify Admin and try again.',
-            'expired_session_token' => 'Your Shopify Admin session expired. Reload rewards from Shopify Admin and try again.',
+            'invalid_session_token' => 'Shopify Admin verification failed. Reload this program page from Shopify Admin and try again.',
+            'expired_session_token' => 'Your Shopify Admin session expired. Reload this program page from Shopify Admin and try again.',
         ];
 
         return response()->json([
@@ -636,21 +715,23 @@ class ShopifyEmbeddedRewardsController extends Controller
         ], $status === 'open_from_shopify' ? 400 : 401);
     }
 
-    protected function headlineForStatus(string $status): string
+    protected function headlineForStatus(string $status, string $rewardsLabel = 'Rewards'): string
     {
         return match ($status) {
             'open_from_shopify' => 'Open this app from Shopify Admin',
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'We could not verify this Shopify request',
-            default => 'Rewards',
+            default => $rewardsLabel,
         };
     }
 
-    protected function subheadlineForStatus(string $status): string
+    protected function subheadlineForStatus(string $status, string $rewardsProgramLabel = 'Rewards program'): string
     {
+        $programLabel = trim($rewardsProgramLabel) !== '' ? $rewardsProgramLabel : 'Rewards program';
+
         return match ($status) {
             'open_from_shopify' => 'This page is meant to load inside your Shopify admin so it can verify the store context.',
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
-            default => 'Manage Candle Cash rewards and program settings.',
+            default => 'Manage '.strtolower($programLabel).' settings.',
         };
     }
 
@@ -671,18 +752,29 @@ class ShopifyEmbeddedRewardsController extends Controller
         $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
         if ($tenantId === null) {
             return [
-                'available' => true,
+                'available' => false,
                 'tenant_id' => null,
-                'status' => null,
-                'message' => null,
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ];
+        }
+
+        if (! Schema::hasTable('tenant_marketing_settings')
+            || ! Schema::hasTable('tenant_candle_cash_task_overrides')
+            || ! Schema::hasTable('tenant_candle_cash_reward_overrides')) {
+            return [
+                'available' => false,
+                'tenant_id' => $tenantId,
+                'status' => 'tenant_scoped_rewards_storage_unavailable',
+                'message' => 'Tenant-scoped rewards storage is not available yet. Run migrations before editing rewards for this tenant.',
             ];
         }
 
         return [
-            'available' => false,
+            'available' => true,
             'tenant_id' => $tenantId,
-            'status' => 'tenant_scoped_rewards_config_unsupported',
-            'message' => 'This embedded rewards editor is unavailable for tenant-scoped stores until Candle Cash tasks, rewards, and program settings are isolated per tenant.',
+            'status' => null,
+            'message' => null,
         ];
     }
 
@@ -691,12 +783,15 @@ class ShopifyEmbeddedRewardsController extends Controller
      */
     protected function unsupportedRewardsConfigResponse(array $configState): JsonResponse
     {
+        $status = (string) ($configState['status'] ?? 'tenant_scoped_rewards_config_unsupported');
+        $httpStatus = $status === 'tenant_not_mapped' ? 422 : 409;
+
         return response()->json([
             'ok' => false,
-            'status' => (string) ($configState['status'] ?? 'tenant_scoped_rewards_config_unsupported'),
+            'status' => $status,
             'message' => (string) ($configState['message']
-                ?? 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.'),
-        ], 409);
+                ?? 'This embedded program editor is unavailable until earn and redeem rows are isolated per tenant.'),
+        ], $httpStatus);
     }
 
     protected function nullableString(mixed $value): ?string

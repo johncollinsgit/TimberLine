@@ -1,3 +1,14 @@
+@php
+    $tenantId = request()?->attributes->get('current_tenant_id');
+    $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+    $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
+    $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
+    $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+    if ($rewardsLabel === '') {
+        $rewardsLabel = 'Rewards';
+    }
+@endphp
+
 <x-layouts::app :title="'Customer'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
@@ -129,7 +140,7 @@
                     </div>
                 </article>
                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Review Rewards</div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-white/55">Active Review {{ $rewardsLabel }}</div>
                     <div class="mt-2 text-2xl font-semibold text-white">{{ number_format((int) ($preferredReviewRewardStatus['count'] ?? 0)) }}</div>
                     <div class="mt-1 text-[11px] text-white/55">
                         Last reward: {{ $preferredReviewRewardStatus['last_rewarded_at'] ?? '—' }}
@@ -1137,10 +1148,10 @@
 
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article class="rounded-3xl border border-white/10 bg-black/15 p-5 space-y-4">
-                <h3 class="text-sm font-semibold text-white">Candle Cash</h3>
+                <h3 class="text-sm font-semibold text-white">{{ $rewardsLabel }}</h3>
                 <div class="text-2xl font-semibold text-white">{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $candleBalance)) }}</div>
-                <x-admin.help-hint tone="neutral" title="Rewards ledger behavior">
-                    All Candle Cash changes are appended to the transaction ledger. Redemptions are issued first, then reconciled as redeemed, canceled, or expired. Shopify code usage is validated during ingestion, while Square event usage can be staff-reconciled.
+                <x-admin.help-hint tone="neutral" :title="$rewardsLabel . ' ledger behavior'">
+                    All {{ $rewardsLabel }} changes are appended to the transaction ledger. Redemptions are issued first, then reconciled as redeemed, canceled, or expired. Shopify code usage is validated during ingestion, while Square event usage can be staff-reconciled.
                 </x-admin.help-hint>
                 <div class="flex flex-wrap gap-2 text-xs">
                     <span class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-white/75">Issued: {{ (int) ($redemptionSummary['issued'] ?? 0) }}</span>
@@ -1156,11 +1167,11 @@
                             <option value="earn">Earn</option>
                             <option value="adjust">Adjust</option>
                         </select>
-                        <input type="number" step="0.01" name="amount" required placeholder="Candle Cash (+/-)" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
+                        <input type="number" step="0.01" name="amount" required placeholder="{{ $rewardsLabel }} (+/-)" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
                         <input type="text" name="description" placeholder="Description" class="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-white">
                     </div>
                     <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-white">
-                        Save Candle Cash Entry
+                        Save {{ $rewardsLabel }} Entry
                     </button>
                 </form>
 

@@ -21,13 +21,14 @@ class MarketingAllOptedInSendService
         protected MarketingEmailExecutionService $emailExecutionService,
         protected TwilioSmsService $twilioSmsService,
         protected SendGridEmailService $sendGridEmailService,
+        protected MarketingTenantOwnershipService $ownershipService,
     ) {
     }
 
     /**
      * @return array{sms:int,email:int,overlap:int,unique:int}
      */
-    public function audienceSummary(): array
+    public function audienceSummary(?int $tenantId = null): array
     {
         $summary = [
             'sms' => 0,
@@ -37,6 +38,7 @@ class MarketingAllOptedInSendService
         ];
 
         MarketingProfile::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
             ->select([
                 'id',
                 'email',
@@ -76,9 +78,9 @@ class MarketingAllOptedInSendService
     /**
      * @return array{sms:int,email:int,overlap:int,unique:int,delivery_total:int,selected_unique:int}
      */
-    public function selectedAudienceSummary(string $selection): array
+    public function selectedAudienceSummary(string $selection, ?int $tenantId = null): array
     {
-        $base = $this->audienceSummary();
+        $base = $this->audienceSummary($tenantId);
         $selection = $this->normalizeChannelSelection($selection);
 
         $deliveryTotal = match ($selection) {
@@ -108,7 +110,8 @@ class MarketingAllOptedInSendService
     {
         $selection = $this->normalizeChannelSelection((string) ($payload['channel'] ?? 'both'));
         $channels = $this->channelsForSelection($selection);
-        $previewProfile = $this->previewProfileForActor($actor);
+        $tenantId = $this->resolveTenantId($payload);
+        $previewProfile = $this->previewProfileForActor($actor, $tenantId);
         $results = [];
 
         if (in_array('sms', $channels, true)) {
@@ -144,10 +147,6 @@ class MarketingAllOptedInSendService
                 ]);
             }
 
-            $tenantId = is_numeric($payload['tenant_id'] ?? null)
-                ? (int) $payload['tenant_id']
-                : null;
-
             $results['email'] = $this->sendGridEmailService->sendEmail(
                 $toEmail,
                 $subject,
@@ -175,7 +174,8 @@ class MarketingAllOptedInSendService
     public function createAndSend(User $actor, array $payload): array
     {
         $selection = $this->normalizeChannelSelection((string) ($payload['channel'] ?? 'both'));
-        $counts = $this->selectedAudienceSummary($selection);
+        $tenantId = $this->resolveTenantId($payload);
+        $counts = $this->selectedAudienceSummary($selection, $tenantId);
         $channels = $this->channelsForSelection($selection);
 
         if ($counts['selected_unique'] <= 0) {
@@ -186,7 +186,7 @@ class MarketingAllOptedInSendService
 
         $campaigns = [];
         foreach ($channels as $channel) {
-            [$campaign, $recipientCount] = $this->buildCampaign($actor, $channel, $payload);
+            [$campaign, $recipientCount] = $this->buildCampaign($actor, $channel, $payload, $tenantId);
             if ($recipientCount <= 0) {
                 continue;
             }
@@ -234,7 +234,7 @@ class MarketingAllOptedInSendService
      * @param array<string,mixed> $payload
      * @return array{0:MarketingCampaign,1:int}
      */
-    protected function buildCampaign(User $actor, string $channel, array $payload): array
+    protected function buildCampaign(User $actor, string $channel, array $payload, ?int $tenantId = null): array
     {
         $messageText = $this->messageTextForChannel($channel, $payload);
         $emailSubject = $channel === 'email' ? trim((string) ($payload['email_subject'] ?? '')) : null;
@@ -242,6 +242,7 @@ class MarketingAllOptedInSendService
         $timestamp = now();
 
         $campaign = MarketingCampaign::query()->create([
+            'tenant_id' => $tenantId,
             'name' => sprintf('All Opted-In %s %s', strtoupper($channel), $timestamp->format('Y-m-d H:i:s')),
             'slug' => sprintf('all-opted-in-%s-%s', $channel, $timestamp->format('YmdHis')),
             'description' => $this->campaignDescription($channel, $emailSubject, $ctaLink),
@@ -266,7 +267,7 @@ class MarketingAllOptedInSendService
         ]);
 
         $recipientCount = 0;
-        $this->candidateQueryForChannel($channel)
+        $this->candidateQueryForChannel($channel, $tenantId)
             ->chunkById(500, function ($profiles) use (&$recipientCount, $campaign, $variant, $actor, $channel, $emailSubject, $ctaLink, $timestamp): void {
                 $rows = [];
 
@@ -314,9 +315,10 @@ class MarketingAllOptedInSendService
         return [$campaign, $recipientCount];
     }
 
-    protected function candidateQueryForChannel(string $channel): Builder
+    protected function candidateQueryForChannel(string $channel, ?int $tenantId = null): Builder
     {
         $query = MarketingProfile::query()
+            ->when($tenantId !== null, fn (Builder $builder) => $builder->forTenantId($tenantId))
             ->select([
                 'id',
                 'email',
@@ -404,13 +406,16 @@ class MarketingAllOptedInSendService
         ));
     }
 
-    protected function previewProfileForActor(User $actor): MarketingProfile
+    protected function previewProfileForActor(User $actor, ?int $tenantId = null): MarketingProfile
     {
         $normalizedEmail = $this->normalizer->normalizeEmail((string) $actor->email);
         if ($normalizedEmail !== null) {
             $existing = MarketingProfile::query()
-                ->where('normalized_email', $normalizedEmail)
-                ->orWhere('email', $normalizedEmail)
+                ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
+                ->where(function (Builder $query) use ($normalizedEmail): void {
+                    $query->where('normalized_email', $normalizedEmail)
+                        ->orWhere('email', $normalizedEmail);
+                })
                 ->orderByDesc('id')
                 ->first();
 
@@ -465,6 +470,25 @@ class MarketingAllOptedInSendService
         }
 
         return implode(' ', $parts);
+    }
+
+    protected function resolveTenantId(array $payload): ?int
+    {
+        $tenantId = is_numeric($payload['tenant_id'] ?? null)
+            ? (int) $payload['tenant_id']
+            : null;
+
+        if ($tenantId !== null && $tenantId > 0) {
+            return $tenantId;
+        }
+
+        if ($this->ownershipService->strictModeEnabled()) {
+            throw ValidationException::withMessages([
+                'channel' => 'Tenant context is required before sending to opted-in audiences.',
+            ]);
+        }
+
+        return null;
     }
 
     protected function nullableString(mixed $value): ?string

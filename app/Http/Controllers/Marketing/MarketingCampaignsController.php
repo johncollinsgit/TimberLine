@@ -20,22 +20,49 @@ use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\MarketingPerformanceAnalyticsService;
 use App\Services\Marketing\MarketingRecommendationEngine;
 use App\Services\Marketing\MarketingSmsExecutionService;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Services\Marketing\MarketingTimingRecommendationService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class MarketingCampaignsController extends Controller
 {
-    public function index(): View
+    public function __construct(
+        protected MarketingTenantOwnershipService $ownershipService
+    ) {
+    }
+
+    public function index(Request $request): View
     {
-        $campaigns = MarketingCampaign::query()
+        $tenantId = $this->resolveTenantId($request);
+        $strict = $this->strictTenantMode();
+
+        $campaignsQuery = MarketingCampaign::query()
             ->with('segment:id,name')
-            ->withCount('recipients')
-            ->orderByDesc('updated_at')
-            ->paginate(30);
+            ->withCount([
+                'recipients as recipients_count' => function ($query) use ($strict, $tenantId): void {
+                    if ($strict && $tenantId !== null) {
+                        $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId));
+                    }
+                },
+            ])
+            ->orderByDesc('updated_at');
+
+        if ($strict && $tenantId !== null) {
+            $campaignIds = $this->ownershipService->tenantCampaignIds($tenantId);
+            if ($campaignIds->isEmpty()) {
+                $campaignsQuery->whereRaw('1 = 0');
+            } else {
+                $campaignsQuery->whereIn('id', $campaignIds->all());
+            }
+        }
+
+        $campaigns = $campaignsQuery->paginate(30);
 
         return view('marketing/campaigns/index', [
             'section' => MarketingSectionRegistry::section('campaigns'),
@@ -46,8 +73,20 @@ class MarketingCampaignsController extends Controller
 
     public function create(Request $request): View
     {
+        $tenantId = $this->resolveTenantId($request);
+        $strict = $this->strictTenantMode();
         $prefillSegmentId = (int) $request->query('segment_id', 0);
         $prefillSegmentId = $prefillSegmentId > 0 ? $prefillSegmentId : null;
+
+        $segmentIds = collect();
+        $groupIds = collect();
+        if ($strict && $tenantId !== null) {
+            $segmentIds = $this->ownershipService->tenantSegmentIds($tenantId);
+            $groupIds = $this->ownershipService->tenantGroupIds($tenantId);
+            if ($prefillSegmentId !== null && ! $segmentIds->contains($prefillSegmentId)) {
+                $prefillSegmentId = null;
+            }
+        }
 
         return view('marketing/campaigns/form', [
             'section' => MarketingSectionRegistry::section('campaigns'),
@@ -59,8 +98,8 @@ class MarketingCampaignsController extends Controller
                 'attribution_window_days' => 7,
                 'segment_id' => $prefillSegmentId,
             ]),
-            'segments' => MarketingSegment::query()->whereIn('status', ['active', 'draft'])->orderBy('name')->get(['id', 'name']),
-            'groups' => MarketingGroup::query()->orderBy('name')->get(['id', 'name', 'is_internal']),
+            'segments' => $this->segmentsQueryForTenant($strict, $segmentIds)->get(['id', 'name']),
+            'groups' => $this->groupsQueryForTenant($strict, $groupIds)->get(['id', 'name', 'is_internal']),
             'selectedGroupIds' => [],
             'mode' => 'create',
         ]);
@@ -68,6 +107,8 @@ class MarketingCampaignsController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $strict = $this->strictTenantMode();
         $data = $this->validatedCampaign($request);
         $groupIds = collect((array) ($data['group_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
@@ -77,8 +118,34 @@ class MarketingCampaignsController extends Controller
             ->all();
         unset($data['group_ids']);
 
+        if ($strict && $tenantId !== null) {
+            if ($groupIds === []) {
+                throw ValidationException::withMessages([
+                    'group_ids' => 'Campaign creation requires at least one tenant-owned group.',
+                ]);
+            }
+
+            $allowedGroupIds = $this->ownershipService->tenantGroupIds($tenantId);
+            $invalidGroupId = collect($groupIds)->first(fn (int $id): bool => ! $allowedGroupIds->contains($id));
+            if ($invalidGroupId !== null) {
+                throw ValidationException::withMessages([
+                    'group_ids' => 'One or more selected groups are outside tenant ownership scope.',
+                ]);
+            }
+
+            $segmentId = isset($data['segment_id']) && is_numeric($data['segment_id'])
+                ? (int) $data['segment_id']
+                : null;
+            if ($segmentId !== null && $segmentId > 0 && ! $this->ownershipService->segmentOwnedByTenant($segmentId, $tenantId)) {
+                throw ValidationException::withMessages([
+                    'segment_id' => 'Selected segment is outside tenant ownership scope.',
+                ]);
+            }
+        }
+
         $campaign = MarketingCampaign::query()->create([
             ...$data,
+            'tenant_id' => $tenantId,
             'slug' => Str::slug($data['name']),
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),
@@ -90,14 +157,25 @@ class MarketingCampaignsController extends Controller
             ->with('toast', ['style' => 'success', 'message' => 'Campaign created.']);
     }
 
-    public function edit(MarketingCampaign $campaign): View
+    public function edit(Request $request, MarketingCampaign $campaign): View
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
+        $strict = $this->strictTenantMode();
+        $segmentIds = collect();
+        $groupIds = collect();
+        if ($strict && $tenantId !== null) {
+            $segmentIds = $this->ownershipService->tenantSegmentIds($tenantId);
+            $groupIds = $this->ownershipService->tenantGroupIds($tenantId);
+        }
+
         return view('marketing/campaigns/form', [
             'section' => MarketingSectionRegistry::section('campaigns'),
             'sections' => $this->navigationItems(),
             'campaign' => $campaign,
-            'segments' => MarketingSegment::query()->whereIn('status', ['active', 'draft'])->orderBy('name')->get(['id', 'name']),
-            'groups' => MarketingGroup::query()->orderBy('name')->get(['id', 'name', 'is_internal']),
+            'segments' => $this->segmentsQueryForTenant($strict, $segmentIds)->get(['id', 'name']),
+            'groups' => $this->groupsQueryForTenant($strict, $groupIds)->get(['id', 'name', 'is_internal']),
             'selectedGroupIds' => $campaign->groups()->pluck('marketing_groups.id')->map(fn ($id) => (int) $id)->all(),
             'mode' => 'edit',
         ]);
@@ -105,6 +183,10 @@ class MarketingCampaignsController extends Controller
 
     public function update(Request $request, MarketingCampaign $campaign): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+        $strict = $this->strictTenantMode();
+
         $data = $this->validatedCampaign($request);
         $groupIds = collect((array) ($data['group_ids'] ?? []))
             ->map(fn ($id) => (int) $id)
@@ -113,6 +195,25 @@ class MarketingCampaignsController extends Controller
             ->values()
             ->all();
         unset($data['group_ids']);
+
+        if ($strict && $tenantId !== null) {
+            $allowedGroupIds = $this->ownershipService->tenantGroupIds($tenantId);
+            $invalidGroupId = collect($groupIds)->first(fn (int $id): bool => ! $allowedGroupIds->contains($id));
+            if ($invalidGroupId !== null) {
+                throw ValidationException::withMessages([
+                    'group_ids' => 'One or more selected groups are outside tenant ownership scope.',
+                ]);
+            }
+
+            $segmentId = isset($data['segment_id']) && is_numeric($data['segment_id'])
+                ? (int) $data['segment_id']
+                : null;
+            if ($segmentId !== null && $segmentId > 0 && ! $this->ownershipService->segmentOwnedByTenant($segmentId, $tenantId)) {
+                throw ValidationException::withMessages([
+                    'segment_id' => 'Selected segment is outside tenant ownership scope.',
+                ]);
+            }
+        }
 
         $campaign->fill([
             ...$data,
@@ -135,6 +236,10 @@ class MarketingCampaignsController extends Controller
         MarketingCampaignDeliveryDiagnostics $diagnosticsService
     ): View
     {
+        $tenantId = $this->resolveTenantId($request);
+        $strict = $this->strictTenantMode();
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $campaign->load([
             'segment:id,name',
             'groups:id,name,is_internal',
@@ -142,49 +247,68 @@ class MarketingCampaignsController extends Controller
             'recommendations' => fn ($query) => $query->orderByDesc('id')->limit(10),
         ]);
 
-        $recipientSummary = $campaign->recipients()
+        $recipientSummaryQuery = $campaign->recipients();
+        if ($strict && $tenantId !== null) {
+            $recipientSummaryQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
+        }
+        $recipientSummary = $recipientSummaryQuery
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status')
             ->all();
 
-        $approvalQueue = $campaign->recipients()
+        $approvalQueueQuery = $campaign->recipients()
             ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name', 'latestDelivery', 'latestEmailDelivery'])
             ->whereIn('status', ['queued_for_approval', 'approved', 'rejected', 'sending', 'sent', 'delivered', 'failed', 'undelivered', 'converted'])
             ->orderByRaw("case when status = 'queued_for_approval' then 0 when status='approved' then 1 when status='sending' then 2 when status='failed' then 3 else 4 end")
             ->orderByDesc('updated_at')
-            ->limit(200)
-            ->get();
+            ->limit(200);
+        if ($strict && $tenantId !== null) {
+            $approvalQueueQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
+        }
+        $approvalQueue = $approvalQueueQuery->get();
 
-        $deliveryLog = $campaign->deliveries()
+        $deliveryLogQuery = $campaign->deliveries()
             ->with(['profile:id,first_name,last_name,email,phone', 'variant:id,name'])
             ->orderByDesc('id')
-            ->limit(200)
-            ->get();
+            ->limit(200);
+        if ($strict && $tenantId !== null) {
+            $deliveryLogQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
+        }
+        $deliveryLog = $deliveryLogQuery->get();
         $emailDeliveryLog = MarketingEmailDelivery::query()
-            ->whereIn('marketing_campaign_recipient_id', function ($query) use ($campaign): void {
-                $query->select('id')
-                    ->from('marketing_campaign_recipients')
-                    ->where('campaign_id', $campaign->id);
+            ->whereIn('marketing_campaign_recipient_id', function ($query) use ($campaign, $strict, $tenantId): void {
+                $query->select('mcr.id')
+                    ->from('marketing_campaign_recipients as mcr')
+                    ->where('mcr.campaign_id', $campaign->id);
+                if ($strict && $tenantId !== null) {
+                    $query->join('marketing_profiles as mp', 'mp.id', '=', 'mcr.marketing_profile_id')
+                        ->where('mp.tenant_id', $tenantId);
+                }
             })
             ->with(['profile:id,first_name,last_name,email,phone', 'recipient:id,status'])
             ->orderByDesc('id')
             ->limit(200)
             ->get();
 
-        $emailReadiness = $readinessService->summary($this->currentTenantId($request));
+        $emailReadiness = $readinessService->summary($tenantId);
         $diagnostics = $diagnosticsService->summarize($campaign, $emailReadiness, $emailDeliveryLog);
 
+        $conversionsQuery = $campaign->conversions();
+        if ($strict && $tenantId !== null) {
+            $conversionsQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
+        }
+
         $conversionSummary = [
-            'count' => (int) $campaign->conversions()->count(),
-            'revenue' => (float) $campaign->conversions()->sum('order_total'),
-            'types' => $campaign->conversions()
+            'count' => (int) (clone $conversionsQuery)->count(),
+            'revenue' => (float) (clone $conversionsQuery)->sum('order_total'),
+            'types' => (clone $conversionsQuery)
                 ->selectRaw('attribution_type, count(*) as aggregate')
                 ->groupBy('attribution_type')
                 ->pluck('aggregate', 'attribution_type')
                 ->all(),
         ];
-        $conversionSourceKeys = $campaign->conversions()
+        $conversionSourceKeys = (clone $conversionsQuery)
             ->get(['source_type', 'source_id'])
             ->map(fn ($row): string => strtolower(trim((string) $row->source_type)) . '|' . trim((string) $row->source_id))
             ->filter()
@@ -196,6 +320,7 @@ class MarketingCampaignsController extends Controller
                 ->where('status', 'redeemed')
                 ->whereNotNull('external_order_source')
                 ->whereNotNull('external_order_id')
+                ->when($strict && $tenantId !== null, fn ($query) => $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId)))
                 ->get(['id', 'platform', 'external_order_source', 'external_order_id'])
                 ->filter(function (CandleCashRedemption $redemption) use ($conversionSourceKeys): bool {
                     $key = strtolower(trim((string) $redemption->external_order_source)) . '|' . trim((string) $redemption->external_order_id);
@@ -210,8 +335,21 @@ class MarketingCampaignsController extends Controller
                 ->all(),
         ];
 
-        $performanceSummary = $performanceAnalyticsService->campaignSummary($campaign, 120);
+        $performanceSummary = $performanceAnalyticsService->campaignSummary($campaign, 120, $tenantId);
         $timingInsight = $timingRecommendationService->bestInsightForCampaign($campaign);
+
+        $templatesQuery = MarketingMessageTemplate::query()
+            ->where('is_active', true)
+            ->where('channel', $campaign->channel)
+            ->orderBy('name');
+        if ($strict && $tenantId !== null) {
+            $templateIds = $this->ownershipService->tenantTemplateIds($tenantId);
+            if ($templateIds->isEmpty()) {
+                $templatesQuery->whereRaw('1 = 0');
+            } else {
+                $templatesQuery->whereIn('id', $templateIds->all());
+            }
+        }
 
         return view('marketing/campaigns/show', [
             'section' => MarketingSectionRegistry::section('campaigns'),
@@ -226,11 +364,7 @@ class MarketingCampaignsController extends Controller
             'rewardConversionSummary' => $rewardConversionSummary,
             'performanceSummary' => $performanceSummary,
             'timingInsight' => $timingInsight,
-            'templates' => MarketingMessageTemplate::query()
-                ->where('is_active', true)
-                ->where('channel', $campaign->channel)
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            'templates' => $templatesQuery->get(['id', 'name']),
             'emailReadiness' => $emailReadiness,
         ]);
     }
@@ -240,6 +374,9 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingSmsExecutionService $executionService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'limit' => ['nullable', 'integer', 'min:1', 'max:2000'],
             'dry_run' => ['nullable', 'boolean'],
@@ -251,6 +388,7 @@ class MarketingCampaignsController extends Controller
             'limit' => (int) ($data['limit'] ?? 500),
             'dry_run' => $dryRun,
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         return redirect()
@@ -273,12 +411,15 @@ class MarketingCampaignsController extends Controller
         MarketingEmailExecutionService $executionService,
         MarketingEmailReadiness $readinessService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'limit' => ['nullable', 'integer', 'min:1', 'max:2000'],
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
-        $readiness = $readinessService->summary($this->currentTenantId($request));
+        $readiness = $readinessService->summary($tenantId);
         $effectiveDryRun = (bool) ($data['dry_run'] ?? false) || (bool) ($readiness['dry_run'] ?? false);
         $blocked = $this->blockEmailSend($readiness, $effectiveDryRun, $campaign);
         if ($blocked) {
@@ -289,6 +430,7 @@ class MarketingCampaignsController extends Controller
             'limit' => (int) ($data['limit'] ?? 500),
             'dry_run' => $effectiveDryRun,
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         $modeLabel = ($summary['dry_run'] ?? false)
@@ -316,24 +458,30 @@ class MarketingCampaignsController extends Controller
         MarketingEmailExecutionService $executionService,
         MarketingEmailReadiness $readinessService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'recipient_ids' => ['required', 'array', 'min:1'],
             'recipient_ids.*' => ['integer', 'exists:marketing_campaign_recipients,id'],
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
-        $readiness = $readinessService->summary($this->currentTenantId($request));
+        $readiness = $readinessService->summary($tenantId);
         $effectiveDryRun = (bool) ($data['dry_run'] ?? false) || (bool) ($readiness['dry_run'] ?? false);
         $blocked = $this->blockEmailSend($readiness, $effectiveDryRun, $campaign);
         if ($blocked) {
             return $blocked;
         }
 
+        $recipientIds = $this->validatedRecipientIdsForCampaign((array) $data['recipient_ids'], $campaign, $tenantId);
+
         $summary = $executionService->sendApprovedForCampaign($campaign, [
-            'recipient_ids' => array_map('intval', (array) $data['recipient_ids']),
+            'recipient_ids' => $recipientIds,
             'dry_run' => $effectiveDryRun,
-            'limit' => count((array) $data['recipient_ids']),
+            'limit' => count($recipientIds),
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         $modeLabel = ($summary['dry_run'] ?? false)
@@ -361,7 +509,10 @@ class MarketingCampaignsController extends Controller
         MarketingEmailExecutionService $executionService,
         MarketingEmailReadiness $readinessService
     ): RedirectResponse {
-        $readiness = $readinessService->summary($this->currentTenantId($request));
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
+        $readiness = $readinessService->summary($tenantId);
         $effectiveDryRun = (bool) ($readiness['dry_run'] ?? false);
         $blocked = $this->blockEmailSend($readiness, $effectiveDryRun, $campaign);
         if ($blocked) {
@@ -378,12 +529,20 @@ class MarketingCampaignsController extends Controller
                 ]);
         }
 
-        $profile = MarketingProfile::query()->firstOrCreate([
-            'normalized_email' => Str::lower($testEmail),
-        ], [
-            'email' => $testEmail,
-            'accepts_email_marketing' => true,
-        ]);
+        $profileQuery = MarketingProfile::query()
+            ->where('normalized_email', Str::lower($testEmail));
+        if ($this->strictTenantMode() && $tenantId !== null) {
+            $profileQuery->forTenantId($tenantId);
+        }
+        $profile = $profileQuery->first();
+        if (! $profile) {
+            $profile = MarketingProfile::query()->create([
+                'tenant_id' => $tenantId,
+                'email' => $testEmail,
+                'normalized_email' => Str::lower($testEmail),
+                'accepts_email_marketing' => true,
+            ]);
+        }
 
         $recipient = $campaign->recipients()
             ->where('channel', 'email')
@@ -422,6 +581,7 @@ class MarketingCampaignsController extends Controller
             'dry_run' => $effectiveDryRun,
             'limit' => 1,
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         $delivery = MarketingEmailDelivery::query()
@@ -465,7 +625,12 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingEmailExecutionService $executionService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
         abort_unless((int) $recipient->campaign_id === (int) $campaign->id, 404);
+        if ($this->strictTenantMode() && $tenantId !== null && ! $this->ownershipService->recipientOwnedByTenant((int) $recipient->id, $tenantId)) {
+            abort(404);
+        }
 
         $data = $request->validate([
             'dry_run' => ['nullable', 'boolean'],
@@ -474,6 +639,7 @@ class MarketingCampaignsController extends Controller
         $result = $executionService->retryRecipient($recipient, [
             'dry_run' => (bool) ($data['dry_run'] ?? false),
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         return redirect()
@@ -529,9 +695,7 @@ class MarketingCampaignsController extends Controller
 
     protected function currentTenantId(Request $request): ?int
     {
-        $tenantId = $request->attributes->get('current_tenant_id');
-
-        return is_numeric($tenantId) ? (int) $tenantId : null;
+        return $this->ownershipService->resolveTenantId($request, false);
     }
 
     public function sendSelectedSms(
@@ -539,17 +703,23 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingSmsExecutionService $executionService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'recipient_ids' => ['required', 'array', 'min:1'],
             'recipient_ids.*' => ['integer', 'exists:marketing_campaign_recipients,id'],
             'dry_run' => ['nullable', 'boolean'],
         ]);
 
+        $recipientIds = $this->validatedRecipientIdsForCampaign((array) $data['recipient_ids'], $campaign, $tenantId);
+
         $summary = $executionService->sendApprovedForCampaign($campaign, [
-            'recipient_ids' => array_map('intval', (array) $data['recipient_ids']),
+            'recipient_ids' => $recipientIds,
             'dry_run' => (bool) ($data['dry_run'] ?? false),
-            'limit' => count((array) $data['recipient_ids']),
+            'limit' => count($recipientIds),
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         return redirect()
@@ -572,7 +742,12 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingSmsExecutionService $executionService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
         abort_unless((int) $recipient->campaign_id === (int) $campaign->id, 404);
+        if ($this->strictTenantMode() && $tenantId !== null && ! $this->ownershipService->recipientOwnedByTenant((int) $recipient->id, $tenantId)) {
+            abort(404);
+        }
 
         $data = $request->validate([
             'dry_run' => ['nullable', 'boolean'],
@@ -581,6 +756,7 @@ class MarketingCampaignsController extends Controller
         $result = $executionService->retryRecipient($recipient, [
             'dry_run' => (bool) ($data['dry_run'] ?? false),
             'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
 
         return redirect()
@@ -600,6 +776,9 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingCampaignAudienceBuilder $audienceBuilder
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'limit' => ['nullable', 'integer', 'min:1', 'max:2000'],
         ]);
@@ -616,6 +795,9 @@ class MarketingCampaignsController extends Controller
 
     public function addVariant(MarketingCampaign $campaign, Request $request): RedirectResponse
     {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'variant_key' => ['nullable', 'string', 'max:20'],
@@ -626,6 +808,15 @@ class MarketingCampaignsController extends Controller
             'status' => ['nullable', 'in:draft,active,paused'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        if ($this->strictTenantMode() && $tenantId !== null && ! empty($data['template_id'])) {
+            $templateId = (int) $data['template_id'];
+            if (! $this->ownershipService->templateOwnedByTenant($templateId, $tenantId)) {
+                throw ValidationException::withMessages([
+                    'template_id' => 'Selected template is outside tenant ownership scope.',
+                ]);
+            }
+        }
 
         MarketingCampaignVariant::query()->create([
             'campaign_id' => $campaign->id,
@@ -649,6 +840,8 @@ class MarketingCampaignsController extends Controller
         MarketingCampaignVariant $variant,
         Request $request
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
         abort_unless((int) $variant->campaign_id === (int) $campaign->id, 404);
 
         $data = $request->validate([
@@ -661,6 +854,15 @@ class MarketingCampaignsController extends Controller
             'status' => ['nullable', 'in:draft,active,paused'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        if ($this->strictTenantMode() && $tenantId !== null && ! empty($data['template_id'])) {
+            $templateId = (int) $data['template_id'];
+            if (! $this->ownershipService->templateOwnedByTenant($templateId, $tenantId)) {
+                throw ValidationException::withMessages([
+                    'template_id' => 'Selected template is outside tenant ownership scope.',
+                ]);
+            }
+        }
 
         $variant->fill([
             'name' => $data['name'],
@@ -684,7 +886,12 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingApprovalService $approvalService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
         abort_unless((int) $recipient->campaign_id === (int) $campaign->id, 404);
+        if ($this->strictTenantMode() && $tenantId !== null && ! $this->ownershipService->recipientOwnedByTenant((int) $recipient->id, $tenantId)) {
+            abort(404);
+        }
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -702,7 +909,12 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingApprovalService $approvalService
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
         abort_unless((int) $recipient->campaign_id === (int) $campaign->id, 404);
+        if ($this->strictTenantMode() && $tenantId !== null && ! $this->ownershipService->recipientOwnedByTenant((int) $recipient->id, $tenantId)) {
+            abort(404);
+        }
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -716,9 +928,15 @@ class MarketingCampaignsController extends Controller
 
     public function generateRecommendations(
         MarketingCampaign $campaign,
+        Request $request,
         MarketingRecommendationEngine $engine
     ): RedirectResponse {
-        $result = $engine->generateForCampaign($campaign);
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
+        $result = $engine->generateForCampaign($campaign, [
+            'tenant_id' => $tenantId,
+        ]);
 
         return redirect()
             ->route('marketing.campaigns.show', $campaign)
@@ -733,6 +951,9 @@ class MarketingCampaignsController extends Controller
         Request $request,
         MarketingRecommendationEngine $recommendationEngine
     ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
         $data = $request->validate([
             'marketing_profile_id' => ['required', 'integer', 'exists:marketing_profiles,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -741,6 +962,11 @@ class MarketingCampaignsController extends Controller
 
         /** @var MarketingProfile $profile */
         $profile = MarketingProfile::query()->findOrFail((int) $data['marketing_profile_id']);
+        if ($this->strictTenantMode() && $tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+            throw ValidationException::withMessages([
+                'marketing_profile_id' => 'Selected profile is outside tenant ownership scope.',
+            ]);
+        }
 
         $existing = MarketingCampaignRecipient::query()
             ->where('campaign_id', $campaign->id)
@@ -790,7 +1016,9 @@ class MarketingCampaignsController extends Controller
         );
 
         if ($recipient->status === 'queued_for_approval') {
-            $recommendationEngine->generateSendSuggestionForProfile($profile, $campaign);
+            $recommendationEngine->generateSendSuggestionForProfile($profile, $campaign, [
+                'tenant_id' => $tenantId,
+            ]);
         }
 
         return redirect()
@@ -898,6 +1126,105 @@ class MarketingCampaignsController extends Controller
             ->first(['id']);
 
         return $variant ? (int) $variant->id : null;
+    }
+
+    /**
+     * @param array<int,mixed> $recipientIds
+     * @return array<int,int>
+     */
+    protected function validatedRecipientIdsForCampaign(array $recipientIds, MarketingCampaign $campaign, ?int $tenantId): array
+    {
+        $requestedIds = collect($recipientIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($requestedIds->isEmpty()) {
+            return [];
+        }
+
+        $authorizedQuery = MarketingCampaignRecipient::query()
+            ->where('campaign_id', $campaign->id)
+            ->whereIn('id', $requestedIds->all());
+
+        if ($this->strictTenantMode() && $tenantId !== null) {
+            $authorizedQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
+        }
+
+        $authorizedIds = $authorizedQuery
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values();
+
+        if ($authorizedIds->count() !== $requestedIds->count()) {
+            throw ValidationException::withMessages([
+                'recipient_ids' => 'Selected recipients are outside campaign or tenant ownership scope.',
+            ]);
+        }
+
+        return $authorizedIds->all();
+    }
+
+    protected function strictTenantMode(): bool
+    {
+        return $this->ownershipService->strictModeEnabled();
+    }
+
+    protected function resolveTenantId(Request $request): ?int
+    {
+        return $this->ownershipService->resolveTenantId($request, $this->strictTenantMode());
+    }
+
+    protected function assertCampaignAccess(MarketingCampaign $campaign, ?int $tenantId): void
+    {
+        if (! $this->strictTenantMode() || $tenantId === null) {
+            return;
+        }
+
+        if (! $this->ownershipService->campaignOwnedByTenant((int) $campaign->id, $tenantId)) {
+            abort(404);
+        }
+    }
+
+    /**
+     * @param Collection<int,int> $segmentIds
+     */
+    protected function segmentsQueryForTenant(bool $strict, Collection $segmentIds): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = MarketingSegment::query()
+            ->whereIn('status', ['active', 'draft'])
+            ->orderBy('name');
+
+        if ($strict) {
+            if ($segmentIds->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('id', $segmentIds->all());
+            }
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param Collection<int,int> $groupIds
+     */
+    protected function groupsQueryForTenant(bool $strict, Collection $groupIds): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = MarketingGroup::query()
+            ->orderBy('name');
+
+        if ($strict) {
+            if ($groupIds->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('id', $groupIds->all());
+            }
+        }
+
+        return $query;
     }
 
     /**

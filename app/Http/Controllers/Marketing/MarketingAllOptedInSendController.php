@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Marketing\MarketingAllOptedInSendService;
+use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
@@ -15,16 +16,26 @@ use Illuminate\Validation\ValidationException;
 
 class MarketingAllOptedInSendController extends Controller
 {
+    public function __construct(
+        protected MarketingTenantOwnershipService $ownershipService
+    ) {
+    }
+
     public function show(
         Request $request,
         MarketingAllOptedInSendService $sendService,
         TwilioSenderConfigService $senderConfigService
     ): View
     {
+        $tenantId = $this->ownershipService->resolveTenantId(
+            $request,
+            $this->ownershipService->strictModeEnabled()
+        );
+
         return view('marketing/send/all-opted-in', [
             'section' => MarketingSectionRegistry::section('messages'),
             'sections' => $this->navigationItems(),
-            'audience' => $sendService->selectedAudienceSummary((string) old('channel', 'both')),
+            'audience' => $sendService->selectedAudienceSummary((string) old('channel', 'both'), $tenantId),
             'channelSelection' => (string) old('channel', 'both'),
             'defaultTestEmail' => old('test_email', (string) auth()->user()?->email),
             'confirmationToken' => $this->issueConfirmationToken($request),
@@ -37,12 +48,18 @@ class MarketingAllOptedInSendController extends Controller
 
     public function submit(Request $request, MarketingAllOptedInSendService $sendService): RedirectResponse
     {
+        $tenantId = $this->ownershipService->resolveTenantId(
+            $request,
+            $this->ownershipService->strictModeEnabled()
+        );
+
         $intent = strtolower(trim((string) $request->input('intent', 'send')));
         if (! in_array($intent, ['test', 'send'], true)) {
             $intent = 'send';
         }
 
         $validated = $this->validatedPayload($request, $intent);
+        $validated['tenant_id'] = $tenantId;
         /** @var User $actor */
         $actor = $request->user();
 

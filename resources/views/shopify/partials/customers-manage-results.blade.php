@@ -33,6 +33,15 @@
     $detailSectionsUrlFor = static function (int $id) use ($detailSectionsRouteName): string {
         return route($detailSectionsRouteName, ['marketingProfile' => $id], false);
     };
+    $resolvedRewardsLabel = trim((string) data_get($displayLabels ?? [], 'rewards_label', 'Rewards'));
+    if ($resolvedRewardsLabel === '') {
+        $resolvedRewardsLabel = 'Rewards';
+    }
+    $resolvedRewardsBalanceLabel = trim((string) data_get($displayLabels ?? [], 'rewards_balance_label', $resolvedRewardsLabel . ' balance'));
+    if ($resolvedRewardsBalanceLabel === '') {
+        $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
+    }
+    $resolvedRewardsActionsLabel = $resolvedRewardsLabel . ' actions';
 @endphp
 
 <section class="customers-table-wrap" aria-label="Manage customers table">
@@ -63,7 +72,7 @@
                             class="customers-sort-link"
                             href="{{ $sortUrl(['sort' => 'candle_cash', 'direction' => ($sort === 'candle_cash' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                         >
-                            Candle Cash
+                            {{ \Illuminate\Support\Str::title($resolvedRewardsBalanceLabel) }}
                             <span class="customers-sort-indicator">{{ $sort === 'candle_cash' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
                         </a>
                     </th>
@@ -77,7 +86,7 @@
                             class="customers-sort-link"
                             href="{{ $sortUrl(['sort' => 'rewards_actions', 'direction' => ($sort === 'rewards_actions' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                         >
-                            Rewards Actions
+                            {{ \Illuminate\Support\Str::title($resolvedRewardsActionsLabel) }}
                             <span class="customers-sort-indicator">{{ $sort === 'rewards_actions' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
                         </a>
                     </th>
@@ -145,7 +154,7 @@
                 @empty
                     <tr>
                         <td colspan="11" class="customers-empty">
-                            No customers matched the current search or filters. Try a different name, email, phone, or clear the secondary filters.
+                            No customers matched the current search or filters. Try a different name, email, phone, or clear filters to broaden the list.
                         </td>
                     </tr>
                 @endforelse

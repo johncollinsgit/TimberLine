@@ -3,6 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    @php
+        $displayLabels = is_array($displayLabels ?? null) ? $displayLabels : [];
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+    @endphp
     <title>Marketing SMS Consent Opt-In</title>
     @vite(['resources/css/app.css'])
 </head>
@@ -65,7 +72,7 @@
                     </label>
                     <label class="inline-flex items-center gap-2">
                         <input type="checkbox" name="award_bonus" value="1" checked class="rounded border-white/20 bg-white/10">
-                        Allow optional Candle Cash consent bonus (if enabled)
+                        Allow optional {{ $rewardsLabel }} consent bonus (if enabled)
                     </label>
                 </div>
 
@@ -77,4 +84,3 @@
     </main>
 </body>
 </html>
-

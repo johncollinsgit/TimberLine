@@ -171,8 +171,8 @@ test('customer detail renders identity and summary data', function () {
     $response->assertOk()
         ->assertSeeText('Customer Detail')
         ->assertSeeText($profile->email)
-        ->assertSeeText('Candle Cash')
-        ->assertSeeText('Candle Cash Adjustment')
+        ->assertSeeText('Rewards Balance')
+        ->assertSeeText('Reward balance adjustment')
         ->assertSeeText('Message Customer')
         ->assertSeeText('Recent Activity')
         ->assertSeeText('Consent');
@@ -188,7 +188,7 @@ test('customer detail alias route resolves with embedded context', function () {
 
     $response->assertOk()
         ->assertSeeText($profile->email)
-        ->assertSeeText('Candle Cash');
+        ->assertSeeText('Rewards Balance');
 });
 
 test('customer detail handles missing optional data gracefully', function () {
@@ -591,7 +591,7 @@ test('candle cash adjustment json returns validation errors', function () {
 
     $response->assertStatus(422)
         ->assertJsonPath('ok', false)
-        ->assertJsonPath('message', 'Candle Cash adjustment could not be saved.')
+        ->assertJsonPath('message', 'Reward balance adjustment could not be saved.')
         ->assertJsonValidationErrors(['direction', 'amount', 'reason']);
 });
 

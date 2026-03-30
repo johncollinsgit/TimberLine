@@ -9,6 +9,7 @@
     :app-navigation="$appNavigation"
     :customer-subnav="$pageSubnav"
     :page-actions="$pageActions"
+    :merchant-journey="$merchantJourney ?? []"
 >
     @php
         $filters = array_merge([
@@ -49,6 +50,25 @@
             'per_page' => 25,
         ];
         $filtersOpenByDefault = (int) ($activeFilterCount ?? 0) > 0;
+        $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', 'Rewards')));
+        if ($resolvedRewardsLabel === '') {
+            $resolvedRewardsLabel = 'Rewards';
+        }
+        $resolvedRewardsBalanceLabel = trim((string) ($rewardsBalanceLabel ?? data_get($displayLabels ?? [], 'rewards_balance_label', $resolvedRewardsLabel . ' balance')));
+        if ($resolvedRewardsBalanceLabel === '') {
+            $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
+        }
+        $sortOptions['candle_cash'] = \Illuminate\Support\Str::title($resolvedRewardsBalanceLabel);
+        $sortOptions['rewards_actions'] = \Illuminate\Support\Str::title($resolvedRewardsLabel . ' actions');
+        $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
+        $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
+        $importState = (string) ($importSummary['state'] ?? 'not_started');
+        $importCta = is_array($importSummary['cta'] ?? null) ? $importSummary['cta'] : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
+        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+            request(),
+            filled($host ?? null) ? (string) $host : null
+        );
+        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
     @endphp
 
     <style>
@@ -655,6 +675,18 @@
         data-default-filters='@json($defaultGridFilters)'
         data-filter-count="{{ (int) ($activeFilterCount ?? 0) }}"
     >
+        @if($importState !== 'imported')
+            <article class="customers-surface">
+                <h2>Import customers to unlock this workspace</h2>
+                <p>{{ $importSummary['description'] ?? 'Import customers first so search, filters, and customer actions become meaningful.' }}</p>
+                <p class="customers-muted-note">{{ $importSummary['progress_note'] ?? 'No import has run yet for this store context.' }}</p>
+                <div class="plans-meta">
+                    <a class="start-here-action-link" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $importCta['label'] ?? 'Import Customers' }}</a>
+                    <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.start', [], false)) }}">Open setup checklist</a>
+                </div>
+            </article>
+        @endif
+
         <form method="GET" action="{{ url()->current() }}" class="customers-toolbar" data-customers-form novalidate>
             @foreach(\App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(request(), filled($host ?? null) ? (string) $host : null) as $key => $value)
                 <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
@@ -663,7 +695,7 @@
             <div class="customers-toolbar-head">
                 <div class="customers-toolbar-copy">
                     <h2>Customer workspace</h2>
-                    <p>Search first, then open filters only when you need a narrower operational slice.</p>
+                    <p>Search customers first, then use filters to focus on the exact segment you want to act on.</p>
                 </div>
                 <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
             </div>
@@ -741,7 +773,7 @@
                     </div>
 
                     <div class="customers-filter-field">
-                        <label for="candle_cash">Candle Cash</label>
+                        <label for="candle_cash">{{ $resolvedRewardsBalanceLabel }}</label>
                         <select id="candle_cash" name="candle_cash" data-customers-live="change">
                             <option value="all" @selected($filters['candle_cash'] === 'all')>All balances</option>
                             <option value="yes" @selected($filters['candle_cash'] === 'yes')>Has balance</option>

@@ -8,6 +8,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Collection;
 
 class CandleCashEarnedAnalyticsService
@@ -66,7 +67,7 @@ class CandleCashEarnedAnalyticsService
                 $breakdown->put($sourceKey, [
                     'key' => $sourceKey,
                     'label' => ucwords(str_replace('_', ' ', $sourceKey)),
-                    'definition' => 'Program-earned Candle Cash events grouped under a fallback source bucket.',
+                    'definition' => 'Program-earned reward credit events grouped under a fallback source bucket.',
                     'candleCash' => 0.0,
                     'amount' => 0.0,
                     'formattedAmount' => $this->formatCurrency(0),
@@ -129,8 +130,8 @@ class CandleCashEarnedAnalyticsService
         $reminderCandidates = $this->reminderCandidates($tenantId);
 
         return [
-            'title' => 'Candle Cash earn activity',
-            'subtitle' => 'Program-earned Candle Cash and redemption behavior for the selected timeframe.',
+            'title' => 'Rewards earn activity',
+            'subtitle' => 'Program-earned reward credit and redemption behavior for the selected timeframe.',
             'earned' => [
                 'amount' => $earnedAmount,
                 'formattedAmount' => $this->formatCurrency($earnedAmount),
@@ -140,7 +141,7 @@ class CandleCashEarnedAnalyticsService
                     ->filter(fn ($value): bool => is_numeric($value) && (int) $value > 0)
                     ->unique()
                     ->count(),
-                'sourceSummary' => $topSourceSummary !== '' ? $topSourceSummary : 'No new program-earned Candle Cash events in this window.',
+                'sourceSummary' => $topSourceSummary !== '' ? $topSourceSummary : 'No new program-earned reward credit events in this window.',
             ],
             'breakdown' => [
                 'rows' => $breakdownRows->all(),
@@ -151,7 +152,7 @@ class CandleCashEarnedAnalyticsService
                 'formattedAmount' => $this->formatCurrency($outstandingAmount),
                 'customerCount' => $outstandingCustomerCount,
                 'excludedGrandfatheredAmount' => $excludedOpeningAmount,
-                'helperText' => 'Currently outstanding earned Candle Cash excludes imported, grandfathered, and manual opening balances.',
+                'helperText' => 'Currently outstanding earned reward credit excludes imported, grandfathered, and manual opening balances.',
             ],
             'timeToFirstRedemption' => $timeToFirstRedemption,
             'customersWithOutstandingEarned' => [
@@ -160,7 +161,7 @@ class CandleCashEarnedAnalyticsService
             'reminderEligibility' => [
                 'eligibleCustomers' => (int) ($reminderCandidates['eligible_customers'] ?? 0),
                 'missingEmailCustomers' => (int) ($reminderCandidates['missing_email_customers'] ?? 0),
-                'expirationPolicy' => 'No fixed expiration date is currently stored for earned Candle Cash buckets in this ledger.',
+                'expirationPolicy' => 'No fixed expiration date is currently stored for earned reward credit buckets in this ledger.',
             ],
         ];
     }
@@ -186,7 +187,11 @@ class CandleCashEarnedAnalyticsService
         }
 
         $profiles = MarketingProfile::query()
-            ->forTenantId($tenantId)
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('marketing_profiles.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('marketing_profiles.tenant_id', $tenantId)
+            )
             ->whereIn('id', $profileIds->all())
             ->get(['id', 'first_name', 'last_name', 'email', 'normalized_email'])
             ->keyBy('id');
@@ -244,7 +249,7 @@ class CandleCashEarnedAnalyticsService
                 'outstanding_bucket_count' => (int) $buckets->count(),
                 'top_sources' => $topSources,
                 'expiration_date' => null,
-                'expiration_policy' => 'No fixed expiration date is currently stored for earned Candle Cash buckets in this ledger.',
+                'expiration_policy' => 'No fixed expiration date is currently stored for earned reward credit buckets in this ledger.',
             ];
         }
 
@@ -310,11 +315,11 @@ class CandleCashEarnedAnalyticsService
             'formattedMedianDays' => $medianDays !== null ? number_format($medianDays, 2).' days' : 'No redemptions yet',
             'sampleCount' => $sampleCount,
             // We cannot directly tie each redeemed order to a specific earn bucket in the current ledger.
-            // Primary method: first redeemed Candle Cash order after each earn event.
-            // Fallback method: first post-earn negative Candle Cash ledger movement when order linkage is missing.
+            // Primary method: first redeemed reward credit order after each earn event.
+            // Fallback method: first post-earn negative reward credit ledger movement when order linkage is missing.
             'approximation' => $usedFallback
-                ? 'Approximated from the first redeemed Candle Cash order after each earn event, with fallback to first post-earn Candle Cash debit when direct order linkage is unavailable.'
-                : 'Approximated from the first redeemed Candle Cash order after each earn event for the same customer profile.',
+                ? 'Approximated from the first redeemed reward credit order after each earn event, with fallback to first post-earn reward credit debit when direct order linkage is unavailable.'
+                : 'Approximated from the first redeemed reward credit order after each earn event for the same customer profile.',
         ];
     }
 
@@ -338,14 +343,18 @@ class CandleCashEarnedAnalyticsService
      */
     protected function currentLedgerState(?int $tenantId = null): array
     {
-        $scopeKey = $tenantId !== null ? 'tenant:'.$tenantId : 'global';
+        $scopeKey = $tenantId !== null ? 'tenant:'.$tenantId : 'tenant:none';
         if (array_key_exists($scopeKey, $this->currentLedgerStateByScope)) {
             return $this->currentLedgerStateByScope[$scopeKey];
         }
 
         $transactions = CandleCashTransaction::query()
             ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_transactions.marketing_profile_id')
-            ->when($tenantId !== null, fn ($query) => $query->where('mp.tenant_id', $tenantId))
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('mp.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('mp.tenant_id', $tenantId)
+            )
             ->where('candle_cash_delta', '!=', 0)
             ->orderBy('candle_cash_transactions.marketing_profile_id')
             ->orderBy('candle_cash_transactions.created_at')
@@ -388,7 +397,7 @@ class CandleCashEarnedAnalyticsService
                 $sourceKey = $isOpening ? 'opening_balance' : $this->normalizer->classifyEarnSource($transaction, $taskHandle);
                 $sourceDefinition = (array) ($this->normalizer->sourceDefinitions()[$sourceKey] ?? [
                     'label' => 'Other earn',
-                    'definition' => 'Program-earned Candle Cash events grouped under a fallback source bucket.',
+                    'definition' => 'Program-earned reward credit events grouped under a fallback source bucket.',
                 ]);
 
                 $earnedAt = $this->timestampForTransaction($transaction);
@@ -525,7 +534,11 @@ class CandleCashEarnedAnalyticsService
     {
         $rows = CandleCashRedemption::query()
             ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_redemptions.marketing_profile_id')
-            ->when($tenantId !== null, fn ($query) => $query->where('mp.tenant_id', $tenantId))
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('mp.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('mp.tenant_id', $tenantId)
+            )
             ->where('status', 'redeemed')
             ->whereNotNull('redeemed_at')
             ->orderBy('marketing_profile_id')

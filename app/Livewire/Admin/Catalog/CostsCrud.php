@@ -6,7 +6,9 @@ use App\Models\CatalogItemCost;
 use App\Models\Scent;
 use App\Models\Size;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -22,6 +24,7 @@ class CostsCrud extends Component
     public bool $showCreate = false;
     public bool $showEdit = false;
     public ?int $editingId = null;
+    public bool $catalogCostsAvailable = true;
 
     public array $create = [];
     public array $edit = [];
@@ -35,6 +38,7 @@ class CostsCrud extends Component
 
     public function mount(): void
     {
+        $this->catalogCostsAvailable = Schema::hasTable('catalog_item_costs');
         $this->resetCreateForm();
     }
 
@@ -57,6 +61,12 @@ class CostsCrud extends Component
 
     public function openCreate(): void
     {
+        if (! $this->catalogCostsAvailable) {
+            $this->dispatchCatalogUnavailableToast();
+
+            return;
+        }
+
         $this->showCreate = ! $this->showCreate;
 
         if (! $this->showCreate) {
@@ -66,6 +76,12 @@ class CostsCrud extends Component
 
     public function create(): void
     {
+        if (! $this->catalogCostsAvailable) {
+            $this->dispatchCatalogUnavailableToast();
+
+            return;
+        }
+
         $data = $this->validateCostPayload($this->create, 'create');
 
         CatalogItemCost::query()->create($data);
@@ -77,6 +93,12 @@ class CostsCrud extends Component
 
     public function openEdit(int $id): void
     {
+        if (! $this->catalogCostsAvailable) {
+            $this->dispatchCatalogUnavailableToast();
+
+            return;
+        }
+
         $cost = CatalogItemCost::query()->findOrFail($id);
 
         $this->editingId = $cost->id;
@@ -98,6 +120,12 @@ class CostsCrud extends Component
 
     public function save(): void
     {
+        if (! $this->catalogCostsAvailable) {
+            $this->dispatchCatalogUnavailableToast();
+
+            return;
+        }
+
         if (! $this->editingId) {
             return;
         }
@@ -189,8 +217,33 @@ class CostsCrud extends Component
         ];
     }
 
+    protected function dispatchCatalogUnavailableToast(): void
+    {
+        $this->dispatch('toast', [
+            'message' => 'Catalog costs are unavailable in this environment until the catalog_item_costs table is migrated.',
+            'style' => 'warning',
+        ]);
+    }
+
     public function render()
     {
+        if (! $this->catalogCostsAvailable) {
+            $costs = new LengthAwarePaginator(
+                items: [],
+                total: 0,
+                perPage: $this->perPage,
+                currentPage: max(1, (int) request()->query('page', 1)),
+                options: ['path' => request()->url(), 'pageName' => 'page']
+            );
+
+            return view('livewire.admin.catalog.costs', [
+                'costs' => $costs,
+                'scentOptions' => collect(),
+                'sizeOptions' => collect(),
+                'catalogCostsAvailable' => false,
+            ])->layout('layouts.app');
+        }
+
         $costs = CatalogItemCost::query()
             ->with(['scent:id,name,display_name', 'size:id,code,label'])
             ->when($this->search !== '', function (Builder $query): void {
@@ -218,6 +271,7 @@ class CostsCrud extends Component
             'costs' => $costs,
             'scentOptions' => Scent::query()->orderByRaw('coalesce(display_name, name) asc')->get(['id', 'name', 'display_name']),
             'sizeOptions' => Size::query()->orderByRaw('coalesce(label, code) asc')->get(['id', 'code', 'label']),
+            'catalogCostsAvailable' => true,
         ])->layout('layouts.app');
     }
 }

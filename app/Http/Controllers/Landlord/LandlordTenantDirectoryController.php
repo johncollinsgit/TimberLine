@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Landlord;
 use App\Http\Controllers\Controller;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
+use App\Services\Tenancy\LandlordTenantOperationsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -42,7 +44,11 @@ class LandlordTenantDirectoryController extends Controller
         ]);
     }
 
-    public function show(Tenant $tenant): View
+    public function show(
+        Tenant $tenant,
+        LandlordTenantOperationsService $operationsService,
+        LandlordOperatorActionAuditService $auditService
+    ): View
     {
         $hydratedTenant = $this->tenantDetailQuery()->findOrFail($tenant->getKey());
         $summary = $this->presentTenant($hydratedTenant);
@@ -51,11 +57,26 @@ class LandlordTenantDirectoryController extends Controller
         $storeRows = $hydratedTenant->relationLoaded('shopifyStores')
             ? $hydratedTenant->shopifyStores
             : collect();
+        $recentOperatorActions = $auditService->recentForTenant((int) $hydratedTenant->id, 25);
 
         return view('landlord.tenants.show', [
             'tenant' => $hydratedTenant,
             'summary' => $summary,
             'shopifyStores' => $storeRows,
+            'tenantConfirmationPhrase' => $operationsService->confirmationPhraseForTenant($hydratedTenant),
+            'tenantApplyRestorePhrase' => $operationsService->applyRestorePhraseForTenant($hydratedTenant),
+            'tenantOverwritePhrase' => $operationsService->overwritePhraseForTenant($hydratedTenant),
+            'snapshotRetentionDays' => $operationsService->snapshotRetentionDays(),
+            'snapshotMaxBytes' => $operationsService->snapshotMaxBytes(),
+            'snapshotTables' => $operationsService->snapshotTables(),
+            'recentTenantCustomers' => $operationsService->recentTenantCustomerRows($hydratedTenant, 25),
+            'recentOperatorActions' => $recentOperatorActions,
+            'operatorActionSummary' => [
+                'total' => $recentOperatorActions->count(),
+                'success' => $recentOperatorActions->where('status', 'success')->count(),
+                'blocked' => $recentOperatorActions->where('status', 'blocked')->count(),
+                'failed' => $recentOperatorActions->where('status', 'failed')->count(),
+            ],
         ]);
     }
 

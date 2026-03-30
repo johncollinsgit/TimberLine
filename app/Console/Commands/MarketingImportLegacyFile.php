@@ -10,8 +10,9 @@ class MarketingImportLegacyFile extends Command
     protected $signature = 'marketing:import-legacy-file
         {type : yotpo_contacts_import|square_marketing_import}
         {file : Absolute or relative CSV path}
-        {--dry-run : Validate and simulate import without persisting data}
-        {--created-by= : User ID to attribute the import run}';
+    {--dry-run : Validate and simulate import without persisting data}
+        {--created-by= : User ID to attribute the import run}
+        {--tenant-id= : Tenant ID to scope the legacy import run}';
 
     protected $description = 'Import a legacy marketing contacts CSV from disk into the canonical marketing pipeline.';
 
@@ -22,11 +23,19 @@ class MarketingImportLegacyFile extends Command
         $dryRun = (bool) $this->option('dry-run');
         $createdBy = $this->option('created-by');
         $createdBy = is_numeric($createdBy) ? (int) $createdBy : null;
+        $tenantId = $this->option('tenant-id');
+        $tenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+        if ($tenantId === null) {
+            $this->error('The legacy import run requires a tenant context (pass --tenant-id).');
+
+            return self::FAILURE;
+        }
 
         try {
             $result = $importService->importPath(
                 path: $file,
                 type: $type,
+                tenantId: $tenantId,
                 createdBy: $createdBy,
                 dryRun: $dryRun,
             );

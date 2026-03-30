@@ -32,6 +32,123 @@ function retailDashboardApiHeaders(array $headers = []): array
     ], $headers);
 }
 
+/**
+ * @return array{profile:MarketingProfile,order:Order}
+ */
+function seedTenantScopedDashboardFixture(
+    int $tenantId,
+    string $key,
+    float $conversionRevenue,
+    float $birthdayRevenue,
+    float $referralRevenue,
+    int $redeemedPoints,
+    int $earnedPoints
+): array {
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenantId,
+        'first_name' => ucfirst($key),
+        'last_name' => 'Tenant',
+        'email' => $key.'@example.com',
+        'normalized_email' => $key.'@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $campaign = MarketingCampaign::query()->create([
+        'name' => ucfirst($key).' campaign',
+        'slug' => $key.'-campaign-'.uniqid(),
+        'channel' => 'email',
+        'status' => 'sent',
+    ]);
+
+    $order = Order::query()->create([
+        'tenant_id' => $tenantId,
+        'source' => 'shopify_'.$key,
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => random_int(10000, 99999),
+        'ordered_at' => now()->subDay(),
+        'order_number' => '#'.strtoupper($key).'-1001',
+        'status' => 'complete',
+        'currency_code' => 'USD',
+        'subtotal_price' => $conversionRevenue,
+        'shipping_total' => 0.00,
+        'total_price' => $conversionRevenue,
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantId,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+    ]);
+
+    MarketingCampaignConversion::query()->create([
+        'campaign_id' => $campaign->id,
+        'marketing_profile_id' => $profile->id,
+        'attribution_type' => 'last_touch',
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+        'converted_at' => now()->subDay(),
+        'order_total' => $conversionRevenue,
+    ]);
+
+    $birthdayProfile = CustomerBirthdayProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 3,
+        'birth_day' => 17,
+        'source' => 'import',
+    ]);
+
+    BirthdayRewardIssuance::query()->create([
+        'customer_birthday_profile_id' => $birthdayProfile->id,
+        'marketing_profile_id' => $profile->id,
+        'cycle_year' => (int) now()->format('Y'),
+        'reward_type' => 'discount_code',
+        'reward_name' => ucfirst($key).' birthday reward',
+        'status' => 'redeemed',
+        'reward_value' => 10,
+        'issued_at' => now()->subDays(2),
+        'redeemed_at' => now()->subDay(),
+        'attributed_revenue' => $birthdayRevenue,
+    ]);
+
+    \App\Models\CandleCashReferral::query()->create([
+        'referrer_marketing_profile_id' => $profile->id,
+        'referred_marketing_profile_id' => $profile->id,
+        'referral_code' => strtoupper($key).'-REF',
+        'status' => 'qualified',
+        'qualified_at' => now()->subDay(),
+        'qualifying_order_source' => 'shopify',
+        'qualifying_order_total' => $referralRevenue,
+    ]);
+
+    CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => 1,
+        'candle_cash_spent' => $redeemedPoints,
+        'platform' => 'shopify',
+        'redemption_code' => strtoupper($key).'-REDEEM',
+        'status' => 'redeemed',
+        'issued_at' => now()->subDays(2),
+        'redeemed_at' => now()->subDay(),
+    ]);
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'candle_cash_delta' => $earnedPoints,
+        'source' => 'consent',
+        'source_id' => 'consent:'.$key,
+        'description' => 'Tenant-scoped earn fixture',
+        'created_at' => now()->subDay(),
+        'updated_at' => now()->subDay(),
+    ]);
+
+    return [
+        'profile' => $profile,
+        'order' => $order,
+    ];
+}
+
 beforeEach(function () {
     $this->withoutVite();
     configureEmbeddedRetailStore();
@@ -303,6 +420,139 @@ test('embedded dashboard api requires bearer token auth and does not fall back t
         ->assertStatus(401)
         ->assertJsonPath('ok', false)
         ->assertJsonPath('status', 'missing_api_auth');
+});
+
+test('embedded dashboard metrics are tenant scoped by store tenant', function () {
+    $tenantOne = Tenant::query()->create([
+        'name' => 'Dashboard Tenant One',
+        'slug' => 'dashboard-tenant-one',
+    ]);
+    $tenantTwo = Tenant::query()->create([
+        'name' => 'Dashboard Tenant Two',
+        'slug' => 'dashboard-tenant-two',
+    ]);
+
+    configureEmbeddedRetailStore($tenantOne->id);
+
+    seedTenantScopedDashboardFixture(
+        tenantId: $tenantOne->id,
+        key: 'tenant-one',
+        conversionRevenue: 40.00,
+        birthdayRevenue: 20.00,
+        referralRevenue: 10.00,
+        redeemedPoints: 120,
+        earnedPoints: 300
+    );
+
+    seedTenantScopedDashboardFixture(
+        tenantId: $tenantTwo->id,
+        key: 'tenant-two',
+        conversionRevenue: 400.00,
+        birthdayRevenue: 200.00,
+        referralRevenue: 100.00,
+        redeemedPoints: 900,
+        earnedPoints: 900
+    );
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'none',
+    ]));
+
+    $topMetrics = collect($response->json('data.topMetrics'));
+    $expectedRewardSales = 70.0;
+    $expectedRedeemed = app(CandleCashService::class)->amountFromPoints(120);
+    $expectedEarned = app(CandleCashService::class)->amountFromPoints(300);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.flags.hasAnyData', true);
+
+    expect((float) ($topMetrics->firstWhere('key', 'rewards_sales')['value'] ?? 0.0))->toEqual($expectedRewardSales)
+        ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_used')['value'] ?? 0.0))->toEqual($expectedRedeemed)
+        ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_earned')['value'] ?? 0.0))->toEqual($expectedEarned);
+});
+
+test('tenant scoped dashboard metrics keep empty states when current tenant has no data', function () {
+    $tenantOne = Tenant::query()->create([
+        'name' => 'Dashboard Empty Tenant One',
+        'slug' => 'dashboard-empty-tenant-one',
+    ]);
+    $tenantTwo = Tenant::query()->create([
+        'name' => 'Dashboard Empty Tenant Two',
+        'slug' => 'dashboard-empty-tenant-two',
+    ]);
+
+    configureEmbeddedRetailStore($tenantOne->id);
+
+    seedTenantScopedDashboardFixture(
+        tenantId: $tenantTwo->id,
+        key: 'tenant-two-only',
+        conversionRevenue: 180.00,
+        birthdayRevenue: 40.00,
+        referralRevenue: 25.00,
+        redeemedPoints: 320,
+        earnedPoints: 250
+    );
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'none',
+    ]));
+
+    $topMetrics = collect($response->json('data.topMetrics'));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.flags.hasAnyData', false)
+        ->assertJsonPath('data.chart.empty', true);
+
+    expect((float) ($topMetrics->firstWhere('key', 'rewards_sales')['value'] ?? 0.0))->toEqual(0.0)
+        ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_used')['value'] ?? 0.0))->toEqual(0.0)
+        ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_earned')['value'] ?? 0.0))->toEqual(0.0);
+});
+
+test('embedded dashboard metrics fail closed when store tenant context is missing', function () {
+    configureEmbeddedRetailStore(null);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Mapped Tenant',
+        'slug' => 'mapped-tenant',
+    ]);
+
+    seedTenantScopedDashboardFixture(
+        tenantId: $tenant->id,
+        key: 'mapped-tenant-data',
+        conversionRevenue: 95.00,
+        birthdayRevenue: 30.00,
+        referralRevenue: 15.00,
+        redeemedPoints: 240,
+        earnedPoints: 180
+    );
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'none',
+    ]));
+
+    $topMetrics = collect($response->json('data.topMetrics'));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.flags.hasAnyData', false)
+        ->assertJsonPath('data.chart.empty', true);
+
+    expect((float) ($topMetrics->firstWhere('key', 'rewards_sales')['value'] ?? 0.0))->toEqual(0.0)
+        ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_used')['value'] ?? 0.0))->toEqual(0.0);
 });
 
 test('issued birthday rewards without linked orders do not reduce realized net profit', function () {
@@ -736,7 +986,14 @@ test('manual candle cash reminder endpoint sends to eligible profiles once and r
     config()->set('services.sendgrid.api_key', 'sg-test-key');
     config()->set('marketing.email.candle_cash_reminder.cooldown_days', 14);
 
+    $tenant = Tenant::query()->create([
+        'name' => 'Reminder Tenant',
+        'slug' => 'reminder-tenant',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Reminder',
         'last_name' => 'Customer',
         'email' => 'reminder@example.com',

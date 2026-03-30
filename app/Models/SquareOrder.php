@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SquareOrder extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'square_order_id',
         'square_customer_id',
         'location_id',
@@ -23,6 +27,7 @@ class SquareOrder extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'raw_tax_names' => 'array',
         'raw_payload' => 'array',
         'closed_at' => 'datetime',

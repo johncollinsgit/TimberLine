@@ -1,5 +1,88 @@
 # Modern Forestry Backstage
 
+## MT-4C Hardening Status (2026-03-30)
+
+MT-4C is now complete.
+
+Completed in MT-4C Pass 1 + Pass 2 + Pass 3 + Pass 4:
+- Growave wishlist and opening-balance backfill flows now require deterministic tenant ownership proof and fail closed on missing/ambiguous/conflicting ownership.
+- Legacy campaign/report/helper surfaces now enforce tenant ownership rails across campaign, segment, template, recommendation, and direct-messaging chains.
+- Campaign send/retry execution now validates tenant-owned recipient scope before mutation; foreign/unproven recipients are blocked.
+- Campaign performance analytics/report computation now supports tenant-scoped query predicates so foreign-tenant rows are excluded at the data layer.
+- First-class schema-backed tenant ownership rails now exist for legacy authoring/storage entities:
+  - `marketing_campaigns.tenant_id`
+  - `marketing_segments.tenant_id`
+  - `marketing_message_templates.tenant_id`
+  - `marketing_event_source_mappings.tenant_id`
+  - `marketing_order_event_attributions.tenant_id`
+- Strict-mode authoring flows previously blocked for safety are now re-enabled where storage rails are deterministic:
+  - segment create/store/duplicate
+  - template create/store
+  - tenant-owned event mapping create/edit/update/list
+- Event source mappings and attribution projection rows are now tenant-partitioned at storage + query boundaries; foreign/unresolved mapping rows remain fail-closed.
+- Legacy ownership backfill now assigns tenant ownership only for provable rows using deterministic rails (campaign/profile/group/conversion, variant/template, and tenant-owned Square evidence for mapping/attribution).
+- Pass 4 added explicit unresolved-tail remediation + quarantine visibility with `marketing:remediate-authoring-ownership`:
+  - dry-run inventory classification across campaigns/segments/templates/mappings/attributions,
+  - deterministic `--apply` ownership assignment for provable rows only,
+  - ambiguous/unprovable/unsupported rows left intentionally fail-closed.
+- Pass 4 also hardened customer analytics/detail attribution reads to enforce tenant-scoped Square order/attribution matching when duplicate `square_order_id` values exist across tenants.
+- Tenant-sensitive admin helper commands now require tenant scope in strict mode and block foreign ownership targets:
+  - `marketing:send-approved-sms`
+  - `marketing:send-approved-email`
+  - `marketing:generate-recommendations`
+- Targeted MT-4C regression coverage now includes campaign/report isolation, schema-backed authoring ownership rails, unresolved-row remediation and quarantine behavior, tenant-owned mapping behavior, strict command ownership guards, and shared-square-order attribution isolation.
+
+MT-4C closure criteria used in Pass 4:
+- campaigns, segments, templates, mappings, and attributions are tenant-owned when proof is deterministic;
+- unresolved historical rows without safe proof remain explicitly quarantined (`tenant_id` null) and fail closed on tenant-sensitive surfaces;
+- unresolved inventory is now observable/remediable through an explicit operator command rather than hidden compatibility behavior.
+
+## Post-MT-4C Operator Phase (2026-03-30)
+
+New landlord/operator capabilities are now available behind landlord host + landlord operator auth guards:
+- Explicit tenant selector flow for landlord tenant operations entry.
+- Guarded tenant snapshot export workflow (tenant-scoped only) for customer/marketing recovery inspection.
+- Guarded tenant snapshot restore/import workflow (bounded MVP) with strict target-tenant confirmation.
+- Guarded customer modify workflow (bounded editable fields only) scoped to one selected tenant.
+- Guarded customer delete workflow implemented as safe archive/redaction (not hard delete), with explicit operator confirmation.
+- Immutable landlord operator action trace for export/restore/customer modify/customer archive actions, including actor, tenant, action type, status, and result context.
+- Tenant-scoped snapshot download flow with blocked/success audit records.
+
+Additional operator hardening in the follow-up pass:
+- Restore now supports explicit dry-run mode (`dry_run`) that returns projected table impact without mutating rows.
+- Restore now enforces stronger artifact gates before apply:
+  - supported schema version
+  - source tenant id + source tenant slug match
+  - scope manifest table list must match data payload tables exactly
+  - max snapshot artifact size guard
+- Restore apply and overwrite now require typed confirmation phrases:
+  - apply phrase: `apply <tenant-slug>` when dry-run is off
+  - overwrite phrase: `overwrite <tenant-slug>` when overwrite mode is enabled
+- Export/restore actions now require explicit operator reason strings and persist them in audit confirmation metadata.
+- Snapshot export now records artifact metadata (`artifact_bytes`, `generated_at`, `expires_at`, retention days); download is blocked once artifact retention expires.
+- Download now enforces tenant path prefix checks (`landlord/tenant-ops/tenant-<id>/...`) in addition to tenant/action ownership checks.
+- Customer modify/archive now require typed target confirmation (`confirm_profile_id` must match selected `profile_id`).
+- Tenant action trace UI now includes status summaries and richer per-action details (mode, reason, expiry, blocked error context).
+
+Operator safety constraints in this phase:
+- Every operation requires explicit tenant id + tenant slug + confirmation phrase (`confirm <tenant-slug>`).
+- Cross-tenant restore/import is blocked fail-closed.
+- Cross-tenant customer modify/delete is blocked fail-closed.
+- Snapshot download artifacts are tenant-locked by route + audit action ownership checks.
+- Landlord operator action records are append-only; update/delete mutation is blocked at the model layer.
+
+Consistency conventions standardized in this phase:
+- Landlord tenant context now uses one canonical confirmation contract across UI + controller + service boundaries.
+- Destructive/overwrite operator workflows now require explicit confirmation toggles plus confirmation phrase.
+- Operator action statuses now follow one pattern (`success`, `blocked`, `failed`) with shared context/result payload structure for traceability.
+- Recovery workflows now share one explicit mode contract (`dry-run` vs `apply`) with consistent confirmation and audit semantics.
+
+Bounded scope (truthful MVP):
+- Snapshot restore/import supports the landlord-generated tenant snapshot artifact format from this phase.
+- Restore/import remains intentionally bounded to tenant-owned marketing/customer datasets included in the snapshot scope.
+- Snapshot artifact retention is bounded by operator config and enforced on download paths; this is not yet a full artifact lifecycle management suite.
+- Broad cross-environment migration tooling and unrestricted operator “god mode” edits are intentionally deferred.
+
 ## Current Release State (2026-03-27)
 
 This branch now includes the first commercialization/operator shell on top of tenant entitlements.
@@ -68,7 +151,7 @@ Commercialization/access state:
   - manual SSH deploy remains available as fallback, but is no longer the primary required path while deploy secrets stay configured
 - checkout and broad subscription lifecycle mutation writes are still intentionally disabled
 - upgrade prompts are informational routing only
-- multi-tenant completion estimate: `45%`
+- multi-tenant completion estimate (historical snapshot at 2026-03-27): `45%`
 
 Multi-tenant state:
 - tenant-aware semantics are now established in email/birthday/provider diagnostics and shell module-state presentation

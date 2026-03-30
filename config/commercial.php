@@ -37,6 +37,27 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Display Label Defaults
+    |--------------------------------------------------------------------------
+    |
+    | User-facing loyalty/rewards wording is tenant-controlled. Labels resolve
+    | in this order: tenant override -> template default -> global fallback.
+    |
+    */
+    'display_label_defaults' => [
+        'rewards' => 'Rewards',
+        'rewards_label' => 'Rewards',
+        'rewards_balance_label' => 'Rewards balance',
+        'rewards_program_label' => 'Rewards program',
+        'rewards_redemption_label' => 'Rewards redemption',
+        'reward_credit_label' => 'reward credit',
+        'birthdays' => 'Birthdays / Lifecycle',
+        'birthdays_label' => 'Birthdays / Lifecycle',
+        'birthday_reward_label' => 'Birthday reward',
+    ],
+
     'plans' => [
         'starter' => [
             'name' => 'Starter',
@@ -221,7 +242,14 @@ return [
             'active' => true,
             'default_labels' => [
                 'rewards' => 'Candle Cash',
+                'rewards_label' => 'Candle Cash',
+                'rewards_balance_label' => 'Candle Cash balance',
+                'rewards_program_label' => 'Candle Cash program',
+                'rewards_redemption_label' => 'Candle Cash redemption',
+                'reward_credit_label' => 'Candle Cash credit',
                 'birthdays' => 'Birthday Rewards',
+                'birthdays_label' => 'Birthday Rewards',
+                'birthday_reward_label' => 'Birthday reward',
             ],
             'recommended_modules' => [
                 'starter' => ['reviews', 'lead_capture'],
@@ -242,7 +270,14 @@ return [
             'active' => true,
             'default_labels' => [
                 'rewards' => 'Client Credits',
+                'rewards_label' => 'Client Credits',
+                'rewards_balance_label' => 'Client credit balance',
+                'rewards_program_label' => 'Client credit program',
+                'rewards_redemption_label' => 'Client credit redemption',
+                'reward_credit_label' => 'credit',
                 'birthdays' => 'Milestone Outreach',
+                'birthdays_label' => 'Milestone Outreach',
+                'birthday_reward_label' => 'Milestone reward',
             ],
             'recommended_modules' => [
                 'starter' => ['lead_capture', 'reviews'],
@@ -263,7 +298,14 @@ return [
             'active' => true,
             'default_labels' => [
                 'rewards' => 'Service Credits',
+                'rewards_label' => 'Service Credits',
+                'rewards_balance_label' => 'Service credit balance',
+                'rewards_program_label' => 'Service credit program',
+                'rewards_redemption_label' => 'Service credit redemption',
+                'reward_credit_label' => 'credit',
                 'birthdays' => 'Seasonal Milestones',
+                'birthdays_label' => 'Seasonal Milestones',
+                'birthday_reward_label' => 'Seasonal reward',
             ],
             'recommended_modules' => [
                 'starter' => ['lead_capture', 'reviews'],
@@ -284,7 +326,14 @@ return [
             'active' => true,
             'default_labels' => [
                 'rewards' => 'Style Credits',
+                'rewards_label' => 'Style Credits',
+                'rewards_balance_label' => 'Style credit balance',
+                'rewards_program_label' => 'Style credit program',
+                'rewards_redemption_label' => 'Style credit redemption',
+                'reward_credit_label' => 'credit',
                 'birthdays' => 'Birthday Perks',
+                'birthdays_label' => 'Birthday Perks',
+                'birthday_reward_label' => 'Birthday perk',
             ],
             'recommended_modules' => [
                 'starter' => ['reviews', 'lead_capture'],
@@ -305,7 +354,14 @@ return [
             'active' => true,
             'default_labels' => [
                 'rewards' => 'Rewards',
+                'rewards_label' => 'Rewards',
+                'rewards_balance_label' => 'Rewards balance',
+                'rewards_program_label' => 'Rewards program',
+                'rewards_redemption_label' => 'Rewards redemption',
+                'reward_credit_label' => 'reward credit',
                 'birthdays' => 'Lifecycle',
+                'birthdays_label' => 'Lifecycle',
+                'birthday_reward_label' => 'Birthday reward',
             ],
             'recommended_modules' => [
                 'starter' => ['lead_capture', 'reviews'],

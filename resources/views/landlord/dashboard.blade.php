@@ -80,6 +80,35 @@
                         </a>
                     </div>
 
+                    <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Tenant Operations Selector</p>
+                        <p class="mt-1 text-xs text-zinc-600">
+                            Select tenant context explicitly before running export/restore/customer actions.
+                        </p>
+                        <form method="POST" action="{{ route('landlord.tenants.select') }}" class="mt-3 flex flex-wrap items-center gap-2">
+                            @csrf
+                            <select
+                                name="tenant"
+                                class="min-w-[18rem] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                                @if (collect($recent_tenants)->isEmpty()) disabled @endif
+                            >
+                                @foreach ($recent_tenants as $row)
+                                    <option value="{{ $row['id'] }}">{{ $row['name'] }} ({{ $row['slug'] }})</option>
+                                @endforeach
+                            </select>
+                            <button
+                                type="submit"
+                                class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-60"
+                                @if (collect($recent_tenants)->isEmpty()) disabled @endif
+                            >
+                                Open Tenant Operations
+                            </button>
+                        </form>
+                        @error('tenant')
+                            <p class="mt-2 text-xs text-rose-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
                     <div class="overflow-hidden rounded-xl border border-zinc-200">
                         <table class="w-full divide-y divide-zinc-200 text-sm">
                             <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-600">

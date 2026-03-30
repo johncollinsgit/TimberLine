@@ -2,6 +2,8 @@
 
 namespace App\Support\Birthdays;
 
+use App\Services\Tenancy\TenantDisplayLabelResolver;
+
 class BirthdaySectionRegistry
 {
     /**
@@ -9,7 +11,7 @@ class BirthdaySectionRegistry
      */
     public static function groups(): array
     {
-        return [
+        return self::replaceLabelTokens([
             'club' => [
                 'label' => 'Club',
                 'description' => 'Customers, campaigns, and day-to-day birthday work.',
@@ -17,7 +19,7 @@ class BirthdaySectionRegistry
             ],
             'performance' => [
                 'label' => 'Performance',
-                'description' => 'Rewards, activity, and conversion reporting.',
+                'description' => '{{birthday_reward_label}} activity and conversion reporting.',
                 'accent' => 'amber',
             ],
             'setup' => [
@@ -25,7 +27,7 @@ class BirthdaySectionRegistry
                 'description' => 'Config and reward rules.',
                 'accent' => 'sky',
             ],
-        ];
+        ]);
     }
 
     /**
@@ -33,7 +35,7 @@ class BirthdaySectionRegistry
      */
     public static function sections(): array
     {
-        return [
+        return self::replaceLabelTokens([
             'customers' => [
                 'label' => 'Customers',
                 'route' => 'birthdays.customers',
@@ -53,9 +55,9 @@ class BirthdaySectionRegistry
                 'group' => 'performance',
             ],
             'rewards' => [
-                'label' => 'Rewards',
+                'label' => '{{birthdays_label}}',
                 'route' => 'birthdays.rewards',
-                'description' => 'Birthday reward settings and issuance lifecycle.',
+                'description' => '{{birthday_reward_label}} settings and issuance lifecycle.',
                 'group' => 'performance',
             ],
             'activity' => [
@@ -70,7 +72,7 @@ class BirthdaySectionRegistry
                 'description' => 'Capture rules, message timing, and Shopify-facing defaults.',
                 'group' => 'setup',
             ],
-        ];
+        ]);
     }
 
     /**
@@ -118,5 +120,62 @@ class BirthdaySectionRegistry
         }
 
         return array_values($grouped);
+    }
+
+    /**
+     * @param  array<mixed,mixed>  $value
+     * @return array<mixed,mixed>
+     */
+    protected static function replaceLabelTokens(array $value): array
+    {
+        $tokens = self::labelTokens();
+
+        $replace = function (mixed $item) use (&$replace, $tokens): mixed {
+            if (is_array($item)) {
+                $updated = [];
+                foreach ($item as $key => $nested) {
+                    $updated[$key] = $replace($nested);
+                }
+
+                return $updated;
+            }
+
+            if (is_string($item)) {
+                return strtr($item, $tokens);
+            }
+
+            return $item;
+        };
+
+        return $replace($value);
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected static function labelTokens(): array
+    {
+        $tenantId = request()?->attributes->get('current_tenant_id');
+        $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+        $resolved = $resolver->resolve($resolvedTenantId);
+        $labels = is_array($resolved['labels'] ?? null) ? (array) $resolved['labels'] : [];
+
+        $birthdaysLabel = trim((string) ($labels['birthdays_label'] ?? $labels['birthdays'] ?? 'Rewards'));
+        if ($birthdaysLabel === '') {
+            $birthdaysLabel = 'Rewards';
+        }
+
+        $birthdayRewardLabel = trim((string) ($labels['birthday_reward_label'] ?? 'Birthday reward'));
+        if ($birthdayRewardLabel === '') {
+            $birthdayRewardLabel = 'Birthday reward';
+        }
+
+        return [
+            '{{birthdays_label}}' => $birthdaysLabel,
+            '{{birthday_reward_label}}' => $birthdayRewardLabel,
+        ];
     }
 }

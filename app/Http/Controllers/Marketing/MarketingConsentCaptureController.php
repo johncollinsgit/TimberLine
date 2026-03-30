@@ -11,6 +11,7 @@ use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -22,12 +23,16 @@ use Illuminate\Validation\ValidationException;
 class MarketingConsentCaptureController extends Controller
 {
     public function __construct(
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected TenantDisplayLabelResolver $displayLabelResolver
     ) {
     }
 
     public function showOptin(Request $request): View
     {
+        $tenantContext = $this->resolveTenantContext($request, app(TenantResolver::class));
+        $displayLabels = $this->displayLabelsForTenantId($tenantContext['tenant_id']);
+
         $this->eventLogger->log('public_consent_optin_view', [
             'status' => 'ok',
             'source_surface' => 'public_event',
@@ -39,6 +44,7 @@ class MarketingConsentCaptureController extends Controller
 
         return view('marketing/consent/optin', [
             'token' => (string) $request->query('token', ''),
+            'displayLabels' => $displayLabels,
         ]);
     }
 
@@ -162,6 +168,11 @@ class MarketingConsentCaptureController extends Controller
         if ($consentRequest?->marketing_profile_id) {
             $profile = MarketingProfile::query()->find((int) $consentRequest->marketing_profile_id);
         }
+        $tenantContext = $this->resolveTenantContext($request, app(TenantResolver::class));
+        $tenantId = is_numeric(data_get((array) ($consentRequest?->payload ?? []), 'tenant_id'))
+            ? (int) data_get((array) ($consentRequest?->payload ?? []), 'tenant_id')
+            : (is_numeric($profile?->tenant_id) ? (int) $profile->tenant_id : $tenantContext['tenant_id']);
+        $displayLabels = $this->displayLabelsForTenantId($tenantId);
 
         $this->eventLogger->log('public_consent_verify_view', [
             'status' => $consentRequest && $consentRequest->status === 'confirmed' ? 'resolved' : 'pending',
@@ -187,6 +198,7 @@ class MarketingConsentCaptureController extends Controller
             ] : null,
             'profile' => $profile,
             'confirmed' => (bool) $request->query('confirmed', false) || (bool) ($consentRequest && $consentRequest->status === 'confirmed'),
+            'displayLabels' => $displayLabels,
         ]);
     }
 
@@ -311,6 +323,18 @@ class MarketingConsentCaptureController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function displayLabelsForTenantId(?int $tenantId): array
+    {
+        $resolved = $this->displayLabelResolver->resolve($tenantId);
+
+        return is_array($resolved['labels'] ?? null)
+            ? (array) $resolved['labels']
+            : [];
     }
 
 }

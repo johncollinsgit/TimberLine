@@ -6,6 +6,7 @@ use App\Models\MarketingOrderEventAttribution;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\SquareOrder;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\MarketingEventAttributionService;
 
@@ -87,7 +88,13 @@ test('customer detail shows mapped event attribution when available', function (
 });
 
 test('unmapped square source values are visible in providers integrations page', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Event Mapping Tenant',
+        'slug' => 'event-mapping-tenant',
+    ]);
+
     SquareOrder::query()->create([
+        'tenant_id' => $tenant->id,
         'square_order_id' => 'SQ-UNMAPPED-1',
         'source_name' => 'Flowertown',
         'raw_tax_names' => ['Horry County'],
@@ -97,6 +104,7 @@ test('unmapped square source values are visible in providers integrations page',
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
 
     $this->actingAs($user)
         ->get(route('marketing.providers-integrations'))

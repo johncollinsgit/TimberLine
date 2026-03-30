@@ -4,6 +4,7 @@ use App\Models\CandleCashBalance;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewSummary;
+use App\Models\Tenant;
 use App\Models\User;
 
 test('providers integrations page renders source overlap summary and filters all-source profiles', function () {
@@ -11,8 +12,18 @@ test('providers integrations page renders source overlap summary and filters all
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $tenantA = Tenant::query()->create([
+        'name' => 'Providers Tenant A',
+        'slug' => 'providers-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Providers Tenant B',
+        'slug' => 'providers-tenant-b',
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenantA->id]);
 
     $shopifyOnly = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Shopify',
         'last_name' => 'Only',
         'email' => 'shopify-only@example.com',
@@ -21,6 +32,7 @@ test('providers integrations page renders source overlap summary and filters all
     ]);
 
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $shopifyOnly->id,
         'source_type' => 'shopify_customer',
         'source_id' => 'SHOP-CUST-1',
@@ -29,12 +41,14 @@ test('providers integrations page renders source overlap summary and filters all
     ]);
 
     $squareOnlyMissingContact = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Square',
         'last_name' => 'Only',
         'source_channels' => ['square'],
     ]);
 
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $squareOnlyMissingContact->id,
         'source_type' => 'square_customer',
         'source_id' => 'SQ-CUST-1',
@@ -43,6 +57,7 @@ test('providers integrations page renders source overlap summary and filters all
     ]);
 
     $growaveOnly = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Growave',
         'last_name' => 'Only',
         'email' => 'growave-only@example.com',
@@ -51,6 +66,7 @@ test('providers integrations page renders source overlap summary and filters all
     ]);
 
     MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantA->id,
         'marketing_profile_id' => $growaveOnly->id,
         'source_type' => 'growave_customer',
         'source_id' => 'GR-CUST-1',
@@ -76,6 +92,7 @@ test('providers integrations page renders source overlap summary and filters all
     ]);
 
     $allThree = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Tri',
         'last_name' => 'Channel',
         'email' => 'tri-channel@example.com',
@@ -91,6 +108,7 @@ test('providers integrations page renders source overlap summary and filters all
         ['source_type' => 'growave_customer', 'source_id' => 'GR-CUST-TRI'],
     ] as $link) {
         MarketingProfileLink::query()->create([
+            'tenant_id' => $tenantA->id,
             'marketing_profile_id' => $allThree->id,
             'source_type' => $link['source_type'],
             'source_id' => $link['source_id'],
@@ -116,7 +134,48 @@ test('providers integrations page renders source overlap summary and filters all
         'balance' => 25,
     ]);
 
+    $foreignProfile = MarketingProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'first_name' => 'Foreign',
+        'last_name' => 'Channel',
+        'email' => 'foreign-channel@example.com',
+        'normalized_email' => 'foreign-channel@example.com',
+        'phone' => '5552229999',
+        'normalized_phone' => '+15552229999',
+        'source_channels' => ['shopify', 'square', 'growave'],
+    ]);
+    foreach ([
+        ['source_type' => 'shopify_customer', 'source_id' => 'SHOP-CUST-FOREIGN'],
+        ['source_type' => 'square_customer', 'source_id' => 'SQ-CUST-FOREIGN'],
+        ['source_type' => 'growave_customer', 'source_id' => 'GR-CUST-FOREIGN'],
+    ] as $link) {
+        MarketingProfileLink::query()->create([
+            'tenant_id' => $tenantB->id,
+            'marketing_profile_id' => $foreignProfile->id,
+            'source_type' => $link['source_type'],
+            'source_id' => $link['source_id'],
+            'match_method' => 'exact_match',
+            'confidence' => 1,
+        ]);
+    }
+    MarketingReviewSummary::query()->create([
+        'marketing_profile_id' => $foreignProfile->id,
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'foreign',
+        'external_customer_id' => 'GR-CUST-FOREIGN',
+        'review_count' => 7,
+        'published_review_count' => 7,
+        'average_rating' => 4.2,
+        'source_synced_at' => now(),
+    ]);
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $foreignProfile->id,
+        'balance' => 999,
+    ]);
+
     $unlinked = MarketingProfile::query()->create([
+        'tenant_id' => $tenantA->id,
         'first_name' => 'Manual',
         'last_name' => 'Only',
         'source_channels' => ['manual'],
@@ -133,7 +192,8 @@ test('providers integrations page renders source overlap summary and filters all
         ->assertSeeText('Shopify + Square + Growave')
         ->assertSeeText('tri-channel@example.com')
         ->assertDontSeeText('shopify-only@example.com')
-        ->assertDontSeeText('growave-only@example.com');
+        ->assertDontSeeText('growave-only@example.com')
+        ->assertDontSeeText('foreign-channel@example.com');
 
     $response->assertViewHas('sourceOverlap', function (array $overlap) use ($allThree): bool {
         $profiles = $overlap['profiles'];

@@ -21,6 +21,11 @@
 >
     @php
         $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
+        $displayLabels = is_array($appNavigation['displayLabels'] ?? null) ? $appNavigation['displayLabels'] : [];
+        $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels, 'rewards_label', data_get($displayLabels, 'rewards', 'Rewards'))));
+        if ($resolvedRewardsLabel === '') {
+            $resolvedRewardsLabel = 'Rewards';
+        }
         $activeChild = strtolower(trim((string) ($appNavigation['activeChild'] ?? 'overview')));
         $activeSection = strtolower(trim((string) ($appNavigation['activeSection'] ?? 'rewards')));
         $moduleMap = [
@@ -34,7 +39,10 @@
         ];
         $activeModuleKey = $moduleMap[$activeChild] ?? $activeSection;
         $activeModuleState = is_array($moduleStates[$activeModuleKey] ?? null) ? $moduleStates[$activeModuleKey] : null;
-        $activeModuleUi = \App\Support\Tenancy\TenantModuleUi::present($activeModuleState, ucfirst(str_replace('_', ' ', $activeModuleKey)));
+        $activeModuleFallbackLabel = $activeModuleKey === 'rewards'
+            ? $resolvedRewardsLabel
+            : ucfirst(str_replace('_', ' ', $activeModuleKey));
+        $activeModuleUi = \App\Support\Tenancy\TenantModuleUi::present($activeModuleState, $activeModuleFallbackLabel);
         $lockedModule = ($activeModuleUi['ui_state'] ?? '') === 'locked';
         $comingSoonModule = ($activeModuleUi['ui_state'] ?? '') === 'coming_soon';
     @endphp

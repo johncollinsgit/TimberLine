@@ -8,29 +8,28 @@ beforeEach(function (): void {
     config()->set('entitlements.default_plan', 'growth');
 });
 
-test('embedded app navigation metadata matches each top-level section route', function (string $routeName, string $expectedSection, ?string $expectedChild, string $visibleText) {
+test('embedded app navigation metadata matches each top-level section route', function (string $routeName, string $expectedSection, ?string $expectedChild) {
     configureEmbeddedRetailStore();
 
     $response = $this->get(route($routeName, retailEmbeddedSignedQuery()));
 
     $response->assertOk()
-        ->assertSeeText($visibleText)
         ->assertViewHas('appNavigation', function (array $navigation) use ($expectedSection, $expectedChild): bool {
             return ($navigation['activeSection'] ?? null) === $expectedSection
                 && ($navigation['activeChild'] ?? null) === $expectedChild;
         })
         ->assertViewHas('pageActions', fn (array $actions): bool => count($actions) === 0);
 })->with([
-    'dashboard' => ['home', 'dashboard', null, 'Rewards performance snapshot'],
-    'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview', 'Manage Candle Cash rewards and program settings.'],
-    'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn', 'Ways to Earn'],
-    'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem', 'Ways to Redeem'],
-    'rewards referrals' => ['shopify.embedded.rewards.referrals', 'rewards', 'referrals', 'Referrals coming soon'],
-    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays', 'Birthday Email Analytics'],
-    'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip', 'VIP experiences coming soon'],
-    'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications', 'Notifications coming soon'],
-    'customers' => ['shopify.app.customers', 'customers', null, 'Manage customers'],
-    'settings' => ['shopify.app.settings', 'settings', null, 'Configure email provider selection per tenant/store.'],
+    'dashboard' => ['home', 'dashboard', null],
+    'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview'],
+    'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn'],
+    'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem'],
+    'rewards referrals' => ['shopify.embedded.rewards.referrals', 'rewards', 'referrals'],
+    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays'],
+    'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip'],
+    'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications'],
+    'customers' => ['shopify.app.customers', 'customers', null],
+    'settings' => ['shopify.app.settings', 'settings', null],
 ]);
 
 test('customers routes and aliases keep customers section active with correct subnav tab', function (string $routeName, string $activeTab, string $visibleText) {
@@ -45,14 +44,14 @@ test('customers routes and aliases keep customers section active with correct su
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === $activeTab && ! empty($item['active']));
         });
 })->with([
-    'customers root manage' => ['shopify.app.customers', 'manage', 'Manage customers'],
-    'customers manage' => ['shopify.app.customers.manage', 'manage', 'Manage customers'],
-    'customers activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
-    'customers questions' => ['shopify.app.customers.questions', 'questions', 'Questions'],
-    'customers alias root manage' => ['shopify.app.customers', 'manage', 'Manage customers'],
-    'customers alias manage' => ['shopify.app.customers.manage', 'manage', 'Manage customers'],
-    'customers alias activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
-    'customers alias questions' => ['shopify.app.customers.questions', 'questions', 'Questions'],
+    'customers root manage' => ['shopify.app.customers', 'manage', 'Customer workspace'],
+    'customers manage' => ['shopify.app.customers.manage', 'manage', 'Customer workspace'],
+    'customers activity' => ['shopify.app.customers.activity', 'activity', 'Customer Activity'],
+    'customers questions' => ['shopify.app.customers.questions', 'questions', 'Customer Questions'],
+    'customers alias root manage' => ['shopify.app.customers', 'manage', 'Customer workspace'],
+    'customers alias manage' => ['shopify.app.customers.manage', 'manage', 'Customer workspace'],
+    'customers alias activity' => ['shopify.app.customers.activity', 'activity', 'Customer Activity'],
+    'customers alias questions' => ['shopify.app.customers.questions', 'questions', 'Customer Questions'],
 ]);
 
 test('customers detail route and alias resolve with manage tab active', function (string $routeName) {

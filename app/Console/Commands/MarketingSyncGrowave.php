@@ -4,12 +4,13 @@ namespace App\Console\Commands;
 
 use App\Models\MarketingImportRun;
 use App\Services\Marketing\GrowaveMarketingSyncService;
+use App\Services\Shopify\ShopifyStores;
 use Illuminate\Console\Command;
 
 class MarketingSyncGrowave extends Command
 {
     protected $signature = 'marketing:sync-growave
-        {--store= : Optional store_key filter (retail|wholesale)}
+        {--store= : Required store_key filter (retail|wholesale)}
         {--limit= : Maximum customers to process (omit for full sync)}
         {--after-candidate-id= : Resume from a specific customer_external_profiles.id}
         {--resume-run-id= : Resume from the checkpoint of a previous growave_customer_sync run}
@@ -31,17 +32,38 @@ class MarketingSyncGrowave extends Command
 
     public function handle(GrowaveMarketingSyncService $syncService): int
     {
+        $store = $this->normalizeStoreKey($this->option('store'));
+        if ($store === null) {
+            $this->error('Missing required --store. Growave sync is tenant-scoped and cannot run globally.');
+
+            return self::FAILURE;
+        }
+
+        $tenantId = $this->tenantIdForStore($store);
+        if ($tenantId === null) {
+            $this->error("Unable to resolve tenant ownership for store '{$store}'.");
+
+            return self::FAILURE;
+        }
+
         $afterCandidateId = $this->optionalInt($this->option('after-candidate-id'));
         $resumeRunId = $this->optionalInt($this->option('resume-run-id'));
         if ($resumeRunId !== null) {
-            $checkpointId = $this->checkpointCandidateIdFromRun($resumeRunId);
+            try {
+                $checkpointId = $this->checkpointCandidateIdFromRun($resumeRunId, $tenantId, $store);
+            } catch (\RuntimeException $exception) {
+                $this->error($exception->getMessage());
+
+                return self::FAILURE;
+            }
+
             if ($checkpointId !== null && ($afterCandidateId === null || $checkpointId > $afterCandidateId)) {
                 $afterCandidateId = $checkpointId;
             }
         }
 
         $result = $syncService->sync([
-            'store' => $this->option('store'),
+            'store' => $store,
             'limit' => $this->optionalInt($this->option('limit')),
             'after_candidate_id' => $afterCandidateId,
             'checkpoint_every' => max(1, (int) ($this->optionalInt($this->option('checkpoint-every')) ?? 100)),
@@ -92,15 +114,21 @@ class MarketingSyncGrowave extends Command
         return ((int) ($summary['errors'] ?? 0) > 0) ? self::FAILURE : self::SUCCESS;
     }
 
-    protected function checkpointCandidateIdFromRun(int $runId): ?int
+    protected function checkpointCandidateIdFromRun(int $runId, int $tenantId, string $storeKey): ?int
     {
-        $run = MarketingImportRun::query()
-            ->where('id', $runId)
-            ->where('type', 'growave_customer_sync')
-            ->first();
+        $run = MarketingImportRun::tenantScopedRun($runId, 'growave_customer_sync', $tenantId);
 
         if (! $run) {
-            return null;
+            throw new \RuntimeException("Run {$runId} is not accessible for tenant {$tenantId} (growave_customer_sync).");
+        }
+
+        if (! is_numeric($run->tenant_id) || (int) $run->tenant_id <= 0) {
+            throw new \RuntimeException("Run {$runId} is missing tenant ownership and cannot be resumed safely.");
+        }
+
+        $runStore = strtolower(trim((string) data_get($run->summary, 'store', '')));
+        if ($runStore !== '' && $runStore !== strtolower($storeKey)) {
+            throw new \RuntimeException("Run {$runId} belongs to store '{$runStore}', not '{$storeKey}'.");
         }
 
         return $this->optionalInt(data_get($run->summary, 'checkpoint.last_candidate_id'));
@@ -117,5 +145,27 @@ class MarketingSyncGrowave extends Command
         }
 
         return max(1, (int) $value);
+    }
+
+    protected function normalizeStoreKey(mixed $value): ?string
+    {
+        $storeKey = strtolower(trim((string) ($value ?? '')));
+        if ($storeKey === '' || $storeKey === 'all') {
+            return null;
+        }
+
+        return $storeKey;
+    }
+
+    protected function tenantIdForStore(string $storeKey): ?int
+    {
+        $store = ShopifyStores::find($storeKey);
+        if (! is_array($store)) {
+            return null;
+        }
+
+        $tenantId = $this->optionalInt($store['tenant_id'] ?? null);
+
+        return $tenantId !== null && $tenantId > 0 ? $tenantId : null;
     }
 }

@@ -9,6 +9,7 @@ use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 
 class BirthdayEmailDispatchService
 {
@@ -16,7 +17,8 @@ class BirthdayEmailDispatchService
         protected TenantEmailDispatchService $emailDispatchService,
         protected TenantEmailSettingsService $emailSettingsService,
         protected MarketingTemplateRenderer $templateRenderer,
-        protected MarketingEmailReadiness $emailReadiness
+        protected MarketingEmailReadiness $emailReadiness,
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver
     ) {
     }
 
@@ -71,7 +73,7 @@ class BirthdayEmailDispatchService
         $selectedProvider = trim((string) ($providerContext['provider'] ?? ($settings['email_provider'] ?? 'sendgrid')));
         $selectedProvider = $selectedProvider !== '' ? strtolower($selectedProvider) : 'sendgrid';
 
-        $config = $this->campaignConfig();
+        $config = $this->campaignConfig($tenantId);
         $subjectTemplate = $this->nullableString($config['birthday_email_subject'] ?? null)
             ?: 'Happy Birthday from The Forestry Studio';
         $bodyTemplate = $this->nullableString($config['birthday_email_body'] ?? null)
@@ -305,7 +307,7 @@ class BirthdayEmailDispatchService
     /**
      * @return array<string,mixed>
      */
-    protected function campaignConfig(): array
+    protected function campaignConfig(?int $tenantId = null): array
     {
         return array_merge(
             [
@@ -313,7 +315,7 @@ class BirthdayEmailDispatchService
                 'birthday_email_subject' => 'Happy Birthday from The Forestry Studio',
                 'birthday_email_body' => 'Activate your birthday reward and use it on your next order.',
             ],
-            (array) optional(\App\Models\MarketingSetting::query()->where('key', 'birthday_campaign_config')->first())->value
+            $this->marketingSettingsResolver->array('birthday_campaign_config', $tenantId)
         );
     }
 

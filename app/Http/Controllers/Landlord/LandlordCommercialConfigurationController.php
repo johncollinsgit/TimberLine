@@ -31,7 +31,7 @@ class LandlordCommercialConfigurationController extends Controller
             $templateLabels = $this->normalizeDisplayLabels((array) data_get($commercial, 'template.payload.default_labels', []));
             $explicitLabels = $this->normalizeDisplayLabels((array) ($commercial['display_labels'] ?? []));
             $effectiveLabels = array_replace($templateLabels, $explicitLabels);
-            $labelSource = 'entitlements_default';
+            $labelSource = 'global_fallback';
             if ($explicitLabels !== []) {
                 $labelSource = 'tenant_override';
             } elseif ($templateKey !== '' && $templateExists && $templateLabels !== []) {

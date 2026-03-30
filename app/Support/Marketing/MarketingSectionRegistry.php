@@ -2,6 +2,8 @@
 
 namespace App\Support\Marketing;
 
+use App\Services\Tenancy\TenantDisplayLabelResolver;
+
 class MarketingSectionRegistry
 {
     /**
@@ -9,7 +11,7 @@ class MarketingSectionRegistry
      */
     public static function groups(): array
     {
-        return [
+        return self::replaceLabelTokens([
             'command-center' => [
                 'label' => 'Home',
                 'description' => 'Start here for customers and daily work.',
@@ -21,8 +23,8 @@ class MarketingSectionRegistry
                 'accent' => 'sky',
             ],
             'loyalty-retention' => [
-                'label' => 'Rewards',
-                'description' => 'Points, reviews, and contact rules.',
+                'label' => '{{rewards_label}}',
+                'description' => '{{reward_credit_label}} activity, reviews, and contact rules.',
                 'accent' => 'amber',
             ],
             'data-operations' => [
@@ -30,7 +32,7 @@ class MarketingSectionRegistry
                 'description' => 'Match fixes, orders, connections, and settings.',
                 'accent' => 'rose',
             ],
-        ];
+        ]);
     }
 
     /**
@@ -38,7 +40,7 @@ class MarketingSectionRegistry
      */
     public static function sections(): array
     {
-        return [
+        return self::replaceLabelTokens([
             'overview' => [
                 'label' => 'Overview',
                 'route' => 'marketing.overview',
@@ -150,9 +152,9 @@ class MarketingSectionRegistry
                 'group' => 'audiences-messaging',
             ],
             'candle-cash' => [
-                'label' => 'Rewards',
+                'label' => '{{rewards_label}}',
                 'route' => 'marketing.candle-cash',
-                'description' => 'Candle Cash rewards ledger, issued-code lifecycle, and Shopify/Square redemption reconciliation visibility.',
+                'description' => '{{rewards_label}} ledger, issued-code lifecycle, and Shopify/Square redemption reconciliation visibility.',
                 'hint_title' => 'How to use this page',
                 'hint_text' => 'Codes are issued first, then reconciled during Shopify/Square order ingestion or staff-assisted workflows. Use Reconciliation Operations for unresolved storefront/public issues and audit-safe manual fixes.',
                 'coming_next' => [
@@ -233,7 +235,7 @@ class MarketingSectionRegistry
                 ],
                 'group' => 'data-operations',
             ],
-        ];
+        ]);
     }
 
     /**
@@ -284,5 +286,63 @@ class MarketingSectionRegistry
     public static function section(string $key): ?array
     {
         return self::sections()[$key] ?? null;
+    }
+
+    /**
+     * @param  array<mixed,mixed>  $value
+     * @return array<mixed,mixed>
+     */
+    protected static function replaceLabelTokens(array $value): array
+    {
+        $tokens = self::labelTokens();
+
+        $replace = function (mixed $item) use (&$replace, $tokens): mixed {
+            if (is_array($item)) {
+                $updated = [];
+                foreach ($item as $key => $nested) {
+                    $updated[$key] = $replace($nested);
+                }
+
+                return $updated;
+            }
+
+            if (is_string($item)) {
+                return strtr($item, $tokens);
+            }
+
+            return $item;
+        };
+
+        return $replace($value);
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected static function labelTokens(): array
+    {
+        $tenantId = request()?->attributes->get('current_tenant_id');
+        $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+
+        /** @var TenantDisplayLabelResolver $resolver */
+        $resolver = app(TenantDisplayLabelResolver::class);
+        $resolved = $resolver->resolve($resolvedTenantId);
+        $labels = is_array($resolved['labels'] ?? null) ? (array) $resolved['labels'] : [];
+
+        $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+
+        $rewardCreditLabel = trim((string) ($labels['reward_credit_label'] ?? 'reward credit'));
+        if ($rewardCreditLabel === '') {
+            $rewardCreditLabel = 'reward credit';
+        }
+
+        return [
+            '{{rewards_label}}' => $rewardsLabel,
+            '{{rewards_label_lc}}' => strtolower($rewardsLabel),
+            '{{reward_credit_label}}' => $rewardCreditLabel,
+        ];
     }
 }

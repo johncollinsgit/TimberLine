@@ -20,6 +20,35 @@
                     Back to Dashboard
                 </a>
             </div>
+
+            <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/20 p-4">
+                <p class="text-xs uppercase tracking-[0.12em] text-emerald-100/60">Tenant Operations Selector</p>
+                <p class="mt-1 text-xs text-emerald-50/70">
+                    Select tenant context explicitly before opening guarded landlord operations.
+                </p>
+                <form method="POST" action="{{ route('landlord.tenants.select') }}" class="mt-3 flex flex-wrap items-center gap-2">
+                    @csrf
+                    <select
+                        name="tenant"
+                        class="min-w-[18rem] rounded-lg border border-emerald-200/20 bg-[#0b1411] px-3 py-2 text-sm text-emerald-50"
+                    >
+                        @foreach ($tenants as $row)
+                            <option value="{{ $row['id'] }}">
+                                {{ $row['name'] }} ({{ $row['slug'] }})
+                            </option>
+                        @endforeach
+                    </select>
+                    <button
+                        type="submit"
+                        class="inline-flex items-center rounded-lg border border-emerald-300/40 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-50"
+                    >
+                        Open Tenant Operations
+                    </button>
+                </form>
+                @error('tenant')
+                    <p class="mt-2 text-xs text-rose-300">{{ $message }}</p>
+                @enderror
+            </div>
         </section>
 
         <section class="overflow-hidden rounded-3xl border border-emerald-200/10 bg-[#101513]/80">

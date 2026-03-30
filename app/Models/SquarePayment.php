@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SquarePayment extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
+        'tenant_id',
         'square_payment_id',
         'square_order_id',
         'square_customer_id',
@@ -22,6 +26,7 @@ class SquarePayment extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'created_at_source' => 'datetime',
         'raw_payload' => 'array',
         'synced_at' => 'datetime',

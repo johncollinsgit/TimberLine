@@ -1,3 +1,14 @@
+@php
+    $tenantId = request()?->attributes->get('current_tenant_id');
+    $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+    $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
+    $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
+    $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+    if ($rewardsLabel === '') {
+        $rewardsLabel = 'Rewards';
+    }
+@endphp
+
 <x-layouts::app :title="'Connections'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
         <x-marketing.partials.section-shell
@@ -347,7 +358,7 @@
                 <div class="mt-3 grid gap-3 lg:grid-cols-3">
                     <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
                         <div class="text-sm font-semibold text-white">At Booth / POS</div>
-                        <div class="mt-2 text-sm text-white/70">Ask for phone or email at purchase with a clear loyalty claim reason: “Enter phone/email for Candle Cash.”</div>
+                        <div class="mt-2 text-sm text-white/70">Ask for phone or email at purchase with a clear loyalty claim reason: “Enter phone or email to track rewards.”</div>
                     </div>
                     <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
                         <div class="text-sm font-semibold text-white">After Purchase</div>
@@ -411,7 +422,7 @@
                                 <th class="px-4 py-3 text-left">Missing Phone</th>
                                 <th class="px-4 py-3 text-left">Missing Both</th>
                                 <th class="px-4 py-3 text-left">Tracked Spend</th>
-                                <th class="px-4 py-3 text-left">Candle Cash</th>
+                                <th class="px-4 py-3 text-left">{{ $rewardsLabel }}</th>
                                 <th class="px-4 py-3 text-left">Review Coverage</th>
                                 <th class="px-4 py-3 text-left"></th>
                             </tr>
@@ -493,7 +504,7 @@
                                 <th class="px-4 py-3 text-left">Sources</th>
                                 <th class="px-4 py-3 text-left">Contact</th>
                                 <th class="px-4 py-3 text-left">Tracked Spend</th>
-                                <th class="px-4 py-3 text-left">Candle Cash</th>
+                                <th class="px-4 py-3 text-left">{{ $rewardsLabel }}</th>
                                 <th class="px-4 py-3 text-left">Reviews</th>
                             </tr>
                         </thead>

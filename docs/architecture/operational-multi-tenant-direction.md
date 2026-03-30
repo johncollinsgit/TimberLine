@@ -151,7 +151,29 @@ Directional intent:
 - Customers are a platform-level business domain, not just a messaging recipient list.
 - Customer surfaces should remain reusable across campaigns, lifecycle programs, ops context, and future non-candle workflows.
 
-### 4) Inventory + internal product operations (partially reusable, currently candle-shaped)
+### 4) Connector ingestion + import ownership (bridging)
+
+Current state:
+- Marketing import runs for Shopify and Growave connectors now persist a resolved `tenant_id` and fail early when the store context cannot be mapped to a tenant.
+- Shopify customer metafield and birthday sync services require tenant-aware store rows, include `tenant_id` on each `marketing_import_runs` entry, and keep candidate/replay queries scoped to the tenant.
+- Shared import-run consumers (jobs, dashboards, reconciliation backfills) now read the tenant-aware ownership tokens instead of assuming global data.
+- MT-3 ownership guardrails now enforce tenant-owned run readers and replay/resume consumers:
+  - import-related Birthday/Marketing run feeds are tenant-filtered,
+  - connector resume paths fail closed when `marketing_import_runs` owner context is missing or cross-tenant,
+  - Growave wishlist backfill runs enforce one owner tenant per run with tenant-scoped downstream updates.
+
+Directional intent:
+- Keep every connector import run bound to a tenant/account before it writes rows or triggers downstream jobs; use tenant-aware dedupe/replay keys when necessary.
+- Surface the tenant ownership on `marketing_import_runs` and reject ambiguous runs so downstream consumers can stay tenant-safe.
+- Keep provider names as operational adapter terminology in admin/integration contexts; do not treat connector/provider names as client-facing product identity.
+- MT-4A follow-through:
+  - non-import operations/reconciliation paths now require tenant context, run tenant-scoped queries, and fail closed on cross-tenant ownership attempts,
+  - `marketing:reconcile-redemptions` now requires explicit tenant context and tenant-filters both Shopify and Square scans.
+- Remaining after MT-4A:
+  - continue tightening tenant boundaries in older/global reporting read models that still sit outside tenant-scoped route boundaries,
+  - keep fail-closed behavior as the default whenever tenant/store ownership cannot be proven.
+
+### 5) Inventory + internal product operations (partially reusable, currently candle-shaped)
 Current state:
 - Reusable operational primitives already exist:
   - inventory adjustment ledger (`inventory_adjustments`)
@@ -166,7 +188,7 @@ Directional intent:
 - Extract reusable workflow/inventory primitives where they are truly generic.
 - Keep manufacturing/candle rules layered as domain-specific policies.
 
-### 5) Order/ops workflows (mixed: reusable core + candle-specific layers)
+### 6) Order/ops workflows (mixed: reusable core + candle-specific layers)
 Current state:
 - Orders/order-lines are core operational truth for current business flows.
 - Some downstream logic is intentionally production-specific (scent splits, pouring states).

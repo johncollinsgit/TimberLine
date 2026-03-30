@@ -172,10 +172,13 @@
             'earnUrl' => route('shopify.embedded.rewards.earn'),
             'redeemUrl' => route('shopify.embedded.rewards.redeem'),
             'theme' => 'embedded',
+            'rewardsLabel' => $rewardsLabel ?? null,
+            'rewardsBalanceLabel' => $rewardsBalanceLabel ?? null,
+            'displayLabels' => $displayLabels ?? [],
         ])
     @else
         <div class="rewards-note">
-            {{ $rewardsEditorMessage ?: 'This embedded rewards editor is unavailable until Candle Cash rewards are isolated per tenant.' }}
+            {{ $rewardsEditorMessage ?: 'This embedded program editor is unavailable until earn and redeem rows are isolated per tenant.' }}
         </div>
     @endif
 @endsection

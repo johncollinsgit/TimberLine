@@ -42,10 +42,10 @@ class CandleCashAccessGate
 
         return [
             'redeem_enabled' => $enabled,
-            'cta_label' => $enabled ? 'Redeem Candle Cash' : 'COMING SOON!',
+            'cta_label' => $enabled ? 'Redeem Reward Credit' : 'COMING SOON!',
             'message' => $enabled
-                ? 'Candle Cash is live for this account.'
-                : 'Candle Cash is temporarily live for selected accounts only.',
+                ? 'Reward redemption is live for this account.'
+                : 'Reward redemption is temporarily available for selected accounts only.',
             'mode' => $enabled ? 'live' : 'coming_soon',
         ];
     }

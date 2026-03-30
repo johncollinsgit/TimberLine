@@ -1,21 +1,34 @@
-<section class="rounded-3xl border border-emerald-200/10 bg-[#0f1412]/70 p-5">
+<section class="mf-app-card rounded-3xl border border-emerald-200/10 p-5">
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
       <div class="text-lg font-semibold text-white">Product Costs</div>
-      <div class="text-sm text-emerald-50/70">Manage COGS for the profit engine. Variant and SKU matches resolve first, then broader catalog fallbacks.</div>
+      <div class="text-sm text-emerald-50/70">Manage product cost rules for reporting and margin visibility.</div>
     </div>
     <div class="flex items-center gap-2">
-      <button wire:click="openCreate" class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white">
+      <button
+        wire:click="openCreate"
+        class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        @disabled(!($catalogCostsAvailable ?? true))
+      >
         {{ $showCreate ? 'Hide form' : 'Add cost rule' }}
       </button>
     </div>
   </div>
 
-  <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-50/85">
-    Resolver order: Shopify variant, SKU, Shopify product, scent + size, then size-only fallback. Add the most specific cost you know first.
-  </div>
+  @if(!($catalogCostsAvailable ?? true))
+    <div class="mt-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+      <p class="font-semibold text-white">Catalog costs are unavailable in this environment.</p>
+      <p class="mt-1">
+        Run migrations to create the <code>catalog_item_costs</code> table, then reload this tab to continue.
+      </p>
+    </div>
+  @else
+    <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-50/85">
+      Resolver order: Shopify variant, SKU, Shopify product, scent + size, then size-only fallback. Add the most specific cost you know first.
+    </div>
+  @endif
 
-  @if($showCreate)
+  @if($showCreate && ($catalogCostsAvailable ?? true))
     <form wire:submit.prevent="create" class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-12">
       <div class="md:col-span-2">
         <flux:input wire:model.defer="create.shopify_store_key" label="Store" placeholder="retail" />
@@ -88,7 +101,7 @@
     </div>
   </div>
 
-  <div class="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0c1210]/55">
+  <div class="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white">
     <div class="overflow-x-auto">
       <table class="min-w-full text-sm">
         <thead class="bg-white/5 text-white/70">
@@ -104,7 +117,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-white/5">
-          @foreach($costs as $cost)
+          @forelse($costs as $cost)
             <tr class="hover:bg-white/5">
               <td class="px-4 py-3 text-white/85">{{ $cost->shopify_store_key ?: 'All stores' }}</td>
               <td class="px-4 py-3 text-white">
@@ -141,7 +154,17 @@
                 <button type="button" wire:click="openEdit({{ $cost->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100">Edit</button>
               </td>
             </tr>
-          @endforeach
+          @empty
+            <tr>
+              <td colspan="8" class="px-4 py-6 text-center text-white/70">
+                @if(!($catalogCostsAvailable ?? true))
+                  Catalog costs are not available in this environment yet.
+                @else
+                  No cost rules found for the current filters.
+                @endif
+              </td>
+            </tr>
+          @endforelse
         </tbody>
       </table>
     </div>
@@ -152,7 +175,7 @@
 
 @if($showEdit)
   <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
-    <div class="w-full max-w-4xl rounded-2xl border border-white/10 bg-zinc-950 p-6">
+    <div class="mf-app-card w-full max-w-4xl rounded-2xl border border-white/10 p-6">
       <div class="text-lg font-semibold text-white">Edit Cost Rule</div>
       <div class="mt-4 grid gap-3 md:grid-cols-12">
         <div class="md:col-span-2">

@@ -26,6 +26,28 @@ class CandleCashEarnedReminderService
         $tenantId = isset($options['tenant_id']) && (int) $options['tenant_id'] > 0
             ? (int) $options['tenant_id']
             : null;
+
+        if ($tenantId === null) {
+            return [
+                'blocked' => true,
+                'status' => 'tenant_context_required',
+                'message' => 'Reminder sends require an explicit tenant context.',
+                'readiness' => [
+                    'can_send' => false,
+                    'status' => 'tenant_context_required',
+                    'missing_requirements' => ['tenant_context'],
+                    'notes' => ['Background reminder execution is tenant-scoped and fails closed without a tenant.'],
+                ],
+                'summary' => [
+                    'processed' => 0,
+                    'sent' => 0,
+                    'failed' => 0,
+                    'skipped_no_email' => 0,
+                    'skipped_cooldown' => 0,
+                    'eligible' => 0,
+                ],
+            ];
+        }
         $readiness = $this->emailReadiness->summary($tenantId);
         $providerContext = $this->emailReadiness->providerContextForDelivery($tenantId);
         $resolvedProvider = trim((string) ($providerContext['provider'] ?? ($readiness['provider'] ?? 'sendgrid'))) ?: 'sendgrid';
@@ -231,7 +253,7 @@ class CandleCashEarnedReminderService
             $amount = '$0.00';
         }
 
-        return 'You still have '.$amount.' in Candle Cash waiting';
+        return 'You still have '.$amount.' in reward credit waiting';
     }
 
     /**
@@ -259,7 +281,7 @@ class CandleCashEarnedReminderService
             ->implode("\n");
 
         if ($sources === '') {
-            $sources = '- Program-earned Candle Cash';
+            $sources = '- Program-earned reward credit';
         }
 
         $expirationLine = $expirationDate !== null
@@ -269,7 +291,7 @@ class CandleCashEarnedReminderService
         return trim(implode("\n", [
             $greeting,
             '',
-            'You currently have '.$amount.' in earned Candle Cash still available.',
+            'You currently have '.$amount.' in earned reward credit still available.',
             'First earned date in your current outstanding balance: '.($earnedDate ?? 'Not available'),
             'Latest earned date in your current outstanding balance: '.($latestEarnedDate ?? 'Not available'),
             $expirationLine,
@@ -277,7 +299,7 @@ class CandleCashEarnedReminderService
             'Current outstanding sources:',
             $sources,
             '',
-            'Use your Candle Cash on a future order:',
+            'Use your reward balance on a future order:',
             $cta,
             '',
             'Reply to this email if you need help.',

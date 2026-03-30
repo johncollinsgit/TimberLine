@@ -5,6 +5,7 @@ use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingConversionAttributionCoverageReport;
 
 function makeCoverageCampaign(string $name, string $channel = 'push'): MarketingCampaign
@@ -17,17 +18,19 @@ function makeCoverageCampaign(string $name, string $channel = 'push'): Marketing
     ]);
 }
 
-function makeCoverageProfile(string $email): MarketingProfile
+function makeCoverageProfile(string $email, ?int $tenantId = null): MarketingProfile
 {
     return MarketingProfile::query()->create([
         'first_name' => 'Coverage',
         'email' => $email,
+        'tenant_id' => $tenantId,
     ]);
 }
 
 function makeCoverageOrder(MarketingProfile $profile, int $shopifyOrderId, array $sourceMeta = []): Order
 {
     $order = Order::query()->create([
+        'tenant_id' => is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : null,
         'source' => 'shopify_retail',
         'shopify_store_key' => 'retail',
         'shopify_store' => 'retail',
@@ -39,6 +42,7 @@ function makeCoverageOrder(MarketingProfile $profile, int $shopifyOrderId, array
 
     MarketingProfileLink::query()->create([
         'marketing_profile_id' => $profile->id,
+        'tenant_id' => is_numeric($profile->tenant_id) ? (int) $profile->tenant_id : null,
         'source_type' => 'order',
         'source_id' => (string) $order->id,
         'source_meta' => $sourceMeta,
@@ -48,9 +52,13 @@ function makeCoverageOrder(MarketingProfile $profile, int $shopifyOrderId, array
 }
 
 test('conversion snapshot backfill dry run reports representative summary counts without writes', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Conversion Backfill Dry Tenant',
+        'slug' => 'conversion-backfill-dry-tenant',
+    ]);
     $campaign = makeCoverageCampaign('Backfill Dry Run');
 
-    $newProfile = makeCoverageProfile('new.backfill@example.com');
+    $newProfile = makeCoverageProfile('new.backfill@example.com', $tenant->id);
     $newOrder = makeCoverageOrder($newProfile, 7101, [
         'utm_source' => 'google',
         'utm_medium' => 'cpc',
@@ -69,7 +77,7 @@ test('conversion snapshot backfill dry run reports representative summary counts
         'order_total' => 120,
     ]);
 
-    $stableProfile = makeCoverageProfile('stable.backfill@example.com');
+    $stableProfile = makeCoverageProfile('stable.backfill@example.com', $tenant->id);
     $stableOrder = makeCoverageOrder($stableProfile, 7102, [
         'utm_source' => 'email',
         'utm_medium' => 'email',
@@ -98,7 +106,7 @@ test('conversion snapshot backfill dry run reports representative summary counts
         ],
     ]);
 
-    $upgradeProfile = makeCoverageProfile('upgrade.backfill@example.com');
+    $upgradeProfile = makeCoverageProfile('upgrade.backfill@example.com', $tenant->id);
     $upgradeOrder = makeCoverageOrder($upgradeProfile, 7103, [
         'utm_source' => 'facebook',
         'utm_medium' => 'paid_social',
@@ -125,7 +133,11 @@ test('conversion snapshot backfill dry run reports representative summary counts
         ],
     ]);
 
-    $this->artisan('marketing:backfill-conversion-attribution-snapshots --dry-run --limit=3')
+    $this->artisan('marketing:backfill-conversion-attribution-snapshots', [
+        '--tenant-id' => $tenant->id,
+        '--dry-run' => true,
+        '--limit' => 3,
+    ])
         ->expectsOutputToContain('mode=dry-run')
         ->expectsOutputToContain('examined=3')
         ->expectsOutputToContain('already_having_snapshot=2')
@@ -138,9 +150,13 @@ test('conversion snapshot backfill dry run reports representative summary counts
 });
 
 test('conversion snapshot backfill is rerunnable and becomes a no-op after live run', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Conversion Backfill Live Tenant',
+        'slug' => 'conversion-backfill-live-tenant',
+    ]);
     $campaign = makeCoverageCampaign('Backfill Rerun');
 
-    $profile = makeCoverageProfile('rerun.backfill@example.com');
+    $profile = makeCoverageProfile('rerun.backfill@example.com', $tenant->id);
     $order = makeCoverageOrder($profile, 7201, [
         'utm_source' => 'instagram',
         'utm_medium' => 'social',
@@ -160,13 +176,19 @@ test('conversion snapshot backfill is rerunnable and becomes a no-op after live 
         'order_total' => 55,
     ]);
 
-    $this->artisan('marketing:backfill-conversion-attribution-snapshots --limit=1')
+    $this->artisan('marketing:backfill-conversion-attribution-snapshots', [
+        '--tenant-id' => $tenant->id,
+        '--limit' => 1,
+    ])
         ->expectsOutputToContain('newly_snapshotted=1')
         ->assertExitCode(0);
 
     expect($conversion->fresh()->attribution_snapshot['channel'])->toBe('instagram');
 
-    $this->artisan('marketing:backfill-conversion-attribution-snapshots --limit=1')
+    $this->artisan('marketing:backfill-conversion-attribution-snapshots', [
+        '--tenant-id' => $tenant->id,
+        '--limit' => 1,
+    ])
         ->expectsOutputToContain('already_having_snapshot=1')
         ->expectsOutputToContain('newly_snapshotted=0')
         ->expectsOutputToContain('updated_stronger_snapshot=0')
@@ -264,8 +286,12 @@ test('conversion attribution coverage report measures coverage, channel distribu
 });
 
 test('conversion attribution coverage command outputs operator friendly summary and detail lines', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Conversion Coverage Command Tenant',
+        'slug' => 'conversion-coverage-command-tenant',
+    ]);
     $campaign = makeCoverageCampaign('Coverage Command');
-    $profile = makeCoverageProfile('coverage.command@example.com');
+    $profile = makeCoverageProfile('coverage.command@example.com', $tenant->id);
 
     MarketingCampaignConversion::query()->create([
         'campaign_id' => $campaign->id,
@@ -285,7 +311,10 @@ test('conversion attribution coverage command outputs operator friendly summary 
         ],
     ]);
 
-    $this->artisan('marketing:report-conversion-attribution-coverage --detail')
+    $this->artisan('marketing:report-conversion-attribution-coverage', [
+        '--tenant-id' => $tenant->id,
+        '--detail' => true,
+    ])
         ->expectsOutputToContain('total_conversions=1')
         ->expectsOutputToContain('with_snapshot=1')
         ->expectsOutputToContain('snapshot_coverage_rate=100')

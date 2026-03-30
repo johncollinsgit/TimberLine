@@ -10,11 +10,15 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\CandleCashService;
 
 test('public rewards account lookup shows balance, referral, reviews, and transaction history', function () {
+    $tenant = publicRewardsRetailTenant();
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Rewards',
         'last_name' => 'Customer',
         'email' => 'rewards.lookup@example.com',
@@ -76,16 +80,19 @@ test('public rewards account lookup shows balance, referral, reviews, and transa
     $this->get(route('marketing.public.account-rewards', [
         'email' => $profile->email,
         'phone' => $profile->phone,
+        'store_key' => 'retail',
     ]))
         ->assertOk()
-        ->assertSeeText('Candle Cash Account Lookup')
+        ->assertSeeText('Rewards Account Lookup')
         ->assertSeeText('Transaction History')
         ->assertSeeText('Review Status')
         ->assertSeeText('https://refrr.app/example/12345');
 });
 
 test('public rewards account prefers native review and reward signals when available', function () {
+    $tenant = publicRewardsRetailTenant();
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Native',
         'last_name' => 'Signals',
         'email' => 'native.signals@example.com',
@@ -186,6 +193,7 @@ test('public rewards account prefers native review and reward signals when avail
     $this->get(route('marketing.public.account-rewards', [
         'email' => $profile->email,
         'phone' => $profile->phone,
+        'store_key' => 'retail',
     ]))
         ->assertOk()
         ->assertSeeText('Source:')
@@ -200,8 +208,10 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'sarahcollins0816@gmail.com',
         'rewards.short@example.com',
     ]);
+    $tenant = publicRewardsRetailTenant('public-redeem-tenant', 'modernforestry.myshopify.com');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Redeem',
         'last_name' => 'Customer',
         'email' => 'sarahcollins0816@gmail.com',
@@ -226,7 +236,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'synced_at' => now(),
     ]);
 
-    $storefrontReward = app(CandleCashService::class)->storefrontReward();
+    $storefrontReward = app(CandleCashService::class)->storefrontReward($tenant->id);
     expect($storefrontReward)->not->toBeNull();
 
     $nonStorefrontReward = CandleCashReward::query()->create([
@@ -259,10 +269,12 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $storefrontReward->id,
+        'store_key' => 'retail',
     ])
         ->assertRedirect(route('marketing.public.rewards-lookup', [
             'email' => $profile->email,
             'phone' => $profile->phone,
+            'store_key' => 'retail',
         ]))
         ->assertSessionHas('redeem_result', function (array $result): bool {
             return ($result['ok'] ?? false) === true
@@ -277,6 +289,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         ->and((int) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(290);
 
     $insufficientProfile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Short',
         'last_name' => 'Balance',
         'email' => 'rewards.short@example.com',
@@ -291,9 +304,11 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'email' => $insufficientProfile->email,
         'phone' => $insufficientProfile->phone,
         'reward_id' => $storefrontReward->id,
+        'store_key' => 'retail',
     ])->assertRedirect(route('marketing.public.rewards-lookup', [
         'email' => $insufficientProfile->email,
         'phone' => $insufficientProfile->phone,
+        'store_key' => 'retail',
     ]));
 
     expect(CandleCashRedemption::query()
@@ -306,9 +321,11 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $nonStorefrontReward->id,
+        'store_key' => 'retail',
     ])->assertRedirect(route('marketing.public.rewards-lookup', [
         'email' => $profile->email,
         'phone' => $profile->phone,
+        'store_key' => 'retail',
     ]));
 
     expect(CandleCashRedemption::query()
@@ -320,8 +337,10 @@ test('public rewards account redeem route issues and rejects redemptions with cl
 test('public rewards account shows COMING SOON! and blocks non-allowlisted redemptions', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com']);
+    $tenant = publicRewardsRetailTenant('public-coming-soon-tenant', 'modernforestry.myshopify.com');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Blocked',
         'last_name' => 'Customer',
         'email' => 'blocked.redeem@example.com',
@@ -346,7 +365,7 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
         'synced_at' => now(),
     ]);
 
-    $reward = app(CandleCashService::class)->storefrontReward();
+    $reward = app(CandleCashService::class)->storefrontReward($tenant->id);
     expect($reward)->not->toBeNull();
 
     $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
@@ -356,6 +375,7 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
     $this->get(route('marketing.public.account-rewards', [
         'email' => $profile->email,
         'phone' => $profile->phone,
+        'store_key' => 'retail',
     ]))
         ->assertOk()
         ->assertSeeText('COMING SOON!');
@@ -364,10 +384,12 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $reward->id,
+        'store_key' => 'retail',
     ])
         ->assertRedirect(route('marketing.public.rewards-lookup', [
             'email' => $profile->email,
             'phone' => $profile->phone,
+            'store_key' => 'retail',
         ]))
         ->assertSessionHas('redeem_result', function (array $result): bool {
             return ($result['ok'] ?? true) === false
@@ -379,7 +401,9 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
 });
 
 test('public rewards account prefers data-rich Growave projection when duplicate rows exist', function () {
+    $tenant = publicRewardsRetailTenant();
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Duplicate',
         'last_name' => 'Projection',
         'email' => 'duplicate.projection@example.com',
@@ -461,6 +485,7 @@ test('public rewards account prefers data-rich Growave projection when duplicate
     $this->get(route('marketing.public.account-rewards', [
         'email' => $profile->email,
         'phone' => $profile->phone,
+        'store_key' => 'retail',
     ]))
         ->assertOk()
         ->assertSeeText('https://refrr.app/example/preferred-public')
@@ -472,8 +497,10 @@ test('public rewards account prefers data-rich Growave projection when duplicate
 test('public rewards account redeem restores balance when Shopify discount sync fails', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['recover.balance@example.com']);
+    $tenant = publicRewardsRetailTenant('public-sync-fail-tenant', 'modernforestry.myshopify.com');
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Recover',
         'last_name' => 'Balance',
         'email' => 'recover.balance@example.com',
@@ -498,7 +525,7 @@ test('public rewards account redeem restores balance when Shopify discount sync 
         'synced_at' => now(),
     ]);
 
-    $reward = app(CandleCashService::class)->storefrontReward();
+    $reward = app(CandleCashService::class)->storefrontReward($tenant->id);
     expect($reward)->not->toBeNull();
 
     $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
@@ -511,10 +538,11 @@ test('public rewards account redeem restores balance when Shopify discount sync 
         'email' => $profile->email,
         'phone' => $profile->phone,
         'reward_id' => $reward->id,
+        'store_key' => 'retail',
     ])
         ->assertOk()
         ->assertSeeText('Redemption Failed')
-        ->assertSeeText('Your Candle Cash balance is safe. We could not prepare the Shopify discount yet.')
+        ->assertSeeText('Your reward balance is safe. We could not prepare the Shopify discount yet.')
         ->assertSeeText('Discount: SYNC_FAILED');
 
     $redemption = CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->latest('id')->first();
@@ -523,3 +551,74 @@ test('public rewards account redeem restores balance when Shopify discount sync 
         ->and((string) $redemption->status)->toBe('canceled')
         ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(300.0);
 });
+
+test('public rewards redeem fails closed when store context is missing', function () {
+    $tenant = publicRewardsRetailTenant();
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Missing',
+        'last_name' => 'Context',
+        'email' => 'missing.context@example.com',
+        'normalized_email' => 'missing.context@example.com',
+        'phone' => '5553190000',
+        'normalized_phone' => '+15553190000',
+    ]);
+
+    app(CandleCashService::class)->addPoints($profile, 300, 'earn', 'admin', 'seed', 'Seed balance');
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'PUBLIC-MISSING-CONTEXT-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'phone' => $profile->phone,
+        'normalized_phone' => $profile->normalized_phone,
+        'points_balance' => 300,
+        'synced_at' => now(),
+    ]);
+
+    $reward = app(CandleCashService::class)->storefrontReward($tenant->id);
+    expect($reward)->not->toBeNull();
+
+    $this->post(route('marketing.public.account-rewards.redeem'), [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'reward_id' => $reward->id,
+    ])
+        ->assertRedirect(route('marketing.public.rewards-lookup', [
+            'email' => $profile->email,
+            'phone' => $profile->phone,
+        ]))
+        ->assertSessionHas('redeem_result', function (array $result): bool {
+            return ($result['ok'] ?? true) === false
+                && ($result['state'] ?? null) === 'missing_tenant_context';
+        });
+
+    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeFalse();
+});
+
+function publicRewardsRetailTenant(
+    string $slug = 'public-rewards-retail',
+    string $shopDomain = 'modernforestry.myshopify.com'
+): Tenant {
+    $tenant = Tenant::query()->create([
+        'name' => str_replace('-', ' ', ucfirst($slug)),
+        'slug' => $slug,
+    ]);
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => $shopDomain,
+            'access_token' => 'public-rewards-retail-token',
+            'tenant_id' => $tenant->id,
+            'installed_at' => now(),
+        ]
+    );
+
+    return $tenant;
+}

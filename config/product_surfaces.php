@@ -3,20 +3,20 @@
 return [
     'promo' => [
         'eyebrow' => 'Shopify-First Customer Platform',
-        'headline' => 'Launch loyalty, lifecycle, and customer operations from one platform.',
-        'summary' => 'Fire Forge Tech keeps Shopify storefront and embedded admin workflows strong today while expanding into broader business-system onboarding over time.',
+        'headline' => 'Production, shipping, and wholesale in one place.',
+        'summary' => 'Forestry Backstage keeps Shopify workflows strong while unifying operations, fulfillment, and customer programs.',
         'how_it_works' => [
             [
-                'title' => 'Connect storefront + admin',
-                'description' => 'Use the existing Shopify storefront proxy contracts and embedded admin flows without replacing what already works.',
+                'title' => 'Connect Shopify and operations',
+                'description' => 'Keep existing Shopify storefront and embedded workflows while giving teams one place to run daily operations.',
             ],
             [
-                'title' => 'Activate first-party modules',
-                'description' => 'Run loyalty/rewards, birthdays, reviews, and wishlist from canonical services and shared identity records.',
+                'title' => 'Turn on live modules',
+                'description' => 'Manage rewards, birthdays, reviews, and customer workflows from shared identity records.',
             ],
             [
-                'title' => 'Scale with entitlements',
-                'description' => 'Expand into tiered plans, add-ons, setup checklists, and upgrade prompts without billing coupling in core module logic.',
+                'title' => 'Scale with clear controls',
+                'description' => 'Use plans, add-ons, and setup checklists to expand scope without disrupting core workflows.',
             ],
         ],
         'plan_order' => [
@@ -30,11 +30,11 @@ return [
                 'href' => '/shopify/reinstall/retail',
             ],
             'demo' => [
-                'label' => 'Book Demo',
+                'label' => 'Book a demo',
                 'href' => '/platform/contact?intent=demo',
             ],
             'contact' => [
-                'label' => 'Contact Sales',
+                'label' => 'Talk to sales',
                 'href' => '/platform/contact?intent=sales',
             ],
         ],
@@ -556,21 +556,21 @@ return [
     ],
 
     'contact' => [
-        'headline' => 'Contact Fire Forge Tech',
-        'summary' => 'Placeholder sales/demo surface for upgrade prompts and promo CTAs. Billing and automated lead routing are intentionally out of scope for this phase.',
+        'headline' => 'Talk with the Forestry Backstage team',
+        'summary' => 'Book a demo, ask about plans, or get rollout guidance for production, shipping, and customer workflows.',
         'channels' => [
             [
-                'label' => 'Demo request',
+                'label' => 'Book a demo',
                 'value' => 'sales@forestrybackstage.com',
                 'href' => 'mailto:sales@forestrybackstage.com?subject=Platform%20Demo%20Request',
             ],
             [
-                'label' => 'Upgrade request',
+                'label' => 'Discuss plan upgrades',
                 'value' => 'upgrades@forestrybackstage.com',
                 'href' => 'mailto:upgrades@forestrybackstage.com?subject=Plan%20Upgrade%20Request',
             ],
             [
-                'label' => 'General contact',
+                'label' => 'General questions',
                 'value' => 'hello@forestrybackstage.com',
                 'href' => 'mailto:hello@forestrybackstage.com?subject=Platform%20Inquiry',
             ],
