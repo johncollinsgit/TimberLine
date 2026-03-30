@@ -52,7 +52,7 @@
                 </div>
             </div>
 
-            <aside class="fb-hero-kpis" aria-label="Platform highlights" data-depth="16" data-premium-surface>
+            <aside class="fb-hero-kpis" aria-label="Platform highlights" data-depth="16">
                 <article class="fb-kpi" data-premium-surface>
                     <span class="fb-kpi-label">Shopify Embedded</span>
                     <span class="fb-kpi-value">Live</span>
