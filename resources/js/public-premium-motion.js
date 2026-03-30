@@ -1,6 +1,8 @@
 const prefersReducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
 const finePointerQuery = window.matchMedia("(pointer: fine)");
+const INTRO_FADE_DELAY_MS = 420;
+const INTRO_FADE_DURATION_MS = 3000;
 
 function enablePublicPremiumMotion() {
     const body = document.body;
@@ -28,8 +30,8 @@ function enablePublicPremiumMotion() {
     if (intro && !introSeen) {
         window.addEventListener("load", () => {
             window.sessionStorage.setItem("fb_intro_seen", "1");
-            setTimeout(() => intro.classList.add("is-hidden"), 1200);
-            setTimeout(() => intro.remove(), 2150);
+            window.setTimeout(() => intro.classList.add("is-hidden"), INTRO_FADE_DELAY_MS);
+            window.setTimeout(() => intro.remove(), INTRO_FADE_DELAY_MS + INTRO_FADE_DURATION_MS + 160);
         }, { once: true });
     } else {
         intro?.remove();

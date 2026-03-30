@@ -92,8 +92,8 @@ body[data-premium-motion="public"].has-premium-motion #intro-logo {
   opacity: 1;
   visibility: visible;
   transition:
-    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0s linear 900ms;
+    opacity 3000ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 3000ms;
 }
 
 body[data-premium-motion="public"].has-premium-motion #intro-logo.is-hidden {
@@ -116,11 +116,11 @@ body[data-premium-motion="public"].has-premium-motion .intro-logo__inner {
     0 24px 90px rgba(8, 24, 27, 0.2),
     0 0 80px rgba(30, 90, 99, 0.18);
   backdrop-filter: blur(16px) saturate(125%);
-  animation: fbIntroPulse 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fbIntroPulse 1700ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 body[data-premium-motion="public"].has-premium-motion .intro-logo__mark {
-  width: 54%;
+  width: 60%;
   height: auto;
   display: block;
   filter: drop-shadow(0 10px 24px rgba(8, 24, 27, 0.18));
@@ -129,17 +129,17 @@ body[data-premium-motion="public"].has-premium-motion .intro-logo__mark {
 
 @keyframes fbIntroPulse {
   0% {
-    transform: scale(0.92);
+    transform: scale(0.95);
     opacity: 0;
-    filter: blur(8px);
+    filter: blur(6px);
   }
-  50% {
+  62% {
     transform: scale(1);
     opacity: 1;
     filter: blur(0);
   }
   100% {
-    transform: scale(1.02);
+    transform: scale(1);
     opacity: 1;
     filter: blur(0);
   }

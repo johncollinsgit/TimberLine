@@ -1,6 +1,6 @@
 <div id="intro-logo" aria-hidden="true">
     <div class="intro-logo__inner">
-        <img src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2" alt="" class="intro-logo__mark" />
+        <img src="{{ asset('brand/forestry-backstage-intro-tree.png') }}?v=fb1" alt="" class="intro-logo__mark" />
     </div>
 </div>
 
