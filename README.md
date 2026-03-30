@@ -83,6 +83,48 @@ Bounded scope (truthful MVP):
 - Snapshot artifact retention is bounded by operator config and enforced on download paths; this is not yet a full artifact lifecycle management suite.
 - Broad cross-environment migration tooling and unrestricted operator “god mode” edits are intentionally deferred.
 
+## Merchant Experience Consolidation Phase (2026-03-30)
+
+This phase shifts primary execution from backend hardening to merchant-facing product clarity and onboarding momentum across the embedded Shopify shell.
+
+What now ships for merchant experience:
+- Post-login and post-install landing (`/shopify/app`) now uses one clear hierarchy:
+  - what the product does
+  - next best setup/import action
+  - current customer/setup snapshot
+  - what unlocks after import
+  - what is active now vs setup next vs purchasable unlocks
+- Start Here, Plans, and Integrations pages now reuse one journey model so setup guidance and CTA logic stay consistent.
+- Customer workflows now include shared setup/import status framing so merchants understand readiness before acting in manage/activity/questions views.
+- Import-first orientation is now explicit:
+  - import state is visible (`Not started`, `In progress`, `Needs attention`, `Imported`)
+  - import CTA is preserved as the first meaningful action when setup is incomplete
+  - post-import path is explained in plain merchant language.
+- Feature discovery and monetization visibility is now structured and non-spammy:
+  - `Available Now` (active)
+  - `Setup Next` (included but not configured)
+  - `Unlock Next` (upgrade/add-on eligible)
+
+Feature metadata for this major UI phase:
+1. Classification: Shared core
+2. Tenant scope: Mixed (tenant-scoped merchant surfaces using existing host/context rails)
+3. Entitlement/access level: Plan/add-on state and module access remain canonical via existing tenant entitlement resolvers
+4. Canonical dependencies reused:
+   - `App\Services\Tenancy\TenantCommercialExperienceService`
+   - `ShopifyEmbeddedAppController`
+   - `ShopifyEmbeddedCustomersController`
+   - embedded shell/navigation components and existing module checklist state
+5. Shopify-specific hooks preserved: embedded query context, App Bridge bootstrap, existing embedded routes/tabs, host/context fail-closed behavior
+6. Setup/onboarding implications: no new identity/import architecture; customer onboarding remains tied to canonical import runs and module setup states
+7. Shopify behavior preservation requirement: MT-4C tenant protections and fail-closed access logic remain unchanged
+8. Non-Shopify applicability target: Later (pattern is reusable, this pass is implemented on merchant embedded surfaces now)
+
+Intentionally deferred after this phase:
+- Broad backend/operator refactors not required for merchant UX clarity
+- App Store packaging work
+- Additional module implementation depth beyond current entitlement/discovery visibility
+- Advanced visual regression tooling (behavioral/rendering tests remain the primary guardrail today)
+
 ## Current Release State (2026-03-27)
 
 This branch now includes the first commercialization/operator shell on top of tenant entitlements.

@@ -34,9 +34,33 @@ Transform Forestry Backstage into a premium, calm, high-trust software experienc
 3. Entitlement/access level: UI layer is globally available; module/plan visibility remains driven by existing entitlement state
 4. Canonical dependencies reused: `routes/web.php` home closure, `PlatformProductPagesController`, Fortify auth views, `ResolveAuthTenantContext`, `PostLoginRedirectResolver`, canonical admin shell, Shopify embedded controllers/shell
 5. Shopify hooks preserved: embedded context query handling, signed context checks, App Bridge bootstrap, existing embedded routes and subnav
-6. Setup/onboarding implications: no new onboarding state model; existing Start Here / plans / integrations payloads still source truth
+6. Setup/onboarding implications: merchant onboarding and guidance now use one canonical payload family (`onboardingPayload`, `merchantJourneyPayload`, `plansPayload`, `integrationsPayload`) from `TenantCommercialExperienceService`
 7. Shopify behavior preservation requirement: embedded home/context logic must remain intact and role-based redirects must remain intact
 8. Non-Shopify applicability target: now (shared visual system is used across non-Shopify and Shopify surfaces)
+
+## Merchant Journey UX System (Embedded)
+- Canonical first-touch merchant hierarchy (dashboard/app home) is:
+  - what this app does
+  - next best action
+  - setup/import status
+  - available now
+  - setup next
+  - unlock next
+- Canonical import state vocabulary is:
+  - `not_started` -> `Not started`
+  - `in_progress` -> `In progress`
+  - `attention` -> `Needs attention`
+  - `imported` -> `Imported`
+- Import CTA priority rule:
+  - if import state is not `imported`, primary orientation CTA should route to import/setup entry points before deeper feature exploration.
+- Capability visibility rule:
+  - use `Available Now` for currently active modules,
+  - `Setup Next` for included modules requiring setup,
+  - `Unlock Next` for purchasable/upgrade-eligible modules.
+- Customer-surface continuity rule:
+  - customer pages should include shared setup/import status context before deep tools to reduce “what do I do next?” friction.
+- Copy rule for merchant surfaces:
+  - explain outcomes and next action in plain product language; keep provider/integration terms operational and secondary.
 
 ## Backend/Frontend Consistency Rules
 - Reuse the same token system and typography for public, auth, admin, and embedded.

@@ -1,5 +1,42 @@
 # UI Changelog
 
+## 2026-03-30 — Merchant Experience Consolidation (Landing/Onboarding/Import/Customers)
+
+### What changed
+- Reworked embedded merchant landing/dashboard (`/shopify/app`) into a guided hierarchy that makes first actions obvious:
+  - product orientation and value summary
+  - next best setup/import action
+  - customer/setup snapshot metrics
+  - post-import value flow explanation
+  - capability grouping (`Available Now`, `Setup Next`, `Unlock Next`)
+  - recommended action list with clear CTA intent.
+- Standardized setup/import framing across Start Here, Plans, and Integrations surfaces by reusing canonical tenant commercial payloads (`merchantJourneyPayload`, `onboardingPayload`, `plansPayload`, `integrationsPayload`) instead of introducing parallel state models.
+- Improved customer workspace orientation:
+  - customer manage/activity/questions surfaces now carry shared setup/import readiness context
+  - empty and pre-import states now direct merchants toward import/setup actions in plain language.
+- Clarified feature discovery and monetization visibility:
+  - active vs setup-needed vs purchasable capability state is now consistently surfaced in merchant-facing copy and card hierarchy
+  - upgrade opportunities remain discoverable without becoming spammy or disruptive.
+- Performed merchant-facing wording cleanup to reduce implementation jargon and keep provider terminology as integration context, not product identity.
+
+### Why
+- Post-MT-4C tenant safety is strong enough to prioritize commercial usability.
+- Merchants need immediate clarity on what to do first, whether import is complete, what tools are usable now, and what value is available next.
+- A single journey system reduces UX drift and lowers onboarding confusion across embedded routes.
+
+### State and behavior conventions established
+- Canonical import states for merchant orientation:
+  - `not_started`, `in_progress`, `attention`, `imported`
+- Canonical capability framing:
+  - `Available Now`, `Setup Next`, `Unlock Next`
+- Canonical first-touch sequencing:
+  - import/setup guidance first, then deeper customer workflows and upgrade discovery.
+
+### Bounded scope that remains intentional
+- No broad backend architecture rewrite was introduced in this pass.
+- No MT-4C tenant-protection rollback or fail-open behavior was introduced.
+- Advanced visual snapshot testing remains deferred; behavior/state gating tests remain the current regression guardrail.
+
 ## 2026-03-30 — Post-MT-4C: Operator Hardening Follow-Up (Recovery/Destructive/Diagnostics)
 
 ### What changed
