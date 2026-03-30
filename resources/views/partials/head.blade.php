@@ -28,11 +28,11 @@
 <meta name="twitter:description" content="{{ $mfDescription }}">
 <meta name="twitter:image" content="{{ $mfOgImage }}">
 
-<link rel="icon" href="{{ asset('favicon.ico') }}?v=fb3" sizes="any">
-<link rel="icon" href="{{ asset('favicon.svg') }}?v=fb3" type="image/svg+xml">
-<link rel="icon" href="{{ asset('favicon.png') }}?v=fb3" type="image/png">
-<link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=fb3">
-<link rel="apple-touch-icon" href="{{ asset('favicon.png') }}?v=fb3">
+<link rel="icon" href="{{ asset('favicon.ico') }}?v=fb4" sizes="any">
+<link rel="icon" href="{{ asset('favicon.svg') }}?v=fb4" type="image/svg+xml">
+<link rel="icon" href="{{ asset('favicon.png') }}?v=fb4" type="image/png">
+<link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=fb4">
+<link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=fb4" sizes="180x180">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&family=fraunces:400,500,600,700" rel="stylesheet" />

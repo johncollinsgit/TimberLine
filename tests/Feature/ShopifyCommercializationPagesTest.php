@@ -20,7 +20,7 @@ test('promo page renders config-driven headline and pricing content', function (
         ->assertSee('data-premium-motion="public"', false)
         ->assertSee('id="intro-logo"', false)
         ->assertSee('id="site-ambient"', false)
-        ->assertSeeText('Production, shipping, and wholesale in one place.')
+        ->assertSeeText('Customers, shipping, and wholesale in one place.')
         ->assertSeeText('From $777/mo')
         ->assertSeeText('Install on Shopify');
 });

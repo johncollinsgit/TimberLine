@@ -40,7 +40,7 @@
 
         <header id="top" class="fb-hero" aria-label="Hero section" data-reveal>
             <div data-depth="10">
-                <h1>Production, shipping, and wholesale in one place.</h1>
+                <h1>Customers, shipping, and wholesale in one place.</h1>
                 <p>
                     Track orders, inventory, fulfillment, and customer growth from one place built for real operations.
                 </p>
