@@ -139,6 +139,21 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Explanation block: `x-ui.page-explainer` + `.fb-page-explainer*`
 - Embedded shell primitives: `.app-shell*`, `.app-topbar*`, `.app-sidebar*`
 
+## Public Motion Pattern
+- Motion enhancements for public marketing pages are opt-in via `data-premium-motion="public"` on `<body>`.
+- Shared motion markup lives in `resources/views/platform/partials/premium-motion.blade.php` and is included by public pages.
+- Motion behavior is powered by `resources/js/public-premium-motion.js` (imported by `resources/js/app.js`), with:
+  - one-time intro logo per tab/session (`sessionStorage`)
+  - cursor ambient glow on fine-pointer devices
+  - touch ripple on coarse-pointer devices
+  - reveal/parallax helpers.
+- Motion hooks:
+  - `data-reveal` for entry reveal
+  - `data-depth="<number>"` for subtle parallax
+  - `data-premium-surface` for elevated surface treatment
+- Respect reduced motion:
+  - when `prefers-reduced-motion: reduce` is set, intro/ambient/ripple/reveal/parallax animation is disabled.
+
 ## Page Header Pattern
 Use clear titles plus concise subheadlines that answer:
 - what this page is

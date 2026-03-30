@@ -1,5 +1,35 @@
 # UI Changelog
 
+## 2026-03-30 — Public Premium Motion Pack (Intro, Ambient, Touch, Reveal)
+
+### What changed
+- Added a new public-page motion layer with restrained premium effects on marketing surfaces:
+  - one-time centered intro logo overlay on first load per browser tab/session,
+  - cursor-responsive ambient glow on fine-pointer devices,
+  - touch ripple bloom on coarse-pointer devices,
+  - reveal-on-scroll and subtle depth parallax helpers.
+- Added shared motion markup partial:
+  - `resources/views/platform/partials/premium-motion.blade.php`
+- Enabled motion layer on public pages:
+  - `resources/views/platform/promo.blade.php`
+  - `resources/views/platform/contact.blade.php`
+  - both now use `data-premium-motion="public"` and include the shared motion partial.
+- Added motion runtime module:
+  - `resources/js/public-premium-motion.js`
+  - imported via `resources/js/app.js`
+- Added motion styles in `resources/css/forestry-ui.css` with scoped selectors under `body[data-premium-motion="public"]`.
+- Added regression assertions in `tests/Feature/ShopifyCommercializationPagesTest.php` so public pages keep rendering the motion shell hooks.
+
+### Why
+- The public brand surface was already polished, but lacked subtle motion cues that increase perceived quality and hierarchy.
+- This pass adds depth and interactivity while preserving performance and accessibility defaults.
+
+### Accessibility and performance guards
+- Motion is disabled when `prefers-reduced-motion: reduce` is active.
+- Ambient loop is enabled only for fine-pointer devices.
+- Touch effects only run on coarse-pointer devices.
+- Motion styles are scoped to public pages only; no admin/embedded behavior changes.
+
 ## 2026-03-30 — Public/Auth Brand Alignment (Approved Tree Logo + Route Behavior Verification)
 
 ### What changed

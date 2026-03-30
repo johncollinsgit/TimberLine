@@ -67,6 +67,206 @@ a:hover {
   margin: 0 auto;
   max-width: 1200px;
   padding: 0 1.5rem 4rem;
+  position: relative;
+  z-index: 2;
+}
+
+body[data-premium-motion="public"] {
+  overflow-x: hidden;
+}
+
+body[data-premium-motion="public"] #intro-logo,
+body[data-premium-motion="public"] #site-ambient {
+  display: none;
+}
+
+body[data-premium-motion="public"].has-premium-motion #intro-logo {
+  display: grid;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, rgba(30, 90, 99, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 248, 0.985));
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 900ms;
+}
+
+body[data-premium-motion="public"].has-premium-motion #intro-logo.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-premium-motion="public"].has-premium-motion .intro-logo__inner {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(34vw, 232px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.94), rgba(241, 246, 245, 0.88));
+  border: 1px solid rgba(18, 60, 67, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.34) inset,
+    0 24px 90px rgba(8, 24, 27, 0.2),
+    0 0 80px rgba(30, 90, 99, 0.18);
+  backdrop-filter: blur(16px) saturate(125%);
+  animation: fbIntroPulse 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body[data-premium-motion="public"].has-premium-motion .intro-logo__mark {
+  width: 54%;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 10px 24px rgba(8, 24, 27, 0.18));
+  transform: translateZ(0);
+}
+
+@keyframes fbIntroPulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0;
+    filter: blur(8px);
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1.02);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+body[data-premium-motion="public"].has-premium-motion #site-ambient {
+  display: block;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+body[data-premium-motion="public"].has-premium-motion .ambient {
+  position: absolute;
+  width: 20rem;
+  height: 20rem;
+  border-radius: 999px;
+  filter: blur(42px);
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity 260ms ease;
+  transform: translate3d(calc(var(--mx, 50vw) - 50%), calc(var(--my, 50vh) - 50%), 0);
+}
+
+body[data-premium-motion="public"].has-premium-motion .ambient--primary {
+  background: radial-gradient(circle, rgba(30, 90, 99, 0.14), rgba(30, 90, 99, 0.04) 44%, transparent 72%);
+}
+
+body[data-premium-motion="public"].has-premium-motion .ambient--secondary {
+  width: 14rem;
+  height: 14rem;
+  background: radial-gradient(circle, rgba(47, 125, 107, 0.13), transparent 68%);
+  transform: translate3d(calc(var(--mx, 50vw) - 40%), calc(var(--my, 50vh) - 40%), 0);
+}
+
+body[data-premium-motion="public"].has-premium-motion.is-pointer-active .ambient {
+  opacity: 1;
+}
+
+body[data-premium-motion="public"] [data-premium-surface] {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 248, 0.92));
+  border: 1px solid rgba(18, 60, 67, 0.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.56) inset,
+    0 14px 44px rgba(8, 24, 27, 0.18);
+  backdrop-filter: blur(10px) saturate(120%);
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body[data-premium-motion="public"] [data-premium-surface]:hover {
+  transform: translateY(-2px);
+  border-color: rgba(18, 60, 67, 0.2);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.62) inset,
+    0 18px 50px rgba(8, 24, 27, 0.24),
+    0 0 0 1px rgba(30, 90, 99, 0.08);
+}
+
+body[data-premium-motion="public"] [data-depth] {
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body[data-premium-motion="public"] .touch-ripple {
+  position: fixed;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(circle, rgba(30, 90, 99, 0.3), rgba(47, 125, 107, 0.2), transparent 72%);
+  transform: translate(-50%, -50%) scale(0.2);
+  animation: fbTouchRipple 720ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: blur(0.5px);
+}
+
+@keyframes fbTouchRipple {
+  0% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  70% {
+    opacity: 0.36;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(11);
+  }
+}
+
+body[data-premium-motion="public"].has-premium-motion [data-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body[data-premium-motion="public"].has-premium-motion [data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-premium-motion="public"] #intro-logo,
+  body[data-premium-motion="public"] .intro-logo__inner,
+  body[data-premium-motion="public"] .ambient,
+  body[data-premium-motion="public"] [data-premium-surface],
+  body[data-premium-motion="public"] [data-depth],
+  body[data-premium-motion="public"] [data-reveal],
+  body[data-premium-motion="public"] .touch-ripple {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+
+  body[data-premium-motion="public"] #intro-logo,
+  body[data-premium-motion="public"] #site-ambient {
+    display: none;
+  }
 }
 
 .fb-announcement-bar {

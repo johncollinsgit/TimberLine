@@ -17,6 +17,9 @@ test('promo page renders config-driven headline and pricing content', function (
 
     $this->get(route('platform.promo'))
         ->assertOk()
+        ->assertSee('data-premium-motion="public"', false)
+        ->assertSee('id="intro-logo"', false)
+        ->assertSee('id="site-ambient"', false)
         ->assertSeeText('Production, shipping, and wholesale in one place.')
         ->assertSeeText('From $777/mo')
         ->assertSeeText('Install on Shopify');
@@ -25,6 +28,7 @@ test('promo page renders config-driven headline and pricing content', function (
 test('contact placeholder page renders configured channels', function () {
     $this->get(route('platform.contact'))
         ->assertOk()
+        ->assertSee('data-premium-motion="public"', false)
         ->assertSeeText('Contact Forestry Backstage')
         ->assertSee('mailto:sales@forestrybackstage.com?subject=Platform%20Demo%20Request', false)
         ->assertSeeText('Back to homepage');

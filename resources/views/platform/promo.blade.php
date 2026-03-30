@@ -8,7 +8,9 @@
 <head>
     @include('partials.head', ['title' => 'Forestry Backstage'])
 </head>
-<body class="fb-public-body">
+<body class="fb-public-body" data-premium-motion="public">
+    @include('platform.partials.premium-motion')
+
     <div class="fb-announcement-bar" role="note" aria-label="Platform status">
         <strong>Live now:</strong>
         Production, shipping, customer growth, and Shopify workflows in one place.
@@ -36,8 +38,8 @@
             </nav>
         </div>
 
-        <header id="top" class="fb-hero" aria-label="Hero section">
-            <div>
+        <header id="top" class="fb-hero" aria-label="Hero section" data-reveal>
+            <div data-depth="10">
                 <h1>Production, shipping, and wholesale in one place.</h1>
                 <p>
                     Track orders, inventory, fulfillment, and customer growth from one place built for real operations.
@@ -50,27 +52,27 @@
                 </div>
             </div>
 
-            <aside class="fb-hero-kpis" aria-label="Platform highlights">
-                <article class="fb-kpi">
+            <aside class="fb-hero-kpis" aria-label="Platform highlights" data-depth="16" data-premium-surface>
+                <article class="fb-kpi" data-premium-surface>
                     <span class="fb-kpi-label">Shopify Embedded</span>
                     <span class="fb-kpi-value">Live</span>
                 </article>
-                <article class="fb-kpi">
+                <article class="fb-kpi" data-premium-surface>
                     <span class="fb-kpi-label">Rewards</span>
                     <span class="fb-kpi-value">Rewards</span>
                 </article>
-                <article class="fb-kpi">
+                <article class="fb-kpi" data-premium-surface>
                     <span class="fb-kpi-label">Plans</span>
                     <span class="fb-kpi-value">Starter / Growth / Pro</span>
                 </article>
-                <article class="fb-kpi">
+                <article class="fb-kpi" data-premium-surface>
                     <span class="fb-kpi-label">Deployment Model</span>
                     <span class="fb-kpi-value">Public + Landlord + Tenant</span>
                 </article>
             </aside>
         </header>
 
-        <section class="fb-section" aria-label="Trust and social proof">
+        <section class="fb-section" aria-label="Trust and social proof" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Built for Real Operations</p>
                 <h2>Reliable from login to fulfillment.</h2>
@@ -87,7 +89,7 @@
             </div>
         </section>
 
-        <section id="product" class="fb-section" aria-label="Product overview">
+        <section id="product" class="fb-section" aria-label="Product overview" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Product Overview</p>
                 <h2>One platform for operations and customer growth.</h2>
@@ -123,7 +125,7 @@
             </div>
         </section>
 
-        <section class="fb-section" aria-label="Feature grid">
+        <section class="fb-section" aria-label="Feature grid" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Capabilities</p>
                 <h2>Clear modules your team can scan quickly.</h2>
@@ -140,7 +142,7 @@
             </div>
         </section>
 
-        <section id="workflows" class="fb-section" aria-label="Workflow and process section">
+        <section id="workflows" class="fb-section" aria-label="Workflow and process section" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">How It Works</p>
                 <h2>From setup to daily execution.</h2>
@@ -162,7 +164,7 @@
             </div>
         </section>
 
-        <section class="fb-section" aria-label="Product preview section">
+        <section class="fb-section" aria-label="Product preview section" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Product Preview</p>
                 <h2>A clear interface built for operators.</h2>
@@ -184,7 +186,7 @@
             </article>
         </section>
 
-        <section id="outcomes" class="fb-section" aria-label="Outcomes and ROI section">
+        <section id="outcomes" class="fb-section" aria-label="Outcomes and ROI section" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Outcomes</p>
                 <h2>Fewer handoffs. Faster execution.</h2>
@@ -196,7 +198,7 @@
             </div>
         </section>
 
-        <section class="fb-section" aria-label="Testimonials and proof section">
+        <section class="fb-section" aria-label="Testimonials and proof section" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Proof</p>
                 <h2>Built for teams that ship every day.</h2>
@@ -213,7 +215,7 @@
             </div>
         </section>
 
-        <section id="security" class="fb-section" aria-label="Security and reliability section">
+        <section id="security" class="fb-section" aria-label="Security and reliability section" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Security and Reliability</p>
                 <h2>Operational controls you can trust.</h2>
@@ -225,7 +227,7 @@
             </div>
         </section>
 
-        <section id="faq" class="fb-section" aria-label="FAQ section">
+        <section id="faq" class="fb-section" aria-label="FAQ section" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">FAQ</p>
                 <h2>Common rollout questions.</h2>
@@ -247,7 +249,7 @@
         </section>
 
         @if($planCards !== [])
-            <section class="fb-section" aria-label="Plan summary section">
+            <section class="fb-section" aria-label="Plan summary section" data-reveal>
                 <div class="fb-section-header">
                     <p class="fb-section-kicker">Plans</p>
                     <h2>Plans built around operating scope.</h2>
@@ -264,8 +266,8 @@
             </section>
         @endif
 
-        <section class="fb-section" aria-label="Final call to action">
-            <div class="fb-final-cta">
+        <section class="fb-section" aria-label="Final call to action" data-reveal>
+            <div class="fb-final-cta" data-premium-surface>
                 <h2>Run operations from one place.</h2>
                 <p>Keep Shopify workflows strong while your team scales production, fulfillment, and customer growth.</p>
                 <div class="fb-hero-cta">
