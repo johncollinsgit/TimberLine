@@ -9,7 +9,11 @@ use App\Models\TenantCandleCashRewardOverride;
 use App\Models\TenantCandleCashTaskOverride;
 use App\Models\TenantMarketingSetting;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\TenantRewardsExportService;
+use App\Services\Marketing\TenantRewardsPolicyAuditService;
 use App\Services\Marketing\TenantRewardsPolicyService;
+use App\Services\Marketing\TenantRewardsReminderDispatchService;
+use App\Services\Marketing\TenantRewardsReminderLogService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -20,7 +24,11 @@ class ShopifyEmbeddedRewardsService
 {
     public function __construct(
         protected CandleCashService $candleCashService,
-        protected TenantRewardsPolicyService $tenantRewardsPolicyService
+        protected TenantRewardsPolicyService $tenantRewardsPolicyService,
+        protected TenantRewardsReminderDispatchService $tenantRewardsReminderDispatchService,
+        protected TenantRewardsReminderLogService $tenantRewardsReminderLogService,
+        protected TenantRewardsPolicyAuditService $tenantRewardsPolicyAuditService,
+        protected TenantRewardsExportService $tenantRewardsExportService
     ) {
     }
 
@@ -82,6 +90,189 @@ class ShopifyEmbeddedRewardsService
     public function updatePolicy(int $tenantId, array $payload, array $context = []): array
     {
         return $this->tenantRewardsPolicyService->update($tenantId, $payload, $context);
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function reviewPolicy(int $tenantId, array $payload, array $context = []): array
+    {
+        return $this->tenantRewardsPolicyService->review($tenantId, $payload, $context);
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function applyAlphaDefaults(int $tenantId, array $context = []): array
+    {
+        return $this->tenantRewardsPolicyService->applyAlphaDefaults($tenantId, $context);
+    }
+
+    /**
+     * @param  array<string,mixed>  $filters
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function explainReminder(int $tenantId, array $filters, array $context = []): array
+    {
+        $policy = $this->tenantRewardsPolicyService->resolve($tenantId, $context);
+        $result = $this->tenantRewardsReminderDispatchService->explainReward($tenantId, $policy, $filters);
+        $reason = trim((string) ($filters['reason'] ?? 'Explain reminder timing'));
+
+        $this->tenantRewardsPolicyAuditService->recordSupportAction(
+            tenantId: $tenantId,
+            actionType: 'tenant_rewards_reminder_explain',
+            reason: $reason,
+            targetId: (string) ($filters['reward_identifier'] ?? $filters['marketing_profile_id'] ?? 'reminder'),
+            context: [
+                ...$context,
+                'policy_version' => $result['policy_version'] ?? data_get($policy, 'versioning.current_version', 0),
+                'reward_identifier' => $filters['reward_identifier'] ?? null,
+                'marketing_profile_id' => $filters['marketing_profile_id'] ?? $filters['profile_id'] ?? null,
+                'channel' => $filters['channel'] ?? null,
+                'timing_days_before_expiration' => $filters['timing_days_before_expiration'] ?? $filters['timing_days'] ?? null,
+            ],
+            result: [
+                'policy_version' => $result['policy_version'] ?? data_get($policy, 'versioning.current_version', 0),
+                'item_count' => count((array) ($result['items'] ?? [])),
+                'status' => $result['status'] ?? 'ok',
+            ]
+        );
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string,mixed>  $filters
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function reminderHistoryForCustomer(int $tenantId, int $marketingProfileId, array $filters = [], array $context = []): array
+    {
+        $rows = $this->tenantRewardsReminderLogService->historyForCustomer($tenantId, $marketingProfileId, $filters, 250);
+        $reason = trim((string) ($filters['reason'] ?? 'View reminder history'));
+
+        $this->tenantRewardsPolicyAuditService->recordSupportAction(
+            tenantId: $tenantId,
+            actionType: 'tenant_rewards_reminder_customer_history',
+            reason: $reason,
+            targetId: (string) $marketingProfileId,
+            context: [
+                ...$context,
+                'marketing_profile_id' => $marketingProfileId,
+                'channel' => $filters['channel'] ?? null,
+            ],
+            result: [
+                'row_count' => count($rows),
+            ]
+        );
+
+        return [
+            'tenant_id' => $tenantId,
+            'marketing_profile_id' => $marketingProfileId,
+            'count' => count($rows),
+            'items' => $rows,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $filters
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function requeueReminder(int $tenantId, array $filters, array $context = []): array
+    {
+        $policy = $this->tenantRewardsPolicyService->resolve($tenantId, $context);
+        $reason = trim((string) ($filters['reason'] ?? 'Manual reminder requeue'));
+        $result = $this->tenantRewardsReminderDispatchService->queueDueReminders($tenantId, $policy, [
+            ...$filters,
+            'policy_version' => data_get($policy, 'versioning.current_version', 0),
+            'actor_user_id' => $context['actor_user_id'] ?? null,
+            'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+            'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
+            'reason' => $reason,
+            'batch_size' => 1,
+        ]);
+
+        $this->tenantRewardsPolicyAuditService->recordSupportAction(
+            tenantId: $tenantId,
+            actionType: 'tenant_rewards_reminder_requeue',
+            reason: $reason,
+            targetId: (string) ($filters['reward_identifier'] ?? $filters['marketing_profile_id'] ?? 'reminder'),
+            context: [
+                ...$context,
+                'policy_version' => $result['policy_version'] ?? data_get($policy, 'versioning.current_version', 0),
+                'reward_identifier' => $filters['reward_identifier'] ?? null,
+                'marketing_profile_id' => $filters['marketing_profile_id'] ?? $filters['profile_id'] ?? null,
+                'channel' => $filters['channel'] ?? null,
+                'timing_days_before_expiration' => $filters['timing_days_before_expiration'] ?? $filters['timing_days'] ?? null,
+            ],
+            result: [
+                'policy_version' => $result['policy_version'] ?? data_get($policy, 'versioning.current_version', 0),
+                'queued_count' => $result['queued_count'] ?? 0,
+                'remaining_due_count' => $result['remaining_due_count'] ?? 0,
+            ]
+        );
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string,mixed>  $filters
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function markReminderSkipped(int $tenantId, array $filters, array $context = []): array
+    {
+        $policy = $this->tenantRewardsPolicyService->resolve($tenantId, $context);
+        $reason = trim((string) ($filters['reason'] ?? 'Manual reminder skip'));
+        $result = $this->tenantRewardsReminderDispatchService->processTenant($tenantId, $policy, [
+            'reward_identifier' => $filters['reward_identifier'] ?? null,
+            'marketing_profile_id' => $filters['marketing_profile_id'] ?? $filters['profile_id'] ?? null,
+            'channel' => $filters['channel'] ?? null,
+            'timing_days_before_expiration' => $filters['timing_days_before_expiration'] ?? $filters['timing_days'] ?? null,
+            'limit' => 1,
+            'mark_skipped' => $reason,
+            'policy_version' => data_get($policy, 'versioning.current_version', 0),
+            'include_content' => false,
+        ]);
+
+        $this->tenantRewardsPolicyAuditService->recordSupportAction(
+            tenantId: $tenantId,
+            actionType: 'tenant_rewards_reminder_mark_skipped',
+            reason: $reason,
+            targetId: (string) ($filters['reward_identifier'] ?? $filters['marketing_profile_id'] ?? 'reminder'),
+            context: [
+                ...$context,
+                'policy_version' => data_get($policy, 'versioning.current_version', 0),
+                'reward_identifier' => $filters['reward_identifier'] ?? null,
+                'marketing_profile_id' => $filters['marketing_profile_id'] ?? $filters['profile_id'] ?? null,
+                'channel' => $filters['channel'] ?? null,
+                'timing_days_before_expiration' => $filters['timing_days_before_expiration'] ?? $filters['timing_days'] ?? null,
+            ],
+            result: [
+                'policy_version' => data_get($policy, 'versioning.current_version', 0),
+                'skipped_count' => data_get($result, 'summary.skipped_count', 0),
+                'schedule_skip_count' => data_get($result, 'summary.schedule_skip_count', 0),
+            ]
+        );
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string,mixed>  $filters
+     * @param  array<string,mixed>  $context
+     * @return array{columns:array<int,string>,rows:array<int,array<string,mixed>>,filename:string}
+     */
+    public function exportData(string $type, int $tenantId, array $filters = [], array $context = []): array
+    {
+        $policy = $this->tenantRewardsPolicyService->resolve($tenantId, $context);
+
+        return $this->tenantRewardsExportService->build($type, $tenantId, $policy, $filters);
     }
 
     /**

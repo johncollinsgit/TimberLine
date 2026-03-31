@@ -47,3 +47,15 @@ Schedule::command('integration-health:prune')
     ->dailyAt('02:20')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+Schedule::command('marketing:process-tenant-rewards-reminders', [
+    '--limit' => 200,
+])
+    ->hourlyAt(10)
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
+Schedule::command('marketing:send-tenant-rewards-finance-reports')
+    ->dailyAt('06:10')
+    ->withoutOverlapping(120)
+    ->runInBackground();

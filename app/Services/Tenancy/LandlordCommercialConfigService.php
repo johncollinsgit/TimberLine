@@ -2,7 +2,9 @@
 
 namespace App\Services\Tenancy;
 
+use App\Models\CandleCashTransaction;
 use App\Models\LandlordCatalogEntry;
+use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
@@ -309,11 +311,28 @@ class LandlordCommercialConfigService
         $sms = Schema::hasTable('marketing_sms_deliveries')
             ? (int) DB::table('marketing_sms_deliveries')->where('tenant_id', $tenantId)->count()
             : 0;
+        $rewardsIssued = Schema::hasTable('candle_cash_transactions') && Schema::hasTable('marketing_profiles')
+            ? CandleCashTransaction::query()
+                ->whereHas('profile', function ($query) use ($tenantId): void {
+                    $query->where('marketing_profiles.tenant_id', $tenantId);
+                })
+                ->where('candle_cash_delta', '>', 0)
+                ->count()
+            : 0;
+        $rewardReminderSends = Schema::hasTable('marketing_automation_events')
+            ? MarketingAutomationEvent::query()
+                ->where('tenant_id', $tenantId)
+                ->where('trigger_key', 'tenant_rewards_expiration_reminder')
+                ->where('status', 'sent')
+                ->count()
+            : 0;
 
         $values = [
             'contact_count' => (int) $contacts,
             'email_usage' => (int) $emails,
             'sms_usage' => (int) $sms,
+            'rewards_issued' => (int) $rewardsIssued,
+            'reward_reminder_sends' => (int) $rewardReminderSends,
         ];
 
         $limits = $this->tenantIncludedUsageLimits($tenantId);

@@ -35,6 +35,14 @@ return [
             'label' => 'Email Usage',
             'track_only' => true,
         ],
+        'rewards_issued' => [
+            'label' => 'Rewards Issued',
+            'track_only' => true,
+        ],
+        'reward_reminder_sends' => [
+            'label' => 'Reward Reminder Sends',
+            'track_only' => true,
+        ],
     ],
 
     /*
@@ -504,6 +512,14 @@ return [
             ],
             'email_usage' => [
                 'meter_lookup_key' => 'usage_email',
+                'billing_mode' => 'track_only',
+            ],
+            'rewards_issued' => [
+                'meter_lookup_key' => 'usage_rewards_issued',
+                'billing_mode' => 'track_only',
+            ],
+            'reward_reminder_sends' => [
+                'meter_lookup_key' => 'usage_reward_reminders',
                 'billing_mode' => 'track_only',
             ],
         ],

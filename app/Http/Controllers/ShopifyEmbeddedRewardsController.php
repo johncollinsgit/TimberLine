@@ -319,6 +319,17 @@ class ShopifyEmbeddedRewardsController extends Controller
             [
                 'rewardsPolicyEndpoint' => route('shopify.app.api.rewards.policy'),
                 'rewardsPolicyUpdateEndpoint' => route('shopify.app.api.rewards.policy.update'),
+                'rewardsPolicyReviewEndpoint' => route('shopify.app.api.rewards.policy.review'),
+                'rewardsPolicyAlphaDefaultsEndpoint' => route('shopify.app.api.rewards.policy.defaults.alpha'),
+                'rewardsPolicyReminderDebugEndpoint' => route('shopify.app.api.rewards.policy.reminders.explain'),
+                'rewardsPolicyReminderHistoryEndpoint' => route('shopify.app.api.rewards.policy.reminders.customer-history'),
+                'rewardsPolicyReminderRequeueEndpoint' => route('shopify.app.api.rewards.policy.reminders.requeue'),
+                'rewardsPolicyReminderSkipEndpoint' => route('shopify.app.api.rewards.policy.reminders.skip'),
+                'rewardsPolicyReminderExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'reminder_history'], false),
+                'rewardsPolicyIssuanceExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'reward_issuance'], false),
+                'rewardsPolicyRedemptionExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'reward_redemption'], false),
+                'rewardsPolicyExpiringExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'expiring_rewards'], false),
+                'rewardsPolicyFinanceExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'finance_summary'], false),
                 'rewardsPolicyEditable' => (bool) ($configState['editable'] ?? false),
             ]
         );
@@ -351,6 +362,7 @@ class ShopifyEmbeddedRewardsController extends Controller
         $policyContext = [
             'editable' => (bool) ($configState['editable'] ?? false),
             'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
         ];
         $payload = $rewardsService->payload($tenantId);
         $payload['meta']['policy'] = $rewardsService->policy($tenantId, $policyContext);
@@ -390,9 +402,21 @@ class ShopifyEmbeddedRewardsController extends Controller
             ]);
         }
 
+        try {
+            $reportFilters = $this->validatedReminderReportingFilters($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Reminder reporting filters are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
         $policy = $rewardsService->policy($tenantId, [
             'editable' => (bool) ($configState['editable'] ?? false),
             'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+            'report_filters' => $reportFilters,
         ]);
 
         return response()->json([
@@ -434,23 +458,465 @@ class ShopifyEmbeddedRewardsController extends Controller
 
         try {
             $payload = $this->validatePolicyPayload($request);
+            $requestedAutomationMode = data_get($payload, 'automation_and_reporting.automation_mode');
+            if ($requestedAutomationMode !== null) {
+                $currentPolicy = $rewardsService->policy($tenantId, [
+                    'editable' => true,
+                    'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+                    'actor_user' => $request->user(),
+                ]);
+                $currentAutomationMode = (string) data_get($currentPolicy, 'automation_and_reporting.automation_mode', 'manual');
+
+                if (strtolower(trim((string) $requestedAutomationMode)) !== strtolower(trim($currentAutomationMode))) {
+                    if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'automation')) {
+                        return $permissionResponse;
+                    }
+                }
+            }
+
+            if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'publish')) {
+                return $permissionResponse;
+            }
+
             $policy = $rewardsService->updatePolicy($tenantId, $payload, [
                 'editable' => true,
                 'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+                'actor_user' => $request->user(),
+                'actor_user_id' => optional($request->user())->id,
+                'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+                'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
             ]);
         } catch (ValidationException $exception) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Rewards policy could not be saved.',
+                'message' => 'Program settings could not be saved.',
                 'errors' => $exception->errors(),
             ], 422);
         }
 
         return response()->json([
             'ok' => true,
-            'message' => 'Rewards policy saved.',
+            'message' => 'Program settings saved.',
             'data' => $policy,
         ]);
+    }
+
+    public function reviewPolicy(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'edit')) {
+            return $permissionResponse;
+        }
+
+        $payload = $this->validatePolicyPayload($request);
+        $review = $rewardsService->reviewPolicy($tenantId, $payload, [
+            'editable' => true,
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Review preview generated.',
+            'data' => $review,
+        ]);
+    }
+
+    public function applyAlphaDefaults(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'publish')) {
+            return $permissionResponse;
+        }
+
+        try {
+            $policy = $rewardsService->applyAlphaDefaults($tenantId, [
+                'editable' => true,
+                'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+                'actor_user' => $request->user(),
+                'actor_user_id' => optional($request->user())->id,
+                'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+                'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
+            ]);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Alpha starter settings could not be applied.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Alpha starter settings applied.',
+            'data' => $policy,
+        ]);
+    }
+
+    public function explainReminder(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        try {
+            $filters = $this->validatedReminderSupportPayload($request, false);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Reminder lookup details are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'support')) {
+            return $permissionResponse;
+        }
+
+        $result = $rewardsService->explainReminder($tenantId, $filters, [
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+            'actor_user_id' => optional($request->user())->id,
+            'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+            'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Reminder explanation ready.',
+            'data' => $result,
+        ]);
+    }
+
+    public function reminderCustomerHistory(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        try {
+            $filters = $this->validatedReminderReportingFilters($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Reminder history filters are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $marketingProfileId = is_numeric($request->query('marketing_profile_id'))
+            ? max(0, (int) $request->query('marketing_profile_id'))
+            : 0;
+
+        if ($marketingProfileId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Customer reminder history needs a customer id.',
+                'errors' => [
+                    'marketing_profile_id' => ['A customer id is required to load reminder history.'],
+                ],
+            ], 422);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'support')) {
+            return $permissionResponse;
+        }
+
+        $result = $rewardsService->reminderHistoryForCustomer($tenantId, $marketingProfileId, $filters, [
+            'actor_user' => $request->user(),
+            'actor_user_id' => optional($request->user())->id,
+            'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+            'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Customer reminder history loaded.',
+            'data' => $result,
+        ]);
+    }
+
+    public function requeueReminder(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'support')) {
+            return $permissionResponse;
+        }
+
+        try {
+            $filters = $this->validatedReminderSupportPayload($request, true);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Reminder requeue details are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $result = $rewardsService->requeueReminder($tenantId, $filters, [
+            'editable' => true,
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+            'actor_user_id' => optional($request->user())->id,
+            'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+            'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => ((int) ($result['queued_count'] ?? 0)) > 0
+                ? 'Reminder requeue requested.'
+                : 'No eligible due reminder matched that request.',
+            'data' => $result,
+        ]);
+    }
+
+    public function skipReminder(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'support')) {
+            return $permissionResponse;
+        }
+
+        try {
+            $filters = $this->validatedReminderSupportPayload($request, true);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Reminder skip details are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $result = $rewardsService->markReminderSkipped($tenantId, $filters, [
+            'editable' => true,
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+            'actor_user_id' => optional($request->user())->id,
+            'shopify_admin_user_id' => $context['shopify_admin_user_id'] ?? null,
+            'shopify_admin_session_id' => $context['shopify_admin_session_id'] ?? null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => ((int) data_get($result, 'summary.skipped_count', 0)) > 0
+                ? 'Reminder marked as skipped.'
+                : 'No due reminder matched that request.',
+            'data' => $result,
+        ]);
+    }
+
+    public function exportRewardsData(
+        string $type,
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): \Symfony\Component\HttpFoundation\Response {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        try {
+            $filters = $this->validatedReminderReportingFilters($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Rewards export filters are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $export = $rewardsService->exportData($type, $tenantId, $filters, [
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+        ]);
+
+        return $this->streamCsvExport(
+            columns: (array) ($export['columns'] ?? []),
+            rows: (array) ($export['rows'] ?? []),
+            filename: (string) ($export['filename'] ?? 'rewards-export.csv')
+        );
+    }
+
+    public function downloadSignedRewardsExport(
+        int $tenant,
+        string $type,
+        Request $request,
+        ShopifyEmbeddedRewardsService $rewardsService
+    ): \Symfony\Component\HttpFoundation\Response {
+        try {
+            $filters = $this->validatedReminderReportingFilters($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Rewards export filters are invalid.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $export = $rewardsService->exportData($type, $tenant, $filters, [
+            'editable' => false,
+            'sms_channel_enabled' => true,
+        ]);
+
+        return $this->streamCsvExport(
+            columns: (array) ($export['columns'] ?? []),
+            rows: (array) ($export['rows'] ?? []),
+            filename: (string) ($export['filename'] ?? 'rewards-export.csv')
+        );
     }
 
     public function updateEarnRule(
@@ -480,6 +946,10 @@ class ShopifyEmbeddedRewardsController extends Controller
 
         if (! ($configState['editable'] ?? false)) {
             return $this->blockedRewardsEditResponse($configState);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'publish')) {
+            return $permissionResponse;
         }
 
         try {
@@ -540,6 +1010,10 @@ class ShopifyEmbeddedRewardsController extends Controller
 
         if (! ($configState['editable'] ?? false)) {
             return $this->blockedRewardsEditResponse($configState);
+        }
+
+        if ($permissionResponse = $this->authorizeRewardsAction($request, $rewardsService, $tenantId, $configState, 'publish')) {
+            return $permissionResponse;
         }
 
         try {
@@ -726,6 +1200,8 @@ class ShopifyEmbeddedRewardsController extends Controller
             'customer_experience',
             'finance_and_safety',
             'access_state',
+            'automation_and_reporting',
+            'team_access',
         ];
 
         $payload = is_array($request->all()) ? $request->all() : [];
@@ -734,6 +1210,101 @@ class ShopifyEmbeddedRewardsController extends Controller
             ->only($sections)
             ->map(fn ($value): array => is_array($value) ? $value : [])
             ->all();
+    }
+
+    /**
+     * @return array{
+     *   date_from:?string,
+     *   date_to:?string,
+     *   channel:?string,
+     *   status:?string,
+     *   reward_type:?string,
+     *   activity_window_days:int,
+     *   upcoming_window_days:int,
+     *   expiring_soon_days:int
+     * }
+     */
+    protected function validatedReminderReportingFilters(Request $request): array
+    {
+        $validated = validator($request->query(), [
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
+            'channel' => ['nullable', 'in:email,sms'],
+            'status' => ['nullable', 'in:sent,skipped,failed,attempted,scheduled'],
+            'reward_type' => ['nullable', 'string', 'max:80'],
+            'activity_window_days' => ['nullable', 'integer', 'min:1', 'max:180'],
+            'upcoming_window_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'expiring_soon_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+        ])->validate();
+
+        $dateFrom = isset($validated['date_from']) ? CarbonImmutable::parse((string) $validated['date_from']) : null;
+        $dateTo = isset($validated['date_to']) ? CarbonImmutable::parse((string) $validated['date_to']) : null;
+
+        if ($dateFrom && $dateTo && $dateFrom->greaterThan($dateTo)) {
+            throw ValidationException::withMessages([
+                'date_from' => ['Start date must be on or before end date.'],
+            ]);
+        }
+
+        if ($dateFrom && $dateTo && $dateFrom->diffInDays($dateTo) > 366) {
+            throw ValidationException::withMessages([
+                'date_range' => ['Reminder reporting date range must be 366 days or less.'],
+            ]);
+        }
+
+        return [
+            'date_from' => isset($validated['date_from']) ? trim((string) $validated['date_from']) : null,
+            'date_to' => isset($validated['date_to']) ? trim((string) $validated['date_to']) : null,
+            'channel' => $this->nullableString($validated['channel'] ?? null),
+            'status' => $this->nullableString($validated['status'] ?? null),
+            'reward_type' => $this->nullableString($validated['reward_type'] ?? null),
+            'activity_window_days' => max(1, (int) ($validated['activity_window_days'] ?? 30)),
+            'upcoming_window_days' => max(1, (int) ($validated['upcoming_window_days'] ?? 7)),
+            'expiring_soon_days' => max(1, (int) ($validated['expiring_soon_days'] ?? 14)),
+        ];
+    }
+
+    /**
+     * @return array{
+     *   reward_identifier:?string,
+     *   marketing_profile_id:?int,
+     *   channel:?string,
+     *   timing_days_before_expiration:?int,
+     *   reason:?string
+     * }
+     */
+    protected function validatedReminderSupportPayload(Request $request, bool $requireReason): array
+    {
+        $validated = validator($request->all(), [
+            'reward_identifier' => ['nullable', 'string', 'max:160'],
+            'marketing_profile_id' => ['nullable', 'integer', 'min:1'],
+            'channel' => ['nullable', 'in:email,sms'],
+            'timing_days_before_expiration' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'reason' => $requireReason
+                ? ['required', 'string', 'max:240']
+                : ['nullable', 'string', 'max:240'],
+        ])->validate();
+
+        $rewardIdentifier = $this->nullableString($validated['reward_identifier'] ?? null);
+        $marketingProfileId = is_numeric($validated['marketing_profile_id'] ?? null)
+            ? max(1, (int) $validated['marketing_profile_id'])
+            : null;
+
+        if ($rewardIdentifier === null && $marketingProfileId === null) {
+            throw ValidationException::withMessages([
+                'reward_identifier' => ['Enter a reward id or a customer id before running this action.'],
+            ]);
+        }
+
+        return [
+            'reward_identifier' => $rewardIdentifier,
+            'marketing_profile_id' => $marketingProfileId,
+            'channel' => $this->nullableString($validated['channel'] ?? null),
+            'timing_days_before_expiration' => is_numeric($validated['timing_days_before_expiration'] ?? null)
+                ? max(0, (int) $validated['timing_days_before_expiration'])
+                : null,
+            'reason' => $this->nullableString($validated['reason'] ?? null),
+        ];
     }
 
     /**
@@ -833,6 +1404,44 @@ class ShopifyEmbeddedRewardsController extends Controller
             'compare_from' => isset($validated['compare_from']) ? trim((string) $validated['compare_from']) : null,
             'compare_to' => isset($validated['compare_to']) ? trim((string) $validated['compare_to']) : null,
         ];
+    }
+
+    /**
+     * @param  array<int,string>  $columns
+     * @param  array<int,array<string,mixed>>  $rows
+     */
+    protected function streamCsvExport(array $columns, array $rows, string $filename): \Symfony\Component\HttpFoundation\Response
+    {
+        return response()->streamDownload(function () use ($columns, $rows): void {
+            $stream = fopen('php://output', 'w');
+            if (! is_resource($stream)) {
+                return;
+            }
+
+            fputcsv($stream, $columns);
+            foreach ($rows as $row) {
+                $record = [];
+                foreach ($columns as $column) {
+                    $value = $row[$column] ?? '';
+                    if (is_bool($value)) {
+                        $record[] = $value ? 'true' : 'false';
+                        continue;
+                    }
+                    if (is_array($value)) {
+                        $record[] = json_encode($value);
+                        continue;
+                    }
+
+                    $record[] = is_scalar($value) || $value === null ? (string) ($value ?? '') : json_encode($value);
+                }
+
+                fputcsv($stream, $record);
+            }
+
+            fclose($stream);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     protected function invalidContextResponse(array $context): JsonResponse
@@ -967,6 +1576,42 @@ class ShopifyEmbeddedRewardsController extends Controller
             'status' => $status,
             'message' => (string) ($configState['message']
                 ?? 'Rewards settings are currently read-only for this tenant.'),
+        ], 403);
+    }
+
+    /**
+     * @param  array{editable?:bool,sms_channel_enabled?:bool}  $configState
+     */
+    protected function authorizeRewardsAction(
+        Request $request,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        int $tenantId,
+        array $configState,
+        string $action
+    ): ?JsonResponse {
+        if (! $request->user()) {
+            return null;
+        }
+
+        $policy = $rewardsService->policy($tenantId, [
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            'actor_user' => $request->user(),
+        ]);
+
+        if ((bool) data_get($policy, 'permissions.actions.'.$action.'.allowed', true)) {
+            return null;
+        }
+
+        return response()->json([
+            'ok' => false,
+            'status' => 'rewards_action_forbidden',
+            'message' => match ($action) {
+                'automation' => 'Your team role cannot switch rewards automation mode.',
+                'publish' => 'Your team role cannot publish live rewards changes.',
+                'support' => 'Your team role cannot use rewards reminder support tools.',
+                default => 'Your team role cannot edit these rewards settings.',
+            },
         ], 403);
     }
 

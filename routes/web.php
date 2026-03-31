@@ -792,6 +792,25 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::patch('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'updatePolicy'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.policy.update');
+        Route::post('/rewards/policy/review', [ShopifyEmbeddedRewardsController::class, 'reviewPolicy'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.policy.review');
+        Route::post('/rewards/policy/defaults/alpha', [ShopifyEmbeddedRewardsController::class, 'applyAlphaDefaults'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.policy.defaults.alpha');
+        Route::match(['GET', 'POST'], '/rewards/policy/reminders/explain', [ShopifyEmbeddedRewardsController::class, 'explainReminder'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.policy.reminders.explain');
+        Route::get('/rewards/policy/reminders/customer-history', [ShopifyEmbeddedRewardsController::class, 'reminderCustomerHistory'])
+            ->name('rewards.policy.reminders.customer-history');
+        Route::post('/rewards/policy/reminders/requeue', [ShopifyEmbeddedRewardsController::class, 'requeueReminder'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.policy.reminders.requeue');
+        Route::post('/rewards/policy/reminders/skip', [ShopifyEmbeddedRewardsController::class, 'skipReminder'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.policy.reminders.skip');
+        Route::get('/rewards/policy/exports/{type}', [ShopifyEmbeddedRewardsController::class, 'exportRewardsData'])
+            ->name('rewards.policy.exports');
         Route::get('/rewards/birthdays/analytics', [ShopifyEmbeddedRewardsController::class, 'birthdayAnalytics'])
             ->name('rewards.birthdays.analytics');
         Route::get('/rewards/birthdays/analytics/export', [ShopifyEmbeddedRewardsController::class, 'birthdayAnalyticsExport'])
@@ -849,5 +868,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/ui/preferences/sidebar-order', [UiPreferencesController::class, 'updateSidebarOrder'])->name('ui.preferences.sidebar-order');
     Route::post('/ui/preferences/theme', [UiPreferencesController::class, 'updateTheme'])->name('ui.preferences.theme');
 });
+
+Route::middleware('signed')
+    ->get('/rewards/policy/exports/signed/{tenant}/{type}', [ShopifyEmbeddedRewardsController::class, 'downloadSignedRewardsExport'])
+    ->name('rewards.policy.exports.signed');
 
 require __DIR__.'/settings.php';

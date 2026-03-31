@@ -261,6 +261,190 @@ class CandleCashEarnedAnalyticsService
     }
 
     /**
+     * @return array<int,array<string,mixed>>
+     */
+    public function outstandingRewardBuckets(?int $tenantId = null): array
+    {
+        $state = $this->currentLedgerState($tenantId);
+        $outstandingByProfile = (array) ($state['outstanding_by_profile'] ?? []);
+        $profileIds = collect(array_keys($outstandingByProfile))
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->values();
+
+        if ($profileIds->isEmpty()) {
+            return [];
+        }
+
+        $profiles = MarketingProfile::query()
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('marketing_profiles.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('marketing_profiles.tenant_id', $tenantId)
+            )
+            ->whereIn('id', $profileIds->all())
+            ->get([
+                'id',
+                'tenant_id',
+                'first_name',
+                'last_name',
+                'email',
+                'normalized_email',
+                'phone',
+                'normalized_phone',
+                'accepts_email_marketing',
+                'accepts_sms_marketing',
+            ])
+            ->keyBy('id');
+
+        $rows = [];
+        foreach ($profileIds as $profileId) {
+            /** @var MarketingProfile|null $profile */
+            $profile = $profiles->get($profileId);
+            if (! $profile) {
+                continue;
+            }
+
+            $tenantForProfile = isset($profile->tenant_id) ? (int) $profile->tenant_id : $tenantId;
+            $email = trim((string) ($profile->normalized_email ?: $profile->email ?: ''));
+            $phone = trim((string) ($profile->normalized_phone ?: $profile->phone ?: ''));
+            $name = trim((string) (($profile->first_name ?? '').' '.($profile->last_name ?? '')));
+
+            foreach ((array) data_get($outstandingByProfile, $profileId.'.buckets', []) as $bucket) {
+                if (! is_array($bucket)) {
+                    continue;
+                }
+
+                $transactionId = (int) ($bucket['transaction_id'] ?? 0);
+                $remainingPoints = CandleCashMeasurement::normalizeStoredAmount($bucket['remaining_points'] ?? 0);
+                if ($transactionId <= 0 || $remainingPoints <= 0) {
+                    continue;
+                }
+
+                $amount = round($this->candleCashService->amountFromPoints($remainingPoints), 2);
+                $earnedAt = $bucket['earned_at'] ?? null;
+
+                $rows[] = [
+                    'reward_identifier' => 'earned-bucket:tx:'.$transactionId,
+                    'transaction_id' => $transactionId,
+                    'tenant_id' => $tenantForProfile,
+                    'marketing_profile_id' => $profileId,
+                    'reward_code' => null,
+                    'status' => 'issued',
+                    'first_name' => trim((string) ($profile->first_name ?? '')),
+                    'last_name' => trim((string) ($profile->last_name ?? '')),
+                    'customer_name' => $name !== '' ? $name : 'Customer #'.$profileId,
+                    'email' => $email !== '' ? $email : null,
+                    'phone' => $phone !== '' ? $phone : null,
+                    'accepts_email_marketing' => (bool) ($profile->accepts_email_marketing ?? false),
+                    'accepts_sms_marketing' => (bool) ($profile->accepts_sms_marketing ?? false),
+                    'email_contactable' => $email !== '',
+                    'sms_contactable' => $phone !== '' && (bool) ($profile->accepts_sms_marketing ?? false),
+                    'earned_at' => $earnedAt instanceof CarbonImmutable ? $earnedAt->toIso8601String() : null,
+                    'expires_at' => null,
+                    'remaining_points' => $remainingPoints,
+                    'remaining_candle_cash' => $amount,
+                    'remaining_amount' => $amount,
+                    'formatted_remaining_amount' => $this->formatCurrency($amount),
+                    'source_key' => (string) ($bucket['source_key'] ?? 'other_earn'),
+                    'source_label' => (string) ($bucket['source_label'] ?? 'Reward earn'),
+                    'source_definition' => (string) ($bucket['source_definition'] ?? ''),
+                ];
+            }
+        }
+
+        return collect($rows)
+            ->sortBy([
+                ['earned_at', 'asc'],
+                ['transaction_id', 'asc'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function outstandingRewardBucket(?int $tenantId, string $rewardIdentifier): ?array
+    {
+        $identifier = strtolower(trim($rewardIdentifier));
+        if ($identifier === '') {
+            return null;
+        }
+
+        return collect($this->outstandingRewardBuckets($tenantId))
+            ->first(fn (array $row): bool => strtolower(trim((string) ($row['reward_identifier'] ?? ''))) === $identifier);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function rewardContext(?int $tenantId, string $rewardIdentifier): ?array
+    {
+        $identifier = strtolower(trim($rewardIdentifier));
+        if ($identifier === '') {
+            return null;
+        }
+
+        $current = $this->outstandingRewardBucket($tenantId, $identifier);
+        if (is_array($current)) {
+            return [
+                'reward_identifier' => $current['reward_identifier'] ?? null,
+                'transaction_id' => $current['transaction_id'] ?? null,
+                'marketing_profile_id' => $current['marketing_profile_id'] ?? null,
+                'source_key' => $current['source_key'] ?? null,
+                'source_label' => $current['source_label'] ?? null,
+                'earned_at' => $current['earned_at'] ?? null,
+                'amount' => $current['remaining_amount'] ?? $current['remaining_candle_cash'] ?? null,
+            ];
+        }
+
+        if (! preg_match('/^earned-bucket:tx:(\d+)$/', $identifier, $matches)) {
+            return null;
+        }
+
+        $transactionId = (int) ($matches[1] ?? 0);
+        if ($transactionId <= 0) {
+            return null;
+        }
+
+        $transaction = CandleCashTransaction::query()
+            ->with('profile:id,tenant_id')
+            ->whereKey($transactionId)
+            ->first();
+
+        if (! $transaction) {
+            return null;
+        }
+
+        $profileTenantId = $transaction->profile?->tenant_id;
+        if ($tenantId === null) {
+            if ($profileTenantId !== null) {
+                return null;
+            }
+        } elseif ((int) $profileTenantId !== $tenantId) {
+            return null;
+        }
+
+        $taskHandle = $this->taskHandlesByTransactionId(collect([$transaction]))[(int) $transaction->id] ?? null;
+        $sourceKey = $this->normalizer->classifyEarnSource($transaction, $taskHandle);
+        $sourceDefinition = (array) ($this->normalizer->sourceDefinitions()[$sourceKey] ?? []);
+        $amount = round($this->candleCashService->amountFromPoints(
+            CandleCashMeasurement::normalizeStoredAmount($transaction->candle_cash_delta ?? 0)
+        ), 2);
+
+        return [
+            'reward_identifier' => $identifier,
+            'transaction_id' => (int) $transaction->id,
+            'marketing_profile_id' => (int) ($transaction->marketing_profile_id ?? 0),
+            'source_key' => $sourceKey,
+            'source_label' => (string) ($sourceDefinition['label'] ?? ucwords(str_replace('_', ' ', $sourceKey))),
+            'earned_at' => $this->timestampForTransaction($transaction)->toIso8601String(),
+            'amount' => $amount,
+        ];
+    }
+
+    /**
      * @param  Collection<int,array<string,mixed>>  $windowEvents
      * @param  array<int,array<int,CarbonImmutable>>  $redeemedAtByProfile
      * @param  array<int,array<int,CarbonImmutable>>  $debitAtByProfile

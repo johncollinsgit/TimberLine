@@ -557,6 +557,8 @@ Temporarily disable deploy:
 - Embedded Shopify API now includes tenant policy endpoints:
   - `GET /shopify/app/api/rewards/policy`
   - `PATCH /shopify/app/api/rewards/policy`
+  - `POST /shopify/app/api/rewards/policy/review`
+  - `POST /shopify/app/api/rewards/policy/defaults/alpha`
 - Writes are entitlement-aware and fail closed:
   - eligible tenants can edit policy
   - non-eligible tenants are read-only/upsell
@@ -565,6 +567,114 @@ Temporarily disable deploy:
   - `candle_cash_notification_config`
   - `candle_cash_finance_config`
   - `candle_cash_access_state`
+- Phase 2 policy safety and operator UX additions:
+  - field control metadata (`editable`, `editable_with_warning`, `restricted`) returned from service layer
+  - plain-English summary generation via `TenantRewardsPolicySummaryService`
+  - business warning model with `errors` / `warnings` / `info`
+  - customer message previews for SMS + email rendered from live policy
+  - lightweight policy versioning in tenant settings (`candle_cash_policy_version_meta`, `candle_cash_policy_versions`)
+  - append-only audit history for policy changes via existing operator action audit model
+  - review-and-publish flow in embedded rewards notifications UI
+  - alpha starter defaults path (`Candle Cash`, second-order `$10`, minimum spend `$50`, 90-day expiry)
+- Phase 3 launch-readiness additions:
+  - tenant reminder scheduling via `TenantRewardsReminderScheduleService`
+  - reminder event history reusing `marketing_automation_events` through `TenantRewardsReminderLogService`
+  - launch readiness evaluation via `TenantRewardsPolicyReadinessService`
+  - separate email vs text reminder timing (`email_reminder_offsets_days`, `sms_reminder_offsets_days`) with legacy `reminder_offsets_days` backward compatibility
+  - policy-version traceability included in reminder previews/history (`runtime_traceability`, reminder event `policy_version`)
+  - live readiness panel, publish change preview, and customer reminder history in the embedded rewards notifications workspace
+  - Alpha starter confirmation summary showing the active recommended setup in plain business language
+- Phase 4 operational additions:
+  - live reminder dispatch orchestration via `TenantRewardsReminderDispatchService` using the existing SendGrid and Twilio delivery paths
+  - hourly reminder processor command: `php artisan marketing:process-tenant-rewards-reminders`
+  - reminder activity + analytics reporting in the embedded rewards workspace via `TenantRewardsReminderAnalyticsService`
+  - rewards reminder outcomes logged as sent / failed / skipped with version-aware reminder keys in `marketing_automation_events`
+  - stronger merchant-managed exclusions for limited releases, collections, product tags, and specific products
+  - clearer channel strategy controls (`online_only`, `show_issued_online_redeemed`, `exclude_shows`) with unsupported combinations shown as unavailable instead of enabled
+  - Alpha launch checklist, launch summary, and recommended next steps in plain business language
+  - operator-safe support actions through the reminder processor command (`--dry-run`, `--reward`, `--profile`, `--channel`, `--mark-skipped`, `--force`)
+- Phase 5 control, observability, and finance additions:
+  - reminder explainability/debug support built on the existing schedule + dispatch services, exposed through embedded rewards support actions
+  - finance visibility via `TenantRewardsFinanceSummaryService`:
+    - estimated outstanding rewards liability
+    - issued vs redeemed vs unredeemed value
+    - breakage estimate
+    - realized discount value
+    - expiring-soon reward value
+  - CSV exports for:
+    - reminder history
+    - reward issuance
+    - reward redemption
+    - expiring rewards
+    - finance summary
+  - filterable reminder reporting in the embedded rewards workspace:
+    - date range
+    - channel
+    - status
+    - reward type
+  - launch/readiness health signals such as:
+    - SMS not configured
+    - no reminders sent recently
+    - high skip rate
+    - large expiring reward volume
+  - lightweight impact view showing projected reminder volume, expiring rewards, and redemption exposure from recent data
+  - optional queued reminder dispatch hardening:
+    - `php artisan marketing:process-tenant-rewards-reminders --queue`
+    - queued job `DispatchTenantRewardsReminderJob`
+    - idempotent unique reminder jobs by tenant/reward/channel/timing/version
+    - safe retry/backoff without duplicating reminder sends
+  - narrow support tooling in the existing embedded rewards workflow:
+    - explain a specific reminder outcome
+    - load reminder history for one customer
+    - requeue one eligible reminder
+    - mark one reminder as skipped with a reason
+  - support/operator actions remain append-only and traceable through the existing landlord operator audit model
+- Phase 6 automation, trust, and monetization readiness additions:
+  - tenant operations/runtime state via `TenantRewardsOperationsService` using the existing tenant settings layer:
+    - `candle_cash_operations_config`
+    - `candle_cash_team_access_config`
+    - `candle_cash_automation_state`
+  - automatic reminder processing status for eligible live tenants:
+    - automation mode (`automatic` / `manual`)
+    - default mode is `manual` until a tenant explicitly switches automation on
+    - last run time
+    - last success time
+    - last failure time
+    - failure count
+    - scheduler respects tenant automation mode so manual tenants are skipped by cron
+    - "Automation is running" / "Automation is off" / "Automation needs attention" messaging in the rewards workspace
+  - scheduled finance-report delivery reusing the existing export + email stack:
+    - `php artisan marketing:send-tenant-rewards-finance-reports`
+    - daily / weekly finance snapshots
+    - signed CSV download links included in scheduled finance emails
+  - finance exports now include a signed-download path for scheduled delivery:
+    - `GET /rewards/policy/exports/signed/{tenant}/{type}`
+  - alert surfacing built on existing reminder reporting + finance summary state:
+    - no reminders sent in the configured window while automation mode is automatic
+    - high skip rate
+    - failure spike
+    - large expiring reward volume
+    - liability above threshold
+    - optional alert email delivery through the existing SendGrid path
+  - lightweight team access rules now cover:
+    - who can edit program settings
+    - who can publish live changes
+    - who can switch automation mode
+    - who can use reminder support tools
+  - lightweight team access controls in the existing rewards workspace:
+    - who can edit program settings
+    - who can publish live changes
+    - who can use reminder support tools
+  - module-usage visibility for commercial readiness:
+    - rewards module enabled state
+    - rewards issued
+    - rewards reminders sent
+    - included-limit watch/high states where limit data is available
+  - lightweight "What happens if..." simulation from recent tenant data:
+    - reward value change impact
+    - expiration change impact
+    - projected reminder volume
+    - near-term expiring reward value
 - Architecture and rollout details: `docs/architecture/tenant-rewards-management-layer.md`.
 
 ## Email Provider-Context Reporting
