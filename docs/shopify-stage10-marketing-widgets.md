@@ -123,8 +123,10 @@ Observed live state on 2026-03-31:
   - `product-reviews/status` returns `button_text = "Write a review"` and `reward_amount = "1.00"`
   - guest wishlist add/status/remove succeeds through the live app proxy
 - The Shopify live theme path at `modernforestry.myshopify.com` is serving the cutover theme (`159310446851`) and no longer renders or requests Growave runtime assets.
-- The remaining storefront blocker is the custom domain `https://theforestrystudio.com`, which is fronted by Cloudflare and still serves stale HTML from the older `Prestige` theme (`136487764227`) and therefore still emits the Growave loader/app block.
-- Shopify response headers on that custom-domain path still report live theme `159310446851`, so the final cutover issue now looks like an edge/cache or rewrite problem rather than a remaining app-proxy/backend mismatch.
+- The remaining storefront blocker is the custom domain `https://theforestrystudio.com`, which still serves stale HTML from the older `Prestige` theme (`136487764227`) and therefore still emits the Growave loader/app block.
+- That stale body persists under cache-busting query params and `Cache-Control: no-cache`, and it also persists when the custom host is forced directly to Shopify's edge IP via `curl --resolve theforestrystudio.com:443:23.227.38.65`.
+- Shopify response headers on that custom-domain path still report live theme `159310446851`, so the final cutover issue now looks like a custom-host Shopify render/cache/routing problem rather than a remaining app-proxy/backend mismatch.
+- Exact next action: purge or bypass any custom-domain cache layer and re-test `theforestrystudio.com`; if the body still reports theme `136487764227`, escalate to Shopify support with the host-specific mismatch evidence.
 
 ## Runtime config validation
 
