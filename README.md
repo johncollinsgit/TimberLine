@@ -460,7 +460,8 @@ Cutover/removal notes:
 Observed live state on 2026-03-31:
 - The production app proxy is returning the native review contract (`Write a review`, `$1.00` reward) and guest wishlist flows are succeeding end to end.
 - The Shopify live theme path at `modernforestry.myshopify.com` is serving the cutover theme (`159310446851`) and no longer requests Growave assets at runtime.
-- The remaining sign-off blocker is the custom storefront domain `theforestrystudio.com`, which is still serving stale HTML from the older `Prestige` theme (`136487764227`) with Growave loader output still present.
+- The remaining sign-off blocker is the custom storefront domain `theforestrystudio.com`, which is fronted by Cloudflare and still serves stale HTML from the older `Prestige` theme (`136487764227`) with Growave loader output still present.
+- Shopify response headers on the custom-domain path still report live theme `159310446851`, which points to an edge/cache or rewrite issue outside the app/backend repo rather than a remaining proxy-contract defect.
 - Treat the final cutover issue as a storefront-domain routing/cache problem outside the app/backend repo. The Backstage proxy contract is live and aligned.
 
 ## Deployment (GitHub Actions -> Production)
