@@ -787,6 +787,11 @@ Route::prefix('shopify')->middleware('web')->group(function () {
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
+        Route::get('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'policy'])
+            ->name('rewards.policy');
+        Route::patch('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'updatePolicy'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.policy.update');
         Route::get('/rewards/birthdays/analytics', [ShopifyEmbeddedRewardsController::class, 'birthdayAnalytics'])
             ->name('rewards.birthdays.analytics');
         Route::get('/rewards/birthdays/analytics/export', [ShopifyEmbeddedRewardsController::class, 'birthdayAnalyticsExport'])

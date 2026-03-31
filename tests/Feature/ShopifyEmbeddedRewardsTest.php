@@ -8,6 +8,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\TenantCandleCashRewardOverride;
 use App\Models\TenantCandleCashTaskOverride;
 use App\Models\TenantMarketingSetting;
@@ -75,6 +76,19 @@ test('shopify embedded rewards data route returns normalized earn and redeem sec
         ->and(array_key_exists('points_cost', $redeemItems[0]))->toBeFalse()
         ->and(array_key_exists('legacy_points_per_candle_cash', $response->json('data.meta.program')))->toBeFalse()
         ->and(data_get($response->json(), 'data.meta.program.measurement_label'))->toBe('1 reward credit = 1 reward credit');
+});
+
+test('shopify embedded rewards policy route returns tenant-scoped policy and editability', function () {
+    $response = $this
+        ->withHeaders(retailRewardsApiHeaders())
+        ->getJson(route('shopify.app.api.rewards.policy'));
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('editable', true)
+        ->assertJsonPath('status', null)
+        ->assertJsonPath('data.program_identity.program_name', 'Candle Cash')
+        ->assertJsonPath('data.value_model.redeem_increment_dollars', 10);
 });
 
 test('shopify embedded rewards data route requires bearer token auth and does not fall back to page state', function () {
@@ -377,6 +391,110 @@ test('shopify embedded rewards program config remains tenant isolated across map
         ->and((float) data_get($globalProgramConfigAfter, 'redeem_increment_dollars'))->toBe(9.0)
         ->and(TenantMarketingSetting::query()->where('tenant_id', $tenantOne->id)->where('key', 'candle_cash_program_config')->exists())->toBeTrue()
         ->and(TenantMarketingSetting::query()->where('tenant_id', $tenantTwo->id)->where('key', 'candle_cash_program_config')->exists())->toBeFalse();
+});
+
+test('shopify embedded rewards policy update persists tenant scoped settings without mutating global settings', function () {
+    $globalProgramConfigRow = MarketingSetting::query()->where('key', 'candle_cash_program_config')->firstOrFail();
+    $globalProgramBefore = (array) $globalProgramConfigRow->value;
+
+    $response = $this
+        ->withHeaders(retailRewardsApiHeaders())
+        ->patchJson(route('shopify.app.api.rewards.policy.update'), [
+            'program_identity' => [
+                'program_name' => 'Tenant Rewards Co',
+                'short_label' => 'TRC',
+                'terminology_mode' => 'cash',
+            ],
+            'value_model' => [
+                'redeem_increment_dollars' => 12,
+                'max_redeemable_per_order_dollars' => 12,
+                'minimum_purchase_dollars' => 50,
+            ],
+            'finance_and_safety' => [
+                'max_open_codes' => 2,
+            ],
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'Rewards policy saved.')
+        ->assertJsonPath('data.program_identity.program_name', 'Tenant Rewards Co')
+        ->assertJsonPath('data.value_model.redeem_increment_dollars', 12)
+        ->assertJsonPath('data.finance_and_safety.max_open_codes', 2);
+
+    $tenantProgram = (array) TenantMarketingSetting::query()
+        ->where('tenant_id', $this->tenant->id)
+        ->where('key', 'candle_cash_program_config')
+        ->firstOrFail()
+        ->value;
+
+    $globalProgramAfter = (array) $globalProgramConfigRow->fresh()->value;
+
+    expect((string) data_get($tenantProgram, 'label'))->toBe('Tenant Rewards Co')
+        ->and((float) data_get($tenantProgram, 'redeem_increment_dollars'))->toBe(12.0)
+        ->and((float) data_get($tenantProgram, 'minimum_purchase_dollars'))->toBe(50.0)
+        ->and((int) data_get($tenantProgram, 'max_open_codes'))->toBe(2)
+        ->and((float) data_get($globalProgramAfter, 'redeem_increment_dollars'))->toBe((float) data_get($globalProgramBefore, 'redeem_increment_dollars'));
+});
+
+test('shopify embedded rewards policy update enforces validation guardrails', function () {
+    $this
+        ->withHeaders(retailRewardsApiHeaders())
+        ->patchJson(route('shopify.app.api.rewards.policy.update'), [
+            'value_model' => [
+                'currency_mode' => 'points_to_cash',
+                'points_per_dollar' => 0,
+                'redeem_increment_dollars' => 10,
+                'max_redeemable_per_order_dollars' => 10,
+            ],
+            'expiration_and_reminders' => [
+                'expiration_mode' => 'days_from_issue',
+                'expiration_days' => 30,
+                'reminder_offsets_days' => [30],
+                'sms_enabled' => true,
+            ],
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonFragment(['Points mode requires a points-per-dollar conversion rate greater than zero.'])
+        ->assertJsonFragment(['Text reminders require SMS plan/module access and channel readiness.'])
+        ->assertJsonFragment(['Reminder timing must occur before the expiration window.']);
+});
+
+test('shopify embedded rewards policy is read only when rewards module access is locked', function () {
+    $lockedTenant = Tenant::query()->create([
+        'name' => 'Locked Tenant',
+        'slug' => 'locked-tenant-'.Str::lower(Str::random(8)),
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $lockedTenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+        'metadata' => [],
+    ]);
+
+    configureEmbeddedRetailStore($lockedTenant->id);
+
+    $this
+        ->withHeaders(retailRewardsApiHeaders())
+        ->getJson(route('shopify.app.api.rewards.policy'))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('editable', false)
+        ->assertJsonPath('status', 'rewards_plan_locked');
+
+    $this
+        ->withHeaders(retailRewardsApiHeaders())
+        ->patchJson(route('shopify.app.api.rewards.policy.update'), [
+            'program_identity' => [
+                'program_name' => 'Blocked Edit',
+            ],
+        ])
+        ->assertStatus(403)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'rewards_plan_locked');
 });
 
 test('shopify embedded rewards routes fail closed when store tenant context is missing', function () {

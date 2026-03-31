@@ -9,6 +9,7 @@ use App\Models\TenantCandleCashRewardOverride;
 use App\Models\TenantCandleCashTaskOverride;
 use App\Models\TenantMarketingSetting;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\TenantRewardsPolicyService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -18,7 +19,8 @@ use Illuminate\Validation\ValidationException;
 class ShopifyEmbeddedRewardsService
 {
     public function __construct(
-        protected CandleCashService $candleCashService
+        protected CandleCashService $candleCashService,
+        protected TenantRewardsPolicyService $tenantRewardsPolicyService
     ) {
     }
 
@@ -32,6 +34,7 @@ class ShopifyEmbeddedRewardsService
     public function payload(?int $tenantId = null): array
     {
         $programConfig = $this->programConfig($tenantId);
+        $policy = $this->tenantRewardsPolicyService->resolve($tenantId);
         $redeemIncrement = round((float) data_get($programConfig, 'redeem_increment_dollars', $this->candleCashService->fixedRedemptionAmount()), 2);
         $maxRedeemable = round((float) data_get($programConfig, 'max_redeemable_per_order_dollars', $this->candleCashService->maxRedeemablePerOrderAmount()), 2);
         $maxOpenCodes = max(1, (int) data_get($programConfig, 'max_open_codes', $this->candleCashService->maxOpenStorefrontCodes()));
@@ -47,7 +50,9 @@ class ShopifyEmbeddedRewardsService
                     'max_redeemable_per_order_dollars' => $maxRedeemable,
                     'max_redeemable_per_order_formatted' => $this->candleCashService->formatRewardCurrency($maxRedeemable),
                     'max_open_codes' => $maxOpenCodes,
+                    'program_name' => (string) data_get($policy, 'program_identity.program_name', 'Rewards'),
                 ],
+                'policy' => $policy,
                 'limitations' => [
                     [
                         'scope' => 'redeem',
@@ -58,6 +63,25 @@ class ShopifyEmbeddedRewardsService
             'earn' => $earn,
             'redeem' => $redeem,
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function policy(?int $tenantId = null, array $context = []): array
+    {
+        return $this->tenantRewardsPolicyService->resolve($tenantId, $context);
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    public function updatePolicy(int $tenantId, array $payload, array $context = []): array
+    {
+        return $this->tenantRewardsPolicyService->update($tenantId, $payload, $context);
     }
 
     /**

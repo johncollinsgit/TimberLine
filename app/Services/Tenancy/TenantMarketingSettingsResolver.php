@@ -13,6 +13,11 @@ class TenantMarketingSettingsResolver
      */
     protected array $arrayCache = [];
 
+    public function flushArrayCache(): void
+    {
+        $this->arrayCache = [];
+    }
+
     /**
      * Resolve an array-valued marketing setting through tenant override, then global fallback.
      *

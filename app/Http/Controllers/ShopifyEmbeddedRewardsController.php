@@ -6,6 +6,7 @@ use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -302,15 +303,23 @@ class ShopifyEmbeddedRewardsController extends Controller
         TenantResolver $tenantResolver
     ): Response
     {
+        $context = $contextService->resolvePageContext($request);
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $configState = $authorized
+            ? $this->rewardsConfigState($store, $tenantResolver)
+            : ['available' => false, 'editable' => false];
+
         return $this->renderSection(
             $request,
             $contextService,
             $tenantResolver,
             'notifications',
-            'shopify.rewards-placeholder',
+            'shopify.rewards-notifications',
             [
-                'title' => 'Notifications coming soon',
-                'message' => 'Notification settings for this program will appear here in a later phase.',
+                'rewardsPolicyEndpoint' => route('shopify.app.api.rewards.policy'),
+                'rewardsPolicyUpdateEndpoint' => route('shopify.app.api.rewards.policy.update'),
+                'rewardsPolicyEditable' => (bool) ($configState['editable'] ?? false),
             ]
         );
     }
@@ -339,12 +348,109 @@ class ShopifyEmbeddedRewardsController extends Controller
             ]);
         }
 
+        $policyContext = [
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+        ];
         $payload = $rewardsService->payload($tenantId);
+        $payload['meta']['policy'] = $rewardsService->policy($tenantId, $policyContext);
+        $payload['meta']['access'] = [
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'status' => $configState['status'] ?? null,
+            'message' => $configState['message'] ?? null,
+        ];
 
         return response()->json([
             'ok' => true,
             'data' => $payload,
         ], $this->statusForPayload($payload));
+    }
+
+    public function policy(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        $policy = $rewardsService->policy($tenantId, [
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'editable' => (bool) ($configState['editable'] ?? false),
+            'status' => $configState['status'] ?? null,
+            'message' => $configState['message'] ?? null,
+            'data' => $policy,
+        ]);
+    }
+
+    public function updatePolicy(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $configState = $this->rewardsConfigState((array) ($context['store'] ?? []), $tenantResolver);
+        if (! ($configState['available'] ?? false)) {
+            return $this->unsupportedRewardsConfigResponse($configState);
+        }
+
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        if ($tenantId === null) {
+            return $this->unsupportedRewardsConfigResponse([
+                'status' => 'tenant_not_mapped',
+                'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+            ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
+        }
+
+        try {
+            $payload = $this->validatePolicyPayload($request);
+            $policy = $rewardsService->updatePolicy($tenantId, $payload, [
+                'editable' => true,
+                'sms_channel_enabled' => (bool) ($configState['sms_channel_enabled'] ?? false),
+            ]);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Rewards policy could not be saved.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Rewards policy saved.',
+            'data' => $policy,
+        ]);
     }
 
     public function updateEarnRule(
@@ -370,6 +476,10 @@ class ShopifyEmbeddedRewardsController extends Controller
                 'status' => 'tenant_not_mapped',
                 'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
             ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
         }
 
         try {
@@ -426,6 +536,10 @@ class ShopifyEmbeddedRewardsController extends Controller
                 'status' => 'tenant_not_mapped',
                 'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
             ]);
+        }
+
+        if (! ($configState['editable'] ?? false)) {
+            return $this->blockedRewardsEditResponse($configState);
         }
 
         try {
@@ -513,6 +627,8 @@ class ShopifyEmbeddedRewardsController extends Controller
             'headline' => $this->headlineForStatus($status, $rewardsLabel),
             'subheadline' => $this->subheadlineForStatus($status, $rewardsProgramLabel),
             'dataEndpoint' => route('shopify.app.api.rewards'),
+            'policyEndpoint' => route('shopify.app.api.rewards.policy'),
+            'policyUpdateEndpoint' => route('shopify.app.api.rewards.policy.update'),
             'earnUpdateEndpointTemplate' => route('shopify.app.api.rewards.earn.update', ['task' => '__TASK__']),
             'redeemUpdateEndpointTemplate' => route('shopify.app.api.rewards.redeem.update', ['reward' => '__REWARD__']),
             'setupNote' => $authorized
@@ -525,6 +641,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'rewardsEditorAvailable' => $authorized && (bool) ($configState['available'] ?? false),
             'rewardsEditorStatus' => $configState['status'] ?? null,
             'rewardsEditorMessage' => $configState['message'] ?? null,
+            'rewardsEditorEditable' => (bool) ($configState['editable'] ?? false),
             'referenceLinks' => $authorized
                 ? [
                     [
@@ -593,6 +710,30 @@ class ShopifyEmbeddedRewardsController extends Controller
             'reward_value' => ['nullable', 'string', 'max:120'],
             'enabled' => ['required', 'boolean'],
         ]);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function validatePolicyPayload(Request $request): array
+    {
+        $sections = [
+            'program_identity',
+            'value_model',
+            'earning_rules',
+            'redemption_rules',
+            'expiration_and_reminders',
+            'customer_experience',
+            'finance_and_safety',
+            'access_state',
+        ];
+
+        $payload = is_array($request->all()) ? $request->all() : [];
+
+        return collect($payload)
+            ->only($sections)
+            ->map(fn ($value): array => is_array($value) ? $value : [])
+            ->all();
     }
 
     /**
@@ -745,7 +886,7 @@ class ShopifyEmbeddedRewardsController extends Controller
 
     /**
      * @param  array<string,mixed>  $store
-     * @return array{available:bool,tenant_id:?int,status:?string,message:?string}
+     * @return array{available:bool,editable:bool,tenant_id:?int,status:?string,message:?string,sms_channel_enabled:bool}
      */
     protected function rewardsConfigState(array $store, TenantResolver $tenantResolver): array
     {
@@ -753,9 +894,11 @@ class ShopifyEmbeddedRewardsController extends Controller
         if ($tenantId === null) {
             return [
                 'available' => false,
+                'editable' => false,
                 'tenant_id' => null,
                 'status' => 'tenant_not_mapped',
                 'message' => 'This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.',
+                'sms_channel_enabled' => false,
             ];
         }
 
@@ -764,17 +907,35 @@ class ShopifyEmbeddedRewardsController extends Controller
             || ! Schema::hasTable('tenant_candle_cash_reward_overrides')) {
             return [
                 'available' => false,
+                'editable' => false,
                 'tenant_id' => $tenantId,
                 'status' => 'tenant_scoped_rewards_storage_unavailable',
                 'message' => 'Tenant-scoped rewards storage is not available yet. Run migrations before editing rewards for this tenant.',
+                'sms_channel_enabled' => false,
             ];
         }
 
+        /** @var TenantModuleAccessResolver $moduleResolver */
+        $moduleResolver = app(TenantModuleAccessResolver::class);
+        $rewardsModule = $moduleResolver->module($tenantId, 'rewards');
+        $smsModule = $moduleResolver->module($tenantId, 'sms');
+        $hasRewardsAccess = (bool) ($rewardsModule['has_access'] ?? false);
+        $rewardsUiState = strtolower(trim((string) ($rewardsModule['ui_state'] ?? 'locked')));
+        $editable = $hasRewardsAccess && $rewardsUiState !== 'locked' && $rewardsUiState !== 'coming_soon';
+        $status = $editable ? null : (($rewardsUiState === 'coming_soon') ? 'rewards_module_coming_soon' : 'rewards_plan_locked');
+        $message = $editable
+            ? null
+            : ($rewardsUiState === 'coming_soon'
+                ? 'Rewards settings are read-only while this module is marked coming soon for this tenant.'
+                : 'Plan access is required before rewards settings can be edited.');
+
         return [
             'available' => true,
+            'editable' => $editable,
             'tenant_id' => $tenantId,
-            'status' => null,
-            'message' => null,
+            'status' => $status,
+            'message' => $message,
+            'sms_channel_enabled' => (bool) ($smsModule['has_access'] ?? false),
         ];
     }
 
@@ -792,6 +953,21 @@ class ShopifyEmbeddedRewardsController extends Controller
             'message' => (string) ($configState['message']
                 ?? 'This embedded program editor is unavailable until earn and redeem rows are isolated per tenant.'),
         ], $httpStatus);
+    }
+
+    /**
+     * @param  array{status?:?string,message?:?string}  $configState
+     */
+    protected function blockedRewardsEditResponse(array $configState): JsonResponse
+    {
+        $status = (string) ($configState['status'] ?? 'rewards_plan_locked');
+
+        return response()->json([
+            'ok' => false,
+            'status' => $status,
+            'message' => (string) ($configState['message']
+                ?? 'Rewards settings are currently read-only for this tenant.'),
+        ], 403);
     }
 
     protected function nullableString(mixed $value): ?string

@@ -35,7 +35,7 @@
             'referrals' => 'referrals',
             'birthdays' => 'birthdays',
             'vip' => 'vip',
-            'notifications' => 'notifications',
+            'notifications' => 'rewards',
         ];
         $activeModuleKey = $moduleMap[$activeChild] ?? $activeSection;
         $activeModuleState = is_array($moduleStates[$activeModuleKey] ?? null) ? $moduleStates[$activeModuleKey] : null;

@@ -140,7 +140,7 @@ trait HandlesShopifyEmbeddedNavigation
             'referrals' => 'referrals',
             'birthdays' => 'birthdays',
             'vip' => 'vip',
-            'notifications' => 'notifications',
+            'notifications' => 'rewards',
             'manage' => 'customers',
             'activity' => 'activity',
             'questions' => 'questions',

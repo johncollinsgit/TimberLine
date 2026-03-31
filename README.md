@@ -552,6 +552,21 @@ Temporarily disable deploy:
 - Backstage surfaces a `Gift insights` tab under Candle Cash (`/marketing/candle-cash/gifts-report`) that summarizes total gifts, intent/origin/notification breakdowns, actor attribution, recent gift rows, and a simple post-gift conversion proxy.
 - Use the date filters on that page to focus on a specific window and understand whether gifted customers later placed orders.
 
+## Tenant Rewards Policy Layer
+- Tenant rewards management extends the existing Candle Cash execution engine (wallet, issuance, redemption, reconciliation) instead of creating a parallel rewards system.
+- Embedded Shopify API now includes tenant policy endpoints:
+  - `GET /shopify/app/api/rewards/policy`
+  - `PATCH /shopify/app/api/rewards/policy`
+- Writes are entitlement-aware and fail closed:
+  - eligible tenants can edit policy
+  - non-eligible tenants are read-only/upsell
+- Policy domains are stored in existing tenant settings keyspace (`tenant_marketing_settings`) with runtime-compatible keys such as:
+  - `candle_cash_program_config`
+  - `candle_cash_notification_config`
+  - `candle_cash_finance_config`
+  - `candle_cash_access_state`
+- Architecture and rollout details: `docs/architecture/tenant-rewards-management-layer.md`.
+
 ## Email Provider-Context Reporting
 - Birthday analytics and exports expose provider context directly from canonical delivery metadata in `marketing_email_deliveries`.
 - Supported reporting dimensions include:
