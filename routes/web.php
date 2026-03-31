@@ -7,6 +7,7 @@ use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
+use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
@@ -418,6 +419,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::post('/reviews/{review}/approve', [CandleCashPagesController::class, 'approveReview'])->name('reviews.approve');
                     Route::post('/reviews/{review}/reject', [CandleCashPagesController::class, 'rejectReview'])->name('reviews.reject');
                     Route::post('/reviews/{review}/delete', [CandleCashPagesController::class, 'deleteReview'])->name('reviews.delete');
+                    Route::post('/reviews/{review}/resend-notification', [CandleCashPagesController::class, 'resendReviewNotification'])->name('reviews.resend-notification');
                     Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');
                     Route::post('/customers/{marketingProfile}/adjust', [CandleCashPagesController::class, 'adjustCustomer'])->name('customers.adjust');
                     Route::get('/gifts-report', [CandleCashPagesController::class, 'giftsReport'])->name('gifts-report');
@@ -446,6 +448,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/reviews', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'reviews')
                 ->name('reviews');
+            Route::get('/wishlist', [MarketingWishlistController::class, 'index'])->name('wishlist');
+            Route::post('/wishlist/items/{item}/prepare-outreach', [MarketingWishlistController::class, 'prepareOutreach'])->name('wishlist.prepare-outreach');
+            Route::post('/wishlist/queue/{queue}/send', [MarketingWishlistController::class, 'sendOutreach'])->name('wishlist.send-outreach');
             Route::get('/settings', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'settings')
                 ->name('settings');
@@ -705,6 +710,9 @@ Route::prefix('shopify/marketing')
         Route::post('/wishlist/add', [MarketingShopifyIntegrationController::class, 'addWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.add');
+        Route::post('/wishlist/lists/create', [MarketingShopifyIntegrationController::class, 'createWishlistList'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.lists.create');
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
@@ -757,6 +765,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/wishlist/add', [MarketingShopifyIntegrationController::class, 'addWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.add');
+        Route::post('/wishlist/lists/create', [MarketingShopifyIntegrationController::class, 'createWishlistList'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.lists.create');
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');

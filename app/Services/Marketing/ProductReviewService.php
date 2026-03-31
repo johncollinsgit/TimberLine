@@ -8,6 +8,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
 use App\Models\Order;
+use App\Models\OrderLine;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
@@ -23,11 +24,12 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
      * @return array<string,mixed>
      */
     public function storefrontPayload(array $product, ?MarketingProfile $viewer = null): array
     {
+        $tenantId = $this->tenantIdForProduct($product, $viewer);
         $approvedQuery = $this->approvedReviewsQuery($product);
         $approvedForAverage = clone $approvedQuery;
         $approvedForCount = clone $approvedQuery;
@@ -51,13 +53,16 @@ class ProductReviewService
                 ->first()
             : null;
 
-        $task = $this->taskService->taskByHandle('product-review');
-        $minLength = $this->minimumBodyLength();
-        $allowGuest = $this->allowGuestReviews();
+        $minLength = $this->minimumBodyLength($tenantId);
+        $allowGuest = $this->allowGuestReviews($tenantId);
+        $recentOrderCandidates = $viewer ? $this->recentOrderCandidates($viewer, $product) : [];
+        $viewerEligibility = $this->viewerEligibilityPayload($viewer, $product, $recentOrderCandidates, $tenantId);
+        $task = $this->storefrontTaskPayload($tenantId);
 
         return [
             'product' => [
                 'id' => (string) $product['product_id'],
+                'variant_id' => $this->nullableString($product['variant_id'] ?? null),
                 'handle' => $this->nullableString($product['product_handle'] ?? null),
                 'title' => $this->nullableString($product['product_title'] ?? null),
                 'url' => $this->canonicalProductUrl($product),
@@ -69,16 +74,17 @@ class ProductReviewService
                     ? number_format($summary['average_rating'], 1) . ' out of 5'
                     : 'No reviews yet',
             ],
-            'task' => $task ? [
-                'enabled' => (bool) $task->enabled,
-                'reward_amount' => (string) $task->reward_amount,
-                'button_text' => (string) ($task->button_text ?: 'Write a review'),
-            ] : null,
+            'task' => $task,
             'settings' => [
+                'enabled' => $this->reviewsEnabled($tenantId),
                 'allow_guest' => $allowGuest,
-                'moderation_enabled' => $this->moderationEnabled(),
+                'moderation_enabled' => $this->moderationEnabled($tenantId),
                 'minimum_length' => $minLength,
-                'notification_email' => $this->notificationEmail(),
+                'notification_email' => $this->notificationEmail($tenantId),
+                'reward_requires_order_match' => $this->requireOrderMatchForReward($tenantId),
+                'reward_amount_cents' => (int) ($task['reward_amount_cents'] ?? 0),
+                'reward_dedupe_mode' => $this->rewardDedupeMode($tenantId),
+                'publication_mode' => $this->moderationEnabled($tenantId) ? 'pending_moderation' : 'auto_publish',
             ],
             'viewer' => [
                 'profile_id' => $viewer?->id,
@@ -86,20 +92,37 @@ class ProductReviewService
                     ? ($viewerReview->status === 'approved' ? 'reviewed' : 'pending')
                     : ($viewer ? 'ready' : ($allowGuest ? 'guest_ready' : 'login_required')),
                 'can_submit' => $viewer !== null || $allowGuest,
+                'eligibility' => $viewerEligibility,
+                'recent_order_candidates' => $recentOrderCandidates,
                 'review' => $viewerReview ? $this->reviewPayload($viewerReview) : null,
+            ],
+            'sort_options' => [
+                ['value' => 'most_relevant', 'label' => 'Most Relevant'],
+                ['value' => 'newest', 'label' => 'Newest'],
+                ['value' => 'highest_rating', 'label' => 'Highest Rating'],
+                ['value' => 'lowest_rating', 'label' => 'Lowest Rating'],
             ],
             'reviews' => $reviews->map(fn (MarketingReviewHistory $review): array => $this->reviewPayload($review))->all(),
         ];
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
-     * @param array{rating:int,title:?string,body:string,name:?string,email:?string,request_key?:?string,source_surface?:?string} $payload
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array{rating:int,title:?string,body:string,name:?string,email:?string,order_id?:mixed,order_line_id?:mixed,variant_id?:?string,media_assets?:mixed,request_key?:?string,source_surface?:?string} $payload
      * @return array<string,mixed>
      */
     public function submitReview(?MarketingProfile $viewer, array $product, array $payload): array
     {
-        $allowGuest = $this->allowGuestReviews();
+        $tenantId = $this->tenantIdForProduct($product, $viewer);
+        if (! $this->reviewsEnabled($tenantId)) {
+            return [
+                'ok' => false,
+                'error' => 'reviews_disabled',
+                'message' => 'Product reviews are not enabled for this storefront right now.',
+            ];
+        }
+
+        $allowGuest = $this->allowGuestReviews($tenantId);
         if (! $viewer && ! $allowGuest) {
             return [
                 'ok' => false,
@@ -116,6 +139,10 @@ class ProductReviewService
         $rating = max(1, min(5, (int) ($payload['rating'] ?? 0)));
         $requestKey = trim((string) ($payload['request_key'] ?? ''));
         $sourceSurface = trim((string) ($payload['source_surface'] ?? 'product_page')) ?: 'product_page';
+        $selectedOrderId = $this->positiveInt($payload['order_id'] ?? null);
+        $selectedOrderLineId = $this->positiveInt($payload['order_line_id'] ?? null);
+        $variantId = $this->nullableString($payload['variant_id'] ?? ($product['variant_id'] ?? null));
+        $mediaAssets = $this->normalizeMediaAssets($payload['media_assets'] ?? null);
 
         if ($rating < 1 || $rating > 5) {
             return [
@@ -125,7 +152,7 @@ class ProductReviewService
             ];
         }
 
-        if (mb_strlen($body) < $this->minimumBodyLength()) {
+        if (mb_strlen($body) < $this->minimumBodyLength($tenantId)) {
             return [
                 'ok' => false,
                 'error' => 'review_too_short',
@@ -146,16 +173,15 @@ class ProductReviewService
             throw new \InvalidArgumentException('A verified Shopify store context is required before submitting a product review.');
         }
 
-        $tenantId = is_numeric($product['tenant_id'] ?? null) && (int) ($product['tenant_id'] ?? 0) > 0
-            ? (int) $product['tenant_id']
-            : null;
-
         Log::info('native product review submission received', [
             'marketing_profile_id' => $viewer?->id,
             'tenant_id' => $tenantId,
             'store_key' => $storeKey,
             'product_id' => (string) $product['product_id'],
             'product_handle' => $product['product_handle'] ?? null,
+            'variant_id' => $variantId,
+            'order_id' => $selectedOrderId,
+            'order_line_id' => $selectedOrderLineId,
             'rating' => $rating,
             'request_key' => $requestKey !== '' ? $requestKey : null,
             'source_surface' => $sourceSurface,
@@ -179,6 +205,7 @@ class ProductReviewService
                 'source_meta' => [
                     'product_id' => (string) $product['product_id'],
                     'product_handle' => $product['product_handle'] ?? null,
+                    'variant_id' => $variantId,
                     'shopify_store_key' => $storeKey,
                     'tenant_id' => $tenantId,
                 ],
@@ -218,7 +245,21 @@ class ProductReviewService
             ]);
         }
 
-        $externalReviewId = $this->externalReviewId($product, $profile, $normalizedEmail);
+        $rewardState = $this->resolveRewardState($profile, $product, [
+            'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'order_id' => $selectedOrderId,
+            'order_line_id' => $selectedOrderLineId,
+            'reviewer_email' => $reviewerEmail,
+            'variant_id' => $variantId,
+        ]);
+
+        $externalReviewId = $this->externalReviewId(
+            $product,
+            $profile,
+            $normalizedEmail,
+            $rewardState['review_scope_key'] ?? null
+        );
         $reviewLookup = [
             'provider' => 'backstage',
             'integration' => 'native',
@@ -263,12 +304,13 @@ class ProductReviewService
             ];
         }
 
-        $moderationEnabled = $this->moderationEnabled();
+        $moderationEnabled = $this->moderationEnabled($tenantId);
         $status = $moderationEnabled ? 'pending' : 'approved';
         $now = now();
         try {
             [$review, $created] = $this->persistReview($reviewLookup, [
                 'marketing_profile_id' => $profile?->id,
+                'tenant_id' => $tenantId,
                 'marketing_review_summary_id' => null,
                 'external_customer_id' => $this->externalCustomerId($profile, $normalizedEmail),
                 'rating' => $rating,
@@ -279,32 +321,55 @@ class ProductReviewService
                 'is_published' => ! $moderationEnabled,
                 'status' => $status,
                 'submission_source' => 'native_storefront',
-                'is_verified_buyer' => $profile ? $this->hasOrderLink($profile) : false,
+                'is_verified_buyer' => (bool) ($rewardState['verified_buyer'] ?? false),
                 'product_id' => (string) $product['product_id'],
+                'order_id' => $rewardState['order']?->id,
+                'order_line_id' => $rewardState['order_line']?->id,
+                'variant_id' => $variantId ?: ($rewardState['order_line']?->shopify_variant_id ? (string) $rewardState['order_line']?->shopify_variant_id : null),
                 'product_handle' => $this->nullableString($product['product_handle'] ?? null),
                 'product_url' => $this->canonicalProductUrl($product),
                 'product_title' => $this->nullableString($product['product_title'] ?? null),
+                'published_at' => ! $moderationEnabled ? $now : null,
                 'submitted_at' => $existing?->submitted_at ?: $now,
                 'reviewed_at' => ! $moderationEnabled ? $now : null,
                 'approved_at' => ! $moderationEnabled ? $now : null,
                 'rejected_at' => null,
                 'moderated_by' => null,
                 'moderation_notes' => null,
+                'reward_eligibility_status' => (string) ($rewardState['status'] ?? 'unknown'),
+                'reward_award_status' => $profile && (bool) ($rewardState['eligible_for_reward'] ?? false) ? 'pending_award' : 'not_awarded',
+                'reward_amount_cents' => (int) ($rewardState['reward_amount_cents'] ?? 0) ?: null,
+                'reward_rule_key' => $this->nullableString($rewardState['reward_rule_key'] ?? null),
+                'media_assets' => $mediaAssets !== [] ? $mediaAssets : null,
+                'has_media' => $mediaAssets !== [],
+                'media_count' => count($mediaAssets),
                 'source_synced_at' => $now,
                 'raw_payload' => [
                     'request_key' => $requestKey !== '' ? $requestKey : null,
                     'source_surface' => $sourceSurface,
                     'submitted_via' => 'storefront',
+                    'selected_order_id' => $selectedOrderId,
+                    'selected_order_line_id' => $selectedOrderLineId,
+                    'reward_state' => [
+                        'status' => $rewardState['status'] ?? null,
+                        'eligible_for_reward' => (bool) ($rewardState['eligible_for_reward'] ?? false),
+                        'verified_buyer' => (bool) ($rewardState['verified_buyer'] ?? false),
+                    ],
+                    'media_assets' => $mediaAssets,
                 ],
             ]);
 
             $award = null;
-            if ($profile) {
+            if ($profile && (bool) ($rewardState['eligible_for_reward'] ?? false)) {
                 $award = $this->verificationService->awardProductReview($profile, (string) $review->external_review_id, [
                     'product_id' => (string) $product['product_id'],
                     'product_handle' => $product['product_handle'] ?? null,
                     'product_title' => $product['product_title'] ?? null,
                     'review_source' => 'backstage_native',
+                    'order_id' => $rewardState['order']?->id,
+                    'order_line_id' => $rewardState['order_line']?->id,
+                    'variant_id' => $variantId,
+                    'reward_amount_cents' => (int) ($rewardState['reward_amount_cents'] ?? 0),
                 ]);
 
                 $completion = $award['completion'] ?? null;
@@ -312,6 +377,11 @@ class ProductReviewService
                 $review->forceFill([
                     'candle_cash_task_event_id' => $event?->id ?: $review->candle_cash_task_event_id,
                     'candle_cash_task_completion_id' => $completion?->id ?: $review->candle_cash_task_completion_id,
+                    'reward_award_status' => (string) ($award['state'] ?? 'not_awarded'),
+                ])->save();
+            } elseif ($profile) {
+                $review->forceFill([
+                    'reward_award_status' => 'not_awarded',
                 ])->save();
             }
         } catch (\Throwable $exception) {
@@ -368,7 +438,16 @@ class ProductReviewService
             'ok' => true,
             'state' => $created ? ($moderationEnabled ? 'review_pending' : 'review_live') : 'review_updated',
             'review' => $review->fresh(['profile']),
-            'award' => $award,
+            'award' => [
+                'state' => $award['state'] ?? ($profile && (bool) ($rewardState['eligible_for_reward'] ?? false) ? 'not_awarded' : 'ineligible'),
+                'event' => $award['event'] ?? null,
+                'completion' => $award['completion'] ?? null,
+                'eligible' => (bool) ($rewardState['eligible_for_reward'] ?? false),
+                'eligibility_status' => (string) ($rewardState['status'] ?? 'unknown'),
+                'reward_amount_cents' => (int) ($rewardState['reward_amount_cents'] ?? 0),
+                'reward_amount' => number_format(((int) ($rewardState['reward_amount_cents'] ?? 0)) / 100, 2, '.', ''),
+                'message' => (string) ($rewardState['message'] ?? ''),
+            ],
             'created' => $created,
         ];
     }
@@ -517,6 +596,7 @@ class ProductReviewService
             'status' => 'approved',
             'is_published' => true,
             'approved_at' => now(),
+            'published_at' => now(),
             'rejected_at' => null,
             'reviewed_at' => now(),
             'moderated_by' => $moderatorId,
@@ -532,6 +612,7 @@ class ProductReviewService
             'status' => 'rejected',
             'is_published' => false,
             'rejected_at' => now(),
+            'published_at' => null,
             'reviewed_at' => now(),
             'moderated_by' => $moderatorId,
             'moderation_notes' => $note ?: $review->moderation_notes,
@@ -545,24 +626,556 @@ class ProductReviewService
         $review->delete();
     }
 
-    public function moderationEnabled(): bool
+    public function moderationEnabled(?int $tenantId = null): bool
     {
-        return (bool) data_get($this->taskService->integrationConfig(), 'product_review_moderation_enabled', false);
+        return (bool) data_get($this->integrationConfig($tenantId), 'product_review_moderation_enabled', false);
     }
 
-    public function allowGuestReviews(): bool
+    public function allowGuestReviews(?int $tenantId = null): bool
     {
-        return (bool) data_get($this->taskService->integrationConfig(), 'product_review_allow_guest', true);
+        return (bool) data_get($this->integrationConfig($tenantId), 'product_review_allow_guest', true);
     }
 
-    public function minimumBodyLength(): int
+    public function minimumBodyLength(?int $tenantId = null): int
     {
-        return max(12, (int) data_get($this->taskService->integrationConfig(), 'product_review_min_length', 24));
+        return max(12, (int) data_get($this->integrationConfig($tenantId), 'product_review_min_length', 24));
     }
 
-    public function notificationEmail(): ?string
+    public function notificationEmail(?int $tenantId = null): ?string
     {
-        return $this->nullableString(data_get($this->taskService->integrationConfig(), 'product_review_notification_email', 'info@theforestrystudio.com'));
+        return $this->nullableString(data_get($this->integrationConfig($tenantId), 'product_review_notification_email', 'info@theforestrystudio.com'));
+    }
+
+    protected function integrationConfig(?int $tenantId = null): array
+    {
+        return $this->taskService->integrationConfig($tenantId);
+    }
+
+    /**
+     * @return array{enabled:bool,reward_amount:string,reward_amount_cents:int,button_text:string}
+     */
+    protected function storefrontTaskPayload(?int $tenantId = null): array
+    {
+        $rewardAmountCents = $this->rewardAmountCents($tenantId);
+
+        return [
+            'enabled' => $this->reviewsEnabled($tenantId),
+            'reward_amount' => number_format($rewardAmountCents / 100, 2, '.', ''),
+            'reward_amount_cents' => $rewardAmountCents,
+            // The native storefront always opens the owned review flow.
+            'button_text' => 'Write a review',
+        ];
+    }
+
+    protected function reviewsEnabled(?int $tenantId = null): bool
+    {
+        return (bool) data_get(
+            $this->integrationConfig($tenantId),
+            'reviews_enabled',
+            data_get($this->integrationConfig($tenantId), 'product_review_enabled', true)
+        );
+    }
+
+    protected function rewardAmountCents(?int $tenantId = null): int
+    {
+        $configured = (int) data_get($this->integrationConfig($tenantId), 'product_review_reward_amount_cents', 0);
+        if ($configured > 0) {
+            return $configured;
+        }
+
+        $task = $this->taskService->taskByHandle('product-review');
+
+        return $task ? max(0, (int) round(((float) $task->reward_amount) * 100)) : 0;
+    }
+
+    protected function requireOrderMatchForReward(?int $tenantId = null): bool
+    {
+        return (bool) data_get($this->integrationConfig($tenantId), 'product_review_require_order_match', true);
+    }
+
+    protected function rewardDedupeMode(?int $tenantId = null): string
+    {
+        $mode = strtolower(trim((string) data_get($this->integrationConfig($tenantId), 'product_review_reward_dedupe_mode', 'order_line')));
+
+        return in_array($mode, ['order_line', 'customer_product'], true) ? $mode : 'order_line';
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array<int,array<string,mixed>> $recentOrderCandidates
+     * @return array<string,mixed>
+     */
+    protected function viewerEligibilityPayload(?MarketingProfile $viewer, array $product, array $recentOrderCandidates, ?int $tenantId): array
+    {
+        if (! $viewer) {
+            return [
+                'eligible_for_review' => $this->allowGuestReviews($tenantId),
+                'eligible_for_reward' => false,
+                'status' => $this->allowGuestReviews($tenantId) ? 'guest_review_ready' : 'login_required',
+                'message' => $this->allowGuestReviews($tenantId)
+                    ? 'Guest reviews are allowed. Rewards are issued after a verified order match.'
+                    : 'Sign in before leaving a product review.',
+                'selected_order_candidate' => null,
+            ];
+        }
+
+        $selected = collect($recentOrderCandidates)
+            ->first(fn (array $candidate): bool => (bool) ($candidate['matches_current_product'] ?? false));
+
+        return [
+            'eligible_for_review' => true,
+            'eligible_for_reward' => $selected !== null || ! $this->requireOrderMatchForReward($tenantId),
+            'status' => $selected !== null ? 'eligible_verified_purchase' : 'no_recent_order_match',
+            'message' => $selected !== null
+                ? 'Reward credit is available after we verify this review against your recent order.'
+                : 'You can still submit a review even if we do not find a matching recent order.',
+            'selected_order_candidate' => $selected,
+        ];
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     * @return array<int,array<string,mixed>>
+     */
+    protected function recentOrderCandidates(MarketingProfile $profile, array $product = [], int $limit = 12): array
+    {
+        $storeKey = $this->nullableString($product['store_key'] ?? null);
+        $tenantId = $this->tenantIdForProduct($product, $profile);
+
+        $rows = $this->matchedOrderLineQuery($profile, $storeKey, $tenantId)
+            ->limit(max(24, $limit * 4))
+            ->get();
+
+        return collect($rows)
+            ->map(fn (OrderLine $row): array => $this->orderCandidatePayload($row, $product))
+            ->unique(fn (array $candidate): string => (string) ($candidate['candidate_key'] ?? ''))
+            ->values()
+            ->take($limit)
+            ->all();
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    protected function resolveRewardState(?MarketingProfile $profile, array $product, array $payload): array
+    {
+        $tenantId = $this->tenantIdForProduct($product, $profile);
+        $rewardAmountCents = $this->rewardAmountCents($tenantId);
+        $selectedOrderId = $this->positiveInt($payload['order_id'] ?? null);
+        $selectedOrderLineId = $this->positiveInt($payload['order_line_id'] ?? null);
+        $requireOrderMatch = $this->requireOrderMatchForReward($tenantId);
+
+        $base = [
+            'eligible_for_reward' => false,
+            'verified_buyer' => false,
+            'status' => 'ineligible',
+            'message' => 'This review does not qualify for reward credit.',
+            'reward_amount_cents' => $rewardAmountCents,
+            'reward_rule_key' => null,
+            'review_scope_key' => null,
+            'order' => null,
+            'order_line' => null,
+        ];
+
+        if (! $profile) {
+            return [
+                ...$base,
+                'status' => 'guest_submitted',
+                'message' => 'Guest reviews are accepted, but reward credit requires a matched customer order.',
+            ];
+        }
+
+        $storeKey = $this->nullableString($payload['store_key'] ?? ($product['store_key'] ?? null));
+        $tenantScope = $this->tenantIdForProduct($product, $profile);
+        $candidateRows = $this->matchedOrderLineQuery($profile, $storeKey, $tenantScope, product: $product)
+            ->limit(40)
+            ->get();
+
+        $candidate = collect($candidateRows)->first(function (OrderLine $row) use ($selectedOrderId, $selectedOrderLineId): bool {
+            if ($selectedOrderLineId !== null) {
+                return (int) $row->id === $selectedOrderLineId;
+            }
+
+            if ($selectedOrderId !== null) {
+                return (int) $row->order_id === $selectedOrderId;
+            }
+
+            return true;
+        });
+
+        if (! $candidate && $requireOrderMatch) {
+            return [
+                ...$base,
+                'status' => $selectedOrderLineId !== null || $selectedOrderId !== null ? 'selected_order_not_eligible' : 'no_order_match',
+                'message' => 'We could not match that review to a fulfilled or completed order for this product.',
+            ];
+        }
+
+        $rewardRuleKey = $candidate instanceof OrderLine
+            ? $this->rewardRuleKeyForOrderLine($candidate, $profile, $tenantId)
+            : $this->rewardRuleKeyForCustomerProduct($profile, $product, $tenantId);
+
+        if ($this->rewardAlreadyUsed($profile, $product, $candidate, $tenantId)) {
+            return [
+                ...$base,
+                'status' => 'reward_already_awarded',
+                'message' => 'Reward credit has already been issued for this review rule.',
+                'reward_rule_key' => $rewardRuleKey,
+                'review_scope_key' => $candidate instanceof OrderLine ? 'order-line:' . $candidate->id : 'customer-product',
+                'order' => $candidate?->relationLoaded('order') ? $candidate->order : $candidate?->order()->first(),
+                'order_line' => $candidate,
+            ];
+        }
+
+        if ($candidate instanceof OrderLine) {
+            $order = $candidate->relationLoaded('order') ? $candidate->order : $candidate->order()->first();
+
+            return [
+                ...$base,
+                'eligible_for_reward' => $rewardAmountCents > 0,
+                'verified_buyer' => true,
+                'status' => $rewardAmountCents > 0 ? 'eligible_verified_purchase' : 'reward_disabled',
+                'message' => $rewardAmountCents > 0
+                    ? 'Reward credit will be issued after the verified order match passes our checks.'
+                    : 'This review is verified, but reward credit is currently disabled.',
+                'reward_rule_key' => $rewardRuleKey,
+                'review_scope_key' => 'order-line:' . $candidate->id,
+                'order' => $order,
+                'order_line' => $candidate,
+            ];
+        }
+
+        return [
+            ...$base,
+            'eligible_for_reward' => ! $requireOrderMatch && $rewardAmountCents > 0,
+            'verified_buyer' => false,
+            'status' => ! $requireOrderMatch && $rewardAmountCents > 0 ? 'eligible_without_order_match' : 'reward_disabled',
+            'message' => ! $requireOrderMatch && $rewardAmountCents > 0
+                ? 'Reward credit is allowed without a matched order for this tenant.'
+                : 'This review does not currently qualify for reward credit.',
+            'reward_rule_key' => $rewardRuleKey,
+            'review_scope_key' => 'customer-product',
+        ];
+    }
+
+    protected function matchedOrderLineQuery(
+        MarketingProfile $profile,
+        ?string $storeKey,
+        ?int $tenantId,
+        bool $productScoped = false,
+        array $product = []
+    ) {
+        $customerIds = $this->profileShopifyCustomerIds($profile, $storeKey);
+        $emails = $this->profileEmails($profile);
+
+        $query = OrderLine::query()
+            ->select([
+                'order_lines.*',
+                'orders.shopify_store_key as review_order_store_key',
+                'orders.shopify_order_id as review_order_external_id',
+                'orders.status as review_order_status',
+                'orders.ordered_at as review_ordered_at',
+                'orders.shopify_customer_id as review_order_customer_id',
+            ])
+            ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+            ->when($tenantId !== null, fn ($builder) => $builder->where('orders.tenant_id', $tenantId))
+            ->when($storeKey !== null, fn ($builder) => $builder->where('orders.shopify_store_key', $storeKey))
+            ->whereIn('orders.status', $this->eligibleOrderStatuses())
+            ->where(function ($builder) use ($customerIds, $emails): void {
+                $applied = false;
+
+                if ($customerIds !== []) {
+                    $builder->whereIn('orders.shopify_customer_id', $customerIds);
+                    $applied = true;
+                }
+
+                foreach (['orders.customer_email', 'orders.email', 'orders.shipping_email', 'orders.billing_email'] as $column) {
+                    if ($emails === []) {
+                        continue;
+                    }
+
+                    if ($applied) {
+                        $builder->orWhereIn($column, $emails);
+                    } else {
+                        $builder->whereIn($column, $emails);
+                        $applied = true;
+                    }
+                }
+
+                if (! $applied) {
+                    $builder->whereRaw('1 = 0');
+                }
+            })
+            ->orderByDesc('orders.ordered_at')
+            ->orderByDesc('orders.id')
+            ->orderByDesc('order_lines.id');
+
+        if ($productScoped) {
+            $this->applyProductMatchToOrderLineQuery($query, $product);
+        }
+
+        return $query;
+    }
+
+    protected function applyProductMatchToOrderLineQuery($query, array $product): void
+    {
+        $productId = $this->nullableString($product['product_id'] ?? null);
+        $variantId = $this->nullableString($product['variant_id'] ?? null);
+        $productTitle = $this->nullableString($product['product_title'] ?? null);
+        $productHandle = $this->nullableString($product['product_handle'] ?? null);
+        $numericProductId = $productId !== null && ctype_digit($productId) ? (int) $productId : null;
+        $numericVariantId = $variantId !== null && ctype_digit($variantId) ? (int) $variantId : null;
+        $handleTitleGuess = $productHandle ? trim(str_replace(['-', '_'], ' ', strtolower($productHandle))) : null;
+
+        $query->where(function ($builder) use ($numericProductId, $numericVariantId, $productTitle, $handleTitleGuess): void {
+            $applied = false;
+
+            if ($numericProductId !== null) {
+                $builder->where('order_lines.shopify_product_id', $numericProductId);
+                $applied = true;
+            }
+
+            if ($numericVariantId !== null) {
+                if ($applied) {
+                    $builder->orWhere('order_lines.shopify_variant_id', $numericVariantId);
+                } else {
+                    $builder->where('order_lines.shopify_variant_id', $numericVariantId);
+                    $applied = true;
+                }
+            }
+
+            if ($productTitle !== null) {
+                if ($applied) {
+                    $builder->orWhereRaw('lower(order_lines.raw_title) = ?', [mb_strtolower($productTitle)]);
+                } else {
+                    $builder->whereRaw('lower(order_lines.raw_title) = ?', [mb_strtolower($productTitle)]);
+                    $applied = true;
+                }
+            }
+
+            if ($handleTitleGuess !== null) {
+                $pattern = '%' . preg_replace('/\s+/', '%', $handleTitleGuess) . '%';
+                if ($applied) {
+                    $builder->orWhereRaw('lower(order_lines.raw_title) like ?', [$pattern]);
+                } else {
+                    $builder->whereRaw('lower(order_lines.raw_title) like ?', [$pattern]);
+                }
+            }
+        });
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     * @return array<string,mixed>
+     */
+    protected function orderCandidatePayload(OrderLine $line, array $product = []): array
+    {
+        $orderedAt = $line->getAttribute('review_ordered_at');
+        $status = $this->nullableString((string) $line->getAttribute('review_order_status'));
+        $productId = $line->shopify_product_id ? (string) $line->shopify_product_id : null;
+        $variantId = $line->shopify_variant_id ? (string) $line->shopify_variant_id : null;
+        $title = $this->nullableString($line->raw_title);
+
+        return [
+            'candidate_key' => 'order-line:' . $line->id,
+            'order_id' => (int) $line->order_id,
+            'order_line_id' => (int) $line->id,
+            'order_external_id' => $this->nullableString((string) $line->getAttribute('review_order_external_id')),
+            'ordered_at' => $orderedAt instanceof CarbonInterface ? $orderedAt->toIso8601String() : $this->nullableString((string) $orderedAt),
+            'order_status' => $status,
+            'store_key' => $this->nullableString((string) $line->getAttribute('review_order_store_key')),
+            'product_id' => $productId,
+            'variant_id' => $variantId,
+            'product_title' => $title,
+            'product_handle' => $this->nullableString($product['product_handle'] ?? null),
+            'product_url' => $this->canonicalProductUrl([
+                'product_handle' => $product['product_handle'] ?? null,
+                'product_url' => $product['product_url'] ?? null,
+            ]),
+            'matches_current_product' => $this->orderLineMatchesProduct($line, $product),
+        ];
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     */
+    protected function orderLineMatchesProduct(OrderLine $line, array $product): bool
+    {
+        $productId = $this->nullableString($product['product_id'] ?? null);
+        $variantId = $this->nullableString($product['variant_id'] ?? null);
+        $productTitle = $this->nullableString($product['product_title'] ?? null);
+
+        if ($productId !== null && $line->shopify_product_id !== null && (string) $line->shopify_product_id === $productId) {
+            return true;
+        }
+
+        if ($variantId !== null && $line->shopify_variant_id !== null && (string) $line->shopify_variant_id === $variantId) {
+            return true;
+        }
+
+        return $productTitle !== null
+            && $this->normalizedName((string) $line->raw_title) === $this->normalizedName($productTitle);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function eligibleOrderStatuses(): array
+    {
+        return [
+            'complete',
+            'completed',
+            'closed',
+            'delivered',
+            'fulfilled',
+            'paid',
+            'shipped',
+        ];
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function profileShopifyCustomerIds(MarketingProfile $profile, ?string $storeKey = null): array
+    {
+        return CustomerExternalProfile::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('integration', 'shopify_customer')
+            ->when($storeKey !== null, fn ($query) => $query->where('store_key', $storeKey))
+            ->pluck('external_customer_id')
+            ->map(fn ($value): ?string => $this->nullableString((string) $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function profileEmails(MarketingProfile $profile): array
+    {
+        return collect([
+            $this->nullableString($profile->normalized_email ?: $profile->email),
+        ])
+            ->merge(
+                CustomerExternalProfile::query()
+                    ->where('marketing_profile_id', $profile->id)
+                    ->pluck('normalized_email')
+            )
+            ->map(fn ($value): ?string => $this->nullableString((string) $value))
+            ->filter()
+            ->map(fn (string $value): string => Str::lower($value))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    protected function rewardRuleKeyForOrderLine(OrderLine $line, MarketingProfile $profile, ?int $tenantId): string
+    {
+        return implode(':', array_filter([
+            'tenant',
+            $tenantId,
+            'profile',
+            $profile->id,
+            $this->rewardDedupeMode($tenantId),
+            'order-line',
+            $line->id,
+        ], fn ($value): bool => $value !== null && $value !== ''));
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     */
+    protected function rewardRuleKeyForCustomerProduct(MarketingProfile $profile, array $product, ?int $tenantId): string
+    {
+        return implode(':', array_filter([
+            'tenant',
+            $tenantId,
+            'profile',
+            $profile->id,
+            'customer-product',
+            $this->nullableString($product['store_key'] ?? null),
+            (string) ($product['product_id'] ?? ''),
+        ], fn ($value): bool => $value !== null && $value !== ''));
+    }
+
+    /**
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
+     */
+    protected function rewardAlreadyUsed(MarketingProfile $profile, array $product, ?OrderLine $candidate, ?int $tenantId): bool
+    {
+        $query = $this->reviewLookupQuery([
+            ...$product,
+            'tenant_id' => $tenantId,
+        ])->where('marketing_profile_id', $profile->id)
+            ->where(function ($builder): void {
+                $builder->whereNotNull('candle_cash_task_completion_id')
+                    ->orWhereIn('reward_award_status', ['awarded', 'pending_award', 'pending', 'submitted']);
+            });
+
+        if ($candidate instanceof OrderLine && $this->rewardDedupeMode($tenantId) === 'order_line') {
+            $query->where('order_line_id', $candidate->id);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * @param mixed $mediaAssets
+     * @return array<int,array<string,mixed>>
+     */
+    protected function normalizeMediaAssets(mixed $mediaAssets): array
+    {
+        $assets = is_array($mediaAssets) ? $mediaAssets : [];
+
+        return collect($assets)
+            ->map(function ($asset): ?array {
+                if (is_string($asset)) {
+                    $label = $this->nullableString($asset);
+
+                    return $label ? ['label' => $label] : null;
+                }
+
+                if (! is_array($asset)) {
+                    return null;
+                }
+
+                $url = $this->nullableString($asset['url'] ?? null);
+                $label = $this->nullableString($asset['label'] ?? $asset['name'] ?? null);
+                $contentType = $this->nullableString($asset['content_type'] ?? $asset['type'] ?? null);
+
+                if ($url === null && $label === null) {
+                    return null;
+                }
+
+                return array_filter([
+                    'url' => $url,
+                    'label' => $label,
+                    'content_type' => $contentType,
+                ], fn ($value) => $value !== null && $value !== '');
+            })
+            ->filter()
+            ->values()
+            ->take(5)
+            ->all();
+    }
+
+    protected function tenantIdForProduct(array $product, ?MarketingProfile $profile = null): ?int
+    {
+        $tenantId = is_numeric($product['tenant_id'] ?? null) && (int) ($product['tenant_id'] ?? 0) > 0
+            ? (int) $product['tenant_id']
+            : null;
+
+        if ($tenantId !== null) {
+            return $tenantId;
+        }
+
+        $profileTenantId = (int) ($profile?->tenant_id ?? 0);
+
+        return $profileTenantId > 0 ? $profileTenantId : null;
     }
 
     /**
@@ -1235,7 +1848,7 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
      */
     protected function approvedReviewsQuery(array $product)
     {
@@ -1243,15 +1856,19 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
      */
     protected function reviewLookupQuery(array $product)
     {
         $storeKey = $this->nullableString($product['store_key'] ?? null);
         $productId = trim((string) ($product['product_id'] ?? ''));
         $productHandle = $this->nullableString($product['product_handle'] ?? null);
+        $tenantId = $this->tenantIdForProduct($product);
 
         return MarketingReviewHistory::query()
+            ->when($tenantId !== null, fn ($query) => $query->where(function ($builder) use ($tenantId): void {
+                $builder->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            }))
             ->when($storeKey !== null, fn ($query) => $query->where('store_key', $storeKey))
             ->where(function ($query) use ($productId, $productHandle): void {
                 // Legacy Growave rows can store product identity only inside raw_payload.
@@ -1278,10 +1895,25 @@ class ProductReviewService
             'status' => (string) ($review->status ?: 'approved'),
             'submitted_at' => optional($review->submitted_at ?: $review->created_at)->toIso8601String(),
             'approved_at' => optional($review->approved_at ?: $review->reviewed_at)->toIso8601String(),
+            'published_at' => optional($review->published_at)->toIso8601String(),
             'product_id' => $review->product_id ? (string) $review->product_id : null,
+            'order_id' => $review->order_id ? (int) $review->order_id : null,
+            'order_line_id' => $review->order_line_id ? (int) $review->order_line_id : null,
+            'variant_id' => $review->variant_id ? (string) $review->variant_id : null,
             'product_handle' => $review->product_handle ? (string) $review->product_handle : null,
             'product_title' => $review->product_title ? (string) $review->product_title : null,
+            'product_url' => $review->product_url ? (string) $review->product_url : null,
             'is_verified_buyer' => (bool) $review->is_verified_buyer,
+            'verified_purchase' => (bool) $review->is_verified_buyer,
+            'media_assets' => is_array($review->media_assets) ? $review->media_assets : [],
+            'helpful_count' => (int) ($review->votes ?? 0),
+            'publication_state' => (string) ($review->status ?: 'approved'),
+            'reward' => [
+                'eligibility_status' => $review->reward_eligibility_status ? (string) $review->reward_eligibility_status : null,
+                'award_status' => $review->reward_award_status ? (string) $review->reward_award_status : null,
+                'amount_cents' => $review->reward_amount_cents ? (int) $review->reward_amount_cents : 0,
+                'amount' => number_format(((int) ($review->reward_amount_cents ?? 0)) / 100, 2, '.', ''),
+            ],
             'source' => (string) ($review->submission_source ?: 'native'),
         ];
     }
@@ -1317,9 +1949,9 @@ class ProductReviewService
     }
 
     /**
-     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key?:?string,tenant_id?:?int} $product
+     * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
      */
-    protected function externalReviewId(array $product, ?MarketingProfile $profile, ?string $normalizedEmail): string
+    protected function externalReviewId(array $product, ?MarketingProfile $profile, ?string $normalizedEmail, ?string $scopeKey = null): string
     {
         $identity = $profile?->id ? 'profile:' . $profile->id : 'email:' . sha1((string) $normalizedEmail);
         $storeKey = $this->nullableString($product['store_key'] ?? null) ?: 'unknown_store';
@@ -1328,6 +1960,7 @@ class ProductReviewService
             $storeKey,
             (string) $product['product_id'],
             (string) ($product['product_handle'] ?? ''),
+            (string) ($scopeKey ?? 'customer-product'),
             $identity,
         ]));
     }
@@ -1406,10 +2039,18 @@ class ProductReviewService
 
     protected function hasOrderLink(MarketingProfile $profile): bool
     {
-        return MarketingProfileLink::query()
-            ->where('marketing_profile_id', $profile->id)
-            ->where('source_type', 'order')
-            ->exists();
+        return $this->recentOrderCandidates($profile) !== [];
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 
 }

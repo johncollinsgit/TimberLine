@@ -33,6 +33,12 @@ All storefront requests must stay on Shopify domain and use app proxy root:
 - `/apps/forestry/consent/request`
 - `/apps/forestry/consent/confirm`
 - `/apps/forestry/health`
+- `/apps/forestry/product-reviews/status`
+- `/apps/forestry/product-reviews/submit`
+- `/apps/forestry/wishlist/status`
+- `/apps/forestry/wishlist/add`
+- `/apps/forestry/wishlist/remove`
+- `/apps/forestry/wishlist/lists/create`
 
 Expected Shopify app proxy target:
 
@@ -68,6 +74,49 @@ Widget JS endpoint -> Laravel v1 endpoint:
 - `/apps/forestry/consent/request` -> `/shopify/marketing/v1/consent/request`
 - `/apps/forestry/consent/confirm` -> `/shopify/marketing/v1/consent/confirm`
 - `/apps/forestry/health` -> `/shopify/marketing/v1/health`
+- `/apps/forestry/product-reviews/status` -> `/shopify/marketing/v1/product-reviews/status`
+- `/apps/forestry/product-reviews/submit` -> `/shopify/marketing/v1/product-reviews/submit`
+- `/apps/forestry/wishlist/status` -> `/shopify/marketing/v1/wishlist/status`
+- `/apps/forestry/wishlist/add` -> `/shopify/marketing/v1/wishlist/add`
+- `/apps/forestry/wishlist/remove` -> `/shopify/marketing/v1/wishlist/remove`
+- `/apps/forestry/wishlist/lists/create` -> `/shopify/marketing/v1/wishlist/lists/create`
+
+## Native reviews + wishlist contract notes
+
+Reviews:
+- `product-reviews/status` returns canonical Backstage review data for the requested product/store context.
+- Native review payload always exposes `task.button_text = "Write a review"` regardless of legacy Candle Cash task text.
+- `viewer.recent_order_candidates` is included for resolved customers.
+- `viewer.eligibility` and submit responses expose reward eligibility/result details.
+- Review publication mode is tenant-driven:
+  - `pending_moderation`
+  - `auto_publish`
+- Modern Forestry default reward is `$1` (`100` cents), awarded only after a fulfilled/completed matching order-line passes anti-abuse checks.
+
+Wishlist:
+- `guest_token` is a supported storefront identity for status/add/remove/create-list.
+- Guest wishlist rows persist in canonical Backstage wishlist tables and merge into the resolved profile on later authenticated status/add flows.
+- `wishlist/status` returns:
+  - `guest_token`
+  - `active_list`
+  - `default_list`
+  - `lists`
+  - `items`
+  - `recent_items`
+- Named lists are created through `POST /wishlist/lists/create`.
+
+Tenant/runtime rules:
+- Storefront review/wishlist requests depend on verified Shopify store context (`shop` or `store_key`) that resolves into `shopify_stores`.
+- `shopify_stores.tenant_id` must be populated for the tenant-scoped Modern Forestry contract/defaults to apply cleanly.
+- Growave is historical-import input only. Runtime storefront reads/writes must use Backstage-owned canonical tables.
+
+## Modern Forestry cutover checklist
+
+After deploying the app/backend and pushing the theme:
+- Confirm `product-reviews/status` returns native CTA/reward values for Modern Forestry.
+- Confirm guest wishlist add/status/remove succeeds with `guest_token`.
+- Confirm the storefront no longer renders Growave helper markup or loads `ssw-empty.js`.
+- If Growave runtime output still appears after theme push, remove remaining Shopify-side Growave ScriptTags/app embeds operationally.
 
 ## Runtime config validation
 

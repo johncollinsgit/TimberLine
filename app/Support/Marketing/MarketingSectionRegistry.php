@@ -165,13 +165,25 @@ class MarketingSectionRegistry
             ],
             'reviews' => [
                 'label' => 'Reviews',
-                'route' => 'marketing.reviews',
-                'description' => 'Review program workspace for provider integrations and engagement loops.',
+                'route' => 'marketing.candle-cash.reviews',
+                'description' => 'Review moderation, reward exceptions, and storefront review operations.',
                 'hint_title' => 'How to use this page',
-                'hint_text' => 'Review summaries and history are now stored locally. Use this surface for review coverage, engagement, and follow-up workflows.',
+                'hint_text' => 'Native and imported reviews are stored locally now. Use this operational surface for moderation, reward troubleshooting, and merchant notifications.',
                 'coming_next' => [
                     'Review prompt pipelines and provider performance views.',
                     'Review sentiment + conversion impact rollups.',
+                ],
+                'group' => 'loyalty-retention',
+            ],
+            'wishlist' => [
+                'label' => 'Wishlist',
+                'route' => 'marketing.wishlist',
+                'description' => 'Wishlist intent, customer/product saves, and operator outreach queue.',
+                'hint_title' => 'How to use this page',
+                'hint_text' => 'Use Wishlist as the operational home for saved-product intent. It surfaces customer demand, product demand, and targeted outreach actions in one place.',
+                'coming_next' => [
+                    'Scheduled outreach cadences and spam guardrails.',
+                    'Redemption and conversion rollups tied back to wishlist offers.',
                 ],
                 'group' => 'loyalty-retention',
             ],

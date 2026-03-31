@@ -282,24 +282,31 @@
                 <div class="mt-4">{{ $eventLog->links() }}</div>
             </section>
         @elseif($sectionKey === 'reviews')
-            <section class="grid gap-4 md:grid-cols-5">
+            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 @foreach([
-                    'all' => 'All reviews',
-                    'approved' => 'Approved',
-                    'pending' => 'Pending',
-                    'rejected' => 'Rejected',
-                    'imported' => 'Imported',
-                ] as $key => $label)
-                    <a href="{{ route('marketing.candle-cash.reviews', ['status' => $key === 'imported' ? 'all' : $key, 'source' => $key === 'imported' ? 'imported' : 'all', 'search' => data_get($reviewFilters, 'search'), 'rating' => data_get($reviewFilters, 'rating')]) }}" wire:navigate class="rounded-[1.7rem] border p-5 {{ (($key === 'imported' ? 'all' : $key) === data_get($reviewFilters, 'status') && ($key !== 'imported' || data_get($reviewFilters, 'source') === 'imported')) ? 'border-amber-300/35 bg-amber-500/10' : 'border-white/10 bg-black/15' }}">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $label }}</div>
-                        <div class="mt-3 text-4xl font-semibold text-white">{{ number_format((int) data_get($reviewSummary, $key, 0)) }}</div>
+                    ['key' => 'all', 'label' => 'All reviews', 'status' => 'all', 'source' => 'all', 'queue' => 'all', 'reward_status' => 'all'],
+                    ['key' => 'approved', 'label' => 'Approved', 'status' => 'approved', 'source' => 'all', 'queue' => 'all', 'reward_status' => 'all'],
+                    ['key' => 'pending', 'label' => 'Pending', 'status' => 'pending', 'source' => 'all', 'queue' => 'pending_moderation', 'reward_status' => 'all'],
+                    ['key' => 'rejected', 'label' => 'Rejected', 'status' => 'rejected', 'source' => 'all', 'queue' => 'all', 'reward_status' => 'all'],
+                    ['key' => 'new_reviews', 'label' => 'New reviews', 'status' => 'all', 'source' => 'all', 'queue' => 'new_reviews', 'reward_status' => 'all'],
+                    ['key' => 'reward_exceptions', 'label' => 'Reward exceptions', 'status' => 'all', 'source' => 'all', 'queue' => 'reward_exceptions', 'reward_status' => 'exceptions'],
+                ] as $card)
+                    @php
+                        $isCurrentReviewCard = data_get($reviewFilters, 'status', 'all') === $card['status']
+                            && data_get($reviewFilters, 'source', 'all') === $card['source']
+                            && data_get($reviewFilters, 'queue', 'all') === $card['queue']
+                            && data_get($reviewFilters, 'reward_status', 'all') === $card['reward_status'];
+                    @endphp
+                    <a href="{{ route('marketing.candle-cash.reviews', ['status' => $card['status'], 'source' => $card['source'], 'queue' => $card['queue'], 'reward_status' => $card['reward_status'], 'search' => data_get($reviewFilters, 'search'), 'rating' => data_get($reviewFilters, 'rating')]) }}" wire:navigate class="rounded-[1.7rem] border p-5 {{ $isCurrentReviewCard ? 'border-amber-300/35 bg-amber-500/10' : 'border-white/10 bg-black/15' }}">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">{{ $card['label'] }}</div>
+                        <div class="mt-3 text-4xl font-semibold text-white">{{ number_format((int) data_get($reviewSummary, $card['key'], 0)) }}</div>
                     </a>
                 @endforeach
             </section>
 
             <section class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr),minmax(340px,0.95fr)]">
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
-                    <form method="GET" action="{{ route('marketing.candle-cash.reviews') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),180px,180px,180px,auto]">
+                    <form method="GET" action="{{ route('marketing.candle-cash.reviews') }}" class="grid gap-3 md:grid-cols-[minmax(0,1fr),180px,180px,180px,180px,auto]">
                         <input type="text" name="search" value="{{ data_get($reviewFilters, 'search') }}" placeholder="Search product, reviewer, title, body" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/35" />
                         <select name="status" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
                             @foreach(['all' => 'All statuses', 'approved' => 'Approved', 'pending' => 'Pending', 'rejected' => 'Rejected'] as $value => $label)
@@ -317,6 +324,19 @@
                             <option value="native" @selected(data_get($reviewFilters, 'source') === 'native')>Native</option>
                             <option value="imported" @selected(data_get($reviewFilters, 'source') === 'imported')>Imported</option>
                         </select>
+                        <select name="reward_status" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                            <option value="all" @selected(data_get($reviewFilters, 'reward_status') === 'all')>All reward states</option>
+                            <option value="awarded" @selected(data_get($reviewFilters, 'reward_status') === 'awarded')>Awarded</option>
+                            <option value="eligible" @selected(data_get($reviewFilters, 'reward_status') === 'eligible')>Eligible</option>
+                            <option value="ineligible" @selected(data_get($reviewFilters, 'reward_status') === 'ineligible')>Ineligible</option>
+                            <option value="exceptions" @selected(data_get($reviewFilters, 'reward_status') === 'exceptions')>Exceptions</option>
+                        </select>
+                        <select name="queue" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                            <option value="all" @selected(data_get($reviewFilters, 'queue') === 'all')>All queues</option>
+                            <option value="new_reviews" @selected(data_get($reviewFilters, 'queue') === 'new_reviews')>New reviews</option>
+                            <option value="pending_moderation" @selected(data_get($reviewFilters, 'queue') === 'pending_moderation')>Pending moderation</option>
+                            <option value="reward_exceptions" @selected(data_get($reviewFilters, 'queue') === 'reward_exceptions')>Reward exceptions</option>
+                        </select>
                         <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Apply</button>
                     </form>
 
@@ -328,7 +348,9 @@
                                     <th class="px-4 py-3">Reviewer</th>
                                     <th class="px-4 py-3">Rating</th>
                                     <th class="px-4 py-3">Status</th>
+                                    <th class="px-4 py-3">Reward</th>
                                     <th class="px-4 py-3">Source</th>
+                                    <th class="px-4 py-3">Tenant</th>
                                     <th class="px-4 py-3">Submitted</th>
                                 </tr>
                             </thead>
@@ -345,11 +367,16 @@
                                         </td>
                                         <td class="px-4 py-3 align-top text-white/70">{{ str_repeat('★', max(0, (int) $review->rating)) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</td>
                                         <td class="px-4 py-3 align-top text-white/70">{{ strtoupper($review->status ?: 'approved') }}</td>
+                                        <td class="px-4 py-3 align-top text-white/60">
+                                            <div>{{ Str::headline((string) ($review->reward_award_status ?: 'not_awarded')) }}</div>
+                                            <div class="mt-1 text-xs text-white/45">{{ Str::headline((string) ($review->reward_eligibility_status ?: 'unknown')) }}</div>
+                                        </td>
                                         <td class="px-4 py-3 align-top text-white/60">{{ $review->submission_source ?: 'native' }}</td>
+                                        <td class="px-4 py-3 align-top text-white/50">{{ $review->tenant?->name ?: (($reviewTenantId ?? null) ? 'Current tenant' : 'Global / legacy') }}</td>
                                         <td class="px-4 py-3 align-top text-white/50">{{ optional($review->submitted_at ?: $review->created_at)->format('Y-m-d H:i') }}</td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="6" class="px-4 py-6 text-center text-white/55">No product reviews match the current filters.</td></tr>
+                                    <tr><td colspan="8" class="px-4 py-6 text-center text-white/55">No product reviews match the current filters.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -373,6 +400,16 @@
                                 <div class="mt-2 text-lg font-semibold text-white">{{ $selectedReview->submission_source ?: 'native' }}</div>
                                 <div class="mt-1 text-xs text-white/45">{{ $selectedReview->status ?: 'approved' }}</div>
                             </div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Reward state</div>
+                                <div class="mt-2 text-lg font-semibold text-white">{{ Str::headline((string) ($selectedReview->reward_award_status ?: 'not_awarded')) }}</div>
+                                <div class="mt-1 text-xs text-white/45">{{ Str::headline((string) ($selectedReview->reward_eligibility_status ?: 'unknown')) }} · ${{ number_format(((int) ($selectedReview->reward_amount_cents ?? 0)) / 100, 2) }}</div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Storefront context</div>
+                                <div class="mt-2 text-lg font-semibold text-white">{{ $selectedReview->store_key ?: 'Unknown store' }}</div>
+                                <div class="mt-1 text-xs text-white/45">{{ $selectedReview->tenant?->name ?: 'Legacy / unscoped' }}</div>
+                            </div>
                         </div>
 
                         @if($selectedReview->title)
@@ -385,6 +422,37 @@
                         <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                             <div class="text-xs uppercase tracking-[0.18em] text-white/45">Review body</div>
                             <div class="mt-3 text-sm leading-7 text-white/80">{{ $selectedReview->body }}</div>
+                        </div>
+
+                        <div class="mt-5 grid gap-3 md:grid-cols-2">
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Order association</div>
+                                <div class="mt-2 text-sm text-white/80">
+                                    @if($selectedReview->order_id)
+                                        Order #{{ $selectedReview->order?->order_number ?: $selectedReview->order_id }}
+                                    @else
+                                        No order linked
+                                    @endif
+                                </div>
+                                <div class="mt-1 text-xs text-white/45">
+                                    @if($selectedReview->orderLine)
+                                        {{ $selectedReview->orderLine->raw_title ?: 'Order line #' . $selectedReview->orderLine->id }}
+                                    @else
+                                        No order line linked
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Media</div>
+                                <div class="mt-2 text-sm text-white/80">{{ number_format(count((array) ($selectedReview->media_assets ?? []))) }} attachment{{ count((array) ($selectedReview->media_assets ?? [])) === 1 ? '' : 's' }}</div>
+                                @if(! empty($selectedReview->media_assets))
+                                    <div class="mt-2 space-y-1 text-xs text-white/45">
+                                        @foreach((array) $selectedReview->media_assets as $asset)
+                                            <div>{{ data_get($asset, 'label') ?: (data_get($asset, 'url') ?: 'Attachment') }}</div>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
                         </div>
 
                         <div class="mt-5 grid gap-3">
@@ -410,6 +478,17 @@
                                         <div class="mt-1 text-xs text-white/50">Use this only when the review should be removed entirely.</div>
                                     </div>
                                     <button type="submit" class="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-white/80">Delete</button>
+                                </div>
+                            </form>
+
+                            <form method="POST" action="{{ route('marketing.candle-cash.reviews.resend-notification', $selectedReview) }}" class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                @csrf
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-white">Resend merchant email</div>
+                                        <div class="mt-1 text-xs text-white/50">Use this when the submission needs to be surfaced to the merchant again.</div>
+                                    </div>
+                                    <button type="submit" class="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-white/80">Resend</button>
                                 </div>
                             </form>
                         </div>
@@ -935,10 +1014,12 @@
 
                 <article class="rounded-[1.8rem] border border-white/10 bg-black/15 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-white/45">Integrations</div>
-                    <h2 class="mt-2 text-lg font-semibold text-white">Verification hooks</h2>
+                    <h2 class="mt-2 text-lg font-semibold text-white">Verification hooks and tenant defaults</h2>
                     <form method="POST" action="{{ route('marketing.candle-cash.settings.save') }}" class="mt-4 space-y-3">
                         @csrf
                         <input type="hidden" name="scope" value="integrations" />
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="reviews_enabled" value="1" @checked(data_get($integrationConfig, 'reviews_enabled', data_get($integrationConfig, 'product_review_enabled', true))) /> Reviews enabled for this tenant</label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="wishlist_enabled" value="1" @checked(data_get($integrationConfig, 'wishlist_enabled', true)) /> Wishlist enabled for this tenant</label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="google_review_enabled" value="1" @checked(data_get($integrationConfig, 'google_review_enabled', false)) /> Google review matching enabled</label>
                         <label class="block text-sm text-white/75">Google review URL<input type="text" name="google_review_url" value="{{ data_get($integrationConfig, 'google_review_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <input type="hidden" name="google_business_location_id" value="{{ data_get($integrationConfig, 'google_business_location_id') }}" />
@@ -947,9 +1028,17 @@
                         <label class="block text-sm text-white/75">Product review platform<input type="text" name="product_review_platform" value="{{ data_get($integrationConfig, 'product_review_platform') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="block text-sm text-white/75">Product review matching strategy<input type="text" name="product_review_matching_strategy" value="{{ data_get($integrationConfig, 'product_review_matching_strategy', 'profile_or_external_customer') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_moderation_enabled" value="1" @checked(data_get($integrationConfig, 'product_review_moderation_enabled', false)) /> Hold new product reviews for moderation</label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="review_auto_publish_enabled" value="1" @checked(data_get($integrationConfig, 'review_auto_publish_enabled', ! data_get($integrationConfig, 'product_review_moderation_enabled', false))) /> Auto-publish approved review submissions</label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_allow_guest" value="1" @checked(data_get($integrationConfig, 'product_review_allow_guest', true)) /> Allow guest product reviews</label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="rewards_incentivized_reviews_enabled" value="1" @checked(data_get($integrationConfig, 'rewards_incentivized_reviews_enabled', true)) /> Incentivized review rewards enabled</label>
                         <label class="block text-sm text-white/75">Product review minimum length<input type="number" min="12" max="500" name="product_review_min_length" value="{{ data_get($integrationConfig, 'product_review_min_length', 24) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="block text-sm text-white/75">Review reward amount<input type="number" step="0.01" min="0" max="50" name="product_review_reward_amount" value="{{ number_format(((int) data_get($integrationConfig, 'product_review_reward_amount_cents', 0)) / 100, 2, '.', '') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="product_review_require_order_match" value="1" @checked(data_get($integrationConfig, 'product_review_require_order_match', true)) /> Require order match for review reward</label>
+                        <label class="block text-sm text-white/75">Review reward dedupe rule<select name="product_review_reward_dedupe_mode" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white"><option value="order_line" @selected(data_get($integrationConfig, 'product_review_reward_dedupe_mode', 'order_line') === 'order_line')>One reward per product/order line</option><option value="customer_product" @selected(data_get($integrationConfig, 'product_review_reward_dedupe_mode', 'order_line') === 'customer_product')>One reward per customer/product</option></select></label>
                         <label class="block text-sm text-white/75">Product review notification email<input type="email" name="product_review_notification_email" value="{{ data_get($integrationConfig, 'product_review_notification_email', 'info@theforestrystudio.com') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="wishlist_discount_outreach_enabled" value="1" @checked(data_get($integrationConfig, 'wishlist_discount_outreach_enabled', true)) /> Wishlist discount outreach enabled</label>
+                        <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="sms_provider_enabled" value="1" @checked(data_get($integrationConfig, 'sms_provider_enabled', true)) /> SMS provider enabled for outreach</label>
+                        <label class="block text-sm text-white/75">Branding tokens (JSON)<textarea name="tenant_branding_tokens" rows="4" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" placeholder='{"accent":"forest","email_footer":"Modern Forestry"}'>{{ data_get($integrationConfig, 'tenant_branding_tokens') ? json_encode(data_get($integrationConfig, 'tenant_branding_tokens'), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '' }}</textarea></label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="email_signup_enabled" value="1" @checked(data_get($integrationConfig, 'email_signup_enabled', true)) /> Email signup task enabled</label>
                         <label class="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" name="sms_signup_enabled" value="1" @checked(data_get($integrationConfig, 'sms_signup_enabled', true)) /> SMS signup task enabled</label>
                         <label class="block text-sm text-white/75">Candle Club locked CTA URL<input type="text" name="vote_locked_join_url" value="{{ data_get($integrationConfig, 'vote_locked_join_url') }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white" /></label>

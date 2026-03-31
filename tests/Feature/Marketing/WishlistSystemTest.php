@@ -4,6 +4,7 @@ use App\Models\CandleCashTaskCompletion;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileWishlistItem;
+use App\Models\MarketingWishlistList;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 
@@ -139,6 +140,104 @@ test('shopify wishlist add remove and status remain idempotent for the canonical
         ->first())
         ->not->toBeNull()
         ->status->toBe(MarketingProfileWishlistItem::STATUS_REMOVED);
+});
+
+test('shopify wishlist guest token flows work end to end through the app proxy', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'wishlist-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'wishlist-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureWishlistStorefrontStores();
+
+    $guestToken = 'guest-wishlist-token-123';
+    $payload = [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'guest_token' => $guestToken,
+        'product_id' => 'wsku-guest-101',
+        'product_handle' => 'guest-glow',
+        'product_title' => 'Guest Glow',
+        'product_url' => '/products/guest-glow',
+        'request_key' => 'wishlist-guest-add-guest-glow',
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.wishlist.add', wishlistSignedQuery([
+        'shop' => $payload['shop'],
+        'timestamp' => $payload['timestamp'],
+    ], 'wishlist-proxy-secret')), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.guest_token', $guestToken)
+        ->assertJsonPath('data.state', 'wishlist_added')
+        ->assertJsonPath('data.product.in_wishlist', true)
+        ->assertJsonPath('data.summary.active_count', 1);
+
+    $item = MarketingProfileWishlistItem::query()->where([
+        'guest_token' => $guestToken,
+        'store_key' => 'retail',
+        'product_id' => 'wsku-guest-101',
+    ])->first();
+
+    expect($item)->not->toBeNull()
+        ->and($item->marketing_profile_id)->toBeNull()
+        ->and($item->status)->toBe(MarketingProfileWishlistItem::STATUS_ACTIVE);
+
+    $statusQuery = wishlistSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 1),
+        'guest_token' => $guestToken,
+        'product_id' => 'wsku-guest-101',
+        'product_handle' => 'guest-glow',
+    ], 'wishlist-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.wishlist.status', $statusQuery))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.guest_token', $guestToken)
+        ->assertJsonPath('data.viewer.state', 'wishlist_ready')
+        ->assertJsonPath('data.summary.active_count', 1)
+        ->assertJsonPath('data.product.in_wishlist', true)
+        ->assertJsonPath('data.items.0.product_handle', 'guest-glow');
+
+    $this->postJson(route('marketing.shopify.v1.wishlist.lists.create', wishlistSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 2),
+    ], 'wishlist-proxy-secret')), [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 2),
+        'guest_token' => $guestToken,
+        'name' => 'Weekend Burn',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.state', 'wishlist_list_created')
+        ->assertJsonPath('data.list.name', 'Weekend Burn')
+        ->assertJsonPath('data.guest_token', $guestToken);
+
+    expect(MarketingWishlistList::query()
+        ->where('guest_token', $guestToken)
+        ->where('name', 'Weekend Burn')
+        ->exists())->toBeTrue();
+
+    $removePayload = [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 3),
+        'guest_token' => $guestToken,
+        'product_id' => 'wsku-guest-101',
+        'product_handle' => 'guest-glow',
+        'request_key' => 'wishlist-guest-remove-guest-glow',
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.wishlist.remove', wishlistSignedQuery([
+        'shop' => $removePayload['shop'],
+        'timestamp' => $removePayload['timestamp'],
+    ], 'wishlist-proxy-secret')), $removePayload)
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.guest_token', $guestToken)
+        ->assertJsonPath('data.state', 'wishlist_removed')
+        ->assertJsonPath('data.product.in_wishlist', false)
+        ->assertJsonPath('data.summary.active_count', 0);
 });
 
 test('shopify wishlist add fails safely when identity matching is ambiguous', function () {

@@ -105,6 +105,7 @@ class CandleCashTaskService
             'proof_text' => $context['proof_text'] ?? null,
             'submission_payload' => is_array($context['submission_payload'] ?? null) ? $context['submission_payload'] : null,
             'metadata' => is_array($context['metadata'] ?? null) ? $context['metadata'] : null,
+            'reward_amount' => isset($context['reward_amount']) ? (float) $context['reward_amount'] : null,
             'occurred_at' => $context['occurred_at'] ?? now(),
         ], autoApprove: (bool) $taskModel->auto_award, logBlocked: false);
     }
@@ -142,6 +143,7 @@ class CandleCashTaskService
             'proof_text' => $payload['proof_text'] ?? null,
             'submission_payload' => $payload !== [] ? $payload : null,
             'metadata' => is_array($context['metadata'] ?? null) ? $context['metadata'] : null,
+            'reward_amount' => isset($context['reward_amount']) ? (float) $context['reward_amount'] : null,
             'occurred_at' => $context['occurred_at'] ?? now(),
         ], autoApprove: ! $taskModel->requires_manual_approval && ! $taskModel->requires_customer_submission, logBlocked: true);
     }
@@ -369,7 +371,9 @@ class CandleCashTaskService
         }
 
         $status = $autoApprove ? 'awarded' : 'pending';
-        $rewardAmount = (float) $task->reward_amount;
+        $rewardAmount = isset($payload['reward_amount']) && (float) $payload['reward_amount'] > 0
+            ? round((float) $payload['reward_amount'], 2)
+            : (float) $task->reward_amount;
         $rewardPoints = $this->candleCashService->pointsFromAmount($rewardAmount);
 
         $completion = DB::transaction(function () use ($profile, $task, $payload, $status, $completionKey, $rewardAmount, $rewardPoints, $autoApprove, $event): CandleCashTaskCompletion {

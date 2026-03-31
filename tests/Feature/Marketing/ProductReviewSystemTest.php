@@ -7,8 +7,11 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingSetting;
+use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
+use App\Models\TenantMarketingSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 
@@ -123,6 +126,57 @@ test('shopify product review status includes legacy growave reviews with product
         ->assertJsonPath('data.reviews.0.source', 'growave_import');
 });
 
+test('shopify product review status uses the native storefront contract for tenant-scoped stores', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    configureProductReviewStorefrontStores($tenant->id);
+
+    TenantMarketingSetting::query()->updateOrCreate(
+        ['tenant_id' => $tenant->id, 'key' => 'candle_cash_integration_config'],
+        ['value' => [
+            'reviews_enabled' => true,
+            'product_review_enabled' => true,
+            'product_review_allow_guest' => true,
+            'product_review_moderation_enabled' => true,
+            'product_review_reward_amount_cents' => 100,
+            'product_review_require_order_match' => true,
+            'product_review_reward_dedupe_mode' => 'order_line',
+            'product_review_notification_email' => 'info@theforestrystudio.com',
+        ]]
+    );
+
+    CandleCashTask::query()->where('handle', 'product-review')->update([
+        'reward_amount' => 2.00,
+        'button_text' => 'Browse products',
+    ]);
+
+    $query = productReviewSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'product_id' => '9001',
+        'product_handle' => 'nightfall-candle',
+        'product_title' => 'Nightfall Candle',
+        'product_url' => '/products/nightfall-candle',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.status', $query))
+        ->assertOk()
+        ->assertJsonPath('data.task.button_text', 'Write a review')
+        ->assertJsonPath('data.task.reward_amount', '1.00')
+        ->assertJsonPath('data.task.reward_amount_cents', 100)
+        ->assertJsonPath('data.settings.publication_mode', 'pending_moderation')
+        ->assertJsonPath('data.settings.reward_requires_order_match', true)
+        ->assertJsonPath('data.viewer.state', 'guest_ready');
+});
+
 test('shopify product review submission creates native review, sends email, and awards candle cash once', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
@@ -137,6 +191,41 @@ test('shopify product review submission creates native review, sends email, and 
         'last_name' => 'Pine',
         'email' => 'june@example.com',
         'normalized_email' => 'june@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_customer',
+        'store_key' => 'retail',
+        'external_customer_id' => 'shopify-customer-9002',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 'shopify-order-9002',
+        'shopify_customer_id' => 'shopify-customer-9002',
+        'order_number' => '#9002',
+        'customer_name' => 'June Pine',
+        'customer_email' => $profile->email,
+        'shipping_email' => $profile->email,
+        'billing_email' => $profile->email,
+        'status' => 'fulfilled',
+        'ordered_at' => now()->subDays(3),
+    ]);
+
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'shopify_line_item_id' => 9002001,
+        'shopify_product_id' => 9002,
+        'shopify_variant_id' => 900201,
+        'quantity' => 1,
+        'scent_name' => 'Salt + Cedar',
+        'size_code' => '8oz',
+        'raw_title' => 'Salt + Cedar',
     ]);
 
     $payload = [

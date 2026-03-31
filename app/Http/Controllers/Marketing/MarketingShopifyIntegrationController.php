@@ -1717,6 +1717,7 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => ['nullable', 'string', 'max:160'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'product_url' => ['nullable', 'string', 'max:500'],
+            'variant_id' => ['nullable', 'string', 'max:120'],
         ]);
 
         $storeContext = $this->resolveStoreContext($request);
@@ -1763,6 +1764,8 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => ['nullable', 'string', 'max:160'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'product_url' => ['nullable', 'string', 'max:500'],
+            'guest_token' => ['nullable', 'string', 'max:120'],
+            'wishlist_list_id' => ['nullable', 'integer'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -1815,6 +1818,9 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => ['nullable', 'string', 'max:160'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'product_url' => ['nullable', 'string', 'max:500'],
+            'guest_token' => ['nullable', 'string', 'max:120'],
+            'wishlist_list_id' => ['nullable', 'integer'],
+            'list_name' => ['nullable', 'string', 'max:160'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
             'request_key' => ['nullable', 'string', 'max:200'],
@@ -1831,8 +1837,9 @@ class MarketingShopifyIntegrationController extends Controller
         $profile = $resolved['profile'] ?? null;
         $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
         $requestKey = trim((string) ($data['request_key'] ?? ''));
+        $guestToken = trim((string) ($data['guest_token'] ?? ''));
 
-        if (! $profile) {
+        if (! $profile && $guestToken === '') {
             $this->logStorefrontEvent($request, 'widget_wishlist_add', [
                 'status' => 'error',
                 'issue_type' => 'identity_' . $identityStatus,
@@ -1875,7 +1882,10 @@ class MarketingShopifyIntegrationController extends Controller
                 [
                     'request_key' => $data['request_key'] ?? null,
                     'source' => 'native_storefront',
-                    'source_surface' => 'shopify_product_page',
+                'source_surface' => 'shopify_product_page',
+                    'guest_token' => $data['guest_token'] ?? null,
+                    'wishlist_list_id' => $data['wishlist_list_id'] ?? null,
+                    'list_name' => $data['list_name'] ?? null,
                     'raw_payload' => [
                         'product' => [
                             'id' => (string) $data['product_id'],
@@ -1942,7 +1952,7 @@ class MarketingShopifyIntegrationController extends Controller
         ]);
 
         return MarketingStorefrontContract::success([
-            'profile_id' => $profile->id,
+            'profile_id' => $profile?->id,
             'state' => (string) ($result['state'] ?? 'wishlist_added'),
             'item' => $item ? $wishlistService->itemPayload($item) : null,
             ...$payload,
@@ -1959,6 +1969,8 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => ['nullable', 'string', 'max:160'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'product_url' => ['nullable', 'string', 'max:500'],
+            'guest_token' => ['nullable', 'string', 'max:120'],
+            'wishlist_list_id' => ['nullable', 'integer'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
             'request_key' => ['nullable', 'string', 'max:200'],
@@ -1975,8 +1987,9 @@ class MarketingShopifyIntegrationController extends Controller
         $profile = $resolved['profile'] ?? null;
         $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
         $requestKey = trim((string) ($data['request_key'] ?? ''));
+        $guestToken = trim((string) ($data['guest_token'] ?? ''));
 
-        if (! $profile) {
+        if (! $profile && $guestToken === '') {
             $this->logStorefrontEvent($request, 'widget_wishlist_remove', [
                 'status' => 'error',
                 'issue_type' => 'identity_' . $identityStatus,
@@ -2068,11 +2081,60 @@ class MarketingShopifyIntegrationController extends Controller
         ]);
 
         return MarketingStorefrontContract::success([
-            'profile_id' => $profile->id,
+            'profile_id' => $profile?->id,
             'state' => (string) ($result['state'] ?? 'wishlist_removed'),
             'item' => $item ? $wishlistService->itemPayload($item) : null,
             ...$payload,
         ], $this->contractMeta($request), [(string) ($result['state'] ?? 'wishlist_removed')]);
+    }
+
+    public function createWishlistList(
+        Request $request,
+        MarketingWishlistService $wishlistService
+    ): JsonResponse {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'],
+            'guest_token' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'request_key' => ['nullable', 'string', 'max:200'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('wishlist_list_create');
+        }
+
+        $resolved = $this->resolveProfile($request, scope: 'wishlist_list_create', allowCreate: false, allowBody: true);
+        $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $guestToken = trim((string) ($data['guest_token'] ?? ''));
+
+        if (! $profile && $guestToken === '') {
+            return $this->identityErrorResponse($identityStatus, $request);
+        }
+
+        $list = $wishlistService->createList($profile, $this->wishlistContext($data, $storeContext), [
+            'name' => $data['name'],
+            'guest_token' => $data['guest_token'] ?? null,
+            'source' => 'native_storefront',
+        ]);
+
+        $payload = $wishlistService->storefrontPayload($profile, [
+            ...$this->wishlistContext($data, $storeContext),
+            'guest_token' => $data['guest_token'] ?? null,
+            'wishlist_list_id' => $list->id,
+            'identity_status' => $identityStatus,
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile?->id,
+            'state' => 'wishlist_list_created',
+            'list' => $wishlistService->listPayload($list),
+            ...$payload,
+        ], $this->contractMeta($request), ['wishlist_list_created']);
     }
 
     public function submitProductReview(
@@ -2084,11 +2146,15 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => ['nullable', 'string', 'max:160'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'product_url' => ['nullable', 'string', 'max:500'],
+            'variant_id' => ['nullable', 'string', 'max:120'],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'title' => ['nullable', 'string', 'max:190'],
             'body' => ['required', 'string', 'max:4000'],
             'name' => ['nullable', 'string', 'max:160'],
             'email' => ['nullable', 'email', 'max:255'],
+            'order_id' => ['nullable', 'integer'],
+            'order_line_id' => ['nullable', 'integer'],
+            'media_assets' => ['nullable', 'array', 'max:5'],
             'phone' => ['nullable', 'string', 'max:40'],
             'request_key' => ['nullable', 'string', 'max:200'],
             'marketing_profile_id' => ['nullable', 'integer'],
@@ -2134,6 +2200,10 @@ class MarketingShopifyIntegrationController extends Controller
                 'body' => (string) $data['body'],
                 'name' => $data['name'] ?? null,
                 'email' => $data['email'] ?? null,
+                'order_id' => $data['order_id'] ?? null,
+                'order_line_id' => $data['order_line_id'] ?? null,
+                'variant_id' => $data['variant_id'] ?? null,
+                'media_assets' => $data['media_assets'] ?? null,
                 'request_key' => $data['request_key'] ?? null,
                 'source_surface' => 'shopify_product_page',
             ]);
@@ -2232,12 +2302,22 @@ class MarketingShopifyIntegrationController extends Controller
                 'reviewer_name' => $review->displayReviewerName(),
                 'submitted_at' => optional($review->submitted_at ?: $review->created_at)->toIso8601String(),
                 'approved_at' => optional($review->approved_at)->toIso8601String(),
+                'published_at' => optional($review->published_at)->toIso8601String(),
                 'is_verified_buyer' => (bool) $review->is_verified_buyer,
+                'order_id' => $review->order_id ? (int) $review->order_id : null,
+                'order_line_id' => $review->order_line_id ? (int) $review->order_line_id : null,
+                'variant_id' => $review->variant_id ? (string) $review->variant_id : null,
+                'media_assets' => is_array($review->media_assets) ? $review->media_assets : [],
             ] : null,
             'award' => [
                 'state' => data_get($result, 'award.state'),
                 'completion_id' => data_get($result, 'award.completion.id'),
                 'event_id' => data_get($result, 'award.event.id'),
+                'eligible' => (bool) data_get($result, 'award.eligible', false),
+                'eligibility_status' => data_get($result, 'award.eligibility_status'),
+                'reward_amount_cents' => (int) data_get($result, 'award.reward_amount_cents', 0),
+                'reward_amount' => data_get($result, 'award.reward_amount'),
+                'message' => data_get($result, 'award.message'),
             ],
         ], $this->contractMeta($request), [(string) ($result['state'] ?? 'review_live')]);
     }
@@ -2469,7 +2549,7 @@ class MarketingShopifyIntegrationController extends Controller
     /**
      * @param array<string,mixed> $data
      * @param array{store_key:?string,tenant_id:?int} $storeContext
-     * @return array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,tenant_id:?int}
+     * @return array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id:?string,store_key:string,tenant_id:?int}
      */
     protected function productReviewContext(array $data, array $storeContext): array
     {
@@ -2478,6 +2558,7 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => $this->nullableString($data['product_handle'] ?? null),
             'product_title' => $this->nullableString($data['product_title'] ?? null),
             'product_url' => $this->nullableString($data['product_url'] ?? null),
+            'variant_id' => $this->nullableString($data['variant_id'] ?? null),
             'store_key' => (string) ($storeContext['store_key'] ?? ''),
             'tenant_id' => is_numeric($storeContext['tenant_id'] ?? null)
                 ? (int) $storeContext['tenant_id']
@@ -2488,7 +2569,7 @@ class MarketingShopifyIntegrationController extends Controller
     /**
      * @param array<string,mixed> $data
      * @param array{store_key:?string,tenant_id:?int} $storeContext
-     * @return array{product_id:string,product_variant_id:?string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,tenant_id:?int}
+     * @return array{product_id:string,product_variant_id:?string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,tenant_id:?int,guest_token:?string,wishlist_list_id:?int,list_name:?string}
      */
     protected function wishlistContext(array $data, array $storeContext): array
     {
@@ -2498,6 +2579,9 @@ class MarketingShopifyIntegrationController extends Controller
             'product_handle' => $this->nullableString($data['product_handle'] ?? null),
             'product_title' => $this->nullableString($data['product_title'] ?? null),
             'product_url' => $this->nullableString($data['product_url'] ?? null),
+            'guest_token' => $this->nullableString($data['guest_token'] ?? null),
+            'wishlist_list_id' => isset($data['wishlist_list_id']) ? (int) $data['wishlist_list_id'] : null,
+            'list_name' => $this->nullableString($data['list_name'] ?? $data['name'] ?? null),
             'store_key' => (string) ($storeContext['store_key'] ?? ''),
             'tenant_id' => is_numeric($storeContext['tenant_id'] ?? null)
                 ? (int) $storeContext['tenant_id']

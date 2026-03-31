@@ -14,14 +14,14 @@ class ProductReviewNotificationService
     ) {
     }
 
-    public function send(MarketingReviewHistory $review): void
+    public function send(MarketingReviewHistory $review, bool $force = false): void
     {
-        if (! $this->shouldNotify($review) || $review->notification_sent_at) {
+        if (! $this->shouldNotify($review) || (! $force && $review->notification_sent_at)) {
             return;
         }
 
         $email = trim((string) data_get(
-            $this->taskService->integrationConfig(),
+            $this->taskService->integrationConfig((int) ($review->tenant_id ?? 0) ?: null),
             'product_review_notification_email',
             'info@theforestrystudio.com'
         ));

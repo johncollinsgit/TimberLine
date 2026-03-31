@@ -3,13 +3,16 @@
     $submittedAt = optional($review->submitted_at ?: $review->created_at)?->timezone(config('app.timezone'))->format('F j, Y');
     $rating = max(0, min(5, (int) $review->rating));
     $stars = str_repeat('★', $rating) . str_repeat('☆', max(0, 5 - $rating));
+    $rewardAmount = (int) ($review->reward_amount_cents ?? 0);
+    $rewardLabel = $rewardAmount > 0 ? '$' . number_format($rewardAmount / 100, 2) : null;
+    $mediaAssets = is_array($review->media_assets ?? null) ? $review->media_assets : [];
 @endphp
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New review on Modern Forestry</title>
+    <title>New review for {{ $merchantName ?? 'Forestry Backstage' }}</title>
 </head>
 <body style="margin:0;background:#f6f6f6;color:#111111;font-family:Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f6f6;margin:0;padding:0;">
@@ -27,7 +30,7 @@
                     <tr>
                         <td style="padding:0 24px 34px;">
                             <p style="margin:0;font-size:22px;line-height:1.45;color:#111111;">
-                                You just received a new review on Modern Forestry.
+                                You just received a new review for {{ $merchantName ?? 'Forestry Backstage' }}.
                             </p>
                         </td>
                     </tr>
@@ -55,6 +58,21 @@
                                         <div style="margin-top:24px;font-size:14px;line-height:1.6;color:#5c5c5c;">
                                             {{ $reviewer }}@if($submittedAt) · {{ $submittedAt }}@endif
                                         </div>
+
+                                        <div style="margin-top:22px;padding-top:22px;border-top:1px solid #ededed;font-size:14px;line-height:1.7;color:#3f3f3f;">
+                                            <div>Status: {{ strtoupper((string) ($review->status ?: 'pending')) }}</div>
+                                            <div>Reward: {{ $review->reward_award_status ?: ($rewardLabel ? 'Eligible' : 'Not awarded') }}@if($rewardLabel) · {{ $rewardLabel }} @endif</div>
+                                            <div>Verified purchase: {{ $review->is_verified_buyer ? 'Yes' : 'No' }}</div>
+                                            @if($review->reviewer_email)
+                                                <div>Reviewer email: {{ $review->reviewer_email }}</div>
+                                            @endif
+                                            @if($review->order_id)
+                                                <div>Order link: #{{ $review->order_id }}@if($review->order_line_id) · line {{ $review->order_line_id }}@endif</div>
+                                            @endif
+                                            @if(count($mediaAssets) > 0)
+                                                <div>Media attachments: {{ count($mediaAssets) }}</div>
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             </table>
@@ -70,7 +88,7 @@
                     <tr>
                         <td style="background:#132855;padding:34px 24px;text-align:center;">
                             <div style="font-size:18px;line-height:1.6;color:#ffffff;">
-                                Sent on behalf of Modern Forestry
+                                Sent on behalf of {{ $merchantName ?? 'Forestry Backstage' }}
                             </div>
                         </td>
                     </tr>

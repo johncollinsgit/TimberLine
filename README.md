@@ -432,6 +432,31 @@ Notes:
 - `shopify:sync-customer-metafields` requires Admin API `read_customers` or `write_customers` scope; Customer Account `customer_*` scopes are not sufficient for Admin `customers` queries.
 - Webhooks are verified with HMAC and dispatched to a sync queue (Phase 1).
 
+### Modern Forestry Native Reviews + Wishlist
+
+Modern Forestry now uses Backstage-owned canonical review and wishlist flows on the Shopify storefront. Growave remains import-only source data and must not be used as a runtime storefront dependency.
+
+Storefront app-proxy endpoints:
+- `GET /apps/forestry/product-reviews/status`
+- `POST /apps/forestry/product-reviews/submit`
+- `GET /apps/forestry/wishlist/status`
+- `POST /apps/forestry/wishlist/add`
+- `POST /apps/forestry/wishlist/remove`
+- `POST /apps/forestry/wishlist/lists/create`
+
+Contract/runtime expectations:
+- Product review status always returns the native widget contract and `task.button_text = "Write a review"`.
+- Product review rewards are tenant-scoped and, for Modern Forestry, default to `$1` (`100` cents).
+- Reward credit is issued only after a fulfilled/completed order-line match for the same product passes dedupe checks.
+- Guest reviews are allowed, but guest reviews do not receive Candle Cash unless they resolve to a qualifying customer/order match.
+- Wishlist supports guests through `guest_token`, named lists, and merge-on-auth when a known customer resolves later.
+- Reviews and wishlists must resolve through tenant-scoped Backstage data. `shopify_stores.tenant_id` must be present for the storefront store context.
+
+Cutover/removal notes:
+- Theme/runtime Growave widgets must stay disabled or removed.
+- Any remaining Growave Shopify app embed or ScriptTag output must be removed operationally after deploy.
+- Growave historical reviews/wishlists may still be imported into canonical Backstage rows, but live storefront reads/writes must use only Backstage-owned tables.
+
 ## Deployment (GitHub Actions -> Production)
 This repository deploys with `.github/workflows/deploy.yml`.
 

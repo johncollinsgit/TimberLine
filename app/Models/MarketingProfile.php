@@ -190,6 +190,11 @@ class MarketingProfile extends Model
         return $this->hasMany(MarketingProfileWishlistItem::class, 'marketing_profile_id');
     }
 
+    public function wishlistLists(): HasMany
+    {
+        return $this->hasMany(MarketingWishlistList::class, 'marketing_profile_id');
+    }
+
     public function automationEvents(): HasMany
     {
         return $this->hasMany(MarketingAutomationEvent::class, 'marketing_profile_id');

@@ -10,6 +10,7 @@ class MarketingReviewHistory extends Model
 {
     protected $fillable = [
         'marketing_profile_id',
+        'tenant_id',
         'marketing_review_summary_id',
         'provider',
         'integration',
@@ -29,17 +30,26 @@ class MarketingReviewHistory extends Model
         'votes',
         'has_media',
         'media_count',
+        'media_assets',
         'product_id',
+        'order_id',
+        'order_line_id',
+        'variant_id',
         'product_handle',
         'product_url',
         'product_title',
         'reviewed_at',
         'submitted_at',
         'approved_at',
+        'published_at',
         'rejected_at',
         'moderated_by',
         'moderation_notes',
         'notification_sent_at',
+        'reward_eligibility_status',
+        'reward_award_status',
+        'reward_amount_cents',
+        'reward_rule_key',
         'candle_cash_task_event_id',
         'candle_cash_task_completion_id',
         'source_synced_at',
@@ -47,6 +57,7 @@ class MarketingReviewHistory extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'rating' => 'integer',
         'is_published' => 'boolean',
         'is_pinned' => 'boolean',
@@ -54,11 +65,14 @@ class MarketingReviewHistory extends Model
         'votes' => 'integer',
         'has_media' => 'boolean',
         'media_count' => 'integer',
+        'media_assets' => 'array',
         'reviewed_at' => 'datetime',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
+        'published_at' => 'datetime',
         'rejected_at' => 'datetime',
         'notification_sent_at' => 'datetime',
+        'reward_amount_cents' => 'integer',
         'source_synced_at' => 'datetime',
         'raw_payload' => 'array',
     ];
@@ -68,9 +82,24 @@ class MarketingReviewHistory extends Model
         return $this->belongsTo(MarketingProfile::class, 'marketing_profile_id');
     }
 
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
     public function summary(): BelongsTo
     {
         return $this->belongsTo(MarketingReviewSummary::class, 'marketing_review_summary_id');
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'order_id');
+    }
+
+    public function orderLine(): BelongsTo
+    {
+        return $this->belongsTo(OrderLine::class, 'order_line_id');
     }
 
     public function moderator(): BelongsTo

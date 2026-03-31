@@ -17,6 +17,8 @@ class MarketingProfileWishlistItem extends Model
     protected $fillable = [
         'tenant_id',
         'marketing_profile_id',
+        'wishlist_list_id',
+        'guest_token',
         'provider',
         'integration',
         'store_key',
@@ -38,6 +40,8 @@ class MarketingProfileWishlistItem extends Model
 
     protected $casts = [
         'tenant_id' => 'integer',
+        'marketing_profile_id' => 'integer',
+        'wishlist_list_id' => 'integer',
         'added_at' => 'datetime',
         'last_added_at' => 'datetime',
         'removed_at' => 'datetime',
@@ -48,6 +52,11 @@ class MarketingProfileWishlistItem extends Model
     public function profile(): BelongsTo
     {
         return $this->belongsTo(MarketingProfile::class, 'marketing_profile_id');
+    }
+
+    public function wishlistList(): BelongsTo
+    {
+        return $this->belongsTo(MarketingWishlistList::class, 'wishlist_list_id');
     }
 
     public function tenant(): BelongsTo

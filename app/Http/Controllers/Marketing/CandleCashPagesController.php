@@ -13,6 +13,8 @@ use App\Models\MarketingReviewHistory;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use App\Models\Order;
+use App\Models\TenantMarketingSetting;
+use App\Models\TenantModuleState;
 use App\Services\Marketing\CandleCashReferralService;
 use App\Services\Marketing\CandleCashRewardsOverviewService;
 use App\Services\Marketing\CandleCashService;
@@ -21,13 +23,16 @@ use App\Services\Marketing\CandleCashTaskEligibilityService;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Services\Marketing\ProductReviewService;
+use App\Services\Marketing\ProductReviewNotificationService;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Support\Marketing\CandleCashSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Collection;
@@ -214,14 +219,16 @@ class CandleCashPagesController extends Controller
 
     public function reviews(Request $request): View
     {
+        $tenantId = $this->currentTenantId($request);
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', 'all'));
         $rating = trim((string) $request->query('rating', 'all'));
         $source = trim((string) $request->query('source', 'all'));
+        $rewardStatus = trim((string) $request->query('reward_status', 'all'));
+        $queue = trim((string) $request->query('queue', 'all'));
         $selectedId = (int) $request->query('review', 0);
 
-        $reviews = MarketingReviewHistory::query()
-            ->with('profile:id,first_name,last_name,email')
+        $reviewsQuery = $this->reviewIndexQuery($tenantId)
             ->when($search !== '', function (Builder $builder) use ($search): void {
                 $builder->where(function (Builder $query) use ($search): void {
                     $query->where('product_title', 'like', '%' . $search . '%')
@@ -229,22 +236,32 @@ class CandleCashPagesController extends Controller
                         ->orWhere('reviewer_name', 'like', '%' . $search . '%')
                         ->orWhere('reviewer_email', 'like', '%' . $search . '%')
                         ->orWhere('body', 'like', '%' . $search . '%')
-                        ->orWhere('title', 'like', '%' . $search . '%');
+                        ->orWhere('title', 'like', '%' . $search . '%')
+                        ->orWhere('reward_eligibility_status', 'like', '%' . $search . '%')
+                        ->orWhere('reward_award_status', 'like', '%' . $search . '%');
                 });
             })
             ->when($status !== 'all', fn (Builder $builder) => $builder->where('status', $status))
             ->when($rating !== 'all', fn (Builder $builder) => $builder->where('rating', (int) $rating))
             ->when($source === 'imported', fn (Builder $builder) => $builder->where('submission_source', 'growave_import'))
             ->when($source === 'native', fn (Builder $builder) => $builder->where('submission_source', '!=', 'growave_import'))
+            ->when($rewardStatus !== 'all', fn (Builder $builder) => $this->applyRewardStatusFilter($builder, $rewardStatus))
+            ->when($queue !== 'all', fn (Builder $builder) => $this->applyReviewQueueFilter($builder, $queue))
             ->orderByDesc('approved_at')
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
+        ;
+
+        $reviews = $reviewsQuery
             ->paginate(25)
             ->withQueryString();
 
         $selectedReview = $selectedId > 0
-            ? MarketingReviewHistory::query()->with('profile:id,first_name,last_name,email')->find($selectedId)
+            ? $this->reviewIndexQuery($tenantId)->find($selectedId)
             : $reviews->first();
+
+        $summaryQuery = MarketingReviewHistory::query()
+            ->when($tenantId !== null, fn (Builder $builder) => $builder->where('tenant_id', $tenantId));
 
         return view('marketing.candle-cash.show', [
             'sectionKey' => 'reviews',
@@ -256,15 +273,26 @@ class CandleCashPagesController extends Controller
                 'status' => $status,
                 'rating' => $rating,
                 'source' => $source,
+                'reward_status' => $rewardStatus,
+                'queue' => $queue,
             ],
             'selectedReview' => $selectedReview,
             'reviewSummary' => [
-                'all' => MarketingReviewHistory::query()->count(),
-                'approved' => MarketingReviewHistory::query()->where('status', 'approved')->count(),
-                'pending' => MarketingReviewHistory::query()->where('status', 'pending')->count(),
-                'rejected' => MarketingReviewHistory::query()->where('status', 'rejected')->count(),
-                'imported' => MarketingReviewHistory::query()->where('submission_source', 'growave_import')->count(),
+                'all' => (clone $summaryQuery)->count(),
+                'approved' => (clone $summaryQuery)->where('status', 'approved')->count(),
+                'pending' => (clone $summaryQuery)->where('status', 'pending')->count(),
+                'rejected' => (clone $summaryQuery)->where('status', 'rejected')->count(),
+                'imported' => (clone $summaryQuery)->where('submission_source', 'growave_import')->count(),
+                'new_reviews' => (clone $summaryQuery)
+                    ->where('submitted_at', '>=', now()->subDays(7))
+                    ->count(),
+                'reward_exceptions' => (clone $summaryQuery)
+                    ->where(function (Builder $builder): void {
+                        $this->applyRewardStatusFilter($builder, 'exceptions');
+                    })
+                    ->count(),
             ],
+            'reviewTenantId' => $tenantId,
         ]);
     }
 
@@ -273,6 +301,8 @@ class CandleCashPagesController extends Controller
         MarketingReviewHistory $review,
         ProductReviewService $productReviewService
     ): RedirectResponse {
+        $this->assertReviewInTenantScope($review, $request);
+
         $data = $request->validate([
             'moderation_notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -287,6 +317,8 @@ class CandleCashPagesController extends Controller
         MarketingReviewHistory $review,
         ProductReviewService $productReviewService
     ): RedirectResponse {
+        $this->assertReviewInTenantScope($review, $request);
+
         $data = $request->validate([
             'moderation_notes' => ['required', 'string', 'max:2000'],
         ]);
@@ -296,11 +328,29 @@ class CandleCashPagesController extends Controller
         return back()->with('toast', ['style' => 'success', 'message' => 'Review rejected.']);
     }
 
-    public function deleteReview(MarketingReviewHistory $review, ProductReviewService $productReviewService): RedirectResponse
+    public function deleteReview(
+        Request $request,
+        MarketingReviewHistory $review,
+        ProductReviewService $productReviewService
+    ): RedirectResponse
     {
+        $this->assertReviewInTenantScope($review, $request);
+
         $productReviewService->delete($review);
 
         return back()->with('toast', ['style' => 'success', 'message' => 'Review deleted.']);
+    }
+
+    public function resendReviewNotification(
+        Request $request,
+        MarketingReviewHistory $review,
+        ProductReviewNotificationService $notificationService
+    ): RedirectResponse {
+        $this->assertReviewInTenantScope($review, $request);
+
+        $notificationService->send($review, true);
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Review notification email resent.']);
     }
 
     public function customers(Request $request, CandleCashService $candleCashService, CandleCashTaskEligibilityService $eligibilityService): View
@@ -459,24 +509,28 @@ class CandleCashPagesController extends Controller
         GoogleBusinessProfileConnectionService $googleBusinessConnectionService
     ): View
     {
+        $tenantId = $this->currentTenantId(request());
+
         return view('marketing.candle-cash.show', [
             'sectionKey' => 'settings',
             'section' => CandleCashSectionRegistry::section('settings'),
             'sections' => $this->navigationItems(),
-            'programConfig' => $taskService->programConfig(),
-            'referralConfig' => $taskService->referralConfig(),
-            'frontendConfig' => $taskService->frontendConfig(),
-            'integrationConfig' => $taskService->integrationConfig(),
+            'programConfig' => $taskService->programConfig($tenantId),
+            'referralConfig' => $taskService->referralConfig($tenantId),
+            'frontendConfig' => $taskService->frontendConfig($tenantId),
+            'integrationConfig' => $taskService->integrationConfig($tenantId),
             'googleBusinessStatus' => $googleBusinessConnectionService->status(),
+            'settingsTenantId' => $tenantId,
         ]);
     }
 
     public function saveSettings(Request $request): RedirectResponse
     {
+        $tenantId = $this->currentTenantId($request);
         $scope = trim((string) $request->input('scope', 'program'));
 
         if ($scope === 'program') {
-            $existing = $this->settingValue('candle_cash_program_config');
+            $existing = $this->settingValue('candle_cash_program_config', $tenantId);
             $data = $request->validate([
                 'label' => ['required', 'string', 'max:120'],
                 'email_signup_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
@@ -506,9 +560,9 @@ class CandleCashPagesController extends Controller
                 'homepage_signup_copy' => trim((string) $data['homepage_signup_copy']),
                 'homepage_central_title' => trim((string) $data['homepage_central_title']),
                 'homepage_central_copy' => trim((string) $data['homepage_central_copy']),
-            ]), $this->displayLabel('rewards_program_label', 'Rewards program') . ' settings.');
+            ]), $this->displayLabel('rewards_program_label', 'Rewards program') . ' settings.', $tenantId);
         } elseif ($scope === 'referral') {
-            $existing = $this->settingValue('candle_cash_referral_config');
+            $existing = $this->settingValue('candle_cash_referral_config', $tenantId);
             $data = $request->validate([
                 'enabled' => ['nullable', 'boolean'],
                 'referrer_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
@@ -527,9 +581,9 @@ class CandleCashPagesController extends Controller
                 'qualifying_min_order_total' => $data['qualifying_min_order_total'] !== null ? (float) $data['qualifying_min_order_total'] : null,
                 'program_headline' => trim((string) $data['program_headline']),
                 'program_copy' => trim((string) $data['program_copy']),
-            ]), $this->displayLabel('rewards_label', 'Rewards') . ' referral settings.');
+            ]), $this->displayLabel('rewards_label', 'Rewards') . ' referral settings.', $tenantId);
         } elseif ($scope === 'frontend') {
-            $existing = $this->settingValue('candle_cash_frontend_config');
+            $existing = $this->settingValue('candle_cash_frontend_config', $tenantId);
             $data = $request->validate([
                 'central_title' => ['required', 'string', 'max:160'],
                 'central_subtitle' => ['required', 'string', 'max:255'],
@@ -546,10 +600,13 @@ class CandleCashPagesController extends Controller
                 'faq_stack_copy' => trim((string) $data['faq_stack_copy']),
                 'faq_pending_copy' => trim((string) $data['faq_pending_copy']),
                 'faq_verification_copy' => trim((string) $data['faq_verification_copy']),
-            ]), $this->displayLabel('rewards_label', 'Rewards') . ' frontend copy settings.');
+            ]), $this->displayLabel('rewards_label', 'Rewards') . ' frontend copy settings.', $tenantId);
         } else {
-            $existing = $this->settingValue('candle_cash_integration_config');
+            $existing = $this->settingValue('candle_cash_integration_config', $tenantId);
             $data = $request->validate([
+                'reviews_enabled' => ['nullable', 'boolean'],
+                'wishlist_enabled' => ['nullable', 'boolean'],
+                'rewards_incentivized_reviews_enabled' => ['nullable', 'boolean'],
                 'google_review_enabled' => ['nullable', 'boolean'],
                 'google_review_url' => ['nullable', 'string', 'max:500'],
                 'google_business_location_id' => ['nullable', 'string', 'max:120'],
@@ -560,13 +617,29 @@ class CandleCashPagesController extends Controller
                 'product_review_moderation_enabled' => ['nullable', 'boolean'],
                 'product_review_allow_guest' => ['nullable', 'boolean'],
                 'product_review_min_length' => ['required', 'integer', 'min:12', 'max:500'],
+                'product_review_reward_amount' => ['required', 'numeric', 'min:0', 'max:50'],
+                'product_review_require_order_match' => ['nullable', 'boolean'],
+                'product_review_reward_dedupe_mode' => ['required', 'in:order_line,customer_product'],
+                'review_auto_publish_enabled' => ['nullable', 'boolean'],
                 'product_review_notification_email' => ['nullable', 'email', 'max:255'],
+                'wishlist_discount_outreach_enabled' => ['nullable', 'boolean'],
+                'sms_provider_enabled' => ['nullable', 'boolean'],
+                'tenant_branding_tokens' => ['nullable', 'string', 'max:5000'],
                 'sms_signup_enabled' => ['nullable', 'boolean'],
                 'email_signup_enabled' => ['nullable', 'boolean'],
                 'vote_locked_join_url' => ['nullable', 'string', 'max:500'],
             ]);
 
+            $autoPublishEnabled = array_key_exists('review_auto_publish_enabled', $data)
+                ? (bool) $data['review_auto_publish_enabled']
+                : ! (bool) ($data['product_review_moderation_enabled'] ?? false);
+            $reviewRewardAmount = (float) $data['product_review_reward_amount'];
+            $brandingTokens = $this->decodeJsonField($data['tenant_branding_tokens'] ?? null);
+
             $this->saveSetting('candle_cash_integration_config', array_merge($existing, [
+                'reviews_enabled' => array_key_exists('reviews_enabled', $data) ? (bool) $data['reviews_enabled'] : data_get($existing, 'reviews_enabled', true),
+                'wishlist_enabled' => array_key_exists('wishlist_enabled', $data) ? (bool) $data['wishlist_enabled'] : data_get($existing, 'wishlist_enabled', true),
+                'rewards_incentivized_reviews_enabled' => array_key_exists('rewards_incentivized_reviews_enabled', $data) ? (bool) $data['rewards_incentivized_reviews_enabled'] : data_get($existing, 'rewards_incentivized_reviews_enabled', true),
                 'google_review_enabled' => array_key_exists('google_review_enabled', $data) ? (bool) $data['google_review_enabled'] : false,
                 'google_review_url' => trim((string) ($data['google_review_url'] ?? '')) ?: null,
                 'google_business_location_id' => trim((string) ($data['google_business_location_id'] ?? '')) ?: null,
@@ -574,14 +647,27 @@ class CandleCashPagesController extends Controller
                 'product_review_enabled' => array_key_exists('product_review_enabled', $data) ? (bool) $data['product_review_enabled'] : false,
                 'product_review_platform' => trim((string) ($data['product_review_platform'] ?? '')) ?: null,
                 'product_review_matching_strategy' => trim((string) $data['product_review_matching_strategy']),
-                'product_review_moderation_enabled' => array_key_exists('product_review_moderation_enabled', $data) ? (bool) $data['product_review_moderation_enabled'] : false,
+                'product_review_moderation_enabled' => ! $autoPublishEnabled,
                 'product_review_allow_guest' => array_key_exists('product_review_allow_guest', $data) ? (bool) $data['product_review_allow_guest'] : false,
                 'product_review_min_length' => (int) $data['product_review_min_length'],
+                'product_review_reward_amount_cents' => (int) round($reviewRewardAmount * 100),
+                'product_review_reward_amount' => $reviewRewardAmount,
+                'product_review_require_order_match' => array_key_exists('product_review_require_order_match', $data) ? (bool) $data['product_review_require_order_match'] : true,
+                'product_review_reward_dedupe_mode' => trim((string) $data['product_review_reward_dedupe_mode']),
+                'review_auto_publish_enabled' => $autoPublishEnabled,
                 'product_review_notification_email' => trim((string) ($data['product_review_notification_email'] ?? '')) ?: null,
+                'wishlist_discount_outreach_enabled' => array_key_exists('wishlist_discount_outreach_enabled', $data) ? (bool) $data['wishlist_discount_outreach_enabled'] : false,
+                'sms_provider_enabled' => array_key_exists('sms_provider_enabled', $data) ? (bool) $data['sms_provider_enabled'] : false,
+                'tenant_branding_tokens' => $brandingTokens,
                 'sms_signup_enabled' => array_key_exists('sms_signup_enabled', $data) ? (bool) $data['sms_signup_enabled'] : false,
                 'email_signup_enabled' => array_key_exists('email_signup_enabled', $data) ? (bool) $data['email_signup_enabled'] : false,
                 'vote_locked_join_url' => trim((string) ($data['vote_locked_join_url'] ?? '')) ?: null,
-            ]), $this->displayLabel('rewards_label', 'Rewards') . ' integration settings.');
+            ]), $this->displayLabel('rewards_label', 'Rewards') . ' integration settings.', $tenantId);
+
+            $this->syncTenantModuleStates($tenantId, [
+                'reviews' => array_key_exists('reviews_enabled', $data) ? (bool) $data['reviews_enabled'] : data_get($existing, 'reviews_enabled', true),
+                'wishlist' => array_key_exists('wishlist_enabled', $data) ? (bool) $data['wishlist_enabled'] : data_get($existing, 'wishlist_enabled', true),
+            ]);
         }
 
         return back()->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' settings saved.']);
@@ -760,16 +846,31 @@ class CandleCashPagesController extends Controller
     /**
      * @return array<string,mixed>
      */
-    protected function settingValue(string $key): array
+    protected function settingValue(string $key, ?int $tenantId = null): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', $key)->first())->value;
+        /** @var TenantMarketingSettingsResolver $resolver */
+        $resolver = app(TenantMarketingSettingsResolver::class);
+
+        return $resolver->array($key, $tenantId);
     }
 
     /**
      * @param array<string,mixed> $value
      */
-    protected function saveSetting(string $key, array $value, string $description): void
+    protected function saveSetting(string $key, array $value, string $description, ?int $tenantId = null): void
     {
+        if ($tenantId !== null && Schema::hasTable('tenant_marketing_settings')) {
+            TenantMarketingSetting::query()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'key' => $key],
+                [
+                    'value' => $value,
+                    'description' => $description,
+                ]
+            );
+
+            return;
+        }
+
         MarketingSetting::query()->updateOrCreate(
             ['key' => $key],
             [
@@ -781,9 +882,39 @@ class CandleCashPagesController extends Controller
 
     protected function currentTenantId(Request $request): ?int
     {
-        $tenantId = $request->attributes->get('current_tenant_id');
+        foreach (['current_tenant_id', 'host_tenant_id'] as $attribute) {
+            $tenantId = $request->attributes->get($attribute);
+            if (is_numeric($tenantId) && (int) $tenantId > 0) {
+                $request->attributes->set('current_tenant_id', (int) $tenantId);
 
-        return is_numeric($tenantId) ? (int) $tenantId : null;
+                return (int) $tenantId;
+            }
+        }
+
+        $sessionTenantId = $request->session()->get('tenant_id');
+        if (is_numeric($sessionTenantId) && (int) $sessionTenantId > 0) {
+            $request->attributes->set('current_tenant_id', (int) $sessionTenantId);
+
+            return (int) $sessionTenantId;
+        }
+
+        $user = $request->user();
+        if ($user) {
+            $tenantIds = $user->tenants()
+                ->pluck('tenants.id')
+                ->map(fn ($value): int => (int) $value)
+                ->filter(fn (int $value): bool => $value > 0)
+                ->values();
+
+            if ($tenantIds->count() === 1) {
+                $resolved = (int) $tenantIds->first();
+                $request->attributes->set('current_tenant_id', $resolved);
+
+                return $resolved;
+            }
+        }
+
+        return null;
     }
 
     protected function displayLabel(string $key, string $fallback): string
@@ -792,5 +923,81 @@ class CandleCashPagesController extends Controller
         $resolver = app(TenantDisplayLabelResolver::class);
 
         return $resolver->label($this->currentTenantId(request()), $key, $fallback);
+    }
+
+    protected function reviewIndexQuery(?int $tenantId = null): Builder
+    {
+        return MarketingReviewHistory::query()
+            ->with([
+                'profile:id,first_name,last_name,email,tenant_id',
+                'tenant:id,name,slug',
+                'order:id,tenant_id,shopify_name,order_number,ordered_at,total_price',
+                'orderLine:id,order_id,shopify_product_id,shopify_variant_id,raw_title,raw_variant',
+            ])
+            ->when($tenantId !== null, fn (Builder $builder) => $builder->where('tenant_id', $tenantId));
+    }
+
+    protected function applyReviewQueueFilter(Builder $builder, string $queue): Builder
+    {
+        return match ($queue) {
+            'new_reviews' => $builder->where('submitted_at', '>=', now()->subDays(7)),
+            'pending_moderation' => $builder->where('status', 'pending'),
+            'reward_exceptions' => $builder->where(function (Builder $query): void {
+                $this->applyRewardStatusFilter($query, 'exceptions');
+            }),
+            default => $builder,
+        };
+    }
+
+    protected function applyRewardStatusFilter(Builder $builder, string $rewardStatus): Builder
+    {
+        return match ($rewardStatus) {
+            'awarded' => $builder->where('reward_award_status', 'awarded'),
+            'eligible' => $builder->whereIn('reward_eligibility_status', ['eligible_verified_purchase', 'eligible_without_order_match']),
+            'ineligible' => $builder->whereIn('reward_eligibility_status', ['guest_submitted', 'no_order_match', 'selected_order_not_eligible', 'reward_disabled']),
+            'exceptions' => $builder->where(function (Builder $query): void {
+                $query->whereIn('reward_eligibility_status', ['reward_already_awarded', 'selected_order_not_eligible', 'no_order_match'])
+                    ->orWhereIn('reward_award_status', ['failed', 'error']);
+            }),
+            default => $builder,
+        };
+    }
+
+    protected function assertReviewInTenantScope(MarketingReviewHistory $review, Request $request): void
+    {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            return;
+        }
+
+        if ((int) ($review->tenant_id ?? 0) !== $tenantId) {
+            abort(404);
+        }
+    }
+
+    /**
+     * @param array<string,bool> $states
+     */
+    protected function syncTenantModuleStates(?int $tenantId, array $states): void
+    {
+        if ($tenantId === null || ! Schema::hasTable('tenant_module_states')) {
+            return;
+        }
+
+        foreach ($states as $moduleKey => $enabled) {
+            TenantModuleState::query()->updateOrCreate(
+                [
+                    'tenant_id' => $tenantId,
+                    'module_key' => $moduleKey,
+                ],
+                [
+                    'enabled_override' => $enabled,
+                    'setup_status' => $enabled ? 'configured' : 'not_started',
+                    'setup_completed_at' => $enabled ? now() : null,
+                    'coming_soon_override' => false,
+                    'upgrade_prompt_override' => ! $enabled,
+                ]
+            );
+        }
     }
 }
