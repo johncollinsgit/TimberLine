@@ -457,6 +457,12 @@ Cutover/removal notes:
 - Any remaining Growave Shopify app embed or ScriptTag output must be removed operationally after deploy.
 - Growave historical reviews/wishlists may still be imported into canonical Backstage rows, but live storefront reads/writes must use only Backstage-owned tables.
 
+Observed live state on 2026-03-31:
+- The production app proxy is returning the native review contract (`Write a review`, `$1.00` reward) and guest wishlist flows are succeeding end to end.
+- The Shopify live theme path at `modernforestry.myshopify.com` is serving the cutover theme (`159310446851`) and no longer requests Growave assets at runtime.
+- The remaining sign-off blocker is the custom storefront domain `theforestrystudio.com`, which is still serving stale HTML from the older `Prestige` theme (`136487764227`) with Growave loader output still present.
+- Treat the final cutover issue as a storefront-domain routing/cache problem outside the app/backend repo. The Backstage proxy contract is live and aligned.
+
 ## Deployment (GitHub Actions -> Production)
 This repository deploys with `.github/workflows/deploy.yml`.
 

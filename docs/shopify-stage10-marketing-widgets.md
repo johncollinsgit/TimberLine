@@ -118,6 +118,14 @@ After deploying the app/backend and pushing the theme:
 - Confirm the storefront no longer renders Growave helper markup or loads `ssw-empty.js`.
 - If Growave runtime output still appears after theme push, remove remaining Shopify-side Growave ScriptTags/app embeds operationally.
 
+Observed live state on 2026-03-31:
+- The app/backend contract is live and aligned with the native storefront widgets:
+  - `product-reviews/status` returns `button_text = "Write a review"` and `reward_amount = "1.00"`
+  - guest wishlist add/status/remove succeeds through the live app proxy
+- The Shopify live theme path at `modernforestry.myshopify.com` is serving the cutover theme (`159310446851`) and no longer renders or requests Growave runtime assets.
+- The remaining storefront blocker is the custom domain `https://theforestrystudio.com`, which is still serving stale HTML from the older `Prestige` theme (`136487764227`) and therefore still emits the Growave loader/app block.
+- Treat the final cutover issue as a custom-domain routing/cache problem unless Shopify admin shows the custom domain switching to the live theme after cache expiry or an operational purge.
+
 ## Runtime config validation
 
 The app proxy verifier depends on:
