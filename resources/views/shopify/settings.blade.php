@@ -17,7 +17,9 @@
         .settings-root {
             display: grid;
             gap: 16px;
-            max-width: 980px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
         }
 
         .settings-card {
@@ -336,6 +338,57 @@
             />
         @endif
 
+        <article class="settings-card" id="widget-settings-card">
+            <div class="settings-head">
+                <div>
+                    <h2>Storefront Widget Settings</h2>
+                    <p>
+                        Configure how wishlist and reviews widgets behave on the storefront. Defaults favor a right-side wishlist drawer and left-aligned reviews.
+                    </p>
+                </div>
+                <div class="settings-badges" id="widget-settings-status"></div>
+            </div>
+
+            <div class="settings-inline-status" id="widget-settings-alert" hidden></div>
+
+            <form id="widget-settings-form" class="settings-grid">
+                <div class="settings-field">
+                    <label for="widget-wishlist-behavior">Wishlist Behavior</label>
+                    <select id="widget-wishlist-behavior" name="wishlist_behavior">
+                        <option value="drawer">Open right-side drawer (recommended)</option>
+                        <option value="account">Redirect to account page</option>
+                    </select>
+                    <small>Controls what happens when shoppers tap wishlist entry points.</small>
+                    <div class="settings-field-error" data-error-for="wishlist_behavior"></div>
+                </div>
+                <div class="settings-field">
+                    <label for="widget-wishlist-drawer-id">Drawer Element ID</label>
+                    <input id="widget-wishlist-drawer-id" name="wishlist_drawer_id" type="text" maxlength="120" placeholder="sidebar-wishlist">
+                    <small>Advanced: customize the drawer element target when using a custom section/snippet.</small>
+                    <div class="settings-field-error" data-error-for="wishlist_drawer_id"></div>
+                </div>
+                <div class="settings-field">
+                    <label for="widget-reviews-position">Reviews Placement</label>
+                    <select id="widget-reviews-position" name="reviews_position">
+                        <option value="left">Left (reviews) / Right (wishlist)</option>
+                        <option value="right">Right (reviews) / Left (wishlist)</option>
+                    </select>
+                    <small>Applies to split PDP meta layouts on desktop.</small>
+                    <div class="settings-field-error" data-error-for="reviews_position"></div>
+                </div>
+                <div class="settings-field">
+                    <label for="widget-image-radius">Image Corner Radius (px)</label>
+                    <input id="widget-image-radius" name="image_radius_px" type="number" min="4" max="32" step="1" placeholder="14">
+                    <small>Shared radius for non-hero images in app-driven widgets.</small>
+                    <div class="settings-field-error" data-error-for="image_radius_px"></div>
+                </div>
+            </form>
+
+            <div class="settings-actions">
+                <button class="settings-button settings-button--primary" type="button" id="widget-settings-save">Save Widget Settings</button>
+            </div>
+        </article>
+
         <article class="settings-card">
             <div class="settings-head">
                 <div>
@@ -478,12 +531,21 @@
     <script>
         (() => {
             const bootstrap = @json($emailSettingsBootstrap ?? []);
+            const widgetBootstrap = @json($widgetSettingsBootstrap ?? []);
             const root = document.getElementById("email-settings-root");
             if (!root) {
                 return;
             }
 
             const form = document.getElementById("email-settings-form");
+            const widgetForm = document.getElementById("widget-settings-form");
+            const widgetAlert = document.getElementById("widget-settings-alert");
+            const widgetStatus = document.getElementById("widget-settings-status");
+            const widgetSaveButton = document.getElementById("widget-settings-save");
+            const wishlistBehaviorSelect = document.getElementById("widget-wishlist-behavior");
+            const wishlistDrawerInput = document.getElementById("widget-wishlist-drawer-id");
+            const reviewsPositionSelect = document.getElementById("widget-reviews-position");
+            const imageRadiusInput = document.getElementById("widget-image-radius");
             const providerSelect = document.getElementById("email-provider");
             const providerStatusInput = document.getElementById("provider-status-readonly");
             const providerSettingsContent = document.getElementById("provider-settings-content");
@@ -513,6 +575,12 @@
                     : defaultProviders(),
                 pendingClearKey: false,
                 providerDrafts: {},
+            };
+
+            const widgetState = {
+                loading: false,
+                saving: false,
+                settings: normalizeWidgetSettings(widgetBootstrap?.settings || widgetBootstrap?.defaults || null),
             };
 
             if (!bootstrap?.authorized || !bootstrap?.tenant_id) {
@@ -983,6 +1051,46 @@
                     .replaceAll("'", "&#039;");
             }
 
+            function normalizeWidgetSettings(settings) {
+                const defaults = widgetBootstrap?.defaults || {
+                    wishlist_behavior: "drawer",
+                    wishlist_drawer_id: "sidebar-wishlist",
+                    reviews_position: "left",
+                    image_radius_px: 14,
+                };
+                const normalized = typeof settings === "object" && settings !== null ? { ...settings } : {};
+                const behavior = String(normalized.wishlist_behavior || defaults.wishlist_behavior).toLowerCase();
+                const reviewsPosition = String(normalized.reviews_position || defaults.reviews_position).toLowerCase();
+                const radius = Number.parseFloat(normalized.image_radius_px ?? defaults.image_radius_px);
+
+                return {
+                    wishlist_behavior: ["drawer", "account"].includes(behavior) ? behavior : defaults.wishlist_behavior,
+                    wishlist_drawer_id: (normalized.wishlist_drawer_id || defaults.wishlist_drawer_id || "sidebar-wishlist").toString().trim() || "sidebar-wishlist",
+                    reviews_position: ["left", "right"].includes(reviewsPosition) ? reviewsPosition : defaults.reviews_position,
+                    image_radius_px: Number.isFinite(radius) ? Math.min(Math.max(radius, 4), 32) : defaults.image_radius_px,
+                };
+            }
+
+            function populateWidgetSettings() {
+                if (!wishlistBehaviorSelect || !reviewsPositionSelect || !imageRadiusInput) {
+                    return;
+                }
+
+                wishlistBehaviorSelect.value = widgetState.settings.wishlist_behavior;
+                reviewsPositionSelect.value = widgetState.settings.reviews_position;
+                imageRadiusInput.value = widgetState.settings.image_radius_px;
+                if (wishlistDrawerInput) {
+                    wishlistDrawerInput.value = widgetState.settings.wishlist_drawer_id;
+                }
+                if (widgetStatus) {
+                    widgetStatus.innerHTML = `
+                        <span class="settings-badge">${widgetState.settings.wishlist_behavior === "drawer" ? "Drawer" : "Account redirect"}</span>
+                        <span class="settings-badge">${widgetState.settings.reviews_position === "left" ? "Reviews left" : "Reviews right"}</span>
+                        <span class="settings-badge">Radius ${widgetState.settings.image_radius_px}px</span>
+                    `;
+                }
+            }
+
             function authFailureMessage(status, fallbackMessage) {
                 const messages = {
                     missing_api_auth: "Shopify Admin verification is unavailable. Reload settings from Shopify Admin and try again.",
@@ -1090,6 +1198,65 @@
                 } finally {
                     state.loading = false;
                     setBusy(false);
+                }
+            }
+
+            async function loadWidgetSettings() {
+                if (!widgetBootstrap?.endpoints?.load || !widgetForm) {
+                    return;
+                }
+
+                widgetState.loading = true;
+                setAlert(widgetAlert, "Loading widget settings...", "neutral");
+                try {
+                    const response = await fetchJson(widgetBootstrap.endpoints.load, { method: "GET" });
+                    widgetState.settings = normalizeWidgetSettings(response?.data?.settings || widgetBootstrap.defaults);
+                    setAlert(widgetAlert, "", "neutral");
+                    populateWidgetSettings();
+                } catch (error) {
+                    const payload = extractError(error);
+                    setAlert(widgetAlert, payload?.message || error?.message || "Failed to load widget settings.", "error");
+                } finally {
+                    widgetState.loading = false;
+                }
+            }
+
+            async function saveWidgetSettings() {
+                if (!widgetBootstrap?.endpoints?.save || !widgetForm) {
+                    return;
+                }
+
+                clearErrors();
+                const payload = {
+                    wishlist_behavior: String(wishlistBehaviorSelect?.value || widgetState.settings.wishlist_behavior || "drawer"),
+                    wishlist_drawer_id: (wishlistDrawerInput?.value || widgetState.settings.wishlist_drawer_id || "sidebar-wishlist").trim() || "sidebar-wishlist",
+                    reviews_position: String(reviewsPositionSelect?.value || widgetState.settings.reviews_position || "left"),
+                    image_radius_px: Number.parseFloat(imageRadiusInput?.value || widgetState.settings.image_radius_px || 14),
+                };
+
+                widgetState.saving = true;
+                setAlert(widgetAlert, "Saving widget settings...", "neutral");
+
+                try {
+                    const response = await fetchJson(widgetBootstrap.endpoints.save, {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+                    widgetState.settings = normalizeWidgetSettings(response?.data?.settings || payload);
+                    populateWidgetSettings();
+                    setAlert(widgetAlert, "Widget settings saved.", "success");
+                } catch (error) {
+                    const payloadError = extractError(error);
+                    const errors = payloadError?.errors || {};
+                    Object.entries(errors).forEach(([field, messages]) => {
+                        const target = widgetForm.querySelector(`[data-error-for=\"${cssEscape(String(field))}\"]`);
+                        if (target) {
+                            target.textContent = Array.isArray(messages) ? messages.join(" ") : String(messages || "");
+                        }
+                    });
+                    setAlert(widgetAlert, payloadError?.message || error?.message || "Failed to save widget settings.", "error");
+                } finally {
+                    widgetState.saving = false;
                 }
             }
 
@@ -1262,6 +1429,15 @@
                 }
                 setAlert(globalAlert, "API key will be cleared on next save.", "neutral");
             });
+
+            if (widgetSaveButton) {
+                widgetSaveButton.addEventListener("click", () => saveWidgetSettings());
+            }
+
+            populateWidgetSettings();
+            if (!widgetBootstrap?.settings) {
+                loadWidgetSettings();
+            }
 
             syncProviderDraftFromSettings();
             populateFormFromState();

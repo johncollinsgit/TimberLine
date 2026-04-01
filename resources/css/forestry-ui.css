@@ -1326,7 +1326,7 @@ body.mf-app-shell {
 .app-shell {
   --app-shell-bg: var(--fb-bg);
   --app-main-bg: var(--fb-bg);
-  --app-content-width: 1260px;
+  --app-content-width: min(1480px, calc(100vw - 48px));
   background: var(--app-shell-bg);
   display: block;
   min-height: 100vh;
@@ -1363,7 +1363,7 @@ body.mf-app-shell {
   box-sizing: border-box;
   flex: 1;
   margin: 0 auto;
-  padding: 1.7rem 1.75rem 3.3rem;
+  padding: 1.4rem clamp(1rem, 2vw, 2rem) 3rem;
   width: min(100%, var(--app-content-width));
 }
 

@@ -6,6 +6,7 @@ use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Models\ShopifyStore;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,9 +66,80 @@ class ShopifyEmbeddedSettingsController extends Controller
                         'health' => route('shopify.app.api.settings.email.health', [], false),
                     ],
                 ],
+                'widgetSettingsBootstrap' => $this->widgetSettingsBootstrap(
+                    $authorized ? (string) ($store['key'] ?? '') : null,
+                    $authorized ? ($store['storefront_widget_settings'] ?? null) : null
+                ),
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         );
+    }
+
+    public function widgetSettings(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $store = $this->resolveStoreFromContext($context);
+        if ($store === null) {
+            return $this->storeNotMappedResponse();
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'store_key' => $store->store_key,
+                'settings' => $this->mergeWidgetSettings($store->storefront_widget_settings),
+            ],
+        ]);
+    }
+
+    public function saveWidgetSettings(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $store = $this->resolveStoreFromContext($context);
+        if ($store === null) {
+            return $this->storeNotMappedResponse();
+        }
+
+        try {
+            $data = $this->validatedWidgetSettingsData($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Widget settings could not be saved.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $settings = $this->mergeWidgetSettings([
+            'wishlist_behavior' => (string) $data['wishlist_behavior'],
+            'wishlist_drawer_id' => $data['wishlist_drawer_id'] ?? 'sidebar-wishlist',
+            'reviews_position' => (string) $data['reviews_position'],
+            'image_radius_px' => $data['image_radius_px'] ?? $this->defaultWidgetSettings()['image_radius_px'],
+        ]);
+
+        $store->storefront_widget_settings = $settings;
+        $store->save();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Widget settings saved.',
+            'data' => [
+                'store_key' => $store->store_key,
+                'settings' => $settings,
+            ],
+        ]);
     }
 
     public function emailSettings(
@@ -367,11 +439,37 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
+     * @return array<string,mixed>
+     */
+    protected function validatedWidgetSettingsData(Request $request): array
+    {
+        return validator($request->all(), [
+            'wishlist_behavior' => ['required', 'in:drawer,account'],
+            'wishlist_drawer_id' => ['nullable', 'string', 'max:120'],
+            'reviews_position' => ['required', 'in:left,right'],
+            'image_radius_px' => ['nullable', 'numeric', 'min:4', 'max:32'],
+        ])->validate();
+    }
+
+    /**
      * @param array<string,mixed> $context
      */
     protected function resolveTenantIdFromContext(array $context, TenantResolver $tenantResolver): ?int
     {
         return $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    protected function resolveStoreFromContext(array $context): ?ShopifyStore
+    {
+        $storeKey = trim((string) ($context['store']['key'] ?? ''));
+        if ($storeKey === '') {
+            return null;
+        }
+
+        return ShopifyStore::query()->where('store_key', $storeKey)->first();
     }
 
     /**
@@ -402,6 +500,14 @@ class ShopifyEmbeddedSettingsController extends Controller
         ], 422);
     }
 
+    protected function storeNotMappedResponse(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => 'This Shopify store is not installed yet. Storefront widget settings are unavailable.',
+        ], 422);
+    }
+
     /**
      * @param array<string,mixed> $validation
      */
@@ -423,5 +529,57 @@ class ShopifyEmbeddedSettingsController extends Controller
         }
 
         return $status === 'not_configured' ? 'not_configured' : 'error';
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function defaultWidgetSettings(): array
+    {
+        return [
+            'wishlist_behavior' => 'drawer',
+            'wishlist_drawer_id' => 'sidebar-wishlist',
+            'reviews_position' => 'left',
+            'image_radius_px' => 14,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed>|null $settings
+     * @return array<string,mixed>
+     */
+    protected function mergeWidgetSettings($settings): array
+    {
+        $defaults = $this->defaultWidgetSettings();
+        if (! is_array($settings)) {
+            return $defaults;
+        }
+
+        return array_merge($defaults, array_filter([
+            'wishlist_behavior' => $settings['wishlist_behavior'] ?? null,
+            'wishlist_drawer_id' => $settings['wishlist_drawer_id'] ?? null,
+            'reviews_position' => $settings['reviews_position'] ?? null,
+            'image_radius_px' => $settings['image_radius_px'] ?? null,
+        ], static fn ($value) => $value !== null));
+    }
+
+    /**
+     * @param array<string,mixed>|null $settings
+     * @return array<string,mixed>
+     */
+    protected function widgetSettingsBootstrap(?string $storeKey, ?array $settings): array
+    {
+        $authorized = $storeKey !== null && $storeKey !== '';
+
+        return [
+            'authorized' => $authorized,
+            'store_key' => $storeKey,
+            'settings' => $this->mergeWidgetSettings($settings),
+            'defaults' => $this->defaultWidgetSettings(),
+            'endpoints' => [
+                'load' => route('shopify.app.api.settings.widgets', [], false),
+                'save' => route('shopify.app.api.settings.widgets.save', [], false),
+            ],
+        ];
     }
 }

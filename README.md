@@ -451,6 +451,10 @@ Contract/runtime expectations:
 - Guest reviews are allowed, but guest reviews do not receive Candle Cash unless they resolve to a qualifying customer/order match.
 - Wishlist supports guests through `guest_token`, named lists, and merge-on-auth when a known customer resolves later.
 - Reviews and wishlists must resolve through tenant-scoped Backstage data. `shopify_stores.tenant_id` must be present for the storefront store context.
+- Storefront UX expectations:
+  - All non-hero images use a shared premium border radius; hero/banner imagery remains square.
+  - Wishlist entry points open the right-side wishlist drawer instead of redirecting to the account page.
+  - On PDP meta stacks, reviews render on the left and wishlist actions on the right on desktop; they stack gracefully on smaller breakpoints.
 
 Cutover/removal notes:
 - Theme/runtime Growave widgets must stay disabled or removed.

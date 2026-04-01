@@ -19,6 +19,7 @@ class ShopifyStore extends Model
         'shop_domain',
         'access_token',
         'scopes',
+        'storefront_widget_settings',
         'installed_at',
     ];
 
@@ -26,6 +27,7 @@ class ShopifyStore extends Model
         'tenant_id' => 'integer',
         'installed_at' => 'datetime',
         'access_token' => 'encrypted',
+        'storefront_widget_settings' => 'array',
     ];
 
     public function tenant(): BelongsTo

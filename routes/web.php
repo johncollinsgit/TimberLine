@@ -849,6 +849,11 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCashJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.candle-cash.send');
+        Route::get('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'widgetSettings'])
+            ->name('settings.widgets');
+        Route::post('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'saveWidgetSettings'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.widgets.save');
         Route::get('/settings/email', [ShopifyEmbeddedSettingsController::class, 'emailSettings'])
             ->name('settings.email');
         Route::post('/settings/email', [ShopifyEmbeddedSettingsController::class, 'saveEmailSettings'])

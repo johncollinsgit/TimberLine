@@ -173,6 +173,7 @@ class ShopifyStores
                 'scopes' => $record?->scopes,
                 'installed_at' => $record?->installed_at,
                 'token_source' => $tokenSource,
+                'storefront_widget_settings' => $record?->storefront_widget_settings,
             ];
         }
 
