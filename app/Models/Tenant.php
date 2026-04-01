@@ -91,6 +91,16 @@ class Tenant extends Model
         return $this->hasMany(TenantModuleState::class);
     }
 
+    public function moduleEntitlements(): HasMany
+    {
+        return $this->hasMany(TenantModuleEntitlement::class);
+    }
+
+    public function moduleAccessRequests(): HasMany
+    {
+        return $this->hasMany(TenantModuleAccessRequest::class);
+    }
+
     public function commercialOverride(): HasOne
     {
         return $this->hasOne(TenantCommercialOverride::class);

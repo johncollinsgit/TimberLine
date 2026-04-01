@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantCommercialOverride;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\TenantUsageCounter;
 use Illuminate\Http\Client\PendingRequest;
@@ -19,10 +20,16 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class LandlordCommercialConfigService
 {
+    public function __construct(
+        protected LandlordOperatorActionAuditService $auditService
+    ) {
+    }
+
     /**
      * @return array<int,array<string,mixed>>
      */
@@ -176,9 +183,19 @@ class LandlordCommercialConfigService
         }
     }
 
-    public function assignTenantPlan(int $tenantId, string $planKey, string $operatingMode = 'shopify', string $source = 'landlord_console'): TenantAccessProfile
+    public function assignTenantPlan(
+        int $tenantId,
+        string $planKey,
+        string $operatingMode = 'shopify',
+        string $source = 'landlord_console',
+        ?int $actorId = null
+    ): TenantAccessProfile
     {
-        return TenantAccessProfile::query()->updateOrCreate(
+        $before = TenantAccessProfile::query()
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        $profile = TenantAccessProfile::query()->updateOrCreate(
             [
                 'tenant_id' => $tenantId,
             ],
@@ -191,28 +208,126 @@ class LandlordCommercialConfigService
                 ],
             ]
         );
+
+        $this->auditService->record(
+            tenantId: $tenantId,
+            actorUserId: $actorId,
+            actionType: 'tenant_plan_assignment_update',
+            targetType: 'tenant_access_profile',
+            targetId: $profile->id,
+            context: [
+                'tenant_id' => $tenantId,
+                'plan_key' => strtolower(trim($planKey)),
+                'operating_mode' => strtolower(trim($operatingMode)) ?: 'shopify',
+                'source' => $source,
+            ],
+            beforeState: $before ? [
+                'plan_key' => (string) $before->plan_key,
+                'operating_mode' => (string) $before->operating_mode,
+                'source' => (string) $before->source,
+            ] : null,
+            afterState: [
+                'plan_key' => (string) $profile->plan_key,
+                'operating_mode' => (string) $profile->operating_mode,
+                'source' => (string) $profile->source,
+            ],
+            result: [
+                'billing_impact' => [
+                    'kind' => 'plan_change',
+                    'may_require_billing_sync' => ! $before
+                        || (string) $before->plan_key !== (string) $profile->plan_key,
+                ],
+            ]
+        );
+
+        return $profile;
     }
 
-    public function setTenantAddonState(int $tenantId, string $addonKey, bool $enabled, string $source = 'landlord_console'): TenantAccessAddon
+    public function setTenantAddonState(
+        int $tenantId,
+        string $addonKey,
+        bool $enabled,
+        string $source = 'landlord_console',
+        ?int $actorId = null
+    ): TenantAccessAddon
     {
-        return TenantAccessAddon::query()->updateOrCreate(
+        $normalizedAddonKey = strtolower(trim($addonKey));
+        if (! is_array(config('module_catalog.addons.'.$normalizedAddonKey)) && ! is_array(config('entitlements.addons.'.$normalizedAddonKey))) {
+            throw ValidationException::withMessages([
+                'addon_key' => 'Unknown add-on key.',
+            ]);
+        }
+
+        $before = TenantAccessAddon::query()
+            ->where('tenant_id', $tenantId)
+            ->where('addon_key', $normalizedAddonKey)
+            ->first();
+
+        $addon = TenantAccessAddon::query()->updateOrCreate(
             [
                 'tenant_id' => $tenantId,
-                'addon_key' => strtolower(trim($addonKey)),
+                'addon_key' => $normalizedAddonKey,
             ],
             [
                 'enabled' => $enabled,
                 'source' => $source,
             ]
         );
+
+        $this->auditService->record(
+            tenantId: $tenantId,
+            actorUserId: $actorId,
+            actionType: 'tenant_addon_entitlement_update',
+            targetType: 'tenant_access_addon',
+            targetId: $addon->id,
+            context: [
+                'tenant_id' => $tenantId,
+                'addon_key' => $normalizedAddonKey,
+                'source' => $source,
+            ],
+            beforeState: $before ? [
+                'enabled' => (bool) $before->enabled,
+                'source' => (string) $before->source,
+                'starts_at' => optional($before->starts_at)->toIso8601String(),
+                'ends_at' => optional($before->ends_at)->toIso8601String(),
+            ] : null,
+            afterState: [
+                'enabled' => (bool) $addon->enabled,
+                'source' => (string) $addon->source,
+                'starts_at' => optional($addon->starts_at)->toIso8601String(),
+                'ends_at' => optional($addon->ends_at)->toIso8601String(),
+            ],
+            result: [
+                'billing_impact' => [
+                    'kind' => 'addon_toggle',
+                    'addon_key' => $normalizedAddonKey,
+                    'may_require_billing_sync' => ! $before || (bool) $before->enabled !== (bool) $addon->enabled,
+                ],
+            ]
+        );
+
+        return $addon;
     }
 
     public function setTenantModuleState(
         int $tenantId,
         string $moduleKey,
         ?bool $enabledOverride,
-        ?string $setupStatus = null
+        ?string $setupStatus = null,
+        ?int $actorId = null
     ): TenantModuleState {
+        $normalizedModuleKey = strtolower(trim($moduleKey));
+        if (! is_array(config('module_catalog.modules.'.$normalizedModuleKey))) {
+            throw ValidationException::withMessages([
+                'module_key' => 'Unknown module key.',
+            ]);
+        }
+
+        $before = TenantModuleState::query()
+            ->where('tenant_id', $tenantId)
+            ->where('module_key', $normalizedModuleKey)
+            ->first();
+
         $payload = [
             'enabled_override' => $enabledOverride,
         ];
@@ -221,21 +336,133 @@ class LandlordCommercialConfigService
             $payload['setup_status'] = strtolower(trim($setupStatus));
         }
 
-        return TenantModuleState::query()->updateOrCreate(
+        $state = TenantModuleState::query()->updateOrCreate(
             [
                 'tenant_id' => $tenantId,
-                'module_key' => strtolower(trim($moduleKey)),
+                'module_key' => $normalizedModuleKey,
             ],
             $payload
         );
+
+        $this->auditService->record(
+            tenantId: $tenantId,
+            actorUserId: $actorId,
+            actionType: 'tenant_module_state_update',
+            targetType: 'tenant_module_state',
+            targetId: $state->id,
+            context: [
+                'tenant_id' => $tenantId,
+                'module_key' => $normalizedModuleKey,
+            ],
+            beforeState: $before ? [
+                'enabled_override' => $before->getRawOriginal('enabled_override') === null
+                    ? null
+                    : (bool) $before->enabled_override,
+                'setup_status' => (string) ($before->setup_status ?? 'not_started'),
+                'coming_soon_override' => $before->getRawOriginal('coming_soon_override') === null
+                    ? null
+                    : (bool) $before->coming_soon_override,
+                'upgrade_prompt_override' => $before->getRawOriginal('upgrade_prompt_override') === null
+                    ? null
+                    : (bool) $before->upgrade_prompt_override,
+            ] : null,
+            afterState: [
+                'enabled_override' => $state->getRawOriginal('enabled_override') === null
+                    ? null
+                    : (bool) $state->enabled_override,
+                'setup_status' => (string) ($state->setup_status ?? 'not_started'),
+                'coming_soon_override' => $state->getRawOriginal('coming_soon_override') === null
+                    ? null
+                    : (bool) $state->coming_soon_override,
+                'upgrade_prompt_override' => $state->getRawOriginal('upgrade_prompt_override') === null
+                    ? null
+                    : (bool) $state->upgrade_prompt_override,
+            ],
+            result: [
+                'billing_impact' => [
+                    'kind' => 'module_override',
+                    'module_key' => $normalizedModuleKey,
+                    'may_require_billing_review' => $enabledOverride !== null,
+                ],
+            ]
+        );
+
+        return $state;
     }
 
     /**
      * @param  array<string,mixed>  $input
      */
-    public function updateTenantCommercialOverride(int $tenantId, array $input): TenantCommercialOverride
+    public function setTenantModuleEntitlement(
+        int $tenantId,
+        string $moduleKey,
+        array $input,
+        ?int $actorId = null
+    ): TenantModuleEntitlement {
+        $normalizedModuleKey = strtolower(trim($moduleKey));
+        $normalizedInput = $this->validatedTenantModuleEntitlementInput($normalizedModuleKey, $input);
+        $before = TenantModuleEntitlement::query()
+            ->where('tenant_id', $tenantId)
+            ->where('module_key', $normalizedModuleKey)
+            ->first();
+
+        $entitlement = TenantModuleEntitlement::query()->updateOrCreate(
+            [
+                'tenant_id' => $tenantId,
+                'module_key' => $normalizedModuleKey,
+            ],
+            [
+                'availability_status' => (string) $normalizedInput['availability_status'],
+                'enabled_status' => (string) $normalizedInput['enabled_status'],
+                'billing_status' => $this->nullableString($normalizedInput['billing_status'] ?? null),
+                'price_override_cents' => $this->nullableInt($normalizedInput['price_override_cents'] ?? null),
+                'currency' => strtoupper(trim((string) ($normalizedInput['currency'] ?? 'USD'))) ?: 'USD',
+                'entitlement_source' => $this->nullableString($normalizedInput['entitlement_source'] ?? 'override'),
+                'price_source' => $this->nullableString($normalizedInput['price_source'] ?? null),
+                'starts_at' => $normalizedInput['starts_at'] ?? null,
+                'ends_at' => $normalizedInput['ends_at'] ?? null,
+                'notes' => $this->nullableString($normalizedInput['notes'] ?? null),
+                'metadata' => $this->normalizeJsonArray($normalizedInput['metadata'] ?? []),
+                'updated_by' => $actorId,
+                'created_by' => $before?->created_by ?? $actorId,
+            ]
+        );
+
+        $this->auditService->record(
+            tenantId: $tenantId,
+            actorUserId: $actorId,
+            actionType: 'tenant_module_entitlement_update',
+            targetType: 'tenant_module_entitlement',
+            targetId: $entitlement->id,
+            context: [
+                'tenant_id' => $tenantId,
+                'module_key' => $normalizedModuleKey,
+            ],
+            beforeState: $before ? $this->tenantModuleEntitlementState($before) : null,
+            afterState: $this->tenantModuleEntitlementState($entitlement),
+            result: [
+                'billing_impact' => [
+                    'kind' => 'module_entitlement',
+                    'billing_status' => $this->nullableString($entitlement->billing_status),
+                    'price_override_cents' => $entitlement->price_override_cents,
+                    'may_require_billing_sync' => ! $before
+                        || (string) $before->billing_status !== (string) $entitlement->billing_status
+                        || (int) ($before->price_override_cents ?? 0) !== (int) ($entitlement->price_override_cents ?? 0),
+                ],
+            ]
+        );
+
+        return $entitlement;
+    }
+
+    /**
+     * @param  array<string,mixed>  $input
+     */
+    public function updateTenantCommercialOverride(int $tenantId, array $input, ?int $actorId = null): TenantCommercialOverride
     {
-        return TenantCommercialOverride::query()->updateOrCreate(
+        $before = TenantCommercialOverride::query()->where('tenant_id', $tenantId)->first();
+
+        $override = TenantCommercialOverride::query()->updateOrCreate(
             [
                 'tenant_id' => $tenantId,
             ],
@@ -250,6 +477,31 @@ class LandlordCommercialConfigService
                 'metadata' => $this->normalizeJsonArray($input['metadata'] ?? []),
             ]
         );
+
+        $this->auditService->record(
+            tenantId: $tenantId,
+            actorUserId: $actorId,
+            actionType: 'tenant_commercial_override_update',
+            targetType: 'tenant_commercial_override',
+            targetId: $override->id,
+            context: [
+                'tenant_id' => $tenantId,
+                'template_key' => $this->nullableString($override->template_key),
+            ],
+            beforeState: $before ? $this->tenantCommercialOverrideState($before) : null,
+            afterState: $this->tenantCommercialOverrideState($override),
+            result: [
+                'billing_impact' => [
+                    'kind' => 'commercial_override',
+                    'may_require_billing_sync' => ! $before
+                        || $this->normalizeJsonArray($before->plan_pricing_overrides ?? []) !== $this->normalizeJsonArray($override->plan_pricing_overrides ?? [])
+                        || $this->normalizeJsonArray($before->addon_pricing_overrides ?? []) !== $this->normalizeJsonArray($override->addon_pricing_overrides ?? [])
+                        || $this->normalizeJsonArray($before->billing_mapping ?? []) !== $this->normalizeJsonArray($override->billing_mapping ?? []),
+                ],
+            ]
+        );
+
+        return $override;
     }
 
     /**
@@ -1753,7 +2005,7 @@ class LandlordCommercialConfigService
     public function tenantRowsForLandlord(): array
     {
         return Tenant::query()
-            ->with(['accessProfile', 'accessAddons', 'moduleStates', 'commercialOverride'])
+            ->with(['accessProfile', 'accessAddons', 'moduleStates', 'moduleEntitlements', 'commercialOverride'])
             ->orderBy('name')
             ->get()
             ->all();
@@ -1881,6 +2133,109 @@ class LandlordCommercialConfigService
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * @param  array<string,mixed>  $input
+     * @return array<string,mixed>
+     */
+    protected function validatedTenantModuleEntitlementInput(string $moduleKey, array $input): array
+    {
+        $definition = config('module_catalog.modules.'.$moduleKey);
+        if (! is_array($definition)) {
+            throw ValidationException::withMessages([
+                'module_key' => 'Unknown module key.',
+            ]);
+        }
+
+        $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+        $marketState = strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY')));
+        $availabilityStatus = strtolower(trim((string) ($input['availability_status'] ?? 'available'))) ?: 'available';
+        $enabledStatus = strtolower(trim((string) ($input['enabled_status'] ?? 'inherit'))) ?: 'inherit';
+        $billingStatus = $this->nullableString($input['billing_status'] ?? null);
+        $priceOverride = $this->nullableInt($input['price_override_cents'] ?? null);
+
+        if ($status === 'disabled') {
+            throw ValidationException::withMessages([
+                'module_key' => 'Disabled catalog modules cannot receive entitlement overrides.',
+            ]);
+        }
+
+        if ($enabledStatus === 'enabled' && ! in_array($status, ['live', 'beta'], true)) {
+            throw ValidationException::withMessages([
+                'enabled_status' => 'Only live or beta modules can be explicitly enabled.',
+            ]);
+        }
+
+        if ($enabledStatus === 'enabled' && in_array($availabilityStatus, ['unavailable', 'disabled'], true)) {
+            throw ValidationException::withMessages([
+                'enabled_status' => 'Unavailable or disabled modules cannot be explicitly enabled.',
+            ]);
+        }
+
+        if ($billingStatus === 'unavailable' && $availabilityStatus !== 'unavailable') {
+            throw ValidationException::withMessages([
+                'billing_status' => 'Unavailable billing status requires the module availability to be unavailable.',
+            ]);
+        }
+
+        if ($priceOverride !== null && $billingStatus === null) {
+            throw ValidationException::withMessages([
+                'billing_status' => 'A billing status is required when a price override is provided.',
+            ]);
+        }
+
+        if ($marketState === 'PLACEHOLDER' && $enabledStatus === 'enabled') {
+            throw ValidationException::withMessages([
+                'enabled_status' => 'Placeholder modules cannot be tenant-enabled yet.',
+            ]);
+        }
+
+        return [
+            ...$input,
+            'availability_status' => $availabilityStatus,
+            'enabled_status' => $enabledStatus,
+            'billing_status' => $billingStatus,
+            'price_override_cents' => $priceOverride,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function tenantModuleEntitlementState(TenantModuleEntitlement $entitlement): array
+    {
+        return [
+            'module_key' => (string) $entitlement->module_key,
+            'availability_status' => (string) $entitlement->availability_status,
+            'enabled_status' => (string) $entitlement->enabled_status,
+            'billing_status' => $this->nullableString($entitlement->billing_status),
+            'price_override_cents' => $entitlement->price_override_cents,
+            'currency' => (string) ($entitlement->currency ?: 'USD'),
+            'entitlement_source' => $this->nullableString($entitlement->entitlement_source),
+            'price_source' => $this->nullableString($entitlement->price_source),
+            'starts_at' => optional($entitlement->starts_at)->toIso8601String(),
+            'ends_at' => optional($entitlement->ends_at)->toIso8601String(),
+            'notes' => $this->nullableString($entitlement->notes),
+            'metadata' => is_array($entitlement->metadata) ? $entitlement->metadata : [],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function tenantCommercialOverrideState(TenantCommercialOverride $override): array
+    {
+        return [
+            'template_key' => $this->nullableString($override->template_key),
+            'store_channel_allowance' => $override->store_channel_allowance,
+            'plan_pricing_overrides' => is_array($override->plan_pricing_overrides) ? $override->plan_pricing_overrides : [],
+            'addon_pricing_overrides' => is_array($override->addon_pricing_overrides) ? $override->addon_pricing_overrides : [],
+            'included_usage_overrides' => is_array($override->included_usage_overrides) ? $override->included_usage_overrides : [],
+            'display_labels' => is_array($override->display_labels) ? $override->display_labels : [],
+            'billing_mapping' => is_array($override->billing_mapping) ? $override->billing_mapping : [],
+            'metadata' => is_array($override->metadata) ? $override->metadata : [],
+        ];
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Services\Tenancy;
 
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use Illuminate\Support\Facades\Schema;
 
@@ -39,30 +40,23 @@ class TenantModuleAccessResolver
      */
     protected array $moduleStateCache = [];
 
+    /**
+     * @var array<int,array<string,array<string,mixed>>>
+     */
+    protected array $moduleEntitlementCache = [];
+
     public function __construct(
         protected TenantResolver $tenantResolver
     ) {
     }
 
     /**
-     * Resolve module access by tenant.
-     *
      * @param  array<int,string>|null  $moduleKeys
      * @return array{
      *   tenant_id:?int,
      *   operating_mode:string,
      *   plan_key:string,
-     *   modules:array<string,array{
-     *     module_key:string,
-     *     label:string,
-     *     classification:string,
-     *     has_access:bool,
-     *     access_sources:array<int,string>,
-     *     setup_status:string,
-     *     coming_soon:bool,
-     *     ui_state:string,
-     *     upgrade_prompt_eligible:bool
-     *   }>
+     *   modules:array<string,array<string,mixed>>
      * }
      */
     public function resolveForTenant(?int $tenantId, ?array $moduleKeys = null): array
@@ -74,17 +68,21 @@ class TenantModuleAccessResolver
         $planIncludes = $this->planIncludes($planKey);
         $enabledAddons = $this->enabledAddonsForTenant($tenantId);
         $stateRows = $this->moduleStateRowsForTenant($tenantId);
-        $keys = $this->requestedModuleKeys($moduleKeys);
+        $entitlementRows = $this->moduleEntitlementRowsForTenant($tenantId);
+        $requestedKeys = $this->requestedModuleKeys($moduleKeys);
+        $keys = $this->expandModuleKeysWithDependencies($requestedKeys);
 
-        $modules = [];
+        $rawModules = [];
         foreach ($keys as $moduleKey) {
             $definition = $this->moduleDefinition($moduleKey);
 
             $sources = [];
             $hasAccess = false;
+            $source = 'flag';
 
             if (in_array($moduleKey, $planIncludes, true)) {
                 $hasAccess = true;
+                $source = 'plan';
                 $sources[] = 'plan:' . $planKey;
             }
 
@@ -96,13 +94,29 @@ class TenantModuleAccessResolver
 
                 if (in_array($moduleKey, $this->addonIncludes($addonKey), true)) {
                     $hasAccess = true;
+                    $source = $source === 'plan' ? $source : 'addon';
                     $sources[] = 'addon:' . $addonKey;
+                }
+            }
+
+            $entitlementRow = $entitlementRows[$moduleKey] ?? null;
+            if ($entitlementRow !== null) {
+                $enabledStatus = strtolower(trim((string) ($entitlementRow['enabled_status'] ?? 'inherit')));
+                if ($enabledStatus === 'enabled') {
+                    $hasAccess = true;
+                    $source = $this->normalizeDecisionSource((string) ($entitlementRow['entitlement_source'] ?? 'override'));
+                    $sources[] = 'entitlement:' . ($entitlementRow['entitlement_source'] ?? 'override');
+                } elseif ($enabledStatus === 'disabled') {
+                    $hasAccess = false;
+                    $source = $this->normalizeDecisionSource((string) ($entitlementRow['entitlement_source'] ?? 'override'));
+                    $sources[] = 'entitlement:' . ($entitlementRow['entitlement_source'] ?? 'override');
                 }
             }
 
             $stateRow = $stateRows[$moduleKey] ?? null;
             if ($stateRow !== null && array_key_exists('enabled_override', $stateRow) && $stateRow['enabled_override'] !== null) {
                 $hasAccess = (bool) $stateRow['enabled_override'];
+                $source = 'override';
                 $sources[] = 'override:enabled';
             }
 
@@ -111,7 +125,8 @@ class TenantModuleAccessResolver
                 ? $this->normalizeSetupStatus((string) ($stateRow['setup_status'] ?? $defaultSetup))
                 : $this->normalizeSetupStatus($defaultSetup);
 
-            $comingSoon = (bool) ($definition['coming_soon'] ?? false);
+            $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+            $comingSoon = in_array($status, ['placeholder', 'roadmap'], true);
             if ($stateRow !== null && array_key_exists('coming_soon_override', $stateRow) && $stateRow['coming_soon_override'] !== null) {
                 $comingSoon = (bool) $stateRow['coming_soon_override'];
             }
@@ -121,22 +136,89 @@ class TenantModuleAccessResolver
                 $supportsUpgradePrompt = (bool) $stateRow['upgrade_prompt_override'];
             }
 
+            $rawModules[$moduleKey] = [
+                'module_key' => $moduleKey,
+                'label' => (string) ($definition['label'] ?? $moduleKey),
+                'description' => (string) ($definition['description'] ?? ''),
+                'classification' => (string) ($definition['classification'] ?? 'shared-core'),
+                'status' => $status,
+                'channels' => $this->normalizedStringList((array) ($definition['channels'] ?? [])),
+                'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
+                'dependencies' => $this->normalizedStringList((array) ($definition['dependencies'] ?? [])),
+                'capabilities' => $this->normalizedCapabilityList((array) ($definition['capabilities'] ?? [])),
+                'visibility' => is_array($definition['visibility'] ?? null) ? (array) $definition['visibility'] : [],
+                'cta_routing' => strtolower(trim((string) ($definition['cta_routing'] ?? 'none'))),
+                'market_state' => strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY'))),
+                'default_enabled' => (bool) ($definition['default_enabled'] ?? false),
+                'has_access_raw' => $hasAccess,
+                'source_raw' => $source,
+                'access_sources' => $sources !== [] ? array_values(array_unique($sources)) : ['none'],
+                'setup_status' => $setupStatus,
+                'coming_soon' => $comingSoon,
+                'supports_upgrade_prompt' => $supportsUpgradePrompt,
+                'billing_status' => $this->nullableString($entitlementRow['billing_status'] ?? null),
+                'entitlement_source' => $this->nullableString($entitlementRow['entitlement_source'] ?? null),
+                'price_source' => $this->nullableString($entitlementRow['price_source'] ?? null),
+                'availability_status' => strtolower(trim((string) ($entitlementRow['availability_status'] ?? 'available'))),
+                'enabled_status' => strtolower(trim((string) ($entitlementRow['enabled_status'] ?? 'inherit'))),
+            ];
+        }
+
+        $modules = [];
+        foreach ($requestedKeys as $moduleKey) {
+            $rawModule = $rawModules[$moduleKey] ?? null;
+            if (! is_array($rawModule)) {
+                continue;
+            }
+
+            $decision = $this->decisionForModule(
+                module: $rawModule,
+                allModules: $rawModules,
+                operatingMode: $operatingMode,
+                planKey: $planKey
+            );
+
             $uiState = $this->uiState(
-                hasAccess: $hasAccess,
-                setupStatus: $setupStatus,
-                comingSoon: $comingSoon
+                enabled: $decision['enabled'],
+                setupStatus: (string) ($rawModule['setup_status'] ?? 'not_started'),
+                comingSoon: (bool) ($rawModule['coming_soon'] ?? false),
+                reason: (string) ($decision['reason'] ?? 'not_enabled')
+            );
+
+            $upgradePromptEligible = $this->upgradePromptEligible(
+                enabled: (bool) ($decision['enabled'] ?? false),
+                comingSoon: (bool) ($rawModule['coming_soon'] ?? false),
+                supportsUpgradePrompt: (bool) ($rawModule['supports_upgrade_prompt'] ?? true),
+                cta: (string) ($decision['cta'] ?? 'none')
             );
 
             $modules[$moduleKey] = [
                 'module_key' => $moduleKey,
-                'label' => (string) ($definition['label'] ?? $moduleKey),
-                'classification' => (string) ($definition['classification'] ?? 'shared-core'),
-                'has_access' => $hasAccess,
-                'access_sources' => $sources !== [] ? array_values(array_unique($sources)) : ['none'],
-                'setup_status' => $setupStatus,
-                'coming_soon' => $comingSoon,
+                'label' => (string) ($rawModule['label'] ?? $moduleKey),
+                'description' => (string) ($rawModule['description'] ?? ''),
+                'classification' => (string) ($rawModule['classification'] ?? 'shared-core'),
+                'status' => (string) ($rawModule['status'] ?? 'disabled'),
+                'channels' => (array) ($rawModule['channels'] ?? []),
+                'billing_mode' => (string) ($rawModule['billing_mode'] ?? 'unavailable'),
+                'dependencies' => (array) ($rawModule['dependencies'] ?? []),
+                'capabilities' => (array) ($rawModule['capabilities'] ?? []),
+                'visibility' => (array) ($rawModule['visibility'] ?? []),
+                'market_state' => (string) ($rawModule['market_state'] ?? 'INTERNAL_ONLY'),
+                'has_access' => (bool) ($decision['enabled'] ?? false),
+                'enabled' => (bool) ($decision['enabled'] ?? false),
+                'access_sources' => (array) ($rawModule['access_sources'] ?? ['none']),
+                'source' => (string) ($decision['source'] ?? 'flag'),
+                'reason' => (string) ($decision['reason'] ?? 'not_enabled'),
+                'cta' => (string) ($decision['cta'] ?? 'none'),
+                'cta_routing' => (string) ($decision['cta_routing'] ?? 'none'),
+                'setup_status' => (string) ($rawModule['setup_status'] ?? 'not_started'),
+                'coming_soon' => (bool) ($rawModule['coming_soon'] ?? false),
                 'ui_state' => $uiState,
-                'upgrade_prompt_eligible' => $this->upgradePromptEligible($hasAccess, $comingSoon, $supportsUpgradePrompt),
+                'upgrade_prompt_eligible' => $upgradePromptEligible,
+                'billing_status' => $this->nullableString($rawModule['billing_status'] ?? null),
+                'availability_status' => (string) ($rawModule['availability_status'] ?? 'available'),
+                'entitlement_source' => $this->nullableString($rawModule['entitlement_source'] ?? null),
+                'price_source' => $this->nullableString($rawModule['price_source'] ?? null),
             ];
         }
 
@@ -149,25 +231,13 @@ class TenantModuleAccessResolver
     }
 
     /**
-     * Resolve module access using store context.
-     *
      * @param  array<string,mixed>  $storeContext
      * @param  array<int,string>|null  $moduleKeys
      * @return array{
      *   tenant_id:?int,
      *   operating_mode:string,
      *   plan_key:string,
-     *   modules:array<string,array{
-     *     module_key:string,
-     *     label:string,
-     *     classification:string,
-     *     has_access:bool,
-     *     access_sources:array<int,string>,
-     *     setup_status:string,
-     *     coming_soon:bool,
-     *     ui_state:string,
-     *     upgrade_prompt_eligible:bool
-     *   }>
+     *   modules:array<string,array<string,mixed>>
      * }
      */
     public function resolveForStoreContext(array $storeContext, ?array $moduleKeys = null): array
@@ -181,23 +251,41 @@ class TenantModuleAccessResolver
     {
         $module = $this->module($tenantId, $moduleKey);
 
-        return (bool) ($module['has_access'] ?? false);
+        return (bool) ($module['enabled'] ?? false);
     }
 
     public function module(?int $tenantId, string $moduleKey): array
     {
         $resolved = $this->resolveForTenant($tenantId, [$moduleKey]);
+        $canonicalKey = $this->canonicalModuleKey($moduleKey);
 
-        return $resolved['modules'][$moduleKey] ?? [
-            'module_key' => $moduleKey,
-            'label' => $moduleKey,
+        return $resolved['modules'][$canonicalKey] ?? [
+            'module_key' => $canonicalKey,
+            'label' => $canonicalKey,
+            'description' => '',
             'classification' => 'shared-core',
+            'status' => 'disabled',
+            'channels' => [],
+            'billing_mode' => 'unavailable',
+            'dependencies' => [],
+            'capabilities' => [],
+            'visibility' => [],
+            'market_state' => 'INTERNAL_ONLY',
             'has_access' => false,
+            'enabled' => false,
             'access_sources' => ['none'],
+            'source' => 'flag',
+            'reason' => 'not_enabled',
+            'cta' => 'none',
+            'cta_routing' => 'none',
             'setup_status' => 'not_started',
             'coming_soon' => false,
             'ui_state' => 'locked',
-            'upgrade_prompt_eligible' => true,
+            'upgrade_prompt_eligible' => false,
+            'billing_status' => null,
+            'availability_status' => 'available',
+            'entitlement_source' => null,
+            'price_source' => null,
         ];
     }
 
@@ -213,7 +301,7 @@ class TenantModuleAccessResolver
         }
 
         $normalized = array_values(array_filter(array_map(
-            fn ($value): string => strtolower(trim((string) $value)),
+            fn ($value): string => $this->canonicalModuleKey((string) $value),
             $moduleKeys
         )));
 
@@ -221,6 +309,33 @@ class TenantModuleAccessResolver
             array_unique($normalized),
             fn (string $key): bool => array_key_exists($key, $catalog)
         ));
+    }
+
+    /**
+     * @param  array<int,string>  $moduleKeys
+     * @return array<int,string>
+     */
+    protected function expandModuleKeysWithDependencies(array $moduleKeys): array
+    {
+        $expanded = [];
+        $pending = array_values($moduleKeys);
+
+        while ($pending !== []) {
+            $moduleKey = array_shift($pending);
+            if (! is_string($moduleKey) || $moduleKey === '' || isset($expanded[$moduleKey])) {
+                continue;
+            }
+
+            $expanded[$moduleKey] = $moduleKey;
+            foreach ((array) ($this->moduleDefinition($moduleKey)['dependencies'] ?? []) as $dependencyKey) {
+                $canonicalDependency = $this->canonicalModuleKey((string) $dependencyKey);
+                if ($canonicalDependency !== '' && ! isset($expanded[$canonicalDependency])) {
+                    $pending[] = $canonicalDependency;
+                }
+            }
+        }
+
+        return array_values($expanded);
     }
 
     /**
@@ -255,7 +370,7 @@ class TenantModuleAccessResolver
         return $this->profileCache[$cacheKey] = [
             'tenant_id' => (int) $row->tenant_id,
             'plan_key' => $this->canonicalPlanKey((string) $row->plan_key),
-            'operating_mode' => strtolower(trim((string) $row->operating_mode)) ?: $this->defaultOperatingMode(),
+            'operating_mode' => strtolower(trim((string) ($row->operating_mode ?? ''))) ?: $this->defaultOperatingMode(),
             'source' => strtolower(trim((string) ($row->source ?? 'manual'))) ?: 'manual',
         ];
     }
@@ -316,7 +431,7 @@ class TenantModuleAccessResolver
             ->forTenantId($tenantId)
             ->get(['module_key', 'enabled_override', 'setup_status', 'coming_soon_override', 'upgrade_prompt_override'])
             ->mapWithKeys(function (TenantModuleState $row): array {
-                $moduleKey = strtolower(trim((string) $row->module_key));
+                $moduleKey = $this->canonicalModuleKey((string) $row->module_key);
                 if ($moduleKey === '') {
                     return [];
                 }
@@ -344,59 +459,187 @@ class TenantModuleAccessResolver
     }
 
     /**
-     * @return array<string,mixed>
+     * @return array<string,array<string,mixed>>
      */
-    protected function moduleDefinition(string $moduleKey): array
+    protected function moduleEntitlementRowsForTenant(?int $tenantId): array
     {
-        $catalog = $this->moduleCatalog();
+        if ($tenantId === null || ! Schema::hasTable('tenant_module_entitlements')) {
+            return [];
+        }
 
-        return $catalog[$moduleKey] ?? [
-            'label' => $moduleKey,
-            'classification' => 'shared-core',
-            'default_setup_status' => 'not_started',
-            'coming_soon' => false,
-            'supports_upgrade_prompt' => true,
+        if (array_key_exists($tenantId, $this->moduleEntitlementCache)) {
+            return $this->moduleEntitlementCache[$tenantId];
+        }
+
+        $rows = TenantModuleEntitlement::query()
+            ->forTenantId($tenantId)
+            ->where(function ($query): void {
+                $query->whereNull('starts_at')
+                    ->orWhere('starts_at', '<=', now());
+            })
+            ->where(function ($query): void {
+                $query->whereNull('ends_at')
+                    ->orWhere('ends_at', '>=', now());
+            })
+            ->get([
+                'module_key',
+                'availability_status',
+                'enabled_status',
+                'billing_status',
+                'entitlement_source',
+                'price_source',
+            ])
+            ->mapWithKeys(function (TenantModuleEntitlement $row): array {
+                $moduleKey = $this->canonicalModuleKey((string) $row->module_key);
+                if ($moduleKey === '') {
+                    return [];
+                }
+
+                return [
+                    $moduleKey => [
+                        'availability_status' => strtolower(trim((string) ($row->availability_status ?? 'available'))),
+                        'enabled_status' => strtolower(trim((string) ($row->enabled_status ?? 'inherit'))),
+                        'billing_status' => $this->nullableString($row->billing_status),
+                        'entitlement_source' => $this->nullableString($row->entitlement_source),
+                        'price_source' => $this->nullableString($row->price_source),
+                    ],
+                ];
+            })
+            ->all();
+
+        $this->moduleEntitlementCache[$tenantId] = $rows;
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string,mixed>  $module
+     * @param  array<string,array<string,mixed>>  $allModules
+     * @return array{enabled:bool,reason:string,source:string,cta:string,cta_routing:string}
+     */
+    protected function decisionForModule(array $module, array $allModules, string $operatingMode, string $planKey): array
+    {
+        $status = strtolower(trim((string) ($module['status'] ?? 'disabled')));
+        $ctaRouting = strtolower(trim((string) ($module['cta_routing'] ?? 'none')));
+        $source = $this->normalizeDecisionSource((string) ($module['source_raw'] ?? 'flag'));
+        $enabled = (bool) ($module['has_access_raw'] ?? false);
+        $reason = $enabled ? 'enabled' : 'not_enabled';
+
+        $channels = $this->normalizedStringList((array) ($module['channels'] ?? []));
+        if (! $this->operatingModeSupportsChannels($operatingMode, $channels)) {
+            return [
+                'enabled' => false,
+                'reason' => 'channel_not_supported',
+                'source' => 'flag',
+                'cta' => 'none',
+                'cta_routing' => $ctaRouting,
+            ];
+        }
+
+        $availabilityStatus = strtolower(trim((string) ($module['availability_status'] ?? 'available')));
+        if (in_array($availabilityStatus, ['unavailable', 'disabled'], true) || $status === 'disabled') {
+            return [
+                'enabled' => false,
+                'reason' => 'module_unavailable',
+                'source' => 'flag',
+                'cta' => 'none',
+                'cta_routing' => $ctaRouting,
+            ];
+        }
+
+        if ($enabled) {
+            foreach ((array) ($module['dependencies'] ?? []) as $dependencyKey) {
+                $dependency = is_array($allModules[$dependencyKey] ?? null) ? $allModules[$dependencyKey] : null;
+                if ($dependency === null || ! (bool) ($dependency['has_access_raw'] ?? false)) {
+                    return [
+                        'enabled' => false,
+                        'reason' => 'dependency_not_enabled',
+                        'source' => 'flag',
+                        'cta' => $this->dependencyCta($dependencyKey, $allModules, $planKey),
+                        'cta_routing' => $ctaRouting,
+                    ];
+                }
+            }
+        }
+
+        if ($enabled) {
+            if (($module['enabled_status'] ?? 'inherit') === 'disabled') {
+                $reason = 'disabled_by_entitlement';
+                $enabled = false;
+                $source = 'override';
+            } elseif (in_array((string) ($module['setup_status'] ?? 'not_started'), ['not_started', 'in_progress', 'blocked'], true)) {
+                $reason = 'setup_required';
+            }
+        }
+
+        if (! $enabled) {
+            if ($source === 'override' || ($module['enabled_status'] ?? 'inherit') === 'disabled') {
+                $reason = 'disabled_by_override';
+            } elseif (($module['billing_mode'] ?? 'unavailable') === 'add_on') {
+                $reason = 'add_on_required';
+            } elseif (($module['billing_mode'] ?? 'unavailable') === 'custom') {
+                $reason = 'contact_sales_required';
+            } elseif ($this->moduleHasFutureStatus($status)) {
+                $reason = 'rollout_pending';
+            } else {
+                $reason = 'plan_upgrade_required';
+            }
+        }
+
+        return [
+            'enabled' => $enabled,
+            'reason' => $reason,
+            'source' => $source,
+            'cta' => $enabled ? 'none' : $this->ctaForReason($reason, $ctaRouting),
+            'cta_routing' => $enabled ? 'none' : $ctaRouting,
         ];
     }
 
-    /**
-     * @return array<int,string>
-     */
-    protected function planIncludes(string $planKey): array
+    protected function dependencyCta(string $dependencyKey, array $allModules, string $planKey): string
     {
-        $plans = $this->planCatalog();
-        $resolvedKey = array_key_exists($planKey, $plans) ? $planKey : $this->defaultPlanKey();
-        $plan = $plans[$resolvedKey] ?? [];
-        $includes = is_array($plan['includes'] ?? null) ? $plan['includes'] : [];
+        $dependency = is_array($allModules[$dependencyKey] ?? null) ? $allModules[$dependencyKey] : null;
+        if ($dependency === null) {
+            return 'none';
+        }
 
-        return array_values(array_filter(array_map(
-            fn ($value): string => strtolower(trim((string) $value)),
-            $includes
-        )));
+        $billingMode = strtolower(trim((string) ($dependency['billing_mode'] ?? 'unavailable')));
+        if ($billingMode === 'add_on') {
+            return 'add';
+        }
+
+        return 'upgrade';
     }
 
-    /**
-     * @return array<int,string>
-     */
-    protected function addonIncludes(string $addonKey): array
+    protected function ctaForReason(string $reason, string $ctaRouting): string
     {
-        $addons = $this->addonCatalog();
-        $addon = $addons[$addonKey] ?? [];
-        $includes = is_array($addon['includes'] ?? null) ? $addon['includes'] : [];
-
-        return array_values(array_filter(array_map(
-            fn ($value): string => strtolower(trim((string) $value)),
-            $includes
-        )));
+        return match ($reason) {
+            'add_on_required' => 'add',
+            'contact_sales_required' => 'request',
+            'rollout_pending' => $this->normalizeCta($ctaRouting),
+            'channel_not_supported',
+            'module_unavailable',
+            'dependency_not_enabled' => $this->normalizeCta($ctaRouting),
+            default => $this->normalizeCta($ctaRouting),
+        };
     }
 
-    protected function uiState(bool $hasAccess, string $setupStatus, bool $comingSoon): string
+    protected function normalizeCta(string $ctaRouting): string
     {
-        if ($comingSoon) {
+        return match (strtolower(trim($ctaRouting))) {
+            'upgrade_plan' => 'upgrade',
+            'add_module' => 'add',
+            'request_access', 'contact_sales' => 'request',
+            default => 'none',
+        };
+    }
+
+    protected function uiState(bool $enabled, string $setupStatus, bool $comingSoon, string $reason): string
+    {
+        if ($comingSoon || $reason === 'rollout_pending') {
             return 'coming_soon';
         }
 
-        if (! $hasAccess) {
+        if (! $enabled) {
             return 'locked';
         }
 
@@ -405,13 +648,18 @@ class TenantModuleAccessResolver
             : 'setup_needed';
     }
 
-    protected function upgradePromptEligible(bool $hasAccess, bool $comingSoon, bool $supportsUpgradePrompt): bool
+    protected function upgradePromptEligible(bool $enabled, bool $comingSoon, bool $supportsUpgradePrompt, string $cta): bool
     {
-        if ($comingSoon || $hasAccess) {
+        if ($enabled || $comingSoon || ! $supportsUpgradePrompt) {
             return false;
         }
 
-        return $supportsUpgradePrompt;
+        return in_array($cta, ['upgrade', 'add'], true);
+    }
+
+    protected function moduleHasFutureStatus(string $status): bool
+    {
+        return in_array($status, ['placeholder', 'roadmap'], true);
     }
 
     protected function normalizeSetupStatus(string $status): string
@@ -434,7 +682,22 @@ class TenantModuleAccessResolver
             return $this->defaultPlanKey();
         }
 
-        $alias = config('commercial.legacy_plan_aliases.'.$normalized);
+        $alias = config('commercial.legacy_plan_aliases.' . $normalized);
+        if (is_string($alias) && trim($alias) !== '') {
+            return strtolower(trim($alias));
+        }
+
+        return $normalized;
+    }
+
+    protected function canonicalModuleKey(string $moduleKey): string
+    {
+        $normalized = strtolower(trim($moduleKey));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $alias = config('module_catalog.legacy.module_aliases.' . $normalized);
         if (is_string($alias) && trim($alias) !== '') {
             return strtolower(trim($alias));
         }
@@ -459,7 +722,7 @@ class TenantModuleAccessResolver
         $configured = (array) config('entitlements.modules', []);
         $normalized = [];
         foreach ($configured as $key => $value) {
-            $normalizedKey = strtolower(trim((string) $key));
+            $normalizedKey = $this->canonicalModuleKey((string) $key);
             if ($normalizedKey === '' || ! is_array($value)) {
                 continue;
             }
@@ -517,5 +780,155 @@ class TenantModuleAccessResolver
         $this->addonCatalog = $normalized;
 
         return $this->addonCatalog;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function moduleDefinition(string $moduleKey): array
+    {
+        $catalog = $this->moduleCatalog();
+        $definition = is_array($catalog[$moduleKey] ?? null) ? (array) $catalog[$moduleKey] : [];
+        $canonical = is_array(config('module_catalog.modules.' . $moduleKey))
+            ? (array) config('module_catalog.modules.' . $moduleKey)
+            : [];
+
+        $canonicalString = static function (string $key, ?string $fallback = null) use ($canonical, $definition): string {
+            if (array_key_exists($key, $canonical)) {
+                return (string) $canonical[$key];
+            }
+
+            if (array_key_exists($key, $definition)) {
+                return (string) $definition[$key];
+            }
+
+            return (string) ($fallback ?? '');
+        };
+
+        $canonicalArray = static function (string $key, array $fallback = []) use ($canonical, $definition): array {
+            if (array_key_exists($key, $canonical) && is_array($canonical[$key])) {
+                return (array) $canonical[$key];
+            }
+
+            if (array_key_exists($key, $definition) && is_array($definition[$key])) {
+                return (array) $definition[$key];
+            }
+
+            return $fallback;
+        };
+
+        $canonicalBool = static function (string $key, bool $fallback = false) use ($canonical, $definition): bool {
+            if (array_key_exists($key, $canonical)) {
+                return (bool) $canonical[$key];
+            }
+
+            if (array_key_exists($key, $definition)) {
+                return (bool) $definition[$key];
+            }
+
+            return $fallback;
+        };
+
+        return [
+            'label' => (string) ($definition['label'] ?? $canonical['display_name'] ?? $moduleKey),
+            'description' => $canonicalString('description'),
+            'classification' => (string) ($definition['classification'] ?? $canonical['classification'] ?? 'shared-core'),
+            'default_setup_status' => (string) ($definition['default_setup_status'] ?? $canonical['default_setup_status'] ?? 'not_started'),
+            'coming_soon' => (bool) ($definition['coming_soon'] ?? false),
+            'supports_upgrade_prompt' => (bool) ($definition['supports_upgrade_prompt'] ?? true),
+            'status' => $canonicalString('status', 'disabled'),
+            'channels' => $canonicalArray('channels'),
+            'billing_mode' => $canonicalString('billing_mode', 'unavailable'),
+            'dependencies' => $canonicalArray('dependencies'),
+            'capabilities' => $canonicalArray('capabilities'),
+            'visibility' => $canonicalArray('visibility'),
+            'cta_routing' => $canonicalString('cta_routing', 'none'),
+            'market_state' => $canonicalString('market_state', 'INTERNAL_ONLY'),
+            'default_enabled' => $canonicalBool('default_enabled'),
+        ];
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function planIncludes(string $planKey): array
+    {
+        $plans = $this->planCatalog();
+        $resolvedKey = array_key_exists($planKey, $plans) ? $planKey : $this->defaultPlanKey();
+        $plan = $plans[$resolvedKey] ?? [];
+        $includes = is_array($plan['includes'] ?? null) ? $plan['includes'] : [];
+
+        return $this->normalizedStringList($includes);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function addonIncludes(string $addonKey): array
+    {
+        $addons = $this->addonCatalog();
+        $addon = $addons[$addonKey] ?? [];
+        $includes = is_array($addon['includes'] ?? null) ? $addon['includes'] : [];
+
+        return $this->normalizedStringList($includes);
+    }
+
+    /**
+     * @param  array<int,mixed>  $values
+     * @return array<int,string>
+     */
+    protected function normalizedStringList(array $values): array
+    {
+        return array_values(array_filter(array_map(function ($value): string {
+            $normalized = strtolower(trim((string) $value));
+
+            return $this->canonicalModuleKey($normalized);
+        }, $values)));
+    }
+
+    /**
+     * @param  array<int,mixed>  $values
+     * @return array<int,string>
+     */
+    protected function normalizedCapabilityList(array $values): array
+    {
+        return array_values(array_filter(array_unique(array_map(
+            static fn ($value): string => strtolower(trim((string) $value)),
+            $values
+        ))));
+    }
+
+    /**
+     * @param  array<int,string>  $channels
+     */
+    protected function operatingModeSupportsChannels(string $operatingMode, array $channels): bool
+    {
+        if ($channels === [] || in_array('both', $channels, true)) {
+            return true;
+        }
+
+        $normalizedMode = strtolower(trim($operatingMode));
+
+        if ($normalizedMode === 'shopify') {
+            return in_array('shopify', $channels, true);
+        }
+
+        return in_array('backstage', $channels, true);
+    }
+
+    protected function normalizeDecisionSource(string $source): string
+    {
+        return match (strtolower(trim($source))) {
+            'plan', 'addon', 'override', 'flag' => strtolower(trim($source)),
+            'manual', 'landlord_console', 'entitlement', 'contract', 'purchase' => 'override',
+            default => 'flag',
+        };
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
     }
 }

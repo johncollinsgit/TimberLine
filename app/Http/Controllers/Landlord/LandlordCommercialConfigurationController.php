@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Landlord\UpdateTenantModuleEntitlementRequest;
 use App\Models\LandlordCatalogEntry;
 use App\Models\Tenant;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -19,6 +21,7 @@ class LandlordCommercialConfigurationController extends Controller
         TenantModuleAccessResolver $moduleAccessResolver
     ): View
     {
+        Gate::authorize('manage-landlord-commercial');
         $tenantRows = [];
         $moduleCatalogKeys = array_keys((array) config('entitlements.modules', []));
         $billingOverview = $service->billingReadinessOverview();
@@ -56,6 +59,25 @@ class LandlordCommercialConfigurationController extends Controller
                 ];
             }
 
+            $moduleEntitlements = [];
+            foreach ($tenant->moduleEntitlements as $moduleEntitlement) {
+                $moduleKey = strtolower(trim((string) $moduleEntitlement->module_key));
+                if ($moduleKey === '') {
+                    continue;
+                }
+
+                $moduleEntitlements[$moduleKey] = [
+                    'availability_status' => strtolower(trim((string) ($moduleEntitlement->availability_status ?? 'available'))),
+                    'enabled_status' => strtolower(trim((string) ($moduleEntitlement->enabled_status ?? 'inherit'))),
+                    'billing_status' => trim((string) ($moduleEntitlement->billing_status ?? '')),
+                    'price_override_cents' => $moduleEntitlement->price_override_cents,
+                    'currency' => strtoupper(trim((string) ($moduleEntitlement->currency ?? 'USD'))),
+                    'entitlement_source' => trim((string) ($moduleEntitlement->entitlement_source ?? '')),
+                    'price_source' => trim((string) ($moduleEntitlement->price_source ?? '')),
+                    'notes' => trim((string) ($moduleEntitlement->notes ?? '')),
+                ];
+            }
+
             $addonStates = [];
             foreach ($tenant->accessAddons as $addonState) {
                 $addonKey = strtolower(trim((string) $addonState->addon_key));
@@ -77,6 +99,7 @@ class LandlordCommercialConfigurationController extends Controller
                 'store_channel_allowance' => $commercial['store_channel_allowance'] ?? null,
                 'usage' => $usage,
                 'module_overrides' => $moduleOverrides,
+                'module_entitlements' => $moduleEntitlements,
                 'addon_states' => $addonStates,
                 'resolved_module_states' => $resolvedModules,
                 'plan_pricing_overrides_json' => $this->encodeJsonMap((array) ($commercial['plan_pricing_overrides'] ?? [])),
@@ -131,6 +154,7 @@ class LandlordCommercialConfigurationController extends Controller
         string $type,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $validated = $request->validate([
             'entry_key' => ['required', 'string', 'max:120'],
             'name' => ['required', 'string', 'max:190'],
@@ -172,6 +196,7 @@ class LandlordCommercialConfigurationController extends Controller
         string $entryKey,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $validated = $request->validate([
             'new_key' => ['nullable', 'string', 'max:120'],
         ]);
@@ -190,6 +215,7 @@ class LandlordCommercialConfigurationController extends Controller
         string $entryKey,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $validated = $request->validate([
             'state' => ['required', 'string', 'in:active,inactive,archived'],
         ]);
@@ -205,6 +231,7 @@ class LandlordCommercialConfigurationController extends Controller
 
     public function reorderTemplates(Request $request, LandlordCommercialConfigService $service): RedirectResponse
     {
+        Gate::authorize('manage-landlord-commercial');
         $validated = $request->validate([
             'ordered_keys' => ['required', 'array'],
             'ordered_keys.*' => ['string', 'max:120'],
@@ -220,6 +247,7 @@ class LandlordCommercialConfigurationController extends Controller
         Tenant $tenant,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $planKeys = array_values(array_filter(array_map(
             static fn (array $entry): string => strtolower(trim((string) ($entry['entry_key'] ?? ''))),
             $service->catalog(LandlordCatalogEntry::TYPE_PLAN)
@@ -234,7 +262,8 @@ class LandlordCommercialConfigurationController extends Controller
             tenantId: (int) $tenant->id,
             planKey: (string) $validated['plan_key'],
             operatingMode: (string) ($validated['operating_mode'] ?? 'shopify'),
-            source: 'landlord_console'
+            source: 'landlord_console',
+            actorId: $request->user()?->id
         );
 
         return back()->with('status', 'Tenant plan assignment saved.');
@@ -246,12 +275,14 @@ class LandlordCommercialConfigurationController extends Controller
         string $moduleKey,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $request->merge([
             'module_key' => strtolower(trim($moduleKey)),
         ]);
 
+        $catalogKeys = array_keys((array) config('module_catalog.modules', []));
         $validated = $request->validate([
-            'module_key' => ['required', 'string', Rule::in(array_keys((array) config('entitlements.modules', [])))],
+            'module_key' => ['required', 'string', Rule::in($catalogKeys)],
             'enabled_override' => ['required', 'string', 'in:inherit,enabled,disabled'],
             'setup_status' => ['nullable', 'string', 'in:not_started,in_progress,configured,blocked'],
         ]);
@@ -266,10 +297,54 @@ class LandlordCommercialConfigurationController extends Controller
             tenantId: (int) $tenant->id,
             moduleKey: (string) $validated['module_key'],
             enabledOverride: $override,
-            setupStatus: (string) ($validated['setup_status'] ?? '')
+            setupStatus: (string) ($validated['setup_status'] ?? ''),
+            actorId: $request->user()?->id
         );
 
         return back()->with('status', 'Module state updated.');
+    }
+
+    public function updateTenantModuleEntitlement(
+        UpdateTenantModuleEntitlementRequest $request,
+        Tenant $tenant,
+        string $moduleKey,
+        LandlordCommercialConfigService $service
+    ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
+        $validated = $request->validated();
+
+        $definition = is_array(config('module_catalog.modules.'.(string) $validated['module_key']))
+            ? (array) config('module_catalog.modules.'.(string) $validated['module_key'])
+            : [];
+        $moduleStatus = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+        if ($moduleStatus === 'disabled') {
+            return back()->withErrors([
+                'module_key' => 'Disabled catalog modules cannot receive entitlement overrides.',
+            ]);
+        }
+
+        $service->setTenantModuleEntitlement(
+            tenantId: (int) $tenant->id,
+            moduleKey: (string) $validated['module_key'],
+            input: [
+                'availability_status' => (string) $validated['availability_status'],
+                'enabled_status' => (string) $validated['enabled_status'],
+                'billing_status' => $validated['billing_status'] ?? null,
+                'price_override_cents' => $validated['price_override_cents'] ?? null,
+                'currency' => 'USD',
+                'entitlement_source' => 'landlord_console',
+                'price_source' => array_key_exists('price_override_cents', $validated) && $validated['price_override_cents'] !== null
+                    ? 'manual'
+                    : null,
+                'notes' => $validated['notes'] ?? null,
+                'metadata' => [
+                    'updated_via' => 'landlord_commercial_console',
+                ],
+            ],
+            actorId: $request->user()?->id
+        );
+
+        return back()->with('status', 'Module entitlement updated.');
     }
 
     public function updateTenantAddonState(
@@ -278,6 +353,7 @@ class LandlordCommercialConfigurationController extends Controller
         string $addonKey,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $request->merge([
             'addon_key' => strtolower(trim($addonKey)),
         ]);
@@ -291,7 +367,8 @@ class LandlordCommercialConfigurationController extends Controller
             tenantId: (int) $tenant->id,
             addonKey: (string) $validated['addon_key'],
             enabled: (bool) $validated['enabled'],
-            source: 'landlord_console'
+            source: 'landlord_console',
+            actorId: $request->user()?->id
         );
 
         return back()->with('status', 'Addon state updated.');
@@ -302,6 +379,7 @@ class LandlordCommercialConfigurationController extends Controller
         Tenant $tenant,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $templateKeys = array_values(array_filter(array_map(
             static fn (array $entry): string => strtolower(trim((string) ($entry['entry_key'] ?? ''))),
             $service->catalog(LandlordCatalogEntry::TYPE_TEMPLATE)
@@ -327,7 +405,7 @@ class LandlordCommercialConfigurationController extends Controller
             'display_labels' => $this->decodeJsonMap($validated['display_labels_json'] ?? ''),
             'billing_mapping' => $this->decodeJsonMap($validated['billing_mapping_json'] ?? ''),
             'metadata' => $this->decodeJsonMap($validated['metadata_json'] ?? ''),
-        ]);
+        ], $request->user()?->id);
 
         return back()->with('status', 'Tenant commercial overrides updated.');
     }
@@ -337,6 +415,7 @@ class LandlordCommercialConfigurationController extends Controller
         Tenant $tenant,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $result = $service->syncStripeCustomerReference($tenant, $request->user()?->id);
 
         if (! (bool) ($result['ok'] ?? false)) {
@@ -356,6 +435,7 @@ class LandlordCommercialConfigurationController extends Controller
         Tenant $tenant,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $result = $service->syncStripeSubscriptionPrepState($tenant, $request->user()?->id);
 
         if (! (bool) ($result['ok'] ?? false)) {
@@ -375,6 +455,7 @@ class LandlordCommercialConfigurationController extends Controller
         Tenant $tenant,
         LandlordCommercialConfigService $service
     ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
         $result = $service->syncStripeLiveSubscriptionReference($tenant, $request->user()?->id);
 
         if (! (bool) ($result['ok'] ?? false)) {

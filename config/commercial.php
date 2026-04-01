@@ -1,5 +1,36 @@
 <?php
 
+$catalog = require __DIR__.'/module_catalog.php';
+
+$canonicalPlans = [];
+foreach ((array) ($catalog['plans'] ?? []) as $planKey => $definition) {
+    if (! is_array($definition)) {
+        continue;
+    }
+
+    $canonicalPlans[$planKey] = [
+        'modules' => array_values(array_map('strval', (array) ($definition['included_modules'] ?? []))),
+        'eligible_addons' => array_values(array_map('strval', (array) ($definition['eligible_addons'] ?? []))),
+        'track' => (string) ($definition['track'] ?? 'shopify'),
+        'name' => (string) ($definition['display_name'] ?? $planKey),
+        'position' => (int) ($definition['position'] ?? 100),
+        'is_public' => (bool) ($definition['is_public'] ?? true),
+    ];
+}
+
+$canonicalAddons = [];
+foreach ((array) ($catalog['addons'] ?? []) as $addonKey => $definition) {
+    if (! is_array($definition)) {
+        continue;
+    }
+
+    $canonicalAddons[$addonKey] = [
+        'modules' => array_values(array_map('strval', (array) ($definition['modules'] ?? []))),
+        'legacy_grants' => array_values(array_map('strval', (array) ($definition['legacy_grants'] ?? []))),
+        'name' => (string) ($definition['label'] ?? $definition['display_name'] ?? $addonKey),
+    ];
+}
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -10,17 +41,11 @@ return [
     | experiences should reference. Billing lifecycle writes remain disabled.
     |
     */
-    'public_tier_order' => [
-        'starter',
-        'growth',
-        'pro',
-    ],
+    'public_tier_order' => array_values(array_keys($canonicalPlans)),
 
-    'legacy_plan_aliases' => [
-        'shopify_proof_of_concept' => 'starter',
-        'shopify_growth' => 'growth',
-        'direct_starter' => 'starter',
-    ],
+    'legacy_plan_aliases' => is_array(($catalog['legacy'] ?? [])['plan_aliases'] ?? null)
+        ? (array) ($catalog['legacy'] ?? [])['plan_aliases']
+        : [],
 
     'usage_metrics' => [
         'contact_count' => [
@@ -68,11 +93,11 @@ return [
 
     'plans' => [
         'starter' => [
-            'name' => 'Starter',
-            'track' => 'shopify',
-            'is_public' => true,
+            'name' => (string) ($canonicalPlans['starter']['name'] ?? 'Starter'),
+            'track' => (string) ($canonicalPlans['starter']['track'] ?? 'shopify'),
+            'is_public' => (bool) ($canonicalPlans['starter']['is_public'] ?? true),
             'is_highest_standard' => false,
-            'position' => 10,
+            'position' => (int) ($canonicalPlans['starter']['position'] ?? 10),
             'currency' => 'USD',
             'recurring_price_cents' => 14900,
             'setup_price_cents' => 4900,
@@ -80,31 +105,15 @@ return [
                 'store_channels' => 1,
                 'contact_count' => 2000,
             ],
-            'modules' => [
-                'dashboard',
-                'customers',
-                'reviews',
-                'lead_capture',
-                'reporting',
-                'integrations',
-                'uploads',
-                'onboarding',
-                'settings',
-                'shopify',
-            ],
-            'eligible_addons' => [
-                'referrals',
-                'sms',
-                'additional_channels',
-                'bulk_email_marketing',
-            ],
+            'modules' => (array) ($canonicalPlans['starter']['modules'] ?? []),
+            'eligible_addons' => (array) ($canonicalPlans['starter']['eligible_addons'] ?? []),
         ],
         'growth' => [
-            'name' => 'Growth',
-            'track' => 'shopify',
-            'is_public' => true,
+            'name' => (string) ($canonicalPlans['growth']['name'] ?? 'Growth'),
+            'track' => (string) ($canonicalPlans['growth']['track'] ?? 'shopify'),
+            'is_public' => (bool) ($canonicalPlans['growth']['is_public'] ?? true),
             'is_highest_standard' => false,
-            'position' => 20,
+            'position' => (int) ($canonicalPlans['growth']['position'] ?? 20),
             'currency' => 'USD',
             'recurring_price_cents' => 24900,
             'setup_price_cents' => 7900,
@@ -112,35 +121,15 @@ return [
                 'store_channels' => 1,
                 'contact_count' => 10000,
             ],
-            'modules' => [
-                'dashboard',
-                'customers',
-                'reviews',
-                'lead_capture',
-                'reporting',
-                'integrations',
-                'uploads',
-                'onboarding',
-                'settings',
-                'shopify',
-                'rewards',
-                'birthdays',
-                'campaigns',
-                'email',
-            ],
-            'eligible_addons' => [
-                'referrals',
-                'sms',
-                'additional_channels',
-                'bulk_email_marketing',
-            ],
+            'modules' => (array) ($canonicalPlans['growth']['modules'] ?? []),
+            'eligible_addons' => (array) ($canonicalPlans['growth']['eligible_addons'] ?? []),
         ],
         'pro' => [
-            'name' => 'Pro',
-            'track' => 'shopify',
-            'is_public' => true,
+            'name' => (string) ($canonicalPlans['pro']['name'] ?? 'Pro'),
+            'track' => (string) ($canonicalPlans['pro']['track'] ?? 'shopify'),
+            'is_public' => (bool) ($canonicalPlans['pro']['is_public'] ?? true),
             'is_highest_standard' => true,
-            'position' => 30,
+            'position' => (int) ($canonicalPlans['pro']['position'] ?? 30),
             'currency' => 'USD',
             'recurring_price_cents' => 39900,
             'setup_price_cents' => 9900,
@@ -148,73 +137,54 @@ return [
                 'store_channels' => 1,
                 'contact_count' => 25000,
             ],
-            'modules' => [
-                'dashboard',
-                'customers',
-                'reviews',
-                'lead_capture',
-                'reporting',
-                'diagnostics_advanced',
-                'integrations',
-                'uploads',
-                'onboarding',
-                'settings',
-                'shopify',
-                'rewards',
-                'birthdays',
-                'campaigns',
-                'email',
-                'wishlist',
-            ],
-            'eligible_addons' => [
-                'referrals',
-                'sms',
-                'additional_channels',
-                'bulk_email_marketing',
-            ],
+            'modules' => (array) ($canonicalPlans['pro']['modules'] ?? []),
+            'eligible_addons' => (array) ($canonicalPlans['pro']['eligible_addons'] ?? []),
         ],
     ],
 
     'addons' => [
         'referrals' => [
-            'name' => 'Referrals',
+            'name' => (string) ($canonicalAddons['referrals']['name'] ?? 'Referrals'),
             'position' => 10,
             'currency' => 'USD',
             'recurring_price_cents' => 7900,
             'setup_price_cents' => 0,
-            'modules' => ['referrals'],
+            'modules' => (array) ($canonicalAddons['referrals']['modules'] ?? ['referrals']),
         ],
         'sms' => [
-            'name' => 'SMS',
+            'name' => (string) ($canonicalAddons['sms']['name'] ?? 'SMS'),
             'position' => 20,
             'currency' => 'USD',
             'recurring_price_cents' => 9900,
             'setup_price_cents' => 0,
-            'modules' => ['sms'],
+            'modules' => (array) ($canonicalAddons['sms']['modules'] ?? ['sms']),
         ],
         'additional_channels' => [
-            'name' => 'Additional Stores/Channels',
+            'name' => (string) ($canonicalAddons['additional_channels']['name'] ?? 'Additional Stores/Channels'),
             'position' => 30,
             'currency' => 'USD',
             'recurring_price_cents' => 5900,
             'setup_price_cents' => 0,
-            'modules' => ['shopify'],
+            'modules' => (array) ($canonicalAddons['additional_channels']['modules'] ?? ['additional_channels']),
+            'legacy_grants' => (array) ($canonicalAddons['additional_channels']['legacy_grants'] ?? ['shopify']),
         ],
         'bulk_email_marketing' => [
-            'name' => 'Bulk Marketing Email',
+            'name' => (string) ($canonicalAddons['bulk_email_marketing']['name'] ?? 'Bulk Marketing Email'),
             'position' => 40,
             'currency' => 'USD',
             'recurring_price_cents' => 12900,
             'setup_price_cents' => 0,
-            'modules' => ['email'],
+            'modules' => (array) ($canonicalAddons['bulk_email_marketing']['modules'] ?? ['bulk_email_marketing']),
+            'legacy_grants' => (array) ($canonicalAddons['bulk_email_marketing']['legacy_grants'] ?? ['email']),
         ],
         'future_niche_modules' => [
-            'name' => 'Future Niche Modules',
+            'name' => (string) ($canonicalAddons['future_niche_modules']['name'] ?? 'Future Niche Modules'),
             'position' => 90,
             'currency' => 'USD',
             'recurring_price_cents' => 0,
             'setup_price_cents' => 0,
-            'modules' => [],
+            'modules' => (array) ($canonicalAddons['future_niche_modules']['modules'] ?? ['future_niche_modules']),
+            'legacy_grants' => (array) ($canonicalAddons['future_niche_modules']['legacy_grants'] ?? ['ai']),
         ],
     ],
 

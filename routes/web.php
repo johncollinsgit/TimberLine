@@ -146,6 +146,8 @@ if ($landlordHost !== '') {
                 ->name('tenants.operations.exports.download');
             Route::post('/landlord/tenants/{tenant}/commercial/plan', [LandlordCommercialConfigurationController::class, 'assignTenantPlan'])
                 ->name('tenants.commercial.plan');
+            Route::post('/landlord/tenants/{tenant}/commercial/entitlements/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleEntitlement'])
+                ->name('tenants.commercial.entitlements.update');
             Route::post('/landlord/tenants/{tenant}/commercial/override', [LandlordCommercialConfigurationController::class, 'updateTenantCommercialOverride'])
                 ->name('tenants.commercial.override');
             Route::post('/landlord/tenants/{tenant}/commercial/modules/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleState'])
