@@ -236,7 +236,7 @@
             <x-tenancy.module-setup-checklist
                 :module-states="$moduleStates"
                 :module-order="$moduleCardOrder"
-                title="Setup Checklist"
+                title="Module setup checklist"
                 subtitle="Track what is active now, what needs setup next, and what is available to unlock."
                 :cta-href="route('shopify.app.plans', [], false)"
             />

@@ -21,6 +21,16 @@ class AuthenticatedTenantContextResolver
             ->get();
 
         if ($memberships->isEmpty()) {
+            if ($this->canUseLegacySingleTenantFallback($user)) {
+                /** @var Tenant|null $soleTenant */
+                $soleTenant = Tenant::query()->orderBy('name')->sole();
+                if ($soleTenant instanceof Tenant) {
+                    $request->session()->put('tenant_id', (int) $soleTenant->id);
+
+                    return $soleTenant;
+                }
+            }
+
             return null;
         }
 
@@ -131,5 +141,18 @@ class AuthenticatedTenantContextResolver
         $cast = (int) $value;
 
         return $cast > 0 ? $cast : null;
+    }
+
+    protected function canUseLegacySingleTenantFallback(User $user): bool
+    {
+        if (! ($user->isAdmin() || $user->canAccessMarketing())) {
+            return false;
+        }
+
+        try {
+            return Tenant::query()->count() === 1;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

@@ -317,7 +317,7 @@ class MarketingPublicEventController extends Controller
         $tenantId = is_numeric($profile?->tenant_id) && (int) ($profile?->tenant_id ?? 0) > 0
             ? (int) $profile->tenant_id
             : $tenantContext['tenant_id'];
-        $displayLabels = $this->displayLabelsForTenantId($tenantId);
+        $displayLabels = $this->publicRewardsLookupDisplayLabels($tenantId);
 
         [
             $balance,
@@ -593,6 +593,36 @@ class MarketingPublicEventController extends Controller
         return is_array($resolved['labels'] ?? null)
             ? (array) $resolved['labels']
             : [];
+    }
+
+    /**
+     * Public rewards lookup still defaults to Candle Cash branding when no
+     * tenant/store context is available, preserving the current storefront
+     * contract until the broader label rollout ships in a later release.
+     *
+     * @return array<string,string>
+     */
+    protected function publicRewardsLookupDisplayLabels(?int $tenantId): array
+    {
+        $labels = $this->displayLabelsForTenantId($tenantId);
+
+        if ($tenantId !== null) {
+            return $labels;
+        }
+
+        $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? ''));
+        if ($rewardsLabel !== '' && strcasecmp($rewardsLabel, 'Rewards') !== 0) {
+            return $labels;
+        }
+
+        return array_replace($labels, [
+            'rewards_label' => 'Candle Cash',
+            'rewards' => 'Candle Cash',
+            'rewards_balance_label' => 'Candle Cash balance',
+            'rewards_program_label' => 'Candle Cash program',
+            'rewards_redemption_label' => 'Candle Cash redemption',
+            'reward_credit_label' => 'Candle Cash credit',
+        ]);
     }
 
     /**

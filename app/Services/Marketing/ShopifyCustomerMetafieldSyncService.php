@@ -106,7 +106,7 @@ class ShopifyCustomerMetafieldSyncService
                     $summary['processed']++;
 
                     try {
-                        $this->syncCustomerRecord($storeKey, $customer, $summary, $dryRun, $tenantId);
+                    $this->syncCustomerRecord($storeKey, $customer, $summary, $dryRun, $tenantId);
                     } catch (\Throwable $e) {
                         $summary['errors']++;
                         Log::warning('shopify customer metafield sync customer failed', [
@@ -175,7 +175,7 @@ class ShopifyCustomerMetafieldSyncService
      * } $customer
      * @param array<string,int> $summary
      */
-    protected function syncCustomerRecord(string $storeKey, array $customer, array &$summary, bool $dryRun, int $tenantId): void
+    protected function syncCustomerRecord(string $storeKey, array $customer, array &$summary, bool $dryRun, ?int $tenantId): void
     {
         $parsed = $this->parser->parse((array) ($customer['metafields'] ?? []));
         $hasGrowaveMetafields = $parsed['raw_metafields'] !== [];
@@ -196,9 +196,9 @@ class ShopifyCustomerMetafieldSyncService
                 'review_context' => $reviewContext,
                 'tenant_id' => $tenantId,
             ]);
-        $action = $this->upsertSnapshot($storeKey, $customer, $parsed, $syncResult['profile_id'] ?? null, $hasGrowaveMetafields, true, $tenantId);
+            $action = $this->upsertSnapshot($storeKey, $customer, $parsed, $syncResult['profile_id'] ?? null, $hasGrowaveMetafields, true, $tenantId);
         } else {
-            [$syncResult, $action] = DB::transaction(function () use ($storeKey, $customer, $parsed, $hasGrowaveMetafields, $reviewContext): array {
+            [$syncResult, $action] = DB::transaction(function () use ($storeKey, $customer, $parsed, $hasGrowaveMetafields, $reviewContext, $tenantId): array {
                 $syncResult = $this->profileSyncService->syncExternalIdentity(
                     $this->identityPayloadFromCustomer($storeKey, $customer, $hasGrowaveMetafields, $tenantId),
                     [
@@ -242,7 +242,7 @@ class ShopifyCustomerMetafieldSyncService
      * } $customer
      * @return array<string,mixed>
      */
-    protected function identityPayloadFromCustomer(string $storeKey, array $customer, bool $hasGrowaveMetafields, int $tenantId): array
+    protected function identityPayloadFromCustomer(string $storeKey, array $customer, bool $hasGrowaveMetafields, ?int $tenantId): array
     {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -332,7 +332,7 @@ class ShopifyCustomerMetafieldSyncService
         mixed $marketingProfileId,
         bool $hasGrowaveMetafields,
         bool $dryRun,
-        int $tenantId
+        ?int $tenantId
     ): string {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -438,13 +438,9 @@ class ShopifyCustomerMetafieldSyncService
         return $string !== '' ? $string : null;
     }
 
-    protected function tenantIdFromStore(array $store): int
+    protected function tenantIdFromStore(array $store): ?int
     {
         $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
-        if ($tenantId === null) {
-            throw new RuntimeException('Tenant context missing for Shopify metafield sync store.');
-        }
-
         return $tenantId;
     }
 

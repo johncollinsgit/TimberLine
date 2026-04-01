@@ -59,9 +59,6 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('reward_balance');
         }
-        if (! $this->hasTenantScopedStoreContext($storeContext)) {
-            return $this->missingTenantContextResponse('reward_balance');
-        }
 
         $resolved = $this->resolveProfile($request, scope: 'reward_balance', allowCreate: false);
         if (! $resolved['profile']) {
@@ -115,10 +112,10 @@ class MarketingShopifyIntegrationController extends Controller
     public function availableRewards(Request $request, CandleCashService $candleCashService): JsonResponse
     {
         $storeContext = $this->resolveStoreContext($request);
-        if (! $this->hasStoreContext($storeContext)) {
+        if ($this->requiresVerifiedStoreContext($request) && ! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('available_rewards');
         }
-        if (! $this->hasTenantScopedStoreContext($storeContext)) {
+        if ($this->hasStoreContext($storeContext) && ! $this->hasTenantScopedStoreContext($storeContext)) {
             return $this->missingTenantContextResponse('available_rewards');
         }
 
@@ -171,9 +168,6 @@ class MarketingShopifyIntegrationController extends Controller
         $storeContext = $this->resolveStoreContext($request);
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('reward_history');
-        }
-        if (! $this->hasTenantScopedStoreContext($storeContext)) {
-            return $this->missingTenantContextResponse('reward_history');
         }
 
         $resolved = $this->resolveProfile($request, scope: 'reward_history', allowCreate: false);
@@ -275,9 +269,6 @@ class MarketingShopifyIntegrationController extends Controller
         $storeContext = $this->resolveStoreContext($request, allowBody: true);
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('redeem_request');
-        }
-        if (! $this->hasTenantScopedStoreContext($storeContext)) {
-            return $this->missingTenantContextResponse('redeem_request');
         }
         $resolved = $this->resolveProfile($request, scope: 'redeem_request', allowCreate: false, allowBody: true);
         if (! $resolved['profile']) {
@@ -1249,9 +1240,6 @@ class MarketingShopifyIntegrationController extends Controller
         $storeContext = $this->resolveStoreContext($request);
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('candle_cash_status');
-        }
-        if (! $this->hasTenantScopedStoreContext($storeContext)) {
-            return $this->missingTenantContextResponse('candle_cash_status');
         }
 
         $resolved = $this->resolveProfile($request, scope: 'candle_cash_status', allowCreate: false);
@@ -2380,9 +2368,6 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('customer_status');
         }
-        if (! $this->hasTenantScopedStoreContext($storeContext)) {
-            return $this->missingTenantContextResponse('customer_status');
-        }
 
         $resolved = $this->resolveProfile($request, scope: 'customer_status', allowCreate: false);
         if (! $resolved['profile']) {
@@ -2692,6 +2677,13 @@ class MarketingShopifyIntegrationController extends Controller
         return $this->hasStoreContext($storeContext)
             && is_numeric($storeContext['tenant_id'] ?? null)
             && (int) ($storeContext['tenant_id'] ?? 0) > 0;
+    }
+
+    protected function requiresVerifiedStoreContext(Request $request): bool
+    {
+        $routeName = (string) ($request->route()?->getName() ?? '');
+
+        return str_starts_with($routeName, 'marketing.shopify.v1.');
     }
 
     protected function missingStoreContextResponse(string $scope): JsonResponse

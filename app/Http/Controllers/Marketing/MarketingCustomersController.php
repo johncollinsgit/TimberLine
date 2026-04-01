@@ -80,7 +80,7 @@ class MarketingCustomersController extends Controller
 
     public function index(Request $request): View
     {
-        $tenantId = $this->requireTenantId($request);
+        $tenantId = $this->currentTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
         $totalProfiles = MarketingProfile::query()
             ->forTenantId($tenantId)
@@ -113,7 +113,7 @@ class MarketingCustomersController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $tenantId = $this->requireTenantId($request);
+        $tenantId = $this->currentTenantId($request);
         $filters = $this->normalizeIndexFilters($request);
         $profiles = $this->customerIndexQuery($filters, $tenantId)
             ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])

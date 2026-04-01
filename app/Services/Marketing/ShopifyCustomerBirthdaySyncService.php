@@ -213,7 +213,7 @@ class ShopifyCustomerBirthdaySyncService
      * } $customer
      * @return array{marketing_profile_id:int,links_created:int,links_reused:int}
      */
-    protected function resolveProfileMapping(string $storeKey, array $customer, bool $dryRun, int $tenantId): array
+    protected function resolveProfileMapping(string $storeKey, array $customer, bool $dryRun, ?int $tenantId): array
     {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -451,13 +451,9 @@ class ShopifyCustomerBirthdaySyncService
         return $string !== '' ? $string : null;
     }
 
-    protected function tenantIdFromStore(array $store): int
+    protected function tenantIdFromStore(array $store): ?int
     {
         $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
-        if ($tenantId === null) {
-            throw new RuntimeException('Tenant context missing for Shopify birthday sync store.');
-        }
-
         return $tenantId;
     }
 }
