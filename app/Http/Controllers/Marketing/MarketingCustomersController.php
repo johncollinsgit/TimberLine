@@ -23,6 +23,7 @@ use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Models\Tenant;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardEngineService;
@@ -2849,13 +2850,13 @@ class MarketingCustomersController extends Controller
         }
 
         $tenantId = $this->currentTenantId(request());
-        if ($tenantId === null) {
+        if ($tenantId === null && Tenant::query()->exists()) {
             return null;
         }
 
         $shopifyOrderCandidates = Schema::hasTable('orders')
             ? (int) Order::query()
-                ->forTenantId($tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
                 ->where(function ($query): void {
                     $query->whereNotNull('shopify_order_id')
                         ->orWhere('source', 'like', 'shopify%');
@@ -2865,26 +2866,26 @@ class MarketingCustomersController extends Controller
 
         $shopifyCustomerCandidates = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
-                ->forTenantId($tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
                 ->where('integration', 'shopify_customer')
                 ->count()
             : 0;
 
         $growaveCandidates = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
-                ->forTenantId($tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
                 ->where('integration', 'growave')
                 ->count()
             : 0;
 
         $squareCustomerCandidates = Schema::hasTable('square_customers')
-            ? (int) SquareCustomer::query()->forTenantId($tenantId)->count()
+            ? (int) SquareCustomer::query()->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))->count()
             : 0;
         $squareOrderCandidates = Schema::hasTable('square_orders')
-            ? (int) SquareOrder::query()->forTenantId($tenantId)->count()
+            ? (int) SquareOrder::query()->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))->count()
             : 0;
         $squarePaymentCandidates = Schema::hasTable('square_payments')
-            ? (int) SquarePayment::query()->forTenantId($tenantId)->count()
+            ? (int) SquarePayment::query()->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))->count()
             : 0;
 
         $upstreamCandidates = $shopifyOrderCandidates
@@ -2900,7 +2901,7 @@ class MarketingCustomersController extends Controller
         $lastSyncRun = null;
         if (Schema::hasTable('marketing_import_runs')) {
             $lastSyncRun = MarketingImportRun::query()
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->whereIn('type', [
                     'marketing_profiles_sync',
                     'shopify_customer_metafields_sync',

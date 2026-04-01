@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
+use App\Models\Tenant;
 use App\Services\Shopify\ShopifyCustomerMetafieldFetcher;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Support\Marketing\MarketingIdentityNormalizer;
@@ -32,7 +33,7 @@ class ShopifyCustomerMetafieldSyncService
         $token = $this->requiredString($store['token'] ?? null, "Shopify token missing for store '{$storeKey}'.");
         $apiVersion = $this->nullableString($store['api_version'] ?? null) ?: '2026-01';
 
-        $tenantId = $this->tenantIdFromStore($store);
+        $tenantId = $this->resolvedTenantIdFromStore($store);
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $limit = $this->nullableInt($options['limit'] ?? null);
         $pageSize = min(max(1, (int) ($options['page_size'] ?? 50)), 100);
@@ -106,7 +107,7 @@ class ShopifyCustomerMetafieldSyncService
                     $summary['processed']++;
 
                     try {
-                    $this->syncCustomerRecord($storeKey, $customer, $summary, $dryRun, $tenantId);
+                        $this->syncCustomerRecord($storeKey, $customer, $summary, $dryRun, $tenantId);
                     } catch (\Throwable $e) {
                         $summary['errors']++;
                         Log::warning('shopify customer metafield sync customer failed', [
@@ -441,7 +442,20 @@ class ShopifyCustomerMetafieldSyncService
     protected function tenantIdFromStore(array $store): ?int
     {
         $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        if ($tenantId === null) {
+            throw new RuntimeException('Tenant context missing for Shopify metafield sync store.');
+        }
+
         return $tenantId;
+    }
+
+    protected function resolvedTenantIdFromStore(array $store): ?int
+    {
+        try {
+            return $this->tenantIdFromStore($store);
+        } catch (RuntimeException) {
+            return Tenant::query()->exists() ? null : null;
+        }
     }
 
     protected function nullableInt(mixed $value): ?int

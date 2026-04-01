@@ -12,6 +12,7 @@ use App\Models\MarketingProfileLink;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingEventAttributionService;
 use App\Services\Marketing\MarketingLegacyImportService;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
@@ -37,7 +38,7 @@ class MarketingProvidersIntegrationsController extends Controller
     ): View
     {
         $tenantId = $this->currentTenantId($request);
-        if ($tenantId === null) {
+        if ($tenantId === null && Tenant::query()->exists()) {
             abort(403, 'Tenant context is required to view integrations.');
         }
         $search = trim((string) $request->query('search', ''));
@@ -63,7 +64,7 @@ class MarketingProvidersIntegrationsController extends Controller
         $overlapSearch = trim((string) $request->query('overlap_search', ''));
 
         $mappings = MarketingEventSourceMapping::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
                     $nested->where('raw_value', 'like', '%' . $search . '%')
@@ -82,7 +83,7 @@ class MarketingProvidersIntegrationsController extends Controller
         $unmappedValues = $attributionService->unmappedValuesFromOrders(null, $tenantId);
 
         $sourceSystems = MarketingEventSourceMapping::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->distinct()
             ->pluck('source_system')
             ->merge(
@@ -98,7 +99,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->values();
 
         $recentRuns = MarketingImportRun::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderByDesc('id')
             ->limit(15)
             ->get();
@@ -111,16 +112,28 @@ class MarketingProvidersIntegrationsController extends Controller
         );
 
         $normalizedOverlapFilter = $sourceOverlapReportService->normalizeFilter($overlapFilter);
-        $sourceOverlap = [
-            'summary' => $sourceOverlapReportService->summary($tenantId),
-            'profiles' => $sourceOverlapReportService->profilesQuery($tenantId, $normalizedOverlapFilter, $overlapSearch)
-                ->paginate(25, ['*'], 'overlap_page')
-                ->withQueryString(),
-            'filters' => $sourceOverlapReportService->filterOptions(),
-            'active_filter' => $normalizedOverlapFilter,
-            'search' => $overlapSearch,
-            'total_profiles' => MarketingProfile::query()->forTenantId($tenantId)->count(),
-        ];
+        $sourceOverlap = $tenantId === null
+            ? [
+                'summary' => [],
+                'profiles' => new LengthAwarePaginator([], 0, 25, null, [
+                    'path' => request()->url(),
+                    'pageName' => 'overlap_page',
+                ]),
+                'filters' => $sourceOverlapReportService->filterOptions(),
+                'active_filter' => $normalizedOverlapFilter,
+                'search' => $overlapSearch,
+                'total_profiles' => MarketingProfile::query()->count(),
+            ]
+            : [
+                'summary' => $sourceOverlapReportService->summary($tenantId),
+                'profiles' => $sourceOverlapReportService->profilesQuery($tenantId, $normalizedOverlapFilter, $overlapSearch)
+                    ->paginate(25, ['*'], 'overlap_page')
+                    ->withQueryString(),
+                'filters' => $sourceOverlapReportService->filterOptions(),
+                'active_filter' => $normalizedOverlapFilter,
+                'search' => $overlapSearch,
+                'total_profiles' => MarketingProfile::query()->forTenantId($tenantId)->count(),
+            ];
 
         return view('marketing/providers-integrations/index', [
             'section' => MarketingSectionRegistry::section('providers-integrations'),
@@ -403,7 +416,7 @@ class MarketingProvidersIntegrationsController extends Controller
      *   manual_follow_up_order_count:int
      * }
      */
-    protected function squareContactAudit(string $filter, string $search, int $minSpendCents, int $tenantId): array
+    protected function squareContactAudit(string $filter, string $search, int $minSpendCents, ?int $tenantId): array
     {
         $profiles = $this->squareContactProfilesQuery($filter, $search, $minSpendCents, $tenantId)
             ->paginate(25, ['*'], 'square_page')
@@ -426,7 +439,7 @@ class MarketingProvidersIntegrationsController extends Controller
         ];
     }
 
-    protected function squareContactProfilesQuery(string $filter, string $search, int $minSpendCents, int $tenantId): QueryBuilder
+    protected function squareContactProfilesQuery(string $filter, string $search, int $minSpendCents, ?int $tenantId): QueryBuilder
     {
         $squareLinkFlags = $this->sourceLinkFlagsSubquery($tenantId);
         $squareCustomerMetrics = $this->squareCustomerMetricsSubquery($tenantId);
@@ -440,7 +453,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 $join->on('square_customer_metrics.marketing_profile_id', '=', 'marketing_profiles.id');
             })
             ->whereRaw('coalesce(square_link_flags.has_square_link, 0) = 1')
-            ->where('marketing_profiles.tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('marketing_profiles.tenant_id', $tenantId))
             ->select([
                 'marketing_profiles.id',
                 'marketing_profiles.first_name',
@@ -514,12 +527,12 @@ class MarketingProvidersIntegrationsController extends Controller
         });
     }
 
-    protected function sourceLinkFlagsSubquery(int $tenantId): QueryBuilder
+    protected function sourceLinkFlagsSubquery(?int $tenantId): QueryBuilder
     {
         return MarketingProfileLink::query()
             ->toBase()
             ->select('marketing_profile_id')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereIn('source_type', [
                 'square_customer',
                 'square_order',
@@ -617,14 +630,14 @@ class MarketingProvidersIntegrationsController extends Controller
         return null;
     }
 
-    protected function squareCustomerMetricsSubquery(int $tenantId): QueryBuilder
+    protected function squareCustomerMetricsSubquery(?int $tenantId): QueryBuilder
     {
         $orderMetrics = SquareOrder::query()
             ->toBase()
             ->select('square_customer_id')
             ->whereNotNull('square_customer_id')
             ->where('square_customer_id', '<>', '')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->groupBy('square_customer_id')
             ->selectRaw('count(*) as order_count')
             ->selectRaw('coalesce(sum(total_money_amount), 0) as order_spend_cents')
@@ -635,7 +648,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->select('square_customer_id')
             ->whereNotNull('square_customer_id')
             ->where('square_customer_id', '<>', '')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->groupBy('square_customer_id')
             ->selectRaw('count(*) as payment_count')
             ->selectRaw('coalesce(sum(amount_money), 0) as payment_spend_cents')
@@ -651,7 +664,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 $join->on('square_payment_metrics.square_customer_id', '=', 'square_links.source_id');
             })
             ->where('square_links.source_type', 'square_customer')
-            ->where('square_links.tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('square_links.tenant_id', $tenantId))
             ->groupBy('square_links.marketing_profile_id')
             ->selectRaw('square_links.marketing_profile_id')
             ->selectRaw('count(distinct square_links.source_id) as square_customer_link_count')
@@ -667,10 +680,10 @@ class MarketingProvidersIntegrationsController extends Controller
     /**
      * @return array<string,int>
      */
-    protected function squareContactAuditSummary(int $minSpendCents, int $tenantId): array
+    protected function squareContactAuditSummary(int $minSpendCents, ?int $tenantId): array
     {
         $profilesWithSquareLink = MarketingProfile::query()
-            ->forTenantId($tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -680,7 +693,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->count();
 
         $squareOnlyProfiles = MarketingProfile::query()
-            ->forTenantId($tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -692,7 +705,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->count();
 
         $squareOnlyMissingContact = MarketingProfile::query()
-            ->forTenantId($tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -710,7 +723,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->count();
 
         $noShopifyOrGrowave = MarketingProfile::query()
-            ->forTenantId($tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->whereExists(function ($query): void {
                 $query->select(DB::raw(1))
                     ->from('marketing_profile_links as square_profile_links')
@@ -726,11 +739,11 @@ class MarketingProvidersIntegrationsController extends Controller
 
         return [
             'profiles_with_square_link' => $profilesWithSquareLink,
-            'square_customer_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_customer')->count(),
-            'square_order_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_order')->count(),
-            'square_payment_links' => MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', 'square_payment')->count(),
+            'square_customer_links' => MarketingProfileLink::query()->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))->where('source_type', 'square_customer')->count(),
+            'square_order_links' => MarketingProfileLink::query()->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))->where('source_type', 'square_order')->count(),
+            'square_payment_links' => MarketingProfileLink::query()->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))->where('source_type', 'square_payment')->count(),
             'square_identity_reviews' => MarketingIdentityReview::query()
-                ->when(Schema::hasColumn('marketing_identity_reviews', 'tenant_id'), fn ($query) => $query->where('tenant_id', $tenantId))
+                ->when($tenantId !== null && Schema::hasColumn('marketing_identity_reviews', 'tenant_id'), fn ($query) => $query->where('tenant_id', $tenantId))
                 ->whereIn('source_type', ['square_customer', 'square_order', 'square_payment'])
                 ->count(),
             'square_only_profiles' => $squareOnlyProfiles,
@@ -738,12 +751,12 @@ class MarketingProvidersIntegrationsController extends Controller
             'no_shopify_or_growave' => $noShopifyOrGrowave,
             'high_value_missing_contact' => $highValueMissingContact,
             'square_orders_without_customer_id' => SquareOrder::query()
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->where(function ($query): void {
                     $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
                 })->count(),
             'square_payments_without_customer_id' => SquarePayment::query()
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->where(function ($query): void {
                     $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
                 })->count(),
@@ -753,9 +766,9 @@ class MarketingProvidersIntegrationsController extends Controller
     /**
      * @return array<string,mixed>
      */
-    protected function squarePayloadDiagnostics(int $tenantId): array
+    protected function squarePayloadDiagnostics(?int $tenantId): array
     {
-        $cacheKey = 'marketing:square-contact-quality:payload-diagnostics:tenant:' . $tenantId;
+        $cacheKey = 'marketing:square-contact-quality:payload-diagnostics:' . ($tenantId !== null ? 'tenant:' . $tenantId : 'global');
 
         return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($tenantId): array {
             $orders = [
@@ -769,7 +782,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ];
 
             foreach (SquareOrder::query()
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->select(['id', 'square_customer_id', 'raw_payload'])
                 ->cursor() as $row) {
                 $orders['total']++;
@@ -809,7 +822,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ];
 
             foreach (SquarePayment::query()
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->select(['id', 'square_customer_id', 'raw_payload'])
                 ->cursor() as $row) {
                 $payments['total']++;
@@ -842,12 +855,12 @@ class MarketingProvidersIntegrationsController extends Controller
     /**
      * @return Collection<int,array<string,mixed>>
      */
-    protected function manualFollowUpOrders(int $minSpendCents, int $tenantId): Collection
+    protected function manualFollowUpOrders(int $minSpendCents, ?int $tenantId): Collection
     {
         return SquareOrder::query()
             ->with(['payments' => fn ($query) => $query->orderByDesc('created_at_source')])
             ->withCount('attributions')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where(function ($query): void {
                 $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
             })
@@ -881,10 +894,10 @@ class MarketingProvidersIntegrationsController extends Controller
             });
     }
 
-    protected function manualFollowUpOrdersCount(int $minSpendCents, int $tenantId): int
+    protected function manualFollowUpOrdersCount(int $minSpendCents, ?int $tenantId): int
     {
         return SquareOrder::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where(function ($query): void {
                 $query->whereNull('square_customer_id')->orWhere('square_customer_id', '');
             })

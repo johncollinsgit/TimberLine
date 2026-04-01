@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\CandleCashReferral;
 use App\Models\MarketingProfile;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Str;
@@ -39,9 +40,14 @@ class CandleCashReferralService
     public function profileFromCode(string $code, ?int $tenantId = null): ?MarketingProfile
     {
         if (! is_numeric($tenantId) || (int) $tenantId <= 0) {
-            return null;
+            if (Tenant::query()->exists()) {
+                return null;
+            }
+
+            $tenantId = null;
+        } else {
+            $tenantId = (int) $tenantId;
         }
-        $tenantId = (int) $tenantId;
 
         $normalized = Str::upper(trim($code));
         $normalized = preg_replace('/[^A-Z0-9-]/', '', $normalized) ?: '';
@@ -65,7 +71,7 @@ class CandleCashReferralService
         }
 
         return MarketingProfile::query()
-            ->forTenantId($tenantId)
+            ->when($tenantId !== null, fn ($query) => $query->forTenantId($tenantId))
             ->find($profileId);
     }
 
@@ -79,7 +85,7 @@ class CandleCashReferralService
     public function captureReferral(?MarketingProfile $referredProfile, string $code, array $identity = [], array $context = []): ?CandleCashReferral
     {
         $tenantId = $this->resolveTenantId($referredProfile, $context);
-        if ($tenantId === null) {
+        if ($tenantId === null && Tenant::query()->exists()) {
             return null;
         }
 
@@ -130,7 +136,7 @@ class CandleCashReferralService
     public function qualifyFromOrder(Order $order, ?MarketingProfile $referredProfile, array $context = []): ?CandleCashReferral
     {
         $tenantId = $this->resolveTenantId($referredProfile, $context, $order);
-        if ($tenantId === null) {
+        if ($tenantId === null && Tenant::query()->exists()) {
             $this->eventLogger->log('candle_cash_referral_skipped_missing_tenant', [
                 'status' => 'error',
                 'issue_type' => 'tenant_context_missing',
@@ -144,7 +150,7 @@ class CandleCashReferralService
             return null;
         }
 
-        if ($referredProfile && (int) ($referredProfile->tenant_id ?? 0) !== $tenantId) {
+        if ($tenantId !== null && $referredProfile && (int) ($referredProfile->tenant_id ?? 0) !== $tenantId) {
             return null;
         }
 

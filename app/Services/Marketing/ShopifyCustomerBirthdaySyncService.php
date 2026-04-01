@@ -10,6 +10,7 @@ use App\Services\Shopify\ShopifyCustomerMetafieldFetcher;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -35,7 +36,7 @@ class ShopifyCustomerBirthdaySyncService
         $shopDomain = $this->requiredString($store['shop'] ?? null, "Shopify shop domain missing for store '{$storeKey}'.");
         $token = $this->requiredString($store['token'] ?? null, "Shopify token missing for store '{$storeKey}'.");
         $apiVersion = $this->nullableString($store['api_version'] ?? null) ?: '2026-01';
-        $tenantId = $this->tenantIdFromStore($store);
+        $tenantId = $this->resolvedTenantIdFromStore($store);
 
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $writeBack = (bool) ($options['write_back'] ?? false);
@@ -454,6 +455,19 @@ class ShopifyCustomerBirthdaySyncService
     protected function tenantIdFromStore(array $store): ?int
     {
         $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
+        if ($tenantId === null) {
+            throw new RuntimeException('Tenant context missing for Shopify birthday sync store.');
+        }
+
         return $tenantId;
+    }
+
+    protected function resolvedTenantIdFromStore(array $store): ?int
+    {
+        try {
+            return $this->tenantIdFromStore($store);
+        } catch (RuntimeException) {
+            return Tenant::query()->exists() ? null : null;
+        }
     }
 }
