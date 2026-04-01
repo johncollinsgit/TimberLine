@@ -115,7 +115,9 @@ class MarketingShopifyIntegrationController extends Controller
         if ($this->requiresVerifiedStoreContext($request) && ! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('available_rewards');
         }
-        if ($this->hasStoreContext($storeContext) && ! $this->hasTenantScopedStoreContext($storeContext)) {
+        if (! $this->requiresVerifiedStoreContext($request)
+            && $this->hasStoreContext($storeContext)
+            && ! $this->hasTenantScopedStoreContext($storeContext)) {
             return $this->missingTenantContextResponse('available_rewards');
         }
 
