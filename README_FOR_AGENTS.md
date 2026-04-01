@@ -115,6 +115,17 @@ Do not start yet:
 - Shopify App Store packaging
 - speculative AI automation work
 
+Current backend release-order rule:
+- use `docs/architecture/backend-release-order-2026-04-01.md` before promoting the waiting backend branch
+- Release A is stabilization-only for Shopify / rewards / storefront / marketing-manager behavior
+- split later commercialization work into smaller releases instead of pushing the mixed branch to `main`
+- prepared split branches now exist and should stay scoped:
+  - `release-a-stabilization`
+  - `release-b-commercial-core`
+  - `release-c-module-discovery`
+  - `release-d-unified-shell`
+  - `release-e-polish-docs-assets`
+
 ## Landlord Host Foundation (2026-03-26)
 
 Reference implementation paths:
