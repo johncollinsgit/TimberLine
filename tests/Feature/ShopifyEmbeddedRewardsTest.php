@@ -1725,6 +1725,10 @@ test('tenant rewards reminder dispatch service retries safely after a failed rem
 });
 
 test('shopify embedded rewards policy route includes automation alerts usage indicators and simulation output', function () {
+    $lastRunAt = now()->subHours(6);
+    $lastSuccessAt = now()->subDay();
+    $lastFailureAt = now()->subHours(6);
+
     CandleCashTransaction::query()->create([
         'marketing_profile_id' => MarketingProfile::query()->create([
             'tenant_id' => $this->tenant->id,
@@ -1743,9 +1747,9 @@ test('shopify embedded rewards policy route includes automation alerts usage ind
     ]);
 
     app(TenantRewardsOperationsService::class)->storeRuntimeState($this->tenant->id, [
-        'last_run_at' => now()->subHours(6)->toIso8601String(),
-        'last_success_at' => now()->subDay()->toIso8601String(),
-        'last_failure_at' => now()->subHours(6)->toIso8601String(),
+        'last_run_at' => $lastRunAt->toIso8601String(),
+        'last_success_at' => $lastSuccessAt->toIso8601String(),
+        'last_failure_at' => $lastFailureAt->toIso8601String(),
         'last_status' => 'error',
         'failure_count' => 2,
         'last_error_message' => 'Reminder worker stalled during the last run.',
@@ -1773,7 +1777,7 @@ test('shopify embedded rewards policy route includes automation alerts usage ind
     $response->assertOk()
         ->assertJsonPath('data.automation.status', 'needs_attention')
         ->assertJsonPath('data.automation.failure_count', 2)
-        ->assertJsonPath('data.automation.last_failure_at', now()->subHours(6)->toIso8601String())
+        ->assertJsonPath('data.automation.last_failure_at', $lastFailureAt->toIso8601String())
         ->assertJsonPath('data.usage_indicators.module_enabled', true)
         ->assertJsonPath('data.simulation_view.headline', 'What happens if these settings change?');
 
