@@ -25,6 +25,12 @@
     }
     $moduleChecklist = \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates);
     $title = filled($headline) ? (string) $headline : 'Forestry Backstage';
+    $workspaceLabel = trim((string) ($appNavigation['workspaceLabel'] ?? 'Commerce workspace'));
+    if ($workspaceLabel === '') {
+        $workspaceLabel = 'Commerce workspace';
+    }
+    $commandSearchEndpoint = $appNavigation['commandSearchEndpoint'] ?? null;
+    $commandSearchPlaceholder = trim((string) ($appNavigation['commandSearchPlaceholder'] ?? 'Search customers, orders, modules, and actions'));
 @endphp
 
 <!DOCTYPE html>
@@ -65,6 +71,9 @@
         :store-label="$storeLabel"
         :host="$host"
         :show-sidebar="false"
+        :workspace-label="$workspaceLabel"
+        :command-search-endpoint="$commandSearchEndpoint"
+        :command-search-placeholder="$commandSearchPlaceholder"
     >
         {{ $slot }}
     </x-app-shell>

@@ -259,7 +259,8 @@ class ShopifyEmbeddedSettingsController extends Controller
         $emailSettingsService->setProviderDiagnostics(
             $tenantId,
             $status,
-            $validation['valid'] ? null : (string) ($validation['issues'][0] ?? 'Configuration validation failed.')
+            $validation['valid'] ? null : (string) ($validation['issues'][0] ?? 'Configuration validation failed.'),
+            true,
         );
 
         return response()->json([
@@ -320,7 +321,7 @@ class ShopifyEmbeddedSettingsController extends Controller
         $success = (bool) ($result['success'] ?? false);
         $emailSettingsService->setProviderDiagnostics(
             $tenantId,
-            $success ? 'configured' : 'error',
+            $success ? 'healthy' : $this->statusFromSendResult($result),
             $success ? null : (string) ($result['error_message'] ?? 'Test email failed.'),
             true
         );
@@ -360,25 +361,24 @@ class ShopifyEmbeddedSettingsController extends Controller
             'perform_live_check' => true,
         ]);
 
-        $status = in_array((string) ($health['status'] ?? ''), ['configured', 'not_configured'], true)
-            ? (string) $health['status']
-            : 'error';
+        $status = $this->statusFromHealth($health);
 
         $emailSettingsService->setProviderDiagnostics(
             $tenantId,
             $status,
-            $status === 'configured' ? null : (string) ($health['message'] ?? 'Provider health check failed.')
+            $status === 'healthy' ? null : (string) ($health['message'] ?? 'Provider health check failed.'),
+            true,
         );
 
         return response()->json([
-            'ok' => $status === 'configured',
+            'ok' => $status === 'healthy',
             'message' => (string) ($health['message'] ?? 'Health status unavailable.'),
             'data' => [
                 'tenant_id' => $tenantId,
                 'health' => $health,
                 'settings' => $emailSettingsService->forAdmin($tenantId),
             ],
-        ], $status === 'configured' ? 200 : 422);
+        ], $status === 'healthy' ? 200 : 422);
     }
 
     protected function headlineForStatus(string $status): string
@@ -426,6 +426,7 @@ class ShopifyEmbeddedSettingsController extends Controller
             'provider_config' => ['nullable', 'array'],
             'provider_config.api_key' => ['nullable', 'string', 'max:500'],
             'provider_config.clear_api_key' => ['nullable', 'boolean'],
+            'provider_config.sender_mode' => ['nullable', 'in:global_fallback,single_sender,domain_authenticated'],
             'provider_config.verified_sender_email' => ['nullable', 'email', 'max:255'],
             'provider_config.verified_sender_name' => ['nullable', 'string', 'max:120'],
             'provider_config.reply_to_email' => ['nullable', 'email', 'max:255'],
@@ -513,22 +514,46 @@ class ShopifyEmbeddedSettingsController extends Controller
      */
     protected function statusFromValidation(array $validation, string $provider): string
     {
-        $provider = strtolower(trim($provider));
-        if ($provider === 'shopify_email') {
-            return 'configured';
+        $status = strtolower(trim((string) ($validation['status'] ?? 'error')));
+        if (in_array($status, ['healthy', 'unhealthy', 'unverified', 'unknown', 'testing'], true)) {
+            return $status;
         }
 
         if ((bool) ($validation['valid'] ?? false)) {
-            return 'configured';
+            return 'healthy';
         }
 
-        $status = strtolower(trim((string) ($validation['status'] ?? 'error')));
+        return in_array($status, ['not_configured', 'configured'], true)
+            ? ($status === 'configured' ? 'healthy' : 'unknown')
+            : 'unhealthy';
+    }
 
-        if ($provider === 'custom') {
-            return 'not_configured';
-        }
+    /**
+     * @param  array<string,mixed>  $result
+     */
+    protected function statusFromSendResult(array $result): string
+    {
+        $errorCode = strtolower(trim((string) ($result['error_code'] ?? '')));
 
-        return $status === 'not_configured' ? 'not_configured' : 'error';
+        return match ($errorCode) {
+            'missing_from_email', 'missing_api_key' => 'unknown',
+            'sender_not_verified', 'unauthorized_sender' => 'unverified',
+            default => 'unhealthy',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $health
+     */
+    protected function statusFromHealth(array $health): string
+    {
+        $status = strtolower(trim((string) ($health['status'] ?? 'unhealthy')));
+
+        return in_array($status, ['healthy', 'unhealthy', 'unverified', 'unknown', 'testing'], true)
+            ? $status
+            : (in_array($status, ['configured', 'not_configured'], true)
+                ? ($status === 'configured' ? 'healthy' : 'unknown')
+                : 'unhealthy');
     }
 
     /**

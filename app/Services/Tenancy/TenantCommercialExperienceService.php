@@ -976,7 +976,7 @@ class TenantCommercialExperienceService
             $providerStatus = strtolower(trim((string) ($email['provider_status'] ?? 'not_configured')));
             $enabled = (bool) ($email['email_enabled'] ?? false);
 
-            return $enabled && $providerStatus === 'configured';
+            return $enabled && in_array($providerStatus, ['configured', 'healthy'], true);
         }
 
         if ($integrationKey === 'sms_gateway') {

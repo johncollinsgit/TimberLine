@@ -27,7 +27,7 @@ test('shopify embedded settings route renders email settings surface', function 
 
     $response->assertOk()
         ->assertSeeText('Email Settings')
-        ->assertSeeText('Configure email provider selection per tenant/store.')
+        ->assertSeeText('Configure tenant-branded email sending with a safe global SendGrid fallback.')
         ->assertSeeText('Send Test Email')
         ->assertSeeText('SMS Sender Visibility');
 });

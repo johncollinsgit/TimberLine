@@ -17,219 +17,26 @@
   $isPouring = $user?->isPouring() ?? false;
   $canAccessOps = $isAdmin || $isManager;
   $canAccessMarketing = $user?->canAccessMarketing() ?? false;
-
-  $hrefDashboard = Route::has('dashboard')        ? route('dashboard')        : '/dashboard';
-  $hrefShipping  = Route::has('shipping.orders')  ? route('shipping.orders')  : '/shipping/orders';
-  $hrefPouring   = Route::has('pouring.index')    ? route('pouring.index')    : '/pouring';
-  $hrefRetailPlan = Route::has('retail.plan')     ? route('retail.plan')      : '/retail/plan';
-  $hrefAdmin     = Route::has('admin.index')      ? route('admin.index')      : '/admin';
-  $hrefAnalytics = Route::has('analytics.index')  ? route('analytics.index')  : '/analytics';
-
-  $shippingActive  = request()->routeIs('shipping.*')  || request()->is('shipping*');
-  $pouringActive   = request()->routeIs('pouring.index')
-      || request()->routeIs('pouring.queue')
-      || request()->routeIs('pouring.bulk')
-      || request()->is('pouring')
-      || request()->is('pouring/queue')
-      || request()->is('pouring/bulk');
-  $retailPlanActive = request()->routeIs('retail.plan') || request()->is('retail/plan');
-  $adminActive     = request()->routeIs('admin.*')     || request()->is('admin*');
-  $analyticsActive = request()->routeIs('analytics.*') || request()->is('analytics*');
+  $navigationShell = app(\App\Services\Navigation\UnifiedAppNavigationService::class)->build(request(), $user);
+  $experienceProfile = is_array($navigationShell['experience_profile'] ?? null) ? $navigationShell['experience_profile'] : [];
+  $workspace = is_array($experienceProfile['workspace'] ?? null) ? $experienceProfile['workspace'] : [];
+  $orderedSidebarItems = collect((array) ($navigationShell['items'] ?? []));
+  $adminSubItems = (array) ($navigationShell['admin_sub_items'] ?? []);
+  $marketingSubGroups = (array) ($navigationShell['marketing_sub_groups'] ?? []);
+  $birthdaySubGroups = (array) ($navigationShell['birthday_sub_groups'] ?? []);
+  $wikiSectionItems = (array) ($navigationShell['wiki_sections'] ?? []);
+  $wikiSectionsActive = collect($wikiSectionItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
+  $quickActions = (array) ($navigationShell['quick_actions'] ?? []);
+  $opsAttention = is_array($navigationShell['ops_attention'] ?? null) ? $navigationShell['ops_attention'] : [];
+  $unresolvedExceptions = (int) ($opsAttention['unresolved_exceptions'] ?? 0);
+  $latestRun = $opsAttention['latest_run'] ?? null;
+  $hrefDashboard = route('dashboard');
+  $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
+  $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
+  $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search the workspace');
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
   $birthdaysActive = request()->routeIs('birthdays.*') || request()->is('birthdays*');
-  $wikiActive = request()->routeIs('wiki.index') || request()->is('wiki');
-  $inventoryActive = request()->routeIs('inventory.index');
-  $eventsActive = request()->routeIs('events.*');
-  $marketListsActive = request()->routeIs('markets.lists.*');
-  $marketsActive = request()->routeIs('markets.browser.*');
-  $adminTab = is_string(request()->query('tab')) ? (string) request()->query('tab') : '';
-
-  $sidebarItems = [];
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => $hrefRetailPlan, 'label' => 'Pour Lists', 'current' => $retailPlanActive];
-  }
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => $eventsActive];
-  }
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'shipping-room', 'icon' => 'truck', 'href' => $hrefShipping, 'label' => 'Shipping Room', 'current' => $shippingActive];
-  }
-  if ($canAccessOps || $isPouring) {
-      $sidebarItems[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => $hrefPouring, 'label' => 'Pouring Room', 'current' => $pouringActive];
-  }
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => $hrefAnalytics, 'label' => 'Analytics', 'current' => $analyticsActive];
-  }
-  if ($canAccessMarketing) {
-      $sidebarItems[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Marketing', 'current' => $marketingActive];
-  }
-  if ($canAccessMarketing) {
-      $sidebarItems[] = ['key' => 'birthdays', 'icon' => 'gift', 'href' => route('birthdays.customers'), 'label' => 'Birthdays', 'current' => $birthdaysActive];
-  }
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => $marketsActive];
-  }
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => $hrefAdmin, 'label' => 'Administration', 'current' => $adminActive];
-  }
-  $sidebarItems[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Backstage Wiki', 'current' => $wikiActive];
-  if ($canAccessOps) {
-      $sidebarItems[] = ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => $inventoryActive];
-  }
-
-  $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
-  $sidebarItemsByKey = collect($sidebarItems)->keyBy('key');
-  $orderedSidebarKeys = [];
-  foreach ($preferredSidebarOrder as $key) {
-      if (is_string($key) && $sidebarItemsByKey->has($key) && !in_array($key, $orderedSidebarKeys, true)) {
-          $orderedSidebarKeys[] = $key;
-      }
-  }
-  foreach ($sidebarItems as $item) {
-      if (!in_array($item['key'], $orderedSidebarKeys, true)) {
-          $orderedSidebarKeys[] = $item['key'];
-      }
-  }
-  $orderedSidebarItems = collect($orderedSidebarKeys)
-      ->map(fn ($key) => $sidebarItemsByKey->get($key))
-      ->filter()
-      ->values();
-  $adminSubItems = [];
-  if ($canAccessOps) {
-      $adminSubItems = [
-          [
-              'key' => 'master-data',
-              'label' => 'Data Manager',
-              'href' => route('admin.index', ['tab' => 'master-data', 'resource' => (string) request()->query('resource', 'scents') ?: 'scents']),
-              'current' => $adminActive && $adminTab === 'master-data',
-          ],
-          ...($isAdmin ? [[
-              'key' => 'users',
-              'label' => 'Team Access',
-              'href' => route('admin.index', ['tab' => 'users']),
-              'current' => $adminActive && $adminTab === 'users',
-          ]] : []),
-          [
-              'key' => 'imports',
-              'label' => 'Import Issues',
-              'href' => route('admin.index', ['tab' => 'imports']),
-              'current' => $adminActive && $adminTab === 'imports',
-          ],
-          [
-              'key' => 'scent-intake',
-              'label' => 'New Scent Requests',
-              'href' => route('admin.index', ['tab' => 'scent-intake']),
-              'current' => $adminActive && $adminTab === 'scent-intake',
-          ],
-          [
-              'key' => 'catalog',
-              'label' => 'Scent Catalog',
-              'href' => route('admin.index', ['tab' => 'catalog']),
-              'current' => $adminActive && $adminTab === 'catalog',
-          ],
-          [
-              'key' => 'sizes-wicks',
-              'label' => 'Sizes & Wicks',
-              'href' => route('admin.index', ['tab' => 'sizes-wicks']),
-              'current' => $adminActive && $adminTab === 'sizes-wicks',
-          ],
-          [
-              'key' => 'wholesale-custom',
-              'label' => 'Wholesale Custom',
-              'href' => route('admin.index', ['tab' => 'wholesale-custom']),
-              'current' => $adminActive && $adminTab === 'wholesale-custom',
-          ],
-          [
-              'key' => 'blends',
-              'label' => 'Oil Blends',
-              'href' => route('admin.index', ['tab' => 'blends']),
-              'current' => $adminActive && $adminTab === 'blends',
-          ],
-          [
-              'key' => 'candle-club',
-              'label' => 'Candle Club',
-              'href' => route('admin.index', ['tab' => 'candle-club']),
-              'current' => $adminActive && $adminTab === 'candle-club',
-          ],
-          [
-              'key' => 'oils',
-              'label' => 'Oil Abbreviations',
-              'href' => route('admin.index', ['tab' => 'oils']),
-              'current' => $adminActive && $adminTab === 'oils',
-          ],
-      ];
-  }
-
-  $marketingSubItems = [];
-  $marketingSubGroups = [];
-  $birthdaySubItems = [];
-  $birthdaySubGroups = [];
-  if ($canAccessMarketing) {
-      $marketingSubItems = collect(\App\Support\Marketing\MarketingSectionRegistry::sections())
-          ->map(function (array $section, string $key): array {
-              return [
-                  'key' => $key,
-                  'label' => $section['label'],
-                  'href' => route($section['route']),
-                  'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
-              ];
-          })
-          ->values()
-          ->all();
-
-      $marketingSubGroups = \App\Support\Marketing\MarketingSectionRegistry::groupNavigationItems($marketingSubItems);
-
-      $birthdaySubItems = collect(\App\Support\Birthdays\BirthdaySectionRegistry::sections())
-          ->map(function (array $section, string $key): array {
-              return [
-                  'key' => $key,
-                  'label' => $section['label'],
-                  'href' => route($section['route']),
-                  'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
-              ];
-          })
-          ->values()
-          ->all();
-
-      $birthdaySubGroups = \App\Support\Birthdays\BirthdaySectionRegistry::groupNavigationItems($birthdaySubItems);
-  }
-
-  $wikiSectionItems = [
-      [
-          'key' => 'wholesale-processes',
-          'label' => 'Wholesale Processes',
-          'href' => route('wiki.wholesale-processes'),
-          'current' => request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*'),
-      ],
-      [
-          'key' => 'market-room-process',
-          'label' => 'Market Room Process',
-          'href' => route('wiki.article', ['slug' => 'market-room']),
-          'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'market-room',
-      ],
-  ];
-  $wikiSectionsActive = collect($wikiSectionItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
-
-  $unresolvedExceptions = 0;
-  $latestRun = null;
-
-  try {
-      if (\Illuminate\Support\Facades\Schema::hasTable('mapping_exceptions')) {
-          $unresolvedExceptions = \App\Models\MappingException::query()
-              ->whereNull('resolved_at')
-              ->count();
-      }
-
-      if (\Illuminate\Support\Facades\Schema::hasTable('shopify_import_runs')) {
-          $latestRun = \App\Models\ShopifyImportRun::query()
-              ->orderByDesc('id')
-              ->first();
-      }
-  } catch (\Throwable $e) {
-      // Sidebar telemetry should never break page rendering.
-      $unresolvedExceptions = 0;
-      $latestRun = null;
-  }
+  $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
 @endphp
 
 <div class="min-h-screen flex">
@@ -257,6 +64,10 @@
           >
             <span class="mf-sidebar-pin-icon" aria-hidden="true">‹</span>
           </button>
+        </div>
+        <div class="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3">
+          <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/45">{{ $workspaceLabel }}</div>
+          <div class="mt-2 text-xs leading-5 text-white/65">{{ $workspaceSubtitle }}</div>
         </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
@@ -296,7 +107,7 @@
                     <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
                         <flux:icon.megaphone class="size-4" />
-                        <span class="mf-nav-label">Marketing</span>
+                        <span class="mf-nav-label">{{ $item['label'] }}</span>
                       </span>
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                     </summary>
@@ -389,11 +200,30 @@
           </div>
         </flux:sidebar.group>
 
-        @if($canAccessOps)
+        @if($quickActions !== [] || $canAccessOps)
         <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
-          <flux:sidebar.item icon="clock" href="{{ $hrefShipping }}" wire:navigate class="mf-transition mf-nav-item">
-            <span class="mf-nav-label">Ship due soon</span>
-          </flux:sidebar.item>
+          <button
+            type="button"
+            class="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+            data-command-trigger
+          >
+            Search everything
+            <span class="mt-1 block text-xs text-white/45">Press Cmd/Ctrl + K</span>
+          </button>
+
+          @foreach($quickActions as $action)
+            @continue(($action['intent'] ?? null) === 'open-command')
+            <a
+              href="{{ $action['href'] ?? '#' }}"
+              wire:navigate
+              class="block rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+            >
+              <span class="mf-nav-label">{{ $action['label'] ?? 'Action' }}</span>
+              @if(! empty($action['description']))
+                <span class="mt-1 block text-xs text-white/45">{{ $action['description'] }}</span>
+              @endif
+            </a>
+          @endforeach
 
           @if($canAccessOps)
             <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
@@ -455,6 +285,25 @@
 
     {{-- Main content --}}
     <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          data-command-trigger
+          class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+        >
+          <span>Search everything</span>
+          <span class="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-white/40">Cmd/Ctrl + K</span>
+        </button>
+
+        @if(! empty($experienceProfile['tenant_name'] ?? null))
+          <div class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-white/55">
+            {{ $experienceProfile['tenant_name'] }}
+            · {{ strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct')) }}
+            · {{ strtoupper((string) ($experienceProfile['use_case_profile'] ?? 'ops')) }}
+          </div>
+        @endif
+      </div>
+
       @if($canAccessOps && $unresolvedExceptions > 0)
         <div class="mf-announcement mb-4 rounded-2xl border px-4 py-3 text-sm">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -487,6 +336,11 @@
 </div>
 
 <div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border border-white/10 bg-zinc-900/95 px-5 py-4 text-base font-semibold text-white shadow-2xl"></div>
+<x-app-command-palette
+  :search-endpoint="route('app.search')"
+  :placeholder="$commandPlaceholder"
+  :context-label="$workspaceLabel"
+/>
 <script>
   (function () {
     let timeoutId;
