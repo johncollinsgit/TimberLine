@@ -242,6 +242,54 @@ test('shopify wishlist guest token flows work end to end through the app proxy',
         ->assertJsonPath('data.summary.active_count', 0);
 });
 
+test('shopify wishlist status returns the product actual wishlist list id when saved to a non-default list', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'wishlist-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'wishlist-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureWishlistStorefrontStores();
+
+    $guestToken = 'guest-wishlist-list-actual';
+
+    $createListResponse = $this->postJson(route('marketing.shopify.v1.wishlist.lists.create', wishlistSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'wishlist-proxy-secret')), [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'guest_token' => $guestToken,
+        'name' => 'Weekend Burn',
+    ])->assertOk();
+
+    $listId = (int) data_get($createListResponse->json(), 'data.list.id');
+
+    $this->postJson(route('marketing.shopify.v1.wishlist.add', wishlistSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 1),
+    ], 'wishlist-proxy-secret')), [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 1),
+        'guest_token' => $guestToken,
+        'wishlist_list_id' => $listId,
+        'product_id' => 'wsku-list-101',
+        'product_handle' => 'ember-jar',
+        'product_title' => 'Ember Jar',
+        'product_url' => '/products/ember-jar',
+        'request_key' => 'wishlist-list-specific-add',
+    ])->assertOk();
+
+    $this->getJson(route('marketing.shopify.v1.wishlist.status', wishlistSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) (time() + 2),
+        'guest_token' => $guestToken,
+        'product_id' => 'wsku-list-101',
+        'product_handle' => 'ember-jar',
+    ], 'wishlist-proxy-secret')))
+        ->assertOk()
+        ->assertJsonPath('data.product.in_wishlist', true)
+        ->assertJsonPath('data.product.wishlist_list_id', $listId);
+});
+
 test('shopify wishlist add fails safely when identity matching is ambiguous', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'wishlist-proxy-secret');

@@ -830,7 +830,9 @@ class MarketingWishlistService
             'store_key' => $product['store_key'],
             'in_wishlist' => $item?->isActive() ?? false,
             'wishlist_item_id' => $item?->isActive() ? (int) $item->id : null,
-            'wishlist_list_id' => $activeList?->id,
+            'wishlist_list_id' => $item?->isActive()
+                ? ($item->wishlist_list_id ? (int) $item->wishlist_list_id : null)
+                : ($activeList?->id),
         ];
     }
 
