@@ -125,6 +125,8 @@ Current backend release-order rule:
   - `release-c-module-discovery`
   - `release-d-unified-shell`
   - `release-e-polish-docs-assets`
+- Releases A through E are now merged on `main`.
+- Active standalone follow-up work is the deferred email/provider reliability pass; do not mix it back into module, shell, or commercialization scope.
 
 ## Landlord Host Foundation (2026-03-26)
 

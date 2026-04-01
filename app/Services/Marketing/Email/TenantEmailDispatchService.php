@@ -47,6 +47,13 @@ class TenantEmailDispatchService
             );
         }
 
+        if ($provider->key() === 'sendgrid') {
+            $preflightFailure = $this->sendGridPreflightFailure($settings, $options, $tenantId, $dryRun);
+            if ($preflightFailure !== null) {
+                return $preflightFailure;
+            }
+        }
+
         $message = $this->messagePayload($toEmail, $subject, $textBody, $settings, $options, $tenantId);
         $result = $provider->sendEmail($message, $this->providerConfig($settings, $options));
 
@@ -189,12 +196,98 @@ class TenantEmailDispatchService
         $providerConfig['reply_to_email'] = $this->nullableString($options['reply_to_email'] ?? null)
             ?? $this->nullableString($settings['reply_to_email'] ?? null)
             ?? $this->nullableString($providerConfig['reply_to_email'] ?? null);
+        $providerConfig['provider_status'] = $this->nullableString($settings['provider_status'] ?? null);
 
         if (array_key_exists('tracking_enabled', $options)) {
             $providerConfig['tracking_enabled'] = (bool) $options['tracking_enabled'];
         }
 
         return $providerConfig;
+    }
+
+    /**
+     * @param  array<string,mixed>  $settings
+     * @param  array<string,mixed>  $options
+     * @return array{
+     *   success:false,
+     *   provider:string,
+     *   status:string,
+     *   message_id:null,
+     *   error_code:string,
+     *   error_message:string,
+     *   retryable:bool,
+     *   payload:array<string,mixed>,
+     *   dry_run:bool,
+     *   tenant_id:?int
+     * }|null
+     */
+    protected function sendGridPreflightFailure(array $settings, array $options, ?int $tenantId, bool $dryRun): ?array
+    {
+        $providerConfig = $this->providerConfig($settings, $options);
+        $fromEmail = $this->nullableString($providerConfig['from_email'] ?? null)
+            ?? $this->nullableString($settings['from_email'] ?? null)
+            ?? $this->nullableString($providerConfig['verified_sender_email'] ?? null);
+        $apiKey = trim((string) ($providerConfig['api_key'] ?? ''));
+        $senderMode = strtolower(trim((string) ($providerConfig['sender_mode'] ?? 'global_fallback')));
+        $providerStatus = strtolower(trim((string) ($settings['provider_status'] ?? 'unknown')));
+
+        if ($fromEmail === null) {
+            return $this->failure(
+                provider: 'sendgrid',
+                code: 'missing_from_email',
+                message: 'A from email is required before SendGrid can send for this tenant.',
+                retryable: false,
+                payload: [
+                    'tenant_id' => $tenantId,
+                    'provider' => 'sendgrid',
+                    'sender_mode' => $senderMode,
+                ],
+                dryRun: $dryRun,
+                tenantId: $tenantId,
+            );
+        }
+
+        if ($apiKey === '') {
+            return $this->failure(
+                provider: 'sendgrid',
+                code: 'missing_api_key',
+                message: 'A SendGrid API key is required before SendGrid can send for this tenant.',
+                retryable: false,
+                payload: [
+                    'tenant_id' => $tenantId,
+                    'provider' => 'sendgrid',
+                    'sender_mode' => $senderMode,
+                ],
+                dryRun: $dryRun,
+                tenantId: $tenantId,
+            );
+        }
+
+        if (
+            in_array($senderMode, ['single_sender', 'domain_authenticated'], true)
+            && ! in_array($providerStatus, ['healthy', 'configured'], true)
+        ) {
+            $guidance = $senderMode === 'domain_authenticated'
+                ? 'Authenticate the tenant domain in SendGrid with SPF/DKIM, then run a successful test send.'
+                : 'Verify the sender address in SendGrid, then run a successful test send.';
+
+            return $this->failure(
+                provider: 'sendgrid',
+                code: 'sender_not_verified',
+                message: 'The tenant sender identity is not verified yet. ' . $guidance,
+                retryable: false,
+                payload: [
+                    'tenant_id' => $tenantId,
+                    'provider' => 'sendgrid',
+                    'sender_mode' => $senderMode,
+                    'provider_status' => $providerStatus,
+                ],
+                dryRun: $dryRun,
+                tenantId: $tenantId,
+            );
+        }
+
+        return null;
     }
 
     /**
