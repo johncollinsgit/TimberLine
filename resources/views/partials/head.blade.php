@@ -6,11 +6,15 @@
     $authTenantPresentation = $authTenantPresentation ?? [];
     $appMetaName = (string) ($authTenantPresentation['app_name'] ?? 'Forestry Backstage');
     $resolvedTitle = trim((string) ($title ?? ''));
+    $mfAssetVersion = 'fb7';
     $mfPageTitle = ($resolvedTitle !== '' && mb_strtolower($resolvedTitle) !== mb_strtolower($appMetaName))
         ? $resolvedTitle.' · '.$appMetaName
         : $appMetaName;
     $mfDescription = trim((string) ($description ?? config('product_surfaces.promo.summary', 'Forestry Backstage unifies production, shipping, and customer growth in one place.')));
     $mfOgImage = asset('og-image.png').'?v=fb3';
+    $mfFaviconPng = asset('favicon.png').'?v='.$mfAssetVersion;
+    $mfFaviconIco = asset('favicon.ico').'?v='.$mfAssetVersion;
+    $mfAppleTouchIcon = asset('apple-touch-icon.png').'?v='.$mfAssetVersion;
 @endphp
 
 <title>{{ $mfPageTitle }}</title>
@@ -28,11 +32,10 @@
 <meta name="twitter:description" content="{{ $mfDescription }}">
 <meta name="twitter:image" content="{{ $mfOgImage }}">
 
-<link rel="icon" href="{{ asset('favicon.ico') }}?v=fb4" sizes="any">
-<link rel="icon" href="{{ asset('favicon.svg') }}?v=fb4" type="image/svg+xml">
-<link rel="icon" href="{{ asset('favicon.png') }}?v=fb4" type="image/png">
-<link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=fb4">
-<link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=fb4" sizes="180x180">
+<link rel="icon" href="{{ $mfFaviconPng }}" type="image/png" sizes="512x512">
+<link rel="icon" href="{{ $mfFaviconIco }}" type="image/x-icon" sizes="16x16 32x32 48x48">
+<link rel="shortcut icon" href="{{ $mfFaviconIco }}">
+<link rel="apple-touch-icon" href="{{ $mfAppleTouchIcon }}" sizes="180x180">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&family=fraunces:400,500,600,700" rel="stylesheet" />
