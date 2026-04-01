@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
@@ -455,6 +456,50 @@ class ShopifyEmbeddedAppController extends Controller
             'message' => (string) ($result['message'] ?? 'Reminder send attempted.'),
             'data' => $result,
         ]);
+    }
+
+    public function search(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        GlobalSearchCoordinator $searchCoordinator
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        $payload = $searchCoordinator->search(
+            (string) ($validated['q'] ?? ''),
+            [
+                'tenant_id' => $tenantId,
+                'user' => $request->user(),
+                'request' => $request,
+                'surface' => 'shopify',
+                'limit' => $validated['limit'] ?? 10,
+            ]
+        );
+        $embeddedContext = ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null));
+        $appendContext = static function (array $row) use ($embeddedContext): array {
+            $url = trim((string) ($row['url'] ?? ''));
+            if ($url !== '' && ! str_starts_with($url, 'http')) {
+                $row['url'] = ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+            }
+
+            return $row;
+        };
+        $payload['results'] = array_map($appendContext, (array) ($payload['results'] ?? []));
+        $payload['groups'] = collect((array) ($payload['groups'] ?? []))
+            ->map(fn (array $rows): array => array_map($appendContext, $rows))
+            ->all();
+
+        return response()->json($payload);
     }
 
     protected function embeddedResponse(Response $response, int $status = 200): Response

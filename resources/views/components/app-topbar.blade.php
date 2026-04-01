@@ -8,6 +8,7 @@
     'navigation' => [],
     'active' => null,
     'activeChild' => null,
+    'workspaceLabel' => 'Unified workspace',
 ])
 
 @php
@@ -56,7 +57,7 @@
                 />
                 <div class="app-topbar-brand-copy">
                     <strong>Forestry Backstage</strong>
-                    <span>Shopify workspace</span>
+                    <span>{{ $workspaceLabel }}</span>
                 </div>
             </div>
             <nav class="app-topbar-nav" aria-label="Primary navigation">
@@ -78,6 +79,13 @@
                 @endforeach
             </nav>
             <div class="app-topbar-right">
+                <button
+                    type="button"
+                    class="app-topbar-action"
+                    data-command-trigger
+                >
+                    Search
+                </button>
                 @if(filled($storeLabel))
                     <span class="app-topbar-store">{{ $storeLabel }}</span>
                 @endif

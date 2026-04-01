@@ -2,6 +2,7 @@
     'items' => [],
     'active' => null,
     'activeChild' => null,
+    'workspaceLabel' => 'Unified workspace',
 ])
 
 <nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
@@ -15,7 +16,7 @@
         />
         <div class="app-sidebar-brand-copy">
             <strong>Forestry Backstage</strong>
-            <span>Shopify workspace</span>
+            <span>{{ $workspaceLabel }}</span>
         </div>
     </div>
     <ul class="app-sidebar-list">

@@ -104,5 +104,9 @@ class AppServiceProvider extends ServiceProvider
 
             return $user->tenants()->whereKey($tenantId)->exists();
         });
+
+        Gate::define('use-global-search', function (User $user): bool {
+            return $user->getAttribute('is_active') !== false;
+        });
     }
 }

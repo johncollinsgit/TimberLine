@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
@@ -184,9 +185,11 @@ Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalog
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
-    Route::middleware(['role:admin,manager'])->group(function () {
+    Route::middleware(['role:admin,manager,marketing_manager'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
+    Route::get('/search', [GlobalSearchController::class, 'index'])
+        ->name('app.search');
 
     /*
     |--------------------------------------------------------------------------
@@ -810,6 +813,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
+        Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
         Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');
