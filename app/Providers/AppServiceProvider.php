@@ -88,5 +88,21 @@ class AppServiceProvider extends ServiceProvider
 
             return $email !== '' && in_array($email, $allowedEmails, true);
         });
+
+        Gate::define('view-tenant-module-store', function (User $user, ?int $tenantId = null): bool {
+            if ($user->getAttribute('is_active') === false || ! $user->canAccessMarketing() || $tenantId === null) {
+                return false;
+            }
+
+            return $user->tenants()->whereKey($tenantId)->exists();
+        });
+
+        Gate::define('mutate-tenant-module-store', function (User $user, ?int $tenantId = null): bool {
+            if ($user->getAttribute('is_active') === false || ! $user->canAccessMarketing() || $tenantId === null) {
+                return false;
+            }
+
+            return $user->tenants()->whereKey($tenantId)->exists();
+        });
     }
 }
