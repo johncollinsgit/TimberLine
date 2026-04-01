@@ -79,6 +79,7 @@ class MarketingEmailReadiness
                 'from_email' => $this->nullableString($settings['from_email'] ?? null),
                 'from_name' => $this->nullableString($settings['from_name'] ?? null),
                 'reply_to_email' => $this->nullableString($settings['reply_to_email'] ?? null),
+                'provider_status' => (string) ($settings['provider_status'] ?? 'unknown'),
                 'perform_live_check' => false,
             ]);
 
@@ -106,9 +107,6 @@ class MarketingEmailReadiness
                 if ($fromEmail === null) {
                     $missingRequirements[] = 'From email is missing.';
                 }
-                if ($fromName === null) {
-                    $missingRequirements[] = 'From name is missing.';
-                }
             }
 
             $validationIssues = collect((array) ($providerValidation['issues'] ?? []))
@@ -132,7 +130,7 @@ class MarketingEmailReadiness
                 $notes[] = 'Custom provider is scaffolded, but runtime sending is not implemented.';
             }
 
-            if ((string) ($settings['provider_status'] ?? '') === 'error' && $validationIssues !== []) {
+            if (in_array((string) ($settings['provider_status'] ?? ''), ['error', 'unhealthy'], true) && $validationIssues !== []) {
                 $warnings[] = 'Latest provider diagnostics reported errors.';
             }
 
@@ -151,7 +149,7 @@ class MarketingEmailReadiness
                 $configStatus = $status;
             } elseif (! (bool) ($providerValidation['valid'] ?? false)) {
                 $validationStatus = strtolower(trim((string) ($providerValidation['status'] ?? 'error')));
-                if ($validationStatus === 'not_configured') {
+                if (in_array($validationStatus, ['not_configured', 'unknown', 'unverified'], true)) {
                     $status = 'incomplete';
                     $configStatus = 'incomplete';
                 } else {
@@ -171,7 +169,7 @@ class MarketingEmailReadiness
             $warnings = array_values(array_unique($warnings));
             $notes = array_values(array_unique($notes));
 
-            $providerHealthStatus = (string) ($providerValidation['status'] ?? ($status === 'ready' ? 'configured' : 'error'));
+            $providerHealthStatus = (string) ($providerValidation['status'] ?? ($status === 'ready' ? 'healthy' : 'unhealthy'));
             $providerHealth = [
                 'provider' => $providerKey,
                 'tenant_id' => $resolvedTenantId,
@@ -188,7 +186,7 @@ class MarketingEmailReadiness
                 'status' => $status,
                 'can_send' => $canSend,
                 'can_send_live' => $canSend && ! $dryRun,
-                'provider_status' => strtolower(trim((string) ($settings['provider_status'] ?? 'not_configured'))),
+                'provider_status' => strtolower(trim((string) ($settings['provider_status'] ?? 'unknown'))),
                 'config_status' => $configStatus,
                 'missing_requirements' => $missingRequirements,
                 'warnings' => $warnings,
@@ -231,7 +229,7 @@ class MarketingEmailReadiness
                 'status' => 'error',
                 'can_send' => false,
                 'can_send_live' => false,
-                'provider_status' => 'error',
+                'provider_status' => 'unhealthy',
                 'config_status' => 'error',
                 'missing_requirements' => ['Unable to evaluate email readiness.'],
                 'warnings' => [],
@@ -397,8 +395,11 @@ class MarketingEmailReadiness
         }
 
         $status = strtolower(trim((string) ($validation['status'] ?? 'error')));
+        if (in_array($status, ['healthy', 'configured'], true)) {
+            return 'configured';
+        }
 
-        return in_array($status, ['not_configured', 'configured'], true) ? $status : 'error';
+        return in_array($status, ['not_configured', 'unknown', 'unverified'], true) ? 'incomplete' : 'error';
     }
 
     protected function legacyStatus(string $normalizedStatus, bool $canSend, bool $dryRun): string

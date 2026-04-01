@@ -225,6 +225,8 @@ Current backend release-order note:
   - `release-c-module-discovery`
   - `release-d-unified-shell`
   - `release-e-polish-docs-assets`
+- Releases A through E are now merged on `main` as of `2026-04-01`.
+- The active standalone follow-up track is email/provider reliability for launch-critical reward and customer workflows.
 
 ## Product Architecture References (2026-03-27 Pass)
 

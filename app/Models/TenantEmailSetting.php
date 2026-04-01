@@ -15,6 +15,8 @@ class TenantEmailSetting extends Model
         'from_email',
         'reply_to_email',
         'provider_status',
+        'provider_status_checked_at',
+        'provider_status_message',
         'provider_config',
         'analytics_enabled',
         'last_tested_at',
@@ -26,6 +28,7 @@ class TenantEmailSetting extends Model
         'email_enabled' => 'boolean',
         'analytics_enabled' => 'boolean',
         'provider_config' => 'encrypted:array',
+        'provider_status_checked_at' => 'datetime',
         'last_tested_at' => 'datetime',
     ];
 
