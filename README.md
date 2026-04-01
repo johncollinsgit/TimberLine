@@ -453,7 +453,9 @@ Contract/runtime expectations:
 - Reviews and wishlists must resolve through tenant-scoped Backstage data. `shopify_stores.tenant_id` must be present for the storefront store context.
 - Storefront UX expectations:
   - All non-hero images use a shared premium border radius; hero/banner imagery remains square.
-  - Wishlist entry points open the right-side wishlist drawer instead of redirecting to the account page.
+  - A left-fixed floating drawer stack stays visible sitewide, with `Reviews` first and `Wishlist` directly beneath it.
+  - On product pages, the floating reviews drawer defaults to that product's reviews and offers a `See all reviews` path into the sitewide feed.
+  - Wishlist entry points keep using the existing persistent wishlist contract and can render inside the floating wishlist drawer without redirecting to the account page.
   - On PDP meta stacks, reviews render on the left and wishlist actions on the right on desktop; they stack gracefully on smaller breakpoints.
 
 Cutover/removal notes:

@@ -1754,6 +1754,54 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), array_values(array_unique($states)));
     }
 
+    public function sitewideReviewStatus(
+        Request $request,
+        ProductReviewService $productReviewService
+    ): JsonResponse {
+        $data = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'sort' => ['nullable', 'string', 'in:most_recent,highest_rating,lowest_rating'],
+        ]);
+
+        $storeContext = $this->resolveStoreContext($request);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('sitewide_review_status');
+        }
+
+        $resolved = $this->resolveProfile($request, scope: 'sitewide_review_status', allowCreate: false);
+        $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $payload = $productReviewService->sitewideStorefrontPayload([
+            'store_key' => $storeContext['store_key'] ?? null,
+            'tenant_id' => $storeContext['tenant_id'] ?? null,
+            'limit' => (int) ($data['limit'] ?? 24),
+            'sort' => $data['sort'] ?? 'most_recent',
+        ], $profile);
+        $states = ['sitewide_product_reviews_ready', $profile ? 'linked_customer' : 'unknown_customer'];
+
+        $this->logStorefrontEvent($request, 'widget_sitewide_product_review_status_lookup', [
+            'status' => 'ok',
+            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'profile' => $profile,
+            'source_type' => 'shopify_widget_sitewide_product_review_status',
+            'source_id' => 'sitewide_reviews',
+            'meta' => [
+                'identity_status' => $identityStatus,
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? null,
+                'sort' => $data['sort'] ?? 'most_recent',
+                'limit' => (int) ($data['limit'] ?? 24),
+                'review_count' => (int) data_get($payload, 'summary.review_count', 0),
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile?->id,
+            ...$payload,
+        ], $this->contractMeta($request), array_values(array_unique($states)));
+    }
+
     public function wishlistStatus(
         Request $request,
         MarketingWishlistService $wishlistService

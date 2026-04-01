@@ -177,6 +177,92 @@ test('shopify product review status uses the native storefront contract for tena
         ->assertJsonPath('data.viewer.state', 'guest_ready');
 });
 
+test('shopify sitewide review status defaults to most recent approved reviews across products', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureProductReviewStorefrontStores();
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'sitewide-customer-old',
+        'external_review_id' => 'sitewide-review-old',
+        'rating' => 4,
+        'title' => 'Older review',
+        'body' => 'This one should render after the newer storefront review.',
+        'reviewer_name' => 'Older Reviewer',
+        'reviewer_email' => 'older@example.com',
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'native_storefront',
+        'product_id' => 'prod-older',
+        'product_handle' => 'older-candle',
+        'product_title' => 'Older Candle',
+        'product_url' => 'https://theforestrystudio.com/products/older-candle',
+        'submitted_at' => now()->subDays(4),
+        'approved_at' => now()->subDays(3),
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'growave',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'sitewide-customer-new',
+        'external_review_id' => 'sitewide-review-new',
+        'rating' => 5,
+        'title' => 'Newest review',
+        'body' => 'This should be first in the sitewide drawer feed.',
+        'reviewer_name' => 'Newest Reviewer',
+        'reviewer_email' => 'newest@example.com',
+        'is_published' => true,
+        'status' => 'approved',
+        'submission_source' => 'growave_import',
+        'product_id' => 'prod-new',
+        'product_handle' => 'new-candle',
+        'product_title' => 'New Candle',
+        'product_url' => 'https://theforestrystudio.com/products/new-candle',
+        'submitted_at' => now()->subDay(),
+        'approved_at' => now()->subHours(12),
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'sitewide-customer-hidden',
+        'external_review_id' => 'sitewide-review-hidden',
+        'rating' => 1,
+        'title' => 'Hidden review',
+        'body' => 'This should not appear because it is pending.',
+        'reviewer_name' => 'Pending Reviewer',
+        'reviewer_email' => 'pending@example.com',
+        'is_published' => false,
+        'status' => 'pending',
+        'submission_source' => 'native_storefront',
+        'product_id' => 'prod-hidden',
+        'product_handle' => 'hidden-candle',
+        'product_title' => 'Hidden Candle',
+        'submitted_at' => now()->subHours(4),
+    ]);
+
+    $query = productReviewSignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.product-reviews.sitewide', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.current_sort', 'most_recent')
+        ->assertJsonPath('data.sort_options.0.value', 'most_recent')
+        ->assertJsonPath('data.summary.review_count', 2)
+        ->assertJsonPath('data.reviews.0.product_handle', 'new-candle')
+        ->assertJsonPath('data.reviews.1.product_handle', 'older-candle');
+});
+
 test('shopify product review submission creates native review, sends email, and awards candle cash once', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');

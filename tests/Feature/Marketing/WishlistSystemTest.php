@@ -28,6 +28,8 @@ test('shopify wishlist status returns guest payload when identity is missing', f
         ->assertJsonPath('data.profile_id', null)
         ->assertJsonPath('data.viewer.state', 'guest_ready')
         ->assertJsonPath('data.summary.active_count', 0)
+        ->assertJsonPath('data.items', [])
+        ->assertJsonPath('data.recent_items', [])
         ->assertJsonPath('data.product.in_wishlist', false);
 });
 

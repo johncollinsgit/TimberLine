@@ -717,6 +717,7 @@ Route::prefix('shopify/marketing')
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
         Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
+        Route::get('/product-reviews/sitewide', [MarketingShopifyIntegrationController::class, 'sitewideReviewStatus'])->name('product-reviews.sitewide');
         Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('product-reviews.submit');
@@ -772,6 +773,7 @@ Route::prefix('shopify/marketing/v1')
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
         Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
+        Route::get('/product-reviews/sitewide', [MarketingShopifyIntegrationController::class, 'sitewideReviewStatus'])->name('product-reviews.sitewide');
         Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('product-reviews.submit');

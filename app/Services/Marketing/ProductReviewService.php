@@ -107,6 +107,63 @@ class ProductReviewService
     }
 
     /**
+     * @param array{store_key?:?string,tenant_id?:?int,limit?:mixed,sort?:?string} $context
+     * @return array<string,mixed>
+     */
+    public function sitewideStorefrontPayload(array $context = [], ?MarketingProfile $viewer = null): array
+    {
+        $storeKey = $this->nullableString($context['store_key'] ?? null);
+        $tenantId = $this->tenantIdForProduct([
+            'tenant_id' => $context['tenant_id'] ?? null,
+        ], $viewer);
+        $limit = max(1, min(50, (int) ($context['limit'] ?? 24)));
+        $sort = $this->normalizedSitewideSort($context['sort'] ?? null);
+
+        $approvedQuery = $this->approvedSitewideReviewsQuery($storeKey, $tenantId);
+        $approvedForAverage = clone $approvedQuery;
+        $approvedForCount = clone $approvedQuery;
+        $orderedQuery = $this->orderedSitewideReviewsQuery(clone $approvedQuery, $sort);
+
+        $reviews = $orderedQuery
+            ->with('profile:id,first_name,last_name,email')
+            ->limit($limit + 1)
+            ->get();
+
+        $hasMore = $reviews->count() > $limit;
+        $visibleReviews = $hasMore ? $reviews->take($limit)->values() : $reviews->values();
+        $reviewCount = (int) $approvedForCount->count();
+        $averageRating = round((float) ($approvedForAverage->avg('rating') ?? 0), 1);
+
+        return [
+            'summary' => [
+                'average_rating' => $averageRating,
+                'review_count' => $reviewCount,
+                'rating_label' => $reviewCount > 0
+                    ? number_format($averageRating, 1) . ' out of 5'
+                    : 'No reviews yet',
+            ],
+            'viewer' => [
+                'profile_id' => $viewer?->id,
+                'state' => $viewer ? 'linked_customer' : 'guest_ready',
+            ],
+            'sort_options' => [
+                ['value' => 'most_recent', 'label' => 'Most Recent'],
+                ['value' => 'highest_rating', 'label' => 'Highest Rating'],
+                ['value' => 'lowest_rating', 'label' => 'Lowest Rating'],
+            ],
+            'current_sort' => $sort,
+            'pagination' => [
+                'limit' => $limit,
+                'has_more' => $hasMore,
+                'returned' => $visibleReviews->count(),
+            ],
+            'reviews' => $visibleReviews
+                ->map(fn (MarketingReviewHistory $review): array => $this->reviewPayload($review))
+                ->all(),
+        ];
+    }
+
+    /**
      * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
      * @param array{rating:int,title:?string,body:string,name:?string,email:?string,order_id?:mixed,order_line_id?:mixed,variant_id?:?string,media_assets?:mixed,request_key?:?string,source_surface?:?string} $payload
      * @return array<string,mixed>
@@ -1855,6 +1912,39 @@ class ProductReviewService
         return $this->reviewLookupQuery($product)->where('status', 'approved')->where('is_published', true);
     }
 
+    protected function approvedSitewideReviewsQuery(?string $storeKey = null, ?int $tenantId = null)
+    {
+        return MarketingReviewHistory::query()
+            ->when($tenantId !== null, fn ($query) => $query->where(function ($builder) use ($tenantId): void {
+                $builder->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            }))
+            ->when($storeKey !== null, fn ($query) => $query->where('store_key', $storeKey))
+            ->where('status', 'approved')
+            ->where('is_published', true);
+    }
+
+    protected function orderedSitewideReviewsQuery($query, string $sort)
+    {
+        return match ($this->normalizedSitewideSort($sort)) {
+            'highest_rating' => $query
+                ->orderByDesc('rating')
+                ->orderByDesc('approved_at')
+                ->orderByDesc('reviewed_at')
+                ->orderByDesc('id'),
+            'lowest_rating' => $query
+                ->orderBy('rating')
+                ->orderByDesc('approved_at')
+                ->orderByDesc('reviewed_at')
+                ->orderByDesc('id'),
+            default => $query
+                ->orderByDesc('approved_at')
+                ->orderByDesc('reviewed_at')
+                ->orderByDesc('published_at')
+                ->orderByDesc('submitted_at')
+                ->orderByDesc('id'),
+        };
+    }
+
     /**
      * @param array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id?:?string,store_key?:?string,tenant_id?:?int} $product
      */
@@ -1886,6 +1976,23 @@ class ProductReviewService
 
     protected function reviewPayload(MarketingReviewHistory $review): array
     {
+        $rawProductId = $this->nullableString(data_get($review->raw_payload, 'product.id'))
+            ?: $this->nullableString(data_get($review->raw_payload, 'product.shopifyProductId'))
+            ?: $this->nullableString(data_get($review->raw_payload, 'product.productId'));
+        $rawProductHandle = $this->nullableString(data_get($review->raw_payload, 'product.handle'));
+        $rawProductTitle = $this->nullableString(data_get($review->raw_payload, 'product.title'));
+        $rawProductUrl = $this->nullableString(data_get($review->raw_payload, 'product.url'));
+        $productId = $review->product_id ? (string) $review->product_id : $rawProductId;
+        $productHandle = $review->product_handle ? (string) $review->product_handle : $rawProductHandle;
+        $productTitle = $review->product_title ? (string) $review->product_title : $rawProductTitle;
+        $productUrl = $review->product_url ? (string) $review->product_url : $this->canonicalProductUrl([
+            'product_id' => $productId,
+            'product_handle' => $productHandle,
+            'product_title' => $productTitle,
+            'product_url' => $rawProductUrl,
+            'store_key' => $review->store_key,
+        ]);
+
         return [
             'id' => (int) $review->id,
             'rating' => (int) $review->rating,
@@ -1896,13 +2003,13 @@ class ProductReviewService
             'submitted_at' => optional($review->submitted_at ?: $review->created_at)->toIso8601String(),
             'approved_at' => optional($review->approved_at ?: $review->reviewed_at)->toIso8601String(),
             'published_at' => optional($review->published_at)->toIso8601String(),
-            'product_id' => $review->product_id ? (string) $review->product_id : null,
+            'product_id' => $productId,
             'order_id' => $review->order_id ? (int) $review->order_id : null,
             'order_line_id' => $review->order_line_id ? (int) $review->order_line_id : null,
             'variant_id' => $review->variant_id ? (string) $review->variant_id : null,
-            'product_handle' => $review->product_handle ? (string) $review->product_handle : null,
-            'product_title' => $review->product_title ? (string) $review->product_title : null,
-            'product_url' => $review->product_url ? (string) $review->product_url : null,
+            'product_handle' => $productHandle,
+            'product_title' => $productTitle,
+            'product_url' => $productUrl,
             'is_verified_buyer' => (bool) $review->is_verified_buyer,
             'verified_purchase' => (bool) $review->is_verified_buyer,
             'media_assets' => is_array($review->media_assets) ? $review->media_assets : [],
@@ -2007,6 +2114,15 @@ class ProductReviewService
         }
 
         return null;
+    }
+
+    protected function normalizedSitewideSort(?string $value): string
+    {
+        return match ($this->nullableString($value)) {
+            'highest_rating' => 'highest_rating',
+            'lowest_rating' => 'lowest_rating',
+            default => 'most_recent',
+        };
     }
 
     protected function sanitizeLine(?string $value): ?string
