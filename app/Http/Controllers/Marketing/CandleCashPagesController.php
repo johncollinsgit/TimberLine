@@ -226,6 +226,7 @@ class CandleCashPagesController extends Controller
         $source = trim((string) $request->query('source', 'all'));
         $rewardStatus = trim((string) $request->query('reward_status', 'all'));
         $queue = trim((string) $request->query('queue', 'all'));
+        $customerId = (int) $request->query('customer_id', 0);
         $selectedId = (int) $request->query('review', 0);
 
         $reviewsQuery = $this->reviewIndexQuery($tenantId)
@@ -247,6 +248,7 @@ class CandleCashPagesController extends Controller
             ->when($source === 'native', fn (Builder $builder) => $builder->where('submission_source', '!=', 'growave_import'))
             ->when($rewardStatus !== 'all', fn (Builder $builder) => $this->applyRewardStatusFilter($builder, $rewardStatus))
             ->when($queue !== 'all', fn (Builder $builder) => $this->applyReviewQueueFilter($builder, $queue))
+            ->when($customerId > 0, fn (Builder $builder) => $builder->where('marketing_profile_id', $customerId))
             ->orderByDesc('approved_at')
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
@@ -259,6 +261,10 @@ class CandleCashPagesController extends Controller
         $selectedReview = $selectedId > 0
             ? $this->reviewIndexQuery($tenantId)->find($selectedId)
             : $reviews->first();
+
+        $filteredCustomer = $customerId > 0
+            ? MarketingProfile::query()->select(['id', 'first_name', 'last_name', 'email'])->find($customerId)
+            : null;
 
         $summaryQuery = MarketingReviewHistory::query()
             ->when($tenantId !== null, fn (Builder $builder) => $builder->where('tenant_id', $tenantId));
@@ -275,8 +281,10 @@ class CandleCashPagesController extends Controller
                 'source' => $source,
                 'reward_status' => $rewardStatus,
                 'queue' => $queue,
+                'customer_id' => $customerId,
             ],
             'selectedReview' => $selectedReview,
+            'filteredCustomer' => $filteredCustomer,
             'reviewSummary' => [
                 'all' => (clone $summaryQuery)->count(),
                 'approved' => (clone $summaryQuery)->where('status', 'approved')->count(),
@@ -326,6 +334,47 @@ class CandleCashPagesController extends Controller
         $productReviewService->reject($review, auth()->id(), $data['moderation_notes']);
 
         return back()->with('toast', ['style' => 'success', 'message' => 'Review rejected.']);
+    }
+
+    public function respondToReview(
+        Request $request,
+        MarketingReviewHistory $review,
+        ProductReviewService $productReviewService,
+        ProductReviewNotificationService $notificationService
+    ): RedirectResponse {
+        $this->assertReviewInTenantScope($review, $request);
+
+        $data = $request->validate([
+            'admin_response' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $isFirstResponse = blank($review->admin_response);
+
+        $updated = $productReviewService->respondToReview($review, $data['admin_response'], $request->user());
+
+        if ($isFirstResponse && $updated->admin_response_notified_at === null) {
+            $notificationService->sendResponseNotification($updated);
+        }
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Response saved.']);
+    }
+
+    public function updateReview(
+        Request $request,
+        MarketingReviewHistory $review,
+        ProductReviewService $productReviewService
+    ): RedirectResponse {
+        $this->assertReviewInTenantScope($review, $request);
+
+        $data = $request->validate([
+            'title' => ['nullable', 'string', 'max:190'],
+            'body' => ['required', 'string', 'max:4000'],
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+        ]);
+
+        $productReviewService->updateReviewContent($review, $data, $request->user());
+
+        return back()->with('toast', ['style' => 'success', 'message' => 'Review updated.']);
     }
 
     public function deleteReview(
@@ -933,7 +982,15 @@ class CandleCashPagesController extends Controller
                 'tenant:id,name,slug',
                 'order:id,tenant_id,shopify_name,order_number,ordered_at,total_price',
                 'orderLine:id,order_id,shopify_product_id,shopify_variant_id,raw_title,raw_variant',
+                'adminResponder:id,name',
             ])
+            ->select('*')
+            ->selectSub(
+                MarketingReviewHistory::query()
+                    ->selectRaw('count(*)')
+                    ->whereColumn('marketing_profile_id', 'marketing_review_histories.marketing_profile_id'),
+                'customer_review_count'
+            )
             ->when($tenantId !== null, fn (Builder $builder) => $builder->where('tenant_id', $tenantId));
     }
 

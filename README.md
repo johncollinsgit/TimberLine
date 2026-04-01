@@ -457,6 +457,7 @@ Contract/runtime expectations:
   - On product pages, the floating reviews drawer defaults to that product's reviews and offers a `See all reviews` path into the sitewide feed.
   - Wishlist entry points keep using the existing persistent wishlist contract and can render inside the floating wishlist drawer without redirecting to the account page.
   - On PDP meta stacks, reviews render on the left and wishlist actions on the right on desktop; they stack gracefully on smaller breakpoints.
+- Backstage review moderation now captures admin responses (with responder + timestamps), exposes customer review counts/filters, and sends a single customer notification email the first time a response is posted. Responses surface in the Backstage list/detail views and in the approved storefront review payload.
 
 Cutover/removal notes:
 - Theme/runtime Growave widgets must stay disabled or removed.

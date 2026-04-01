@@ -9,6 +9,7 @@ use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
@@ -658,6 +659,43 @@ class ProductReviewService
             'reviewed_at' => now(),
             'moderated_by' => $moderatorId,
             'moderation_notes' => $note ?: $review->moderation_notes,
+        ])->save();
+
+        return $review->fresh(['profile']);
+    }
+
+    public function respondToReview(MarketingReviewHistory $review, string $response, User $user): MarketingReviewHistory
+    {
+        $now = now();
+        $isFirst = blank($review->admin_response);
+
+        $review->forceFill([
+            'admin_response' => $this->sanitizeBody($response),
+            'admin_response_by' => $review->admin_response_by ?: $user->id,
+            'admin_response_created_at' => $isFirst
+                ? $now
+                : ($review->admin_response_created_at ?: $now),
+            'admin_response_updated_at' => $isFirst ? null : $now,
+        ])->save();
+
+        return $review->fresh(['profile', 'adminResponder']);
+    }
+
+    /**
+     * @param array{title:?string,body:?string,rating:?int} $payload
+     */
+    public function updateReviewContent(MarketingReviewHistory $review, array $payload, User $user): MarketingReviewHistory
+    {
+        $title = $this->sanitizeLine($payload['title'] ?? null);
+        $body = $this->sanitizeBody((string) ($payload['body'] ?? ''));
+        $rating = max(1, min(5, (int) ($payload['rating'] ?? $review->rating)));
+
+        $review->forceFill([
+            'title' => $title,
+            'body' => $body,
+            'rating' => $rating,
+            'moderated_by' => $user->id,
+            'reviewed_at' => $review->reviewed_at ?: now(),
         ])->save();
 
         return $review->fresh(['profile']);
@@ -2015,6 +2053,12 @@ class ProductReviewService
             'media_assets' => is_array($review->media_assets) ? $review->media_assets : [],
             'helpful_count' => (int) ($review->votes ?? 0),
             'publication_state' => (string) ($review->status ?: 'approved'),
+            'admin_response' => $review->status === 'approved' && filled($review->admin_response)
+                ? [
+                    'body' => (string) $review->admin_response,
+                    'responded_at' => optional($review->admin_response_created_at)->toIso8601String(),
+                ]
+                : null,
             'reward' => [
                 'eligibility_status' => $review->reward_eligibility_status ? (string) $review->reward_eligibility_status : null,
                 'award_status' => $review->reward_award_status ? (string) $review->reward_award_status : null,

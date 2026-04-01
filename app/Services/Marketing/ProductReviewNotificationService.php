@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Mail\ProductReviewSubmittedMail;
+use App\Mail\ProductReviewResponseMail;
 use App\Models\MarketingReviewHistory;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -47,5 +48,41 @@ class ProductReviewNotificationService
     {
         return (string) $review->provider === 'backstage'
             && (string) $review->integration === 'native';
+    }
+
+    public function sendResponseNotification(MarketingReviewHistory $review): void
+    {
+        if (blank($review->admin_response) || $review->admin_response_notified_at) {
+            return;
+        }
+
+        $email = $this->recipientEmailForReview($review);
+        if ($email === null) {
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new ProductReviewResponseMail($review));
+            $review->forceFill([
+                'admin_response_notified_at' => now(),
+            ])->save();
+        } catch (\Throwable $exception) {
+            Log::warning('product review response notification failed', [
+                'review_id' => $review->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    protected function recipientEmailForReview(MarketingReviewHistory $review): ?string
+    {
+        $profileEmail = $review->relationLoaded('profile')
+            ? $review->profile?->email
+            : $review->profile()->value('email');
+
+        $email = $profileEmail ?: $review->reviewer_email;
+        $email = trim((string) $email);
+
+        return $email !== '' ? $email : null;
     }
 }

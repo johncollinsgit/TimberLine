@@ -53,6 +53,11 @@ class MarketingReviewHistory extends Model
         'candle_cash_task_event_id',
         'candle_cash_task_completion_id',
         'source_synced_at',
+        'admin_response',
+        'admin_response_created_at',
+        'admin_response_updated_at',
+        'admin_response_by',
+        'admin_response_notified_at',
         'raw_payload',
     ];
 
@@ -74,6 +79,9 @@ class MarketingReviewHistory extends Model
         'notification_sent_at' => 'datetime',
         'reward_amount_cents' => 'integer',
         'source_synced_at' => 'datetime',
+        'admin_response_created_at' => 'datetime',
+        'admin_response_updated_at' => 'datetime',
+        'admin_response_notified_at' => 'datetime',
         'raw_payload' => 'array',
     ];
 
@@ -105,6 +113,11 @@ class MarketingReviewHistory extends Model
     public function moderator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'moderated_by');
+    }
+
+    public function adminResponder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admin_response_by');
     }
 
     public function candleCashTaskEvent(): BelongsTo

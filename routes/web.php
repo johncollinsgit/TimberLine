@@ -418,6 +418,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::get('/reviews', [CandleCashPagesController::class, 'reviews'])->name('reviews');
                     Route::post('/reviews/{review}/approve', [CandleCashPagesController::class, 'approveReview'])->name('reviews.approve');
                     Route::post('/reviews/{review}/reject', [CandleCashPagesController::class, 'rejectReview'])->name('reviews.reject');
+                    Route::post('/reviews/{review}/response', [CandleCashPagesController::class, 'respondToReview'])->name('reviews.response');
+                    Route::post('/reviews/{review}/update', [CandleCashPagesController::class, 'updateReview'])->name('reviews.update');
                     Route::post('/reviews/{review}/delete', [CandleCashPagesController::class, 'deleteReview'])->name('reviews.delete');
                     Route::post('/reviews/{review}/resend-notification', [CandleCashPagesController::class, 'resendReviewNotification'])->name('reviews.resend-notification');
                     Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');

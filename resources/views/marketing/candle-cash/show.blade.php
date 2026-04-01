@@ -339,6 +339,12 @@
                         </select>
                         <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">Apply</button>
                     </form>
+                    @if($filteredCustomer)
+                        <div class="mt-3 inline-flex items-center gap-3 rounded-full border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-xs text-white">
+                            <span>Filtering by customer: {{ trim(($filteredCustomer->first_name ?? '') . ' ' . ($filteredCustomer->last_name ?? '')) ?: ($filteredCustomer->email ?: ('Profile #' . $filteredCustomer->id)) }}</span>
+                            <a href="{{ route('marketing.candle-cash.reviews', array_filter(['search' => data_get($reviewFilters, 'search'), 'status' => data_get($reviewFilters, 'status'), 'rating' => data_get($reviewFilters, 'rating'), 'source' => data_get($reviewFilters, 'source'), 'queue' => data_get($reviewFilters, 'queue'), 'reward_status' => data_get($reviewFilters, 'reward_status')])) }}" wire:navigate class="rounded-full border border-white/15 px-2 py-1 text-white/80">Clear</a>
+                        </div>
+                    @endif
 
                     <div class="mt-5 overflow-x-auto rounded-[1.4rem] border border-white/10">
                         <table class="min-w-full text-left text-sm text-white/80">
@@ -348,6 +354,7 @@
                                     <th class="px-4 py-3">Reviewer</th>
                                     <th class="px-4 py-3">Rating</th>
                                     <th class="px-4 py-3">Status</th>
+                                    <th class="px-4 py-3">Response</th>
                                     <th class="px-4 py-3">Reward</th>
                                     <th class="px-4 py-3">Source</th>
                                     <th class="px-4 py-3">Tenant</th>
@@ -362,14 +369,43 @@
                                             <div class="mt-1 text-xs text-white/45">{{ $review->product_handle ?: $review->product_id ?: 'No product handle' }}</div>
                                         </td>
                                         <td class="px-4 py-3 align-top">
-                                            <div class="font-medium text-white">{{ $review->displayReviewerName() }}</div>
+                                            @if($review->profile)
+                                                <a href="{{ route('marketing.customers.show', $review->profile) }}" wire:navigate class="font-medium text-white underline decoration-dotted">{{ $review->displayReviewerName() }}</a>
+                                            @else
+                                                <div class="font-medium text-white">{{ $review->displayReviewerName() }}</div>
+                                            @endif
                                             <div class="mt-1 text-xs text-white/45">{{ $review->reviewer_email ?: ($review->profile->email ?? 'No email') }}</div>
+                                            @if((int) ($review->marketing_profile_id ?? 0) > 0)
+                                                <div class="mt-1 text-xs text-white/60">
+                                                    <a href="{{ route('marketing.candle-cash.reviews', array_filter([
+                                                        'search' => data_get($reviewFilters, 'search'),
+                                                        'status' => data_get($reviewFilters, 'status'),
+                                                        'rating' => data_get($reviewFilters, 'rating'),
+                                                        'source' => data_get($reviewFilters, 'source'),
+                                                        'queue' => data_get($reviewFilters, 'queue'),
+                                                        'reward_status' => data_get($reviewFilters, 'reward_status'),
+                                                        'customer_id' => $review->marketing_profile_id,
+                                                    ])) }}" wire:navigate class="underline decoration-dotted">
+                                                        {{ number_format((int) ($review->customer_review_count ?? 0)) }} review{{ (int) ($review->customer_review_count ?? 0) === 1 ? '' : 's' }}
+                                                    </a>
+                                                </div>
+                                            @endif
                                         </td>
                                         <td class="px-4 py-3 align-top text-white/70">{{ str_repeat('★', max(0, (int) $review->rating)) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</td>
                                         <td class="px-4 py-3 align-top text-white/70">{{ strtoupper($review->status ?: 'approved') }}</td>
                                         <td class="px-4 py-3 align-top text-white/60">
+                                            @if(filled($review->admin_response))
+                                                <div class="text-emerald-200">Responded</div>
+                                                <a href="{{ route('marketing.candle-cash.reviews', array_filter(['review' => $review->id])) }}" wire:navigate class="mt-1 inline-flex text-xs underline decoration-dotted">View response</a>
+                                            @else
+                                                <div class="text-white/60">No response</div>
+                                                <a href="{{ route('marketing.candle-cash.reviews', array_filter(['review' => $review->id])) }}" wire:navigate class="mt-1 inline-flex text-xs underline decoration-dotted">Respond</a>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-3 align-top text-white/60">
                                             <div>{{ Str::headline((string) ($review->reward_award_status ?: 'not_awarded')) }}</div>
                                             <div class="mt-1 text-xs text-white/45">{{ Str::headline((string) ($review->reward_eligibility_status ?: 'unknown')) }}</div>
+                                            <div class="mt-1 text-xs text-white/45">${{ number_format(((int) ($review->reward_amount_cents ?? 0)) / 100, 2) }}</div>
                                         </td>
                                         <td class="px-4 py-3 align-top text-white/60">{{ $review->submission_source ?: 'native' }}</td>
                                         <td class="px-4 py-3 align-top text-white/50">{{ $review->tenant?->name ?: (($reviewTenantId ?? null) ? 'Current tenant' : 'Global / legacy') }}</td>
@@ -422,6 +458,50 @@
                         <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                             <div class="text-xs uppercase tracking-[0.18em] text-white/45">Review body</div>
                             <div class="mt-3 text-sm leading-7 text-white/80">{{ $selectedReview->body }}</div>
+                        </div>
+
+                        <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                            <div class="text-xs uppercase tracking-[0.18em] text-white/45">Admin response</div>
+                            @if(filled($selectedReview->admin_response))
+                                <div class="text-sm leading-7 text-white/80">{{ $selectedReview->admin_response }}</div>
+                                <div class="text-xs text-white/50">
+                                    Responded {{ optional($selectedReview->admin_response_created_at)->format('Y-m-d H:i') ?: 'recently' }}
+                                    @if($selectedReview->adminResponder)
+                                        · {{ $selectedReview->adminResponder->name }}
+                                    @endif
+                                </div>
+                            @else
+                                <div class="text-sm text-white/60">No response yet.</div>
+                            @endif
+
+                            <form method="POST" action="{{ route('marketing.candle-cash.reviews.response', $selectedReview) }}" class="space-y-2">
+                                @csrf
+                                <textarea name="admin_response" rows="4" required class="w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white placeholder:text-white/35" placeholder="Write a thank-you or follow-up note">{{ old('admin_response', $selectedReview->admin_response) }}</textarea>
+                                <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">
+                                    {{ filled($selectedReview->admin_response) ? 'Save response' : 'Submit response' }}
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                            <div class="text-xs uppercase tracking-[0.18em] text-white/45">Edit review</div>
+                            <form method="POST" action="{{ route('marketing.candle-cash.reviews.update', $selectedReview) }}" class="space-y-3">
+                                @csrf
+                                <label class="block text-sm text-white/80">Title
+                                    <input type="text" name="title" value="{{ old('title', $selectedReview->title) }}" class="mt-2 block w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white placeholder:text-white/35" maxlength="190" />
+                                </label>
+                                <label class="block text-sm text-white/80">Rating
+                                    <select name="rating" class="mt-2 block w-32 rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white">
+                                        @for($stars = 5; $stars >= 1; $stars--)
+                                            <option value="{{ $stars }}" @selected((int) old('rating', $selectedReview->rating) === $stars)>{{ $stars }} star{{ $stars === 1 ? '' : 's' }}</option>
+                                        @endfor
+                                    </select>
+                                </label>
+                                <label class="block text-sm text-white/80">Body
+                                    <textarea name="body" rows="5" required class="mt-2 block w-full rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white placeholder:text-white/35">{{ old('body', $selectedReview->body) }}</textarea>
+                                </label>
+                                <button type="submit" class="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">Save review</button>
+                            </form>
                         </div>
 
                         <div class="mt-5 grid gap-3 md:grid-cols-2">

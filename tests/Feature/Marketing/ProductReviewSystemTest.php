@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
+use App\Mail\ProductReviewResponseMail;
 
 test('marketing manager can load candle cash reviews section', function () {
     $user = User::factory()->create([
@@ -124,6 +125,154 @@ test('shopify product review status includes legacy growave reviews with product
         ->assertJsonPath('data.summary.review_count', 1)
         ->assertJsonPath('data.summary.average_rating', 4)
         ->assertJsonPath('data.reviews.0.source', 'growave_import');
+});
+
+test('admin can respond to a review and customer gets one email', function () {
+    Mail::fake();
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::factory()->create([
+        'email' => 'reviewer@example.com',
+    ]);
+
+    $review = MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'profile:' . $profile->id,
+        'external_review_id' => 'resp-1',
+        'marketing_profile_id' => $profile->id,
+        'rating' => 5,
+        'title' => 'Great',
+        'body' => 'Lovely candle.',
+        'reviewer_name' => 'Test Reviewer',
+        'reviewer_email' => 'reviewer@example.com',
+        'status' => 'approved',
+        'is_published' => true,
+        'submitted_at' => now()->subDay(),
+        'approved_at' => now()->subDay(),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('marketing.candle-cash.reviews.response', $review), [
+            'admin_response' => 'Thanks so much for your review!',
+        ])
+        ->assertRedirect();
+
+    $review->refresh();
+
+    expect($review->admin_response)->toBe('Thanks so much for your review!');
+    expect($review->admin_response_by)->toBe($user->id);
+    expect($review->admin_response_created_at)->not->toBeNull();
+    expect($review->admin_response_notified_at)->not->toBeNull();
+
+    Mail::assertSent(ProductReviewResponseMail::class, function (ProductReviewResponseMail $mail) use ($review): bool {
+        return $mail->review->is($review);
+    });
+});
+
+test('editing an existing response does not resend email', function () {
+    Mail::fake();
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::factory()->create([
+        'email' => 'reviewer2@example.com',
+    ]);
+
+    $review = MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'profile:' . $profile->id,
+        'external_review_id' => 'resp-2',
+        'marketing_profile_id' => $profile->id,
+        'rating' => 4,
+        'title' => 'Solid',
+        'body' => 'Pretty good.',
+        'reviewer_name' => 'Another Reviewer',
+        'reviewer_email' => 'reviewer2@example.com',
+        'status' => 'approved',
+        'is_published' => true,
+        'submitted_at' => now()->subDay(),
+        'approved_at' => now()->subDay(),
+        'admin_response' => 'Old response',
+        'admin_response_created_at' => now()->subHours(5),
+        'admin_response_notified_at' => now()->subHours(5),
+    ]);
+
+    // Clear the initial submission mail so we only assert on edits.
+    Mail::fake();
+
+    $this->actingAs($user)
+        ->post(route('marketing.candle-cash.reviews.response', $review), [
+            'admin_response' => 'Updated response copy',
+        ])
+        ->assertRedirect();
+
+    $review->refresh();
+
+    expect($review->admin_response)->toBe('Updated response copy');
+    expect($review->admin_response_updated_at)->not->toBeNull();
+
+    Mail::assertNothingSent();
+});
+
+test('customer filter narrows reviews by marketing profile id', function () {
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $profileA = MarketingProfile::factory()->create(['first_name' => 'Alice', 'email' => 'alice@example.com']);
+    $profileB = MarketingProfile::factory()->create(['first_name' => 'Bob', 'email' => 'bob@example.com']);
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'profile:' . $profileA->id,
+        'external_review_id' => 'cust-A',
+        'marketing_profile_id' => $profileA->id,
+        'rating' => 5,
+        'title' => 'Alice review',
+        'body' => 'Love it',
+        'reviewer_name' => 'Alice',
+        'status' => 'approved',
+        'is_published' => true,
+        'submitted_at' => now()->subDay(),
+        'approved_at' => now()->subDay(),
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'provider' => 'backstage',
+        'integration' => 'native',
+        'store_key' => 'retail',
+        'external_customer_id' => 'profile:' . $profileB->id,
+        'external_review_id' => 'cust-B',
+        'marketing_profile_id' => $profileB->id,
+        'rating' => 3,
+        'title' => 'Bob review',
+        'body' => 'Ok',
+        'reviewer_name' => 'Bob',
+        'status' => 'approved',
+        'is_published' => true,
+        'submitted_at' => now()->subDay(),
+        'approved_at' => now()->subDay(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.reviews', ['customer_id' => $profileA->id]))
+        ->assertOk()
+        ->assertSeeText('Alice review')
+        ->assertDontSeeText('Bob review');
 });
 
 test('shopify product review status uses the native storefront contract for tenant-scoped stores', function () {
