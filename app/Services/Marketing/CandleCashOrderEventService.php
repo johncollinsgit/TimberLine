@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\Tenant;
 
 class CandleCashOrderEventService
 {
@@ -25,7 +26,7 @@ class CandleCashOrderEventService
             ? (int) $identityContext['tenant_id']
             : (is_numeric($order->tenant_id ?? null) && (int) $order->tenant_id > 0 ? (int) $order->tenant_id : null);
 
-        if ($tenantId === null) {
+        if ($tenantId === null && Tenant::query()->exists()) {
             $this->eventLogger->log('candle_cash_order_event_skipped_missing_tenant', [
                 'status' => 'error',
                 'issue_type' => 'tenant_context_missing',
@@ -58,7 +59,7 @@ class CandleCashOrderEventService
         }
     }
 
-    protected function profileForOrder(Order $order, int $tenantId): ?MarketingProfile
+    protected function profileForOrder(Order $order, ?int $tenantId): ?MarketingProfile
     {
         $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown') . ':' . $order->shopify_order_id;
 
@@ -80,7 +81,11 @@ class CandleCashOrderEventService
             ->first();
 
         $profile = $link?->marketingProfile;
-        if (! $profile || (int) ($profile->tenant_id ?? 0) !== $tenantId) {
+        if (! $profile) {
+            return null;
+        }
+
+        if ($tenantId !== null && (int) ($profile->tenant_id ?? 0) !== $tenantId) {
             return null;
         }
 

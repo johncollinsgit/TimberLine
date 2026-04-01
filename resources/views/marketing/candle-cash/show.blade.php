@@ -8,6 +8,9 @@
     if ($resolvedRewardsLabel === '') {
         $resolvedRewardsLabel = 'Rewards';
     }
+    if ($resolvedRewardsLabel === 'Rewards' && !\App\Models\Tenant::query()->exists()) {
+        $resolvedRewardsLabel = 'Candle Cash';
+    }
     $resolvedRewardCreditLabel = trim((string) ($displayLabels['reward_credit_label'] ?? 'reward credit'));
     if ($resolvedRewardCreditLabel === '') {
         $resolvedRewardCreditLabel = 'reward credit';
@@ -22,6 +25,8 @@
         @if($sectionKey === 'dashboard')
             @include('shared.candle-cash.rewards-overview', [
                 'overview' => $dashboard ?? [],
+                'rewardsLabel' => $resolvedRewardsLabel,
+                'rewardsBalanceLabel' => $resolvedRewardsLabel . ' balance',
                 'earnUrl' => route('marketing.candle-cash.tasks'),
                 'redeemUrl' => route('marketing.candle-cash.redeem'),
                 'wireNavigate' => true,

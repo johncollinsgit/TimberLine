@@ -7,7 +7,7 @@
   <section class="fb-card p-4 sm:p-6">
     <div class="text-[11px] uppercase tracking-[0.35em] text-[var(--fb-muted)]">Administration</div>
     <div class="mt-2 text-2xl font-['Fraunces'] font-semibold text-[var(--fb-text)] sm:text-3xl">Admin Workspace</div>
-    <div class="mt-2 text-sm text-[var(--fb-muted)]">Use this area to manage data quality, imports, and team-facing system controls.</div>
+    <div class="mt-2 text-sm text-[var(--fb-muted)]">Use this area to manage Scent Intake, Master Data, imports, and team-facing system controls.</div>
   </section>
 
   <x-ui.page-explainer

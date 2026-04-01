@@ -1068,6 +1068,9 @@ class ShopifyEmbeddedRewardsController extends Controller
         if ($rewardsLabel === '') {
             $rewardsLabel = 'Rewards';
         }
+        if ($authorized && ($configState['tenant_id'] ?? null) === null && $rewardsLabel === 'Rewards') {
+            $rewardsLabel = 'Candle Cash';
+        }
         $rewardsBalanceLabel = trim((string) ($labels['rewards_balance_label'] ?? ($rewardsLabel.' balance')));
         if ($rewardsBalanceLabel === '') {
             $rewardsBalanceLabel = $rewardsLabel.' balance';
@@ -1075,6 +1078,9 @@ class ShopifyEmbeddedRewardsController extends Controller
         $rewardsProgramLabel = trim((string) ($labels['rewards_program_label'] ?? ($rewardsLabel.' program')));
         if ($rewardsProgramLabel === '') {
             $rewardsProgramLabel = $rewardsLabel.' program';
+        }
+        if ($authorized && ($configState['tenant_id'] ?? null) === null && $rewardsProgramLabel === 'Rewards program') {
+            $rewardsProgramLabel = 'Candle Cash rewards and program';
         }
         $rewardsRedemptionLabel = trim((string) ($labels['rewards_redemption_label'] ?? ($rewardsLabel.' redemption')));
         if ($rewardsRedemptionLabel === '') {
@@ -1481,7 +1487,9 @@ class ShopifyEmbeddedRewardsController extends Controller
         return match ($status) {
             'open_from_shopify' => 'This page is meant to load inside your Shopify admin so it can verify the store context.',
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'Open the app again from Shopify Admin. If this keeps happening, the store app config needs attention.',
-            default => 'Manage '.strtolower($programLabel).' settings.',
+            default => $programLabel === 'Candle Cash rewards and program'
+                ? 'Manage Candle Cash rewards and program settings.'
+                : 'Manage '.strtolower($programLabel).' settings.',
         };
     }
 

@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
+use App\Models\Tenant;
 use App\Services\Shopify\ShopifyCustomerMetafieldFetcher;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Support\Marketing\MarketingIdentityNormalizer;
@@ -32,7 +33,7 @@ class ShopifyCustomerMetafieldSyncService
         $token = $this->requiredString($store['token'] ?? null, "Shopify token missing for store '{$storeKey}'.");
         $apiVersion = $this->nullableString($store['api_version'] ?? null) ?: '2026-01';
 
-        $tenantId = $this->tenantIdFromStore($store);
+        $tenantId = $this->resolvedTenantIdFromStore($store);
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $limit = $this->nullableInt($options['limit'] ?? null);
         $pageSize = min(max(1, (int) ($options['page_size'] ?? 50)), 100);
@@ -175,7 +176,7 @@ class ShopifyCustomerMetafieldSyncService
      * } $customer
      * @param array<string,int> $summary
      */
-    protected function syncCustomerRecord(string $storeKey, array $customer, array &$summary, bool $dryRun, int $tenantId): void
+    protected function syncCustomerRecord(string $storeKey, array $customer, array &$summary, bool $dryRun, ?int $tenantId): void
     {
         $parsed = $this->parser->parse((array) ($customer['metafields'] ?? []));
         $hasGrowaveMetafields = $parsed['raw_metafields'] !== [];
@@ -196,9 +197,9 @@ class ShopifyCustomerMetafieldSyncService
                 'review_context' => $reviewContext,
                 'tenant_id' => $tenantId,
             ]);
-        $action = $this->upsertSnapshot($storeKey, $customer, $parsed, $syncResult['profile_id'] ?? null, $hasGrowaveMetafields, true, $tenantId);
+            $action = $this->upsertSnapshot($storeKey, $customer, $parsed, $syncResult['profile_id'] ?? null, $hasGrowaveMetafields, true, $tenantId);
         } else {
-            [$syncResult, $action] = DB::transaction(function () use ($storeKey, $customer, $parsed, $hasGrowaveMetafields, $reviewContext): array {
+            [$syncResult, $action] = DB::transaction(function () use ($storeKey, $customer, $parsed, $hasGrowaveMetafields, $reviewContext, $tenantId): array {
                 $syncResult = $this->profileSyncService->syncExternalIdentity(
                     $this->identityPayloadFromCustomer($storeKey, $customer, $hasGrowaveMetafields, $tenantId),
                     [
@@ -242,7 +243,7 @@ class ShopifyCustomerMetafieldSyncService
      * } $customer
      * @return array<string,mixed>
      */
-    protected function identityPayloadFromCustomer(string $storeKey, array $customer, bool $hasGrowaveMetafields, int $tenantId): array
+    protected function identityPayloadFromCustomer(string $storeKey, array $customer, bool $hasGrowaveMetafields, ?int $tenantId): array
     {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -332,7 +333,7 @@ class ShopifyCustomerMetafieldSyncService
         mixed $marketingProfileId,
         bool $hasGrowaveMetafields,
         bool $dryRun,
-        int $tenantId
+        ?int $tenantId
     ): string {
         $shopifyCustomerId = $this->requiredString(
             $customer['shopify_customer_id'] ?? null,
@@ -438,7 +439,7 @@ class ShopifyCustomerMetafieldSyncService
         return $string !== '' ? $string : null;
     }
 
-    protected function tenantIdFromStore(array $store): int
+    protected function tenantIdFromStore(array $store): ?int
     {
         $tenantId = is_numeric($store['tenant_id'] ?? null) ? (int) $store['tenant_id'] : null;
         if ($tenantId === null) {
@@ -446,6 +447,15 @@ class ShopifyCustomerMetafieldSyncService
         }
 
         return $tenantId;
+    }
+
+    protected function resolvedTenantIdFromStore(array $store): ?int
+    {
+        try {
+            return $this->tenantIdFromStore($store);
+        } catch (RuntimeException) {
+            return Tenant::query()->exists() ? null : null;
+        }
     }
 
     protected function nullableInt(mixed $value): ?int

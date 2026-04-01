@@ -37,7 +37,10 @@ class TenantRewardsPolicyReadinessService
         $scheduledLaunchAt = $this->asDate($access['scheduled_launch_at'] ?? null);
 
         $emailReadiness = $this->emailReadiness->summary($tenantId);
-        $emailReady = ! $emailEnabled || (bool) ($emailReadiness['can_send_live'] ?? false);
+        $emailReady = ! $emailEnabled || (
+            (bool) ($emailReadiness['can_send_live'] ?? false)
+            && ! (bool) ($emailReadiness['using_fallback_config'] ?? false)
+        );
 
         $smsDefaultSender = $this->twilioSenderConfigService->defaultSender();
         $smsReady = ! $smsEnabled || (
