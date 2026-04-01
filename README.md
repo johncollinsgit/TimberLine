@@ -216,6 +216,16 @@ Do not start yet:
 - Shopify App Store packaging
 - speculative AI automation work
 
+Current backend release-order note:
+- treat `docs/architecture/backend-release-order-2026-04-01.md` as the active split plan for the waiting backend branch
+- do not promote mixed commercialization/unified-shell work to `main` until Release A stabilization is green and the later releases are separated
+- prepared split branches now exist:
+  - `release-a-stabilization`
+  - `release-b-commercial-core`
+  - `release-c-module-discovery`
+  - `release-d-unified-shell`
+  - `release-e-polish-docs-assets`
+
 ## Product Architecture References (2026-03-27 Pass)
 
 - Business concept and commercial model:
