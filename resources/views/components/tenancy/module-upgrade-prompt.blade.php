@@ -2,16 +2,24 @@
     'moduleState' => null,
     'moduleName' => null,
     'ctaHref' => null,
-    'ctaLabel' => 'Request Upgrade',
+    'ctaLabel' => null,
     'comingSoonCtaLabel' => 'Learn More',
     'showWhenComingSoon' => true,
     'force' => false,
+    'storeRoute' => null,
+    'plansRoute' => null,
+    'contactRoute' => null,
 ])
 
 @php
-    $presented = \App\Support\Tenancy\TenantModuleUi::present(
+    $presented = \App\Support\Tenancy\TenantModuleActionPresenter::present(
         is_array($moduleState) ? $moduleState : null,
-        is_string($moduleName) ? $moduleName : null
+        is_string($moduleName) ? $moduleName : null,
+        [
+            'store_route' => is_string($storeRoute) ? $storeRoute : null,
+            'plans_route' => is_string($plansRoute) ? $plansRoute : null,
+            'contact_route' => is_string($contactRoute) ? $contactRoute : null,
+        ]
     );
 
     $isLocked = ($presented['ui_state'] ?? '') === 'locked';
@@ -19,6 +27,8 @@
     $canShowLocked = $isLocked && ((bool) ($presented['upgrade_prompt_eligible'] ?? false) || (bool) $force);
     $canShowComingSoon = $isComingSoon && ((bool) $showWhenComingSoon || (bool) $force);
     $show = $canShowLocked || $canShowComingSoon;
+    $resolvedCtaHref = is_string($ctaHref) && trim($ctaHref) !== '' ? $ctaHref : ($presented['cta_href'] ?? null);
+    $resolvedLockedCtaLabel = is_string($ctaLabel) && trim($ctaLabel) !== '' ? $ctaLabel : ($presented['cta_label'] ?? 'Request access');
 @endphp
 
 @if($show)
@@ -106,17 +116,16 @@
 
         <p class="tenant-module-upgrade__body">
             @if($canShowLocked)
-                This module is not included in the current access level. Upgrade or add the relevant module pack to unlock it.
+                {{ $presented['reason_description'] ?? 'This module is not currently available for the tenant.' }}
             @else
-                This module is visible for roadmap alignment but is not available for setup yet.
+                {{ $presented['reason_description'] ?? 'This module is visible for roadmap alignment but is not available for setup yet.' }}
             @endif
         </p>
 
-        @if(is_string($ctaHref) && trim($ctaHref) !== '')
-            <a href="{{ $ctaHref }}" class="tenant-module-upgrade__cta">
-                {{ $canShowLocked ? $ctaLabel : $comingSoonCtaLabel }}
+        @if(is_string($resolvedCtaHref) && trim($resolvedCtaHref) !== '')
+            <a href="{{ $resolvedCtaHref }}" class="tenant-module-upgrade__cta">
+                {{ $canShowLocked ? $resolvedLockedCtaLabel : $comingSoonCtaLabel }}
             </a>
         @endif
     </section>
 @endif
-

@@ -170,8 +170,9 @@
                     @foreach(array_slice($lockedModules, 0, 4) as $module)
                         <x-tenancy.module-upgrade-prompt
                             :module-state="$module"
-                            :cta-href="($upgradeCtas['primary']['href'] ?? route('platform.contact'))"
-                            :cta-label="($upgradeCtas['primary']['label'] ?? 'Request upgrade')"
+                            store-route="shopify.app.store"
+                            plans-route="shopify.app.plans"
+                            contact-route="platform.contact"
                         />
                     @endforeach
                 </div>
