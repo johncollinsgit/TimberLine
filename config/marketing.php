@@ -70,6 +70,7 @@ return [
         'dry_run' => (bool) env('MARKETING_EMAIL_DRY_RUN', false),
         'from_email' => env('MARKETING_EMAIL_FROM_EMAIL'),
         'from_name' => env('MARKETING_EMAIL_FROM_NAME', 'TimberLine Marketing'),
+        'reply_to_email' => env('MARKETING_EMAIL_REPLY_TO_EMAIL'),
         'smoke_test_recipient_email' => env('MARKETING_EMAIL_SMOKE_TEST_RECIPIENT'),
         'candle_cash_reminder' => [
             'cooldown_days' => (int) env('MARKETING_EMAIL_CANDLE_CASH_REMINDER_COOLDOWN_DAYS', 14),

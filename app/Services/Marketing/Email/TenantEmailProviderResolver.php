@@ -29,7 +29,7 @@ class TenantEmailProviderResolver
      */
     public function getEmailProviderForTenant(?int $tenantId): array
     {
-        $settings = $this->settingsService->resolvedForTenant($tenantId);
+        $settings = $this->settingsService->resolvedForRuntime($tenantId);
         $providerKey = strtolower(trim((string) ($settings['email_provider'] ?? 'sendgrid')));
         $provider = $this->providerForKey($providerKey);
 
@@ -97,6 +97,8 @@ class TenantEmailProviderResolver
 
         if ($providerKey === 'sendgrid') {
             $providerConfig = (array) ($settings['provider_config'] ?? []);
+            $senderMode = strtolower(trim((string) ($providerConfig['sender_mode'] ?? 'global_fallback')));
+            $providerStatus = strtolower(trim((string) ($settings['provider_status'] ?? 'unknown')));
 
             if (trim((string) ($providerConfig['api_key'] ?? '')) === '') {
                 $issues[] = 'SendGrid API key is missing.';
@@ -107,9 +109,11 @@ class TenantEmailProviderResolver
                 $issues[] = 'From email is missing.';
             }
 
-            $fromName = trim((string) (($settings['from_name'] ?? null) ?: ($providerConfig['verified_sender_name'] ?? null)));
-            if ($fromName === '') {
-                $issues[] = 'From name is missing.';
+            if (
+                in_array($senderMode, ['single_sender', 'domain_authenticated'], true)
+                && ! in_array($providerStatus, ['healthy', 'configured'], true)
+            ) {
+                $issues[] = 'Sender identity verification is incomplete for this tenant.';
             }
         }
 

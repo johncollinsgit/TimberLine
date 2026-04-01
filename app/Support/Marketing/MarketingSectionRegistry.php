@@ -54,6 +54,18 @@ class MarketingSectionRegistry
                 ],
                 'group' => 'command-center',
             ],
+            'modules' => [
+                'label' => 'Modules',
+                'route' => 'marketing.modules',
+                'description' => 'Tenant-aware module marketplace for activation, upgrades, and access requests.',
+                'hint_title' => 'How to use this page',
+                'hint_text' => 'Use Modules as the catalog surface for what is active, what can be added now, and what still needs an upgrade or request workflow.',
+                'coming_next' => [
+                    'Saved views and approval queues for module requests.',
+                    'Billing-aware activation flows tied to modular pricing.',
+                ],
+                'group' => 'command-center',
+            ],
             'customers' => [
                 'label' => 'Customers',
                 'route' => 'marketing.customers',

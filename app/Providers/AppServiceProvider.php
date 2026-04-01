@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Models\MarketingReviewHistory;
+use App\Models\User;
 use App\Observers\MarketingReviewHistoryObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -31,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         MarketingReviewHistory::observe(MarketingReviewHistoryObserver::class);
+        $this->registerAuthorizationGates();
 
         Date::use(CarbonImmutable::class);
 
@@ -47,5 +50,62 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null
         );
+    }
+
+    protected function registerAuthorizationGates(): void
+    {
+        Gate::define('manage-landlord-commercial', function (User $user): bool {
+            if ($user->getAttribute('is_active') === false) {
+                return false;
+            }
+
+            $role = strtolower(trim((string) ($user->role ?? '')));
+            $allowedRoles = collect((array) config('tenancy.landlord.operator_roles', ['admin']))
+                ->map(fn (mixed $candidate): string => strtolower(trim((string) $candidate)))
+                ->filter()
+                ->values()
+                ->all();
+            if ($allowedRoles === []) {
+                $allowedRoles = ['admin'];
+            }
+
+            if (! in_array($role, $allowedRoles, true)) {
+                return false;
+            }
+
+            $allowedEmails = collect((array) config('tenancy.landlord.operator_emails', []))
+                ->map(fn (mixed $candidate): string => strtolower(trim((string) $candidate)))
+                ->filter()
+                ->values()
+                ->all();
+
+            if ($allowedEmails === []) {
+                return true;
+            }
+
+            $email = strtolower(trim((string) ($user->email ?? '')));
+
+            return $email !== '' && in_array($email, $allowedEmails, true);
+        });
+
+        Gate::define('use-global-search', function (User $user): bool {
+            return $user->getAttribute('is_active') !== false;
+        });
+
+        Gate::define('view-tenant-module-store', function (User $user, ?int $tenantId = null): bool {
+            if ($user->getAttribute('is_active') === false || ! $user->canAccessMarketing() || $tenantId === null) {
+                return false;
+            }
+
+            return $user->tenants()->whereKey($tenantId)->exists();
+        });
+
+        Gate::define('mutate-tenant-module-store', function (User $user, ?int $tenantId = null): bool {
+            if ($user->getAttribute('is_active') === false || ! $user->canAccessMarketing() || $tenantId === null) {
+                return false;
+            }
+
+            return $user->tenants()->whereKey($tenantId)->exists();
+        });
     }
 }

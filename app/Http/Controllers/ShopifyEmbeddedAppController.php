@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
+use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class ShopifyEmbeddedAppController extends Controller
 {
@@ -295,6 +299,127 @@ class ShopifyEmbeddedAppController extends Controller
         );
     }
 
+    public function moduleStore(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleCatalogService $catalogService
+    ): Response {
+        $context = $contextService->resolvePageContext($request);
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            : null;
+
+        return $this->embeddedResponse(
+            response()->view('shopify.app-store', [
+                'authorized' => $authorized,
+                'status' => $status,
+                'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+                'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
+                'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
+                'storeLabel' => $authorized
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
+                    : 'Shopify Admin',
+                'headline' => $this->headlineForStatus($status, 'App Store'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Discover active modules, add-ons, and upgrade paths from a single catalog surface.'),
+                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
+                'pageActions' => [],
+                'pageSubnav' => $this->dashboardExperienceSubnav('store', $tenantId),
+                'contextToken' => $authorized ? $contextService->issueContextToken($context) : null,
+                'moduleStorePayload' => $catalogService->tenantStorePayload($tenantId, 'shopify'),
+            ]),
+            $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
+        );
+    }
+
+    public function activateModule(
+        Request $request,
+        string $moduleKey,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleCatalogService $catalogService
+    ) {
+        $context = $contextService->resolveMutationContext($request);
+        if (! (bool) ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $request->validate([
+            'moduleKey' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
+        if ($tenantId === null) {
+            Log::warning('shopify.app_store.activate.blocked_missing_tenant', [
+                'module_key' => strtolower(trim($moduleKey)),
+                'store_key' => (string) ($store['key'] ?? ''),
+                'shop_domain' => (string) ($context['shop_domain'] ?? ''),
+            ]);
+
+            return redirect(
+                ShopifyEmbeddedContextQuery::appendToUrl(
+                    route('shopify.app.store', [], false),
+                    ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+                )
+            )->with('status_error', 'Tenant context is missing for this store.');
+        }
+        $result = $catalogService->activateModuleForTenant($tenantId, $moduleKey, null, 'shopify_app_store');
+
+        return redirect(
+            ShopifyEmbeddedContextQuery::appendToUrl(
+                route('shopify.app.store', [], false),
+                ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+            )
+        )->with(($result['ok'] ?? false) ? 'status' : 'status_error', (string) ($result['message'] ?? 'Module action completed.'));
+    }
+
+    public function requestModuleAccess(
+        Request $request,
+        string $moduleKey,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleCatalogService $catalogService
+    ) {
+        $context = $contextService->resolveMutationContext($request);
+        if (! (bool) ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $request->validate([
+            'moduleKey' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
+        if ($tenantId === null) {
+            Log::warning('shopify.app_store.request.blocked_missing_tenant', [
+                'module_key' => strtolower(trim($moduleKey)),
+                'store_key' => (string) ($store['key'] ?? ''),
+                'shop_domain' => (string) ($context['shop_domain'] ?? ''),
+            ]);
+
+            return redirect(
+                ShopifyEmbeddedContextQuery::appendToUrl(
+                    route('shopify.app.store', [], false),
+                    ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+                )
+            )->with('status_error', 'Tenant context is missing for this store.');
+        }
+
+        $result = $catalogService->requestModuleAccessForTenant($tenantId, $moduleKey, null, 'shopify_app_store_request');
+
+        return redirect(
+            ShopifyEmbeddedContextQuery::appendToUrl(
+                route('shopify.app.store', [], false),
+                ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+            )
+        )->with(($result['ok'] ?? false) ? 'status' : 'status_error', (string) ($result['message'] ?? 'Module request completed.'));
+    }
+
     public function sendCandleCashEarnedReminders(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
@@ -333,6 +458,50 @@ class ShopifyEmbeddedAppController extends Controller
         ]);
     }
 
+    public function search(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        GlobalSearchCoordinator $searchCoordinator
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        $payload = $searchCoordinator->search(
+            (string) ($validated['q'] ?? ''),
+            [
+                'tenant_id' => $tenantId,
+                'user' => $request->user(),
+                'request' => $request,
+                'surface' => 'shopify',
+                'limit' => $validated['limit'] ?? 10,
+            ]
+        );
+        $embeddedContext = ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null));
+        $appendContext = static function (array $row) use ($embeddedContext): array {
+            $url = trim((string) ($row['url'] ?? ''));
+            if ($url !== '' && ! str_starts_with($url, 'http')) {
+                $row['url'] = ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+            }
+
+            return $row;
+        };
+        $payload['results'] = array_map($appendContext, (array) ($payload['results'] ?? []));
+        $payload['groups'] = collect((array) ($payload['groups'] ?? []))
+            ->map(fn (array $rows): array => array_map($appendContext, $rows))
+            ->all();
+
+        return response()->json($payload);
+    }
+
     protected function embeddedResponse(Response $response, int $status = 200): Response
     {
         $response->setStatusCode($status);
@@ -359,6 +528,7 @@ class ShopifyEmbeddedAppController extends Controller
             ['key' => 'overview', 'label' => 'Overview', 'href' => route('shopify.app', [], false), 'module_key' => 'dashboard'],
             ['key' => 'start', 'label' => 'Start Here', 'href' => route('shopify.app.start', [], false), 'module_key' => 'onboarding'],
             ['key' => 'plans', 'label' => 'Plans & Add-ons', 'href' => route('shopify.app.plans', [], false), 'module_key' => 'onboarding'],
+            ['key' => 'store', 'label' => 'App Store', 'href' => route('shopify.app.store', [], false), 'module_key' => 'onboarding'],
             ['key' => 'integrations', 'label' => 'Integrations', 'href' => route('shopify.app.integrations', [], false), 'module_key' => 'integrations'],
         ];
 
@@ -404,6 +574,8 @@ class ShopifyEmbeddedAppController extends Controller
             'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload the dashboard from Shopify Admin and try again.',
             'invalid_session_token' => 'Shopify Admin verification failed. Reload the dashboard from Shopify Admin and try again.',
             'expired_session_token' => 'Your Shopify Admin session expired. Reload the dashboard from Shopify Admin and try again.',
+            'missing_context_token' => 'This embedded action is missing its page context token. Reload the App Store and try again.',
+            'invalid_context_token' => 'This embedded action could not be matched to the current Shopify page context.',
         ];
 
         return response()->json([

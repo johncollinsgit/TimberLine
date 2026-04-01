@@ -1093,6 +1093,120 @@
                                     </div>
                                 </div>
 
+                                <div
+                                    class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
+                                    x-data="{ moduleEntitlementTab: @js($defaultModuleCategoryTab) }"
+                                >
+                                    <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Module entitlements & billing</h5>
+                                    <p class="mt-1 text-[11px] text-zinc-600">Write-backed tenant module entitlement rows with billing treatment, price overrides, and operator notes.</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        @foreach ($moduleCategories as $category)
+                                            @php
+                                                $categoryKey = (string) ($category['key'] ?? '');
+                                            @endphp
+                                            <button
+                                                type="button"
+                                                @click="moduleEntitlementTab = @js($categoryKey)"
+                                                :class="moduleEntitlementTab === @js($categoryKey)
+                                                    ? 'border-zinc-900 bg-zinc-900 text-white'
+                                                    : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100'"
+                                                class="rounded-md border px-2.5 py-1 text-[11px] font-medium transition"
+                                            >
+                                                {{ $category['label'] }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+
+                                    <div class="mt-3 space-y-3">
+                                        @foreach ($moduleCategories as $category)
+                                            @php
+                                                $categoryKey = (string) ($category['key'] ?? '');
+                                            @endphp
+                                            <section
+                                                x-show="moduleEntitlementTab === @js($categoryKey)"
+                                                class="rounded-lg border border-zinc-200 bg-white p-3"
+                                            >
+                                                <h6 class="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-700">{{ $category['label'] }}</h6>
+                                                <div class="mt-2 grid gap-3">
+                                                    @foreach ((array) ($category['items'] ?? []) as $module)
+                                                        @php
+                                                            $moduleKey = (string) ($module['module_key'] ?? '');
+                                                            $definition = is_array(data_get($moduleCatalog, $moduleKey))
+                                                                ? (array) data_get($moduleCatalog, $moduleKey)
+                                                                : [];
+                                                            $effectiveModuleState = is_array(data_get($row, 'resolved_module_states.'.$moduleKey))
+                                                                ? (array) data_get($row, 'resolved_module_states.'.$moduleKey)
+                                                                : [];
+                                                            $entitlement = (array) data_get($row, 'module_entitlements.'.$moduleKey, []);
+                                                        @endphp
+                                                        <form method="POST" action="{{ route('landlord.tenants.commercial.entitlements.update', ['tenant' => $tenant->id, 'moduleKey' => $moduleKey]) }}" class="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                                                            @csrf
+                                                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                                                <div>
+                                                                    <div class="text-sm font-semibold text-zinc-900">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $moduleKey) }}</div>
+                                                                    <div class="mt-1 text-[11px] text-zinc-600">
+                                                                        status {{ $definition['status'] ?? 'n/a' }}
+                                                                        · billing {{ $definition['billing_mode'] ?? 'n/a' }}
+                                                                        · market {{ $definition['market_state'] ?? 'INTERNAL_ONLY' }}
+                                                                        · public {{ data_get($definition, 'visibility.public_site') ? 'yes' : 'no' }}
+                                                                        · app store {{ data_get($definition, 'visibility.app_store') ? 'yes' : 'no' }}
+                                                                        · effective source {{ $effectiveModuleState['source'] ?? 'flag' }}
+                                                                    </div>
+                                                                </div>
+                                                                <x-tenancy.module-state-badge :module-state="$effectiveModuleState" size="sm" compact />
+                                                            </div>
+
+                                                            <div class="mt-3 grid gap-2 md:grid-cols-5">
+                                                                <label class="text-[11px] text-zinc-600">
+                                                                    Availability
+                                                                    <select name="availability_status" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
+                                                                        @foreach (['available', 'requested', 'unavailable', 'disabled'] as $availabilityStatus)
+                                                                            <option value="{{ $availabilityStatus }}" @selected(($entitlement['availability_status'] ?? 'available') === $availabilityStatus)>{{ $availabilityStatus }}</option>
+                                                                        @endforeach
+                                                                    </select>
+                                                                </label>
+                                                                <label class="text-[11px] text-zinc-600">
+                                                                    Enabled
+                                                                    <select name="enabled_status" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
+                                                                        @foreach (['inherit', 'enabled', 'disabled'] as $enabledStatus)
+                                                                            <option value="{{ $enabledStatus }}" @selected(($entitlement['enabled_status'] ?? 'inherit') === $enabledStatus)>{{ $enabledStatus }}</option>
+                                                                        @endforeach
+                                                                    </select>
+                                                                </label>
+                                                                <label class="text-[11px] text-zinc-600">
+                                                                    Billing
+                                                                    <select name="billing_status" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
+                                                                        <option value="">none</option>
+                                                                        @foreach (['included_in_plan', 'add_on_paid', 'add_on_comped', 'custom_contract', 'trial', 'unavailable', 'pending_billing'] as $billingStatus)
+                                                                            <option value="{{ $billingStatus }}" @selected(($entitlement['billing_status'] ?? '') === $billingStatus)>{{ $billingStatus }}</option>
+                                                                        @endforeach
+                                                                    </select>
+                                                                </label>
+                                                                <label class="text-[11px] text-zinc-600">
+                                                                    Price override cents
+                                                                    <input type="number" min="0" step="1" name="price_override_cents" value="{{ old('price_override_cents', (string) ($entitlement['price_override_cents'] ?? '')) }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
+                                                                </label>
+                                                                <label class="text-[11px] text-zinc-600">
+                                                                    Operator note
+                                                                    <input type="text" maxlength="500" name="notes" value="{{ old('notes', (string) ($entitlement['notes'] ?? '')) }}" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900" placeholder="Why is this changed?">
+                                                                </label>
+                                                            </div>
+
+                                                            <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-600">
+                                                                <div>
+                                                                    entitlement source {{ $entitlement['entitlement_source'] ?? 'n/a' }}
+                                                                    · price source {{ $entitlement['price_source'] ?? 'n/a' }}
+                                                                </div>
+                                                                <button type="submit" class="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100">Save entitlement</button>
+                                                            </div>
+                                                        </form>
+                                                    @endforeach
+                                                </div>
+                                            </section>
+                                        @endforeach
+                                    </div>
+                                </div>
+
                                 <div class="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
                                     Usage now:
                                     contacts {{ (int) data_get($row, 'usage.metrics.contact_count', 0) }}/{{ data_get($row, 'usage.included_limits.contact_count', 'n/a') }},

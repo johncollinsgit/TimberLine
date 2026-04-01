@@ -3,8 +3,10 @@
 namespace App\Services\Shopify;
 
 use App\Support\Shopify\ShopifyEmbeddedContextQuery;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Throwable;
 
 class ShopifyEmbeddedAppContext
 {
@@ -157,6 +159,78 @@ class ShopifyEmbeddedAppContext
     }
 
     /**
+     * Accept either strict embedded API auth or a server-issued page context token
+     * tied to the currently stored signed/session page context. This keeps HTML
+     * form posts working without trusting raw client-provided store identifiers.
+     *
+     * @return array{
+     *   ok:bool,
+     *   status:string,
+     *   shop_domain:?string,
+     *   host:?string,
+     *   signed_query:array<string,mixed>,
+     *   auth_source:string,
+     *   store?:array<string,mixed>
+     * }
+     */
+    public function resolveMutationContext(Request $request): array
+    {
+        $apiContext = $this->resolveAuthenticatedApiContext($request);
+        if (($apiContext['ok'] ?? false) === true) {
+            return $apiContext;
+        }
+
+        $pageContext = $this->resolvePageContext($request);
+        if (! ($pageContext['ok'] ?? false)) {
+            return $apiContext;
+        }
+
+        $contextToken = trim((string) $request->input('context_token', ''));
+        if ($contextToken === '') {
+            return [
+                'ok' => false,
+                'status' => 'missing_context_token',
+                'shop_domain' => $pageContext['shop_domain'] ?? null,
+                'host' => $pageContext['host'] ?? null,
+                'signed_query' => (array) ($pageContext['signed_query'] ?? []),
+                'auth_source' => 'none',
+            ];
+        }
+
+        $resolvedToken = $this->resolveContextToken($contextToken);
+        if ($resolvedToken === null) {
+            return [
+                'ok' => false,
+                'status' => 'invalid_context_token',
+                'shop_domain' => $pageContext['shop_domain'] ?? null,
+                'host' => $pageContext['host'] ?? null,
+                'signed_query' => (array) ($pageContext['signed_query'] ?? []),
+                'auth_source' => 'none',
+            ];
+        }
+
+        $pageStoreKey = strtolower(trim((string) ($pageContext['store']['key'] ?? '')));
+        $pageShopDomain = $this->normalizeShopDomain((string) ($pageContext['shop_domain'] ?? ''));
+        $tokenStoreKey = strtolower(trim((string) ($resolvedToken['store_key'] ?? '')));
+        $tokenShopDomain = $this->normalizeShopDomain((string) ($resolvedToken['shop_domain'] ?? ''));
+
+        if ($pageStoreKey === '' || $pageStoreKey !== $tokenStoreKey || $pageShopDomain === '' || $pageShopDomain !== $tokenShopDomain) {
+            return [
+                'ok' => false,
+                'status' => 'invalid_context_token',
+                'shop_domain' => $pageContext['shop_domain'] ?? null,
+                'host' => $pageContext['host'] ?? null,
+                'signed_query' => (array) ($pageContext['signed_query'] ?? []),
+                'auth_source' => 'none',
+            ];
+        }
+
+        return array_merge($pageContext, [
+            'auth_source' => 'page_context_token',
+        ]);
+    }
+
+    /**
      * @param  array{store:array<string,mixed>,shop_domain:?string,host:?string}  $context
      */
     public function issueContextToken(array $context): string
@@ -167,6 +241,41 @@ class ShopifyEmbeddedAppContext
             'host' => trim((string) ($context['host'] ?? '')),
             'issued_at' => now()->toIso8601String(),
         ], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function resolveContextToken(string $token): ?array
+    {
+        try {
+            $decoded = json_decode(Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        $storeKey = strtolower(trim((string) ($decoded['store_key'] ?? '')));
+        $shopDomain = $this->normalizeShopDomain((string) ($decoded['shop_domain'] ?? ''));
+        $issuedAt = trim((string) ($decoded['issued_at'] ?? ''));
+        if ($storeKey === '' || $shopDomain === '' || $issuedAt === '') {
+            return null;
+        }
+
+        try {
+            $issued = CarbonImmutable::parse($issuedAt);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($issued->lt(now()->subHours(12))) {
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**

@@ -394,8 +394,8 @@
                 <div>
                     <h2>Email Settings</h2>
                     <p>
-                        Configure email provider selection per tenant/store. SendGrid is fully supported for app-driven sends,
-                        Shopify Email is selectable with current architecture limits, and Custom Provider is scaffolded for future support.
+                        Configure tenant-branded email sending with a safe global SendGrid fallback. Tenants can keep using the
+                        app-wide sender identity immediately, or move to a verified single sender or authenticated domain when ready.
                     </p>
                 </div>
                 <div class="settings-badges" id="settings-status-badges"></div>
@@ -448,7 +448,7 @@
                     <div class="settings-field">
                         <label for="from-email">From Email</label>
                         <input id="from-email" name="from_email" type="email" maxlength="255" placeholder="hello@example.com">
-                        <small>Use a sender email aligned with your verified domain.</small>
+                        <small>Tenants can send from their own company email/domain when it is verified in SendGrid. They do not need inboxes on our domain.</small>
                         <div class="settings-field-error" data-error-for="from_email"></div>
                     </div>
                     <div class="settings-field">
@@ -474,8 +474,8 @@
         <article class="settings-card">
             <h2>Send Test Email</h2>
             <p>
-                Send a provider test email for this tenant. Shopify Email and Custom Provider selections return honest
-                unsupported/not-implemented responses so setup issues are visible early.
+                Run a health check or test send with the resolved tenant settings. If tenant branding is incomplete, the fallback
+                preview below shows exactly which sender identity and API key source will be used.
             </p>
             <div class="settings-inline-status" id="settings-test-alert" hidden></div>
             <div class="settings-grid">
@@ -619,11 +619,15 @@
                     from_name: "",
                     from_email: "",
                     reply_to_email: "",
-                    provider_status: "not_configured",
+                    provider_status: "unknown",
                     provider_config: {},
                     analytics_enabled: true,
                     last_tested_at: null,
                     last_error: null,
+                    provider_status_checked_at: null,
+                    provider_status_message: null,
+                    resolved_preview: {},
+                    global_defaults: {},
                 };
             }
 
@@ -668,12 +672,12 @@
                 if (normalizedProvider === "sendgrid") {
                     return {
                         ...existing,
-                        verified_sender_email: normalizeString(document.getElementById("provider-verified-email")?.value || "")
-                            || existing.verified_sender_email
+                        draft_api_key: normalizeString(document.getElementById("provider-api-key")?.value || "")
+                            || existing.draft_api_key
                             || null,
-                        verified_sender_name: normalizeString(document.getElementById("provider-verified-name")?.value || "")
-                            || existing.verified_sender_name
-                            || null,
+                        sender_mode: normalizeString(document.getElementById("provider-sender-mode")?.value || "")
+                            || existing.sender_mode
+                            || "global_fallback",
                         reply_to_email: normalizeString(document.getElementById("provider-reply-to-email")?.value || "")
                             || existing.reply_to_email
                             || null,
@@ -791,30 +795,32 @@
             }
 
             function statusLabel(status, settings) {
-                const normalized = String(status || "not_configured");
-                if (normalized === "configured" && settings?.last_tested_at) {
+                const normalized = String(status || "unknown");
+                if (normalized === "healthy" && settings?.last_tested_at) {
                     return "Test successful";
                 }
 
                 return ({
-                    not_configured: "Not configured",
-                    configured: "Configured",
-                    error: "Error",
-                    testing: "Testing",
+                    unknown: "Unknown",
+                    healthy: "Healthy",
+                    unhealthy: "Unhealthy",
+                    unverified: "Needs verification",
+                    testing: "Checking",
                 })[normalized] || "Not configured";
             }
 
             function statusTone(status, settings) {
-                const normalized = String(status || "not_configured");
-                if (normalized === "configured" && settings?.last_tested_at) {
+                const normalized = String(status || "unknown");
+                if (normalized === "healthy" && settings?.last_tested_at) {
                     return "configured";
                 }
 
                 return ({
-                    configured: "configured",
-                    error: "error",
+                    healthy: "configured",
+                    unhealthy: "error",
+                    unverified: "warn",
                     testing: "testing",
-                    not_configured: "warn",
+                    unknown: "warn",
                 })[normalized] || "warn";
             }
 
@@ -829,6 +835,12 @@
                     label: statusLabel(settings.provider_status, settings),
                     tone: statusTone(settings.provider_status, settings),
                 });
+                if (settings?.provider_config?.sender_mode) {
+                    badges.push({
+                        label: String(settings.provider_config.sender_mode).replaceAll("_", " "),
+                        tone: "neutral",
+                    });
+                }
                 badges.push({
                     label: settings.email_enabled ? "Email enabled" : "Email disabled",
                     tone: settings.email_enabled ? "configured" : "warn",
@@ -857,6 +869,42 @@
                 }).join("");
             }
 
+            function emailDomain(value) {
+                const normalized = normalizeString(value);
+                if (!normalized || !normalized.includes("@")) {
+                    return null;
+                }
+
+                return normalized.split("@").pop()?.toLowerCase() || null;
+            }
+
+            function senderModeCopy(senderMode) {
+                return ({
+                    global_fallback: "Use the app-wide SendGrid sender identity and global key when tenant-specific values are missing.",
+                    single_sender: "Verify a specific sender email in SendGrid, then run a successful test send before enabling live traffic.",
+                    domain_authenticated: "Authenticate the tenant domain in SendGrid with SPF/DKIM records, then confirm delivery with a test send.",
+                })[senderMode] || "Choose how this tenant should verify and send email.";
+            }
+
+            function senderModeWarning(settings, senderMode) {
+                const tenantDomain = emailDomain(settings?.from_email);
+                const globalDomain = emailDomain(settings?.global_defaults?.from_email);
+
+                if (senderMode === "global_fallback" && tenantDomain && globalDomain && tenantDomain !== globalDomain) {
+                    return `This tenant from address uses ${tenantDomain}, but the global fallback identity is ${globalDomain}. Confirm that SendGrid is allowed to send this sender before going live.`;
+                }
+
+                if (senderMode === "domain_authenticated" && tenantDomain && ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"].includes(tenantDomain)) {
+                    return "Domain-authenticated mode usually should not use a personal mailbox domain. Switch to a company domain that has SPF/DKIM records in SendGrid.";
+                }
+
+                if ((senderMode === "single_sender" || senderMode === "domain_authenticated") && !tenantDomain) {
+                    return "Add a from email before running verification checks for this sender mode.";
+                }
+
+                return null;
+            }
+
             function renderProviderFields() {
                 const provider = String(state.settings.email_provider || "sendgrid");
                 const config = state.settings.provider_config || {};
@@ -864,29 +912,35 @@
                 const hasApiKey = Boolean(config.has_api_key);
 
                 if (provider === "sendgrid") {
+                    const senderMode = String(config.sender_mode || "global_fallback");
+                    const resolvedPreview = state.settings?.resolved_preview || {};
+                    const warning = senderModeWarning(state.settings, senderMode);
+                    const apiKeyHelp = senderMode === "global_fallback"
+                        ? "Optional. Leave blank to keep using the app-wide SendGrid API key."
+                        : "Optional. Save a tenant key here to send through this tenant's own SendGrid account.";
+                    const keySourceLabel = String(resolvedPreview.api_key_source || "global") === "tenant" ? "Tenant key" : "Global key";
+
                     providerSettingsContent.innerHTML = `
                         <div class="settings-provider-help">
-                            SendGrid is fully supported for app-driven sends. Use a verified sender identity, and for best deliverability
-                            complete domain authentication (SPF/DKIM) in DNS. You do not need to move your website, only add the DNS records SendGrid provides.
+                            SendGrid is fully supported for app-driven sends. Tenants can send from their own company email/domain if verified in SendGrid.
+                            If nothing tenant-specific is configured, the app-wide sender identity remains the fallback.
                         </div>
                         <div class="settings-grid">
                             <div class="settings-field">
+                                <label for="provider-sender-mode">Sender Mode</label>
+                                <select id="provider-sender-mode" name="provider_config.sender_mode">
+                                    <option value="global_fallback" ${senderMode === "global_fallback" ? "selected" : ""}>Global fallback</option>
+                                    <option value="single_sender" ${senderMode === "single_sender" ? "selected" : ""}>Single sender</option>
+                                    <option value="domain_authenticated" ${senderMode === "domain_authenticated" ? "selected" : ""}>Domain authenticated</option>
+                                </select>
+                                <small>${escapeHtml(senderModeCopy(senderMode))}</small>
+                                <div class="settings-field-error" data-error-for="provider_config.sender_mode"></div>
+                            </div>
+                            <div class="settings-field" style="${senderMode === "global_fallback" ? "opacity: 0.72;" : ""}">
                                 <label for="provider-api-key">SendGrid API Key</label>
-                                <input id="provider-api-key" name="provider_config.api_key" type="password" maxlength="500" autocomplete="off" placeholder="SG.xxxxx">
-                                <small>${hasApiKey ? `Saved key: ${escapeHtml(apiKeyMasked || "********")}. Leave blank to keep current key.` : "Paste a SendGrid API key with Mail Send permission."}</small>
+                                <input id="provider-api-key" name="provider_config.api_key" type="password" maxlength="500" autocomplete="off" value="${escapeHtml(config.draft_api_key || "")}" placeholder="SG.xxxxx">
+                                <small>${hasApiKey ? `Saved key: ${escapeHtml(apiKeyMasked || "********")}. Leave blank to keep current key. ${escapeHtml(apiKeyHelp)}` : escapeHtml(apiKeyHelp)}</small>
                                 <div class="settings-field-error" data-error-for="provider_config.api_key"></div>
-                            </div>
-                            <div class="settings-field">
-                                <label for="provider-verified-email">Verified Sender Email</label>
-                                <input id="provider-verified-email" name="provider_config.verified_sender_email" type="email" maxlength="255" value="${escapeHtml(config.verified_sender_email || "")}" placeholder="verified@example.com">
-                                <small>This address must be verified in SendGrid.</small>
-                                <div class="settings-field-error" data-error-for="provider_config.verified_sender_email"></div>
-                            </div>
-                            <div class="settings-field">
-                                <label for="provider-verified-name">Verified Sender Name</label>
-                                <input id="provider-verified-name" name="provider_config.verified_sender_name" type="text" maxlength="120" value="${escapeHtml(config.verified_sender_name || "")}" placeholder="Brand Team">
-                                <small>Name tied to the verified sender profile.</small>
-                                <div class="settings-field-error" data-error-for="provider_config.verified_sender_name"></div>
                             </div>
                             <div class="settings-field">
                                 <label for="provider-reply-to-email">Provider Reply-To Override</label>
@@ -901,6 +955,13 @@
                                 <span>Enable click/open tracking for analytics and campaign health signals.</span>
                             </div>
                             <input id="provider-tracking-enabled" name="provider_config.tracking_enabled" type="checkbox" ${Boolean(config.tracking_enabled ?? true) ? "checked" : ""}>
+                        </div>
+                        ${warning ? `<div class="settings-inline-status" data-tone="warn" style="margin-top: 12px;">${escapeHtml(warning)}</div>` : ""}
+                        <div class="settings-provider-help" style="margin-top: 12px;">
+                            <strong>Resolved preview</strong><br>
+                            From: ${escapeHtml(resolvedPreview.from_name || state.settings.from_name || "Not set")} &lt;${escapeHtml(resolvedPreview.from_email || state.settings.from_email || "not set")}&gt;<br>
+                            Reply-To: ${escapeHtml(resolvedPreview.reply_to_email || state.settings.reply_to_email || "Not set")}<br>
+                            API key source: ${escapeHtml(keySourceLabel)}
                         </div>
                         <div class="settings-toggle" style="margin-top: 10px;">
                             <div class="settings-toggle-copy">
@@ -1014,8 +1075,7 @@
                     payload.provider_config = {
                         api_key: apiKeyValue,
                         clear_api_key: Boolean(document.getElementById("provider-clear-api-key")?.checked || state.pendingClearKey),
-                        verified_sender_email: normalizeString(document.getElementById("provider-verified-email")?.value || ""),
-                        verified_sender_name: normalizeString(document.getElementById("provider-verified-name")?.value || ""),
+                        sender_mode: normalizeString(document.getElementById("provider-sender-mode")?.value || "") || "global_fallback",
                         reply_to_email: normalizeString(document.getElementById("provider-reply-to-email")?.value || ""),
                         tracking_enabled: Boolean(document.getElementById("provider-tracking-enabled")?.checked),
                     };
@@ -1396,12 +1456,19 @@
 
             providerSettingsContent.addEventListener("change", (event) => {
                 const target = event.target;
-                if (!(target instanceof HTMLInputElement)) {
+                if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
                     return;
                 }
 
                 if (target.id === "provider-clear-api-key") {
                     state.pendingClearKey = Boolean(target.checked);
+                }
+
+                if (target.id === "provider-sender-mode") {
+                    state.settings.provider_config = {
+                        ...(providerDraftFromDom("sendgrid") || {}),
+                    };
+                    renderProviderFields();
                 }
             });
 

@@ -73,8 +73,9 @@
         @if($lockedModule || $comingSoonModule)
             <x-tenancy.module-upgrade-prompt
                 :module-state="$activeModuleState"
-                :cta-href="route('marketing.overview')"
-                cta-label="Request customer module access"
+                store-route="shopify.app.store"
+                plans-route="shopify.app.plans"
+                contact-route="platform.contact"
                 coming-soon-cta-label="Follow roadmap"
             />
         @endif

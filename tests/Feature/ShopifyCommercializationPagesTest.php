@@ -6,6 +6,8 @@ use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantCommercialOverride;
+use App\Models\TenantModuleAccessRequest;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 
 beforeEach(function () {
@@ -85,6 +87,175 @@ test('embedded plans page renders tenant-aware plan and addon state', function (
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'plans' && ! empty($item['active']));
         });
+});
+
+test('embedded app store page renders safe visible modules and hides internal-only catalog entries', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'App Store Tenant',
+        'slug' => 'app-store-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.store', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('App Store')
+        ->assertSeeText('SMS')
+        ->assertSeeText('Add module')
+        ->assertDontSeeText('Square')
+        ->assertDontSeeText('Future Niche Modules')
+        ->assertViewHas('pageSubnav', function (array $subnav): bool {
+            return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'store' && ! empty($item['active']));
+        });
+});
+
+test('embedded app store activation writes tenant module entitlements', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Activation Tenant',
+        'slug' => 'activation-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']) . '?' . http_build_query(retailEmbeddedSignedQuery()), [
+        'context_token' => retailEmbeddedContextToken(),
+    ])
+        ->assertRedirect();
+
+    expect(TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'sms')
+        ->value('enabled_status'))->toBe('enabled');
+});
+
+test('embedded app store request path records a pending access request lifecycle row', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Embedded Request Tenant',
+        'slug' => 'embedded-request-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->post(route('shopify.app.store.request', ['moduleKey' => 'diagnostics_advanced']) . '?' . http_build_query(retailEmbeddedSignedQuery()), [
+        'context_token' => retailEmbeddedContextToken(),
+    ])
+        ->assertRedirect();
+
+    expect(TenantModuleAccessRequest::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'diagnostics_advanced')
+        ->value('status'))->toBe('pending');
+});
+
+test('embedded app store suppresses shopify-only safe modules for direct-mode tenants', function () {
+    config()->set('module_catalog.modules.sms.channels', ['shopify']);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Direct Mode Store Tenant',
+        'slug' => 'direct-mode-store-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'direct_starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.store', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertDontSeeText('SMS');
+});
+
+test('embedded app store activation requires authenticated embedded api context', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Missing Api Auth Tenant',
+        'slug' => 'missing-api-auth-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->postJson(route('shopify.app.store.activate', ['moduleKey' => 'sms']), retailEmbeddedSignedQuery())
+        ->assertStatus(401)
+        ->assertJsonPath('status', 'missing_api_auth');
+});
+
+test('embedded app store activation rejects direct signed-query posts without a page context token', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Missing Context Token Tenant',
+        'slug' => 'missing-context-token-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']) . '?' . http_build_query(retailEmbeddedSignedQuery()))
+        ->assertStatus(401)
+        ->assertJsonPath('status', 'missing_context_token');
+});
+
+test('embedded app store blocks shopify only activation for direct mode tenants', function () {
+    config()->set('module_catalog.modules.sms.channels', ['shopify']);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Direct Embedded Activation Tenant',
+        'slug' => 'direct-embedded-activation-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'direct_starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    configureEmbeddedRetailStore($tenant->id);
+
+    $response = $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']) . '?' . http_build_query(retailEmbeddedSignedQuery()), [
+        'context_token' => retailEmbeddedContextToken(),
+    ]);
+
+    $response->assertRedirect();
+    expect(TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'sms')
+        ->exists())->toBeFalse();
 });
 
 test('assignment and label overrides propagate across start plans and integrations pages', function () {
@@ -335,6 +506,23 @@ test('dashboard now exposes overview start-here and plans subnav links', functio
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             $keys = collect($subnav)->pluck('key')->values()->all();
 
-            return $keys === ['overview', 'start', 'plans', 'integrations'];
+            return $keys === ['overview', 'start', 'plans', 'store', 'integrations'];
         });
+});
+
+test('public catalog feed only exposes safe public modules', function () {
+    $this->get(route('platform.catalog.feed'))
+        ->assertOk()
+        ->assertJsonStructure([
+            'generated_at',
+            'positioning' => ['headline', 'themes', 'supported_channel_types'],
+            'plans',
+            'modules' => [
+                '*' => ['key', 'display_name', 'description', 'status', 'billing_mode', 'channels', 'included_in_plans', 'market_state', 'cta_routing'],
+            ],
+        ])
+        ->assertJsonMissing(['key' => 'square'])
+        ->assertJsonMissing(['key' => 'future_niche_modules'])
+        ->assertJsonFragment(['key' => 'sms'])
+        ->assertJsonFragment(['key' => 'bulk_email_marketing']);
 });

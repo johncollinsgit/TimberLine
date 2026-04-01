@@ -19,7 +19,7 @@ class HomeRedirect
         }
 
         if ($role === 'marketing_manager') {
-            return route('marketing.overview', absolute: false);
+            return route('dashboard', absolute: false);
         }
 
         return route('dashboard', absolute: false);

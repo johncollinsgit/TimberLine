@@ -26,8 +26,10 @@ class SendGridEmailProvider implements EmailProvider
         $textBody = $this->nullableString($message['text'] ?? null);
         $htmlBody = $this->nullableString($message['html'] ?? null);
         $fromEmail = $this->nullableString($message['from_email'] ?? null)
+            ?? $this->nullableString($config['from_email'] ?? null)
             ?? $this->nullableString($config['verified_sender_email'] ?? null);
         $fromName = $this->nullableString($message['from_name'] ?? null)
+            ?? $this->nullableString($config['from_name'] ?? null)
             ?? $this->nullableString($config['verified_sender_name'] ?? null)
             ?? 'Timberline';
         $replyTo = $this->nullableString($message['reply_to_email'] ?? null)
@@ -46,7 +48,7 @@ class SendGridEmailProvider implements EmailProvider
         }
 
         if ($fromEmail === '') {
-            return $this->failure('unauthorized_sender', 'Verified sender email is required for SendGrid.', false, [
+            return $this->failure('missing_from_email', 'A from email is required for SendGrid sending.', false, [
                 'from_email_present' => false,
             ], $dryRun);
         }
@@ -78,7 +80,7 @@ class SendGridEmailProvider implements EmailProvider
         }
 
         if ($apiKey === '') {
-            return $this->failure('invalid_api_key', 'SendGrid API key is not configured.', false, [
+            return $this->failure('missing_api_key', 'SendGrid API key is not configured.', false, [
                 'api_key_present' => false,
             ], false);
         }
@@ -208,41 +210,57 @@ class SendGridEmailProvider implements EmailProvider
         $apiKey = trim((string) ($config['api_key'] ?? ''));
         $fromEmail = $this->nullableString($config['from_email'] ?? null)
             ?? $this->nullableString($config['verified_sender_email'] ?? null);
-        $fromName = $this->nullableString($config['from_name'] ?? null)
-            ?? $this->nullableString($config['verified_sender_name'] ?? null);
         $performLiveCheck = (bool) ($config['perform_live_check'] ?? true);
+        $senderMode = $this->normalizedSenderMode($config['sender_mode'] ?? null);
+        $providerStatus = $this->normalizedProviderStatus($config['provider_status'] ?? null, $senderMode);
 
         $issues = [];
         if ($apiKey === '') {
             $issues[] = 'SendGrid API key is missing.';
         }
         if ($fromEmail === null) {
-            $issues[] = 'Verified sender email is missing.';
-        }
-        if ($fromName === null) {
-            $issues[] = 'Verified sender name is missing.';
+            $issues[] = 'From email is missing.';
         }
 
         if ($issues !== []) {
             return [
                 'valid' => false,
-                'status' => 'not_configured',
+                'status' => $senderMode === 'global_fallback' ? 'unknown' : 'unverified',
                 'issues' => $issues,
                 'details' => [
                     'provider' => $this->key(),
                     'live_check' => false,
+                    'sender_mode' => $senderMode,
                 ],
             ];
         }
 
         if (! $performLiveCheck) {
+            if (
+                in_array($senderMode, ['single_sender', 'domain_authenticated'], true)
+                && $providerStatus !== 'healthy'
+            ) {
+                return [
+                    'valid' => false,
+                    'status' => 'unverified',
+                    'issues' => [$this->verificationGuidance($senderMode)],
+                    'details' => [
+                        'provider' => $this->key(),
+                        'live_check' => false,
+                        'sender_mode' => $senderMode,
+                        'requires_sender_verification' => true,
+                    ],
+                ];
+            }
+
             return [
                 'valid' => true,
-                'status' => 'configured',
+                'status' => 'healthy',
                 'issues' => [],
                 'details' => [
                     'provider' => $this->key(),
                     'live_check' => false,
+                    'sender_mode' => $senderMode,
                 ],
             ];
         }
@@ -252,12 +270,13 @@ class SendGridEmailProvider implements EmailProvider
         } catch (\Throwable $exception) {
             return [
                 'valid' => false,
-                'status' => 'error',
+                'status' => 'unhealthy',
                 'issues' => ['SendGrid health check failed: ' . $exception->getMessage()],
                 'details' => [
                     'provider' => $this->key(),
                     'live_check' => true,
                     'exception' => get_class($exception),
+                    'sender_mode' => $senderMode,
                 ],
             ];
         }
@@ -267,25 +286,45 @@ class SendGridEmailProvider implements EmailProvider
 
             return [
                 'valid' => false,
-                'status' => 'error',
+                'status' => 'unhealthy',
                 'issues' => [$errorMessage],
                 'details' => [
                     'provider' => $this->key(),
                     'live_check' => true,
                     'error_code' => $errorCode,
                     'http_status' => $response->status(),
+                    'sender_mode' => $senderMode,
+                ],
+            ];
+        }
+
+        if (
+            in_array($senderMode, ['single_sender', 'domain_authenticated'], true)
+            && $providerStatus !== 'healthy'
+        ) {
+            return [
+                'valid' => false,
+                'status' => 'unverified',
+                'issues' => [$this->verificationGuidance($senderMode)],
+                'details' => [
+                    'provider' => $this->key(),
+                    'live_check' => true,
+                    'http_status' => $response->status(),
+                    'sender_mode' => $senderMode,
+                    'requires_sender_verification' => true,
                 ],
             ];
         }
 
         return [
             'valid' => true,
-            'status' => 'configured',
+            'status' => 'healthy',
             'issues' => [],
             'details' => [
                 'provider' => $this->key(),
                 'live_check' => true,
                 'http_status' => $response->status(),
+                'sender_mode' => $senderMode,
             ],
         ];
     }
@@ -310,7 +349,7 @@ class SendGridEmailProvider implements EmailProvider
         }
 
         return [
-            'status' => 'configured',
+            'status' => 'healthy',
             'message' => 'SendGrid configuration is healthy.',
             'details' => [
                 ...((array) ($validation['details'] ?? [])),
@@ -452,6 +491,34 @@ class SendGridEmailProvider implements EmailProvider
         }
 
         return ['malformed_payload', $message, false];
+    }
+
+    protected function normalizedSenderMode(mixed $mode): string
+    {
+        $mode = strtolower(trim((string) $mode));
+
+        return in_array($mode, ['global_fallback', 'single_sender', 'domain_authenticated'], true)
+            ? $mode
+            : 'global_fallback';
+    }
+
+    protected function normalizedProviderStatus(mixed $status, string $senderMode): string
+    {
+        $status = strtolower(trim((string) $status));
+
+        return match ($status) {
+            'configured', 'healthy' => 'healthy',
+            'error', 'unhealthy' => 'unhealthy',
+            'unverified' => 'unverified',
+            default => $senderMode === 'global_fallback' ? 'unknown' : 'unverified',
+        };
+    }
+
+    protected function verificationGuidance(string $senderMode): string
+    {
+        return $senderMode === 'domain_authenticated'
+            ? 'Authenticate the tenant domain in SendGrid with SPF/DKIM, then run a test send to confirm delivery.'
+            : 'Verify the sender address in SendGrid, then run a test send to confirm delivery.';
     }
 
     /**

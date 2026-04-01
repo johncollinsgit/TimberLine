@@ -53,14 +53,51 @@ class TenantEmailSettingsService
      */
     public function resolvedForTenant(?int $tenantId): array
     {
-        if ($tenantId !== null && Schema::hasTable('tenant_email_settings')) {
-            $setting = TenantEmailSetting::query()->where('tenant_id', $tenantId)->first();
-            if ($setting) {
-                return $this->normalizedFromModel($setting);
-            }
+        $fallback = $this->fallbackFromConfig($tenantId);
+
+        return $this->resolvedRuntimeSettings($tenantId, $fallback);
+    }
+
+    /**
+     * @return array{
+     *   tenant_id:?int,
+     *   id:?int,
+     *   email_provider:string,
+     *   email_enabled:bool,
+     *   from_name:?string,
+     *   from_email:?string,
+     *   reply_to_email:?string,
+     *   provider_status:string,
+     *   provider_config:array<string,mixed>,
+     *   analytics_enabled:bool,
+     *   last_tested_at:?string,
+     *   last_error:?string,
+     *   source:string
+     * }
+     */
+    public function resolvedForRuntime(?int $tenantId): array
+    {
+        $fallback = $this->fallbackFromConfig($tenantId);
+
+        return $this->resolvedRuntimeSettings($tenantId, $fallback);
+    }
+
+    /**
+     * @param  array<string,mixed>  $fallback
+     * @return array<string,mixed>
+     */
+    protected function resolvedRuntimeSettings(?int $tenantId, array $fallback): array
+    {
+        if ($tenantId === null || ! Schema::hasTable('tenant_email_settings')) {
+            return $fallback;
         }
 
-        return $this->fallbackFromConfig($tenantId);
+        $setting = TenantEmailSetting::query()->where('tenant_id', $tenantId)->first();
+        if (! $setting) {
+            return $fallback;
+        }
+
+        return $this->normalizedFromModel($setting, $fallback);
     }
 
     /**
@@ -83,14 +120,11 @@ class TenantEmailSettingsService
      */
     public function forAdmin(?int $tenantId): array
     {
-        $resolved = $this->resolvedForTenant($tenantId);
+        $fallback = $this->fallbackFromConfig($tenantId);
+        $resolved = $this->withAdminContext($this->resolvedRuntimeSettings($tenantId, $fallback), $fallback);
 
         return [
             ...$resolved,
-            'provider_config' => $this->sanitizedProviderConfig(
-                (string) $resolved['email_provider'],
-                (array) $resolved['provider_config']
-            ),
             'available_providers' => $this->availableProviders(),
         ];
     }
@@ -106,6 +140,7 @@ class TenantEmailSettingsService
 
         $setting = TenantEmailSetting::query()->firstOrNew(['tenant_id' => $tenantId]);
         $provider = $this->normalizedProvider((string) ($payload['email_provider'] ?? $setting->email_provider ?? 'sendgrid'));
+        $senderMode = $this->normalizedSenderMode(data_get($payload, 'provider_config.sender_mode'));
 
         $existingConfig = is_array($setting->provider_config) ? $setting->provider_config : [];
         $incomingConfig = is_array($payload['provider_config'] ?? null) ? $payload['provider_config'] : [];
@@ -117,12 +152,24 @@ class TenantEmailSettingsService
             'from_email' => $this->nullableString($payload['from_email'] ?? $setting->from_email),
             'reply_to_email' => $this->nullableString($payload['reply_to_email'] ?? $setting->reply_to_email),
             'provider_status' => $this->normalizedProviderStatus(
-                (string) ($payload['provider_status'] ?? $setting->provider_status ?? 'not_configured')
+                (string) ($payload['provider_status'] ?? $setting->provider_status ?? 'unknown'),
+                $senderMode
+            ),
+            'provider_status_checked_at' => $payload['provider_status_checked_at']
+                ?? $payload['last_tested_at']
+                ?? $setting->provider_status_checked_at
+                ?? $setting->last_tested_at,
+            'provider_status_message' => $this->nullableString(
+                $payload['provider_status_message'] ?? $payload['last_error'] ?? $setting->provider_status_message ?? $setting->last_error
             ),
             'provider_config' => $this->normalizedProviderConfig($provider, $incomingConfig, $existingConfig),
             'analytics_enabled' => (bool) ($payload['analytics_enabled'] ?? $setting->analytics_enabled ?? true),
-            'last_error' => $this->nullableString($payload['last_error'] ?? $setting->last_error),
-            'last_tested_at' => $payload['last_tested_at'] ?? $setting->last_tested_at,
+            'last_error' => $this->nullableString(
+                $payload['last_error'] ?? $payload['provider_status_message'] ?? $setting->last_error
+            ),
+            'last_tested_at' => $payload['last_tested_at']
+                ?? $payload['provider_status_checked_at']
+                ?? $setting->last_tested_at,
         ])->save();
 
         return $setting->fresh();
@@ -142,14 +189,21 @@ class TenantEmailSettingsService
             ['tenant_id' => $tenantId],
             [
                 'email_provider' => 'sendgrid',
-                'provider_status' => 'not_configured',
-                'provider_config' => [],
+                'provider_status' => 'unknown',
+                'provider_config' => [
+                    'sender_mode' => 'global_fallback',
+                ],
             ]
         );
 
-        $setting->provider_status = $this->normalizedProviderStatus($providerStatus);
-        $setting->last_error = $this->nullableString($lastError);
+        $senderMode = $this->normalizedSenderMode(data_get($setting->provider_config, 'sender_mode'));
+        $message = $this->nullableString($lastError);
+
+        $setting->provider_status = $this->normalizedProviderStatus($providerStatus, $senderMode);
+        $setting->provider_status_message = $message;
+        $setting->last_error = $message;
         if ($markTested) {
+            $setting->provider_status_checked_at = now();
             $setting->last_tested_at = now();
         }
 
@@ -161,21 +215,49 @@ class TenantEmailSettingsService
     /**
      * @return array<string,mixed>
      */
-    protected function normalizedFromModel(TenantEmailSetting $setting): array
+    protected function normalizedFromModel(TenantEmailSetting $setting, array $fallback): array
     {
+        $provider = $this->normalizedProvider((string) $setting->email_provider);
+        $resolvedFromName = $this->nullableString($setting->from_name) ?? $this->nullableString($fallback['from_name'] ?? null);
+        $resolvedFromEmail = $this->nullableString($setting->from_email) ?? $this->nullableString($fallback['from_email'] ?? null);
+        $resolvedReplyToEmail = $this->nullableString($setting->reply_to_email) ?? $this->nullableString($fallback['reply_to_email'] ?? null);
+
+        $providerConfig = $this->mergedProviderConfig(
+            $provider,
+            is_array($setting->provider_config) ? $setting->provider_config : [],
+            is_array($fallback['provider_config'] ?? null) ? $fallback['provider_config'] : [],
+            [
+                'from_name' => $resolvedFromName,
+                'from_email' => $resolvedFromEmail,
+                'reply_to_email' => $resolvedReplyToEmail,
+            ],
+        );
+
+        $senderMode = $this->normalizedSenderMode($providerConfig['sender_mode'] ?? null);
+        $providerStatus = $this->resolvedProviderStatus(
+            (string) $setting->provider_status,
+            $senderMode,
+            (string) ($fallback['provider_status'] ?? 'unknown'),
+        );
+
+        $statusCheckedAt = $setting->provider_status_checked_at ?? $setting->last_tested_at;
+        $statusMessage = $this->nullableString($setting->provider_status_message ?? $setting->last_error);
+
         return [
             'tenant_id' => (int) $setting->tenant_id,
             'id' => (int) $setting->id,
-            'email_provider' => $this->normalizedProvider((string) $setting->email_provider),
+            'email_provider' => $provider,
             'email_enabled' => (bool) $setting->email_enabled,
-            'from_name' => $this->nullableString($setting->from_name),
-            'from_email' => $this->nullableString($setting->from_email),
-            'reply_to_email' => $this->nullableString($setting->reply_to_email),
-            'provider_status' => $this->normalizedProviderStatus((string) $setting->provider_status),
-            'provider_config' => is_array($setting->provider_config) ? $setting->provider_config : [],
+            'from_name' => $resolvedFromName,
+            'from_email' => $resolvedFromEmail,
+            'reply_to_email' => $resolvedReplyToEmail,
+            'provider_status' => $providerStatus,
+            'provider_status_checked_at' => optional($statusCheckedAt)->toIso8601String(),
+            'provider_status_message' => $statusMessage,
+            'provider_config' => $providerConfig,
             'analytics_enabled' => (bool) $setting->analytics_enabled,
-            'last_tested_at' => optional($setting->last_tested_at)->toIso8601String(),
-            'last_error' => $this->nullableString($setting->last_error),
+            'last_tested_at' => optional($statusCheckedAt)->toIso8601String(),
+            'last_error' => $statusMessage,
             'source' => 'tenant_email_settings',
         ];
     }
@@ -198,9 +280,13 @@ class TenantEmailSettingsService
             'from_name' => $fromName,
             'from_email' => $fromEmail,
             'reply_to_email' => $replyToEmail,
-            'provider_status' => ($apiKey !== '' && $fromEmail !== null && $fromName !== null) ? 'configured' : 'not_configured',
+            'provider_status' => ($apiKey !== '' && $fromEmail !== null) ? 'healthy' : 'unknown',
+            'provider_status_checked_at' => null,
+            'provider_status_message' => null,
             'provider_config' => [
                 'api_key' => $apiKey,
+                'api_key_source' => 'global',
+                'sender_mode' => 'global_fallback',
                 'verified_sender_email' => $fromEmail,
                 'verified_sender_name' => $fromName,
                 'reply_to_email' => $replyToEmail,
@@ -233,6 +319,7 @@ class TenantEmailSettingsService
 
             return [
                 'api_key' => $apiKey,
+                'sender_mode' => $this->normalizedSenderMode($incomingConfig['sender_mode'] ?? $existingConfig['sender_mode'] ?? null),
                 'verified_sender_email' => $this->nullableString(
                     $incomingConfig['verified_sender_email'] ?? $existingConfig['verified_sender_email'] ?? null
                 ),
@@ -288,6 +375,12 @@ class TenantEmailSettingsService
             return [
                 'has_api_key' => $apiKey !== null,
                 'api_key_masked' => $this->maskedSecret($apiKey),
+                'api_key_source' => in_array(
+                    (string) ($providerConfig['api_key_source'] ?? 'tenant'),
+                    ['tenant', 'global'],
+                    true
+                ) ? (string) $providerConfig['api_key_source'] : 'tenant',
+                'sender_mode' => $this->normalizedSenderMode($providerConfig['sender_mode'] ?? null),
                 'verified_sender_email' => $this->nullableString($providerConfig['verified_sender_email'] ?? null),
                 'verified_sender_name' => $this->nullableString($providerConfig['verified_sender_name'] ?? null),
                 'reply_to_email' => $this->nullableString($providerConfig['reply_to_email'] ?? null),
@@ -328,13 +421,136 @@ class TenantEmailSettingsService
             : 'sendgrid';
     }
 
-    protected function normalizedProviderStatus(string $status): string
+    protected function normalizedProviderStatus(string $status, ?string $senderMode = null): string
+    {
+        return $this->resolvedProviderStatus($status, $this->normalizedSenderMode($senderMode), 'unknown');
+    }
+
+    protected function normalizedSenderMode(mixed $mode): string
+    {
+        $mode = strtolower(trim((string) $mode));
+
+        return in_array($mode, ['global_fallback', 'single_sender', 'domain_authenticated'], true)
+            ? $mode
+            : 'global_fallback';
+    }
+
+    /**
+     * @param  array<string,mixed>  $tenantConfig
+     * @param  array<string,mixed>  $fallbackConfig
+     * @param  array<string,?string>  $resolvedFields
+     * @return array<string,mixed>
+     */
+    protected function mergedProviderConfig(
+        string $provider,
+        array $tenantConfig,
+        array $fallbackConfig,
+        array $resolvedFields = [],
+    ): array {
+        $provider = $this->normalizedProvider($provider);
+
+        if ($provider === 'sendgrid') {
+            $tenantApiKey = $this->nullableString($tenantConfig['api_key'] ?? null);
+            $fallbackApiKey = $this->nullableString($fallbackConfig['api_key'] ?? null);
+            $resolvedApiKey = $tenantApiKey ?? $fallbackApiKey;
+            $resolvedReplyTo = $this->nullableString($tenantConfig['reply_to_email'] ?? null)
+                ?? $this->nullableString($resolvedFields['reply_to_email'] ?? null)
+                ?? $this->nullableString($fallbackConfig['reply_to_email'] ?? null);
+
+            return [
+                'api_key' => $resolvedApiKey,
+                'api_key_source' => $tenantApiKey !== null ? 'tenant' : 'global',
+                'sender_mode' => $this->normalizedSenderMode($tenantConfig['sender_mode'] ?? null),
+                'verified_sender_email' => $this->nullableString($tenantConfig['verified_sender_email'] ?? null)
+                    ?? $this->nullableString($resolvedFields['from_email'] ?? null)
+                    ?? $this->nullableString($fallbackConfig['verified_sender_email'] ?? null),
+                'verified_sender_name' => $this->nullableString($tenantConfig['verified_sender_name'] ?? null)
+                    ?? $this->nullableString($resolvedFields['from_name'] ?? null)
+                    ?? $this->nullableString($fallbackConfig['verified_sender_name'] ?? null),
+                'reply_to_email' => $resolvedReplyTo,
+                'tracking_enabled' => array_key_exists('tracking_enabled', $tenantConfig)
+                    ? (bool) $tenantConfig['tracking_enabled']
+                    : (bool) ($fallbackConfig['tracking_enabled'] ?? true),
+                'template_defaults' => is_array($tenantConfig['template_defaults'] ?? null)
+                    ? $tenantConfig['template_defaults']
+                    : (is_array($fallbackConfig['template_defaults'] ?? null) ? $fallbackConfig['template_defaults'] : []),
+                'has_api_key' => $resolvedApiKey !== null,
+            ];
+        }
+
+        return $tenantConfig !== [] ? $tenantConfig : $fallbackConfig;
+    }
+
+    protected function resolvedProviderStatus(string $status, string $senderMode, string $fallbackStatus): string
     {
         $status = strtolower(trim($status));
+        $senderMode = $this->normalizedSenderMode($senderMode);
+        $fallbackStatus = strtolower(trim($fallbackStatus));
 
-        return in_array($status, ['not_configured', 'configured', 'error', 'testing'], true)
-            ? $status
-            : 'not_configured';
+        $normalized = match ($status) {
+            'configured', 'healthy' => 'healthy',
+            'error', 'unhealthy' => 'unhealthy',
+            'testing' => 'testing',
+            'not_configured', 'unknown', '' => 'unknown',
+            'unverified' => 'unverified',
+            default => 'unknown',
+        };
+
+        if ($normalized === 'unknown' && in_array($senderMode, ['single_sender', 'domain_authenticated'], true)) {
+            $normalized = 'unverified';
+        }
+
+        if (
+            $senderMode === 'global_fallback'
+            && in_array($normalized, ['unknown', 'unverified'], true)
+            && in_array($fallbackStatus, ['configured', 'healthy'], true)
+        ) {
+            return 'healthy';
+        }
+
+        if ($fallbackStatus === 'unhealthy' && $normalized === 'unknown') {
+            return 'unhealthy';
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<string,mixed>  $settings
+     * @param  array<string,mixed>  $fallback
+     * @return array<string,mixed>
+     */
+    protected function withAdminContext(array $settings, array $fallback): array
+    {
+        $provider = $this->normalizedProvider((string) ($settings['email_provider'] ?? 'sendgrid'));
+        $providerConfig = is_array($settings['provider_config'] ?? null) ? $settings['provider_config'] : [];
+        $sanitizedProviderConfig = $this->sanitizedProviderConfig($provider, $providerConfig);
+
+        return [
+            ...$settings,
+            'provider_config' => $sanitizedProviderConfig,
+            'provider_status_checked_at' => $settings['provider_status_checked_at'] ?? $settings['last_tested_at'] ?? null,
+            'provider_status_message' => $settings['provider_status_message'] ?? $settings['last_error'] ?? null,
+            'last_tested_at' => $settings['provider_status_checked_at'] ?? $settings['last_tested_at'] ?? null,
+            'last_error' => $settings['provider_status_message'] ?? $settings['last_error'] ?? null,
+            'resolved_preview' => [
+                'from_email' => $this->nullableString($settings['from_email'] ?? null),
+                'from_name' => $this->nullableString($settings['from_name'] ?? null),
+                'reply_to_email' => $this->nullableString($settings['reply_to_email'] ?? null),
+                'api_key_source' => (string) ($sanitizedProviderConfig['api_key_source'] ?? 'global'),
+                'sender_mode' => (string) ($sanitizedProviderConfig['sender_mode'] ?? 'global_fallback'),
+            ],
+            'global_defaults' => [
+                'from_name' => $this->nullableString($fallback['from_name'] ?? null),
+                'from_email' => $this->nullableString($fallback['from_email'] ?? null),
+                'reply_to_email' => $this->nullableString($fallback['reply_to_email'] ?? null),
+                'provider_status' => (string) ($fallback['provider_status'] ?? 'unknown'),
+                'provider_config' => $this->sanitizedProviderConfig(
+                    (string) ($fallback['email_provider'] ?? 'sendgrid'),
+                    is_array($fallback['provider_config'] ?? null) ? $fallback['provider_config'] : [],
+                ),
+            ],
+        ];
     }
 
     protected function maskedSecret(?string $value): ?string

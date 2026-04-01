@@ -1,12 +1,15 @@
 <?php
 
 use App\Models\LandlordCatalogEntry;
+use App\Models\LandlordOperatorAction;
 use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantCommercialOverride;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
+use App\Services\Tenancy\LandlordCommercialConfigService;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 
@@ -67,6 +70,10 @@ test('landlord commercial actions can assign plans and tenant overrides', functi
         ->assertRedirect();
 
     expect(TenantAccessProfile::query()->where('tenant_id', $tenant->id)->value('plan_key'))->toBe('growth');
+    expect(LandlordOperatorAction::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('action_type', 'tenant_plan_assignment_update')
+        ->exists())->toBeTrue();
 
     $this->actingAs($user)
         ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/override", [
@@ -93,6 +100,11 @@ test('landlord commercial actions can assign plans and tenant overrides', functi
         ->where('tenant_id', $tenant->id)
         ->where('module_key', 'rewards')
         ->value('enabled_override'))->toBeTrue();
+    expect(LandlordOperatorAction::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('action_type', 'tenant_module_state_update')
+        ->where('target_type', 'tenant_module_state')
+        ->exists())->toBeTrue();
 
     $this->actingAs($user)
         ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/addons/sms", [
@@ -104,6 +116,187 @@ test('landlord commercial actions can assign plans and tenant overrides', functi
         ->where('tenant_id', $tenant->id)
         ->where('addon_key', 'sms')
         ->value('enabled'))->toBeTrue();
+    expect(LandlordOperatorAction::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('action_type', 'tenant_addon_entitlement_update')
+        ->where('target_type', 'tenant_access_addon')
+        ->exists())->toBeTrue();
+});
+
+test('landlord commercial service records tenant module entitlement billing overrides in the audit log', function (): void {
+    $tenant = Tenant::query()->create([
+        'name' => 'Entitlement Tenant',
+        'slug' => 'entitlement-tenant',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $entitlement = app(LandlordCommercialConfigService::class)->setTenantModuleEntitlement(
+        tenantId: (int) $tenant->id,
+        moduleKey: 'sms',
+        input: [
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
+            'billing_status' => 'add_on_comped',
+            'price_override_cents' => 0,
+            'currency' => 'USD',
+            'entitlement_source' => 'override',
+            'price_source' => 'manual',
+            'notes' => 'Comped during rollout',
+            'metadata' => ['reason' => 'beta_support'],
+        ],
+        actorId: (int) $user->id
+    );
+
+    expect($entitlement)->toBeInstanceOf(TenantModuleEntitlement::class)
+        ->and((string) $entitlement->module_key)->toBe('sms')
+        ->and((string) $entitlement->billing_status)->toBe('add_on_comped');
+
+    $audit = LandlordOperatorAction::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('action_type', 'tenant_module_entitlement_update')
+        ->latest('id')
+        ->first();
+
+    expect($audit)->not->toBeNull()
+        ->and((string) $audit?->target_type)->toBe('tenant_module_entitlement')
+        ->and((int) ($audit?->actor_user_id ?? 0))->toBe((int) $user->id)
+        ->and((string) data_get($audit?->after_state, 'billing_status'))->toBe('add_on_comped')
+        ->and((int) data_get($audit?->result, 'billing_impact.price_override_cents'))->toBe(0)
+        ->and((bool) data_get($audit?->result, 'billing_impact.may_require_billing_sync'))->toBeTrue();
+});
+
+test('landlord commercial page updates tenant module entitlement rows from the current panel flow', function (): void {
+    $host = commercialLandlordHost();
+    $tenant = Tenant::query()->create([
+        'name' => 'CRUD Entitlement Tenant',
+        'slug' => 'crud-entitlement-tenant',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/entitlements/sms", [
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
+            'billing_status' => 'pending_billing',
+            'price_override_cents' => 2500,
+            'notes' => 'Temporary launch price',
+        ])
+        ->assertRedirect();
+
+    $entitlement = TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'sms')
+        ->first();
+
+    expect($entitlement)->not->toBeNull()
+        ->and((string) $entitlement?->availability_status)->toBe('available')
+        ->and((string) $entitlement?->enabled_status)->toBe('enabled')
+        ->and((string) $entitlement?->billing_status)->toBe('pending_billing')
+        ->and((int) ($entitlement?->price_override_cents ?? 0))->toBe(2500)
+        ->and((string) ($entitlement?->notes ?? ''))->toBe('Temporary launch price');
+
+    expect(LandlordOperatorAction::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('action_type', 'tenant_module_entitlement_update')
+        ->where('target_type', 'tenant_module_entitlement')
+        ->exists())->toBeTrue();
+});
+
+test('landlord commercial entitlement mutations are forbidden to non landlord operators', function (): void {
+    $host = commercialLandlordHost();
+    $tenant = Tenant::query()->create([
+        'name' => 'Forbidden Landlord Mutation Tenant',
+        'slug' => 'forbidden-landlord-mutation-tenant',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/entitlements/sms", [
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
+        ])
+        ->assertForbidden();
+
+    expect(TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'sms')
+        ->exists())->toBeFalse();
+});
+
+test('landlord commercial entitlement validation blocks invalid state transitions', function (): void {
+    $host = commercialLandlordHost();
+    $tenant = Tenant::query()->create([
+        'name' => 'Invalid Transition Tenant',
+        'slug' => 'invalid-transition-tenant',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->from("http://{$host}/landlord/commercial")
+        ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/entitlements/sms", [
+            'availability_status' => 'unavailable',
+            'enabled_status' => 'enabled',
+            'billing_status' => 'included_in_plan',
+        ])
+        ->assertSessionHasErrors('enabled_status');
+
+    expect(TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'sms')
+        ->exists())->toBeFalse();
+});
+
+test('landlord commercial override updates are audited with before and after payloads', function (): void {
+    $host = commercialLandlordHost();
+    $tenant = Tenant::query()->create([
+        'name' => 'Override Audit Tenant',
+        'slug' => 'override-audit-tenant',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    TenantCommercialOverride::query()->create([
+        'tenant_id' => $tenant->id,
+        'template_key' => 'generic',
+        'display_labels' => ['rewards' => 'Rewards'],
+    ]);
+
+    $this->actingAs($user)
+        ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/override", [
+            'template_key' => 'law',
+            'display_labels_json' => '{"rewards":"Case Credits"}',
+        ])
+        ->assertRedirect();
+
+    $audit = LandlordOperatorAction::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('action_type', 'tenant_commercial_override_update')
+        ->latest('id')
+        ->first();
+
+    expect($audit)->not->toBeNull()
+        ->and((string) data_get($audit?->before_state, 'template_key'))->toBe('generic')
+        ->and((string) data_get($audit?->after_state, 'template_key'))->toBe('law')
+        ->and((string) data_get($audit?->after_state, 'display_labels.rewards'))->toBe('Case Credits');
 });
 
 test('landlord commercial assignment supports all canonical template keys', function (): void {
@@ -184,6 +377,13 @@ test('landlord commercial validation blocks unknown assignment keys', function (
         ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/modules/not_real", [
             'enabled_override' => 'enabled',
             'setup_status' => 'configured',
+        ])
+        ->assertSessionHasErrors('module_key');
+
+    $this->actingAs($user)
+        ->post("http://{$host}/landlord/tenants/{$tenant->id}/commercial/entitlements/not_real", [
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
         ])
         ->assertSessionHasErrors('module_key');
 

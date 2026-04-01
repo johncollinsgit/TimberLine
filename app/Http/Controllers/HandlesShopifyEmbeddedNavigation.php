@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Tenancy\TenantDisplayLabelResolver;
+use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 
 trait HandlesShopifyEmbeddedNavigation
@@ -12,6 +13,9 @@ trait HandlesShopifyEmbeddedNavigation
         $displayLabels = $this->embeddedDisplayLabels($tenantId);
         $items = $this->embeddedAppNavigationItems($displayLabels);
         $moduleStates = $this->embeddedNavigationModuleStates($tenantId);
+        /** @var TenantExperienceProfileService $experienceProfiles */
+        $experienceProfiles = app(TenantExperienceProfileService::class);
+        $profile = $experienceProfiles->forTenant($tenantId, auth()->user());
         $items = $this->attachEmbeddedNavigationModuleStates($items, $moduleStates);
 
         return [
@@ -21,6 +25,9 @@ trait HandlesShopifyEmbeddedNavigation
             'moduleStates' => $moduleStates,
             'tenantId' => $tenantId,
             'displayLabels' => $displayLabels,
+            'workspaceLabel' => (string) data_get($profile, 'workspace.label', 'Commerce workspace'),
+            'commandSearchEndpoint' => route('shopify.app.api.search', [], false),
+            'commandSearchPlaceholder' => (string) data_get($profile, 'workspace.command_placeholder', 'Search customers, orders, modules, and actions'),
         ];
     }
 

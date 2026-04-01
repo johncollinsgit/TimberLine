@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Marketing\MarketingGroupsController;
 use App\Http\Controllers\Marketing\MarketingIdentityReviewController;
 use App\Http\Controllers\Marketing\MarketingMessagesController;
 use App\Http\Controllers\Marketing\MarketingMessageTemplatesController;
+use App\Http\Controllers\Marketing\MarketingModuleStoreController;
 use App\Http\Controllers\Marketing\MarketingOperationsController;
 use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
@@ -150,6 +152,8 @@ if ($landlordHost !== '') {
                 ->name('tenants.commercial.override');
             Route::post('/landlord/tenants/{tenant}/commercial/modules/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleState'])
                 ->name('tenants.commercial.modules.update');
+            Route::post('/landlord/tenants/{tenant}/commercial/entitlements/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleEntitlement'])
+                ->name('tenants.commercial.entitlements.update');
             Route::post('/landlord/tenants/{tenant}/commercial/addons/{addonKey}', [LandlordCommercialConfigurationController::class, 'updateTenantAddonState'])
                 ->name('tenants.commercial.addons.update');
             Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/customer-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeCustomer'])
@@ -176,13 +180,17 @@ Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersCont
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
+Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalogFeed'])->name('platform.catalog.feed');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
-    Route::middleware(['role:admin,manager'])->group(function () {
+    Route::middleware(['role:admin,manager,marketing_manager'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
+
+    Route::get('/search', [GlobalSearchController::class, 'index'])
+        ->name('app.search');
 
     /*
     |--------------------------------------------------------------------------
@@ -450,6 +458,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/reviews', [MarketingPagesController::class, 'show'])
                 ->defaults('section', 'reviews')
                 ->name('reviews');
+            Route::middleware(['tenant.access'])->group(function (): void {
+                Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
+                Route::post('/modules/{moduleKey}/activate', [MarketingModuleStoreController::class, 'activate'])->name('modules.activate');
+                Route::post('/modules/{moduleKey}/request', [MarketingModuleStoreController::class, 'requestAccess'])->name('modules.request');
+            });
             Route::get('/wishlist', [MarketingWishlistController::class, 'index'])->name('wishlist');
             Route::post('/wishlist/items/{item}/prepare-outreach', [MarketingWishlistController::class, 'prepareOutreach'])->name('wishlist.prepare-outreach');
             Route::post('/wishlist/queue/{queue}/send', [MarketingWishlistController::class, 'sendOutreach'])->name('wishlist.send-outreach');
@@ -788,6 +801,9 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
     Route::get('/app/plans', [ShopifyEmbeddedAppController::class, 'plansAndAddons'])->name('shopify.app.plans');
+    Route::get('/app/store', [ShopifyEmbeddedAppController::class, 'moduleStore'])->name('shopify.app.store');
+    Route::post('/app/store/modules/{moduleKey}/activate', [ShopifyEmbeddedAppController::class, 'activateModule'])->name('shopify.app.store.activate');
+    Route::post('/app/store/modules/{moduleKey}/request', [ShopifyEmbeddedAppController::class, 'requestModuleAccess'])->name('shopify.app.store.request');
     Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
@@ -798,6 +814,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
+        Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
         Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');
