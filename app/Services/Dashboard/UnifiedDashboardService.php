@@ -172,6 +172,15 @@ class UnifiedDashboardService
             ],
         ];
 
+        if ($canAccessMarketing) {
+            $actions[] = [
+                'label' => 'Send Message to All Opted-In Customers',
+                'description' => 'Quick send to all SMS/email subscribers.',
+                'href' => route('marketing.send.all-opted-in'),
+                'tone' => 'success',
+            ];
+        }
+
         if ($canAccessMarketing && $tenantId !== null && Schema::hasTable('marketing_import_runs')) {
             $latestImport = MarketingImportRun::query()
                 ->forTenantId($tenantId)
