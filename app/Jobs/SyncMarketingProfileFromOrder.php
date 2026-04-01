@@ -8,6 +8,7 @@ use App\Services\Marketing\CandleCashOrderEventService;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
+use App\Services\Marketing\MarketingStorefrontEventLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -64,7 +65,21 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
             'tenant_id' => $tenantId,
         ]);
 
-        $candleCashOrderEventService->handle($order, $tenantAwareIdentityContext);
+        if ($tenantId !== null && $tenantId > 0) {
+            $candleCashOrderEventService->handle($order, $tenantAwareIdentityContext);
+        } else {
+            app(MarketingStorefrontEventLogger::class)->log('candle_cash_order_event_skipped_missing_tenant', [
+                'status' => 'error',
+                'issue_type' => 'tenant_context_missing',
+                'source_surface' => 'ingestion',
+                'endpoint' => 'shopify_order_ingest',
+                'source_type' => 'order',
+                'source_id' => (string) $order->id,
+                'meta' => [
+                    'shopify_order_id' => $order->shopify_order_id ? (string) $order->shopify_order_id : null,
+                ],
+            ]);
+        }
 
         $rewardSummary = $this->missingTenantSummary();
         $birthdayRewardSummary = $this->missingTenantSummary();
