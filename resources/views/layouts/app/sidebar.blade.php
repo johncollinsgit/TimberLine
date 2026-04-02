@@ -65,9 +65,9 @@
             <span class="mf-sidebar-pin-icon" aria-hidden="true">‹</span>
           </button>
         </div>
-        <div class="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3">
-          <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/45">{{ $workspaceLabel }}</div>
-          <div class="mt-2 text-xs leading-5 text-white/65">{{ $workspaceSubtitle }}</div>
+        <div class="mt-4 rounded-2xl border border-zinc-200 bg-white px-3 py-3 shadow-sm">
+          <div class="text-[11px] uppercase tracking-[0.28em] text-zinc-500">{{ $workspaceLabel }}</div>
+          <div class="mt-2 text-xs leading-5 text-zinc-600">{{ $workspaceSubtitle }}</div>
         </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
@@ -204,11 +204,11 @@
         <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
           <button
             type="button"
-            class="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+            class="w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-left text-sm text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
             data-command-trigger
           >
             Search everything
-            <span class="mt-1 block text-xs text-white/45">Press Cmd/Ctrl + K</span>
+            <span class="mt-1 block text-xs text-zinc-500">Press Cmd/Ctrl + K</span>
           </button>
 
           @foreach($quickActions as $action)
@@ -216,18 +216,18 @@
             <a
               href="{{ $action['href'] ?? '#' }}"
               wire:navigate
-              class="block rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+              class="block rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-left text-sm text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
             >
               <span class="mf-nav-label">{{ $action['label'] ?? 'Action' }}</span>
               @if(! empty($action['description']))
-                <span class="mt-1 block text-xs text-white/45">{{ $action['description'] }}</span>
+                <span class="mt-1 block text-xs text-zinc-500">{{ $action['description'] }}</span>
               @endif
             </a>
           @endforeach
 
           @if($canAccessOps)
-            <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
-              <summary class="cursor-pointer list-none text-[10px] uppercase tracking-[0.3em] text-emerald-100/50 flex items-center justify-between">
+            <details class="mt-2 rounded-2xl border border-zinc-200 bg-white p-3 group shadow-sm mf-sidebar-panel">
+              <summary class="cursor-pointer list-none text-[10px] uppercase tracking-[0.3em] text-zinc-500 flex items-center justify-between">
                 <span>Import Tools</span>
                 <span class="text-[10px] transition-transform group-open:rotate-90">▸</span>
               </summary>
@@ -289,14 +289,14 @@
         <button
           type="button"
           data-command-trigger
-          class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+          class="inline-flex items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
         >
           <span>Search everything</span>
-          <span class="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-white/40">Cmd/Ctrl + K</span>
+          <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-zinc-500">Cmd/Ctrl + K</span>
         </button>
 
         @if(! empty($experienceProfile['tenant_name'] ?? null))
-          <div class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-white/55">
+          <div class="rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs text-zinc-600 shadow-sm">
             {{ $experienceProfile['tenant_name'] }}
             · {{ strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct')) }}
             · {{ strtoupper((string) ($experienceProfile['use_case_profile'] ?? 'ops')) }}
@@ -335,7 +335,7 @@
   </div>
 </div>
 
-<div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border border-white/10 bg-zinc-900/95 px-5 py-4 text-base font-semibold text-white shadow-2xl"></div>
+<div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border px-5 py-4 text-base font-semibold"></div>
 <x-app-command-palette
   :search-endpoint="route('app.search')"
   :placeholder="$commandPlaceholder"
@@ -352,16 +352,13 @@
         : detail;
       const message = payload && payload.message ? payload.message : 'Saved.';
       const style = payload && (payload.style || payload.type) ? (payload.style || payload.type) : 'success';
-      el.classList.remove('hidden', 'border-emerald-400/40', 'border-red-400/40', 'border-amber-300/40', 'bg-emerald-950/90', 'bg-red-950/90', 'bg-amber-950/90');
+      el.classList.remove('hidden', 'mf-toast-success', 'mf-toast-warning', 'mf-toast-error');
       if (style === 'error') {
-        el.classList.add('border-red-400/40');
-        el.classList.add('bg-red-950/90');
+        el.classList.add('mf-toast-error');
       } else if (style === 'warning') {
-        el.classList.add('border-amber-300/40');
-        el.classList.add('bg-amber-950/90');
+        el.classList.add('mf-toast-warning');
       } else {
-        el.classList.add('border-emerald-400/40');
-        el.classList.add('bg-emerald-950/90');
+        el.classList.add('mf-toast-success');
       }
       el.textContent = message;
       clearTimeout(timeoutId);

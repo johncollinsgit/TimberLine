@@ -108,6 +108,7 @@ class TenantCommercialExperienceService
      *   customer_summary:array{
      *     total_profiles:int,
      *     reachable_profiles:int,
+     *     customers_with_points:int,
      *     linked_external_profiles:int
      *   },
      *   import_summary:array<string,mixed>,
@@ -1119,6 +1120,7 @@ class TenantCommercialExperienceService
      * @return array{
      *   total_profiles:int,
      *   reachable_profiles:int,
+     *   customers_with_points:int,
      *   linked_external_profiles:int
      * }
      */
@@ -1128,6 +1130,7 @@ class TenantCommercialExperienceService
             return [
                 'total_profiles' => 0,
                 'reachable_profiles' => 0,
+                'customers_with_points' => 0,
                 'linked_external_profiles' => 0,
             ];
         }
@@ -1155,6 +1158,16 @@ class TenantCommercialExperienceService
                     });
             })
             ->count();
+        $customersWithPoints = 0;
+        if (Schema::hasTable('candle_cash_balances')) {
+            $customersWithPoints = (int) (clone $profilesQuery)
+                ->whereIn('id', function ($query): void {
+                    $query->from('candle_cash_balances')
+                        ->select('marketing_profile_id')
+                        ->where('balance', '>', 0);
+                })
+                ->count();
+        }
 
         $linkedExternalProfiles = 0;
         if (Schema::hasTable('customer_external_profiles')) {
@@ -1181,6 +1194,7 @@ class TenantCommercialExperienceService
         return [
             'total_profiles' => $totalProfiles,
             'reachable_profiles' => $reachableProfiles,
+            'customers_with_points' => $customersWithPoints,
             'linked_external_profiles' => $linkedExternalProfiles,
         ];
     }
@@ -1225,28 +1239,31 @@ class TenantCommercialExperienceService
         };
 
         $description = match ($state) {
-            'imported' => 'Customers are available now. You can manage customer profiles, loyalty context, and lifecycle actions.',
-            'in_progress' => 'A customer import is currently running. This workspace will update as soon as data is available.',
-            'attention' => 'The most recent import did not complete successfully. Review import options and retry safely.',
-            default => 'Import customers first to unlock customer management, segmentation, and lifecycle workflows.',
+            'imported' => 'Customers are synced and ready.',
+            'in_progress' => 'Customer sync is running.',
+            'attention' => 'The last sync did not complete.',
+            default => 'Customer sync has not started yet.',
         };
 
         $progressNote = match ($state) {
-            'imported' => number_format($profileCount).' customer profile'.($profileCount === 1 ? '' : 's').' available.',
+            'imported' => number_format($profileCount).' customer profile'.($profileCount === 1 ? '' : 's').' loaded.',
             'in_progress' => ! empty($latestRun['started_at_display'])
-                ? 'Latest import started '.$latestRun['started_at_display'].'.'
-                : 'Latest import is running.',
+                ? 'Started '.$latestRun['started_at_display'].'.'
+                : 'Sync in progress.',
             'attention' => ! empty($latestRun['status_label'])
-                ? 'Latest import status: '.$latestRun['status_label'].'.'
-                : 'Latest import requires review before retry.',
+                ? 'Latest status: '.$latestRun['status_label'].'.'
+                : 'Retry sync to continue.',
             default => $latestRun !== null
-                ? 'A prior import exists, but no customer profiles are available yet.'
-                : 'No customer import has run yet for this store context.',
+                ? 'No customer profiles are available yet.'
+                : 'No sync run found yet.',
         };
 
-        $cta = $state === 'imported'
-            ? ['label' => 'Open Customers', 'href' => route('shopify.app.customers.manage', [], false)]
-            : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
+        $cta = match ($state) {
+            'imported' => ['label' => 'Open customers', 'href' => route('shopify.app.customers.manage', [], false)],
+            'in_progress' => ['label' => 'View sync status', 'href' => route('shopify.app.integrations', [], false)],
+            'attention' => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
+            default => ['label' => 'Sync customers', 'href' => route('shopify.app.integrations', [], false)],
+        };
 
         return [
             'state' => $state,

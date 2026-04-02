@@ -25,9 +25,9 @@
     }
     $moduleChecklist = \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates);
     $title = filled($headline) ? (string) $headline : 'Forestry Backstage';
-    $workspaceLabel = trim((string) ($appNavigation['workspaceLabel'] ?? 'Commerce workspace'));
+    $workspaceLabel = trim((string) ($appNavigation['workspaceLabel'] ?? 'Commerce'));
     if ($workspaceLabel === '') {
-        $workspaceLabel = 'Commerce workspace';
+        $workspaceLabel = 'Commerce';
     }
     $commandSearchEndpoint = $appNavigation['commandSearchEndpoint'] ?? null;
     $commandSearchPlaceholder = trim((string) ($appNavigation['commandSearchPlaceholder'] ?? 'Search customers, orders, modules, and actions'));
@@ -54,16 +54,15 @@
 <body>
     @if($authorized && filled($shopifyApiKey) && filled($host))
         <s-app-nav>
-            <s-link href="{{ $embeddedNavUrl(route('home', [], false)) }}" rel="home">Home</s-link>
-            <s-link href="{{ $embeddedNavUrl(route('shopify.app', [], false)) }}">Dashboard</s-link>
-            <s-link href="{{ $embeddedNavUrl(route('shopify.app.rewards', [], false)) }}">{{ $rewardsLabel }}</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app', [], false)) }}" rel="home">Home</s-link>
             <s-link href="{{ $embeddedNavUrl(route('shopify.app.customers.manage', [], false)) }}">Customers</s-link>
+            <s-link href="{{ $embeddedNavUrl(route('shopify.app.rewards', [], false)) }}">{{ $rewardsLabel }}</s-link>
             <s-link href="{{ $embeddedNavUrl(route('shopify.app.settings', [], false)) }}">Settings</s-link>
         </s-app-nav>
     @endif
 
     <x-app-shell
-        :navigation="$appNavigation"
+        :navigation="[]"
         :page-title="$headline"
         :page-subtitle="$subheadline"
         :subnav="$pageSubnav"

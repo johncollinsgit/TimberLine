@@ -32,7 +32,7 @@
                 </a>
                 <a
                     :href="routes.tenant_index"
-                    class="inline-flex items-center rounded-full bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                    class="inline-flex items-center rounded-full border border-[#123c43] bg-[#123c43] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#1e5a63]"
                 >
                     Add tenant
                 </a>
@@ -337,7 +337,7 @@
                                         <button type="button" @click.stop="openRow(row)" class="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-100">
                                             Open
                                         </button>
-                                        <a :href="row.detail_url" @click.stop class="inline-flex items-center rounded-full bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800">
+                                        <a :href="row.detail_url" @click.stop class="inline-flex items-center rounded-full border border-[#123c43] bg-[#123c43] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#1e5a63]">
                                             Detail
                                         </a>
                                     </div>
@@ -364,7 +364,7 @@
     </div>
 
     <div x-show="showMoreFilters" x-cloak class="fixed inset-0 z-40" aria-modal="true" role="dialog">
-        <div class="absolute inset-0 bg-zinc-950/35" @click="showMoreFilters = false"></div>
+        <div class="absolute inset-0 bg-slate-900/20" @click="showMoreFilters = false"></div>
         <div class="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between gap-3">
                 <div>
@@ -413,7 +413,7 @@
     </div>
 
     <div x-show="showDrawer && selectedRow" x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog">
-        <div class="absolute inset-0 bg-zinc-950/45" @click="closeDrawer()"></div>
+        <div class="absolute inset-0 bg-slate-900/26" @click="closeDrawer()"></div>
         <div class="absolute right-0 top-0 h-full w-full max-w-lg overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-2xl">
             <div class="flex items-start justify-between gap-3">
                 <div>

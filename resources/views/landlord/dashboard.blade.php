@@ -17,7 +17,7 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <a
                             href="{{ route('landlord.commercial.index') }}"
-                            class="inline-flex items-center rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
                         >
                             Open Commercial Config
                         </a>

@@ -14,6 +14,7 @@
     @php
         $filters = array_merge([
             'search' => '',
+            'segment' => 'all',
             'candle_club' => 'all',
             'candle_cash' => 'all',
             'referral' => 'all',
@@ -27,64 +28,98 @@
 
         $sort = (string) ($filters['sort'] ?? 'last_activity');
         $direction = (string) ($filters['direction'] ?? 'desc');
-        $perPage = (int) ($filters['per_page'] ?? 25);
         $sortOptions = collect($gridSortOptions ?? [])->pluck('label', 'value')->all();
-        $currentCount = method_exists($customers, 'count') ? (int) $customers->count() : 0;
-        $currentPage = method_exists($customers, 'currentPage') ? (int) $customers->currentPage() : 1;
-        $summaryLabel = sprintf(
-            '%s customer%s loaded · Page %s',
-            number_format($currentCount),
-            $currentCount === 1 ? '' : 's',
-            number_format($currentPage)
-        );
-        $defaultGridFilters = [
-            'search' => '',
-            'candle_club' => 'all',
-            'candle_cash' => 'all',
-            'referral' => 'all',
-            'review' => 'all',
-            'birthday' => 'all',
-            'wholesale' => 'all',
-            'sort' => 'last_activity',
-            'direction' => 'desc',
-            'per_page' => 25,
-        ];
-        $filtersOpenByDefault = (int) ($activeFilterCount ?? 0) > 0;
-        $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', 'Rewards')));
-        if ($resolvedRewardsLabel === '') {
-            $resolvedRewardsLabel = 'Rewards';
-        }
-        $resolvedRewardsBalanceLabel = trim((string) ($rewardsBalanceLabel ?? data_get($displayLabels ?? [], 'rewards_balance_label', $resolvedRewardsLabel . ' balance')));
-        if ($resolvedRewardsBalanceLabel === '') {
-            $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
-        }
-        $sortOptions['candle_cash'] = \Illuminate\Support\Str::title($resolvedRewardsBalanceLabel);
-        $sortOptions['rewards_actions'] = \Illuminate\Support\Str::title($resolvedRewardsLabel . ' actions');
         $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
+        $customerSummary = is_array($journey['customer_summary'] ?? null)
+            ? $journey['customer_summary']
+            : ['total_profiles' => 0, 'reachable_profiles' => 0, 'customers_with_points' => 0];
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
-        $importCta = is_array($importSummary['cta'] ?? null) ? $importSummary['cta'] : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
+        $importCta = is_array($importSummary['cta'] ?? null)
+            ? $importSummary['cta']
+            : ['label' => 'Sync customers', 'href' => route('shopify.app.integrations', [], false)];
+        $filtersOpenByDefault = (int) ($activeFilterCount ?? 0) > 0;
+        $summaryTotal = (int) ($customerSummary['total_profiles'] ?? 0);
+        $summaryReachable = (int) ($customerSummary['reachable_profiles'] ?? 0);
+        $summaryWithPoints = (int) ($customerSummary['customers_with_points'] ?? 0);
+
+        $lastSync = 'Not started';
+        if (filled(data_get($importSummary, 'latest_run.finished_at_display'))) {
+            $lastSync = (string) data_get($importSummary, 'latest_run.finished_at_display');
+        } elseif (filled(data_get($importSummary, 'latest_run.started_at_display'))) {
+            $lastSync = (string) data_get($importSummary, 'latest_run.started_at_display');
+        } elseif (filled($importSummary['label'] ?? null)) {
+            $lastSync = (string) $importSummary['label'];
+        }
+
+        $primarySyncLabel = match ($importState) {
+            'in_progress' => 'View sync status',
+            'attention' => 'Retry sync',
+            'imported' => 'Import history',
+            default => 'Sync customers',
+        };
         $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
         $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+
+        $contextFields = collect($embeddedContext)
+            ->filter(fn ($value) => is_scalar($value) && trim((string) $value) !== '')
+            ->all();
+
+        $filterReset = array_merge($contextFields, [
+            'sort' => 'last_activity',
+            'direction' => 'desc',
+            'per_page' => 25,
+        ]);
     @endphp
 
     <style>
-        .customers-manage-root {
+        .customers-page {
             display: grid;
-            gap: 14px;
+            gap: 16px;
+        }
+
+        .customers-summary-strip {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .customers-summary-card {
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            border-radius: 12px;
+            background: #fff;
+            padding: 14px;
+        }
+
+        .customers-summary-label {
+            margin: 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.62);
+        }
+
+        .customers-summary-value {
+            margin: 8px 0 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .customers-summary-meta {
+            margin: 6px 0 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.52);
         }
 
         .customers-toolbar {
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            border-radius: 12px;
+            background: #fff;
+            padding: 14px;
             display: grid;
-            gap: 14px;
-            border-radius: 16px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.97);
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
-            padding: 16px;
+            gap: 12px;
         }
 
         .customers-toolbar-head {
@@ -95,221 +130,103 @@
             flex-wrap: wrap;
         }
 
-        .customers-toolbar-copy {
-            display: grid;
-            gap: 4px;
-        }
-
-        .customers-toolbar-copy h2 {
+        .customers-toolbar-title {
             margin: 0;
-            font-size: 0.98rem;
+            font-size: 0.95rem;
             font-weight: 650;
-            letter-spacing: -0.01em;
             color: #0f172a;
         }
 
-        .customers-toolbar-copy p {
-            margin: 0;
+        .customers-toolbar-copy {
+            margin: 4px 0 0;
             font-size: 13px;
-            line-height: 1.5;
-            color: rgba(15, 23, 42, 0.58);
+            color: rgba(15, 23, 42, 0.6);
         }
 
-        .customers-toolbar-summary {
+        .customers-toolbar-actions {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            min-height: 36px;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(248, 250, 252, 0.96);
-            padding: 0 12px;
-            font-size: 12px;
-            font-weight: 600;
-            color: rgba(15, 23, 42, 0.64);
-            white-space: nowrap;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
-        .customers-toolbar-row {
-            display: grid;
-            grid-template-columns: minmax(0, 1.75fr) auto minmax(150px, 180px) minmax(108px, 132px);
-            gap: 10px;
-            align-items: stretch;
-        }
-
-        .customers-search {
-            position: relative;
-            display: grid;
-            gap: 6px;
-        }
-
-        .customers-search label,
-        .customers-control label {
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: rgba(15, 23, 42, 0.48);
-        }
-
-        .customers-search input,
-        .customers-control select,
-        .customers-filter-field select {
-            width: 100%;
-            box-sizing: border-box;
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            background: #fff;
-            min-height: 44px;
-            padding: 10px 14px;
-            font-size: 13px;
-            color: rgba(15, 23, 42, 0.84);
-            transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-        }
-
-        .customers-search input:focus,
-        .customers-control select:focus,
-        .customers-filter-field select:focus {
-            outline: none;
-            border-color: rgba(15, 143, 97, 0.38);
-            box-shadow: 0 0 0 4px rgba(15, 143, 97, 0.1);
-        }
-
-        .customers-search input {
-            padding-left: 42px;
-        }
-
-        .customers-search-icon {
-            position: absolute;
-            left: 14px;
-            bottom: 13px;
-            width: 16px;
-            height: 16px;
-            color: rgba(15, 23, 42, 0.38);
-            pointer-events: none;
-        }
-
-        .customers-search-icon svg {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-
-        .customers-button,
+        .customers-action-button,
+        .customers-action-link,
         .customers-filter-toggle {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            background: rgba(255, 255, 255, 0.96);
-            color: rgba(15, 23, 42, 0.8);
-            text-decoration: none;
-            min-height: 44px;
-            padding: 0 14px;
+            min-height: 36px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
             font-size: 12px;
-            font-weight: 630;
+            font-weight: 600;
+            text-decoration: none;
             cursor: pointer;
-            transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
         }
 
-        .customers-button:hover,
-        .customers-filter-toggle:hover {
-            border-color: rgba(15, 23, 42, 0.22);
-            background: rgba(255, 255, 255, 1);
-            color: rgba(15, 23, 42, 0.96);
-            transform: translateY(-1px);
+        .customers-action-button--primary {
+            border-color: #0f766e;
+            background: rgba(15, 118, 110, 0.12);
+            color: #115e59;
         }
 
-        .customers-button:focus-visible,
-        .customers-filter-toggle:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(15, 143, 97, 0.1);
-        }
-
-        .customers-filter-toggle.is-active {
-            border-color: rgba(15, 143, 97, 0.24);
-            background: rgba(15, 143, 97, 0.1);
-            color: #0d6f4d;
-        }
-
-        .customers-filter-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 20px;
-            min-height: 20px;
-            border-radius: 999px;
-            background: rgba(15, 143, 97, 0.14);
-            color: #0d6f4d;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 0 6px;
-        }
-
-        .customers-filter-badge[hidden] {
-            display: none !important;
-        }
-
-        .customers-control {
+        .customers-query-row {
             display: grid;
-            gap: 6px;
+            grid-template-columns: minmax(0, 2fr) minmax(170px, 220px) minmax(150px, 190px) auto;
+            gap: 10px;
+            align-items: end;
         }
 
-        .customers-toolbar-meta {
-            display: flex;
+        .customers-field {
+            display: grid;
+            gap: 5px;
+        }
+
+        .customers-field label {
+            font-size: 11px;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .customers-field input,
+        .customers-field select {
+            width: 100%;
+            min-height: 38px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.16);
+            background: #fff;
+            padding: 8px 10px;
+            font-size: 13px;
+            color: #0f172a;
+            box-sizing: border-box;
+        }
+
+        .customers-controls {
+            display: inline-flex;
+            gap: 8px;
             align-items: center;
-            justify-content: space-between;
-            gap: 10px;
+            justify-content: flex-end;
             flex-wrap: wrap;
         }
 
-        .customers-page-note,
-        .customers-live-note {
+        .customers-sync-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
             font-size: 12px;
             color: rgba(15, 23, 42, 0.58);
         }
 
-        .customers-live-note {
-            min-height: 18px;
-        }
-
-        .customers-active-filters {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .customers-active-filters[hidden] {
-            display: none !important;
-        }
-
-        .customers-filter-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(248, 250, 252, 0.95);
-            padding: 6px 10px;
-            font-size: 11px;
-            font-weight: 620;
-            color: rgba(15, 23, 42, 0.68);
-        }
-
-        .customers-filter-chip__label {
-            color: rgba(15, 23, 42, 0.46);
-        }
-
         .customers-filter-panel {
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+            padding-top: 12px;
             display: grid;
-            gap: 12px;
-            border-radius: 14px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(248, 250, 252, 0.78);
-            padding: 14px;
+            gap: 10px;
         }
 
         .customers-filter-panel[hidden] {
@@ -318,1019 +235,351 @@
 
         .customers-filter-grid {
             display: grid;
+            gap: 10px;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
         }
 
-        .customers-filter-field {
-            display: grid;
-            gap: 6px;
-        }
-
-        .customers-filter-field label {
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: rgba(15, 23, 42, 0.48);
-        }
-
-        .customers-filter-actions {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .customers-filter-actions-copy {
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.56);
-        }
-
-        .customers-filter-actions-buttons {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .customers-button.is-primary {
-            border-color: rgba(15, 143, 97, 0.28);
-            background: rgba(15, 143, 97, 0.12);
-            color: #0d6f4d;
-        }
-
-        .customers-button.is-link {
-            background: transparent;
-        }
-
-        .customers-results-shell {
-            position: relative;
-            display: grid;
-            gap: 10px;
-            --customers-results-height: auto;
-        }
-
-        .customers-results-shell.is-loading [data-customers-results] {
-            min-height: var(--customers-results-height);
-        }
-
-        .customers-results-shell.is-loading .customers-table-wrap,
-        .customers-results-shell.is-loading .customers-pagination {
-            opacity: 0.68;
-        }
-
-        .customers-results-shell[aria-busy="true"]::before {
-            content: "";
-            position: absolute;
-            inset: 0 auto auto 0;
-            width: 100%;
-            height: 2px;
-            border-radius: 999px;
-            background: linear-gradient(90deg, rgba(15, 143, 97, 0), rgba(15, 143, 97, 0.72), rgba(15, 143, 97, 0));
-            animation: customers-progress 1.2s linear infinite;
-        }
-
-        .customers-results-shell[aria-busy="true"]::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            border-radius: 16px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
-        }
-
-        .customers-results-status {
-            min-height: 18px;
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.58);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .customers-results-status[data-tone="error"] {
-            color: #b42318;
-        }
-
-        .customers-results-status:empty {
-            min-height: 0;
-        }
-
-        .customers-results-status-action {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 28px;
-            padding: 0 10px;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            background: rgba(255, 255, 255, 0.98);
-            color: rgba(15, 23, 42, 0.78);
-            font-size: 11px;
-            font-weight: 620;
-            cursor: pointer;
-            transition: border-color 0.18s ease, background 0.18s ease;
-        }
-
-        .customers-results-status-action:hover {
-            border-color: rgba(15, 23, 42, 0.22);
+        .customers-index-table {
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            border-radius: 12px;
             background: #fff;
-        }
-
-        .customers-results-status-action:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(15, 143, 97, 0.1);
-        }
-
-        .customers-table-wrap {
-            border-radius: 16px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.98);
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.05);
             overflow: hidden;
-            position: relative;
-            transition: opacity 0.18s ease;
         }
 
-        .customers-results-shell.is-loading .customers-table-wrap::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(248, 250, 252, 0.64) 48%, rgba(255, 255, 255, 0) 100%);
-            transform: translateX(-100%);
-            animation: customers-sheen 1.2s ease-in-out infinite;
-        }
-
-        .customers-table-scroll {
+        .customers-index-scroll {
             overflow-x: auto;
         }
 
-        .customers-table-wrap table {
+        .customers-index-table table {
             width: 100%;
-            min-width: 1120px;
             border-collapse: collapse;
+            min-width: 940px;
         }
 
-        .customers-table-wrap th {
-            text-align: left;
-            padding: 11px 13px;
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.11em;
-            text-transform: uppercase;
-            color: rgba(15, 23, 42, 0.56);
+        .customers-index-table th,
+        .customers-index-table td {
+            padding: 10px 12px;
             border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(248, 250, 252, 0.96);
-            white-space: nowrap;
+            text-align: left;
+            font-size: 13px;
+            color: rgba(15, 23, 42, 0.86);
+            vertical-align: top;
         }
 
-        .customers-table-wrap td {
-            padding: 11px 13px;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.78);
-            white-space: nowrap;
-            vertical-align: middle;
-        }
-
-        .customers-row--clickable {
-            cursor: pointer;
-        }
-
-        .customers-row--clickable:hover {
-            background: rgba(15, 23, 42, 0.018);
-        }
-
-        .customers-row--clickable:focus-visible {
-            outline: 2px solid rgba(15, 143, 97, 0.4);
-            outline-offset: -2px;
-        }
-
-        .customers-name-cell {
-            min-width: 200px;
-        }
-
-        .customers-name-link {
-            color: rgba(15, 23, 42, 0.94);
-            text-decoration: none;
-            font-weight: 630;
-        }
-
-        .customers-name-link:hover {
-            text-decoration: underline;
-            text-decoration-thickness: 1px;
-            text-underline-offset: 2px;
-        }
-
-        .customers-subtext {
-            margin-top: 2px;
+        .customers-index-table th {
             font-size: 11px;
-            color: rgba(15, 23, 42, 0.5);
+            font-weight: 700;
+            color: rgba(15, 23, 42, 0.64);
+            background: rgba(248, 250, 252, 0.75);
+            white-space: nowrap;
         }
 
         .customers-sort-link {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
             color: inherit;
             text-decoration: none;
         }
 
         .customers-sort-indicator {
-            font-size: 10px;
-            color: rgba(15, 23, 42, 0.42);
+            font-size: 11px;
+            color: rgba(15, 23, 42, 0.4);
         }
 
-        .customers-status {
+        .customers-row-clickable {
+            cursor: pointer;
+        }
+
+        .customers-row-clickable:hover {
+            background: rgba(248, 250, 252, 0.75);
+        }
+
+        .customers-identity-name {
+            color: #0f172a;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .customers-identity-meta {
+            margin: 2px 0 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.55);
+        }
+
+        .customers-status-badge {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            min-width: 82px;
             border-radius: 999px;
-            padding: 4px 8px;
-            border: 1px solid rgba(15, 23, 42, 0.13);
+            padding: 3px 8px;
             font-size: 11px;
-            font-weight: 620;
-            line-height: 1.2;
+            font-weight: 600;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            background: rgba(248, 250, 252, 0.8);
         }
 
-        .customers-status.is-yes {
-            border-color: rgba(15, 143, 97, 0.28);
-            background: rgba(15, 143, 97, 0.1);
-            color: #0d6f4d;
+        .customers-status-badge--active {
+            border-color: rgba(15, 118, 110, 0.35);
+            color: #115e59;
+            background: rgba(15, 118, 110, 0.12);
         }
 
-        .customers-status.is-no {
-            border-color: rgba(148, 163, 184, 0.24);
-            background: rgba(148, 163, 184, 0.08);
-            color: #475569;
+        .customers-status-badge--needs_contact {
+            border-color: rgba(180, 83, 9, 0.35);
+            color: #92400e;
+            background: rgba(245, 158, 11, 0.16);
         }
 
-        .customers-button--row {
-            min-height: 34px;
-            padding: 0 12px;
+        .customers-row-action {
+            color: #0f766e;
+            font-weight: 600;
+            text-decoration: none;
+            white-space: nowrap;
         }
 
-        .customers-empty {
-            padding: 28px 20px;
+        .customers-index-empty {
+            text-align: center !important;
+            padding: 20px 12px !important;
+            color: rgba(15, 23, 42, 0.58) !important;
+        }
+
+        .customers-empty-state {
+            border: 1px dashed rgba(15, 23, 42, 0.2);
+            border-radius: 12px;
+            background: rgba(248, 250, 252, 0.7);
+            padding: 22px;
             text-align: center;
-            color: rgba(15, 23, 42, 0.58);
-            background: rgba(248, 250, 252, 0.84);
+            display: grid;
+            gap: 10px;
+        }
+
+        .customers-empty-state h2 {
+            margin: 0;
+            font-size: 1rem;
+            color: #0f172a;
+        }
+
+        .customers-empty-state p {
+            margin: 0;
             font-size: 13px;
-            line-height: 1.6;
+            color: rgba(15, 23, 42, 0.62);
         }
 
         .customers-pagination {
-            display: flex;
-            justify-content: flex-end;
-            padding-top: 2px;
+            margin-top: 12px;
         }
 
-        .customers-pagination nav {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .customers-pagination .page-link,
-        .customers-pagination a,
-        .customers-pagination span {
-            border-radius: 999px;
-        }
-
-        @keyframes customers-progress {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        @keyframes customers-sheen {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        @media (max-width: 1080px) {
-            .customers-toolbar-row {
-                grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 1fr));
-            }
-
-            .customers-filter-grid {
+        @media (max-width: 980px) {
+            .customers-summary-strip {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
-        }
 
-        @media (max-width: 860px) {
-            .customers-toolbar-row {
-                grid-template-columns: 1fr 1fr;
+            .customers-query-row {
+                grid-template-columns: 1fr;
             }
 
-            .customers-search {
-                grid-column: 1 / -1;
+            .customers-controls {
+                justify-content: flex-start;
             }
 
             .customers-filter-grid {
                 grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 640px) {
-            .customers-toolbar {
-                padding: 14px;
-            }
-
-            .customers-toolbar-row {
-                grid-template-columns: 1fr;
-            }
-
-            .customers-toolbar-summary {
-                white-space: normal;
-            }
-
-            .customers-filter-actions {
-                align-items: stretch;
-            }
-
-            .customers-filter-actions-buttons {
-                width: 100%;
-            }
-
-            .customers-filter-actions-buttons > * {
-                flex: 1 1 auto;
-            }
-
-            .customers-pagination {
-                justify-content: stretch;
             }
         }
     </style>
 
-    <section
-        class="customers-manage-root"
-        data-customers-manage
-        data-endpoint="{{ $customersManageEndpoint ?? request()->url() }}"
-        data-default-filters='@json($defaultGridFilters)'
-        data-filter-count="{{ (int) ($activeFilterCount ?? 0) }}"
-    >
-        @if($importState !== 'imported')
-            <article class="customers-surface">
-                <h2>Import customers to unlock this workspace</h2>
-                <p>{{ $importSummary['description'] ?? 'Import customers first so search, filters, and customer actions become meaningful.' }}</p>
-                <p class="customers-muted-note">{{ $importSummary['progress_note'] ?? 'No import has run yet for this store context.' }}</p>
-                <div class="plans-meta">
-                    <a class="start-here-action-link" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $importCta['label'] ?? 'Import Customers' }}</a>
-                    <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.start', [], false)) }}">Open setup checklist</a>
-                </div>
+    <section class="customers-page" data-customers-page>
+        <div class="customers-summary-strip" aria-label="Customer summary">
+            <article class="customers-summary-card">
+                <p class="customers-summary-label">Total customers</p>
+                <p class="customers-summary-value">{{ number_format($summaryTotal) }}</p>
             </article>
-        @endif
+            <article class="customers-summary-card">
+                <p class="customers-summary-label">Reachable customers</p>
+                <p class="customers-summary-value">{{ number_format($summaryReachable) }}</p>
+            </article>
+            <article class="customers-summary-card">
+                <p class="customers-summary-label">Customers with points</p>
+                <p class="customers-summary-value">{{ number_format($summaryWithPoints) }}</p>
+            </article>
+            <article class="customers-summary-card">
+                <p class="customers-summary-label">Last synced</p>
+                <p class="customers-summary-value">{{ $lastSync }}</p>
+                <p class="customers-summary-meta">{{ (string) ($importSummary['label'] ?? 'Not started') }}</p>
+            </article>
+        </div>
 
-        <form method="GET" action="{{ url()->current() }}" class="customers-toolbar" data-customers-form novalidate>
-            @foreach(\App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(request(), filled($host ?? null) ? (string) $host : null) as $key => $value)
-                <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
+        <form method="GET" action="{{ $customersManageEndpoint ?? request()->url() }}" class="customers-toolbar" data-customers-toolbar>
+            @foreach($contextFields as $key => $value)
+                <input type="hidden" name="{{ $key }}" value="{{ (string) $value }}" />
             @endforeach
 
             <div class="customers-toolbar-head">
-                <div class="customers-toolbar-copy">
-                    <h2>Customer workspace</h2>
-                    <p>Search customers first, then use filters to focus on the exact segment you want to act on.</p>
+                <div>
+                    <h2 class="customers-toolbar-title">All customers</h2>
+                    <p class="customers-toolbar-copy">Search records, apply filters, and open a profile.</p>
                 </div>
-                <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
+                <div class="customers-toolbar-actions">
+                    <a class="customers-action-button customers-action-button--primary" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $primarySyncLabel }}</a>
+                    <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.segments', [], false)) }}">Create segment</a>
+                </div>
             </div>
 
-            <div class="customers-toolbar-row">
-                <div class="customers-search">
-                    <label for="customers-search">Search customers</label>
-                    <span class="customers-search-icon" aria-hidden="true">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
-                            <circle cx="8.5" cy="8.5" r="5.5"></circle>
-                            <path d="M13 13l4 4"></path>
-                        </svg>
-                    </span>
+            <div class="customers-query-row">
+                <div class="customers-field">
+                    <label for="customers-search">Search</label>
                     <input
                         id="customers-search"
                         name="search"
-                        type="text"
+                        type="search"
                         value="{{ (string) $filters['search'] }}"
                         placeholder="Search name, email, phone, or customer ID"
-                        autocomplete="off"
-                        data-customers-search
                     />
                 </div>
 
-                <button
-                    type="button"
-                    class="customers-filter-toggle {{ $filtersOpenByDefault ? 'is-active' : '' }}"
-                    data-customers-toggle-filters
-                    aria-expanded="{{ $filtersOpenByDefault ? 'true' : 'false' }}"
-                    aria-controls="customers-filter-panel"
-                >
-                    Filters
-                    <span class="customers-filter-badge" data-customers-filter-badge @if((int) ($activeFilterCount ?? 0) === 0) hidden @endif>
-                        {{ (int) ($activeFilterCount ?? 0) }}
-                    </span>
-                </button>
+                <div class="customers-field">
+                    <label for="customers-segment">Segment</label>
+                    <select id="customers-segment" name="segment">
+                        <option value="all" @selected($filters['segment'] === 'all')>All customers</option>
+                        <option value="with_points" @selected($filters['segment'] === 'with_points')>With points</option>
+                        <option value="reachable" @selected($filters['segment'] === 'reachable')>Reachable</option>
+                        <option value="needs_contact" @selected($filters['segment'] === 'needs_contact')>Needs contact</option>
+                    </select>
+                </div>
 
-                <div class="customers-control">
+                <div class="customers-field">
                     <label for="customers-sort">Sort</label>
-                    <select id="customers-sort" name="sort" data-customers-live="change">
+                    <select id="customers-sort" name="sort">
                         @foreach($sortOptions as $value => $label)
                             <option value="{{ $value }}" @selected($sort === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div class="customers-control">
-                    <label for="customers-per-page">Rows</label>
-                    <select id="customers-per-page" name="per_page" data-customers-live="change">
-                        @foreach([25, 50, 100] as $count)
-                            <option value="{{ $count }}" @selected($perPage === $count)>{{ $count }}</option>
-                        @endforeach
+                <div class="customers-controls">
+                    <button
+                        type="button"
+                        class="customers-filter-toggle"
+                        data-customers-toggle-filters
+                        aria-expanded="{{ $filtersOpenByDefault ? 'true' : 'false' }}"
+                        aria-controls="customers-filter-panel"
+                    >
+                        Filters
+                    </button>
+                    <select name="direction" aria-label="Sort direction">
+                        <option value="desc" @selected($direction === 'desc')>Newest first</option>
+                        <option value="asc" @selected($direction === 'asc')>Oldest first</option>
                     </select>
+                    <button type="submit" class="customers-action-button customers-action-button--primary">Apply filters</button>
                 </div>
             </div>
 
-            <div class="customers-toolbar-meta">
-                <div class="customers-page-note" data-customers-page-note>
-                    {{ method_exists($customers, 'hasMorePages') && $customers->hasMorePages() ? 'Page ' . number_format($currentPage) . ' · More results available' : 'Page ' . number_format($currentPage) }}
+            <div class="customers-sync-meta">
+                <span>Sync status: {{ (string) ($importSummary['label'] ?? 'Not started') }}</span>
+                <div class="customers-controls">
+                    <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', array_merge($contextFields, ['refresh' => 1]), false)) }}">Refresh table</a>
+                    <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', $filterReset, false)) }}">Reset view</a>
                 </div>
-                <div class="customers-live-note" data-customers-live-note aria-live="polite"></div>
             </div>
-
-            <div class="customers-active-filters" data-customers-active-filters @if((int) ($activeFilterCount ?? 0) === 0) hidden @endif></div>
 
             <div class="customers-filter-panel" id="customers-filter-panel" data-customers-filter-panel @if(! $filtersOpenByDefault) hidden @endif>
                 <div class="customers-filter-grid">
-                    <div class="customers-filter-field">
-                        <label for="candle_club">Candle Club</label>
-                        <select id="candle_club" name="candle_club" data-customers-live="change">
-                            <option value="all" @selected($filters['candle_club'] === 'all')>All customers</option>
+                    <div class="customers-field">
+                        <label for="customers-candle-club">Candle Club</label>
+                        <select id="customers-candle-club" name="candle_club">
+                            <option value="all" @selected($filters['candle_club'] === 'all')>All</option>
                             <option value="yes" @selected($filters['candle_club'] === 'yes')>Active</option>
                             <option value="no" @selected($filters['candle_club'] === 'no')>Not active</option>
                         </select>
                     </div>
-
-                    <div class="customers-filter-field">
-                        <label for="candle_cash">{{ $resolvedRewardsBalanceLabel }}</label>
-                        <select id="candle_cash" name="candle_cash" data-customers-live="change">
-                            <option value="all" @selected($filters['candle_cash'] === 'all')>All balances</option>
-                            <option value="yes" @selected($filters['candle_cash'] === 'yes')>Has balance</option>
-                            <option value="no" @selected($filters['candle_cash'] === 'no')>No balance</option>
+                    <div class="customers-field">
+                        <label for="customers-balance">Points balance</label>
+                        <select id="customers-balance" name="candle_cash">
+                            <option value="all" @selected($filters['candle_cash'] === 'all')>All</option>
+                            <option value="yes" @selected($filters['candle_cash'] === 'yes')>Has points</option>
+                            <option value="no" @selected($filters['candle_cash'] === 'no')>No points</option>
                         </select>
                     </div>
-
-                    <div class="customers-filter-field">
-                        <label for="referral">Referral</label>
-                        <select id="referral" name="referral" data-customers-live="change">
-                            <option value="all" @selected($filters['referral'] === 'all')>All states</option>
+                    <div class="customers-field">
+                        <label for="customers-referral">Referral</label>
+                        <select id="customers-referral" name="referral">
+                            <option value="all" @selected($filters['referral'] === 'all')>All</option>
                             <option value="yes" @selected($filters['referral'] === 'yes')>Completed</option>
                             <option value="no" @selected($filters['referral'] === 'no')>Not completed</option>
                         </select>
                     </div>
-
-                    <div class="customers-filter-field">
-                        <label for="review">Review</label>
-                        <select id="review" name="review" data-customers-live="change">
-                            <option value="all" @selected($filters['review'] === 'all')>All states</option>
+                    <div class="customers-field">
+                        <label for="customers-review">Review</label>
+                        <select id="customers-review" name="review">
+                            <option value="all" @selected($filters['review'] === 'all')>All</option>
                             <option value="yes" @selected($filters['review'] === 'yes')>Completed</option>
                             <option value="no" @selected($filters['review'] === 'no')>Not completed</option>
                         </select>
                     </div>
-
-                    <div class="customers-filter-field">
-                        <label for="birthday">Birthday</label>
-                        <select id="birthday" name="birthday" data-customers-live="change">
-                            <option value="all" @selected($filters['birthday'] === 'all')>All states</option>
+                    <div class="customers-field">
+                        <label for="customers-birthday">Birthday</label>
+                        <select id="customers-birthday" name="birthday">
+                            <option value="all" @selected($filters['birthday'] === 'all')>All</option>
                             <option value="yes" @selected($filters['birthday'] === 'yes')>Completed</option>
                             <option value="no" @selected($filters['birthday'] === 'no')>Not completed</option>
                         </select>
                     </div>
-
-                    <div class="customers-filter-field">
-                        <label for="wholesale">Wholesale</label>
-                        <select id="wholesale" name="wholesale" data-customers-live="change">
-                            <option value="all" @selected($filters['wholesale'] === 'all')>All states</option>
+                    <div class="customers-field">
+                        <label for="customers-wholesale">Wholesale</label>
+                        <select id="customers-wholesale" name="wholesale">
+                            <option value="all" @selected($filters['wholesale'] === 'all')>All</option>
                             <option value="yes" @selected($filters['wholesale'] === 'yes')>Eligible</option>
                             <option value="no" @selected($filters['wholesale'] === 'no')>Not eligible</option>
                         </select>
                     </div>
                 </div>
-
-                <div class="customers-filter-actions">
-                    <div class="customers-filter-actions-copy">
-                        Filters update the current table immediately. Search remains the primary control.
-                    </div>
-                    <div class="customers-filter-actions-buttons">
-                        <button type="button" class="customers-button is-link" data-customers-clear-filters @if((int) ($activeFilterCount ?? 0) === 0) hidden @endif>
-                            Clear filters
-                        </button>
-                        <noscript>
-                            <button type="submit" class="customers-button is-primary">Apply search</button>
-                        </noscript>
-                    </div>
+                <div class="customers-controls">
+                    <button type="submit" class="customers-action-button customers-action-button--primary">Apply filters</button>
                 </div>
             </div>
         </form>
 
-        <section class="customers-results-shell" data-customers-results-shell aria-busy="false">
-            <div class="customers-results-status" data-customers-results-status aria-live="polite"></div>
-            <div data-customers-results>
-                @include('shopify.partials.customers-manage-results', [
-                    'customers' => $customers,
-                    'filters' => $filters,
-                    'sort' => $sort,
-                    'direction' => $direction,
-                ])
-            </div>
-        </section>
+        @if($summaryTotal === 0)
+            <section class="customers-empty-state" aria-label="No customers synced yet">
+                <h2>No customers synced yet</h2>
+                <p>Start Shopify sync to load customer profiles and loyalty status.</p>
+                <div class="customers-controls" style="justify-content: center;">
+                    <a class="customers-action-button customers-action-button--primary" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">Sync customers</a>
+                    <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.integrations', [], false)) }}">Review sync settings</a>
+                </div>
+            </section>
+        @else
+            @include('shopify.partials.customers-manage-results', [
+                'customers' => $customers,
+                'filters' => $filters,
+                'sort' => $sort,
+                'direction' => $direction,
+                'displayLabels' => $displayLabels ?? [],
+            ])
+        @endif
     </section>
 
     <script>
         (() => {
-            const root = document.querySelector('[data-customers-manage]');
-            if (!root || root.dataset.customersManageBound === 'true') {
+            const toolbar = document.querySelector('[data-customers-toolbar]');
+            if (!toolbar) {
                 return;
             }
 
-            root.dataset.customersManageBound = 'true';
+            const toggle = toolbar.querySelector('[data-customers-toggle-filters]');
+            const panel = toolbar.querySelector('[data-customers-filter-panel]');
 
-            const form = root.querySelector('[data-customers-form]');
-            const resultsShell = root.querySelector('[data-customers-results-shell]');
-            const resultsNode = root.querySelector('[data-customers-results]');
-            const summaryNode = root.querySelector('[data-customers-summary]');
-            const pageNoteNode = root.querySelector('[data-customers-page-note]');
-            const liveNoteNode = root.querySelector('[data-customers-live-note]');
-            const resultsStatusNode = root.querySelector('[data-customers-results-status]');
-            const filtersPanel = root.querySelector('[data-customers-filter-panel]');
-            const toggleFiltersButton = root.querySelector('[data-customers-toggle-filters]');
-            const filterBadge = root.querySelector('[data-customers-filter-badge]');
-            const clearFiltersButton = root.querySelector('[data-customers-clear-filters]');
-            const activeFiltersNode = root.querySelector('[data-customers-active-filters]');
-            const searchInput = root.querySelector('[data-customers-search]');
-
-            if (!form || !resultsShell || !resultsNode || !toggleFiltersButton) {
+            if (!toggle || !panel) {
                 return;
             }
 
-            const defaultFilters = JSON.parse(root.dataset.defaultFilters || '{}');
-            const endpoint = root.dataset.endpoint || window.location.pathname;
-            const detailCache = (() => {
-                try {
-                    return window.sessionStorage;
-                } catch (error) {
-                    return null;
-                }
-            })();
-            const detailCacheTtlMs = 60 * 1000;
-            let controller = null;
-            let debounceTimer = null;
-            let requestSequence = 0;
-            let lastRequestedUrl = null;
-            let authHeadersPromise = null;
-            const detailPrefetches = new Map();
-
-            function cleanValue(value) {
-                return value == null ? '' : String(value).trim();
-            }
-
-            function filterFieldKeys() {
-                return ['candle_club', 'candle_cash', 'referral', 'review', 'birthday', 'wholesale'];
-            }
-
-            function activeFilterEntries() {
-                return filterFieldKeys()
-                    .map((key) => {
-                        const field = form.elements.namedItem(key);
-                        const value = cleanValue(field && field.value);
-                        if (!value || value === cleanValue(defaultFilters[key] ?? 'all') || value === 'all') {
-                            return null;
-                        }
-
-                        const label = field && field.closest('.customers-filter-field')?.querySelector('label');
-                        const optionLabel = field && field.options[field.selectedIndex]
-                            ? cleanValue(field.options[field.selectedIndex].textContent)
-                            : value;
-
-                        return {
-                            key,
-                            label: cleanValue(label && label.textContent) || key.replace(/_/g, ' '),
-                            value: optionLabel,
-                        };
-                    })
-                    .filter(Boolean);
-            }
-
-            function setFiltersOpen(open) {
-                if (!filtersPanel) {
-                    return;
-                }
-
-                filtersPanel.hidden = !open;
-                toggleFiltersButton.classList.toggle('is-active', open);
-                toggleFiltersButton.setAttribute('aria-expanded', open ? 'true' : 'false');
-            }
-
-            function syncFilterSummary() {
-                const entries = activeFilterEntries();
-                const count = entries.length;
-
-                if (filterBadge) {
-                    filterBadge.hidden = count === 0;
-                    filterBadge.textContent = String(count);
-                }
-
-                if (clearFiltersButton) {
-                    clearFiltersButton.hidden = count === 0;
-                }
-
-                if (!activeFiltersNode) {
-                    return;
-                }
-
-                if (!count) {
-                    activeFiltersNode.hidden = true;
-                    activeFiltersNode.innerHTML = '';
-                    return;
-                }
-
-                activeFiltersNode.hidden = false;
-                activeFiltersNode.innerHTML = entries.map((entry) => (
-                    `<span class="customers-filter-chip"><span class="customers-filter-chip__label">${entry.label}</span>${entry.value}</span>`
-                )).join('');
-            }
-
-            function setStatusMessage(message = '', tone = 'neutral', retryable = false) {
-                if (!resultsStatusNode) {
-                    return;
-                }
-
-                resultsStatusNode.dataset.tone = tone;
-                if (!message) {
-                    resultsStatusNode.innerHTML = '';
-                    return;
-                }
-
-                const retryButton = retryable
-                    ? '<button type="button" class="customers-results-status-action" data-customers-retry>Retry</button>'
-                    : '';
-
-                resultsStatusNode.innerHTML = `<span>${message}</span>${retryButton}`;
-            }
-
-            function lockResultsHeight() {
-                if (!resultsNode) {
-                    return;
-                }
-
-                const currentHeight = resultsNode.offsetHeight;
-                if (currentHeight > 0) {
-                    resultsShell.style.setProperty('--customers-results-height', `${currentHeight}px`);
-                }
-            }
-
-            function releaseResultsHeight() {
-                if (!resultsNode) {
-                    return;
-                }
-
-                const nextHeight = resultsNode.offsetHeight;
-                if (nextHeight > 0) {
-                    resultsShell.style.setProperty('--customers-results-height', `${nextHeight}px`);
-                } else {
-                    resultsShell.style.removeProperty('--customers-results-height');
-                }
-
-                window.setTimeout(() => {
-                    if (resultsShell.getAttribute('aria-busy') === 'false') {
-                        resultsShell.style.removeProperty('--customers-results-height');
-                    }
-                }, 180);
-            }
-
-            function setPendingState(pending, message = '') {
-                resultsShell.classList.toggle('is-loading', pending);
-                resultsShell.setAttribute('aria-busy', pending ? 'true' : 'false');
-                if (liveNoteNode) {
-                    liveNoteNode.textContent = pending ? message : '';
-                }
-                if (pending) {
-                    setStatusMessage(message, 'neutral', false);
-                } else if (resultsStatusNode?.dataset.tone !== 'error') {
-                    setStatusMessage('');
-                }
-            }
-
-            async function resolveAuthHeaders() {
-                const shopifyBridge = window.shopify;
-                if (!shopifyBridge || typeof shopifyBridge.idToken !== 'function') {
-                    throw new Error('Shopify Admin verification is unavailable. Reload this page from Shopify Admin and try again.');
-                }
-
-                if (!authHeadersPromise) {
-                    authHeadersPromise = Promise.race([
-                        Promise.resolve(shopifyBridge.idToken()),
-                        new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
-                    ]).then((token) => {
-                        if (typeof token !== 'string' || token.trim() === '') {
-                            authHeadersPromise = null;
-                            throw new Error('Shopify Admin verification is unavailable. Reload this page from Shopify Admin and try again.');
-                        }
-
-                        return {
-                            'Accept': 'application/json',
-                            'Authorization': `Bearer ${token.trim()}`,
-                            'X-Requested-With': 'XMLHttpRequest',
-                        };
-                    }).catch((error) => {
-                        authHeadersPromise = null;
-                        throw error;
-                    });
-                }
-
-                return authHeadersPromise;
-            }
-
-            function detailCacheKey(profileId) {
-                return `forestry:customer-detail-deferred:${profileId}`;
-            }
-
-            function cacheDetailPrefetch(profileId, data) {
-                if (!detailCache || !profileId || !data || typeof data !== 'object') {
-                    return;
-                }
-
-                try {
-                    detailCache.setItem(detailCacheKey(profileId), JSON.stringify({
-                        stored_at: Date.now(),
-                        data,
-                    }));
-                } catch (error) {
-                    // Ignore session storage failures.
-                }
-            }
-
-            async function prefetchCustomerDetail(target) {
-                const endpointUrl = cleanValue(target?.dataset?.customerPrefetchEndpoint);
-                const profileId = cleanValue(target?.dataset?.customerPrefetchProfileId);
-                if (!endpointUrl || !profileId || detailPrefetches.has(profileId)) {
-                    return;
-                }
-
-                if (detailCache) {
-                    try {
-                        const cached = detailCache.getItem(detailCacheKey(profileId));
-                        if (cached) {
-                            const parsed = JSON.parse(cached);
-                            if (parsed && typeof parsed.stored_at === 'number' && (Date.now() - parsed.stored_at) < detailCacheTtlMs) {
-                                return;
-                            }
-                        }
-                    } catch (error) {
-                        // Ignore malformed cache entries and refetch.
-                    }
-                }
-
-                const promise = (async () => {
-                    try {
-                        const headers = await resolveAuthHeaders();
-                        const response = await fetch(new URL(endpointUrl, window.location.origin).toString(), {
-                            method: 'GET',
-                            credentials: 'same-origin',
-                            headers,
-                        });
-
-                        const payload = await response.json().catch(() => null);
-                        if (!response.ok || !payload?.ok || !payload?.data) {
-                            return;
-                        }
-
-                        cacheDetailPrefetch(profileId, payload.data);
-                    } catch (error) {
-                        // Prefetch is best-effort only.
-                    } finally {
-                        detailPrefetches.delete(profileId);
-                    }
-                })();
-
-                detailPrefetches.set(profileId, promise);
-                await promise;
-            }
-
-            function buildUrl(overrides = {}, resetPage = false) {
-                const url = new URL(endpoint, window.location.origin);
-                const formData = new FormData(form);
-
-                formData.forEach((value, key) => {
-                    const stringValue = cleanValue(value);
-                    if (key in defaultFilters && stringValue === cleanValue(defaultFilters[key])) {
-                        return;
-                    }
-
-                    if (stringValue !== '') {
-                        url.searchParams.set(key, stringValue);
-                    }
-                });
-
-                Object.entries(overrides).forEach(([key, value]) => {
-                    const stringValue = cleanValue(value);
-                    if (stringValue === '') {
-                        url.searchParams.delete(key);
-                        return;
-                    }
-
-                    url.searchParams.set(key, stringValue);
-                });
-
-                if (resetPage) {
-                    url.searchParams.delete('page');
-                }
-
-                return url;
-            }
-
-            function syncFormFromUrl(url) {
-                const params = url.searchParams;
-
-                Object.entries(defaultFilters).forEach(([key, defaultValue]) => {
-                    const field = form.elements.namedItem(key);
-                    if (!field) {
-                        return;
-                    }
-
-                    field.value = params.get(key) ?? String(defaultValue);
-                });
-
-                syncFilterSummary();
-            }
-
-            async function requestRows(url, pendingMessage = 'Updating customers…') {
-                requestSequence += 1;
-                const sequence = requestSequence;
-                lastRequestedUrl = url;
-
-                if (controller) {
-                    controller.abort();
-                }
-
-                controller = new AbortController();
-                lockResultsHeight();
-                setPendingState(true, pendingMessage);
-
-                try {
-                    const headers = await resolveAuthHeaders();
-                    const response = await fetch(url.toString(), {
-                        method: 'GET',
-                        credentials: 'same-origin',
-                        headers,
-                        signal: controller.signal,
-                    });
-
-                    const payload = await response.json().catch(() => ({
-                        ok: false,
-                        message: 'Unexpected response from Backstage.',
-                    }));
-
-                    if (!response.ok || !payload.ok || !payload.data) {
-                        throw new Error(payload.message || 'Customers could not be loaded.');
-                    }
-
-                    if (sequence !== requestSequence) {
-                        return;
-                    }
-
-                    resultsNode.innerHTML = payload.data.results_html || '';
-                    if (summaryNode) {
-                        summaryNode.textContent = payload.data.summary_label || '';
-                    }
-                    if (pageNoteNode) {
-                        pageNoteNode.textContent = payload.data.page_label || '';
-                    }
-
-                    window.history.replaceState({}, '', url.toString());
-                    syncFormFromUrl(url);
-                    setStatusMessage('');
-                    releaseResultsHeight();
-                } catch (error) {
-                    if (error && error.name === 'AbortError') {
-                        return;
-                    }
-
-                    if (liveNoteNode) {
-                        liveNoteNode.textContent = error instanceof Error ? error.message : 'Customers could not be loaded.';
-                    }
-                    setStatusMessage(
-                        error instanceof Error ? error.message : 'Customers could not be loaded.',
-                        'error',
-                        true
-                    );
-                    releaseResultsHeight();
-                } finally {
-                    if (sequence === requestSequence) {
-                        setPendingState(false);
-                    }
-                }
-            }
-
-            function queueRequest(delay = 240, pendingMessage = 'Updating customers…') {
-                window.clearTimeout(debounceTimer);
-                debounceTimer = window.setTimeout(() => {
-                    const url = buildUrl({}, true);
-                    void requestRows(url, pendingMessage);
-                }, delay);
-            }
-
-            syncFilterSummary();
-
-            toggleFiltersButton.addEventListener('click', () => {
-                const expanded = toggleFiltersButton.getAttribute('aria-expanded') === 'true';
-                setFiltersOpen(!expanded);
-            });
-
-            resultsStatusNode?.addEventListener('click', (event) => {
-                const retryButton = event.target.closest('[data-customers-retry]');
-                if (!retryButton || !lastRequestedUrl) {
-                    return;
-                }
-
-                void requestRows(lastRequestedUrl, 'Retrying customers…');
-            });
-
-            clearFiltersButton?.addEventListener('click', () => {
-                filterFieldKeys().forEach((key) => {
-                    const field = form.elements.namedItem(key);
-                    if (field) {
-                        field.value = cleanValue(defaultFilters[key] ?? 'all');
-                    }
-                });
-
-                syncFilterSummary();
-                const url = buildUrl({}, true);
-                void requestRows(url, 'Clearing filters…');
-            });
-
-            form.addEventListener('submit', (event) => {
-                event.preventDefault();
-                window.clearTimeout(debounceTimer);
-                const url = buildUrl({}, true);
-                void requestRows(url, 'Searching customers…');
-            });
-
-            searchInput?.addEventListener('input', () => {
-                queueRequest(260, 'Searching customers…');
-            });
-
-            searchInput?.addEventListener('keydown', (event) => {
-                if (event.key !== 'Enter') {
-                    return;
-                }
-
-                event.preventDefault();
-                window.clearTimeout(debounceTimer);
-                const url = buildUrl({}, true);
-                void requestRows(url, 'Searching customers…');
-            });
-
-            form.querySelectorAll('[data-customers-live="change"]').forEach((field) => {
-                field.addEventListener('change', () => {
-                    syncFilterSummary();
-                    const url = buildUrl({}, true);
-                    void requestRows(url, 'Updating customers…');
-                });
-            });
-
-            resultsNode.addEventListener('click', (event) => {
-                const link = event.target.closest('a[href]');
-                if (!link || !resultsNode.contains(link)) {
-                    return;
-                }
-
-                const href = cleanValue(link.getAttribute('href'));
-                if (!href || link.target === '_blank' || link.hasAttribute('download')) {
-                    return;
-                }
-
-                const url = new URL(href, window.location.origin);
-                const normalizedPath = url.pathname.replace(/\/+$/, '');
-                if (url.origin !== window.location.origin || normalizedPath !== '/shopify/app/customers/manage') {
-                    return;
-                }
-
-                event.preventDefault();
-                syncFormFromUrl(url);
-                void requestRows(url, 'Updating customers…');
-            });
-
-            ['mouseenter', 'focusin', 'touchstart'].forEach((eventName) => {
-                resultsNode.addEventListener(eventName, (event) => {
-                    const target = event.target.closest('[data-customer-prefetch-endpoint]');
-                    if (!target || !resultsNode.contains(target)) {
-                        return;
-                    }
-
-                    void prefetchCustomerDetail(target);
-                }, { passive: true });
+            const setExpanded = (expanded) => {
+                panel.hidden = !expanded;
+                toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            };
+
+            toggle.addEventListener('click', () => {
+                setExpanded(panel.hidden);
             });
         })();
     </script>

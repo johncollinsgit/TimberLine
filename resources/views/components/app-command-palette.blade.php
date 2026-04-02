@@ -10,30 +10,30 @@
     data-placeholder="{{ $placeholder }}"
     class="hidden"
 >
-    <div class="fixed inset-0 z-[70] hidden bg-slate-950/55 backdrop-blur-sm" data-command-overlay></div>
+    <div class="fixed inset-0 z-[70] hidden bg-slate-900/20 backdrop-blur-[2px]" data-command-overlay></div>
     <div class="fixed inset-x-0 top-[8vh] z-[71] hidden px-4" data-command-panel>
-        <div class="mx-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/95 shadow-[0_32px_80px_rgba(2,6,23,0.55)]">
-            <div class="border-b border-white/10 px-5 py-4">
+        <div class="mx-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-[0_26px_60px_-38px_rgba(15,23,42,0.35)]">
+            <div class="border-b border-zinc-200 px-5 py-4">
                 <div class="flex items-center justify-between gap-3">
                     <div>
-                        <div class="text-[11px] uppercase tracking-[0.28em] text-white/45">{{ $contextLabel }}</div>
-                        <div class="mt-2 text-sm text-white/65">Search customers, orders, modules, imports, and actions.</div>
+                        <div class="text-[11px] uppercase tracking-[0.28em] text-zinc-500">{{ $contextLabel }}</div>
+                        <div class="mt-2 text-sm text-zinc-600">Search customers, orders, modules, imports, and actions.</div>
                     </div>
-                    <button type="button" class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70" data-command-close>Esc</button>
+                    <button type="button" class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100" data-command-close>Esc</button>
                 </div>
                 <div class="mt-4">
                     <input
                         type="search"
                         autocomplete="off"
                         placeholder="{{ $placeholder }}"
-                        class="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-300/35 focus:outline-none"
+                        class="w-full rounded-2xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-700 focus:outline-none"
                         data-command-input
                     />
                 </div>
             </div>
 
             <div class="max-h-[60vh] overflow-y-auto px-4 py-4" data-command-results>
-                <div class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/55">
+                <div class="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 text-sm text-zinc-600">
                     Start typing to search the workspace.
                 </div>
             </div>
@@ -56,14 +56,14 @@
 
             function renderResultRow(row) {
                 const href = row.url || "#";
-                const badge = row.badge ? `<span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-white/45">${row.badge}</span>` : "";
-                const meta = row.subtitle ? `<div class="mt-1 text-xs text-white/50">${row.subtitle}</div>` : "";
+                const badge = row.badge ? `<span class="rounded-full border border-zinc-300 bg-zinc-50 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-500">${row.badge}</span>` : "";
+                const meta = row.subtitle ? `<div class="mt-1 text-xs text-zinc-500">${row.subtitle}</div>` : "";
 
                 return `
-                    <a href="${href}" class="block rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 transition hover:border-emerald-300/20 hover:bg-emerald-400/[0.08]" data-command-result data-command-action="${row.action || ""}">
+                    <a href="${href}" class="block rounded-2xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-emerald-700/35 hover:bg-emerald-50/55" data-command-result data-command-action="${row.action || ""}">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
-                                <div class="text-sm font-semibold text-white">${row.title || "Result"}</div>
+                                <div class="text-sm font-semibold text-zinc-900">${row.title || "Result"}</div>
                                 ${meta}
                             </div>
                             ${badge}
@@ -83,9 +83,9 @@
                         subtitle: "Try a customer name, order number, module, import type, or workflow."
                     };
                     container.innerHTML = `
-                        <div class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-6">
-                            <div class="text-sm font-semibold text-white">${empty.title}</div>
-                            <div class="mt-2 text-sm text-white/55">${empty.subtitle}</div>
+                        <div class="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6">
+                            <div class="text-sm font-semibold text-zinc-900">${empty.title}</div>
+                            <div class="mt-2 text-sm text-zinc-600">${empty.subtitle}</div>
                         </div>
                     `;
                     return;
@@ -93,7 +93,7 @@
 
                 container.innerHTML = groups.map(([group, rows]) => `
                     <section class="mb-4 last:mb-0">
-                        <div class="mb-2 px-2 text-[11px] uppercase tracking-[0.24em] text-white/40">${group}</div>
+                        <div class="mb-2 px-2 text-[11px] uppercase tracking-[0.24em] text-zinc-500">${group}</div>
                         <div class="space-y-2">
                             ${(rows || []).map(renderResultRow).join("")}
                         </div>

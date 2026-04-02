@@ -92,7 +92,8 @@ class ShopifyEmbeddedCustomersGridService
 
         $filters = [
             'search' => trim((string) $request->query('search', '')),
-            'sort' => in_array($sort, ['last_activity', 'name', 'email', 'candle_cash', 'rewards_actions'], true)
+            'segment' => $this->normalizeSegment((string) $request->query('segment', 'all')),
+            'sort' => in_array($sort, ['last_activity', 'name', 'email', 'orders', 'candle_cash', 'rewards_actions'], true)
                 ? $sort
                 : 'last_activity',
             'direction' => $direction,
@@ -106,6 +107,15 @@ class ShopifyEmbeddedCustomersGridService
         ];
 
         return $filters;
+    }
+
+    protected function normalizeSegment(string $value): string
+    {
+        $normalized = strtolower(trim($value));
+
+        return in_array($normalized, ['all', 'with_points', 'reachable', 'needs_contact'], true)
+            ? $normalized
+            : 'all';
     }
 
     protected function normalizeTriState(string $value): string
@@ -145,6 +155,9 @@ class ShopifyEmbeddedCustomersGridService
             ->leftJoinSub($this->externalProfileStatsSubquery($tenantId, $scopedProfileIds), 'external_stats', function ($join): void {
                 $join->on('external_stats.marketing_profile_id', '=', 'mp.id');
             })
+            ->leftJoinSub($this->ordersStatsSubquery($tenantId), 'order_stats', function ($join): void {
+                $join->on('order_stats.normalized_email', '=', 'mp.normalized_email');
+            })
             ->leftJoinSub($this->wholesaleLinkStatsSubquery($tenantId, $scopedProfileIds), 'wholesale_link_stats', function ($join): void {
                 $join->on('wholesale_link_stats.marketing_profile_id', '=', 'mp.id');
             })
@@ -177,7 +190,11 @@ class ShopifyEmbeddedCustomersGridService
                 'mp.first_name',
                 'mp.last_name',
                 'mp.email',
+                'mp.phone',
+                'mp.normalized_phone',
             ])
+            ->selectRaw('coalesce(order_stats.orders_count, 0) as orders_count')
+            ->selectRaw("coalesce(nullif(trim(external_stats.vip_tier), ''), case when ".$this->candleClubExpression()." = 1 then 'Candle Club' else 'Standard' end) as vip_tier")
             ->selectRaw('coalesce(balance_stats.candle_cash_balance, 0) as candle_cash_balance')
             ->selectRaw('coalesce(task_stats.rewards_actions_count, 0) as rewards_actions_count')
             ->selectRaw($this->candleClubExpression() . ' as candle_club_active')
@@ -279,6 +296,34 @@ class ShopifyEmbeddedCustomersGridService
      */
     protected function applyFilters(Builder $query, array $filters): void
     {
+        $segment = (string) ($filters['segment'] ?? 'all');
+        if ($segment === 'with_points') {
+            $query->whereRaw('coalesce(balance_stats.candle_cash_balance, 0) > 0');
+        }
+        if ($segment === 'reachable') {
+            $query->where(function ($reachable): void {
+                $reachable
+                    ->whereNotNull('mp.normalized_email')
+                    ->where('mp.normalized_email', '!=', '')
+                    ->orWhere(function ($phoneQuery): void {
+                        $phoneQuery
+                            ->whereNotNull('mp.normalized_phone')
+                            ->where('mp.normalized_phone', '!=', '');
+                    });
+            });
+        }
+        if ($segment === 'needs_contact') {
+            $query->where(function ($contact): void {
+                $contact
+                    ->whereNull('mp.normalized_email')
+                    ->orWhere('mp.normalized_email', '=', '');
+            })->where(function ($contact): void {
+                $contact
+                    ->whereNull('mp.normalized_phone')
+                    ->orWhere('mp.normalized_phone', '=', '');
+            });
+        }
+
         $this->applyTriStateFilter(
             $query,
             (string) $filters['candle_club'],
@@ -360,6 +405,13 @@ class ShopifyEmbeddedCustomersGridService
             return;
         }
 
+        if ($sort === 'orders') {
+            $query->orderByRaw('coalesce(order_stats.orders_count, 0) ' . $direction)
+                ->orderBy('mp.id', 'asc');
+
+            return;
+        }
+
         $query->orderByRaw('last_activity_at is null asc')
             ->orderBy('last_activity_at', $direction)
             ->orderBy('mp.id', 'asc');
@@ -376,14 +428,49 @@ class ShopifyEmbeddedCustomersGridService
             'id' => (int) $row->id,
             'name' => $displayName,
             'email' => (string) ($row->email ?: '—'),
+            'phone' => (string) ($row->phone ?: '—'),
+            'orders_count' => (int) ($row->orders_count ?? 0),
             'candle_cash_balance' => (int) ($row->candle_cash_balance ?? 0),
             'candle_club_active' => ((int) ($row->candle_club_active ?? 0)) === 1,
+            'vip_tier' => trim((string) ($row->vip_tier ?? '')) !== ''
+                ? trim((string) $row->vip_tier)
+                : (((int) ($row->candle_club_active ?? 0)) === 1 ? 'Candle Club' : 'Standard'),
             'referral_completed' => ((int) ($row->referral_completed ?? 0)) === 1,
             'review_completed' => ((int) ($row->review_completed ?? 0)) === 1,
             'birthday_completed' => ((int) ($row->birthday_completed ?? 0)) === 1,
             'wholesale_eligible' => ((int) ($row->wholesale_eligible ?? 0)) === 1,
             'rewards_actions_count' => (int) ($row->rewards_actions_count ?? 0),
             'last_activity_display' => $this->formatTimestamp($row->last_activity_at),
+            'status' => $this->customerStatus(
+                email: (string) ($row->email ?? ''),
+                normalizedPhone: (string) ($row->normalized_phone ?? ''),
+                pointsBalance: (int) ($row->candle_cash_balance ?? 0)
+            ),
+        ];
+    }
+
+    protected function customerStatus(string $email, string $normalizedPhone, int $pointsBalance): array
+    {
+        $hasEmail = trim($email) !== '';
+        $hasPhone = trim($normalizedPhone) !== '';
+
+        if (! $hasEmail && ! $hasPhone) {
+            return [
+                'key' => 'needs_contact',
+                'label' => 'Needs contact',
+            ];
+        }
+
+        if ($pointsBalance > 0) {
+            return [
+                'key' => 'active',
+                'label' => 'Active',
+            ];
+        }
+
+        return [
+            'key' => 'standard',
+            'label' => 'Standard',
         ];
     }
 
@@ -527,6 +614,7 @@ class ShopifyEmbeddedCustomersGridService
             ['value' => 'last_activity', 'label' => 'Last Activity'],
             ['value' => 'name', 'label' => 'Name'],
             ['value' => 'email', 'label' => 'Email'],
+            ['value' => 'orders', 'label' => 'Orders'],
             ['value' => 'candle_cash', 'label' => 'Rewards Balance'],
             ['value' => 'rewards_actions', 'label' => 'Rewards Actions'],
         ];
@@ -537,7 +625,7 @@ class ShopifyEmbeddedCustomersGridService
      */
     protected function activeFilterCount(array $filters): int
     {
-        return collect(['candle_club', 'candle_cash', 'referral', 'review', 'birthday', 'wholesale'])
+        return collect(['segment', 'candle_club', 'candle_cash', 'referral', 'review', 'birthday', 'wholesale'])
             ->filter(fn (string $key): bool => (($filters[$key] ?? 'all') !== 'all'))
             ->count();
     }
@@ -731,6 +819,7 @@ class ShopifyEmbeddedCustomersGridService
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as wholesale_eligible',
+                'null as vip_tier',
                 'null as last_external_activity_at',
             ]);
         }
@@ -738,6 +827,7 @@ class ShopifyEmbeddedCustomersGridService
         $query = DB::table('customer_external_profiles')
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when lower(coalesce(store_key, '')) = 'wholesale' or lower(coalesce(integration, '')) = 'wholesale' or lower(coalesce(provider, '')) = 'wholesale' then 1 else 0 end) as wholesale_eligible")
+            ->selectRaw("max(nullif(trim(vip_tier), '')) as vip_tier")
             ->selectRaw('max(coalesce(last_activity_at, synced_at, updated_at, created_at)) as last_external_activity_at')
             ->whereNotNull('marketing_profile_id')
             ->groupBy('marketing_profile_id');
@@ -839,6 +929,45 @@ class ShopifyEmbeddedCustomersGridService
             'marketing_profile_id',
             $profileIds
         );
+    }
+
+    protected function ordersStatsSubquery(?int $tenantId = null): Builder
+    {
+        if (! Schema::hasTable('orders')) {
+            return $this->emptySubquery([
+                "'' as normalized_email",
+                '0 as orders_count',
+            ]);
+        }
+
+        $emailColumns = array_values(array_filter([
+            Schema::hasColumn('orders', 'customer_email') ? 'orders.customer_email' : null,
+            Schema::hasColumn('orders', 'email') ? 'orders.email' : null,
+            Schema::hasColumn('orders', 'billing_email') ? 'orders.billing_email' : null,
+            Schema::hasColumn('orders', 'shipping_email') ? 'orders.shipping_email' : null,
+        ]));
+
+        if ($emailColumns === []) {
+            return $this->emptySubquery([
+                "'' as normalized_email",
+                '0 as orders_count',
+            ]);
+        }
+
+        $emailExpression = 'coalesce(' . implode(', ', array_map(
+            static fn (string $column): string => "nullif(trim($column), '')",
+            $emailColumns
+        )) . ')';
+        $normalizedEmailExpression = 'lower(' . $emailExpression . ')';
+
+        $query = DB::table('orders as orders')
+            ->selectRaw($normalizedEmailExpression . ' as normalized_email')
+            ->selectRaw('count(*) as orders_count')
+            ->whereRaw($emailExpression . ' is not null')
+            ->groupByRaw($normalizedEmailExpression);
+        $query = $this->applyTenantScope($query, 'orders', 'orders', $tenantId);
+
+        return $query;
     }
 
     /**

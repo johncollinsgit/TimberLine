@@ -11,254 +11,630 @@
     :page-actions="$pageActions"
 >
     @php
-        $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
-        $moduleCardOrder = [
-            'dashboard',
-            'customers',
-            'rewards',
-            'birthdays',
-            'activity',
-            'questions',
-            'referrals',
-            'vip',
-            'notifications',
-            'settings',
-        ];
-
+        $bootstrap = is_array($dashboardBootstrap ?? null) ? $dashboardBootstrap : [];
+        $dashboardData = is_array($bootstrap['initialData'] ?? null) ? $bootstrap['initialData'] : [];
         $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
-        $plan = is_array($journey['plan'] ?? null) ? $journey['plan'] : ['label' => 'Starter'];
-        $customerSummary = is_array($journey['customer_summary'] ?? null) ? $journey['customer_summary'] : ['total_profiles' => 0, 'reachable_profiles' => 0, 'linked_external_profiles' => 0];
+
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
-        $activeNow = is_array($journey['active_now'] ?? null) ? $journey['active_now'] : [];
-        $availableNext = is_array($journey['available_next'] ?? null) ? $journey['available_next'] : [];
-        $purchasable = is_array($journey['purchasable'] ?? null) ? $journey['purchasable'] : [];
-        $recommendedActions = is_array($journey['recommended_actions'] ?? null) ? $journey['recommended_actions'] : [];
-        $latestRun = is_array($importSummary['latest_run'] ?? null) ? $importSummary['latest_run'] : null;
-        $checklist = is_array($journey['checklist'] ?? null) ? $journey['checklist'] : [];
-        $checklistCounts = is_array($checklist['counts'] ?? null) ? $checklist['counts'] : ['active' => 0, 'setup' => 0, 'locked' => 0, 'coming_soon' => 0];
+        $customerSummary = is_array($journey['customer_summary'] ?? null)
+            ? $journey['customer_summary']
+            : ['total_profiles' => 0, 'reachable_profiles' => 0, 'customers_with_points' => 0];
+        $moduleStates = (array) ($journey['module_states'] ?? []);
+        $rewardsState = is_array($moduleStates['rewards'] ?? null) ? $moduleStates['rewards'] : [];
+        $rewardsSetupStatus = strtolower(trim((string) ($rewardsState['setup_status'] ?? 'not_started')));
 
-        $nextStepTitle = 'Import your customers';
-        $nextStepDescription = 'Import customer data first so customer management, segmentation, and lifecycle actions become useful immediately.';
-        $nextStepCta = ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
-        $nextStepSecondary = ['label' => 'Open Start Here', 'href' => route('shopify.app.start', [], false)];
+        $emailReadiness = (array) data_get($dashboardData, 'candleCashEngagement.reminderEligibility.emailReadiness', []);
+        $emailReady = (bool) ($emailReadiness['canSendLive'] ?? false);
+        $emailMissing = (array) ($emailReadiness['missingReasons'] ?? []);
 
-        if ($importState === 'in_progress') {
-            $nextStepTitle = 'Monitor your import';
-            $nextStepDescription = 'Your customer import is running. As soon as it completes, move into customer management and activation workflows.';
-            $nextStepCta = ['label' => 'View Import Status', 'href' => route('shopify.app.integrations', [], false)];
-            $nextStepSecondary = ['label' => 'Review Setup Checklist', 'href' => route('shopify.app.start', [], false)];
-        } elseif ($importState === 'attention') {
-            $nextStepTitle = 'Fix import and retry';
-            $nextStepDescription = 'The latest import needs attention. Resolve it first so your customer workspace is reliable.';
-            $nextStepCta = ['label' => 'Open Import Options', 'href' => route('shopify.app.integrations', [], false)];
-            $nextStepSecondary = ['label' => 'Open Start Here', 'href' => route('shopify.app.start', [], false)];
-        } elseif ($importState === 'imported' && $availableNext !== []) {
-            $nextStepTitle = 'Complete setup for included modules';
-            $nextStepDescription = 'Customers are imported. Finish setup for modules that are already included in your plan to unlock more value.';
-            $nextStepCta = ['label' => 'Review Setup Checklist', 'href' => route('shopify.app.start', [], false)];
-            $nextStepSecondary = ['label' => 'Open Customers', 'href' => route('shopify.app.customers.manage', [], false)];
-        } elseif ($importState === 'imported') {
-            $nextStepTitle = 'Activate customer workflows';
-            $nextStepDescription = 'Your customer data is ready. Start using customer views, lifecycle actions, and campaign-ready segments.';
-            $nextStepCta = ['label' => 'Open Customers', 'href' => route('shopify.app.customers.manage', [], false)];
-            $nextStepSecondary = ['label' => 'Review Plans & Add-ons', 'href' => route('shopify.app.plans', [], false)];
+        $isSetupMode = $importState !== 'imported' || $rewardsSetupStatus !== 'live';
+        $showChartControls = ! $isSetupMode;
+
+        $latestSyncAt = null;
+        $latestSyncAtRaw = (string) (data_get($importSummary, 'latest_run.finished_at')
+            ?: data_get($importSummary, 'latest_run.started_at')
+            ?: '');
+        if ($latestSyncAtRaw !== '') {
+            try {
+                $latestSyncAt = \Carbon\CarbonImmutable::parse($latestSyncAtRaw);
+            } catch (\Throwable) {
+                $latestSyncAt = null;
+            }
         }
+        $syncIsStale = $importState === 'imported'
+            && $latestSyncAt !== null
+            && $latestSyncAt->lt(now()->subDays(3));
+
+        $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', 'Rewards')));
+        if ($resolvedRewardsLabel === '') {
+            $resolvedRewardsLabel = 'Rewards';
+        }
+
+        $warnings = [];
+        if ($importState === 'attention') {
+            $warnings[] = [
+                'title' => 'Fix customer sync',
+                'detail' => 'The latest sync did not complete successfully.',
+                'action' => ['label' => 'Open sync settings', 'href' => route('shopify.app.integrations', [], false)],
+            ];
+        }
+        if ($syncIsStale) {
+            $warnings[] = [
+                'title' => 'Refresh customer sync',
+                'detail' => 'Customer data has not synced in the last 3 days.',
+                'action' => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
+            ];
+        }
+        if ($rewardsSetupStatus !== 'live') {
+            $warnings[] = [
+                'title' => 'Enable rewards rules',
+                'detail' => 'Rewards are not live until rules are active.',
+                'action' => ['label' => 'Open rewards settings', 'href' => route('shopify.embedded.rewards.notifications', [], false)],
+            ];
+        }
+        if (! $emailReady) {
+            $warnings[] = [
+                'title' => 'Verify email sender',
+                'detail' => $emailMissing !== []
+                    ? 'Reminder emails are off until sender settings are complete.'
+                    : 'Email sender setup still needs review.',
+                'action' => ['label' => 'Open email settings', 'href' => route('shopify.app.settings', [], false)],
+            ];
+        }
+        $warnings = array_slice($warnings, 0, 3);
+
+        $setupItems = [
+            [
+                'title' => 'Sync customers',
+                'status' => (string) ($importSummary['label'] ?? 'Not started'),
+                'done' => $importState === 'imported',
+                'action' => [
+                    'label' => match ($importState) {
+                        'imported' => 'Review sync',
+                        'in_progress' => 'View sync status',
+                        'attention' => 'Retry sync',
+                        default => 'Sync customers',
+                    },
+                    'href' => route('shopify.app.integrations', [], false),
+                ],
+            ],
+            [
+                'title' => 'Enable rewards rules',
+                'status' => $rewardsSetupStatus === 'live' ? 'Live' : 'Needs setup',
+                'done' => $rewardsSetupStatus === 'live',
+                'action' => ['label' => 'Open rewards settings', 'href' => route('shopify.embedded.rewards.notifications', [], false)],
+            ],
+            [
+                'title' => 'Verify email sender',
+                'status' => $emailReady ? 'Ready' : 'Missing setup',
+                'done' => $emailReady,
+                'action' => ['label' => 'Open email settings', 'href' => route('shopify.app.settings', [], false)],
+            ],
+            [
+                'title' => 'Review live status',
+                'status' => $warnings === [] ? 'Good' : 'Needs review',
+                'done' => $warnings === [],
+                'action' => ['label' => 'Open rewards analytics', 'href' => route('shopify.app.rewards', [], false)],
+            ],
+        ];
+        $setupItems = array_slice($setupItems, 0, 5);
+
+        $kpis = array_slice((array) ($dashboardData['topMetrics'] ?? []), 0, 4);
+        if ($kpis === []) {
+            $kpis = [
+                [
+                    'label' => 'Loyalty-attributed revenue',
+                    'formattedValue' => '$0',
+                    'deltaLabel' => 'No prior period',
+                ],
+                [
+                    'label' => 'Returning customer rate',
+                    'formattedValue' => '0%',
+                    'deltaLabel' => 'No prior period',
+                ],
+                [
+                    'label' => 'Rewards redeemed',
+                    'formattedValue' => '0',
+                    'deltaLabel' => 'No prior period',
+                ],
+                [
+                    'label' => 'Customers with points',
+                    'formattedValue' => number_format((int) ($customerSummary['customers_with_points'] ?? 0)),
+                    'deltaLabel' => 'Current total',
+                ],
+            ];
+        }
+
+        $seriesPoints = (array) data_get($dashboardData, 'chart.series', []);
+        $seriesOptions = collect((array) data_get($dashboardData, 'chart.seriesOptions', []));
+        $selectedSeries = $seriesOptions->filter(fn (array $item): bool => (bool) ($item['selected'] ?? false));
+        if ($selectedSeries->isEmpty()) {
+            $selectedSeries = $seriesOptions->take(1);
+        }
+
+        $chartLabels = array_map(
+            static fn (array $point): string => (string) ($point['label'] ?? ''),
+            $seriesPoints
+        );
+
+        $chartSeries = $selectedSeries->map(function (array $option) use ($seriesPoints): array {
+            $key = (string) ($option['key'] ?? 'metric');
+
+            return [
+                'name' => (string) ($option['label'] ?? 'Metric'),
+                'data' => array_map(
+                    static fn (array $point): float => (float) data_get($point, 'values.'.$key, 0),
+                    $seriesPoints
+                ),
+            ];
+        })->values()->all();
+
+        $timeframeOptions = (array) data_get($dashboardData, 'config.timeframeOptions', []);
+        $currentTimeframe = (string) data_get($dashboardData, 'query.timeframe', 'last_30_days');
 
         $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
         $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+
+        $contextFields = collect($embeddedContext)
+            ->filter(fn ($value) => is_scalar($value) && trim((string) $value) !== '')
+            ->all();
+
+        $recentActivity = [];
+        if (filled(data_get($importSummary, 'latest_run.source_label'))) {
+            $recentActivity[] = [
+                'title' => (string) data_get($importSummary, 'latest_run.source_label'),
+                'detail' => (string) data_get($importSummary, 'latest_run.status_label', 'Status unknown'),
+                'time' => (string) (data_get($importSummary, 'latest_run.finished_at_display')
+                    ?: data_get($importSummary, 'latest_run.started_at_display')
+                    ?: 'No timestamp'),
+            ];
+        }
+
+        $recentActivity[] = [
+            'title' => $resolvedRewardsLabel.' rules',
+            'detail' => $rewardsSetupStatus === 'live' ? 'Live' : 'Needs setup',
+            'time' => 'Current status',
+        ];
+
+        $recentActivity[] = [
+            'title' => 'Reminder emails',
+            'detail' => $emailReady ? 'Enabled' : 'Disabled',
+            'time' => 'Current status',
+        ];
+        $recentActivity = array_slice($recentActivity, 0, 4);
+
+        $homePrimaryAction = $isSetupMode
+            ? ['label' => 'Complete setup', 'href' => route('shopify.app.start', [], false)]
+            : ['label' => 'View rewards analytics', 'href' => route('shopify.app.rewards', [], false)];
+        $chartSubtitle = $isSetupMode
+            ? 'Trend data appears after sync and rewards setup.'
+            : (string) data_get($dashboardData, 'chart.subtitle', 'Track revenue and rewards activity over time.');
     @endphp
 
-    <section class="merchant-landing" data-merchant-landing="true" data-import-state="{{ $importState }}">
-        <article class="merchant-landing-hero" aria-label="Merchant orientation">
-            <div class="merchant-landing-hero__content">
-                <p class="merchant-landing-kicker">Merchant Home</p>
-                <h2 class="merchant-landing-title">Run customer growth from one organized workspace</h2>
-                <p class="merchant-landing-copy">
-                    Forestry Backstage helps you import customers, manage customer profiles, and activate growth modules with a clear setup path.
-                </p>
-                <ul class="merchant-landing-list" aria-label="What this app does">
-                    <li>Import customers and see setup status instantly.</li>
-                    <li>Manage customer records, balances, and lifecycle actions in one place.</li>
-                    <li>Understand what is active now, what needs setup, and what can be unlocked next.</li>
-                </ul>
-                <div class="merchant-landing-actions">
-                    <a class="fb-btn fb-btn-primary" href="{{ $embeddedUrl($nextStepCta['href']) }}">
-                        {{ $nextStepCta['label'] }}
-                    </a>
-                    <a class="fb-btn fb-btn-secondary" href="{{ $embeddedUrl($nextStepSecondary['href']) }}">{{ $nextStepSecondary['label'] }}</a>
+    <style>
+        .embedded-home {
+            display: grid;
+            gap: 16px;
+        }
+
+        .embedded-home-card {
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            border-radius: 12px;
+            background: #fff;
+            padding: 16px;
+        }
+
+        .embedded-home-card--subdued {
+            background: rgba(248, 250, 252, 0.88);
+        }
+
+        .embedded-home-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .embedded-home-header h2 {
+            margin: 0;
+            font-size: 1rem;
+            color: #0f172a;
+        }
+
+        .embedded-home-header p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: rgba(15, 23, 42, 0.6);
+        }
+
+        .embedded-home-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .embedded-home-button,
+        .embedded-home-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            background: #fff;
+            color: #0f172a;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 0 12px;
+        }
+
+        .embedded-home-button {
+            border-color: #0f766e;
+            background: rgba(15, 118, 110, 0.12);
+            color: #115e59;
+        }
+
+        .embedded-home-kpis {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-top: 12px;
+        }
+
+        .embedded-home-kpi {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 10px;
+            padding: 12px;
+            background: rgba(248, 250, 252, 0.72);
+        }
+
+        .embedded-home-kpi-label {
+            margin: 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.62);
+        }
+
+        .embedded-home-kpi-value {
+            margin: 8px 0 0;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .embedded-home-kpi-meta {
+            margin: 6px 0 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.52);
+        }
+
+        .embedded-home-checklist {
+            display: grid;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .embedded-home-checklist-row {
+            display: grid;
+            gap: 6px;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: rgba(248, 250, 252, 0.72);
+        }
+
+        .embedded-home-checklist-title {
+            margin: 0;
+            font-size: 13px;
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+        .embedded-home-checklist-status {
+            margin: 2px 0 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .embedded-home-chart-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .embedded-home-chart-head h3 {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #0f172a;
+        }
+
+        .embedded-home-chart-head p {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .embedded-home-chart-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .embedded-home-chart-filter select {
+            min-height: 34px;
+            border-radius: 8px;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            background: #fff;
+            color: #0f172a;
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+
+        .embedded-home-chart-note {
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .embedded-home-chart {
+            min-height: 300px;
+        }
+
+        .embedded-home-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 16px;
+        }
+
+        .embedded-home-queue,
+        .embedded-home-activity {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .embedded-home-queue-item,
+        .embedded-home-activity-item {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 10px;
+            background: rgba(248, 250, 252, 0.72);
+            padding: 10px 12px;
+        }
+
+        .embedded-home-queue-item h4,
+        .embedded-home-activity-item h4 {
+            margin: 0;
+            font-size: 13px;
+            color: #0f172a;
+        }
+
+        .embedded-home-queue-item p,
+        .embedded-home-activity-item p {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.6);
+        }
+
+        .embedded-home-empty-note {
+            margin: 0;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.6);
+            padding: 8px 0;
+        }
+
+        .embedded-home-status {
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: rgba(248, 250, 252, 0.7);
+            margin-top: 12px;
+            font-size: 13px;
+            color: rgba(15, 23, 42, 0.66);
+        }
+
+        @media (max-width: 980px) {
+            .embedded-home-kpis,
+            .embedded-home-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .embedded-home-kpis,
+            .embedded-home-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <section class="embedded-home" data-embedded-home>
+        <article class="embedded-home-card">
+            <div class="embedded-home-header">
+                <div>
+                    <h2>Home</h2>
+                    <p>Revenue and setup at a glance.</p>
+                </div>
+                <div class="embedded-home-actions">
+                    <a class="embedded-home-button" href="{{ $embeddedUrl($homePrimaryAction['href']) }}">{{ $homePrimaryAction['label'] }}</a>
+                    <a class="embedded-home-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', [], false)) }}">Open customers</a>
                 </div>
             </div>
 
-            <div class="merchant-landing-hero__status">
-                <p class="merchant-landing-kicker">Next Step</p>
-                <h3 class="merchant-landing-panel__title">{{ $nextStepTitle }}</h3>
-                <p class="merchant-landing-copy">{{ $nextStepDescription }}</p>
-
-                <div class="merchant-landing-status-chip merchant-landing-status-chip--{{ $importState }}">
-                    Import Status: {{ $importSummary['label'] ?? 'Not started' }}
-                </div>
-                <p class="merchant-landing-note">{{ $importSummary['progress_note'] ?? 'No import has run yet for this store context.' }}</p>
-
-                @if($latestRun)
-                    <p class="merchant-landing-note">
-                        Latest run: {{ $latestRun['source_label'] ?? 'Import' }} · {{ $latestRun['status_label'] ?? 'Unknown' }}
-                        @if(filled($latestRun['finished_at_display'] ?? null))
-                            · {{ $latestRun['finished_at_display'] }}
-                        @elseif(filled($latestRun['started_at_display'] ?? null))
-                            · {{ $latestRun['started_at_display'] }}
-                        @endif
-                    </p>
-                @endif
-
-                <div class="merchant-landing-status-list" aria-label="Setup snapshot">
-                    <p><strong>{{ (int) ($checklistCounts['active'] ?? 0) }}</strong> active now</p>
-                    <p><strong>{{ (int) ($checklistCounts['setup'] ?? 0) }}</strong> need setup</p>
-                    <p><strong>{{ (int) ($checklistCounts['locked'] ?? 0) }}</strong> available to unlock</p>
-                </div>
-            </div>
-        </article>
-
-        <div class="merchant-landing-metrics" aria-label="Customer and setup snapshot">
-            <article class="merchant-landing-metric">
-                <p class="merchant-landing-metric__label">Customer Profiles</p>
-                <p class="merchant-landing-metric__value">{{ number_format((int) ($customerSummary['total_profiles'] ?? 0)) }}</p>
-                <p class="merchant-landing-metric__detail">Profiles currently available to manage in this store context.</p>
-            </article>
-            <article class="merchant-landing-metric">
-                <p class="merchant-landing-metric__label">Reachable Profiles</p>
-                <p class="merchant-landing-metric__value">{{ number_format((int) ($customerSummary['reachable_profiles'] ?? 0)) }}</p>
-                <p class="merchant-landing-metric__detail">Profiles with an email or phone ready for customer messaging.</p>
-            </article>
-            <article class="merchant-landing-metric">
-                <p class="merchant-landing-metric__label">Linked Source Records</p>
-                <p class="merchant-landing-metric__value">{{ number_format((int) ($customerSummary['linked_external_profiles'] ?? 0)) }}</p>
-                <p class="merchant-landing-metric__detail">Connected source records attached to canonical customer profiles.</p>
-            </article>
-            <article class="merchant-landing-metric">
-                <p class="merchant-landing-metric__label">Current Plan</p>
-                <p class="merchant-landing-metric__value">{{ $plan['label'] ?? 'Starter' }}</p>
-                <p class="merchant-landing-metric__detail">Use plan and module state to prioritize what to activate next.</p>
-            </article>
-        </div>
-
-        <article class="merchant-landing-panel" aria-label="After import value flow">
-            <h3 class="merchant-landing-panel__title">What Happens After Import</h3>
-            <div class="merchant-landing-steps">
-                <div class="merchant-landing-step">
-                    <p class="merchant-landing-step__title">1. Confirm customer data quality</p>
-                    <p class="merchant-landing-panel__copy">Review customer records, identity links, and reachable channels.</p>
-                </div>
-                <div class="merchant-landing-step">
-                    <p class="merchant-landing-step__title">2. Use customer management tools</p>
-                    <p class="merchant-landing-panel__copy">Segment customers, review status signals, and run lifecycle actions.</p>
-                </div>
-                <div class="merchant-landing-step">
-                    <p class="merchant-landing-step__title">3. Expand with add-ons</p>
-                    <p class="merchant-landing-panel__copy">Unlock premium modules when your current setup is producing clear value.</p>
-                </div>
-            </div>
-        </article>
-
-        <div class="merchant-landing-columns">
-            <article class="merchant-landing-panel" aria-label="Available now">
-                <h3 class="merchant-landing-panel__title">Available Now</h3>
-                <p class="merchant-landing-panel__copy">Modules currently active for your store.</p>
-                <div class="merchant-landing-panel__list">
-                    @forelse(array_slice($activeNow, 0, 5) as $module)
-                        <div class="merchant-landing-panel__row">
-                            <span>{{ $module['label'] ?? 'Module' }}</span>
-                            <x-tenancy.module-state-badge :module-state="$module" size="sm" compact />
-                        </div>
-                    @empty
-                        <p class="merchant-landing-note">No active modules are visible yet.</p>
-                    @endforelse
-                </div>
-                <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', [], false)) }}">Open Customers</a>
-            </article>
-
-            <article class="merchant-landing-panel" aria-label="Setup next">
-                <h3 class="merchant-landing-panel__title">Setup Next</h3>
-                <p class="merchant-landing-panel__copy">Included modules that still need setup work.</p>
-                <div class="merchant-landing-panel__list">
-                    @forelse(array_slice($availableNext, 0, 5) as $module)
-                        <div class="merchant-landing-panel__row">
-                            <span>{{ $module['label'] ?? 'Module' }}</span>
-                            <x-tenancy.module-state-badge :module-state="$module" size="sm" compact />
-                        </div>
-                    @empty
-                        <p class="merchant-landing-note">Everything included in your current plan is configured.</p>
-                    @endforelse
-                </div>
-                <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.start', [], false)) }}">View Setup Checklist</a>
-            </article>
-
-            <article class="merchant-landing-panel" aria-label="Unlock next">
-                <h3 class="merchant-landing-panel__title">Unlock Next</h3>
-                <p class="merchant-landing-panel__copy">Purchasable capabilities you can add when ready.</p>
-                <div class="merchant-landing-panel__list">
-                    @forelse(array_slice($purchasable, 0, 5) as $module)
-                        <div class="merchant-landing-panel__row">
-                            <span>{{ $module['label'] ?? 'Module' }}</span>
-                            <x-tenancy.module-state-badge :module-state="$module" size="sm" compact />
-                        </div>
-                    @empty
-                        <p class="merchant-landing-note">No purchasable modules are currently highlighted.</p>
-                    @endforelse
-                </div>
-                <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.plans', [], false)) }}">Review Plans & Add-ons</a>
-            </article>
-        </div>
-
-        @if($recommendedActions !== [])
-            <article class="merchant-landing-panel" aria-label="Recommended actions">
-                <h3 class="merchant-landing-panel__title">Recommended Actions</h3>
-                <div class="merchant-landing-panel__list">
-                    @foreach(array_slice($recommendedActions, 0, 4) as $action)
-                        <div class="merchant-landing-panel__action">
+            @if($isSetupMode)
+                <div class="embedded-home-checklist" aria-label="Setup checklist">
+                    @foreach($setupItems as $item)
+                        <div class="embedded-home-checklist-row">
                             <div>
-                                <p class="merchant-landing-panel__action-title">{{ $action['title'] ?? 'Next step' }}</p>
-                                <p class="merchant-landing-panel__copy">{{ $action['description'] ?? '' }}</p>
+                                <p class="embedded-home-checklist-title">{{ $item['title'] }}</p>
+                                <p class="embedded-home-checklist-status">{{ $item['status'] }}</p>
                             </div>
-                            <a class="start-here-action-link" href="{{ $embeddedUrl((string) ($action['href'] ?? route('shopify.app.start', [], false))) }}">Open</a>
+                            <a class="embedded-home-link" href="{{ $embeddedUrl((string) ($item['action']['href'] ?? route('shopify.app.start', [], false))) }}">{{ (string) ($item['action']['label'] ?? 'Open') }}</a>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="embedded-home-kpis" aria-label="Key metrics">
+                    @foreach($kpis as $metric)
+                        <article class="embedded-home-kpi">
+                            <p class="embedded-home-kpi-label">{{ (string) ($metric['label'] ?? 'Metric') }}</p>
+                            <p class="embedded-home-kpi-value">{{ (string) ($metric['formattedValue'] ?? '0') }}</p>
+                            <p class="embedded-home-kpi-meta">{{ (string) ($metric['deltaLabel'] ?? 'No prior period') }}</p>
+                        </article>
+                    @endforeach
+                </div>
+            @endif
+        </article>
+
+        <article class="embedded-home-card @if($isSetupMode) embedded-home-card--subdued @endif">
+            <div class="embedded-home-chart-head">
+                <div>
+                    <h3>Revenue and engagement trend</h3>
+                    <p>{{ $chartSubtitle }}</p>
+                </div>
+                @if($showChartControls)
+                    <form method="GET" action="{{ request()->url() }}" class="embedded-home-chart-filter">
+                        @foreach($contextFields as $key => $value)
+                            <input type="hidden" name="{{ $key }}" value="{{ (string) $value }}" />
+                        @endforeach
+                        <input type="hidden" name="comparison" value="{{ (string) data_get($dashboardData, 'query.comparison', 'previous_period') }}" />
+                        <select name="timeframe" aria-label="Date range">
+                            @foreach($timeframeOptions as $option)
+                                @php($value = (string) ($option['value'] ?? ''))
+                                @php($label = (string) ($option['label'] ?? $value))
+                                <option value="{{ $value }}" @selected($currentTimeframe === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="embedded-home-link">Update range</button>
+                    </form>
+                @else
+                    <span class="embedded-home-chart-note">Finish setup to start trend tracking.</span>
+                @endif
+            </div>
+            <div id="embedded-home-chart" class="embedded-home-chart" aria-label="Home trend chart"></div>
+            <script id="embedded-home-chart-data" type="application/json">
+                {!! json_encode([
+                    'labels' => $chartLabels,
+                    'series' => $chartSeries,
+                ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+            </script>
+        </article>
+
+        <div class="embedded-home-grid">
+            <article class="embedded-home-card">
+                <h3>Attention needed</h3>
+                @if($warnings === [])
+                    <p class="embedded-home-empty-note">No issues right now.</p>
+                @else
+                    <div class="embedded-home-queue">
+                        @foreach($warnings as $warning)
+                            <div class="embedded-home-queue-item">
+                                <h4>{{ $warning['title'] }}</h4>
+                                <p>{{ $warning['detail'] }}</p>
+                                <a class="embedded-home-link" href="{{ $embeddedUrl((string) data_get($warning, 'action.href', route('shopify.app.settings', [], false))) }}">{{ (string) data_get($warning, 'action.label', 'Open') }}</a>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </article>
+
+            <article class="embedded-home-card">
+                <h3>Recent activity</h3>
+                <div class="embedded-home-activity">
+                    @foreach($recentActivity as $activity)
+                        <div class="embedded-home-activity-item">
+                            <h4>{{ $activity['title'] }}</h4>
+                            <p>{{ $activity['detail'] }} · {{ $activity['time'] }}</p>
                         </div>
                     @endforeach
                 </div>
             </article>
+        </div>
+
+        @if(! $authorized)
+            <div class="embedded-home-status">
+                Open this app from Shopify Admin to load store data.
+            </div>
         @endif
     </section>
 
-    @if($moduleStates !== [])
-        <section class="embedded-module-experience" data-module-experience="dashboard-home">
-            <x-tenancy.module-setup-checklist
-                :module-states="$moduleStates"
-                :module-order="$moduleCardOrder"
-                title="Module setup checklist"
-                subtitle="Track what is active now, what needs setup next, and what is available to unlock."
-                :cta-href="route('shopify.app.plans', [], false)"
-            />
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        (() => {
+            const node = document.getElementById('embedded-home-chart');
+            const payloadNode = document.getElementById('embedded-home-chart-data');
+            if (!node || !payloadNode || typeof window.ApexCharts === 'undefined') {
+                return;
+            }
 
-            <div class="embedded-module-experience__grid" aria-label="Module state cards">
-                @foreach($moduleCardOrder as $moduleKey)
-                    @continue(! isset($moduleStates[$moduleKey]) || ! is_array($moduleStates[$moduleKey]))
-                    <x-tenancy.module-state-card :module-state="$moduleStates[$moduleKey]" />
-                @endforeach
-            </div>
-        </section>
-    @endif
+            let payload;
+            try {
+                payload = JSON.parse(payloadNode.textContent || '{}');
+            } catch (error) {
+                payload = { labels: [], series: [] };
+            }
 
-    <div id="shopify-dashboard-root"></div>
-    <script id="shopify-dashboard-bootstrap" type="application/json">
-        {!! json_encode($dashboardBootstrap ?? [
-            'authorized' => false,
-            'status' => 'invalid_request',
-            'storeLabel' => 'Shopify Admin',
-            'links' => [],
-        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+            const labels = Array.isArray(payload.labels) ? payload.labels : [];
+            const series = Array.isArray(payload.series) ? payload.series : [];
+
+            const chart = new window.ApexCharts(node, {
+                chart: {
+                    type: 'line',
+                    height: 300,
+                    toolbar: { show: false },
+                    zoom: { enabled: false },
+                },
+                stroke: {
+                    curve: 'smooth',
+                    width: 3,
+                },
+                colors: ['#0f766e', '#334155', '#1d4ed8'],
+                xaxis: {
+                    categories: labels,
+                    labels: {
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '11px',
+                        },
+                    },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false },
+                },
+                yaxis: {
+                    labels: {
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '11px',
+                        },
+                    },
+                },
+                grid: {
+                    borderColor: 'rgba(148, 163, 184, 0.25)',
+                    strokeDashArray: 4,
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'left',
+                    fontSize: '12px',
+                },
+                tooltip: {
+                    theme: 'light',
+                },
+                dataLabels: { enabled: false },
+                series,
+            });
+
+            chart.render();
+        })();
     </script>
-
-    @vite('resources/js/shopify/dashboard.tsx')
 </x-shopify-embedded-shell>

@@ -11,8 +11,9 @@ beforeEach(function () {
 test('shopify embedded app route shows helpful launch message when opened outside shopify admin', function () {
     $this->get(route('shopify.app'))
         ->assertOk()
-        ->assertSee('id="shopify-dashboard-root"', false)
-        ->assertSee('shopify-dashboard-bootstrap', false)
+        ->assertSeeText('Home')
+        ->assertSeeText('Open this app from Shopify Admin to load store data.')
+        ->assertDontSeeText('Install on Shopify')
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 });
 
@@ -38,10 +39,10 @@ test('shopify embedded app route renders verified admin shell for configured sto
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Dashboard')
-        ->assertSee('id="shopify-dashboard-root"', false)
-        ->assertSee('shopify-dashboard-bootstrap', false)
-        ->assertSee('shopify\\/app\\/api\\/dashboard', false)
+        ->assertSeeText('Home')
+        ->assertSeeText('Revenue and setup at a glance.')
+        ->assertSee('id="embedded-home-chart"', false)
+        ->assertSee('<s-app-nav>', false)
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
@@ -60,8 +61,7 @@ test('shopify embedded app route rejects invalid hmac', function () {
         'hmac' => 'bad-signature',
     ]))
         ->assertStatus(401)
-        ->assertSee('id="shopify-dashboard-root"', false)
-        ->assertSee('"status":"invalid_request"', false);
+        ->assertSeeText('Open this app from Shopify Admin to load store data.');
 });
 
 test('shopify embedded session lets root-style home route resolve after signed app entry', function () {
@@ -87,8 +87,8 @@ test('shopify embedded session lets root-style home route resolve after signed a
 
     $this->get('/')
         ->assertOk()
-        ->assertSeeText('Dashboard')
-        ->assertSee('id="shopify-dashboard-root"', false);
+        ->assertSeeText('Home')
+        ->assertSeeText('Revenue and setup at a glance.');
 });
 
 test('shopify embedded session keeps rewards root-style route but blocks legacy customer entry without Shopify context', function () {
@@ -122,7 +122,7 @@ test('shopify embedded session keeps rewards root-style route but blocks legacy 
         ->assertSeeText('This page must be opened from Shopify Admin');
 });
 
-test('shopify embedded dashboard renders module-state checklist shell and bootstrap payload', function () {
+test('shopify embedded home renders module-state checklist shell and bootstrap payload', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
     config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
@@ -144,8 +144,8 @@ test('shopify embedded dashboard renders module-state checklist shell and bootst
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Module setup checklist')
-        ->assertSee('data-module-checklist="true"', false)
+        ->assertSeeText('Attention needed')
+        ->assertSee('<s-app-nav>', false)
         ->assertSee('tenant-module-access-bootstrap', false)
         ->assertSee('"checklist"', false);
 });

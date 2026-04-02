@@ -25,9 +25,9 @@ trait HandlesShopifyEmbeddedNavigation
             'moduleStates' => $moduleStates,
             'tenantId' => $tenantId,
             'displayLabels' => $displayLabels,
-            'workspaceLabel' => (string) data_get($profile, 'workspace.label', 'Commerce workspace'),
+            'workspaceLabel' => (string) data_get($profile, 'workspace.label', 'Commerce'),
             'commandSearchEndpoint' => route('shopify.app.api.search', [], false),
-            'commandSearchPlaceholder' => (string) data_get($profile, 'workspace.command_placeholder', 'Search customers, orders, modules, and actions'),
+            'commandSearchPlaceholder' => (string) data_get($profile, 'workspace.command_placeholder', 'Search customers, rewards, and settings'),
         ];
     }
 
@@ -43,17 +43,17 @@ trait HandlesShopifyEmbeddedNavigation
 
         return [
             [
-                'key' => 'dashboard',
-                'label' => 'Dashboard',
-                'href' => route('home', [], false),
+                'key' => 'home',
+                'label' => 'Home',
+                'href' => route('shopify.app', [], false),
                 'children' => [],
             ],
             [
                 'key' => 'rewards',
                 'label' => $rewardsLabel,
-                'href' => route('shopify.embedded.rewards', [], false),
+                'href' => route('shopify.app.rewards', [], false),
                 'children' => [
-                    ['key' => 'overview', 'label' => 'Overview', 'href' => route('shopify.embedded.rewards', [], false)],
+                    ['key' => 'overview', 'label' => 'Overview', 'href' => route('shopify.app.rewards', [], false)],
                     ['key' => 'earn', 'label' => 'Ways to Earn', 'href' => route('shopify.embedded.rewards.earn', [], false)],
                     ['key' => 'redeem', 'label' => 'Ways to Redeem', 'href' => route('shopify.embedded.rewards.redeem', [], false)],
                     ['key' => 'referrals', 'label' => 'Referrals', 'href' => route('shopify.embedded.rewards.referrals', [], false)],
@@ -115,7 +115,8 @@ trait HandlesShopifyEmbeddedNavigation
             'notifications',
             'customers',
             'activity',
-            'questions',
+            'segments',
+            'imports',
             'settings',
         ];
 
@@ -134,7 +135,7 @@ trait HandlesShopifyEmbeddedNavigation
     protected function attachEmbeddedNavigationModuleStates(array $items, array $moduleStates): array
     {
         $topLevelModuleMap = [
-            'dashboard' => 'dashboard',
+            'home' => 'dashboard',
             'rewards' => 'rewards',
             'customers' => 'customers',
             'settings' => 'settings',
@@ -148,9 +149,9 @@ trait HandlesShopifyEmbeddedNavigation
             'birthdays' => 'birthdays',
             'vip' => 'vip',
             'notifications' => 'rewards',
-            'manage' => 'customers',
+            'segments' => 'customers',
             'activity' => 'activity',
-            'questions' => 'questions',
+            'imports' => 'customers',
         ];
 
         return array_map(function (array $item) use ($topLevelModuleMap, $childModuleMap, $moduleStates): array {

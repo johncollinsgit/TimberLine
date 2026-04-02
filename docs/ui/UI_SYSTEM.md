@@ -94,13 +94,24 @@ Transform Forestry Backstage into a premium, calm, high-trust software experienc
 
 ## Color Tokens
 Source of truth: `resources/css/forestry-ui.css` (`:root`)
-- `--fb-bg: #FFFFFF`
-- `--fb-text: #0D1B1E`
-- `--fb-brand: #123C43`
-- `--fb-brand-2: #1E5A63`
-- `--fb-accent: #2F7D6B`
-- `--fb-border: #E7ECEB`
-- `--fb-muted: #5D6B6A`
+- Semantic surface/text tokens:
+  - `--fb-page-background`
+  - `--fb-surface`
+  - `--fb-surface-subtle`
+  - `--fb-surface-muted`
+  - `--fb-border`
+  - `--fb-text-primary`
+  - `--fb-text-secondary`
+  - `--fb-text-muted`
+- Semantic state/interaction tokens:
+  - `--fb-accent`
+  - `--fb-success`
+  - `--fb-warning`
+  - `--fb-danger`
+  - `--fb-focus-ring`
+  - `--fb-shadow-sm`
+  - `--fb-shadow-md`
+- Legacy compatibility aliases remain (`--fb-bg`, `--fb-text`, `--fb-brand*`, `--fb-muted`, `--fb-ring`, `--fb-shadow-*`) and should not be removed until all dependent views are migrated.
 
 ## Typography
 - Headline/display: Fraunces (`--fb-font-display`)
@@ -135,6 +146,11 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 ## Component Patterns
 - Buttons: `.fb-btn`, `.fb-btn-primary`, `.fb-btn-secondary`
 - Cards: `.fb-card`
+- Admin/operator surfaces:
+  - `.fb-page-surface`, `.fb-page-surface--subtle`, `.fb-page-surface--muted`
+  - `.fb-chip`, `.fb-chip--accent`
+  - `.fb-btn-soft`, `.fb-btn-accent`
+  - `.fb-code-block`
 - Section header: `.fb-section-header`, `.fb-section-kicker`
 - Explanation block: `x-ui.page-explainer` + `.fb-page-explainer*`
 - Embedded shell primitives: `.app-shell*`, `.app-topbar*`, `.app-sidebar*`
