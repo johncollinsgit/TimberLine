@@ -20,7 +20,7 @@
     $quote = $quotes[array_rand($quotes)];
 @endphp
 
-<div class="mt-6 rounded-2xl border border-white/10 bg-black/20 p-4">
+<div class="mt-6 rounded-2xl border border-zinc-200 bg-slate-900/8 p-4">
     <div class="text-[11px] uppercase tracking-[0.28em] text-zinc-500">Disappointment Desk</div>
     <blockquote class="mt-2 text-sm italic text-zinc-200">“{{ $quote['text'] }}”</blockquote>
     <div class="mt-2 text-xs text-zinc-400">— {{ $quote['author'] }}</div>

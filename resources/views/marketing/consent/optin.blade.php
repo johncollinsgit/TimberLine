@@ -13,25 +13,25 @@
     <title>Marketing SMS Consent Opt-In</title>
     @vite(['resources/css/app.css'])
 </head>
-<body class="min-h-screen bg-zinc-950 text-zinc-100">
+<body class="min-h-screen bg-[var(--fb-page-background)] text-zinc-900">
     <main class="mx-auto max-w-3xl px-4 py-10 space-y-6">
-        <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <div class="text-xs uppercase tracking-[0.22em] text-zinc-400">TimberLine Marketing</div>
-            <h1 class="mt-2 text-2xl font-semibold text-white">SMS Consent Opt-In (Scaffold)</h1>
-            <p class="mt-2 text-sm text-zinc-300">
+        <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
+            <div class="text-xs uppercase tracking-[0.22em] text-zinc-500">TimberLine Marketing</div>
+            <h1 class="mt-2 text-2xl font-semibold text-zinc-950">SMS Consent Opt-In (Scaffold)</h1>
+            <p class="mt-2 text-sm text-zinc-600">
                 This Stage 6 scaffold captures an SMS consent intent, links or creates a marketing profile, and routes the user to verify confirmation.
                 It does not auto-send messages.
             </p>
         </section>
 
         @if(session('status'))
-            <div class="rounded-2xl border border-emerald-300/30 bg-emerald-500/15 px-4 py-3 text-sm text-emerald-100">
+            <div class="rounded-2xl border border-emerald-300/30 bg-emerald-100 px-4 py-3 text-sm text-emerald-800">
                 {{ session('status') }}
             </div>
         @endif
 
         @if($errors->any())
-            <div class="rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-sm text-rose-100">
+            <div class="rounded-2xl border border-rose-300/30 bg-rose-100 px-4 py-3 text-sm text-rose-800">
                 <ul class="space-y-1">
                     @foreach($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -40,43 +40,43 @@
             </div>
         @endif
 
-        <section class="rounded-3xl border border-white/10 bg-black/20 p-6">
+        <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
             <form method="POST" action="{{ route('marketing.consent.optin.store') }}" class="space-y-4">
                 @csrf
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-400">First Name</label>
-                        <input type="text" name="first_name" value="{{ old('first_name') }}" class="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">First Name</label>
+                        <input type="text" name="first_name" value="{{ old('first_name') }}" class="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                     </div>
                     <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-400">Last Name</label>
-                        <input type="text" name="last_name" value="{{ old('last_name') }}" class="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Last Name</label>
+                        <input type="text" name="last_name" value="{{ old('last_name') }}" class="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                     </div>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-400">Email</label>
-                        <input type="email" name="email" value="{{ old('email') }}" class="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Email</label>
+                        <input type="email" name="email" value="{{ old('email') }}" class="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                     </div>
                     <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-400">Phone</label>
-                        <input type="text" name="phone" value="{{ old('phone') }}" class="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">
+                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Phone</label>
+                        <input type="text" name="phone" value="{{ old('phone') }}" class="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                     </div>
                 </div>
 
-                <div class="flex flex-wrap gap-4 text-sm text-zinc-200">
+                <div class="flex flex-wrap gap-4 text-sm text-zinc-700">
                     <label class="inline-flex items-center gap-2">
-                        <input type="checkbox" name="accepts_email" value="1" class="rounded border-white/20 bg-white/10">
+                        <input type="checkbox" name="accepts_email" value="1" class="rounded border-zinc-300 bg-zinc-100">
                         Also mark email consent
                     </label>
                     <label class="inline-flex items-center gap-2">
-                        <input type="checkbox" name="award_bonus" value="1" checked class="rounded border-white/20 bg-white/10">
+                        <input type="checkbox" name="award_bonus" value="1" checked class="rounded border-zinc-300 bg-zinc-100">
                         Allow optional {{ $rewardsLabel }} consent bonus (if enabled)
                     </label>
                 </div>
 
-                <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/20 px-5 py-2 text-sm font-semibold text-emerald-50">
+                <button type="submit" class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-900">
                     Continue to Verify
                 </button>
             </form>

@@ -53,18 +53,18 @@
   $typeBadge = function ($type) {
     $type = strtolower((string) $type);
     return match ($type) {
-      'wholesale' => 'border-amber-300/35 bg-amber-400/20 text-amber-50',
+      'wholesale' => 'border-amber-300/35 bg-amber-100 text-amber-900',
       'event', 'market' => 'border-purple-300/35 bg-purple-400/20 text-purple-50',
-      default => 'border-sky-300/35 bg-sky-400/20 text-sky-50',
+      default => 'border-sky-300/35 bg-sky-100 text-sky-900',
     };
   };
 
   $typeAccent = function ($type) {
     $type = strtolower((string) $type);
     return match ($type) {
-      'wholesale' => 'border-amber-300/30 bg-amber-500/10',
+      'wholesale' => 'border-amber-300/30 bg-amber-100',
       'event', 'market' => 'border-purple-300/30 bg-purple-500/10',
-      default => 'border-sky-300/30 bg-sky-500/10',
+      default => 'border-sky-300/30 bg-sky-100',
     };
   };
 
@@ -199,7 +199,7 @@
     <section class="sticky top-2 sm:top-4 z-30 min-w-0">
       <div
         style="background: {{ $panelBg }};"
-        class="rounded-3xl border border-emerald-500/15 bg-zinc-950/60 backdrop-blur
+        class="rounded-3xl border border-emerald-500/15 bg-white
                shadow-[0_18px_60px_-40px_rgba(0,0,0,1)] overflow-hidden min-w-0"
       >
         <div class="p-3 sm:p-4">
@@ -208,21 +208,21 @@
             <div class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div class="flex min-w-0 flex-wrap items-center gap-3">
                 <div>
-                  <div class="text-sm font-semibold text-white/95">Orders</div>
-                  <div class="text-xs text-white/50 mt-0.5">{{ $orders->total() }} total</div>
+                  <div class="text-sm font-semibold text-zinc-950/95">Orders</div>
+                  <div class="text-xs text-zinc-500 mt-0.5">{{ $orders->total() }} total</div>
                 </div>
                 <a href="{{ route('retail.plan') }}"
-                  class="inline-flex h-10 sm:h-11 items-center rounded-full border border-emerald-300/35 bg-emerald-400/25 px-4 sm:px-5 text-sm font-semibold text-emerald-50 hover:bg-emerald-400/35 transition">
+                  class="inline-flex h-10 sm:h-11 items-center rounded-full border border-zinc-300 bg-emerald-400/25 px-4 sm:px-5 text-sm font-semibold text-emerald-900 hover:bg-emerald-400/35 transition">
                   Retail/Pour List
                 </a>
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <button type="button" wire:click="expandAll"
-                  class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
+                  class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition">
                   Expand
                 </button>
                 <button type="button" wire:click="collapseAll"
-                  class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
+                  class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition">
                   Collapse
                 </button>
               </div>
@@ -230,7 +230,7 @@
 
             {{-- Row B: View + Search --}}
             <div class="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div class="mf-shipping-view-tabs flex max-w-full overflow-x-auto rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-1">
+              <div class="mf-shipping-view-tabs flex max-w-full overflow-x-auto rounded-2xl border border-emerald-400/20 bg-emerald-50 p-1">
                 @foreach($views as $key => $meta)
                   @php $active = (($view ?? 'list') === $key); @endphp
                   @php
@@ -242,8 +242,8 @@
                   <a href="{{ $tabHref }}"
                     wire:click.prevent="setViewMode('{{ $key }}')"
                     class="mf-shipping-view-tab h-9 px-4 rounded-2xl text-xs font-semibold transition inline-flex items-center gap-2
-                      {{ $active ? 'bg-emerald-400/25 text-emerald-50' : 'text-white/70 hover:bg-emerald-500/10' }}">
-                    <span class="{{ $key === 'timeline' ? 'text-white/40' : 'text-white/70' }}">{{ $meta['icon'] }}</span>
+                      {{ $active ? 'bg-emerald-400/25 text-emerald-900' : 'text-zinc-600 hover:bg-emerald-100' }}">
+                    <span class="{{ $key === 'timeline' ? 'text-zinc-500' : 'text-zinc-600' }}">{{ $meta['icon'] }}</span>
                     <span>{{ $meta['label'] }}</span>
                   </a>
                 @endforeach
@@ -251,10 +251,10 @@
 
               <div class="w-full xl:max-w-md min-w-0">
                 <div class="relative">
-                  <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">⌕</div>
+                  <div class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-zinc-500">⌕</div>
                   <input type="text" wire:model.live.debounce.250ms="search"
                     placeholder="Search order #, customer, scent..."
-                    class="h-10 w-full pl-9 pr-3 rounded-2xl bg-emerald-500/5 border border-emerald-400/15 text-white placeholder:text-white/40
+                    class="h-10 w-full pl-9 pr-3 rounded-2xl bg-emerald-50 border border-emerald-400/15 text-zinc-950 placeholder:text-zinc-500
                            focus:outline-none focus:ring-2 focus:ring-emerald-400/20" />
                 </div>
               </div>
@@ -264,27 +264,27 @@
             <div class="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start min-w-0">
               <div class="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Status</label>
+                  <label class="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 mb-2">Status</label>
                   <select wire:model.live="status"
-                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/5 px-3 text-white/90">
+                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-50 px-3 text-zinc-900">
                     @foreach($pills as $key => $label)
                       <option value="{{ $key }}">{{ $label }}</option>
                     @endforeach
                   </select>
                 </div>
                 <div>
-                  <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Channel</label>
+                  <label class="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 mb-2">Channel</label>
                   <select wire:model.live="channel"
-                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/5 px-3 text-white/90">
+                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-50 px-3 text-zinc-900">
                     @foreach($channels as $key => $label)
                       <option value="{{ $key }}">{{ $label }}</option>
                     @endforeach
                   </select>
                 </div>
                 <div>
-                  <label class="block text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">Source</label>
+                  <label class="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 mb-2">Source</label>
                   <select wire:model.live="source"
-                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/5 px-3 text-white/90">
+                    class="h-10 w-full rounded-2xl border border-emerald-400/15 bg-emerald-50 px-3 text-zinc-900">
                     @foreach($sources as $key => $label)
                       <option value="{{ $key }}">{{ $label }}</option>
                     @endforeach
@@ -296,32 +296,32 @@
                 <div class="flex flex-wrap items-center gap-2 min-w-0">
                   @if(($status ?? 'all') !== 'all')
                     <button type="button" wire:click="$set('status','all')"
-                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-100 text-emerald-900">
                       Status: {{ $pills[$status] ?? ucfirst($status) }} ✕
                     </button>
                   @endif
                   @if(($channel ?? 'all') !== 'all')
                     <button type="button" wire:click="$set('channel','all')"
-                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-100 text-emerald-900">
                       Channel: {{ ucfirst($channel) }} ✕
                     </button>
                   @endif
                   @if(($source ?? 'all') !== 'all')
                     <button type="button" wire:click="$set('source','all')"
-                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-100 text-emerald-900">
                       Source: {{ $sources[$source] ?? ucfirst($source) }} ✕
                     </button>
                   @endif
                   @if(($search ?? '') !== '')
                     <button type="button" wire:click="$set('search','')"
-                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-400/15 text-emerald-50">
+                      class="h-8 px-3 rounded-full text-xs border border-emerald-300/25 bg-emerald-100 text-emerald-900">
                       Search: "{{ \Illuminate\Support\Str::limit($search, 20) }}" ✕
                     </button>
                   @endif
 
                   @if(($status ?? 'all') !== 'all' || ($channel ?? 'all') !== 'all' || ($source ?? 'all') !== 'all' || ($search ?? '') !== '')
                     <button type="button" wire:click="clearFilters"
-                      class="h-8 px-3 rounded-full text-xs border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition">
+                      class="h-8 px-3 rounded-full text-xs border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 transition">
                       Clear filters
                     </button>
                   @endif
@@ -330,16 +330,16 @@
                 @if(($view ?? 'list') === 'timeline')
                   <div class="mt-3 flex flex-wrap items-center gap-2">
                     <button type="button" wire:click="timelinePrevMonth"
-                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition"
                       title="Previous month">←</button>
                     <button type="button" wire:click="timelineToday"
-                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition"
                       title="Jump to current month">Today</button>
                     <button type="button" wire:click="timelineNextMonth"
-                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                      class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition"
                       title="Next month">→</button>
-                    <div class="ml-2 text-xs text-white/55">
-                      <span class="text-white/85 font-semibold">{{ $month->format('F Y') }}</span>
+                    <div class="ml-2 text-xs text-zinc-500">
+                      <span class="text-zinc-800 font-semibold">{{ $month->format('F Y') }}</span>
                     </div>
                   </div>
                 @endif
@@ -391,37 +391,37 @@
             <div style="background: {{ $surface }}; box-shadow: {{ $shadow }};"
                  class="group relative rounded-3xl overflow-hidden transition">
               <div class="absolute inset-0 rounded-3xl border border-emerald-500/14 pointer-events-none"></div>
-              <div class="absolute -inset-8 bg-emerald-500/5 blur-3xl pointer-events-none"></div>
+              <div class="absolute -inset-8 bg-emerald-50 blur-3xl pointer-events-none"></div>
               <div style="background: {{ $rail }};" class="absolute left-0 top-4 bottom-4 w-[6px] rounded-full opacity-95"></div>
 
               <button type="button" wire:click="toggle({{ $order->id }})"
-                      class="relative w-full px-6 py-5 text-left hover:bg-emerald-500/5 transition">
+                      class="relative w-full px-6 py-5 text-left hover:bg-emerald-50 transition">
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0 pl-1">
                     <div class="min-w-0 flex items-center gap-2">
                       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border {{ $typeBadge($type) }}">
                         {{ ucfirst($type) }}
                       </span>
-                      <div class="font-semibold text-white/95 truncate">{{ $label }}</div>
-                      <span class="text-white/25">·</span>
-                      <div class="text-white/80 truncate">{{ $customer }}</div>
+                      <div class="font-semibold text-zinc-950/95 truncate">{{ $label }}</div>
+                      <span class="text-zinc-500">·</span>
+                      <div class="text-zinc-700 truncate">{{ $customer }}</div>
                     </div>
 
-                    <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/55">
-                      <span class="text-emerald-100/80">{{ $orderNumber }}</span>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-white/10 bg-white/5 text-white/60">
+                    <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                      <span class="text-emerald-800">{{ $orderNumber }}</span>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-zinc-200 bg-zinc-50 text-zinc-500">
                         Source: {{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}
                       </span>
-                      <span class="inline-flex items-center gap-1"><span class="text-white/25">•</span><span>{{ $linesCount }} lines</span></span>
-                      <span class="inline-flex items-center gap-1"><span class="text-white/25">•</span><span>{{ $qtyTotal }} qty</span></span>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70">
+                      <span class="inline-flex items-center gap-1"><span class="text-zinc-500">•</span><span>{{ $linesCount }} lines</span></span>
+                      <span class="inline-flex items-center gap-1"><span class="text-zinc-500">•</span><span>{{ $qtyTotal }} qty</span></span>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-zinc-200 bg-zinc-50 text-zinc-600">
                         {{ $statusLabel }}
                       </span>
                       @if(($order->open_mapping_exceptions_count ?? 0) > 0)
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-100 text-amber-900">
                           Blocked: needs mapping
                         </span>
-                        <a href="{{ route('admin.mapping-exceptions') }}" class="text-[11px] text-emerald-100/80 hover:text-emerald-100 underline">
+                        <a href="{{ route('admin.mapping-exceptions') }}" class="text-[11px] text-emerald-800 hover:text-emerald-900 underline">
                           Fix mappings
                         </a>
                       @endif
@@ -429,16 +429,16 @@
                   </div>
 
                   <div class="flex items-center gap-3 shrink-0">
-                    <div class="text-sm text-white/60">
-                      Ship By: <span class="text-emerald-50/90">{{ $shipBy }}</span>
+                    <div class="text-sm text-zinc-500">
+                      Ship By: <span class="text-zinc-600">{{ $shipBy }}</span>
                     </div>
 
                     <div class="text-xs px-3 py-1.5 rounded-full border
-                      {{ $isOpen ? 'border-emerald-300/30 bg-emerald-400/20 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/8 text-white/70' }}">
+                      {{ $isOpen ? 'border-emerald-300/30 bg-emerald-100 text-emerald-900' : 'border-emerald-400/15 bg-emerald-100 text-zinc-600' }}">
                       {{ $isOpen ? 'Open' : 'Closed' }}
                     </div>
 
-                    <div class="text-emerald-100/40 group-hover:text-emerald-100/75 transition">
+                    <div class="text-emerald-800 group-hover:text-emerald-800 transition">
                       <span class="inline-block transition-transform duration-300 {{ $isOpen ? 'rotate-90' : '' }}">▸</span>
                     </div>
                   </div>
@@ -452,14 +452,14 @@
               >
                 <div class="px-6 pb-6 pt-4 {{ $isOpen ? '' : 'pointer-events-none' }}">
                   @if($lines->isEmpty())
-                    <div class="rounded-2xl border border-emerald-400/12 bg-emerald-500/5 p-3 text-sm text-white/70">
+                    <div class="rounded-2xl border border-emerald-400/12 bg-emerald-50 p-3 text-sm text-zinc-600">
                       No line items.
                     </div>
                   @else
-                    <div class="rounded-2xl border border-emerald-400/12 bg-emerald-500/5 overflow-hidden">
-                      <div class="flex items-center justify-between px-4 py-2 text-xs text-white/55 border-b border-emerald-400/10">
+                    <div class="rounded-2xl border border-emerald-400/12 bg-emerald-50 overflow-hidden">
+                      <div class="flex items-center justify-between px-4 py-2 text-xs text-zinc-500 border-b border-emerald-400/10">
                         <div>Line items</div>
-                        <div class="text-white/45">{{ $lines->count() }} items · Total qty {{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</div>
+                        <div class="text-zinc-500">{{ $lines->count() }} items · Total qty {{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</div>
                       </div>
 
                       <div class="divide-y divide-emerald-400/10">
@@ -484,35 +484,35 @@
                               <div class="shrink-0">
                                 @if($img)
                                   <img src="{{ $img }}" alt=""
-                                       class="h-10 w-10 rounded-lg object-cover border border-white/10 bg-white/5"
+                                       class="h-10 w-10 rounded-lg object-cover border border-zinc-200 bg-zinc-50"
                                        loading="lazy" />
                                 @else
-                                  <div class="h-10 w-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-white/30 text-[10px]">—</div>
+                                  <div class="h-10 w-10 rounded-lg border border-zinc-200 bg-zinc-50 flex items-center justify-center text-zinc-500 text-[10px]">—</div>
                                 @endif
                               </div>
 
                               <div class="min-w-0 flex-1">
                                 <div class="min-w-0 flex flex-wrap items-center gap-1.5 text-sm leading-tight">
-                                  <span class="font-semibold text-white/90 truncate">{{ $title }}</span>
+                                  <span class="font-semibold text-zinc-900 truncate">{{ $title }}</span>
 
                                   @if($sizeLabel)
-                                    <span class="text-white/30">·</span>
-                                    <span class="text-white/55 truncate">{{ $sizeLabel }}</span>
+                                    <span class="text-zinc-500">·</span>
+                                    <span class="text-zinc-500 truncate">{{ $sizeLabel }}</span>
                                   @elseif($variant)
-                                    <span class="text-white/30">·</span>
-                                    <span class="text-white/55 truncate">{{ $variant }}</span>
+                                    <span class="text-zinc-500">·</span>
+                                    <span class="text-zinc-500 truncate">{{ $variant }}</span>
                                   @endif
 
-                                  <span class="text-white/30">·</span>
+                                  <span class="text-zinc-500">·</span>
 
-                                  <span class="inline-flex items-center gap-1 text-white/70 shrink-0">
-                                    <span class="text-white/40">×</span>
-                                    <span class="px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/80">{{ $qty }}</span>
+                                  <span class="inline-flex items-center gap-1 text-zinc-600 shrink-0">
+                                    <span class="text-zinc-500">×</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] border border-zinc-200 bg-zinc-50 text-zinc-700">{{ $qty }}</span>
                                   </span>
 
                                   @if($pour)
-                                    <span class="text-white/30">·</span>
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-emerald-300/20 bg-emerald-500/10 text-emerald-100/80 shrink-0">
+                                    <span class="text-zinc-500">·</span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-emerald-300/20 bg-emerald-100 text-emerald-800 shrink-0">
                                       {{ $pour }}
                                     </span>
                                   @endif
@@ -523,9 +523,9 @@
                         @endforeach
                       </div>
 
-                      <div class="flex items-center justify-between px-4 py-2 text-xs text-white/55 border-t border-emerald-400/10">
+                      <div class="flex items-center justify-between px-4 py-2 text-xs text-zinc-500 border-t border-emerald-400/10">
                         <div>{{ $lines->count() }} items</div>
-                        <div>Total qty: <span class="text-white/80 font-semibold">{{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</span></div>
+                        <div>Total qty: <span class="text-zinc-700 font-semibold">{{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</span></div>
                       </div>
                     </div>
                   @endif
@@ -533,9 +533,9 @@
               </div>
             </div>
           @empty
-            <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 p-10 text-center">
-              <div class="text-white font-medium">No orders found</div>
-              <div class="text-white/50 text-sm mt-1">Try adjusting filters or search.</div>
+            <div class="rounded-3xl border border-emerald-500/15 bg-emerald-50 p-10 text-center">
+              <div class="text-zinc-950 font-medium">No orders found</div>
+              <div class="text-zinc-500 text-sm mt-1">Try adjusting filters or search.</div>
             </div>
           @endforelse
 
@@ -551,10 +551,10 @@
             'dir' => strtolower((string) ($dir ?? 'asc')) === 'desc' ? 'desc' : 'asc',
           ];
         @endphp
-        <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 overflow-hidden">
+        <div class="rounded-3xl border border-emerald-500/15 bg-emerald-50 overflow-hidden">
           <div class="px-4 py-3 border-b border-emerald-400/10 flex items-center justify-between">
-            <div class="text-sm font-semibold text-white/90">Table View</div>
-            <div class="text-xs text-white/55">Shipping-room spreadsheet mode.</div>
+            <div class="text-sm font-semibold text-zinc-900">Table View</div>
+            <div class="text-xs text-zinc-500">Shipping-room spreadsheet mode.</div>
           </div>
 
           <div class="mf-shipping-table-wrap">
@@ -572,7 +572,7 @@
                 <col style="width: 72px;">
                 <col style="width: 118px;">
               </colgroup>
-              <thead class="text-xs text-white/55 bg-black/20">
+              <thead class="text-xs text-zinc-500 bg-zinc-50">
                 <tr class="[&>th]:px-4 [&>th]:py-3 [&>th]:text-left [&>th]:font-medium">
                   @foreach([
                     ['key' => 'order_number', 'label' => 'Order', 'align' => 'left', 'title' => 'Order Number'],
@@ -628,34 +628,34 @@
 
                   {{-- main row --}}
                   <tr
-                    class="mf-row-main hover:bg-emerald-500/5 transition {{ $isEditingOrder ? '' : 'cursor-pointer' }}"
+                    class="mf-row-main hover:bg-emerald-50 transition {{ $isEditingOrder ? '' : 'cursor-pointer' }}"
                     wire:key="order-row-{{ $order->id }}"
                     @if(!$isEditingOrder) wire:click="toggle({{ $order->id }})" @endif
                   >
-                    <td class="px-4 py-3 text-emerald-100/80 whitespace-nowrap">
+                    <td class="px-4 py-3 text-emerald-800 whitespace-nowrap">
                       {{ $order->order_number ?? '—' }}
                     </td>
 
-                    <td class="px-4 py-3 text-white/80 whitespace-nowrap">
+                    <td class="px-4 py-3 text-zinc-700 whitespace-nowrap">
                       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border {{ $typeBadge($order->order_type ?? $order->channel ?? 'retail') }}">
                         {{ ucfirst($order->order_type ?? $order->channel ?? 'retail') }}
                       </span>
                     </td>
 
-                    <td class="px-4 py-3 text-white/80" title="{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}">
+                    <td class="px-4 py-3 text-zinc-700" title="{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}">
                       <span class="mf-cell-clip">{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}</span>
                     </td>
 
-                    <td class="px-4 py-3 text-white/80" title="{{ $order->customer_name ?? $order->display_name ?? '—' }}">
+                    <td class="px-4 py-3 text-zinc-700" title="{{ $order->customer_name ?? $order->display_name ?? '—' }}">
                       <span class="mf-cell-clip">{{ $order->customer_name ?? $order->display_name ?? '—' }}</span>
                     </td>
 
                     {{-- Ship By --}}
-                    <td class="px-4 py-3 text-white/70 whitespace-nowrap">
+                    <td class="px-4 py-3 text-zinc-600 whitespace-nowrap">
                       @if($canEditOrders && $isEditingOrder)
                         <input
                           type="date"
-                          class="w-[150px] rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white/90
+                          class="w-[150px] rounded-xl border border-zinc-200 bg-zinc-50 px-2 py-1 text-zinc-900
                                  focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                           wire:model.defer="orderEdit.{{ $order->id }}.ship_by_at"
                         />
@@ -674,11 +674,11 @@
                     </td>
 
                     {{-- Bring Down --}}
-                    <td class="px-4 py-3 text-white/70 whitespace-nowrap">
+                    <td class="px-4 py-3 text-zinc-600 whitespace-nowrap">
                       @if($canEditOrders && $isEditingOrder)
                         <input
                           type="date"
-                          class="w-[150px] rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white/90
+                          class="w-[150px] rounded-xl border border-zinc-200 bg-zinc-50 px-2 py-1 text-zinc-900
                                  focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                           wire:model.defer="orderEdit.{{ $order->id }}.due_at"
                         />
@@ -700,7 +700,7 @@
                     <td class="px-4 py-3 {{ $isEditingOrder ? 'mf-cell-wrap' : '' }}">
                       @if($canEditOrders && $isEditingOrder)
                         <select
-                          class="w-[170px] rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/90
+                          class="w-[170px] rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-zinc-900
                                  focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                           wire:model.defer="orderEdit.{{ $order->id }}.status"
                         >
@@ -715,19 +715,19 @@
                         @error("orderEdit.$order->id.status")
                           <div class="mt-1 text-[11px] text-red-400">{{ $message }}</div>
                         @enderror
-                        <label class="mt-2 flex items-center gap-2 text-[11px] text-white/60 whitespace-normal">
+                        <label class="mt-2 flex items-center gap-2 text-[11px] text-zinc-500 whitespace-normal">
                           <input
                             type="checkbox"
-                            class="h-4 w-4 rounded border-white/20 bg-white/5 text-emerald-400 focus:ring-emerald-400/30"
+                            class="h-4 w-4 rounded border-zinc-300 bg-zinc-50 text-emerald-400 focus:ring-emerald-400/30"
                             wire:model.defer="orderEdit.{{ $order->id }}.recalc_ship_by"
                           />
                           Recalculate ship-by from order type
                         </label>
                         @if(($order->open_mapping_exceptions_count ?? 0) > 0)
-                          <div class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                          <div class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-100 text-amber-900">
                             Blocked: needs mapping
                           </div>
-                          <a href="{{ route('admin.mapping-exceptions') }}" class="mt-1 inline-flex text-[10px] text-emerald-100/80 hover:text-emerald-100 underline">
+                          <a href="{{ route('admin.mapping-exceptions') }}" class="mt-1 inline-flex text-[10px] text-emerald-800 hover:text-emerald-900 underline">
                             Fix mappings
                           </a>
                         @endif
@@ -735,13 +735,13 @@
                         <div class="flex items-center gap-2 whitespace-nowrap overflow-hidden">
                           <button
                             type="button"
-                            class="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition"
+                            class="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 transition"
                             @if($canEditOrders) wire:click.stop="startEditing({{ $order->id }})" @endif
                           >
                             {{ $fmtStatus($order->status ?? null) }}
                           </button>
                           @if(($order->open_mapping_exceptions_count ?? 0) > 0)
-                            <span class="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                            <span class="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-100 text-amber-900">
                               Needs mapping
                             </span>
                           @endif
@@ -749,15 +749,15 @@
                       @endif
                     </td>
 
-                    <td class="px-4 py-3 text-white/70 whitespace-nowrap" title="{{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}">
+                    <td class="px-4 py-3 text-zinc-600 whitespace-nowrap" title="{{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}">
                       <span class="mf-cell-clip">{{ $order->source ? str_replace('_', ' ', ucfirst($order->source)) : 'manual' }}</span>
                     </td>
 
-                    <td class="px-4 py-3 text-right text-white/70 whitespace-nowrap">
+                    <td class="px-4 py-3 text-right text-zinc-600 whitespace-nowrap">
                       {{ $lines->count() }}
                     </td>
 
-                    <td class="px-4 py-3 text-right text-white/70 whitespace-nowrap">
+                    <td class="px-4 py-3 text-right text-zinc-600 whitespace-nowrap">
                       {{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0)) }}
                     </td>
 
@@ -766,7 +766,7 @@
                         <button
                           type="button"
                           wire:click.stop="toggle({{ $order->id }})"
-                          class="px-3 py-1.5 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition"
+                          class="px-3 py-1.5 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition"
                         >
                           {{ $isOpen ? 'Close' : 'Open' }}
                         </button>
@@ -776,17 +776,17 @@
 
                   {{-- open details row --}}
                   @if($isOpen)
-                    <tr class="bg-black/20" wire:key="order-open-{{ $order->id }}">
+                    <tr class="bg-zinc-50" wire:key="order-open-{{ $order->id }}">
                       <td colspan="11" class="px-4 py-4">
-                        <div class="rounded-2xl border border-emerald-400/12 bg-emerald-500/5 overflow-hidden">
+                        <div class="rounded-2xl border border-emerald-400/12 bg-emerald-50 overflow-hidden">
 
                           <div class="px-4 py-3 border-b border-emerald-400/10 flex items-center justify-between">
-                            <div class="text-xs text-white/60">
+                            <div class="text-xs text-zinc-500">
                               Line items
-                              <span class="text-white/30">·</span>
-                              <span class="text-white/50">{{ $lines->count() }} items</span>
-                              <span class="text-white/30">·</span>
-                              <span class="text-white/50">Total qty {{$lines->sum(fn ($l) => (int)($l->ordered_qty ?? $l->quantity ?? 0))}}</span>
+                              <span class="text-zinc-500">·</span>
+                              <span class="text-zinc-500">{{ $lines->count() }} items</span>
+                              <span class="text-zinc-500">·</span>
+                              <span class="text-zinc-500">Total qty {{$lines->sum(fn ($l) => (int)($l->ordered_qty ?? $l->quantity ?? 0))}}</span>
                             </div>
 
                             @php
@@ -798,7 +798,7 @@
                                 <button
                                   type="button"
                                   wire:click="cancelEditing({{ $order->id }})"
-                                  class="px-3 py-1.5 rounded-xl text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white/75 transition"
+                                  class="px-3 py-1.5 rounded-xl text-xs border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 transition"
                                 >
                                   Cancel
                                 </button>
@@ -806,7 +806,7 @@
                                   type="button"
                                   wire:click="saveOrderWork({{ $order->id }})"
                                   wire:loading.attr="disabled"
-                                  class="px-4 py-1.5 rounded-xl text-xs border border-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/20 text-white/90 transition"
+                                  class="px-4 py-1.5 rounded-xl text-xs border border-emerald-400/25 bg-emerald-100 hover:bg-emerald-100 text-zinc-900 transition"
                                 >
                                   <span wire:loading.remove>Save Order</span>
                                   <span wire:loading>Saving…</span>
@@ -817,14 +817,14 @@
 
                           {{-- NOTICE --}}
                           @if(!empty($orderNotice[$order->id] ?? null))
-                            <div class="px-4 py-2 border-b border-emerald-400/10 bg-emerald-500/10 text-xs text-emerald-100/90">
+                            <div class="px-4 py-2 border-b border-emerald-400/10 bg-emerald-100 text-xs text-emerald-800">
                               {{ $orderNotice[$order->id] }}
                             </div>
                           @endif
 
                           {{-- ADD NEW LINE --}}
                           @if($canEditOrders)
-                            <div class="px-4 py-3 border-b border-emerald-400/10 bg-black/10">
+                            <div class="px-4 py-3 border-b border-emerald-400/10 bg-zinc-50">
                               <div class="grid grid-cols-12 gap-3 items-center">
 
                           {{-- SCENT --}}
@@ -852,7 +852,7 @@
                               type="text"
                               list="sizes-list-{{ $order->id }}"
                               placeholder="Size…"
-                              class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90 placeholder:text-white/35
+                              class="w-full h-10 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 placeholder:text-zinc-500
                                     focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                               wire:model.live.debounce.150ms="newLine.{{ $order->id }}.size_search"
                               wire:keydown.enter.prevent="selectNewLineSize({{ $order->id }})"
@@ -878,7 +878,7 @@
                                 {{-- WICK --}}
                                 <div class="col-span-2">
                                   <select
-                                    class="w-full h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-white/90
+                                    class="w-full h-10 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900
                                            focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                                     wire:model.defer="newLine.{{ $order->id }}.wick"
                                   >
@@ -898,7 +898,7 @@
                                     <button
                                       type="button"
                                       wire:click="decrementNewLineQty({{ $order->id }})"
-                                      class="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/85 transition"
+                                      class="h-10 w-10 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 transition"
                                       title="Decrease"
                                     >−</button>
 
@@ -906,7 +906,7 @@
                                       type="text"
                                       inputmode="numeric"
                                       pattern="[0-9]*"
-                                      class="h-10 w-20 text-center rounded-xl border border-white/10 bg-white/5 px-2 text-white/90
+                                      class="h-10 w-20 text-center rounded-xl border border-zinc-200 bg-zinc-50 px-2 text-zinc-900
                                              focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                                       wire:model.defer="newLine.{{ $order->id }}.qty"
                                     />
@@ -914,7 +914,7 @@
                                     <button
                                       type="button"
                                       wire:click="incrementNewLineQty({{ $order->id }})"
-                                      class="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/85 transition"
+                                      class="h-10 w-10 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 transition"
                                       title="Increase"
                                     >+</button>
                                   </div>
@@ -930,7 +930,7 @@
                                     type="button"
                                     wire:click="addLineItem({{ $order->id }})"
                                     wire:loading.attr="disabled"
-                                    class="h-10 w-full min-w-[90px] rounded-xl text-sm font-semibold border border-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/20 text-white/90 transition"
+                                    class="h-10 w-full min-w-[90px] rounded-xl text-sm font-semibold border border-emerald-400/25 bg-emerald-100 hover:bg-emerald-100 text-zinc-900 transition"
                                   >
                                     Add
                                   </button>
@@ -955,13 +955,13 @@
 
                               <div class="px-4 py-3 flex items-center justify-between gap-4" wire:key="line-{{ $line->id }}">
                                 <div class="min-w-0 flex-1">
-                                  <div class="min-w-0 flex flex-wrap items-center gap-2 text-white/85">
+                                  <div class="min-w-0 flex flex-wrap items-center gap-2 text-zinc-800">
                                     <span class="font-semibold truncate max-w-[320px]">{{ $name }}</span>
                                     @if(!blank($sizeLabel))
-                                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70">{{ $sizeLabel }}</span>
+                                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-zinc-200 bg-zinc-50 text-zinc-600">{{ $sizeLabel }}</span>
                                     @endif
                                     @if(!blank($wickLabel))
-                                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-white/70">{{ ucfirst($wickLabel) }}</span>
+                                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-zinc-200 bg-zinc-50 text-zinc-600">{{ ucfirst($wickLabel) }}</span>
                                     @endif
                                   </div>
                                 </div>
@@ -971,7 +971,7 @@
                                     <button
                                       type="button"
                                       wire:click="decrementLineQty({{ $line->id }})"
-                                      class="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition"
+                                      class="h-9 w-9 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 transition"
                                       title="Decrease"
                                     >−</button>
 
@@ -979,7 +979,7 @@
                                       type="number"
                                       min="0"
                                       inputmode="numeric"
-                                      class="w-20 h-9 text-center rounded-xl border border-white/10 bg-white/5 px-2 text-white/90
+                                      class="w-20 h-9 text-center rounded-xl border border-zinc-200 bg-zinc-50 px-2 text-zinc-900
                                              focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
                                       wire:model.defer="lineEdit.{{ $line->id }}.qty"
                                     />
@@ -987,7 +987,7 @@
                                     <button
                                       type="button"
                                       wire:click="incrementLineQty({{ $line->id }})"
-                                      class="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition"
+                                      class="h-9 w-9 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 transition"
                                       title="Increase"
                                     >+</button>
 
@@ -1007,24 +1007,24 @@
                                         type="button"
                                         wire:click="saveLine({{ $line->id }})"
                                         wire:loading.attr="disabled"
-                                        class="ml-2 px-3 py-2 rounded-xl text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 transition"
+                                        class="ml-2 px-3 py-2 rounded-xl text-xs border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 transition"
                                       >
                                         Save line
                                       </button>
                                     @endif
                                   @else
-                                    <div class="text-white/80">× {{ $qty }}</div>
+                                    <div class="text-zinc-700">× {{ $qty }}</div>
                                   @endif
                                 </div>
                               </div>
                             @empty
-                              <div class="px-4 py-6 text-sm text-white/60">No line items.</div>
+                              <div class="px-4 py-6 text-sm text-zinc-500">No line items.</div>
                             @endforelse
                           </div>
 
-                          <div class="px-4 py-3 border-t border-emerald-400/10 flex items-center justify-between text-xs text-white/55">
+                          <div class="px-4 py-3 border-t border-emerald-400/10 flex items-center justify-between text-xs text-zinc-500">
                             <div>{{ $lines->count() }} items</div>
-                            <div>Total qty: <span class="text-white/80 font-semibold">{{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</span></div>
+                            <div>Total qty: <span class="text-zinc-700 font-semibold">{{ $lines->sum(fn ($l) => (int)(($l->ordered_qty ?? $l->quantity) ?? 0))}}</span></div>
                           </div>
 
                         </div>
@@ -1034,7 +1034,7 @@
 
                 @empty
                   <tr>
-                    <td colspan="11" class="px-4 py-10 text-center text-white/60">No orders found.</td>
+                    <td colspan="11" class="px-4 py-10 text-center text-zinc-500">No orders found.</td>
                   </tr>
                 @endforelse
               </tbody>
@@ -1058,15 +1058,15 @@
           });
         @endphp
 
-        <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 overflow-hidden">
+        <div class="rounded-3xl border border-emerald-500/15 bg-emerald-50 overflow-hidden">
           <div class="px-4 py-3 border-b border-emerald-400/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div class="text-sm font-semibold text-white/90">Gantt View</div>
+            <div class="text-sm font-semibold text-zinc-900">Gantt View</div>
             <div class="flex items-center gap-2">
               <button type="button" wire:click="ganttToday"
-                class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/15 text-white/80 transition">
+                class="h-9 px-3 rounded-xl text-xs border border-emerald-400/20 bg-emerald-100 hover:bg-emerald-100 text-zinc-700 transition">
                 This Week
               </button>
-              <div class="text-xs text-white/60 ml-2">
+              <div class="text-xs text-zinc-500 ml-2">
                 {{ $gStart->format('M j') }} – {{ $gEnd->format('M j, Y') }}
               </div>
             </div>
@@ -1082,15 +1082,15 @@
             <div class="min-w-[900px]">
               {{-- Date header --}}
               <div class="grid sticky top-0 z-10" style="grid-template-columns: 240px repeat({{ $gDays }}, 44px);">
-                <div class="px-4 py-2 text-xs text-white/50 border-b border-emerald-400/10 bg-black/30">Order</div>
+                <div class="px-4 py-2 text-xs text-zinc-500 border-b border-emerald-400/10 bg-zinc-50">Order</div>
                 @for($i=0; $i<$gDays; $i++)
                   @php $d = $gStart->copy()->addDays($i); @endphp
                   <div
-                    class="px-2 py-2 text-[11px] text-white/60 border-b border-emerald-400/10 bg-black/30 text-center"
+                    class="px-2 py-2 text-[11px] text-zinc-500 border-b border-emerald-400/10 bg-zinc-50 text-center"
                     data-gantt-day
                     data-date="{{ $d->toDateString() }}"
                   >
-                    <div class="text-[10px] uppercase tracking-[0.2em] text-white/40">{{ $d->format('D') }}</div>
+                    <div class="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{{ $d->format('D') }}</div>
                     <div>{{ $d->format('M j') }}</div>
                   </div>
                 @endfor
@@ -1098,10 +1098,10 @@
 
               @foreach($grouped as $type => $ordersGroup)
                 <div class="grid border-b border-emerald-400/10" style="grid-template-columns: 240px repeat({{ $gDays }}, 44px);">
-                  <div class="px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-100/60 bg-emerald-500/10">
+                  <div class="px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-800 bg-emerald-100">
                     {{ ucfirst($type) }}
                   </div>
-                  <div class="bg-emerald-500/10" style="grid-column: 2 / span {{ $gDays }};"></div>
+                  <div class="bg-emerald-100" style="grid-column: 2 / span {{ $gDays }};"></div>
                 </div>
 
                 @foreach($ordersGroup as $row)
@@ -1119,10 +1119,10 @@
                   @endphp
 
                   <div class="grid border-b border-emerald-400/10" style="grid-template-columns: 240px repeat({{ $gDays }}, 44px);">
-                    <div class="px-4 py-2 text-xs text-white/80 truncate">
-                      <div class="font-semibold text-white/90 truncate">#{{ ltrim((string) $number, '#') }}</div>
-                      <div class="text-white/50 truncate">{{ $label }}</div>
-                      <div class="text-white/40 text-[11px]">Start: {{ $start->toDateString() }} → Ship: {{ $end->toDateString() }}</div>
+                    <div class="px-4 py-2 text-xs text-zinc-700 truncate">
+                      <div class="font-semibold text-zinc-900 truncate">#{{ ltrim((string) $number, '#') }}</div>
+                      <div class="text-zinc-500 truncate">{{ $label }}</div>
+                      <div class="text-zinc-500 text-[11px]">Start: {{ $start->toDateString() }} → Ship: {{ $end->toDateString() }}</div>
                     </div>
                     @for($i=0; $i<$gDays; $i++)
                       <div class="border-l border-emerald-400/10"></div>
@@ -1130,7 +1130,7 @@
 
                     @if($visible)
                       <div
-                        class="h-6 rounded-full bg-emerald-400/40 border border-emerald-300/30 shadow-[0_4px_20px_-12px_rgba(16,185,129,0.9)]"
+                        class="h-6 rounded-full bg-emerald-400/40 border border-emerald-300/30 shadow-sm"
                         style="grid-column: {{ $offset + 2 }} / span {{ $span }}; margin-top: -26px; margin-bottom: 8px;"
                         title="Start: {{ $start->toDateString() }} → Ship: {{ $end->toDateString() }}"
                       ></div>
@@ -1147,22 +1147,22 @@
       @if(($view ?? 'list') === 'timeline')
         <div class="space-y-4">
 
-          <div class="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 p-4 text-sm text-white/65">
-            <div class="text-white/85 font-semibold">Timeline (Month)</div>
+          <div class="rounded-3xl border border-emerald-500/15 bg-emerald-50 p-4 text-sm text-zinc-600">
+            <div class="text-zinc-800 font-semibold">Timeline (Month)</div>
             <div class="mt-1">
-              Orders show on their <span class="text-emerald-100/80">ship-by due date</span> (day-of-month).
+              Orders show on their <span class="text-emerald-800">ship-by due date</span> (day-of-month).
               Use Channel + Status + Search to isolate workloads.
             </div>
           </div>
 
-          <div class="grid grid-cols-7 gap-2 text-xs text-white/45 px-2">
+          <div class="grid grid-cols-7 gap-2 text-xs text-zinc-500 px-2">
             @foreach($daysOfWeek as $d)
               <div class="px-2">{{ $d }}</div>
             @endforeach
           </div>
 
-          <div class="rounded-3xl border border-emerald-500/15 bg-zinc-950/40 backdrop-blur overflow-hidden">
-            <div class="grid grid-cols-7 gap-px bg-emerald-400/10">
+          <div class="rounded-3xl border border-emerald-500/15 bg-white overflow-hidden">
+            <div class="grid grid-cols-7 gap-px bg-emerald-100">
               @foreach($gridDays as $cursor)
                 @php
                   $dayKey   = $cursor->toDateString();
@@ -1171,14 +1171,14 @@
                   $dayOrders = $byDay->get($dayKey, collect());
                 @endphp
 
-                <div class="bg-black/30 min-h-[150px] p-2">
+                <div class="bg-zinc-50 min-h-[150px] p-2">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs {{ $inMonth ? 'text-white/75' : 'text-white/30' }}">
+                    <div class="text-xs {{ $inMonth ? 'text-zinc-700' : 'text-zinc-500' }}">
                       {{ $cursor->day }}
                     </div>
 
                     @if($isToday)
-                      <div class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-300/30 bg-emerald-400/20 text-emerald-50">
+                      <div class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-300/30 bg-emerald-100 text-emerald-900">
                         Today
                       </div>
                     @endif
@@ -1202,22 +1202,22 @@
                         class="w-full text-left rounded-xl border px-2 py-1.5 transition hover:brightness-110 {{ $typeAccent($type) }}">
                         <div class="flex items-center justify-between gap-2">
                           <div class="min-w-0">
-                            <div class="text-xs text-white/90 truncate">
+                            <div class="text-xs text-zinc-900 truncate">
                               <span class="font-semibold">{{ $titleLeft }}</span>
-                              <span class="text-white/25">·</span>
-                              <span class="text-white/70">{{ $titleRight }}</span>
+                              <span class="text-zinc-500">·</span>
+                              <span class="text-zinc-600">{{ $titleRight }}</span>
                             </div>
-                            <div class="mt-0.5 text-[11px] text-white/55 truncate">{{ $sub }}</div>
+                            <div class="mt-0.5 text-[11px] text-zinc-500 truncate">{{ $sub }}</div>
                           </div>
                           <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border {{ $typeBadge($type) }}">
                             {{ ucfirst($type) }}
                           </span>
-                          <div class="text-emerald-100/40">{{ $isOpen ? '▾' : '▸' }}</div>
+                          <div class="text-emerald-800">{{ $isOpen ? '▾' : '▸' }}</div>
                         </div>
                       </button>
 
                       @if($isOpen)
-                        <div class="ml-2 mr-1 mb-2 mt-1 rounded-xl border border-emerald-400/10 bg-black/20 overflow-hidden">
+                        <div class="ml-2 mr-1 mb-2 mt-1 rounded-xl border border-emerald-400/10 bg-zinc-50 overflow-hidden">
                           <div class="divide-y divide-emerald-400/10">
                             @foreach($lines->take(6) as $line)
                               @php
@@ -1225,20 +1225,20 @@
                                 $size = $line->size ? ($line->size->label ?: $line->size->code) : ($line->size_code ?? null);
                                 $qty = (int) (($line->ordered_qty ?? $line->quantity) ?? 0);
                               @endphp
-                              <div class="px-2 py-1 text-[11px] text-white/65 flex items-center justify-between gap-2">
+                              <div class="px-2 py-1 text-[11px] text-zinc-600 flex items-center justify-between gap-2">
                                 <div class="truncate">
                                   {{ $name }}
                                   @if(!blank($size))
-                                    <span class="text-white/35">·</span>
-                                    <span class="text-white/50">{{ $size }}</span>
+                                    <span class="text-zinc-500">·</span>
+                                    <span class="text-zinc-500">{{ $size }}</span>
                                   @endif
                                 </div>
-                                <div class="shrink-0 text-white/70">× {{ $qty }}</div>
+                                <div class="shrink-0 text-zinc-600">× {{ $qty }}</div>
                               </div>
                             @endforeach
 
                             @if($lines->count() > 6)
-                              <div class="px-2 py-1 text-[11px] text-white/45">
+                              <div class="px-2 py-1 text-[11px] text-zinc-500">
                                 + {{ $lines->count() - 6 }} more…
                               </div>
                             @endif
@@ -1248,7 +1248,7 @@
                     @endforeach
 
                     @if($dayOrders->count() > 4)
-                      <div class="text-[11px] text-white/45 px-2">
+                      <div class="text-[11px] text-zinc-500 px-2">
                         + {{ $dayOrders->count() - 4 }} more…
                       </div>
                     @endif

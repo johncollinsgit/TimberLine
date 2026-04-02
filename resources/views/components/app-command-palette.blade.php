@@ -10,7 +10,7 @@
     data-placeholder="{{ $placeholder }}"
     class="hidden"
 >
-    <div class="fixed inset-0 z-[70] hidden bg-slate-900/20 backdrop-blur-[2px]" data-command-overlay></div>
+    <div class="fixed inset-0 z-[70] hidden fb-overlay-subtle" data-command-overlay></div>
     <div class="fixed inset-x-0 top-[8vh] z-[71] hidden px-4" data-command-panel>
         <div class="mx-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-[0_26px_60px_-38px_rgba(15,23,42,0.35)]">
             <div class="border-b border-zinc-200 px-5 py-4">

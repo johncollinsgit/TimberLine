@@ -9,7 +9,7 @@
             hint-text="Internal groups unlock direct send actions for admin and marketing_manager users. Consent gating still applies at send time."
         />
 
-        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+        <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <form method="POST" action="{{ $mode === 'create' ? route('marketing.groups.store') : route('marketing.groups.update', $group) }}" class="space-y-5">
                 @csrf
                 @if($mode === 'edit')
@@ -21,29 +21,29 @@
                 @endif
 
                 <div>
-                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Name</label>
+                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Name</label>
                     <input type="text" name="name" required value="{{ old('name', $group->name) }}"
-                           class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                           class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                 </div>
 
                 <div>
-                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Description</label>
+                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Description</label>
                     <textarea name="description" rows="3"
-                              class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">{{ old('description', $group->description) }}</textarea>
+                              class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">{{ old('description', $group->description) }}</textarea>
                 </div>
 
-                <label class="inline-flex items-center gap-2 text-sm text-white/85">
+                <label class="inline-flex items-center gap-2 text-sm text-zinc-800">
                     <input type="checkbox" name="is_internal" value="1" @checked((bool) old('is_internal', $group->is_internal))
-                           class="rounded border-white/20 bg-white/5">
+                           class="rounded border-zinc-300 bg-zinc-50">
                     Mark as internal group (allows direct SMS/email send bypass actions)
                 </label>
 
                 <div class="flex flex-wrap gap-3">
-                    <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-50">
+                    <button type="submit" class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
                         {{ $mode === 'create' ? 'Create Group' : 'Save Group' }}
                     </button>
                     <a href="{{ $mode === 'create' ? route('marketing.groups') : route('marketing.groups.show', $group) }}" wire:navigate
-                       class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85">
+                       class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-800">
                         Cancel
                     </a>
                 </div>

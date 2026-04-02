@@ -12,33 +12,33 @@
             hint-text="This bypass is internal-group only. Consent and contact eligibility checks still run per profile before provider execution."
         />
 
-        <section class="rounded-3xl border border-amber-300/30 bg-amber-500/10 p-5 sm:p-6">
-            <h2 class="text-lg font-semibold text-amber-100">{{ $group->name }}</h2>
-            <p class="mt-1 text-sm text-amber-50/90">
+        <section class="rounded-3xl border border-amber-300/30 bg-amber-100 p-5 sm:p-6">
+            <h2 class="text-lg font-semibold text-amber-900">{{ $group->name }}</h2>
+            <p class="mt-1 text-sm text-amber-800">
                 Members: {{ $memberCount }} · Internal send bypass enabled.
             </p>
         </section>
 
-        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+        <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <form method="POST" action="{{ route('marketing.groups.send.execute', $group) }}" class="space-y-4">
                 @csrf
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Channel</label>
-                        <select name="channel" id="group_send_channel" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Channel</label>
+                        <select name="channel" id="group_send_channel" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                             <option value="sms" @selected(old('channel') === 'sms')>SMS</option>
                             <option value="email" @selected(old('channel') === 'email')>Email</option>
                         </select>
                     </div>
                     <div id="email_subject_wrap">
-                        <label class="text-xs uppercase tracking-[0.2em] text-white/55">Email Subject</label>
-                        <input type="text" name="subject" value="{{ old('subject') }}" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Email Subject</label>
+                        <input type="text" name="subject" value="{{ old('subject') }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                     </div>
                 </div>
 
                 <div id="sms_sender_wrap">
-                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">SMS Sender</label>
-                    <select name="sender_key" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">SMS Sender</label>
+                    <select name="sender_key" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                         @foreach($smsSenders as $sender)
                             <option value="{{ $sender['key'] }}" @selected($selectedSenderKey === $sender['key']) @disabled(empty($sender['sendable']))>
                                 {{ $sender['label'] }} · {{ $sender['type'] }} · {{ $sender['status'] }}{{ empty($sender['sendable']) ? ' (not sendable yet)' : '' }}
@@ -48,20 +48,20 @@
                 </div>
 
                 <div>
-                    <label class="text-xs uppercase tracking-[0.2em] text-white/55">Message</label>
-                    <textarea name="message" rows="5" required class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">{{ old('message') }}</textarea>
+                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Message</label>
+                    <textarea name="message" rows="5" required class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">{{ old('message') }}</textarea>
                 </div>
 
-                <label class="inline-flex items-center gap-2 text-sm text-white/75">
-                    <input type="checkbox" name="dry_run" value="1" class="rounded border-white/20 bg-white/5">
+                <label class="inline-flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" name="dry_run" value="1" class="rounded border-zinc-300 bg-zinc-50">
                     Dry run (simulate provider success)
                 </label>
 
                 <div class="flex flex-wrap gap-3">
-                    <button type="submit" class="inline-flex rounded-full border border-amber-300/35 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-100">
+                    <button type="submit" class="inline-flex rounded-full border border-amber-300/35 bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900">
                         Send To Internal Group
                     </button>
-                    <a href="{{ route('marketing.groups.show', $group) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">
+                    <a href="{{ route('marketing.groups.show', $group) }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-700">
                         Back To Group
                     </a>
                 </div>

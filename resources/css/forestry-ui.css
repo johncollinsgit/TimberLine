@@ -145,6 +145,20 @@ h6 {
   padding: 0.72rem 0.8rem;
 }
 
+.fb-surface-card {
+  background: var(--fb-surface);
+  border: 1px solid var(--fb-border);
+  box-shadow: var(--fb-shadow-sm);
+}
+
+.fb-overlay-subtle {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.fb-overlay-soft {
+  background: rgba(15, 23, 42, 0.16);
+}
+
 a {
   color: var(--fb-brand-2);
 }

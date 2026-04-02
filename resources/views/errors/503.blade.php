@@ -8,7 +8,7 @@
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100">
     <main class="mx-auto flex min-h-screen max-w-2xl items-center px-6">
-        <section class="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl">
+        <section class="w-full rounded-3xl border border-zinc-200 bg-white/5 p-8 shadow-2xl">
             <p class="text-xs uppercase tracking-[0.3em] text-zinc-400">503</p>
             <h1 class="mt-3 text-3xl font-semibold">Backstage is taking a breather.</h1>
             <p class="mt-3 text-sm text-zinc-300">

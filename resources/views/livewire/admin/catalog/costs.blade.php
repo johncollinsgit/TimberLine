@@ -1,13 +1,13 @@
-<section class="mf-app-card rounded-3xl border border-emerald-200/10 p-5">
+<section class="mf-app-card rounded-3xl border border-zinc-200 p-5">
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
-      <div class="text-lg font-semibold text-white">Product Costs</div>
-      <div class="text-sm text-emerald-50/70">Manage product cost rules for reporting and margin visibility.</div>
+      <div class="text-lg font-semibold text-zinc-950">Product Costs</div>
+      <div class="text-sm text-zinc-600">Manage product cost rules for reporting and margin visibility.</div>
     </div>
     <div class="flex items-center gap-2">
       <button
         wire:click="openCreate"
-        class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded-full border border-emerald-400/40 bg-emerald-100 px-4 py-2 text-xs font-semibold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
         @disabled(!($catalogCostsAvailable ?? true))
       >
         {{ $showCreate ? 'Hide form' : 'Add cost rule' }}
@@ -16,20 +16,20 @@
   </div>
 
   @if(!($catalogCostsAvailable ?? true))
-    <div class="mt-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
-      <p class="font-semibold text-white">Catalog costs are unavailable in this environment.</p>
+    <div class="mt-4 rounded-2xl border border-amber-300/30 bg-amber-100 px-4 py-3 text-sm text-amber-800">
+      <p class="font-semibold text-zinc-950">Catalog costs are unavailable in this environment.</p>
       <p class="mt-1">
         Run migrations to create the <code>catalog_item_costs</code> table, then reload this tab to continue.
       </p>
     </div>
   @else
-    <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-50/85">
+    <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-100 px-4 py-3 text-xs text-zinc-600">
       Resolver order: Shopify variant, SKU, Shopify product, scent + size, then size-only fallback. Add the most specific cost you know first.
     </div>
   @endif
 
   @if($showCreate && ($catalogCostsAvailable ?? true))
-    <form wire:submit.prevent="create" class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-12">
+    <form wire:submit.prevent="create" class="mt-4 grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-12">
       <div class="md:col-span-2">
         <flux:input wire:model.defer="create.shopify_store_key" label="Store" placeholder="retail" />
       </div>
@@ -44,8 +44,8 @@
         <flux:input wire:model.defer="create.sku" label="SKU" />
       </div>
       <div class="md:col-span-2">
-        <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-white/60">Scent</label>
-        <select wire:model.defer="create.scent_id" class="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white focus:border-emerald-300 focus:outline-none">
+        <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">Scent</label>
+        <select wire:model.defer="create.scent_id" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 focus:border-emerald-300 focus:outline-none">
           <option value="">Any scent</option>
           @foreach($scentOptions as $scent)
             <option value="{{ $scent->id }}">{{ $scent->display_name ?: $scent->name }}</option>
@@ -53,8 +53,8 @@
         </select>
       </div>
       <div class="md:col-span-2">
-        <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-white/60">Size</label>
-        <select wire:model.defer="create.size_id" class="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white focus:border-emerald-300 focus:outline-none">
+        <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">Size</label>
+        <select wire:model.defer="create.size_id" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 focus:border-emerald-300 focus:outline-none">
           <option value="">Any size</option>
           @foreach($sizeOptions as $size)
             <option value="{{ $size->id }}">{{ $size->label ?: $size->code }}</option>
@@ -75,14 +75,14 @@
         <flux:input wire:model.defer="create.notes" label="Notes" />
       </div>
       <div class="md:col-span-2 flex items-center gap-2 pt-6">
-        <input type="checkbox" wire:model.defer="create.is_active" class="rounded border-white/20 bg-white/10" />
-        <span class="text-sm text-white/80">Active</span>
+        <input type="checkbox" wire:model.defer="create.is_active" class="rounded border-zinc-300 bg-zinc-100" />
+        <span class="text-sm text-zinc-700">Active</span>
       </div>
       <div class="md:col-span-12 flex items-center gap-2">
-        <button type="submit" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white">
+        <button type="submit" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-zinc-950">
           Save cost
         </button>
-        <button type="button" wire:click="openCreate" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">
+        <button type="button" wire:click="openCreate" class="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600">
           Cancel
         </button>
       </div>
@@ -91,9 +91,9 @@
 
   <div class="mt-4 flex flex-wrap items-center gap-2">
     <flux:input wire:model.live="search" placeholder="Search costs..." />
-    <div class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2">
-      <span class="text-[11px] uppercase tracking-wide text-white/50">Rows</span>
-      <select wire:model.live="perPage" class="bg-transparent text-xs text-white/80 focus:outline-none">
+    <div class="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-2">
+      <span class="text-[11px] uppercase tracking-wide text-zinc-500">Rows</span>
+      <select wire:model.live="perPage" class="bg-transparent text-xs text-zinc-700 focus:outline-none">
         <option value="25">25</option>
         <option value="50">50</option>
         <option value="100">100</option>
@@ -101,10 +101,10 @@
     </div>
   </div>
 
-  <div class="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white">
+  <div class="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
     <div class="overflow-x-auto">
       <table class="min-w-full text-sm">
-        <thead class="bg-white/5 text-white/70">
+        <thead class="bg-zinc-50 text-zinc-600">
           <tr>
             <th class="cursor-pointer px-4 py-3 text-left" wire:click="setSort('shopify_store_key')">Store</th>
             <th class="px-4 py-3 text-left">Matcher</th>
@@ -116,11 +116,11 @@
             <th class="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-white/5">
+        <tbody class="divide-y divide-zinc-200">
           @forelse($costs as $cost)
-            <tr class="hover:bg-white/5">
-              <td class="px-4 py-3 text-white/85">{{ $cost->shopify_store_key ?: 'All stores' }}</td>
-              <td class="px-4 py-3 text-white">
+            <tr class="hover:bg-zinc-50">
+              <td class="px-4 py-3 text-zinc-800">{{ $cost->shopify_store_key ?: 'All stores' }}</td>
+              <td class="px-4 py-3 text-zinc-950">
                 <div class="space-y-1">
                   @if($cost->shopify_variant_id)
                     <div>Variant {{ $cost->shopify_variant_id }}</div>
@@ -132,31 +132,31 @@
                     <div>Product {{ $cost->shopify_product_id }}</div>
                   @endif
                   @if(!$cost->shopify_variant_id && !$cost->sku && !$cost->shopify_product_id)
-                    <div class="text-white/50">Catalog fallback only</div>
+                    <div class="text-zinc-500">Catalog fallback only</div>
                   @endif
                 </div>
               </td>
-              <td class="px-4 py-3 text-white/80">
+              <td class="px-4 py-3 text-zinc-700">
                 <div class="space-y-1">
                   <div>{{ $cost->scent?->display_name ?: $cost->scent?->name ?: 'Any scent' }}</div>
                   <div>{{ $cost->size?->label ?: $cost->size?->code ?: 'Any size' }}</div>
                 </div>
               </td>
-              <td class="px-4 py-3 text-white">{{ '$' . number_format((float) $cost->cost_amount, 2) }}</td>
-              <td class="px-4 py-3 text-white/80">{{ $cost->currency_code }}</td>
-              <td class="px-4 py-3 text-white/80">{{ $cost->effective_at?->format('M j, Y g:i A') ?: 'Immediate' }}</td>
+              <td class="px-4 py-3 text-zinc-950">{{ '$' . number_format((float) $cost->cost_amount, 2) }}</td>
+              <td class="px-4 py-3 text-zinc-700">{{ $cost->currency_code }}</td>
+              <td class="px-4 py-3 text-zinc-700">{{ $cost->effective_at?->format('M j, Y g:i A') ?: 'Immediate' }}</td>
               <td class="px-4 py-3">
-                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $cost->is_active ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-white/60' }}">
+                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $cost->is_active ? 'bg-emerald-100 text-emerald-900' : 'bg-zinc-100 text-zinc-500' }}">
                   {{ $cost->is_active ? 'Active' : 'Inactive' }}
                 </span>
               </td>
               <td class="px-4 py-3 text-right">
-                <button type="button" wire:click="openEdit({{ $cost->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100">Edit</button>
+                <button type="button" wire:click="openEdit({{ $cost->id }})" class="rounded-full border border-emerald-400/30 bg-emerald-100 px-3 py-1 text-[11px] text-emerald-900">Edit</button>
               </td>
             </tr>
           @empty
             <tr>
-              <td colspan="8" class="px-4 py-6 text-center text-white/70">
+              <td colspan="8" class="px-4 py-6 text-center text-zinc-600">
                 @if(!($catalogCostsAvailable ?? true))
                   Catalog costs are not available in this environment yet.
                 @else
@@ -174,9 +174,9 @@
 </section>
 
 @if($showEdit)
-  <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
-    <div class="mf-app-card w-full max-w-4xl rounded-2xl border border-white/10 p-6">
-      <div class="text-lg font-semibold text-white">Edit Cost Rule</div>
+  <div class="fixed inset-0 z-[9999] flex items-center justify-center fb-overlay-soft p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
+    <div class="mf-app-card w-full max-w-4xl rounded-2xl border border-zinc-200 p-6">
+      <div class="text-lg font-semibold text-zinc-950">Edit Cost Rule</div>
       <div class="mt-4 grid gap-3 md:grid-cols-12">
         <div class="md:col-span-2">
           <flux:input wire:model.defer="edit.shopify_store_key" label="Store" />
@@ -192,8 +192,8 @@
           <flux:input wire:model.defer="edit.sku" label="SKU" />
         </div>
         <div class="md:col-span-2">
-          <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-white/60">Scent</label>
-          <select wire:model.defer="edit.scent_id" class="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white focus:border-emerald-300 focus:outline-none">
+          <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">Scent</label>
+          <select wire:model.defer="edit.scent_id" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 focus:border-emerald-300 focus:outline-none">
             <option value="">Any scent</option>
             @foreach($scentOptions as $scent)
               <option value="{{ $scent->id }}">{{ $scent->display_name ?: $scent->name }}</option>
@@ -201,8 +201,8 @@
           </select>
         </div>
         <div class="md:col-span-2">
-          <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-white/60">Size</label>
-          <select wire:model.defer="edit.size_id" class="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white focus:border-emerald-300 focus:outline-none">
+          <label class="mb-1 block text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">Size</label>
+          <select wire:model.defer="edit.size_id" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 focus:border-emerald-300 focus:outline-none">
             <option value="">Any size</option>
             @foreach($sizeOptions as $size)
               <option value="{{ $size->id }}">{{ $size->label ?: $size->code }}</option>
@@ -223,13 +223,13 @@
           <flux:input wire:model.defer="edit.notes" label="Notes" />
         </div>
         <div class="md:col-span-2 flex items-center gap-2 pt-6">
-          <input type="checkbox" wire:model.defer="edit.is_active" class="rounded border-white/20 bg-white/10" />
-          <span class="text-sm text-white/80">Active</span>
+          <input type="checkbox" wire:model.defer="edit.is_active" class="rounded border-zinc-300 bg-zinc-100" />
+          <span class="text-sm text-zinc-700">Active</span>
         </div>
       </div>
       <div class="mt-4 flex items-center gap-2">
-        <button type="button" wire:click="save" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white">Save</button>
-        <button type="button" wire:click="$set('showEdit', false)" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
+        <button type="button" wire:click="save" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-zinc-950">Save</button>
+        <button type="button" wire:click="$set('showEdit', false)" class="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600">Cancel</button>
       </div>
     </div>
   </div>

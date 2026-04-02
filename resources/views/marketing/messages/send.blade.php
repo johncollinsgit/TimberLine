@@ -1,20 +1,20 @@
 <x-layouts::app :title="'Send a Text'">
     <div class="mx-auto w-full max-w-5xl px-3 py-4 sm:px-5 sm:py-6 space-y-5">
-        <header class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5">
+        <header class="rounded-2xl border border-zinc-200 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="space-y-1">
-                    <p class="text-[11px] uppercase tracking-[0.24em] text-white/45">Marketing Messages</p>
-                    <h1 class="text-2xl font-semibold text-white">Send a text</h1>
-                    <p class="text-sm text-white/70">Pick an audience, write the message, send a quick test, then launch.</p>
+                    <p class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Marketing Messages</p>
+                    <h1 class="text-2xl font-semibold text-zinc-950">Send a text</h1>
+                    <p class="text-sm text-zinc-600">Pick an audience, write the message, send a quick test, then launch.</p>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <a href="{{ $deliveryLogUrl }}" class="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10">
+                    <a href="{{ $deliveryLogUrl }}" class="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                         Delivery Log
                     </a>
                     <form method="POST" action="{{ route('marketing.messages.reset') }}">
                         @csrf
-                        <button type="submit" class="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/75 hover:bg-white/10">
+                        <button type="submit" class="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                             Reset
                         </button>
                     </form>
@@ -22,7 +22,7 @@
             </div>
         </header>
 
-        <section class="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3 sm:px-4">
+        <section class="rounded-2xl border border-zinc-200 bg-white/[0.02] px-3 py-3 sm:px-4">
             @php
                 $steps = [
                     1 => 'Who',
@@ -33,7 +33,7 @@
             @endphp
             <ol class="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 @foreach($steps as $number => $label)
-                    <li class="rounded-xl border px-3 py-2 text-xs {{ $step === $number ? 'border-emerald-300/45 bg-emerald-400/12 text-white' : ($step > $number ? 'border-white/20 bg-white/[0.06] text-white/85' : 'border-white/10 bg-transparent text-white/45') }}">
+                    <li class="rounded-xl border px-3 py-2 text-xs {{ $step === $number ? 'border-emerald-300/45 bg-emerald-400/12 text-zinc-950' : ($step > $number ? 'border-zinc-300 bg-white/[0.06] text-zinc-800' : 'border-zinc-200 bg-transparent text-zinc-500') }}">
                         <span class="font-semibold">{{ $number }}.</span> {{ $label }}
                     </li>
                 @endforeach
@@ -41,24 +41,24 @@
         </section>
 
         @if($profileCount === 0)
-            <section class="rounded-2xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <section class="rounded-2xl border border-amber-300/30 bg-amber-100 px-4 py-3 text-sm text-amber-900">
                 No customer profiles yet, so search will be empty. Run <code class="font-mono">php artisan marketing:sync-profiles</code> then refresh.
             </section>
         @endif
 
         @if($step === 1)
-            <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5" x-data="{ audienceKind: '{{ old('audience_kind', (string) ($state['audience_kind'] ?? 'person')) }}', groupMode: '{{ old('group_mode', (string) ($state['group_mode'] ?? 'saved')) }}' }">
+            <section class="rounded-2xl border border-zinc-200 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5" x-data="{ audienceKind: '{{ old('audience_kind', (string) ($state['audience_kind'] ?? 'person')) }}', groupMode: '{{ old('group_mode', (string) ($state['group_mode'] ?? 'saved')) }}' }">
                 <div class="space-y-1">
-                    <h2 class="text-xl font-semibold text-white">Who are we texting?</h2>
-                    <p class="text-sm text-white/68">Pick a person, a group, a segment, or paste numbers if you're feeling chaotic.</p>
+                    <h2 class="text-xl font-semibold text-zinc-950">Who are we texting?</h2>
+                    <p class="text-sm text-zinc-600">Pick a person, a group, a segment, or paste numbers if you're feeling chaotic.</p>
                 </div>
 
                 <form method="POST" action="{{ route('marketing.messages.save-audience') }}" class="mt-5 space-y-4">
                     @csrf
 
                     <div class="space-y-2">
-                        <label for="audience_kind" class="text-xs uppercase tracking-[0.2em] text-white/50">Send To</label>
-                        <select id="audience_kind" name="audience_kind" x-model="audienceKind" class="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white sm:w-64">
+                        <label for="audience_kind" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Send To</label>
+                        <select id="audience_kind" name="audience_kind" x-model="audienceKind" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 sm:w-64">
                             <option value="person">Person</option>
                             <option value="group">Group</option>
                             <option value="segment">Segment</option>
@@ -66,9 +66,9 @@
                         </select>
                     </div>
 
-                    <div x-show="audienceKind === 'person'" x-cloak class="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4">
-                        <p class="text-sm font-medium text-white">Find one customer</p>
-                        <p class="mt-1 text-xs text-white/60">Start typing a name, email, or phone. Enter picks the highlighted result.</p>
+                    <div x-show="audienceKind === 'person'" x-cloak class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
+                        <p class="text-sm font-medium text-zinc-950">Find one customer</p>
+                        <p class="mt-1 text-xs text-zinc-500">Start typing a name, email, or phone. Enter picks the highlighted result.</p>
 
                         <div class="mt-3" x-data="singleProfilePicker({
                             endpoint: @js($searchEndpoint),
@@ -84,12 +84,12 @@
                                     @keydown="handleKeydown($event)"
                                     @focus="handleFocus()"
                                     placeholder="Type a name, email, or phone"
-                                    class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35"
+                                    class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-950 placeholder:text-zinc-500"
                                 />
 
-                                <div x-show="loading" x-cloak class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-white/50">Searching...</div>
+                                <div x-show="loading" x-cloak class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-zinc-500">Searching...</div>
 
-                                <div x-show="open" x-cloak class="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#0f1917] shadow-2xl">
+                                <div x-show="open" x-cloak class="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-md">
                                     <template x-if="items.length > 0">
                                         <ul class="max-h-64 overflow-auto py-1">
                                             <template x-for="(item, index) in items" :key="item.id">
@@ -99,10 +99,10 @@
                                                         @mouseenter="activeIndex = index"
                                                         @click="select(item)"
                                                         class="w-full px-3 py-2 text-left text-sm"
-                                                        :class="activeIndex === index ? 'bg-emerald-500/20 text-white' : 'text-white/85 hover:bg-white/5'"
+                                                        :class="activeIndex === index ? 'bg-emerald-100 text-zinc-950' : 'text-zinc-800 hover:bg-zinc-50'"
                                                     >
                                                         <div class="font-medium" x-text="item.name"></div>
-                                                        <div class="text-xs text-white/60" x-text="item.email || item.phone || 'No email or phone yet'"></div>
+                                                        <div class="text-xs text-zinc-500" x-text="item.email || item.phone || 'No email or phone yet'"></div>
                                                     </button>
                                                 </li>
                                             </template>
@@ -110,7 +110,7 @@
                                     </template>
 
                                     <template x-if="!loading && items.length === 0">
-                                        <div class="px-3 py-3 text-xs text-white/60">
+                                        <div class="px-3 py-3 text-xs text-zinc-500">
                                             <template x-if="meta.empty_reason === 'no_profiles'">
                                                 <p>No profiles yet. Sync customers first.</p>
                                             </template>
@@ -126,32 +126,32 @@
                             </div>
 
                             <template x-if="selected">
-                                <div class="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-sm text-emerald-50">
+                                <div class="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-100 px-3 py-1.5 text-sm text-emerald-900">
                                     <span x-text="selected.name"></span>
-                                    <span class="text-emerald-100/70" x-text="selected.phone || selected.email || ''"></span>
-                                    <button type="button" class="text-emerald-100/80 hover:text-white" @click="clearSelected()">Remove</button>
+                                    <span class="text-emerald-800" x-text="selected.phone || selected.email || ''"></span>
+                                    <button type="button" class="text-emerald-800 hover:text-zinc-950" @click="clearSelected()">Remove</button>
                                 </div>
                             </template>
                         </div>
                     </div>
 
-                    <div x-show="audienceKind === 'group'" x-cloak class="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4 space-y-3">
+                    <div x-show="audienceKind === 'group'" x-cloak class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 space-y-3">
                         <div class="space-y-1">
-                            <p class="text-sm font-medium text-white">Groups</p>
-                            <p class="text-xs text-white/60">Saved group = reusable list. Custom group = build one now.</p>
+                            <p class="text-sm font-medium text-zinc-950">Groups</p>
+                            <p class="text-xs text-zinc-500">Saved group = reusable list. Custom group = build one now.</p>
                         </div>
 
                         <div class="space-y-2">
-                            <label for="group_mode" class="text-xs uppercase tracking-[0.2em] text-white/50">Group Type</label>
-                            <select id="group_mode" name="group_mode" x-model="groupMode" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white sm:w-72">
+                            <label for="group_mode" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Group Type</label>
+                            <select id="group_mode" name="group_mode" x-model="groupMode" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 sm:w-72">
                                 <option value="saved">Saved Group</option>
                                 <option value="custom">Build Custom Group</option>
                             </select>
                         </div>
 
                         <div x-show="groupMode === 'saved'" x-cloak class="space-y-2">
-                            <label for="group_id" class="text-xs uppercase tracking-[0.2em] text-white/50">Saved Group</label>
-                            <select id="group_id" name="group_id" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                            <label for="group_id" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Saved Group</label>
+                            <select id="group_id" name="group_id" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                                 <option value="">Choose a group</option>
                                 @foreach($groups as $group)
                                     <option value="{{ $group->id }}" @selected((int) ($state['group_id'] ?? 0) === (int) $group->id)>
@@ -160,7 +160,7 @@
                                 @endforeach
                             </select>
                             @if($groups->isEmpty())
-                                <p class="text-xs text-white/55">No saved groups yet. Build one below in about 10 seconds.</p>
+                                <p class="text-xs text-zinc-500">No saved groups yet. Build one below in about 10 seconds.</p>
                             @endif
                         </div>
 
@@ -174,7 +174,7 @@
                                     <input type="hidden" name="selected_profile_ids[]" :value="item.id">
                                 </template>
 
-                                <label class="text-xs uppercase tracking-[0.2em] text-white/50">Add Customers</label>
+                                <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Add Customers</label>
                                 <div class="relative" @click.outside="open = false">
                                     <input
                                         type="text"
@@ -182,12 +182,12 @@
                                         @keydown="handleKeydown($event)"
                                         @focus="handleFocus()"
                                         placeholder="Search and press enter to add"
-                                        class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35"
+                                        class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-950 placeholder:text-zinc-500"
                                     />
 
-                                    <div x-show="loading" x-cloak class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-white/50">Searching...</div>
+                                    <div x-show="loading" x-cloak class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-zinc-500">Searching...</div>
 
-                                    <div x-show="open" x-cloak class="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#0f1917] shadow-2xl">
+                                    <div x-show="open" x-cloak class="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-md">
                                         <template x-if="items.length > 0">
                                             <ul class="max-h-64 overflow-auto py-1">
                                                 <template x-for="(item, index) in items" :key="item.id">
@@ -197,10 +197,10 @@
                                                             @mouseenter="activeIndex = index"
                                                             @click="select(item)"
                                                             class="w-full px-3 py-2 text-left text-sm"
-                                                            :class="activeIndex === index ? 'bg-emerald-500/20 text-white' : 'text-white/85 hover:bg-white/5'"
+                                                            :class="activeIndex === index ? 'bg-emerald-100 text-zinc-950' : 'text-zinc-800 hover:bg-zinc-50'"
                                                         >
                                                             <div class="font-medium" x-text="item.name"></div>
-                                                            <div class="text-xs text-white/60" x-text="item.email || item.phone || 'No email or phone yet'"></div>
+                                                            <div class="text-xs text-zinc-500" x-text="item.email || item.phone || 'No email or phone yet'"></div>
                                                         </button>
                                                     </li>
                                                 </template>
@@ -208,65 +208,65 @@
                                         </template>
 
                                         <template x-if="!loading && items.length === 0">
-                                            <div class="px-3 py-3 text-xs text-white/60">No matches yet. Try a different search term.</div>
+                                            <div class="px-3 py-3 text-xs text-zinc-500">No matches yet. Try a different search term.</div>
                                         </template>
                                     </div>
                                 </div>
 
                                 <div class="flex flex-wrap gap-2" x-show="selected.length > 0" x-cloak>
                                     <template x-for="item in selected" :key="'pill-' + item.id">
-                                        <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/85">
+                                        <div class="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-800">
                                             <span x-text="item.name"></span>
-                                            <button type="button" @click="remove(item.id)" class="text-white/60 hover:text-white">Remove</button>
+                                            <button type="button" @click="remove(item.id)" class="text-zinc-500 hover:text-zinc-950">Remove</button>
                                         </div>
                                     </template>
                                 </div>
                             </div>
 
                             <div>
-                                <label for="manual_phones_custom" class="text-xs uppercase tracking-[0.2em] text-white/50">Optional Extra Numbers</label>
+                                <label for="manual_phones_custom" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Optional Extra Numbers</label>
                                 <textarea
                                     id="manual_phones_custom"
                                     name="manual_phones"
                                     rows="3"
-                                    class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                                    class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                                     placeholder="Paste numbers separated by commas or new lines"
                                 >{{ old('manual_phones', (string) ($state['manual_phones'] ?? '')) }}</textarea>
                             </div>
 
                             <div class="grid gap-3 sm:grid-cols-2">
                                 <div>
-                                    <label for="group_name" class="text-xs uppercase tracking-[0.2em] text-white/50">Group Name (optional)</label>
+                                    <label for="group_name" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Group Name (optional)</label>
                                     <input
                                         id="group_name"
                                         name="group_name"
                                         value="{{ old('group_name', (string) ($state['group_name'] ?? '')) }}"
                                         placeholder="Spring launch crowd"
-                                        class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                                        class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                                     />
                                 </div>
-                                <label class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
+                                <label class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
                                     <input type="checkbox" name="save_reusable_group" value="1" @checked((bool) ($state['save_reusable_group'] ?? false))>
                                     Save this as a reusable group
                                 </label>
                             </div>
 
                             <div>
-                                <label for="group_description" class="text-xs uppercase tracking-[0.2em] text-white/50">Description (optional)</label>
+                                <label for="group_description" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Description (optional)</label>
                                 <input
                                     id="group_description"
                                     name="group_description"
                                     value="{{ old('group_description', (string) ($state['group_description'] ?? '')) }}"
                                     placeholder="Great for launch reminders"
-                                    class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                                    class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <div x-show="audienceKind === 'segment'" x-cloak class="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4 space-y-2">
-                        <p class="text-sm font-medium text-white">Segment</p>
-                        <select id="segment_id" name="segment_id" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <div x-show="audienceKind === 'segment'" x-cloak class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 space-y-2">
+                        <p class="text-sm font-medium text-zinc-950">Segment</p>
+                        <select id="segment_id" name="segment_id" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                             <option value="">Choose a segment</option>
                             @foreach($segments as $segment)
                                 <option value="{{ $segment->id }}" @selected((int) ($state['segment_id'] ?? 0) === (int) $segment->id)>
@@ -274,23 +274,23 @@
                                 </option>
                             @endforeach
                         </select>
-                        <p class="text-xs text-white/58">Rule-based audience. We'll lock current matches when you continue.</p>
+                        <p class="text-xs text-zinc-950/58">Rule-based audience. We'll lock current matches when you continue.</p>
                     </div>
 
-                    <div x-show="audienceKind === 'manual'" x-cloak class="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4 space-y-2">
-                        <p class="text-sm font-medium text-white">Manual numbers</p>
+                    <div x-show="audienceKind === 'manual'" x-cloak class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 space-y-2">
+                        <p class="text-sm font-medium text-zinc-950">Manual numbers</p>
                         <textarea
                             id="manual_phones"
                             name="manual_phones"
                             rows="5"
-                            class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                            class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                             placeholder="+15551234567&#10;+15557654321"
                         >{{ old('manual_phones', (string) ($state['manual_phones'] ?? '')) }}</textarea>
-                        <p class="text-xs text-white/58">Paste one per line, or separate with commas.</p>
+                        <p class="text-xs text-zinc-950/58">Paste one per line, or separate with commas.</p>
                     </div>
 
                     <div class="flex justify-end">
-                        <button type="submit" class="rounded-xl border border-emerald-300/40 bg-emerald-500/18 px-4 py-2 text-sm font-semibold text-white">
+                        <button type="submit" class="rounded-xl border border-emerald-300/40 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">
                             Continue
                         </button>
                     </div>
@@ -305,22 +305,22 @@
                     ->all();
                 $initialTemplateId = (string) old('template_id', (string) ((int) ($state['template_id'] ?? 0) ?: ''));
             @endphp
-            <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5" x-data="messageComposer(
+            <section class="rounded-2xl border border-zinc-200 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5" x-data="messageComposer(
                 @js((string) (($state['raw_message_text'] ?? '') !== '' ? $state['raw_message_text'] : ($state['message_text'] ?? ''))),
                 @js($templateLookup),
                 @js($initialTemplateId)
             )" x-init="init()">
                 <div class="space-y-1">
-                    <h2 class="text-xl font-semibold text-white">What should it say?</h2>
-                    <p class="text-sm text-white/68">Keep it clear, friendly, and worth opening.</p>
+                    <h2 class="text-xl font-semibold text-zinc-950">What should it say?</h2>
+                    <p class="text-sm text-zinc-600">Keep it clear, friendly, and worth opening.</p>
                 </div>
 
                 <form method="POST" action="{{ route('marketing.messages.save-message') }}" id="message-form" class="mt-5 space-y-4">
                     @csrf
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
-                            <label for="template_id" class="text-xs uppercase tracking-[0.2em] text-white/50">Template (optional)</label>
-                            <select id="template_id" name="template_id" x-model="selectedTemplateId" @change="applyTemplate($event)" class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                            <label for="template_id" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Template (optional)</label>
+                            <select id="template_id" name="template_id" x-model="selectedTemplateId" @change="applyTemplate($event)" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                                 <option value="">No template</option>
                                 @foreach($templates as $template)
                                     <option value="{{ $template->id }}" @selected((int) old('template_id', (int) ($state['template_id'] ?? 0)) === (int) $template->id)>
@@ -330,34 +330,34 @@
                             </select>
                         </div>
                         <div>
-                            <label for="send_at" class="text-xs uppercase tracking-[0.2em] text-white/50">Send Time</label>
+                            <label for="send_at" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Send Time</label>
                             <input
                                 id="send_at"
                                 type="datetime-local"
                                 name="send_at"
                                 value="{{ old('send_at', isset($state['send_at']) && $state['send_at'] ? \Illuminate\Support\Carbon::parse((string) $state['send_at'])->format('Y-m-d\TH:i') : '') }}"
-                                class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                                class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                             />
                         </div>
                     </div>
 
                     <div class="space-y-2">
-                        <label for="message_text" class="text-xs uppercase tracking-[0.2em] text-white/50">Message</label>
+                        <label for="message_text" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Message</label>
                         <textarea
                             id="message_text"
                             name="message_text"
                             rows="9"
                             x-model="text"
-                            class="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-base text-white"
+                            class="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-base text-zinc-950"
                             placeholder="Example: Fresh drop just landed. Grab yours here: https://..."
                         >{{ old('message_text', (string) (($state['raw_message_text'] ?? '') !== '' ? $state['raw_message_text'] : ($state['message_text'] ?? ''))) }}</textarea>
 
-                        <div class="flex flex-wrap items-center gap-3 text-xs text-white/65">
+                        <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-600">
                             <span>Characters: <span x-text="length"></span></span>
                             <span>Estimated SMS segments: <span x-text="segments"></span></span>
                         </div>
 
-                        <div class="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/68">
+                        <div class="rounded-xl border border-zinc-200 bg-white/[0.04] px-3 py-2 text-xs text-zinc-600">
                             Paste a link and we'll shorten it automatically before send.
                         </div>
 
@@ -366,12 +366,12 @@
                                 type="url"
                                 x-model="linkDraft"
                                 placeholder="Paste a product link"
-                                class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                                class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                             />
-                            <button type="button" @click="appendLink()" class="rounded-xl border border-sky-300/30 bg-sky-500/15 px-3 py-2 text-sm font-medium text-white">
+                            <button type="button" @click="appendLink()" class="rounded-xl border border-sky-300/30 bg-sky-100 px-3 py-2 text-sm font-medium text-zinc-950">
                                 Add Link
                             </button>
-                            <button type="button" @click="appendFirstName()" class="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white/85">
+                            <button type="button" @click="appendFirstName()" class="rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-800">
                                 Add First Name
                             </button>
                         </div>
@@ -383,10 +383,10 @@
                     <form method="POST" action="{{ route('marketing.messages.set-step') }}">
                         @csrf
                         <input type="hidden" name="step" value="1">
-                        <button type="submit" class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">Back</button>
+                        <button type="submit" class="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm text-zinc-700">Back</button>
                     </form>
 
-                    <button type="submit" form="message-form" class="rounded-xl border border-emerald-300/40 bg-emerald-500/18 px-4 py-2 text-sm font-semibold text-white">
+                    <button type="submit" form="message-form" class="rounded-xl border border-emerald-300/40 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">
                         Continue
                     </button>
                 </div>
@@ -394,84 +394,84 @@
         @endif
 
         @if($step === 3)
-            <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5 space-y-4">
+            <section class="rounded-2xl border border-zinc-200 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5 space-y-4">
                 <div class="space-y-1">
-                    <h2 class="text-xl font-semibold text-white">Give it one last look.</h2>
-                    <p class="text-sm text-white/68">Want to test it first? Good instinct.</p>
+                    <h2 class="text-xl font-semibold text-zinc-950">Give it one last look.</h2>
+                    <p class="text-sm text-zinc-600">Want to test it first? Good instinct.</p>
                 </div>
 
                 <div class="grid gap-3 sm:grid-cols-3">
-                    <article class="rounded-xl border border-white/10 bg-black/20 p-3">
-                        <p class="text-xs uppercase tracking-[0.2em] text-white/50">Audience</p>
-                        <p class="mt-1 text-sm font-semibold text-white">{{ data_get($state, 'audience_summary.label', 'Audience') }}</p>
-                        <p class="mt-1 text-xs text-white/65">{{ data_get($state, 'audience_summary.detail', 'No audience selected yet.') }}</p>
+                    <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Audience</p>
+                        <p class="mt-1 text-sm font-semibold text-zinc-950">{{ data_get($state, 'audience_summary.label', 'Audience') }}</p>
+                        <p class="mt-1 text-xs text-zinc-600">{{ data_get($state, 'audience_summary.detail', 'No audience selected yet.') }}</p>
                     </article>
-                    <article class="rounded-xl border border-white/10 bg-black/20 p-3">
-                        <p class="text-xs uppercase tracking-[0.2em] text-white/50">Recipients</p>
-                        <p class="mt-1 text-sm font-semibold text-white">{{ number_format($recipientCount) }}</p>
-                        <p class="mt-1 text-xs text-white/65">Estimated segments: {{ number_format($estimatedSegments) }}</p>
+                    <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Recipients</p>
+                        <p class="mt-1 text-sm font-semibold text-zinc-950">{{ number_format($recipientCount) }}</p>
+                        <p class="mt-1 text-xs text-zinc-600">Estimated segments: {{ number_format($estimatedSegments) }}</p>
                     </article>
-                    <article class="rounded-xl border border-white/10 bg-black/20 p-3">
-                        <p class="text-xs uppercase tracking-[0.2em] text-white/50">Send Time</p>
-                        <p class="mt-1 text-sm font-semibold text-white">
+                    <article class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Send Time</p>
+                        <p class="mt-1 text-sm font-semibold text-zinc-950">
                             {{ !empty($state['send_at']) ? \Illuminate\Support\Carbon::parse((string) $state['send_at'])->format('Y-m-d H:i') : 'Immediately' }}
                         </p>
-                        <p class="mt-1 text-xs text-white/65">Timezone follows app default.</p>
+                        <p class="mt-1 text-xs text-zinc-600">Timezone follows app default.</p>
                     </article>
                 </div>
 
-                <div class="rounded-xl border border-white/10 bg-black/20 p-3">
-                    <p class="text-xs uppercase tracking-[0.2em] text-white/50">Message Preview</p>
-                    <p class="mt-2 whitespace-pre-wrap text-sm text-white/88">{{ (string) ($state['message_text'] ?? '') }}</p>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                    <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Message Preview</p>
+                    <p class="mt-2 whitespace-pre-wrap text-sm text-zinc-950/88">{{ (string) ($state['message_text'] ?? '') }}</p>
                 </div>
 
-                <div class="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
-                    <p class="text-xs uppercase tracking-[0.2em] text-white/50">Compliance / Deliverability</p>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 space-y-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Compliance / Deliverability</p>
                     @if($recipientWarnings !== [])
-                        <ul class="space-y-1 text-sm text-amber-100/90">
+                        <ul class="space-y-1 text-sm text-amber-800">
                             @foreach($recipientWarnings as $warning)
                                 <li>{{ $warning }}</li>
                             @endforeach
                         </ul>
                     @else
-                        <p class="text-sm text-emerald-100/90">No obvious consent/suppression blockers found in this audience snapshot.</p>
+                        <p class="text-sm text-emerald-800">No obvious consent/suppression blockers found in this audience snapshot.</p>
                     @endif
                 </div>
 
-                <div class="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
-                    <p class="text-xs uppercase tracking-[0.2em] text-white/50">Shortened Links</p>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 space-y-2">
+                    <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Shortened Links</p>
                     @if($shortenedLinks !== [])
                         <div class="space-y-2 text-sm">
                             @foreach($shortenedLinks as $link)
-                                <div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                                    <p class="text-white/60 break-all">{{ $link['original'] ?? '—' }}</p>
-                                    <p class="text-emerald-100 break-all">{{ $link['shortened'] ?? '—' }}</p>
+                                <div class="rounded-lg border border-zinc-200 bg-white/[0.03] px-3 py-2">
+                                    <p class="text-zinc-500 break-all">{{ $link['original'] ?? '—' }}</p>
+                                    <p class="text-emerald-900 break-all">{{ $link['shortened'] ?? '—' }}</p>
                                 </div>
                             @endforeach
                         </div>
                     @else
-                        <p class="text-sm text-white/65">No links detected in your message.</p>
+                        <p class="text-sm text-zinc-600">No links detected in your message.</p>
                     @endif
                 </div>
 
-                <form method="POST" action="{{ route('marketing.messages.send-test') }}" class="rounded-xl border border-white/10 bg-black/20 p-3">
+                <form method="POST" action="{{ route('marketing.messages.send-test') }}" class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                     @csrf
                     <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
                         <div>
-                            <label for="test_phone" class="text-xs uppercase tracking-[0.2em] text-white/50">Want to test it first?</label>
+                            <label for="test_phone" class="text-xs uppercase tracking-[0.2em] text-zinc-500">Want to test it first?</label>
                             <input
                                 id="test_phone"
                                 name="test_phone"
                                 value="{{ old('test_phone', (string) ($state['last_test_phone'] ?? env('MARKETING_SMS_TEST_NUMBER', ''))) }}"
                                 placeholder="+15551234567"
-                                class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                                class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950"
                             />
                         </div>
-                        <label class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75">
+                        <label class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                             <input type="checkbox" name="dry_run" value="1">
                             Dry run
                         </label>
-                        <button type="submit" class="rounded-xl border border-sky-300/30 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-white">
+                        <button type="submit" class="rounded-xl border border-sky-300/30 bg-sky-100 px-4 py-2 text-sm font-semibold text-zinc-950">
                             Send Test Text
                         </button>
                     </div>
@@ -481,13 +481,13 @@
                     <form method="POST" action="{{ route('marketing.messages.set-step') }}">
                         @csrf
                         <input type="hidden" name="step" value="2">
-                        <button type="submit" class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">Back</button>
+                        <button type="submit" class="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm text-zinc-700">Back</button>
                     </form>
 
                     <form method="POST" action="{{ route('marketing.messages.set-step') }}">
                         @csrf
                         <input type="hidden" name="step" value="4">
-                        <button type="submit" class="rounded-xl border border-emerald-300/40 bg-emerald-500/18 px-4 py-2 text-sm font-semibold text-white">
+                        <button type="submit" class="rounded-xl border border-emerald-300/40 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">
                             Continue to Send
                         </button>
                     </form>
@@ -496,25 +496,25 @@
         @endif
 
         @if($step === 4)
-            <section class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5 space-y-4">
+            <section class="rounded-2xl border border-zinc-200 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5 space-y-4">
                 <div class="space-y-1">
-                    <h2 class="text-xl font-semibold text-white">Ready to send this thing?</h2>
-                    <p class="text-sm text-white/68">Quick final check, then send.</p>
+                    <h2 class="text-xl font-semibold text-zinc-950">Ready to send this thing?</h2>
+                    <p class="text-sm text-zinc-600">Quick final check, then send.</p>
                 </div>
 
-                <div class="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/80 space-y-2">
-                    <p><span class="text-white/55">Audience:</span> {{ data_get($state, 'audience_summary.label', 'Audience') }}</p>
-                    <p><span class="text-white/55">Recipients:</span> {{ number_format($recipientCount) }}</p>
-                    <p><span class="text-white/55">Message:</span> {{ \Illuminate\Support\Str::limit((string) ($state['message_text'] ?? ''), 180) }}</p>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700 space-y-2">
+                    <p><span class="text-zinc-500">Audience:</span> {{ data_get($state, 'audience_summary.label', 'Audience') }}</p>
+                    <p><span class="text-zinc-500">Recipients:</span> {{ number_format($recipientCount) }}</p>
+                    <p><span class="text-zinc-500">Message:</span> {{ \Illuminate\Support\Str::limit((string) ($state['message_text'] ?? ''), 180) }}</p>
                 </div>
 
                 <form id="final-send-form" method="POST" action="{{ route('marketing.messages.execute') }}" onsubmit="return window.confirm('Send this message now?');" class="space-y-3">
                     @csrf
-                    <label class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
+                    <label class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
                         <input type="checkbox" name="confirm_send" value="1" required>
                         Yes, send it
                     </label>
-                    <label class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
+                    <label class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
                         <input type="checkbox" name="dry_run" value="1">
                         Dry run only
                     </label>
@@ -525,10 +525,10 @@
                     <form method="POST" action="{{ route('marketing.messages.set-step') }}">
                         @csrf
                         <input type="hidden" name="step" value="3">
-                        <button type="submit" class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80">Back</button>
+                        <button type="submit" class="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm text-zinc-700">Back</button>
                     </form>
 
-                    <button type="submit" form="final-send-form" class="rounded-xl border border-emerald-300/45 bg-emerald-500/22 px-4 py-2 text-sm font-semibold text-white">
+                    <button type="submit" form="final-send-form" class="rounded-xl border border-emerald-300/45 bg-emerald-500/22 px-4 py-2 text-sm font-semibold text-zinc-950">
                         Send Message
                     </button>
                 </div>

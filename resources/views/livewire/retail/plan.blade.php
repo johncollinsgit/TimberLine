@@ -1,27 +1,27 @@
 <div class="space-y-4 sm:space-y-6 min-w-0">
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)] min-w-0">
+  <section class="rounded-3xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm min-w-0">
     <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div class="min-w-0">
-        <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">All Pour Lists</div>
-        <div class="mt-2 max-w-full sm:max-w-[32rem] text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-white truncate" title="{{ $plan->name }}">{{ $plan->name }}</div>
-        <div class="mt-2 text-sm text-emerald-50/70 break-words">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
-        <div class="mt-2 text-xs text-emerald-100/70 italic">“{{ $quote }}”</div>
+        <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-800">All Pour Lists</div>
+        <div class="mt-2 max-w-full sm:max-w-[32rem] text-2xl sm:text-3xl font-['Fraunces'] font-semibold text-zinc-950 truncate" title="{{ $plan->name }}">{{ $plan->name }}</div>
+        <div class="mt-2 text-sm text-zinc-600 break-words">{{ $queueMeta['subtitle'] ?? 'Draft list for today. Publish to push to the pouring room.' }}</div>
+        <div class="mt-2 text-xs text-emerald-800 italic">“{{ $quote }}”</div>
       </div>
       @php($wholesaleNeedsSelection = ($queueMeta['key'] ?? '') === 'wholesale' && empty($selectedWholesaleOrderId))
       <div class="flex flex-wrap gap-2">
         @if(($queueMeta['key'] ?? '') !== 'markets')
           <button type="button" wire:click="prefillFromOrders"
             @if($wholesaleNeedsSelection) disabled @endif
-            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition disabled:cursor-not-allowed disabled:opacity-40">
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-100 text-zinc-800 hover:bg-emerald-100 transition disabled:cursor-not-allowed disabled:opacity-40">
             {{ $queueMeta['prefill_label'] ?? 'Prefill from Retail Orders' }}
           </button>
           <button type="button" wire:click="clearScents"
-            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/10 text-white/85 hover:bg-emerald-500/15 transition">
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/25 bg-emerald-100 text-zinc-800 hover:bg-emerald-100 transition">
             Clear Scents
           </button>
           <button type="button" wire:click="publishPlan"
             @if($wholesaleNeedsSelection) disabled @endif
-            class="px-4 py-2 rounded-full text-xs border border-emerald-400/40 bg-emerald-500/25 text-white font-semibold hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-40">
+            class="px-4 py-2 rounded-full text-xs border border-emerald-400/40 bg-emerald-500/25 text-zinc-950 font-semibold hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-40">
             Publish to Pouring
           </button>
         @endif
@@ -33,14 +33,14 @@
         @php($isActiveQueue = ($queueMeta['key'] ?? 'retail') === $tabKey)
         <a
           href="{{ route('retail.plan', ['queue' => $tabKey]) }}"
-          class="group block rounded-2xl border p-4 sm:p-5 transition min-w-0 {{ $isActiveQueue ? 'border-emerald-300/35 bg-emerald-500/18 shadow-[0_18px_40px_-30px_rgba(16,185,129,.35)]' : 'border-emerald-200/10 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-300/20' }}"
+          class="group block rounded-2xl border p-4 sm:p-5 transition min-w-0 {{ $isActiveQueue ? 'border-zinc-300 bg-emerald-100 shadow-[0_18px_40px_-30px_rgba(16,185,129,.35)]' : 'border-zinc-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300/20' }}"
         >
           <div class="flex h-full min-h-[5.5rem] flex-col justify-between gap-3">
             <div class="min-w-0">
-              <div class="text-base sm:text-lg font-semibold text-white leading-tight">{{ $tabMeta['label'] }}</div>
-              <div class="mt-1 text-xs sm:text-sm text-emerald-50/65">{{ $tabMeta['desc'] }}</div>
+              <div class="text-base sm:text-lg font-semibold text-zinc-950 leading-tight">{{ $tabMeta['label'] }}</div>
+              <div class="mt-1 text-xs sm:text-sm text-zinc-600">{{ $tabMeta['desc'] }}</div>
             </div>
-            <div class="inline-flex items-center gap-1 text-xs font-semibold {{ $isActiveQueue ? 'text-emerald-50' : 'text-emerald-100/80 group-hover:text-emerald-50' }}">
+            <div class="inline-flex items-center gap-1 text-xs font-semibold {{ $isActiveQueue ? 'text-emerald-900' : 'text-emerald-800 group-hover:text-emerald-900' }}">
               {{ $isActiveQueue ? 'Current Queue' : 'Open Queue' }} <span aria-hidden="true">→</span>
             </div>
           </div>
@@ -65,14 +65,14 @@
 
   <div class="grid grid-cols-1 gap-4 sm:gap-6 min-w-0">
     @if(($queueMeta['key'] ?? '') === 'wholesale')
-    <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
+    <section class="rounded-3xl border border-zinc-200 bg-white p-4 sm:p-5 min-w-0">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Select Wholesale Order</div>
-        <div class="text-xs text-emerald-100/70">{{ $wholesaleOrders->count() }} open orders</div>
+        <div class="text-xs uppercase tracking-[0.3em] text-emerald-800">Select Wholesale Order</div>
+        <div class="text-xs text-emerald-800">{{ $wholesaleOrders->count() }} open orders</div>
       </div>
 
       @if($wholesaleOrders->isEmpty())
-        <div class="mt-3 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
+        <div class="mt-3 rounded-2xl border border-zinc-200 bg-emerald-50 p-4 text-sm text-zinc-600">
           No open wholesale orders found.
         </div>
       @else
@@ -81,19 +81,19 @@
             <button
               type="button"
               wire:click="selectWholesaleOrder({{ (int) $orderRow['id'] }})"
-              class="rounded-2xl border px-4 py-3 text-left transition {{ ((int) ($selectedWholesaleOrderId ?? 0) === (int) $orderRow['id']) ? 'border-emerald-300/35 bg-emerald-500/18' : 'border-emerald-200/10 bg-emerald-500/5 hover:border-emerald-300/20 hover:bg-emerald-500/10' }}"
+              class="rounded-2xl border px-4 py-3 text-left transition {{ ((int) ($selectedWholesaleOrderId ?? 0) === (int) $orderRow['id']) ? 'border-zinc-300 bg-emerald-100' : 'border-zinc-200 bg-emerald-50 hover:border-emerald-300/20 hover:bg-emerald-100' }}"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <div class="truncate text-sm font-semibold text-white" title="{{ $orderRow['display_name'] }}">{{ $orderRow['display_name'] }}</div>
-                  <div class="mt-1 text-xs text-emerald-100/65">
+                  <div class="truncate text-sm font-semibold text-zinc-950" title="{{ $orderRow['display_name'] }}">{{ $orderRow['display_name'] }}</div>
+                  <div class="mt-1 text-xs text-emerald-800">
                     #{{ ltrim((string) $orderRow['order_number'], '#') }} · {{ ucfirst($orderRow['status']) }}
                     @if($orderRow['due_at'])
                       · Due {{ \Illuminate\Support\Carbon::parse($orderRow['due_at'])->format('M j') }}
                     @endif
                   </div>
                 </div>
-                <div class="text-right text-xs text-emerald-100/70">
+                <div class="text-right text-xs text-emerald-800">
                   <div>{{ (int) $orderRow['lines_count'] }} lines</div>
                   <div>{{ (int) $orderRow['units_total'] }} units</div>
                 </div>
@@ -104,17 +104,17 @@
       @endif
 
       @if($selectedWholesaleOrder)
-        <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4">
-          <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/65">Selected Order Overview</div>
-          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
+        <div class="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-100 p-4">
+          <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-800">Selected Order Overview</div>
+          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-900">
             <span class="font-semibold">{{ $selectedWholesaleOrder['display_name'] }}</span>
-            <span class="text-emerald-100/65">#{{ ltrim((string) $selectedWholesaleOrder['order_number'], '#') }}</span>
-            <span class="text-emerald-100/65">{{ ucfirst($selectedWholesaleOrder['status']) }}</span>
+            <span class="text-emerald-800">#{{ ltrim((string) $selectedWholesaleOrder['order_number'], '#') }}</span>
+            <span class="text-emerald-800">{{ ucfirst($selectedWholesaleOrder['status']) }}</span>
             @if($selectedWholesaleOrder['due_at'])
-              <span class="text-emerald-100/65">Due {{ \Illuminate\Support\Carbon::parse($selectedWholesaleOrder['due_at'])->format('M j, Y') }}</span>
+              <span class="text-emerald-800">Due {{ \Illuminate\Support\Carbon::parse($selectedWholesaleOrder['due_at'])->format('M j, Y') }}</span>
             @endif
           </div>
-          <div class="mt-2 text-xs text-emerald-100/70">
+          <div class="mt-2 text-xs text-emerald-800">
             {{ (int) $selectedWholesaleOrder['lines_count'] }} line items · {{ (int) $selectedWholesaleOrder['units_total'] }} total units
           </div>
         </div>
@@ -123,12 +123,12 @@
     @endif
 
     @if(($queueMeta['key'] ?? '') !== 'markets')
-    <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 h-full min-w-0">
-      <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Add Additional Scents to the list</div>
+    <section class="rounded-3xl border border-zinc-200 bg-white p-4 sm:p-5 h-full min-w-0">
+      <div class="text-xs uppercase tracking-[0.3em] text-emerald-800">Add Additional Scents to the list</div>
       <div class="mt-3 min-w-0">
         <div class="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-end min-w-0">
           <div class="{{ ($queueMeta['key'] ?? '') === 'markets' ? 'md:col-span-7' : 'md:col-span-5' }}">
-            <label class="text-xs text-emerald-100/60">Scent</label>
+            <label class="text-xs text-emerald-800">Scent</label>
             @livewire(
               \App\Livewire\Components\ScentCombobox::class,
               [
@@ -141,34 +141,34 @@
           </div>
           @if(($queueMeta['key'] ?? '') === 'markets')
             <div class="md:col-span-5">
-              <label class="text-xs text-emerald-100/60">Add Market Box</label>
+              <label class="text-xs text-emerald-800">Add Market Box</label>
               <div class="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <button type="button" wire:click="addMarketHalfBox"
-                  class="w-full rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm text-white/90 hover:bg-emerald-500/15">
+                  class="w-full rounded-xl border border-emerald-400/25 bg-emerald-100 px-3 py-2 text-sm text-zinc-900 hover:bg-emerald-100">
                   Add Half Box
                 </button>
                 <button type="button" wire:click="addMarketFullBox"
-                  class="w-full rounded-xl border border-emerald-400/35 bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/25">
+                  class="w-full rounded-xl border border-emerald-400/35 bg-emerald-100 px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-500/25">
                   Add Full Box
                 </button>
                 <button type="button" wire:click="addTopShelfTemplate"
-                  class="w-full rounded-xl border border-amber-300/25 bg-amber-500/12 px-3 py-2 text-sm text-amber-50 hover:bg-amber-500/18">
+                  class="w-full rounded-xl border border-amber-300/25 bg-amber-100 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100">
                   Add Top Shelf
                 </button>
               </div>
-              <div class="mt-2 text-[11px] text-emerald-100/60">
+              <div class="mt-2 text-[11px] text-emerald-800">
                 One event at a time. Select an event first, then add/edit boxes only for that event.
               </div>
             </div>
           @else
             <div class="md:col-span-4">
-              <label class="text-xs text-emerald-100/60">Size</label>
+              <label class="text-xs text-emerald-800">Size</label>
               <input type="text"
                 list="retail-size-list"
                 wire:model.live.debounce.200ms="inventorySizeSearch"
                 wire:blur="selectInventorySize"
                 wire:change="selectInventorySize"
-                class="mt-1 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90"
+                class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900"
                 placeholder="Start typing a size..." />
               <datalist id="retail-size-list">
                 @foreach($sizes as $size)
@@ -177,12 +177,12 @@
               </datalist>
             </div>
             <div class="md:col-span-1">
-              <label class="text-xs text-emerald-100/60">Quantity</label>
+              <label class="text-xs text-emerald-800">Quantity</label>
               <input type="number" min="1" wire:model="inventoryQty"
-                class="mt-1 w-full rounded-xl border border-emerald-200/10 bg-black/20 px-3 py-2 text-sm text-white/90" />
+                class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900" />
             </div>
             <button type="button" wire:click="addInventoryItem"
-              class="md:col-span-2 w-full rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-3 py-2 text-sm text-white/90">
+              class="md:col-span-2 w-full rounded-xl border border-emerald-400/25 bg-emerald-100 px-3 py-2 text-sm text-zinc-900">
               {{ $queueMeta['add_button_label'] ?? 'Add to Retail/Pour List' }}
             </button>
           @endif
@@ -192,55 +192,55 @@
     @endif
 
     @if(($queueMeta['key'] ?? '') !== 'markets')
-    <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-4 sm:p-5 min-w-0">
-      <div class="text-xs uppercase tracking-[0.3em] text-emerald-100/60">Candles to be poured</div>
+    <section class="rounded-3xl border border-zinc-200 bg-white p-4 sm:p-5 min-w-0">
+      <div class="text-xs uppercase tracking-[0.3em] text-emerald-800">Candles to be poured</div>
         <div class="mt-4 space-y-2">
           @if($items->isEmpty())
-            <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4 text-sm text-emerald-50/70">
+            <div class="rounded-2xl border border-zinc-200 bg-emerald-50 p-4 text-sm text-zinc-600">
               {{ $queueMeta['empty_label'] ?? 'No items yet. Prefill from retail orders or add inventory below.' }}
             </div>
           @else
             @foreach($items as $item)
-              <div class="flex flex-col gap-2 rounded-2xl border border-emerald-200/10 bg-emerald-500/5 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
+              <div class="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-emerald-50 px-4 py-3 md:flex-row md:items-center md:justify-between min-w-0">
                 <div class="min-w-0">
-                  <div class="text-sm text-white/90">
+                  <div class="text-sm text-zinc-900">
                     {{ $item->scent?->display_name ?? $item->scent?->name ?? 'Unknown' }}
-                    <span class="text-emerald-100/60">· {{ $item->size?->label ?? $item->size?->code ?? '—' }}</span>
+                    <span class="text-emerald-800">· {{ $item->size?->label ?? $item->size?->code ?? '—' }}</span>
                   </div>
-                  <div class="text-xs text-emerald-100/60">
+                  <div class="text-xs text-emerald-800">
                     {{ ($item->source ?? '') === 'inventory' ? 'Inventory' : 'Order' }}
                     @if(($item->status ?? 'draft') === 'needs_mapping')
-                      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-400/20 text-amber-50">
+                      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border border-amber-300/35 bg-amber-100 text-amber-900">
                         Needs mapping
                       </span>
                     @endif
                   </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                  <div class="flex items-center rounded-full border border-emerald-200/15 bg-black/30 px-2 py-1 shrink-0">
+                  <div class="flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 shrink-0">
                     <button type="button" wire:click="decrementItemQuantity({{ $item->id }})"
-                      class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
+                      class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-100 text-emerald-900 hover:bg-emerald-100 transition">
                       −
                     </button>
                     <input type="number" min="1" value="{{ $item->quantity }}"
                       wire:change="updateItemQuantity({{ $item->id }}, $event.target.value)"
-                      class="w-12 bg-transparent text-center text-xs text-white/90 focus:outline-none appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      class="w-12 bg-transparent text-center text-xs text-zinc-900 focus:outline-none appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     <button type="button" wire:click="incrementItemQuantity({{ $item->id }})"
-                      class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/20 transition">
+                      class="h-6 w-6 rounded-full border border-emerald-300/20 bg-emerald-100 text-emerald-900 hover:bg-emerald-100 transition">
                       +
                     </button>
                   </div>
-                  <div class="flex items-center rounded-full border border-emerald-200/10 bg-black/20 px-2 py-1 shrink-0">
-                    <span class="text-[10px] text-emerald-100/60 mr-2">Additional for inventory</span>
+                  <div class="flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 shrink-0">
+                    <span class="text-[10px] text-emerald-800 mr-2">Additional for inventory</span>
                     <button type="button" wire:click="decrementItemInventoryQuantity({{ $item->id }})"
-                      class="h-6 w-6 rounded-full border border-emerald-300/15 bg-emerald-500/5 text-emerald-50 hover:bg-emerald-500/15 transition">
+                      class="h-6 w-6 rounded-full border border-emerald-300/15 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition">
                       −
                     </button>
                     <input type="number" min="0" value="{{ $item->inventory_quantity ?? 0 }}"
                       wire:change="updateItemInventoryQuantity({{ $item->id }}, $event.target.value)"
-                      class="w-12 bg-transparent text-center text-xs text-white/90 focus:outline-none appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      class="w-12 bg-transparent text-center text-xs text-zinc-900 focus:outline-none appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     <button type="button" wire:click="incrementItemInventoryQuantity({{ $item->id }})"
-                      class="h-6 w-6 rounded-full border border-emerald-300/15 bg-emerald-500/5 text-emerald-50 hover:bg-emerald-500/15 transition">
+                      class="h-6 w-6 rounded-full border border-emerald-300/15 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition">
                       +
                     </button>
                   </div>
@@ -256,7 +256,7 @@
         <div class="mt-4">
           <button type="button" wire:click="publishPlan"
             @if($wholesaleNeedsSelection) disabled @endif
-            class="w-full rounded-xl border border-emerald-400/40 bg-emerald-500/25 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-40">
+            class="w-full rounded-xl border border-emerald-400/40 bg-emerald-500/25 px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-500/30 transition disabled:cursor-not-allowed disabled:opacity-40">
             Publish to Pouring room
           </button>
         </div>

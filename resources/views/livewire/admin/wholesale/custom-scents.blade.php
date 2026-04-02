@@ -1,12 +1,12 @@
-<section class="rounded-3xl border border-emerald-200/10 bg-[#0f1412]/70 p-5">
+<section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
-      <div class="text-lg font-semibold text-white">Wholesale Custom Scents</div>
-      <div class="text-sm text-emerald-50/70">Account-specific scent names mapped to canonical scents.</div>
-      <div class="mt-1 text-xs text-emerald-100/70">Customer-specific naming and mapping. Use the wizard for manual adds; master CSV sync can create canonical blends when missing.</div>
+      <div class="text-lg font-semibold text-zinc-950">Wholesale Custom Scents</div>
+      <div class="text-sm text-zinc-600">Account-specific scent names mapped to canonical scents.</div>
+      <div class="mt-1 text-xs text-emerald-800">Customer-specific naming and mapping. Use the wizard for manual adds; master CSV sync can create canonical blends when missing.</div>
     </div>
     <div class="flex items-center gap-2">
-      <label class="relative inline-flex h-10 cursor-pointer items-center rounded-full border border-amber-300/40 bg-amber-500/20 px-4 text-xs font-semibold text-amber-50 hover:bg-amber-500/30">
+      <label class="relative inline-flex h-10 cursor-pointer items-center rounded-full border border-amber-300/40 bg-amber-100 px-4 text-xs font-semibold text-amber-900 hover:bg-amber-500/30">
         <input
           type="file"
           wire:model="masterCsvUpload"
@@ -16,13 +16,13 @@
         <span wire:loading.remove wire:target="masterCsvUpload,syncMasterCsv">Upload + Sync Master CSV</span>
         <span wire:loading wire:target="masterCsvUpload,syncMasterCsv">Syncing master CSV…</span>
       </label>
-      <button wire:click="openCreate" class="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-white">
+      <button wire:click="openCreate" class="rounded-full border border-emerald-400/40 bg-emerald-100 px-4 py-2 text-xs font-semibold text-zinc-950">
         Add custom scent
       </button>
       <a
         href="{{ route('admin.scent-wizard', ['source_context' => 'wholesale-custom', 'channel_hint' => 'wholesale', 'store' => 'wholesale', 'return_to' => route('admin.index', ['tab' => 'wholesale-custom'])]) }}"
         wire:navigate
-        class="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-50"
+        class="rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-xs font-semibold text-emerald-900"
       >
         New Scent Wizard
       </a>
@@ -33,7 +33,7 @@
   @enderror
 
   @if($showCreate)
-    <div class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-6">
+    <div class="mt-4 grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-6">
       <div class="md:col-span-2">
         <flux:input wire:model.defer="create.account_name" label="Account name" />
         @error('create.account_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
@@ -43,7 +43,7 @@
         @error('create.custom_scent_name') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
       </div>
       <div class="md:col-span-2">
-        <label class="text-xs text-white/70">Canonical scent (optional)</label>
+        <label class="text-xs text-zinc-600">Canonical scent (optional)</label>
         <div class="mt-1">
           <livewire:components.scent-combobox
             wire:model.live="create.canonical_scent_id"
@@ -74,14 +74,14 @@
         <flux:input wire:model.defer="create.notes" label="Notes" />
       </div>
       <div class="flex items-center gap-2">
-        <input type="checkbox" wire:model.defer="create.active" class="rounded border-white/20 bg-white/10" />
-        <span class="text-sm text-white/80">Active</span>
+        <input type="checkbox" wire:model.defer="create.active" class="rounded border-zinc-300 bg-zinc-100" />
+        <span class="text-sm text-zinc-700">Active</span>
       </div>
       <div class="md:col-span-6 flex items-center gap-2">
-        <button wire:click="create" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-white">
+        <button wire:click="create" class="rounded-full border border-emerald-400/40 bg-emerald-500/30 px-4 py-2 text-xs font-semibold text-zinc-950">
           Save
         </button>
-        <button wire:click="openCreate" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">
+        <button wire:click="openCreate" class="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600">
           Cancel
         </button>
       </div>
@@ -89,21 +89,21 @@
   @endif
 
   <div class="mt-4 flex flex-wrap items-center gap-2">
-    <div class="mr-auto text-xs text-white/50">
+    <div class="mr-auto text-xs text-zinc-500">
       {{ $records->total() }} {{ \Illuminate\Support\Str::plural('custom scent', $records->total()) }}
     </div>
     <flux:input wire:model.live="search" placeholder="Search account or scent..." />
-    <div class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2">
-      <span class="text-[11px] uppercase tracking-wide text-white/50">Filter</span>
-      <select wire:model.live="filter" class="bg-transparent text-xs text-white/80 focus:outline-none">
+    <div class="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-2">
+      <span class="text-[11px] uppercase tracking-wide text-zinc-500">Filter</span>
+      <select wire:model.live="filter" class="bg-transparent text-xs text-zinc-700 focus:outline-none">
         <option value="all">All</option>
         <option value="mapped">Mapped</option>
         <option value="unmapped">Unmapped</option>
       </select>
     </div>
-    <div class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2">
-      <span class="text-[11px] uppercase tracking-wide text-white/50">Rows</span>
-      <select wire:model.live="perPage" class="bg-transparent text-xs text-white/80 focus:outline-none">
+    <div class="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-2">
+      <span class="text-[11px] uppercase tracking-wide text-zinc-500">Rows</span>
+      <select wire:model.live="perPage" class="bg-transparent text-xs text-zinc-700 focus:outline-none">
         <option value="25">25</option>
         <option value="50">50</option>
         <option value="100">100</option>
@@ -111,9 +111,9 @@
     </div>
   </div>
 
-  <div class="mt-4 overflow-hidden rounded-2xl border border-white/10">
+  <div class="mt-4 overflow-hidden rounded-2xl border border-zinc-200">
     <table class="min-w-full text-sm">
-      <thead class="bg-white/5 text-white/70">
+      <thead class="bg-zinc-50 text-zinc-600">
         <tr>
           <th class="px-4 py-3 text-left">Wholesale Account Name</th>
           <th class="px-4 py-3 text-left">Scent Name</th>
@@ -128,20 +128,20 @@
           <th class="px-4 py-3 text-right">Actions</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-white/5">
+      <tbody class="divide-y divide-zinc-200">
         @forelse($records as $record)
-          <tr class="{{ (int)$editingId === (int)$record->id ? 'bg-emerald-500/10' : 'hover:bg-white/5' }}">
-            <td class="px-4 py-3 text-white">{{ $record->account_name }}</td>
-            <td class="px-4 py-3 text-white">{{ $record->custom_scent_name }}</td>
-            <td class="px-4 py-3 text-white/80">{{ $record->oil_1 ?: '—' }}</td>
-            <td class="px-4 py-3 text-white/80">{{ $record->oil_2 ?: '—' }}</td>
-            <td class="px-4 py-3 text-white/80">{{ $record->oil_3 ?: '—' }}</td>
-            <td class="px-4 py-3 text-white/80">{{ $record->total_oils ?? '—' }}</td>
-            <td class="px-4 py-3 text-white/80">{{ $record->abbreviation ?: '—' }}</td>
-            <td class="px-4 py-3 text-white/80">
+          <tr class="{{ (int)$editingId === (int)$record->id ? 'bg-emerald-100' : 'hover:bg-zinc-50' }}">
+            <td class="px-4 py-3 text-zinc-950">{{ $record->account_name }}</td>
+            <td class="px-4 py-3 text-zinc-950">{{ $record->custom_scent_name }}</td>
+            <td class="px-4 py-3 text-zinc-700">{{ $record->oil_1 ?: '—' }}</td>
+            <td class="px-4 py-3 text-zinc-700">{{ $record->oil_2 ?: '—' }}</td>
+            <td class="px-4 py-3 text-zinc-700">{{ $record->oil_3 ?: '—' }}</td>
+            <td class="px-4 py-3 text-zinc-700">{{ $record->total_oils ?? '—' }}</td>
+            <td class="px-4 py-3 text-zinc-700">{{ $record->abbreviation ?: '—' }}</td>
+            <td class="px-4 py-3 text-zinc-700">
               {{ $record->canonicalScent?->display_name ?: ($record->canonicalScent?->name ?? '—') }}
             </td>
-            <td class="px-4 py-3 text-white/80">
+            <td class="px-4 py-3 text-zinc-700">
               @php
                 $resolved = is_array($record->resolved_recipe_json['components'] ?? null)
                   ? collect($record->resolved_recipe_json['components'])
@@ -163,7 +163,7 @@
               @endphp
 
               @if($oilLines->isNotEmpty())
-                <div class="space-y-0.5 text-xs text-white/80">
+                <div class="space-y-0.5 text-xs text-zinc-700">
                   @foreach($oilLines as $index => $component)
                     <div class="truncate">
                       Oil {{ $index + 1 }}:
@@ -174,25 +174,25 @@
                     </div>
                   @endforeach
                   @if($resolved->count() > 3)
-                    <div class="text-[11px] text-white/55">+{{ $resolved->count() - 3 }} more</div>
+                    <div class="text-[11px] text-zinc-500">+{{ $resolved->count() - 3 }} more</div>
                   @endif
                 </div>
               @else
-                <span class="text-white/45">—</span>
+                <span class="text-zinc-500">—</span>
               @endif
             </td>
             <td class="px-4 py-3">
               @if($record->canonical_scent_id)
-                <span class="inline-flex rounded-full px-2 py-1 text-xs bg-emerald-500/20 text-emerald-100">Mapped</span>
+                <span class="inline-flex rounded-full px-2 py-1 text-xs bg-emerald-100 text-emerald-900">Mapped</span>
               @else
-                <span class="inline-flex rounded-full px-2 py-1 text-xs bg-amber-500/20 text-amber-100">Unmapped</span>
+                <span class="inline-flex rounded-full px-2 py-1 text-xs bg-amber-100 text-amber-900">Unmapped</span>
               @endif
             </td>
             <td class="px-4 py-3 text-right space-x-2">
               <button
                 type="button"
                 wire:click.prevent.stop="openEdit({{ $record->id }})"
-                class="inline-flex h-8 items-center rounded-lg border border-emerald-400/35 bg-emerald-500/20 px-3 text-[11px] font-semibold text-emerald-50 hover:bg-emerald-500/30"
+                class="inline-flex h-8 items-center rounded-lg border border-emerald-400/35 bg-emerald-100 px-3 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-500/30"
               >
                 {{ (int)$editingId === (int)$record->id && $showEdit ? 'Close Edit' : 'Edit Mapping' }}
               </button>
@@ -207,27 +207,27 @@
           </tr>
 
           @if((int)$editingId === (int)$record->id && $showEdit)
-            <tr class="bg-emerald-500/5">
+            <tr class="bg-emerald-50">
               <td colspan="11" class="px-4 py-4">
                 <div class="rounded-2xl border border-emerald-300/25 bg-emerald-950/20 p-4">
-                  <div class="flex flex-wrap items-start justify-between gap-2 border-b border-emerald-200/15 pb-3">
+                  <div class="flex flex-wrap items-start justify-between gap-2 border-b border-zinc-200 pb-3">
                     <div>
-                      <div class="text-[11px] uppercase tracking-[0.24em] text-emerald-100/70">Edit Mapping</div>
-                      <div class="mt-1 text-sm font-semibold text-white">{{ $edit['custom_scent_name'] ?? '' }}</div>
-                      <div class="mt-0.5 text-xs text-emerald-100/70">{{ $edit['account_name'] ?? '' }}</div>
+                      <div class="text-[11px] uppercase tracking-[0.24em] text-emerald-800">Edit Mapping</div>
+                      <div class="mt-1 text-sm font-semibold text-zinc-950">{{ $edit['custom_scent_name'] ?? '' }}</div>
+                      <div class="mt-0.5 text-xs text-emerald-800">{{ $edit['account_name'] ?? '' }}</div>
                     </div>
                     <div class="flex items-center gap-2">
                       <button
                         type="button"
                         wire:click="save"
-                        class="inline-flex h-9 items-center rounded-xl border border-emerald-300/45 bg-emerald-500/30 px-4 text-xs font-semibold text-white hover:bg-emerald-500/40"
+                        class="inline-flex h-9 items-center rounded-xl border border-emerald-300/45 bg-emerald-500/30 px-4 text-xs font-semibold text-zinc-950 hover:bg-emerald-500/40"
                       >
                         Save Changes
                       </button>
                       <button
                         type="button"
                         wire:click="closeEdit"
-                        class="inline-flex h-9 items-center rounded-xl border border-white/15 bg-white/5 px-4 text-xs font-semibold text-white/80 hover:bg-white/10"
+                        class="inline-flex h-9 items-center rounded-xl border border-zinc-300 bg-zinc-50 px-4 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                       >
                         Cancel
                       </button>
@@ -244,7 +244,7 @@
                     <flux:input wire:model.defer="edit.abbreviation" label="Abbreviation" />
 
                     <div class="md:col-span-2">
-                      <label class="text-xs text-white/70">Canonical scent (optional)</label>
+                      <label class="text-xs text-zinc-600">Canonical scent (optional)</label>
                       <div class="mt-1">
                         <livewire:components.scent-combobox
                           wire:model.live="edit.canonical_scent_id"
@@ -254,14 +254,14 @@
                           wire:key="wholesale-edit-combo-{{ $editingId }}"
                         />
                       </div>
-                      <div class="mt-1 text-[11px] text-emerald-100/65">Search and select canonical scent/blend.</div>
+                      <div class="mt-1 text-[11px] text-emerald-800">Search and select canonical scent/blend.</div>
                       @error('edit.canonical_scent_id') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
                     </div>
 
                     <flux:input wire:model.defer="edit.notes" label="Notes" />
                     <div class="flex items-center gap-2">
-                      <input type="checkbox" wire:model.defer="edit.active" class="rounded border-white/20 bg-white/10" />
-                      <span class="text-sm text-white/80">Active</span>
+                      <input type="checkbox" wire:model.defer="edit.active" class="rounded border-zinc-300 bg-zinc-100" />
+                      <span class="text-sm text-zinc-700">Active</span>
                     </div>
                   </div>
                 </div>
@@ -270,7 +270,7 @@
           @endif
         @empty
           <tr>
-            <td colspan="11" class="px-4 py-8 text-center text-sm text-white/55">
+            <td colspan="11" class="px-4 py-8 text-center text-sm text-zinc-500">
               @if($search !== '' || $filter !== 'all')
                 No wholesale custom scents match the current search/filter.
               @else
@@ -287,13 +287,13 @@
 </section>
 
 @if($showDelete)
-  <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
-    <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6">
-      <div class="text-lg font-semibold text-white">Delete Custom Scent</div>
-      <div class="mt-2 text-sm text-white/70">Are you sure? This cannot be undone.</div>
+  <div class="fixed inset-0 z-[9999] flex items-center justify-center fb-overlay-soft p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
+    <div class="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6">
+      <div class="text-lg font-semibold text-zinc-950">Delete Custom Scent</div>
+      <div class="mt-2 text-sm text-zinc-600">Are you sure? This cannot be undone.</div>
       <div class="mt-4 flex items-center gap-2">
-        <button type="button" wire:click="destroy" class="rounded-full border border-red-400/40 bg-red-500/30 px-4 py-2 text-xs font-semibold text-white">Delete</button>
-        <button type="button" wire:click="$set('showDelete', false)" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-white/70">Cancel</button>
+        <button type="button" wire:click="destroy" class="rounded-full border border-red-400/40 bg-red-500/30 px-4 py-2 text-xs font-semibold text-zinc-950">Delete</button>
+        <button type="button" wire:click="$set('showDelete', false)" class="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600">Cancel</button>
       </div>
     </div>
   </div>

@@ -9,17 +9,17 @@
             hint-text="Campaigns are prepared and approved here, then executed through Twilio SMS or SendGrid email with delivery tracking."
         />
 
-        <section class="rounded-3xl border border-white/10 bg-black/15 p-5 sm:p-6">
+        <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <div class="flex items-center justify-between gap-3">
-                <h2 class="text-lg font-semibold text-white">Campaign Workspace</h2>
-                <a href="{{ route('marketing.campaigns.create') }}" wire:navigate class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-white">
+                <h2 class="text-lg font-semibold text-zinc-950">Campaign Workspace</h2>
+                <a href="{{ route('marketing.campaigns.create') }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">
                     Create Campaign
                 </a>
             </div>
 
-            <div class="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+            <div class="mt-4 overflow-x-auto rounded-2xl border border-zinc-200">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-white/5 text-white/65">
+                    <thead class="bg-zinc-50 text-zinc-600">
                         <tr>
                             <th class="px-4 py-3 text-left">Name</th>
                             <th class="px-4 py-3 text-left">Status</th>
@@ -32,30 +32,30 @@
                             <th class="px-4 py-3 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-white/10">
+                    <tbody class="divide-y divide-zinc-200">
                         @forelse($campaigns as $campaign)
-                            <tr class="hover:bg-white/5">
-                                <td class="px-4 py-3 text-white/85">
+                            <tr class="hover:bg-zinc-50">
+                                <td class="px-4 py-3 text-zinc-800">
                                     {{ $campaign->name }}
-                                    <div class="text-xs text-white/55">{{ $campaign->description ?: '—' }}</div>
+                                    <div class="text-xs text-zinc-500">{{ $campaign->description ?: '—' }}</div>
                                 </td>
-                                <td class="px-4 py-3 text-white/75">{{ $campaign->status }}</td>
-                                <td class="px-4 py-3 text-white/75">{{ strtoupper($campaign->channel) }}</td>
-                                <td class="px-4 py-3 text-white/75">{{ $campaign->objective ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/75">{{ $campaign->segment?->name ?: 'Unlinked' }}</td>
-                                <td class="px-4 py-3 text-white/75">{{ number_format((int) $campaign->recipients_count) }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ optional($campaign->launched_at)->format('Y-m-d') ?: '—' }}</td>
-                                <td class="px-4 py-3 text-white/65">{{ optional($campaign->updated_at)->format('Y-m-d') }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $campaign->status }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ strtoupper($campaign->channel) }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $campaign->objective ?: '—' }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $campaign->segment?->name ?: 'Unlinked' }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ number_format((int) $campaign->recipients_count) }}</td>
+                                <td class="px-4 py-3 text-zinc-600">{{ optional($campaign->launched_at)->format('Y-m-d') ?: '—' }}</td>
+                                <td class="px-4 py-3 text-zinc-600">{{ optional($campaign->updated_at)->format('Y-m-d') }}</td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="inline-flex flex-wrap justify-end gap-2">
-                                        <a href="{{ route('marketing.campaigns.show', $campaign) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80">Open</a>
-                                        <a href="{{ route('marketing.campaigns.edit', $campaign) }}" wire:navigate class="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80">Edit</a>
+                                        <a href="{{ route('marketing.campaigns.show', $campaign) }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">Open</a>
+                                        <a href="{{ route('marketing.campaigns.edit', $campaign) }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">Edit</a>
                                     </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="px-4 py-8 text-center text-white/55">No campaigns created yet.</td>
+                                <td colspan="9" class="px-4 py-8 text-center text-zinc-500">No campaigns created yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
