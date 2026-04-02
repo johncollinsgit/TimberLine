@@ -412,6 +412,22 @@
             box-shadow: 0 0 0 4px rgba(15, 143, 97, 0.08);
         }
 
+        .customers-detail-form select {
+            appearance: none;
+            background: linear-gradient(180deg, #fff, #f6f7f8);
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12), inset 0 -4px 8px rgba(15, 23, 42, 0.08);
+            padding-right: 40px;
+            position: relative;
+            background-image: linear-gradient(180deg, #fff, #f6f7f8), linear-gradient(135deg, transparent 50%, rgba(15, 23, 42, 0.4) 50%);
+            background-position: center right 12px, center right 12px;
+            background-size: calc(0.55em + 2px) calc(0.55em + 2px), calc(0.35em + 2px) calc(0.35em + 2px);
+            background-repeat: no-repeat;
+        }
+
+        .customers-detail-form select::-ms-expand {
+            display: none;
+        }
+
         .customers-detail-form-helper {
             margin: 0;
             font-size: 12px;
@@ -899,18 +915,18 @@
                                 >
                                     @csrf
                                     <div class="customers-detail-form-grid">
-                                        <div class="customers-detail-form-field">
+                                        <div class="customers-detail-form-field is-full">
+                                            <label for="adjustment-amount">Amount</label>
+                                            <input id="adjustment-amount" type="number" name="amount" min="1" step="1" value="{{ old('amount') }}" placeholder="Amount" />
+                                            <p class="customers-detail-field-error" data-error-for="amount">{{ $errors->first('amount') }}</p>
+                                        </div>
+                                        <div class="customers-detail-form-field is-full">
                                             <label for="adjustment-direction">Adjustment type</label>
                                             <select id="adjustment-direction" name="direction">
                                                 <option value="add" @selected(old('direction') === 'add')>Add {{ strtolower($resolvedRewardsBalanceLabel) }}</option>
                                                 <option value="subtract" @selected(old('direction') === 'subtract')>Subtract {{ strtolower($resolvedRewardsBalanceLabel) }}</option>
                                             </select>
                                             <p class="customers-detail-field-error" data-error-for="direction">{{ $errors->first('direction') }}</p>
-                                        </div>
-                                        <div class="customers-detail-form-field">
-                                            <label for="adjustment-amount">Amount</label>
-                                            <input id="adjustment-amount" type="number" name="amount" min="1" step="1" value="{{ old('amount') }}" placeholder="Amount" />
-                                            <p class="customers-detail-field-error" data-error-for="amount">{{ $errors->first('amount') }}</p>
                                         </div>
                                         <div class="customers-detail-form-field is-full">
                                             <label for="adjustment-reason">Reason</label>
@@ -949,12 +965,12 @@
                                 >
                                     @csrf
                                     <div class="customers-detail-form-grid">
-                                        <div class="customers-detail-form-field">
+                                        <div class="customers-detail-form-field is-full">
                                             <label for="gift-amount">Amount</label>
                                             <input id="gift-amount" type="number" name="amount" min="1" step="1" value="{{ old('amount') }}" placeholder="Amount" />
                                             <p class="customers-detail-field-error" data-error-for="amount">{{ $errors->first('amount') }}</p>
                                         </div>
-                                        <div class="customers-detail-form-field">
+                                        <div class="customers-detail-form-field is-full">
                                             <label for="gift-sender">SMS sender</label>
                                             <select id="gift-sender" name="sender_key">
                                                 @foreach($smsSenders as $sender)
