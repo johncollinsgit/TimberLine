@@ -856,6 +856,7 @@ body[data-premium-motion="public"].has-premium-motion [data-reveal].is-visible {
   gap: 0.6rem;
   justify-content: center;
   min-height: 2.8rem;
+  width: 100%;
   text-decoration: none;
 }
 
