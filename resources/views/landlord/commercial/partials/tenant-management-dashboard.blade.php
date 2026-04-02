@@ -769,13 +769,16 @@
 
                         this.kpiCards = data.summary?.cards || [];
                         this.chartState = data.chart || this.chartState;
-                        this.renderChart();
+                        this.activityLoading = false;
+                        this.$nextTick(() => this.renderChart());
                     } catch (error) {
                         console.error(error);
-                    } finally {
                         if (token === this.activityRequestToken) {
                             this.activityLoading = false;
                         }
+                    } finally {
+                        // renderChart is intentionally driven after loading flips false so
+                        // non-empty series mount correctly instead of bailing while loading.
                     }
                 },
 

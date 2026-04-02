@@ -297,7 +297,12 @@ test('landlord analytics activity endpoint returns module revenue grouping and s
         ->assertJsonPath('chart.unit', 'currency')
         ->assertJsonPath('chart.total', 34800)
         ->assertJsonPath('chart.delta_label', '0%')
-        ->assertJsonPath('chart.delta_tone', 'neutral');
+        ->assertJsonPath('chart.delta_tone', 'neutral')
+        ->assertJsonPath('chart.empty_state', null);
+
+    $subscriptionSeries = $subscriptionResponse->json('chart.series.0.data');
+    expect($subscriptionSeries)->toBeArray()->not->toBeEmpty();
+    expect(collect($subscriptionSeries)->contains(fn (array $point): bool => (int) ($point['y'] ?? 0) === 34800))->toBeTrue();
 });
 
 test('landlord analytics endpoints return safe empty states for zero-data and no-match filters', function (): void {
@@ -322,6 +327,10 @@ test('landlord analytics endpoints return safe empty states for zero-data and no
         ->assertJsonPath('chart.total', 0)
         ->assertJsonPath('chart.previous_total', 0)
         ->assertJsonPath('chart.empty_state', 'No Sales generated data is available for the current filter and time window yet.');
+
+    $salesSeries = $activityResponse->json('chart.series.0.data');
+    expect($salesSeries)->toBeArray()->not->toBeEmpty();
+    expect(collect($salesSeries)->every(fn (array $point): bool => (int) ($point['y'] ?? 0) === 0))->toBeTrue();
 });
 
 test('landlord analytics endpoints remain forbidden to non landlord operators', function (): void {
