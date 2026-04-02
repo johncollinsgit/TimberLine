@@ -31,7 +31,7 @@
                         />
                         <button
                             type="submit"
-                            class="inline-flex shrink-0 items-center justify-center rounded-3xl border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-5 py-4 text-sm font-semibold text-white hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)] focus:outline-none"
+                            class="inline-flex shrink-0 items-center justify-center rounded-3xl border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-5 py-4 text-sm font-semibold text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)] focus:outline-none"
                         >
                             Search
                         </button>

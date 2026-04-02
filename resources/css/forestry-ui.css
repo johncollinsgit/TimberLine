@@ -1,17 +1,30 @@
 :root {
-  --fb-bg: #ffffff;
-  --fb-text: #0d1b1e;
-  --fb-brand: #123c43;
-  --fb-brand-2: #1e5a63;
-  --fb-accent: #2f7d6b;
-  --fb-border: #e7eceb;
-  --fb-muted: #5d6b6a;
+  --fb-page-background: #f4f7f6;
   --fb-surface: #ffffff;
-  --fb-surface-muted: #f6f9f8;
-  --fb-surface-strong: #f1f6f5;
-  --fb-ring: rgba(47, 125, 107, 0.22);
-  --fb-shadow-soft: 0 20px 52px -36px rgba(10, 27, 31, 0.24);
-  --fb-shadow-card: 0 24px 56px -40px rgba(10, 27, 31, 0.24);
+  --fb-surface-subtle: #f8fbfa;
+  --fb-surface-muted: #f1f5f4;
+  --fb-surface-strong: #eaf0ef;
+  --fb-border: #dbe4e3;
+  --fb-text-primary: #0f1c1f;
+  --fb-text-secondary: #32464b;
+  --fb-text-muted: #5d6b6a;
+  --fb-accent: #1e5a63;
+  --fb-success: #157347;
+  --fb-warning: #9a670f;
+  --fb-danger: #b42318;
+  --fb-focus-ring: rgba(30, 90, 99, 0.24);
+  --fb-shadow-sm: 0 10px 26px -20px rgba(10, 27, 31, 0.2);
+  --fb-shadow-md: 0 16px 36px -26px rgba(10, 27, 31, 0.24);
+
+  /* Legacy aliases kept for compatibility with existing classes/components. */
+  --fb-bg: var(--fb-page-background);
+  --fb-text: var(--fb-text-primary);
+  --fb-brand: #123c43;
+  --fb-brand-2: var(--fb-accent);
+  --fb-muted: var(--fb-text-muted);
+  --fb-ring: var(--fb-focus-ring);
+  --fb-shadow-soft: var(--fb-shadow-sm);
+  --fb-shadow-card: var(--fb-shadow-md);
   --fb-radius-lg: 1.25rem;
   --fb-radius-md: 0.9rem;
   --fb-radius-sm: 0.72rem;
@@ -24,8 +37,8 @@ html {
 }
 
 body {
-  background: var(--fb-bg);
-  color: var(--fb-text);
+  background: var(--fb-page-background);
+  color: var(--fb-text-primary);
   font-family: var(--fb-font-ui);
 }
 
@@ -35,9 +48,115 @@ h3,
 h4,
 h5,
 h6 {
-  color: var(--fb-text);
+  color: var(--fb-text-primary);
   font-family: var(--fb-font-display);
   letter-spacing: -0.02em;
+}
+
+.fb-page-canvas {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.fb-page-surface {
+  background: var(--fb-surface);
+  border: 1px solid var(--fb-border);
+  border-radius: var(--fb-radius-lg);
+  box-shadow: var(--fb-shadow-sm);
+}
+
+.fb-page-surface--subtle {
+  background: var(--fb-surface-subtle);
+}
+
+.fb-page-surface--muted {
+  background: var(--fb-surface-muted);
+}
+
+.fb-section-title {
+  color: var(--fb-text-primary);
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.fb-section-copy {
+  color: var(--fb-text-secondary);
+}
+
+.fb-chip {
+  align-items: center;
+  background: var(--fb-surface-subtle);
+  border: 1px solid var(--fb-border);
+  border-radius: 999px;
+  color: var(--fb-text-secondary);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 600;
+  min-height: 1.9rem;
+  padding: 0 0.72rem;
+}
+
+.fb-chip--accent {
+  background: rgba(30, 90, 99, 0.08);
+  border-color: rgba(18, 60, 67, 0.2);
+  color: var(--fb-brand);
+}
+
+.fb-btn-soft {
+  align-items: center;
+  background: var(--fb-surface);
+  border: 1px solid var(--fb-border);
+  border-radius: 0.72rem;
+  color: var(--fb-text-secondary);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-height: 2.25rem;
+  padding: 0 0.85rem;
+}
+
+.fb-btn-soft:hover {
+  background: var(--fb-surface-subtle);
+  border-color: rgba(18, 60, 67, 0.24);
+  color: var(--fb-brand);
+}
+
+.fb-btn-accent {
+  background: var(--fb-brand);
+  border-color: var(--fb-brand);
+  color: #ffffff;
+}
+
+.fb-btn-accent:hover {
+  background: var(--fb-brand-2);
+  border-color: var(--fb-brand-2);
+  color: #ffffff;
+}
+
+.fb-code-block {
+  background: var(--fb-surface-subtle);
+  border: 1px solid var(--fb-border);
+  border-radius: var(--fb-radius-sm);
+  color: var(--fb-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  overflow-x: auto;
+  padding: 0.72rem 0.8rem;
+}
+
+.fb-surface-card {
+  background: var(--fb-surface);
+  border: 1px solid var(--fb-border);
+  box-shadow: var(--fb-shadow-sm);
+}
+
+.fb-overlay-subtle {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.fb-overlay-soft {
+  background: rgba(15, 23, 42, 0.16);
 }
 
 a {
@@ -856,6 +975,7 @@ body[data-premium-motion="public"].has-premium-motion [data-reveal].is-visible {
   gap: 0.6rem;
   justify-content: center;
   min-height: 2.8rem;
+  width: 100%;
   text-decoration: none;
 }
 
@@ -1266,18 +1386,30 @@ body.mf-app-shell {
 }
 
 .mf-app-card :where(.text-white, [class*='text-white/'], .text-zinc-50, .text-zinc-100, .text-zinc-200, .text-zinc-300, .text-zinc-400, .text-zinc-500, .text-slate-300, .text-slate-400, .text-slate-500, .text-amber-100, .text-emerald-100, .text-rose-100, .text-sky-100) {
-  color: var(--fb-muted) !important;
+  color: var(--fb-text-secondary) !important;
+}
+
+.mf-app-card :where(.text-white, .text-zinc-50, .text-zinc-100) {
+  color: var(--fb-text-primary) !important;
+}
+
+.mf-app-card :where([class*='text-emerald-50'], [class*='text-emerald-100'], [class*='text-emerald-200']) {
+  color: var(--fb-text-secondary) !important;
 }
 
 .mf-app-card :where(h1, h2, h3, h4, h5, h6, .font-semibold, .font-medium) {
-  color: var(--fb-text) !important;
+  color: var(--fb-text-primary) !important;
 }
 
-.mf-app-card :where([class*='bg-black/'], [class*='bg-zinc-'], [class*='bg-white/5'], [class*='bg-white/10']) {
+.mf-app-card :where([class*='bg-black/'], [class*='bg-slate-9'], [class*='bg-[#101513]'], [class*='bg-[#0f1412]'], [class*='bg-[#0b1411]'], [class*='bg-[#1a1010]']) {
+  background: var(--fb-surface-subtle) !important;
+}
+
+.mf-app-card :where([class*='bg-zinc-'], [class*='bg-white/']) {
   background: var(--fb-surface-muted) !important;
 }
 
-.mf-app-card :where([class*='border-white/'], [class*='border-zinc-']) {
+.mf-app-card :where([class*='border-white/'], [class*='border-zinc-'], [class*='border-emerald-200/'], [class*='border-emerald-300/']) {
   border-color: var(--fb-border) !important;
 }
 
@@ -1292,7 +1424,7 @@ body.mf-app-shell {
 .mf-app-card :where(input, textarea, select) {
   background: #ffffff !important;
   border-color: var(--fb-border) !important;
-  color: var(--fb-text) !important;
+  color: var(--fb-text-primary) !important;
 }
 
 .mf-app-card :where(input:focus, textarea:focus, select:focus) {
@@ -1316,10 +1448,32 @@ body.mf-app-shell {
   background: rgba(30, 90, 99, 0.05) !important;
 }
 
+.mf-app-card :where(pre, code, kbd, samp) {
+  background: var(--fb-surface-subtle);
+  border-color: var(--fb-border);
+  color: var(--fb-text-secondary);
+}
+
 #mf-toast {
-  background: #11373f;
-  border-color: rgba(255, 255, 255, 0.32);
-  color: #ffffff;
+  background: var(--fb-surface);
+  border-color: var(--fb-border);
+  box-shadow: var(--fb-shadow-md);
+  color: var(--fb-text-primary);
+}
+
+#mf-toast.mf-toast-success {
+  background: rgba(21, 115, 71, 0.08);
+  border-color: rgba(21, 115, 71, 0.28);
+}
+
+#mf-toast.mf-toast-warning {
+  background: rgba(154, 103, 15, 0.11);
+  border-color: rgba(154, 103, 15, 0.3);
+}
+
+#mf-toast.mf-toast-error {
+  background: rgba(180, 35, 24, 0.1);
+  border-color: rgba(180, 35, 24, 0.3);
 }
 
 /* Embedded shell components */

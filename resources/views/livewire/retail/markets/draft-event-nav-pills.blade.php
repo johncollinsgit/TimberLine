@@ -1,7 +1,7 @@
 <div>
-  <div class="text-xs text-emerald-100/65">Draft events</div>
+  <div class="text-xs text-emerald-800">Draft events</div>
   @if(empty($events))
-    <div class="mt-2 rounded-xl border border-dashed border-emerald-200/10 bg-black/10 p-3 text-xs text-emerald-50/70">
+    <div class="mt-2 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
       No drafted events yet.
     </div>
   @else
@@ -11,7 +11,7 @@
         <button
           type="button"
           wire:click="selectDraftEvent({{ (int)($event['id'] ?? 0) }})"
-          class="rounded-full border px-3 py-1 text-xs {{ $isSelected ? 'border-emerald-300/35 bg-emerald-500/15 text-white' : 'border-white/10 text-emerald-100/75 hover:bg-white/5' }}"
+          class="rounded-full border px-3 py-1 text-xs {{ $isSelected ? 'border-zinc-300 bg-emerald-100 text-zinc-950' : 'border-zinc-200 text-emerald-800 hover:bg-zinc-50' }}"
         >
           {{ $event['title'] ?? 'Event' }}
           @if(!empty($event['starts_at']))

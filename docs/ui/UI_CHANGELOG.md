@@ -1,5 +1,61 @@
 # UI Changelog
 
+## 2026-04-02 — Backstage Light-Surface Consistency Sweep (Deep Feature Views)
+
+### What changed
+- Continued the light-surface migration across deeper Backstage areas, focusing on analytics widgets, birthdays internals, admin/operator Livewire views, market planners, wiki surfaces, and marketing detail pages.
+- Removed remaining legacy dark-surface utility patterns from scoped Backstage templates:
+  - hard-coded deep backgrounds (`bg-[#101513]`, `bg-[#0f1412]`, `bg-[#0b1411]`, related near-black variants),
+  - dark translucent slab wrappers and heavy glass effects,
+  - white-on-dark table divider/border patterns (`divide-white/*`, `border-white/*`),
+  - forced dark-mode utility branches (`dark:*`) still present in catalog admin.
+- Normalized modal/drawer and command palette surfaces to the shared light treatment (white/surface-muted cards, soft border, restrained shadow, lighter overlay intensity).
+- Reworked shared marketing section wrappers to use light semantic surfaces and simplified accent cards/chips for readability-first hierarchy.
+- Corrected wiki/admin/public-marketing text contrast drift introduced by legacy dark-class carryover (faint zinc/sky/emerald text on light backgrounds).
+
+### Why
+- A broad landlord-first pass was complete, but deep feature routes still contained mixed-era dark wrappers and low-contrast text patterns that broke visual consistency and scanning speed.
+- This pass aligns those remaining screens with the canonical light-background UI system while preserving existing behavior and route logic.
+
+### Scope boundary
+- No route/controller behavior changes were introduced in this pass.
+- Focus remained on shared visual consistency, surface tokens, and readability improvements in existing templates/components.
+
+## 2026-04-01 — Backstage Light-Surface Consistency Pass (Landlord + Shared Shells)
+
+### What changed
+- Standardized a semantic light token layer in `resources/css/forestry-ui.css` and aligned legacy aliases to it:
+  - `pageBackground`, `surface`, `surfaceSubtle`, `surfaceMuted`,
+  - `border`,
+  - `textPrimary`, `textSecondary`, `textMuted`,
+  - `accent`, `success`, `warning`, `danger`,
+  - `focusRing`,
+  - `shadowSm`, `shadowMd`.
+- Added reusable shared primitives for admin/operator surfaces:
+  - `.fb-page-surface*`, `.fb-chip*`, `.fb-btn-soft`, `.fb-btn-accent`, `.fb-code-block`.
+- Hardened `mf-app-card` compatibility overrides so legacy dark utility classes in existing views resolve to readable light surfaces without introducing a parallel system.
+- Migrated shared shells/components to the light language:
+  - `x-app-layout` (removed forced dark mode class, improved page-level composition),
+  - landlord/app sidebar quick actions + search chip styling,
+  - toast surface/status styling,
+  - command palette surface and result cards,
+  - admin help-hint component tones,
+  - shared marketing/candle-cash/birthdays section wrappers.
+- Converted landlord tenant directory/detail and key admin pages away from dark slab cards:
+  - `resources/views/landlord/tenants/index.blade.php`
+  - `resources/views/landlord/tenants/show.blade.php`
+  - `resources/views/admin/index.blade.php`
+  - `resources/views/pouring/index.blade.php`
+- Aligned landlord commercial action accents to the shared brand accent direction while preserving existing workflow logic.
+
+### Why
+- Landlord and adjacent operator screens still carried high-contrast dark slabs that conflicted with the project’s white-surface system and reduced scanability.
+- This pass centralizes light-surface behavior in shared theme primitives first, then removes major dark remnants from high-frequency operational screens.
+
+### Scope boundary
+- No controller, route, or tenant isolation behavior changed.
+- No commercial workflow contracts changed; this pass is visual-system and readability focused.
+
 ## 2026-04-01 — Landlord Commercial Becomes Tenant Management Surface
 
 ### What changed

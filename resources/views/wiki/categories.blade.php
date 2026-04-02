@@ -8,24 +8,24 @@
             </aside>
 
             <div class="space-y-6">
-                <section class="rounded-3xl border border-white/10 bg-zinc-950/40 p-6">
+                <section class="rounded-3xl border border-zinc-200 bg-white p-6">
                     @if(auth()->user()?->isAdmin())
                         <div class="mb-3 flex justify-end">
-                            <a href="{{ route('wiki.admin.category.create') }}" class="rounded-full border border-sky-300/40 bg-sky-500/15 px-3 py-1 text-xs font-medium text-sky-100 hover:bg-sky-500/25">New Category</a>
+                            <a href="{{ route('wiki.admin.category.create') }}" class="rounded-full border border-sky-300/40 bg-sky-100 px-3 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100">New Category</a>
                         </div>
                     @endif
                     <div class="text-xs uppercase tracking-[0.26em] text-zinc-400">Wiki</div>
-                    <h1 class="mt-2 text-3xl font-semibold text-white">Categories</h1>
-                    <p class="mt-2 text-sm text-zinc-300">Browse wiki content by category.</p>
+                    <h1 class="mt-2 text-3xl font-semibold text-zinc-950">Categories</h1>
+                    <p class="mt-2 text-sm text-zinc-600">Browse wiki content by category.</p>
                 </section>
 
                 <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     @foreach($categories as $category)
-                        <div class="rounded-2xl border border-white/10 bg-zinc-950/40 p-5 hover:border-sky-300/30">
+                        <div class="rounded-2xl border border-zinc-200 bg-white p-5 hover:border-sky-300/30">
                             <div class="mb-3 flex justify-end">@include('wiki.partials.admin-category-pills', ['category' => $category])</div>
                             <a href="{{ route('wiki.category', ['slug' => $category['slug']]) }}" class="block">
-                                <div class="text-base font-semibold text-white">{{ $category['title'] }}</div>
-                                <p class="mt-2 text-xs text-zinc-300">{{ $category['description'] }}</p>
+                                <div class="text-base font-semibold text-zinc-950">{{ $category['title'] }}</div>
+                                <p class="mt-2 text-xs text-zinc-600">{{ $category['description'] }}</p>
                                 <div class="mt-3 text-xs text-zinc-500">View category</div>
                             </a>
                         </div>

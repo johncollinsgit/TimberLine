@@ -45,12 +45,12 @@
         <livewire:admin.oils.oil-abbreviations-crud />
       @elseif($tab === 'master-data')
         <div class="flex min-h-0 flex-col gap-4 sm:min-h-[calc(100vh-16rem)] sm:gap-6">
-          <section class="rounded-3xl border border-white/10 bg-black/15 p-4 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-6">
+          <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-4 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-6">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Canonical Tables</div>
-                <h2 class="mt-2 text-2xl font-['Fraunces'] font-semibold text-white sm:text-3xl">Normalized Catalog</h2>
-                <p class="mt-2 max-w-3xl text-sm text-emerald-50/70">
+                <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-800">Canonical Tables</div>
+                <h2 class="mt-2 text-2xl font-['Fraunces'] font-semibold text-zinc-950 sm:text-3xl">Normalized Catalog</h2>
+                <p class="mt-2 max-w-3xl text-sm text-zinc-600">
                   Power-user maintenance for existing canonical data. Use the New Scent Wizard to create new scents.
                 </p>
               </div>
@@ -58,14 +58,14 @@
                 <a
                   href="{{ route('admin.scent-wizard', ['source_context' => 'master-data', 'return_to' => request()->fullUrl()]) }}"
                   wire:navigate
-                  class="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25"
+                  class="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-emerald-100 px-4 text-sm font-medium text-zinc-950 transition hover:bg-emerald-500/25"
                 >
                   New Scent Wizard
                 </a>
                 <a
                   href="{{ route('admin.index', ['tab' => 'scent-intake']) }}"
                   wire:navigate
-                  class="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10"
+                  class="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100"
                 >
                   Open Scent Intake
                 </a>
@@ -73,7 +73,7 @@
             </div>
           </section>
 
-          <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/15 p-3 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-4 md:p-6">
+          <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50 p-3 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-4 md:p-6">
             <div
               id="master-data-grid"
               data-resources='@json($masterDataResources)'
@@ -83,7 +83,7 @@
               data-scent-wizard-url="{{ route('admin.scent-wizard', ['source_context' => 'master-data']) }}"
               class="h-full min-h-0"
             >
-              <div class="flex h-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-emerald-50/65">
+              <div class="flex h-full items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
                 Loading master data grid…
               </div>
             </div>

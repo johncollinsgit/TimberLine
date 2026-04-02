@@ -277,7 +277,7 @@
         }
     @endphp
     <main class="mx-auto flex min-h-screen max-w-2xl items-center px-6">
-        <section class="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl">
+        <section class="w-full rounded-3xl border border-zinc-200 bg-white/5 p-8 shadow-2xl">
             <p class="text-xs uppercase tracking-[0.3em] text-zinc-400">500</p>
             <h1 class="mt-3 text-3xl font-semibold">The server had a moment.</h1>
             <p class="mt-3 text-sm text-zinc-300">
@@ -295,22 +295,22 @@
                 <div class="mt-8 rounded-2xl border border-amber-300/20 bg-amber-500/5 p-4">
                     <div class="text-xs uppercase tracking-[0.25em] text-amber-200/70">Retail Plan Diagnostics</div>
                     <p class="mt-2 text-sm text-amber-50/90">
-                        This panel is only shown because the failing request path is <code class="rounded bg-black/30 px-1.5 py-0.5 text-xs">{{ $rpDiagnostics['path'] }}</code>.
-                        It checks common causes for <code class="rounded bg-black/30 px-1.5 py-0.5 text-xs">/retail/plan</code> and <code class="rounded bg-black/30 px-1.5 py-0.5 text-xs">/retail/plan?queue=markets</code>.
+                        This panel is only shown because the failing request path is <code class="rounded bg-slate-900/10 px-1.5 py-0.5 text-xs">{{ $rpDiagnostics['path'] }}</code>.
+                        It checks common causes for <code class="rounded bg-slate-900/10 px-1.5 py-0.5 text-xs">/retail/plan</code> and <code class="rounded bg-slate-900/10 px-1.5 py-0.5 text-xs">/retail/plan?queue=markets</code>.
                     </p>
 
                     <div class="mt-3 grid gap-2 text-xs text-zinc-200 sm:grid-cols-2">
-                        <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <div class="rounded-xl border border-zinc-200 bg-slate-900/8 px-3 py-2">
                             <span class="text-zinc-400">Queue</span>
                             <div class="mt-1 font-semibold text-white">{{ $rpDiagnostics['queue'] ?? 'retail' }}</div>
                         </div>
-                        <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <div class="rounded-xl border border-zinc-200 bg-slate-900/8 px-3 py-2">
                             <span class="text-zinc-400">Route Name</span>
                             <div class="mt-1 font-semibold text-white">{{ $rpDiagnostics['route_name'] ?? 'unknown' }}</div>
                         </div>
                     </div>
 
-                    <div class="mt-4 rounded-xl border border-white/10 bg-black/25 p-3">
+                    <div class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                         <div class="text-xs uppercase tracking-[0.2em] text-zinc-400">What Happened</div>
                         @if(!empty($rpDiagnostics['exception']))
                             <div class="mt-2 text-sm text-white">
@@ -346,7 +346,7 @@
                                     default => 'CHECK',
                                 };
                             @endphp
-                            <div class="rounded-xl border border-white/10 bg-black/20 p-3">
+                            <div class="rounded-xl border border-zinc-200 bg-slate-900/8 p-3">
                                 <div class="flex flex-wrap items-start justify-between gap-2">
                                     <div class="text-sm font-medium text-white">{{ $check['label'] ?? 'Check' }}</div>
                                     <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $badgeClass }}">

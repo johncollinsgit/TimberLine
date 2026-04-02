@@ -5,7 +5,7 @@
         <div class="text-sm text-[var(--fb-muted)]">Manage workspace access and roles.</div>
       </div>
     <div class="flex items-center gap-2">
-      <button wire:click="openCreate" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
+      <button wire:click="openCreate" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
         Add user
       </button>
     </div>
@@ -39,7 +39,7 @@
         <span class="text-sm text-[var(--fb-muted)]">Active</span>
       </div>
       <div class="md:col-span-6 flex items-center gap-2">
-        <button wire:click="create" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
+        <button wire:click="create" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
           Save
         </button>
         <button wire:click="openCreate" class="rounded-full border border-[var(--fb-border)] bg-white px-4 py-2 text-xs font-semibold text-[var(--fb-muted)]">
@@ -91,7 +91,7 @@
             <button type="button" wire:click="openEdit({{ $pending->id }})" class="rounded-full border border-[var(--fb-border)] bg-white px-3 py-1 text-[11px] text-[var(--fb-muted)]">
               Review
             </button>
-            <button type="button" wire:click="approve({{ $pending->id }})" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-3 py-1 text-[11px] text-white hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
+            <button type="button" wire:click="approve({{ $pending->id }})" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-3 py-1 text-[11px] text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
               Approve
             </button>
           </div>
@@ -122,7 +122,7 @@
             <td class="px-4 py-3 text-[var(--fb-muted)]">{{ $user->email }}</td>
             <td class="px-4 py-3 text-[var(--fb-muted)] capitalize">{{ $user->role ?? 'admin' }}</td>
             <td class="px-4 py-3">
-              <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $user->is_active ? 'border border-[var(--fb-brand)] bg-[var(--fb-brand)] text-white' : 'border border-[var(--fb-border)] bg-white text-[var(--fb-muted)]' }}">
+              <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $user->is_active ? 'border border-[var(--fb-brand)] bg-[var(--fb-brand)] text-zinc-950' : 'border border-[var(--fb-border)] bg-white text-[var(--fb-muted)]' }}">
                 {{ $user->is_active ? 'Active' : 'Inactive' }}
               </span>
             </td>
@@ -141,7 +141,7 @@
 </section>
 
   @if($showEdit)
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
+    <div class="fixed inset-0 z-[9999] flex items-center justify-center fb-overlay-soft p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
       <div class="mf-app-card w-full max-w-2xl rounded-2xl border border-[var(--fb-border)] p-6">
         <div class="text-lg font-semibold text-[var(--fb-text)]">Edit User</div>
         <div class="mt-4 grid gap-3 md:grid-cols-2">
@@ -164,7 +164,7 @@
           @error('newPassword') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
         <div class="mt-4 flex items-center gap-2">
-          <button type="button" wire:click="save" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">Save</button>
+          <button type="button" wire:click="save" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">Save</button>
           <button type="button" wire:click="$set('showEdit', false)" class="rounded-full border border-[var(--fb-border)] bg-white px-4 py-2 text-xs font-semibold text-[var(--fb-muted)]">Cancel</button>
         </div>
       </div>
@@ -172,12 +172,12 @@
   @endif
 
   @if($showDelete)
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
+    <div class="fixed inset-0 z-[9999] flex items-center justify-center fb-overlay-soft p-4" style="position: fixed; inset: 0; z-index: 99999;" data-admin-modal>
       <div class="mf-app-card w-full max-w-md rounded-2xl border border-[var(--fb-border)] p-6">
         <div class="text-lg font-semibold text-[var(--fb-text)]">Delete User</div>
         <div class="mt-2 text-sm text-[var(--fb-muted)]">Are you sure? This cannot be undone.</div>
         <div class="mt-4 flex items-center gap-2">
-          <button type="button" wire:click="destroy" class="rounded-full border border-red-300/40 bg-red-600 px-4 py-2 text-xs font-semibold text-white">Delete</button>
+          <button type="button" wire:click="destroy" class="rounded-full border border-red-300/40 bg-red-600 px-4 py-2 text-xs font-semibold text-zinc-950">Delete</button>
           <button type="button" wire:click="$set('showDelete', false)" class="rounded-full border border-[var(--fb-border)] bg-white px-4 py-2 text-xs font-semibold text-[var(--fb-muted)]">Cancel</button>
         </div>
       </div>

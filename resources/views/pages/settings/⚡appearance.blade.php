@@ -25,16 +25,16 @@ new class extends Component {
         <form method="POST" action="{{ route('ui.preferences.update') }}" class="mt-6 space-y-4">
             @csrf
 
-            <div class="rounded-2xl border border-emerald-200/10 bg-emerald-500/5 p-4">
+            <div class="rounded-2xl border border-zinc-200 bg-emerald-500/5 p-4">
                 <div class="text-sm font-semibold text-white/90">Layout Preferences</div>
                 <div class="mt-3 space-y-3">
                     <label class="flex items-center justify-between text-sm text-white/70">
                         <span>Wide layout (wider dashboards)</span>
-                        <input type="checkbox" name="wide_layout" value="1" @checked(!empty($prefs['wide_layout'])) class="rounded border-white/20 bg-white/5 text-emerald-400" />
+                        <input type="checkbox" name="wide_layout" value="1" @checked(!empty($prefs['wide_layout'])) class="rounded border-zinc-300 bg-white/5 text-emerald-400" />
                     </label>
                     <label class="flex items-center justify-between text-sm text-white/70">
                         <span>Compact tables</span>
-                        <input type="checkbox" name="compact_tables" value="1" @checked(!empty($prefs['compact_tables'])) class="rounded border-white/20 bg-white/5 text-emerald-400" />
+                        <input type="checkbox" name="compact_tables" value="1" @checked(!empty($prefs['compact_tables'])) class="rounded border-zinc-300 bg-white/5 text-emerald-400" />
                     </label>
                 </div>
             </div>

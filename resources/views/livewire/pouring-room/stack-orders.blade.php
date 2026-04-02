@@ -28,7 +28,7 @@
       }
     </style>
     <div id="mf-celebration" class="pointer-events-none fixed inset-0 z-[90] overflow-hidden">
-      <div class="absolute left-1/2 top-14 -translate-x-1/2 rounded-full border border-fuchsia-300/45 bg-fuchsia-500/30 px-6 py-2 text-base font-semibold text-white shadow-xl">
+      <div class="absolute left-1/2 top-14 -translate-x-1/2 rounded-full border border-fuchsia-300/45 bg-fuchsia-500/30 px-6 py-2 text-base font-semibold text-zinc-950 shadow-xl">
         🦄 Order Complete!
       </div>
       @for($i = 0; $i < 48; $i++)
@@ -56,25 +56,25 @@
     </script>
   @endif
 
-  <div class="flex flex-wrap items-center gap-2 text-[11px] text-emerald-100/70">
-    <a href="{{ route('pouring.index') }}" class="rounded-full border border-emerald-200/15 bg-emerald-500/10 px-3 py-1 hover:bg-emerald-500/20">Pouring Room</a>
-    <a href="{{ route('pouring.index') }}" class="rounded-full border border-emerald-200/15 bg-emerald-500/10 px-3 py-1 hover:bg-emerald-500/20">Stacks</a>
-    <span class="rounded-full border border-emerald-200/15 bg-emerald-500/20 px-3 py-1 text-white/85">{{ $title }}</span>
+  <div class="flex flex-wrap items-center gap-2 text-[11px] text-emerald-800">
+    <a href="{{ route('pouring.index') }}" class="rounded-full border border-zinc-200 bg-emerald-100 px-3 py-1 hover:bg-emerald-100">Pouring Room</a>
+    <a href="{{ route('pouring.index') }}" class="rounded-full border border-zinc-200 bg-emerald-100 px-3 py-1 hover:bg-emerald-100">Stacks</a>
+    <span class="rounded-full border border-zinc-200 bg-emerald-100 px-3 py-1 text-zinc-800">{{ $title }}</span>
   </div>
   <livewire:pouring-room.dashboard-bar />
 
-  <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-    <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Stack</div>
-    <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">{{ $title }}</div>
-    <div class="mt-2 text-sm text-emerald-50/70">Orders sorted by what must be poured next.</div>
-    <div class="mt-2 inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-emerald-100/80">
+  <section class="rounded-3xl border border-zinc-200 bg-white p-6">
+    <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-800">Stack</div>
+    <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-zinc-950">{{ $title }}</div>
+    <div class="mt-2 text-sm text-zinc-600">Orders sorted by what must be poured next.</div>
+    <div class="mt-2 inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-100 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-emerald-800">
       {{ $stateLabel }}
     </div>
     <div class="mt-4 flex flex-wrap items-center gap-2">
-      <button wire:click="$set('sort','due')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='due' ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">Due soon</button>
-      <button wire:click="$set('sort','largest')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='largest' ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">Largest first</button>
-      <button wire:click="$set('sort','recent')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='recent' ? 'border-emerald-300/35 bg-emerald-400/25 text-emerald-50' : 'border-emerald-400/15 bg-emerald-500/5 text-white/80' }}">Recently updated</button>
-      <button wire:click="submitSelected" class="ml-auto px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/15 text-white/90">Submit selected</button>
+      <button wire:click="$set('sort','due')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='due' ? 'border-zinc-300 bg-emerald-400/25 text-emerald-900' : 'border-emerald-400/15 bg-emerald-50 text-zinc-700' }}">Due soon</button>
+      <button wire:click="$set('sort','largest')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='largest' ? 'border-zinc-300 bg-emerald-400/25 text-emerald-900' : 'border-emerald-400/15 bg-emerald-50 text-zinc-700' }}">Largest first</button>
+      <button wire:click="$set('sort','recent')" class="px-3 py-1.5 rounded-full text-xs border {{ $sort==='recent' ? 'border-zinc-300 bg-emerald-400/25 text-emerald-900' : 'border-emerald-400/15 bg-emerald-50 text-zinc-700' }}">Recently updated</button>
+      <button wire:click="submitSelected" class="ml-auto px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-100 text-zinc-900">Submit selected</button>
     </div>
   </section>
 
@@ -86,31 +86,31 @@
         $orderUrl = route('pouring.order', ['order' => $order, 'return_to' => url()->full()]);
       @endphp
       <div
-        class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-5 cursor-pointer"
+        class="rounded-3xl border border-zinc-200 bg-white p-5 cursor-pointer"
         role="link"
         tabindex="0"
         onclick="window.location='{{ $orderUrl }}'"
         onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.location='{{ $orderUrl }}'; }">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div class="min-w-0">
-            <div class="text-sm text-white/90 font-semibold truncate">{{ $label }}</div>
-            <div class="mt-1 text-xs text-emerald-100/60">
+            <div class="text-sm text-zinc-900 font-semibold truncate">{{ $label }}</div>
+            <div class="mt-1 text-xs text-emerald-800">
               {{ $order->order_number ?? '—' }} · {{ $urgencyLabel }} · Due {{ optional($order->due_at)->format('M j, Y') ?? '—' }}
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <span class="rounded-full border border-emerald-200/10 bg-emerald-500/5 px-3 py-1 text-xs text-white/80">{{ $order->units }} units</span>
-            <a href="{{ $orderUrl }}" onclick="event.stopPropagation()" class="px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/15 text-white/90">Open</a>
-            <button wire:click.stop="toggleSelect({{ $order->id }})" onclick="event.stopPropagation()" class="px-3 py-1.5 rounded-full text-xs border border-white/15 bg-white/5 text-white/80">
+            <span class="rounded-full border border-zinc-200 bg-emerald-50 px-3 py-1 text-xs text-zinc-700">{{ $order->units }} units</span>
+            <a href="{{ $orderUrl }}" onclick="event.stopPropagation()" class="px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-100 text-zinc-900">Open</a>
+            <button wire:click.stop="toggleSelect({{ $order->id }})" onclick="event.stopPropagation()" class="px-3 py-1.5 rounded-full text-xs border border-zinc-300 bg-zinc-50 text-zinc-700">
               {{ !empty($selected[$order->id] ?? false) ? 'Selected' : 'Select' }}
             </button>
             <button wire:click.stop="startOrder({{ $order->id }})" onclick="event.stopPropagation()"
-              class="px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/15 text-white/90 {{ ($order->status ?? '') !== 'submitted_to_pouring' ? 'opacity-40 cursor-not-allowed' : '' }}"
+              class="px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-100 text-zinc-900 {{ ($order->status ?? '') !== 'submitted_to_pouring' ? 'opacity-40 cursor-not-allowed' : '' }}"
               @if(($order->status ?? '') !== 'submitted_to_pouring') disabled @endif>
               Start
             </button>
             <button wire:click.stop="completeOrder({{ $order->id }})" onclick="event.stopPropagation()"
-              class="px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-500/20 text-white/90 {{ !in_array($order->status ?? '', ['pouring','brought_down'], true) ? 'opacity-40 cursor-not-allowed' : '' }}"
+              class="px-3 py-1.5 rounded-full text-xs border border-emerald-400/25 bg-emerald-100 text-zinc-900 {{ !in_array($order->status ?? '', ['pouring','brought_down'], true) ? 'opacity-40 cursor-not-allowed' : '' }}"
               @if(!in_array($order->status ?? '', ['pouring','brought_down'], true)) disabled @endif>
               Complete
             </button>
@@ -118,7 +118,7 @@
         </div>
       </div>
     @empty
-      <div class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 text-sm text-emerald-50/70">No orders ready for pouring.</div>
+      <div class="rounded-3xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">No orders ready for pouring.</div>
     @endforelse
   </div>
 </div>
