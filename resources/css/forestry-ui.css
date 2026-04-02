@@ -1667,6 +1667,23 @@ body.mf-app-shell {
   white-space: nowrap;
 }
 
+.app-topbar-search-button {
+  border: 0;
+  background: var(--fb-brand);
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.45rem 1.4rem;
+  transition: background 0.2s ease;
+}
+
+.app-topbar-search-button:hover,
+.app-topbar-search-button:focus-visible {
+  background: #0d5f56;
+}
+
 .app-topbar-store {
   color: var(--fb-muted);
   font-size: 0.68rem;

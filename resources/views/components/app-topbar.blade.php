@@ -93,6 +93,13 @@
                             enterkeyhint="search"
                             data-command-field
                         />
+                        <button
+                            type="button"
+                            class="app-topbar-search-button"
+                            data-command-trigger
+                        >
+                            Search
+                        </button>
                         <span class="app-topbar-search-shortcut">Cmd/Ctrl + K</span>
                     </div>
                 @else
