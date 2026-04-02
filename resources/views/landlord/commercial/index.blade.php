@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-xl font-semibold text-zinc-900">Landlord Commercial Config</h1>
+        <h1 class="text-xl font-semibold text-zinc-900">Tenant Management</h1>
     </x-slot>
 
     @php
@@ -49,7 +49,7 @@
 
                 return [
                     'module_key' => $moduleKey,
-                    'label' => (string) ($definition['label'] ?? $moduleKey),
+                    'label' => (string) ($definition['label'] ?? $definition['display_name'] ?? $moduleKey),
                     'classification' => $classification,
                 ];
             })
@@ -109,6 +109,8 @@
                 </ul>
             </section>
         @endif
+
+        @include('landlord.commercial.partials.tenant-management-dashboard', ['tenantManagement' => $tenantManagement])
 
         <section
             class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
@@ -602,7 +604,7 @@
                                         @foreach ($addonCatalog as $addonKey => $definition)
                                             <tr>
                                                 <td class="px-3 py-2 font-mono text-zinc-900">{{ $addonKey }}</td>
-                                                <td class="px-3 py-2">{{ $definition['label'] ?? $addonKey }}</td>
+                                                <td class="px-3 py-2">{{ $definition['label'] ?? $definition['display_name'] ?? $addonKey }}</td>
                                             </tr>
                                         @endforeach
                                     </tbody>
@@ -1050,7 +1052,7 @@
                                                             @endphp
                                                             <form method="POST" action="{{ route('landlord.tenants.commercial.modules.update', ['tenant' => $tenant->id, 'moduleKey' => $moduleKey]) }}" class="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]">
                                                                 @csrf
-                                                                <div class="text-xs text-zinc-700">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $moduleKey) }}</div>
+                                                                <div class="text-xs text-zinc-700">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $definition['display_name'] ?? $moduleKey) }}</div>
                                                                 <select name="enabled_override" class="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900">
                                                                     <option value="inherit" @selected($enabledOverride === null)>inherit</option>
                                                                     <option value="enabled" @selected($enabledOverride === true)>enabled</option>
@@ -1081,7 +1083,7 @@
                                                 <form method="POST" action="{{ route('landlord.tenants.commercial.addons.update', ['tenant' => $tenant->id, 'addonKey' => $addonKey]) }}" class="grid gap-2 md:grid-cols-[1fr_auto_auto]">
                                                     @csrf
                                                     <input type="hidden" name="enabled" value="0">
-                                                    <div class="text-xs text-zinc-700">{{ $definition['label'] ?? $addonKey }}</div>
+                                                    <div class="text-xs text-zinc-700">{{ $definition['label'] ?? $definition['display_name'] ?? $addonKey }}</div>
                                                     <label class="inline-flex items-center gap-2 text-xs text-zinc-700">
                                                         <input type="checkbox" name="enabled" value="1" @checked($addonEnabled)>
                                                         enabled
@@ -1143,7 +1145,7 @@
                                                             @csrf
                                                             <div class="flex flex-wrap items-start justify-between gap-3">
                                                                 <div>
-                                                                    <div class="text-sm font-semibold text-zinc-900">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $moduleKey) }}</div>
+                                                                    <div class="text-sm font-semibold text-zinc-900">{{ $effectiveModuleState['label'] ?? ($definition['label'] ?? $definition['display_name'] ?? $moduleKey) }}</div>
                                                                     <div class="mt-1 text-[11px] text-zinc-600">
                                                                         status {{ $definition['status'] ?? 'n/a' }}
                                                                         · billing {{ $definition['billing_mode'] ?? 'n/a' }}
