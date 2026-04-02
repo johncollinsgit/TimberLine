@@ -1612,8 +1612,59 @@ body.mf-app-shell {
 .app-topbar-right {
   align-items: center;
   display: flex;
+  gap: 0.65rem;
   justify-content: flex-end;
   min-width: 180px;
+}
+
+.app-topbar-search {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--fb-border);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 0.55rem;
+  min-width: min(24rem, 100%);
+  padding: 0.12rem 0.18rem 0.12rem 0.9rem;
+}
+
+.app-topbar-search:focus-within {
+  border-color: rgba(18, 60, 67, 0.28);
+  box-shadow: 0 0 0 3px rgba(18, 60, 67, 0.08);
+}
+
+.app-topbar-search-input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--fb-brand);
+  flex: 1 1 auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-width: 12rem;
+  padding: 0.42rem 0;
+}
+
+.app-topbar-search-input::placeholder {
+  color: var(--fb-muted);
+  font-weight: 500;
+}
+
+.app-topbar-search-input:focus {
+  outline: none;
+}
+
+.app-topbar-search-shortcut {
+  background: var(--fb-surface-muted);
+  border: 1px solid rgba(18, 60, 67, 0.08);
+  border-radius: 999px;
+  color: var(--fb-muted);
+  flex: 0 0 auto;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.38rem 0.68rem;
+  white-space: nowrap;
 }
 
 .app-topbar-store {
@@ -2386,6 +2437,11 @@ body.mf-app-shell {
     margin-left: 0;
     min-width: 0;
     order: 3;
+    width: 100%;
+  }
+
+  .app-topbar-search {
+    min-width: 0;
     width: 100%;
   }
 

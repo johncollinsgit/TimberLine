@@ -149,11 +149,46 @@ test('shopify embedded home renders concise setup surface', function () {
 
     $response->assertOk()
         ->assertSeeText('Setup progress')
+        ->assertSee('data-command-field', false)
+        ->assertSee('id="app-topbar-command-search"', false)
+        ->assertSee('data-setup-panel', false)
+        ->assertSee('aria-expanded="false"', false)
         ->assertSeeText('Attention needed')
         ->assertDontSeeText('What Happens After Import')
         ->assertDontSeeText('Available Now')
         ->assertDontSeeText('Setup Next')
         ->assertDontSeeText('Unlock Next');
+});
+
+test('shopify embedded search reuses page context and returns embedded backstage sections', function () {
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
+    config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
+
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'modernforestry.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+
+    $query = shopifyEmbeddedSignedQuery([
+        'shop' => 'modernforestry.myshopify.com',
+        'host' => 'admin-host-token',
+        'embedded' => '1',
+        'timestamp' => (string) time(),
+    ], 'shopify-client-secret');
+
+    $this->get(route('shopify.app', $query))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.search', ['q' => 'settings']));
+
+    $response->assertOk()
+        ->assertJsonPath('query', 'settings')
+        ->assertJsonPath('groups.Backstage.0.title', 'Settings');
+
+    expect(collect($response->json('results'))->pluck('url'))
+        ->toContain('/shopify/app/settings?host=admin-host-token');
 });
 
 test('home does not flag sync as stale before the configured threshold', function () {

@@ -105,6 +105,9 @@
                 'action' => ['label' => 'Open rewards analytics', 'href' => route('shopify.app.rewards', [], false)],
             ],
         ];
+        $setupItemCount = count($setupItems);
+        $completedSetupItems = collect($setupItems)->filter(fn (array $item): bool => (bool) ($item['done'] ?? false))->count();
+        $remainingSetupItems = max(0, $setupItemCount - $completedSetupItems);
 
         $kpis = array_slice((array) ($dashboardData['topMetrics'] ?? []), 0, 4);
         if ($kpis === []) {
@@ -240,10 +243,13 @@
             display: inline-flex;
             gap: 8px;
             flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
         }
 
         .embedded-home-button,
-        .embedded-home-link {
+        .embedded-home-link,
+        .embedded-home-toggle {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -256,12 +262,31 @@
             font-size: 12px;
             font-weight: 600;
             padding: 0 12px;
+            white-space: nowrap;
         }
 
         .embedded-home-button {
             border-color: #0f766e;
             background: rgba(15, 118, 110, 0.12);
             color: #115e59;
+        }
+
+        .embedded-home-toggle {
+            cursor: pointer;
+        }
+
+        .embedded-home-toggle-summary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            margin-top: 8px;
+            border-radius: 999px;
+            background: rgba(15, 118, 110, 0.08);
+            color: #115e59;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 0 10px;
         }
 
         .embedded-home-kpis {
@@ -302,6 +327,10 @@
             display: grid;
             gap: 8px;
             margin-top: 12px;
+        }
+
+        .embedded-home-checklist[hidden] {
+            display: none;
         }
 
         .embedded-home-checklist-row,
@@ -391,8 +420,22 @@
                     <div>
                         <h2>{{ $isSetupMode ? 'Setup progress' : 'Performance summary' }}</h2>
                         <p>{{ $isSetupMode ? 'Finish the core setup steps to go live.' : 'Track revenue, engagement, and program health.' }}</p>
+                        @if($isSetupMode)
+                            <span class="embedded-home-toggle-summary">{{ $completedSetupItems }} of {{ $setupItemCount }} complete{{ $remainingSetupItems > 0 ? ' · '.$remainingSetupItems.' left' : '' }}</span>
+                        @endif
                     </div>
                     <div class="embedded-home-actions">
+                        @if($isSetupMode)
+                            <button
+                                type="button"
+                                class="embedded-home-toggle"
+                                data-setup-toggle
+                                aria-expanded="false"
+                                aria-controls="embedded-home-setup-panel"
+                            >
+                                Show checklist
+                            </button>
+                        @endif
                         <a class="embedded-home-button" href="{{ $embeddedUrl($isSetupMode ? route('shopify.app.start', [], false) : route('shopify.app.rewards', [], false)) }}">
                             {{ $isSetupMode ? 'Complete setup' : 'View rewards analytics' }}
                         </a>
@@ -401,7 +444,13 @@
                 </div>
 
                 @if($isSetupMode)
-                    <div class="embedded-home-checklist" aria-label="Setup checklist">
+                    <div
+                        id="embedded-home-setup-panel"
+                        class="embedded-home-checklist"
+                        aria-label="Setup checklist"
+                        data-setup-panel
+                        hidden
+                    >
                         @foreach(array_slice($setupItems, 0, 4) as $item)
                             <div class="embedded-home-checklist-row">
                                 <div>
@@ -562,6 +611,32 @@
                     });
 
                     chart.render();
+                })();
+            </script>
+        @endif
+
+        @if($isSetupMode)
+            <script>
+                (() => {
+                    const home = document.querySelector('[data-embedded-home]');
+                    const toggle = home?.querySelector('[data-setup-toggle]');
+                    const panel = home?.querySelector('[data-setup-panel]');
+
+                    if (!toggle || !panel) {
+                        return;
+                    }
+
+                    const syncState = (expanded) => {
+                        panel.hidden = !expanded;
+                        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                        toggle.textContent = expanded ? 'Hide checklist' : 'Show checklist';
+                    };
+
+                    syncState(false);
+
+                    toggle.addEventListener('click', () => {
+                        syncState(panel.hidden);
+                    });
                 })();
             </script>
         @endif

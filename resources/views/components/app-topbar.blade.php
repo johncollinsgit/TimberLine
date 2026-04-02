@@ -9,6 +9,8 @@
     'active' => null,
     'activeChild' => null,
     'workspaceLabel' => 'Unified workspace',
+    'commandSearchEnabled' => false,
+    'commandSearchPlaceholder' => 'Search the workspace',
 ])
 
 @php
@@ -79,13 +81,29 @@
                 @endforeach
             </nav>
             <div class="app-topbar-right">
-                <button
-                    type="button"
-                    class="app-topbar-action"
-                    data-command-trigger
-                >
-                    Search
-                </button>
+                @if($commandSearchEnabled)
+                    <div class="app-topbar-search" role="search">
+                        <label class="sr-only" for="app-topbar-command-search">Search Backstage</label>
+                        <input
+                            id="app-topbar-command-search"
+                            type="search"
+                            class="app-topbar-search-input"
+                            placeholder="{{ $commandSearchPlaceholder }}"
+                            autocomplete="off"
+                            enterkeyhint="search"
+                            data-command-field
+                        />
+                        <span class="app-topbar-search-shortcut">Cmd/Ctrl + K</span>
+                    </div>
+                @else
+                    <button
+                        type="button"
+                        class="app-topbar-action"
+                        data-command-trigger
+                    >
+                        Search
+                    </button>
+                @endif
                 @if(filled($storeLabel))
                     <span class="app-topbar-store">{{ $storeLabel }}</span>
                 @endif

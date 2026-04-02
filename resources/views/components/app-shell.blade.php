@@ -35,6 +35,8 @@
             :actions="$actions"
             :store-label="$storeLabel"
             :workspace-label="$workspaceLabel"
+            :command-search-enabled="filled($commandSearchEndpoint)"
+            :command-search-placeholder="$commandSearchPlaceholder"
         />
         <div class="app-shell-content">
             {{ $slot }}

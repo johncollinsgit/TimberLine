@@ -446,6 +446,10 @@ class ShopifyEmbeddedAppController extends Controller
     ): JsonResponse {
         $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! ($context['ok'] ?? false)) {
+            $context = $contextService->resolvePageContext($request);
+        }
+
+        if (! ($context['ok'] ?? false)) {
             return $this->invalidContextResponse($context);
         }
 
@@ -465,6 +469,10 @@ class ShopifyEmbeddedAppController extends Controller
                 'limit' => $validated['limit'] ?? 10,
             ]
         );
+        $embeddedNavigationResults = $this->embeddedSearchResults(
+            (string) ($validated['q'] ?? ''),
+            $tenantId
+        );
         $embeddedContext = ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null));
         $appendContext = static function (array $row) use ($embeddedContext): array {
             $url = trim((string) ($row['url'] ?? ''));
@@ -474,10 +482,27 @@ class ShopifyEmbeddedAppController extends Controller
 
             return $row;
         };
-        $payload['results'] = array_map($appendContext, (array) ($payload['results'] ?? []));
-        $payload['groups'] = collect((array) ($payload['groups'] ?? []))
-            ->map(fn (array $rows): array => array_map($appendContext, $rows))
+        $payload['results'] = collect(array_merge(
+            $embeddedNavigationResults,
+            (array) ($payload['results'] ?? [])
+        ))
+            ->map($appendContext)
+            ->unique(fn (array $row): string => strtolower(trim((string) ($row['title'] ?? '')).'|'.trim((string) ($row['url'] ?? ''))))
+            ->sortByDesc(fn (array $row): int => (int) ($row['score'] ?? 0))
+            ->take($validated['limit'] ?? 10)
+            ->values()
             ->all();
+        $payload['groups'] = collect((array) $payload['results'])
+            ->groupBy(fn (array $row): string => (string) ($row['type'] ?? 'other'))
+            ->map(fn ($rows): array => $rows->values()->all())
+            ->all();
+        $payload['total'] = count((array) $payload['results']);
+        $payload['empty_state'] = $payload['total'] === 0
+            ? [
+                'title' => 'No exact match yet',
+                'subtitle' => 'Try a customer name, section name, sync status, or settings keyword.',
+            ]
+            : null;
 
         return response()->json($payload);
     }
@@ -522,6 +547,177 @@ class ShopifyEmbeddedAppController extends Controller
                 'module_state' => is_array($state) ? $state : null,
             ]);
         }, $items);
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function embeddedSearchResults(string $query, ?int $tenantId): array
+    {
+        $displayLabels = $this->embeddedDisplayLabels($tenantId);
+        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
+        if ($rewardsLabel === '') {
+            $rewardsLabel = 'Rewards';
+        }
+
+        $entries = [
+            [
+                'title' => 'Home',
+                'subtitle' => 'Revenue, setup progress, and recent activity.',
+                'url' => route('shopify.app', [], false),
+                'badge' => 'Section',
+                'keywords' => ['dashboard', 'overview', 'home'],
+            ],
+            [
+                'title' => 'Start Here',
+                'subtitle' => 'Walk through onboarding and launch steps.',
+                'url' => route('shopify.app.start', [], false),
+                'badge' => 'Setup',
+                'keywords' => ['setup', 'getting started', 'onboarding'],
+            ],
+            [
+                'title' => 'Plans & Add-ons',
+                'subtitle' => 'Review plan options and add-on modules.',
+                'url' => route('shopify.app.plans', [], false),
+                'badge' => 'Setup',
+                'keywords' => ['plans', 'addons', 'pricing'],
+            ],
+            [
+                'title' => 'App Store',
+                'subtitle' => 'Browse modules available for this store.',
+                'url' => route('shopify.app.store', [], false),
+                'badge' => 'Modules',
+                'keywords' => ['modules', 'store', 'apps'],
+            ],
+            [
+                'title' => 'Integrations',
+                'subtitle' => 'Customer sync and connected app health.',
+                'url' => route('shopify.app.integrations', [], false),
+                'badge' => 'Sync',
+                'keywords' => ['sync', 'imports', 'integrations'],
+            ],
+            [
+                'title' => 'Customers',
+                'subtitle' => 'Search profiles, segments, and customer activity.',
+                'url' => route('shopify.app.customers.manage', [], false),
+                'badge' => 'Customers',
+                'keywords' => ['customers', 'profiles', 'audience'],
+            ],
+            [
+                'title' => 'Customer Segments',
+                'subtitle' => 'Review reusable customer groupings.',
+                'url' => route('shopify.app.customers.segments', [], false),
+                'badge' => 'Customers',
+                'keywords' => ['segments', 'groups', 'customers'],
+            ],
+            [
+                'title' => 'Customer Activity',
+                'subtitle' => 'See recent customer and rewards events.',
+                'url' => route('shopify.app.customers.activity', [], false),
+                'badge' => 'Customers',
+                'keywords' => ['activity', 'events', 'customers'],
+            ],
+            [
+                'title' => 'Customer Imports',
+                'subtitle' => 'Inspect imports and sync history.',
+                'url' => route('shopify.app.customers.imports', [], false),
+                'badge' => 'Sync',
+                'keywords' => ['imports', 'sync', 'customers'],
+            ],
+            [
+                'title' => $rewardsLabel,
+                'subtitle' => 'Review performance, rules, and live status.',
+                'url' => route('shopify.app.rewards', [], false),
+                'badge' => 'Rewards',
+                'keywords' => ['rewards', 'loyalty', 'analytics'],
+            ],
+            [
+                'title' => 'Ways to Earn',
+                'subtitle' => 'Manage how customers earn rewards.',
+                'url' => route('shopify.embedded.rewards.earn', [], false),
+                'badge' => 'Rewards',
+                'keywords' => ['earn', 'rules', 'rewards'],
+            ],
+            [
+                'title' => 'Ways to Redeem',
+                'subtitle' => 'Manage redemption options and discounts.',
+                'url' => route('shopify.embedded.rewards.redeem', [], false),
+                'badge' => 'Rewards',
+                'keywords' => ['redeem', 'discounts', 'rewards'],
+            ],
+            [
+                'title' => 'Notifications',
+                'subtitle' => 'Configure reminder and program messaging.',
+                'url' => route('shopify.embedded.rewards.notifications', [], false),
+                'badge' => 'Rewards',
+                'keywords' => ['notifications', 'emails', 'reminders'],
+            ],
+            [
+                'title' => 'Settings',
+                'subtitle' => 'Email sender, branding, and workspace preferences.',
+                'url' => route('shopify.app.settings', [], false),
+                'badge' => 'Settings',
+                'keywords' => ['settings', 'email', 'preferences'],
+            ],
+        ];
+
+        $normalized = strtolower(trim($query));
+
+        return collect($entries)
+            ->map(function (array $entry) use ($normalized): ?array {
+                $score = $this->embeddedSearchScore($normalized, array_merge(
+                    [(string) ($entry['title'] ?? ''), (string) ($entry['subtitle'] ?? '')],
+                    (array) ($entry['keywords'] ?? [])
+                ));
+
+                if ($normalized !== '' && $score === 0) {
+                    return null;
+                }
+
+                return [
+                    'type' => 'Backstage',
+                    'subtype' => 'section',
+                    'title' => (string) ($entry['title'] ?? 'Section'),
+                    'subtitle' => (string) ($entry['subtitle'] ?? ''),
+                    'url' => (string) ($entry['url'] ?? '#'),
+                    'badge' => (string) ($entry['badge'] ?? 'Section'),
+                    'score' => $score ?: 260,
+                    'icon' => 'rectangle-stack',
+                    'meta' => [],
+                ];
+            })
+            ->filter()
+            ->sortByDesc(fn (array $entry): int => (int) ($entry['score'] ?? 0))
+            ->values()
+            ->all();
+    }
+
+    protected function embeddedSearchScore(string $query, array $haystacks, int $base = 260): int
+    {
+        if ($query === '') {
+            return $base;
+        }
+
+        foreach ($haystacks as $index => $haystack) {
+            $normalized = strtolower(trim((string) $haystack));
+            if ($normalized === '') {
+                continue;
+            }
+
+            if ($normalized === $query) {
+                return $base + 120 - ($index * 5);
+            }
+
+            if (str_starts_with($normalized, $query)) {
+                return $base + 80 - ($index * 5);
+            }
+
+            if (str_contains($normalized, $query)) {
+                return $base + 40 - ($index * 5);
+            }
+        }
+
+        return 0;
     }
 
     protected function headlineForStatus(string $status, string $defaultHeadline): string

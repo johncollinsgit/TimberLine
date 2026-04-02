@@ -49,6 +49,17 @@
             }
             window.__fbCommandPaletteBound = true;
 
+            function renderIdleState(root) {
+                const container = root.querySelector("[data-command-results]");
+                if (!container) return;
+
+                container.innerHTML = `
+                    <div class="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 text-sm text-zinc-600">
+                        Start typing to search the workspace.
+                    </div>
+                `;
+            }
+
             function normalizeGroups(payload) {
                 const groups = payload && typeof payload === "object" ? (payload.groups || {}) : {};
                 return Object.entries(groups);
@@ -112,6 +123,8 @@
                 const input = root.querySelector("[data-command-input]");
                 const closeBtn = root.querySelector("[data-command-close]");
                 const endpoint = root.dataset.searchEndpoint || "";
+                const externalFields = () => Array.from(document.querySelectorAll("[data-command-field]"))
+                    .filter((field) => field instanceof HTMLInputElement);
 
                 if (!overlay || !panel || !input || endpoint === "") {
                     return;
@@ -120,11 +133,35 @@
                 let debounceId = null;
                 let requestId = 0;
 
-                const open = () => {
+                const syncExternalFields = (value) => {
+                    externalFields().forEach((field) => {
+                        if (field.value !== value) {
+                            field.value = value;
+                        }
+                    });
+                };
+
+                const open = (options = {}) => {
+                    const detail = options && typeof options === "object" ? options : {};
+                    const query = typeof detail.query === "string" ? detail.query : input.value;
+
+                    if (input.value !== query) {
+                        input.value = query;
+                    }
+                    syncExternalFields(query);
                     overlay.classList.remove("hidden");
                     panel.classList.remove("hidden");
-                    input.focus();
-                    input.select();
+
+                    if (detail.search === true || (detail.search !== false && query.trim() !== "")) {
+                        executeSearch();
+                    } else if (query.trim() === "") {
+                        renderIdleState(root);
+                    }
+
+                    if (detail.focus !== false) {
+                        input.focus();
+                        input.setSelectionRange(query.length, query.length);
+                    }
                 };
 
                 const close = () => {
@@ -172,7 +209,7 @@
                     const isCommandKey = (event.metaKey || event.ctrlKey) && String(event.key).toLowerCase() === "k";
                     if (isCommandKey) {
                         event.preventDefault();
-                        open();
+                        open({ search: input.value.trim() !== "" });
                         return;
                     }
 
@@ -211,12 +248,50 @@
                     }
 
                     if (target.closest("[data-command-trigger]")) {
-                        open();
+                        open({ search: input.value.trim() !== "" });
                     }
                 });
 
-                document.addEventListener("app-command-palette:open", open);
-                input.addEventListener("input", debouncedSearch);
+                externalFields().forEach((field) => {
+                    if (field.dataset.commandFieldBound === "1") {
+                        return;
+                    }
+
+                    field.dataset.commandFieldBound = "1";
+
+                    field.addEventListener("focus", () => {
+                        open({
+                            query: field.value,
+                            search: field.value.trim() !== "",
+                        });
+                    });
+
+                    field.addEventListener("input", () => {
+                        open({
+                            query: field.value,
+                            search: field.value.trim() !== "",
+                        });
+                    });
+
+                    field.addEventListener("keydown", (event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            open({
+                                query: field.value,
+                                search: field.value.trim() !== "",
+                            });
+                        }
+                    });
+                });
+
+                document.addEventListener("app-command-palette:open", (event) => {
+                    const detail = event instanceof CustomEvent ? event.detail : {};
+                    open(detail);
+                });
+                input.addEventListener("input", () => {
+                    syncExternalFields(input.value);
+                    debouncedSearch();
+                });
                 closeBtn.addEventListener("click", close);
                 overlay.addEventListener("click", close);
             }
