@@ -35,6 +35,7 @@
             : ['total_profiles' => 0, 'reachable_profiles' => 0, 'customers_with_points' => 0];
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
+        $syncIsStale = (bool) ($importSummary['is_stale'] ?? false);
         $importCta = is_array($importSummary['cta'] ?? null)
             ? $importSummary['cta']
             : ['label' => 'Sync customers', 'href' => route('shopify.app.integrations', [], false)];
@@ -43,7 +44,7 @@
         $summaryReachable = (int) ($customerSummary['reachable_profiles'] ?? 0);
         $summaryWithPoints = (int) ($customerSummary['customers_with_points'] ?? 0);
 
-        $lastSync = 'Not started';
+        $lastSync = 'Not synced';
         if (filled(data_get($importSummary, 'latest_run.finished_at_display'))) {
             $lastSync = (string) data_get($importSummary, 'latest_run.finished_at_display');
         } elseif (filled(data_get($importSummary, 'latest_run.started_at_display'))) {
@@ -55,9 +56,10 @@
         $primarySyncLabel = match ($importState) {
             'in_progress' => 'View sync status',
             'attention' => 'Retry sync',
-            'imported' => 'Import history',
+            'imported' => $syncIsStale ? 'Retry sync' : 'View sync status',
             default => 'Sync customers',
         };
+        $primarySyncHref = route('shopify.app.integrations', [], false);
         $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
             request(),
             filled($host ?? null) ? (string) $host : null
@@ -405,7 +407,7 @@
             <article class="customers-summary-card">
                 <p class="customers-summary-label">Last synced</p>
                 <p class="customers-summary-value">{{ $lastSync }}</p>
-                <p class="customers-summary-meta">{{ (string) ($importSummary['label'] ?? 'Not started') }}</p>
+                <p class="customers-summary-meta">{{ (string) ($importSummary['label'] ?? 'Not synced') }}</p>
             </article>
         </div>
 
@@ -417,10 +419,10 @@
             <div class="customers-toolbar-head">
                 <div>
                     <h2 class="customers-toolbar-title">All customers</h2>
-                    <p class="customers-toolbar-copy">Search records, apply filters, and open a profile.</p>
+                    <p class="customers-toolbar-copy">Search customers, apply filters, and open a profile.</p>
                 </div>
                 <div class="customers-toolbar-actions">
-                    <a class="customers-action-button customers-action-button--primary" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $primarySyncLabel }}</a>
+                    <a class="customers-action-button customers-action-button--primary" href="{{ $embeddedUrl($primarySyncHref) }}">{{ $primarySyncLabel }}</a>
                     <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.segments', [], false)) }}">Create segment</a>
                 </div>
             </div>
@@ -475,7 +477,7 @@
             </div>
 
             <div class="customers-sync-meta">
-                <span>Sync status: {{ (string) ($importSummary['label'] ?? 'Not started') }}</span>
+                <span>Sync status: {{ (string) ($importSummary['label'] ?? 'Not synced') }}</span>
                 <div class="customers-controls">
                     <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', array_merge($contextFields, ['refresh' => 1]), false)) }}">Refresh table</a>
                     <a class="customers-action-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', $filterReset, false)) }}">Reset view</a>

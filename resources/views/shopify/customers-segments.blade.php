@@ -59,7 +59,7 @@
 
     <section class="customers-tab-panel" aria-label="Customer segments">
         <h2>Segments</h2>
-        <p>Create and review saved customer groups.</p>
+        <p>Create and review saved customer segments.</p>
         <a class="customers-tab-link" href="{{ $embeddedUrl(route('shopify.app.customers.manage', [], false)) }}">Open all customers</a>
     </section>
 </x-shopify.customers-layout>

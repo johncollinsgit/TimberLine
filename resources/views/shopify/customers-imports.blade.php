@@ -15,10 +15,12 @@
         $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
+        $syncIsStale = (bool) ($importSummary['is_stale'] ?? false);
         $syncActionLabel = match ($importState) {
+            'imported' => $syncIsStale ? 'Retry sync' : 'View sync status',
             'attention' => 'Retry sync',
             'in_progress' => 'View sync status',
-            default => 'Open sync settings',
+            default => 'Sync customers',
         };
         $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
             request(),
@@ -72,8 +74,8 @@
 
     <section class="customers-tab-panel" aria-label="Customer imports">
         <h2>Imports</h2>
-        <p>Review sync runs and retry when needed.</p>
-        <p class="customers-tab-meta">Current status: {{ (string) ($importSummary['label'] ?? 'Not started') }}</p>
+        <p>Review sync status and run sync when needed.</p>
+        <p class="customers-tab-meta">Current sync status: {{ (string) ($importSummary['label'] ?? 'Not synced') }}</p>
         <a class="customers-tab-link" href="{{ $embeddedUrl(route('shopify.app.integrations', [], false)) }}">{{ $syncActionLabel }}</a>
     </section>
 </x-shopify.customers-layout>

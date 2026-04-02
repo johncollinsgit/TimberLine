@@ -104,7 +104,7 @@
                 @if($importState !== 'imported')
                     <tr>
                         <td colspan="4" class="customers-tab-empty">
-                            No activity yet.
+                            No activity yet. Sync customers to load recent events.
                             <br />
                             <a class="customers-tab-link" href="{{ $embeddedUrl(route('shopify.app.integrations', [], false)) }}">Sync customers</a>
                         </td>
@@ -112,7 +112,7 @@
                 @else
                     <tr>
                         <td colspan="4" class="customers-tab-empty">
-                            Activity events will appear after new sync updates.
+                            No recent activity yet.
                         </td>
                     </tr>
                 @endif

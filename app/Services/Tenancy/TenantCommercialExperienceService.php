@@ -1206,7 +1206,9 @@ class TenantCommercialExperienceService
      *   description:string,
      *   progress_note:string,
      *   cta:array{label:string,href:string},
-     *   latest_run:?array<string,mixed>
+     *   latest_run:?array<string,mixed>,
+     *   is_stale:bool,
+     *   stale_after_days:int
      * }
      */
     protected function importSummary(?int $tenantId, int $profileCount): array
@@ -1231,22 +1233,44 @@ class TenantCommercialExperienceService
             $state = 'attention';
         }
 
+        $staleAfterDays = max(1, (int) config('shopify_embedded.sync_stale_after_days', 3));
+        $latestSyncAtRaw = (string) ($latestRun['finished_at'] ?? $latestRun['started_at'] ?? '');
+        $latestSyncAt = null;
+        if ($latestSyncAtRaw !== '') {
+            try {
+                $latestSyncAt = \Carbon\CarbonImmutable::parse($latestSyncAtRaw);
+            } catch (\Throwable) {
+                $latestSyncAt = null;
+            }
+        }
+        $isStale = $state === 'imported'
+            && $latestSyncAt !== null
+            && $latestSyncAt->lessThanOrEqualTo(now()->subDays($staleAfterDays));
+
         $label = match ($state) {
-            'imported' => 'Imported',
-            'in_progress' => 'In progress',
-            'attention' => 'Needs attention',
-            default => 'Not started',
+            'imported' => 'Synced',
+            'in_progress' => 'Syncing',
+            'attention' => 'Sync issue',
+            default => 'Not synced',
         };
 
         $description = match ($state) {
-            'imported' => 'Customers are synced and ready.',
+            'imported' => $isStale
+                ? 'Customer sync needs refresh.'
+                : 'Customers are synced and ready.',
             'in_progress' => 'Customer sync is running.',
             'attention' => 'The last sync did not complete.',
             default => 'Customer sync has not started yet.',
         };
 
         $progressNote = match ($state) {
-            'imported' => number_format($profileCount).' customer profile'.($profileCount === 1 ? '' : 's').' loaded.',
+            'imported' => $isStale
+                ? (! empty($latestRun['finished_at_display'])
+                    ? 'Last synced '.$latestRun['finished_at_display'].'.'
+                    : (! empty($latestRun['started_at_display'])
+                        ? 'Last sync started '.$latestRun['started_at_display'].'.'
+                        : 'Last sync is stale.'))
+                : number_format($profileCount).' customer profile'.($profileCount === 1 ? '' : 's').' loaded.',
             'in_progress' => ! empty($latestRun['started_at_display'])
                 ? 'Started '.$latestRun['started_at_display'].'.'
                 : 'Sync in progress.',
@@ -1258,10 +1282,11 @@ class TenantCommercialExperienceService
                 : 'No sync run found yet.',
         };
 
-        $cta = match ($state) {
-            'imported' => ['label' => 'Open customers', 'href' => route('shopify.app.customers.manage', [], false)],
-            'in_progress' => ['label' => 'View sync status', 'href' => route('shopify.app.integrations', [], false)],
-            'attention' => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
+        $cta = match (true) {
+            $state === 'imported' && $isStale => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
+            $state === 'imported' => ['label' => 'Open customers', 'href' => route('shopify.app.customers.manage', [], false)],
+            $state === 'in_progress' => ['label' => 'View sync status', 'href' => route('shopify.app.integrations', [], false)],
+            $state === 'attention' => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
             default => ['label' => 'Sync customers', 'href' => route('shopify.app.integrations', [], false)],
         };
 
@@ -1272,6 +1297,8 @@ class TenantCommercialExperienceService
             'progress_note' => $progressNote,
             'cta' => $cta,
             'latest_run' => $latestRun,
+            'is_stale' => $isStale,
+            'stale_after_days' => $staleAfterDays,
         ];
     }
 

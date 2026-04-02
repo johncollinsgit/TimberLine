@@ -31,20 +31,8 @@
         $isSetupMode = $importState !== 'imported' || $rewardsSetupStatus !== 'live';
         $showChartControls = ! $isSetupMode;
 
-        $latestSyncAt = null;
-        $latestSyncAtRaw = (string) (data_get($importSummary, 'latest_run.finished_at')
-            ?: data_get($importSummary, 'latest_run.started_at')
-            ?: '');
-        if ($latestSyncAtRaw !== '') {
-            try {
-                $latestSyncAt = \Carbon\CarbonImmutable::parse($latestSyncAtRaw);
-            } catch (\Throwable) {
-                $latestSyncAt = null;
-            }
-        }
-        $syncIsStale = $importState === 'imported'
-            && $latestSyncAt !== null
-            && $latestSyncAt->lt(now()->subDays(3));
+        $syncStaleAfterDays = max(1, (int) ($importSummary['stale_after_days'] ?? config('shopify_embedded.sync_stale_after_days', 3)));
+        $syncIsStale = (bool) ($importSummary['is_stale'] ?? false);
 
         $resolvedRewardsLabel = trim((string) ($rewardsLabel ?? data_get($displayLabels ?? [], 'rewards_label', 'Rewards')));
         if ($resolvedRewardsLabel === '') {
@@ -56,13 +44,13 @@
             $warnings[] = [
                 'title' => 'Fix customer sync',
                 'detail' => 'The latest sync did not complete successfully.',
-                'action' => ['label' => 'Open sync settings', 'href' => route('shopify.app.integrations', [], false)],
+                'action' => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
             ];
         }
         if ($syncIsStale) {
             $warnings[] = [
                 'title' => 'Refresh customer sync',
-                'detail' => 'Customer data has not synced in the last 3 days.',
+                'detail' => 'Customer data has not synced in the last '.$syncStaleAfterDays.' day'.($syncStaleAfterDays === 1 ? '' : 's').'.',
                 'action' => ['label' => 'Retry sync', 'href' => route('shopify.app.integrations', [], false)],
             ];
         }
@@ -87,11 +75,11 @@
         $setupItems = [
             [
                 'title' => 'Sync customers',
-                'status' => (string) ($importSummary['label'] ?? 'Not started'),
+                'status' => (string) ($importSummary['label'] ?? 'Not synced'),
                 'done' => $importState === 'imported',
                 'action' => [
                     'label' => match ($importState) {
-                        'imported' => 'Review sync',
+                        'imported' => $syncIsStale ? 'Retry sync' : 'View sync status',
                         'in_progress' => 'View sync status',
                         'attention' => 'Retry sync',
                         default => 'Sync customers',

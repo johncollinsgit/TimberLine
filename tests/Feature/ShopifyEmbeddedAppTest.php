@@ -2,7 +2,11 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
+use App\Models\MarketingImportRun;
+use App\Models\MarketingProfile;
 use App\Models\ShopifyStore;
+use App\Models\Tenant;
+use Carbon\CarbonImmutable;
 
 beforeEach(function () {
     $this->withoutVite();
@@ -148,4 +152,83 @@ test('shopify embedded home renders module-state checklist shell and bootstrap p
         ->assertSee('<s-app-nav>', false)
         ->assertSee('tenant-module-access-bootstrap', false)
         ->assertSee('"checklist"', false);
+});
+
+test('home does not flag sync as stale before the configured threshold', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-04-02 12:00:00'));
+
+    try {
+        config()->set('shopify_embedded.sync_stale_after_days', 3);
+
+        $tenant = Tenant::query()->create([
+            'name' => 'Retail Tenant',
+            'slug' => 'retail-tenant',
+        ]);
+        configureEmbeddedRetailStore($tenant->id);
+
+        MarketingProfile::query()->create([
+            'tenant_id' => $tenant->id,
+            'first_name' => 'Avery',
+            'last_name' => 'Stone',
+            'email' => 'avery@example.com',
+            'normalized_email' => 'avery@example.com',
+        ]);
+
+        MarketingImportRun::query()->create([
+            'tenant_id' => $tenant->id,
+            'type' => 'customers',
+            'status' => 'completed',
+            'source_label' => 'Shopify sync',
+            'started_at' => now()->subDays(3)->addMinute(),
+            'finished_at' => now()->subDays(3)->addMinute(),
+        ]);
+
+        $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
+
+        $response->assertOk()
+            ->assertDontSeeText('Refresh customer sync')
+            ->assertDontSeeText('Retry sync');
+    } finally {
+        $this->travelBack();
+    }
+});
+
+test('home flags sync as stale at the configured threshold', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-04-02 12:00:00'));
+
+    try {
+        config()->set('shopify_embedded.sync_stale_after_days', 3);
+
+        $tenant = Tenant::query()->create([
+            'name' => 'Retail Tenant',
+            'slug' => 'retail-tenant',
+        ]);
+        configureEmbeddedRetailStore($tenant->id);
+
+        MarketingProfile::query()->create([
+            'tenant_id' => $tenant->id,
+            'first_name' => 'Avery',
+            'last_name' => 'Stone',
+            'email' => 'avery@example.com',
+            'normalized_email' => 'avery@example.com',
+        ]);
+
+        MarketingImportRun::query()->create([
+            'tenant_id' => $tenant->id,
+            'type' => 'customers',
+            'status' => 'completed',
+            'source_label' => 'Shopify sync',
+            'started_at' => now()->subDays(3),
+            'finished_at' => now()->subDays(3),
+        ]);
+
+        $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
+
+        $response->assertOk()
+            ->assertSeeText('Refresh customer sync')
+            ->assertSeeText('Customer data has not synced in the last 3 days.')
+            ->assertSeeText('Retry sync');
+    } finally {
+        $this->travelBack();
+    }
 });

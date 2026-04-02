@@ -49,6 +49,12 @@ trait HandlesShopifyEmbeddedNavigation
                 'children' => [],
             ],
             [
+                'key' => 'customers',
+                'label' => 'Customers',
+                'href' => route('shopify.app.customers', [], false),
+                'children' => [],
+            ],
+            [
                 'key' => 'rewards',
                 'label' => $rewardsLabel,
                 'href' => route('shopify.app.rewards', [], false),
@@ -61,12 +67,6 @@ trait HandlesShopifyEmbeddedNavigation
                     ['key' => 'vip', 'label' => 'VIP', 'href' => route('shopify.embedded.rewards.vip', [], false)],
                     ['key' => 'notifications', 'label' => 'Notifications', 'href' => route('shopify.embedded.rewards.notifications', [], false)],
                 ],
-            ],
-            [
-                'key' => 'customers',
-                'label' => 'Customers',
-                'href' => route('shopify.app.customers', [], false),
-                'children' => [],
             ],
             [
                 'key' => 'settings',
