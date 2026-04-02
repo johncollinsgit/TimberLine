@@ -385,10 +385,39 @@
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         }
 
+        .embedded-home-column-head {
+            align-items: flex-start;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .embedded-home-column-toggle {
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            border-radius: 999px;
+            background: #fff;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            cursor: pointer;
+            align-self: center;
+        }
+
+        .embedded-home-column-toggle[aria-expanded="true"] {
+            border-color: rgba(15, 118, 110, 0.6);
+            color: #0f766e;
+            background: rgba(15, 118, 110, 0.12);
+        }
+
         .embedded-home-column-list {
             display: grid;
             gap: 8px;
             margin-top: 12px;
+        }
+
+        .embedded-home-column-list[hidden] {
+            display: none;
         }
 
         @media (max-width: 980px) {
@@ -497,9 +526,29 @@
 
             <div class="embedded-home-columns">
                 <article class="embedded-home-card embedded-home-column">
-                    <h3>Attention needed</h3>
-                    <p>High-signal items only.</p>
-                    <div class="embedded-home-column-list">
+                    <div class="embedded-home-column-head">
+                        <div>
+                            <h3>Attention needed</h3>
+                            <p>High-signal items only.</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="embedded-home-column-toggle"
+                            data-column-toggle="attention"
+                            data-column-closed-label="Show details"
+                            data-column-open-label="Hide details"
+                            aria-expanded="false"
+                            aria-controls="attention-items"
+                        >
+                            Show details
+                        </button>
+                    </div>
+                    <div
+                        id="attention-items"
+                        class="embedded-home-column-list"
+                        data-column-panel="attention"
+                        hidden
+                    >
                         @forelse($warnings as $warning)
                             <div class="embedded-home-list-row">
                                 <div>
@@ -520,9 +569,29 @@
                 </article>
 
                 <article class="embedded-home-card embedded-home-column">
-                    <h3>Recent activity</h3>
-                    <p>Latest sync and program status.</p>
-                    <div class="embedded-home-column-list">
+                    <div class="embedded-home-column-head">
+                        <div>
+                            <h3>Recent activity</h3>
+                            <p>Latest sync and program status.</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="embedded-home-column-toggle"
+                            data-column-toggle="activity"
+                            data-column-closed-label="Show activity"
+                            data-column-open-label="Hide activity"
+                            aria-expanded="false"
+                            aria-controls="activity-items"
+                        >
+                            Show activity
+                        </button>
+                    </div>
+                    <div
+                        id="activity-items"
+                        class="embedded-home-column-list"
+                        data-column-panel="activity"
+                        hidden
+                    >
                         @foreach(array_slice($recentActivity, 0, 4) as $item)
                             <div class="embedded-home-list-row">
                                 <div>
@@ -640,5 +709,36 @@
                 })();
             </script>
         @endif
+
+        <script>
+            (() => {
+                document.querySelectorAll('[data-column-toggle]').forEach((toggle) => {
+                    const key = toggle.dataset.columnToggle;
+                    if (!key) {
+                        return;
+                    }
+
+                    const panel = document.querySelector(`[data-column-panel="${key}"]`);
+                    if (!panel) {
+                        return;
+                    }
+
+                    const closedLabel = toggle.dataset.columnClosedLabel ?? 'Show details';
+                    const openLabel = toggle.dataset.columnOpenLabel ?? 'Hide details';
+
+                    const setState = (expanded) => {
+                        panel.hidden = !expanded;
+                        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                        toggle.textContent = expanded ? openLabel : closedLabel;
+                    };
+
+                    setState(false);
+
+                    toggle.addEventListener('click', () => {
+                        setState(panel.hidden);
+                    });
+                });
+            })();
+        </script>
     @endif
 </x-shopify-embedded-shell>
