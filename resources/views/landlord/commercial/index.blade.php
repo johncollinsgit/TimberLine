@@ -112,82 +112,100 @@
 
         @include('landlord.commercial.partials.tenant-management-dashboard', ['tenantManagement' => $tenantManagement])
 
-        <section
+        <details
             class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
             x-data="{
                 activeSection: @js($defaultSectionTab),
                 sectionIds: @js($sectionTabIds),
+                syncFromHash() {
+                    const hash = window.location.hash.replace('#', '');
+                    if (! this.sectionIds.includes(hash)) {
+                        return;
+                    }
+
+                    this.$el.open = true;
+                    this.activeSection = hash;
+                },
                 init() {
-                    const syncFromHash = () => {
-                        const hash = window.location.hash.replace('#', '');
-                        if (this.sectionIds.includes(hash)) {
-                            this.activeSection = hash;
-                        }
-                    };
-                    syncFromHash();
-                    window.addEventListener('hashchange', syncFromHash);
+                    this.syncFromHash();
+                    window.addEventListener('hashchange', () => this.syncFromHash());
                 },
                 setSection(sectionId) {
                     if (! this.sectionIds.includes(sectionId)) {
                         return;
                     }
 
+                    this.$el.open = true;
                     this.activeSection = sectionId;
                     if (window.location.hash !== `#${sectionId}`) {
                         history.replaceState(null, '', `#${sectionId}`);
                     }
                 },
             }"
+            data-legacy-commercial-controls
         >
-            <header class="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
-                <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Landlord</p>
-                        <h2 class="mt-1 text-2xl font-semibold text-zinc-950">Commercial Revenue Configuration</h2>
-                        <p class="mt-1 max-w-3xl text-sm text-zinc-600">
-                            Commercial Control Center for plan pricing, add-on pricing, tenant overrides, and guarded billing-readiness actions.
-                        </p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <a
-                            href="{{ route('landlord.dashboard') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Back to Dashboard
-                        </a>
-                        <a
-                            href="#plans-pricing"
-                            class="inline-flex items-center rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
-                        >
-                            Update Pricing
-                        </a>
-                    </div>
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-left marker:hidden">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Commercial configuration controls</p>
+                    <p class="mt-1 text-sm text-zinc-600">
+                        Open the legacy pricing, billing-readiness, module, and tenant-override controls when you need to manage configuration details.
+                    </p>
                 </div>
-                <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
-                    <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
-                        @foreach ($sectionTabs as $tab)
-                            @php
-                                $tabId = (string) ($tab['id'] ?? '');
-                                $tabLabel = (string) ($tab['label'] ?? $tabId);
-                            @endphp
-                            <li>
-                                <a
-                                    href="#{{ $tabId }}"
-                                    @click.prevent="setSection(@js($tabId))"
-                                    :class="activeSection === @js($tabId)
-                                        ? 'border-zinc-900 bg-zinc-900 text-white'
-                                        : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100'"
-                                    class="rounded-md border px-3 py-1.5 transition"
-                                >
-                                    {{ $tabLabel }}
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
-                </nav>
-            </header>
+                <span class="inline-flex items-center rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700">
+                    Open controls
+                </span>
+            </summary>
 
-            <div class="space-y-8 p-6">
+            <div class="border-t border-zinc-200">
+                <header class="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
+                    <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Landlord</p>
+                            <h2 class="mt-1 text-2xl font-semibold text-zinc-950">Commercial Revenue Configuration</h2>
+                            <p class="mt-1 max-w-3xl text-sm text-zinc-600">
+                                Commercial Control Center for plan pricing, add-on pricing, tenant overrides, and guarded billing-readiness actions.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a
+                                href="{{ route('landlord.dashboard') }}"
+                                class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                            >
+                                Back to Dashboard
+                            </a>
+                            <a
+                                href="#plans-pricing"
+                                class="inline-flex items-center rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
+                            >
+                                Update Pricing
+                            </a>
+                        </div>
+                    </div>
+                    <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
+                        <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
+                            @foreach ($sectionTabs as $tab)
+                                @php
+                                    $tabId = (string) ($tab['id'] ?? '');
+                                    $tabLabel = (string) ($tab['label'] ?? $tabId);
+                                @endphp
+                                <li>
+                                    <a
+                                        href="#{{ $tabId }}"
+                                        @click.prevent="setSection(@js($tabId))"
+                                        :class="activeSection === @js($tabId)
+                                            ? 'border-zinc-900 bg-zinc-900 text-white'
+                                            : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100'"
+                                        class="rounded-md border px-3 py-1.5 transition"
+                                    >
+                                        {{ $tabLabel }}
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </nav>
+                </header>
+
+                <div class="space-y-8 p-6">
                 <section id="overview" x-show="activeSection === 'overview'" class="space-y-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Overview</h3>
@@ -1220,7 +1238,8 @@
                         @endforeach
                     </div>
                 </section>
+                </div>
             </div>
-        </section>
+        </details>
     </div>
 </x-app-layout>

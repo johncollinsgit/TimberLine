@@ -42,6 +42,7 @@ test('landlord commercial page is host-locked and available to landlord operator
         ->assertSeeText('Tenant Management')
         ->assertSeeText('Activity analytics')
         ->assertSeeText('Tenant table')
+        ->assertSeeText('Commercial configuration controls')
         ->assertSeeText('Commercial Revenue Configuration')
         ->assertSeeText('Plans & pricing')
         ->assertSeeText('Monthly price (USD)')
@@ -50,7 +51,10 @@ test('landlord commercial page is host-locked and available to landlord operator
         ->assertSeeText('Integration Layer Modules')
         ->assertSee('moduleCategoryTab')
         ->assertSee('activeSection')
-        ->assertSee('setSection');
+        ->assertSee('setSection')
+        ->assertSee('data-legacy-commercial-controls', false)
+        ->assertSee('<summary', false)
+        ->assertDontSee('<details open', false);
 });
 
 test('landlord commercial actions can assign plans and tenant overrides', function (): void {
