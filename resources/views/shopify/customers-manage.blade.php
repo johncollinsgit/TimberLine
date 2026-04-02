@@ -14,6 +14,7 @@
     @php
         $filters = array_merge([
             'search' => '',
+            'segment' => 'all',
             'candle_club' => 'all',
             'candle_cash' => 'all',
             'referral' => 'all',
@@ -39,6 +40,7 @@
         );
         $defaultGridFilters = [
             'search' => '',
+            'segment' => 'all',
             'candle_club' => 'all',
             'candle_cash' => 'all',
             'referral' => 'all',
@@ -63,7 +65,22 @@
         $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
-        $importCta = is_array($importSummary['cta'] ?? null) ? $importSummary['cta'] : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
+        $syncIsStale = (bool) ($importSummary['is_stale'] ?? false);
+        $importCta = is_array($importSummary['cta'] ?? null) ? $importSummary['cta'] : ['label' => 'Sync customers', 'href' => route('shopify.app.integrations', [], false)];
+        $customerSummary = is_array($journey['customer_summary'] ?? null)
+            ? $journey['customer_summary']
+            : ['total_profiles' => 0, 'reachable_profiles' => 0, 'customers_with_points' => 0];
+        $summaryTotal = (int) ($customerSummary['total_profiles'] ?? 0);
+        $summaryReachable = (int) ($customerSummary['reachable_profiles'] ?? 0);
+        $summaryWithPoints = (int) ($customerSummary['customers_with_points'] ?? 0);
+        $lastSync = 'Not synced';
+        if (filled(data_get($importSummary, 'latest_run.finished_at_display'))) {
+            $lastSync = (string) data_get($importSummary, 'latest_run.finished_at_display');
+        } elseif (filled(data_get($importSummary, 'latest_run.started_at_display'))) {
+            $lastSync = (string) data_get($importSummary, 'latest_run.started_at_display');
+        } elseif (filled($importSummary['label'] ?? null)) {
+            $lastSync = (string) $importSummary['label'];
+        }
         $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
             request(),
             filled($host ?? null) ? (string) $host : null
@@ -75,6 +92,41 @@
         .customers-manage-root {
             display: grid;
             gap: 14px;
+        }
+
+        .customers-summary-strip {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .customers-summary-card {
+            border-radius: 16px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+            padding: 14px 16px;
+        }
+
+        .customers-summary-card h2 {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .customers-summary-card p {
+            margin: 8px 0 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .customers-summary-card small {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.52);
         }
 
         .customers-toolbar {
@@ -132,7 +184,7 @@
 
         .customers-toolbar-row {
             display: grid;
-            grid-template-columns: minmax(0, 1.75fr) auto minmax(150px, 180px) minmax(108px, 132px);
+            grid-template-columns: minmax(0, 1.6fr) minmax(170px, 210px) auto minmax(150px, 180px) minmax(108px, 132px);
             gap: 10px;
             align-items: stretch;
         }
@@ -558,16 +610,24 @@
             line-height: 1.2;
         }
 
-        .customers-status.is-yes {
+        .customers-status.is-yes,
+        .customers-status--active {
             border-color: rgba(15, 143, 97, 0.28);
             background: rgba(15, 143, 97, 0.1);
             color: #0d6f4d;
         }
 
-        .customers-status.is-no {
+        .customers-status.is-no,
+        .customers-status--standard {
             border-color: rgba(148, 163, 184, 0.24);
             background: rgba(148, 163, 184, 0.08);
             color: #475569;
+        }
+
+        .customers-status--needs_contact {
+            border-color: rgba(202, 138, 4, 0.26);
+            background: rgba(245, 158, 11, 0.1);
+            color: #92400e;
         }
 
         .customers-button--row {
@@ -615,11 +675,15 @@
 
         @media (max-width: 1080px) {
             .customers-toolbar-row {
-                grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 1fr));
+                grid-template-columns: minmax(0, 1fr) repeat(4, minmax(0, 1fr));
             }
 
             .customers-filter-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .customers-summary-strip {
+                grid-template-columns: 1fr 1fr;
             }
         }
 
@@ -665,6 +729,10 @@
             .customers-pagination {
                 justify-content: stretch;
             }
+
+            .customers-summary-strip {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 
@@ -675,14 +743,37 @@
         data-default-filters='@json($defaultGridFilters)'
         data-filter-count="{{ (int) ($activeFilterCount ?? 0) }}"
     >
+        <div class="customers-summary-strip" aria-label="Customer summary">
+            <article class="customers-summary-card">
+                <h2>Total customers</h2>
+                <p>{{ number_format($summaryTotal) }}</p>
+                <small>Profiles available now.</small>
+            </article>
+            <article class="customers-summary-card">
+                <h2>Reachable customers</h2>
+                <p>{{ number_format($summaryReachable) }}</p>
+                <small>Email or phone on file.</small>
+            </article>
+            <article class="customers-summary-card">
+                <h2>Customers with points</h2>
+                <p>{{ number_format($summaryWithPoints) }}</p>
+                <small>Points balance above zero.</small>
+            </article>
+            <article class="customers-summary-card">
+                <h2>Last sync</h2>
+                <p>{{ $lastSync }}</p>
+                <small>{{ $syncIsStale ? 'Sync needs refresh.' : 'Current sync status.' }}</small>
+            </article>
+        </div>
+
         @if($importState !== 'imported')
             <article class="customers-surface">
-                <h2>Import customers to unlock this workspace</h2>
-                <p>{{ $importSummary['description'] ?? 'Import customers first so search, filters, and customer actions become meaningful.' }}</p>
+                <h2>No customers synced yet</h2>
+                <p>Start Shopify sync to load customer profiles and loyalty status.</p>
                 <p class="customers-muted-note">{{ $importSummary['progress_note'] ?? 'No import has run yet for this store context.' }}</p>
                 <div class="plans-meta">
-                    <a class="start-here-action-link" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $importCta['label'] ?? 'Import Customers' }}</a>
-                    <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.start', [], false)) }}">Open setup checklist</a>
+                    <a class="start-here-action-link" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">{{ $importCta['label'] ?? 'Sync customers' }}</a>
+                    <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.integrations', [], false)) }}">Review sync settings</a>
                 </div>
             </article>
         @endif
@@ -694,8 +785,8 @@
 
             <div class="customers-toolbar-head">
                 <div class="customers-toolbar-copy">
-                    <h2>Customer workspace</h2>
-                    <p>Search customers first, then use filters to focus on the exact segment you want to act on.</p>
+                    <h2>All customers</h2>
+                    <p>Search customers and use filters to narrow the list.</p>
                 </div>
                 <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
             </div>
@@ -718,6 +809,16 @@
                         autocomplete="off"
                         data-customers-search
                     />
+                </div>
+
+                <div class="customers-control">
+                    <label for="customers-segment">Segment</label>
+                    <select id="customers-segment" name="segment" data-customers-live="change">
+                        <option value="all" @selected(($filters['segment'] ?? 'all') === 'all')>All customers</option>
+                        <option value="with_points" @selected(($filters['segment'] ?? 'all') === 'with_points')>With points</option>
+                        <option value="reachable" @selected(($filters['segment'] ?? 'all') === 'reachable')>Reachable</option>
+                        <option value="needs_contact" @selected(($filters['segment'] ?? 'all') === 'needs_contact')>Needs contact</option>
+                    </select>
                 </div>
 
                 <button
@@ -820,7 +921,7 @@
 
                 <div class="customers-filter-actions">
                     <div class="customers-filter-actions-copy">
-                        Filters update the current table immediately. Search remains the primary control.
+                        Filters update the table immediately.
                     </div>
                     <div class="customers-filter-actions-buttons">
                         <button type="button" class="customers-button is-link" data-customers-clear-filters @if((int) ($activeFilterCount ?? 0) === 0) hidden @endif>
@@ -896,7 +997,7 @@
             }
 
             function filterFieldKeys() {
-                return ['candle_club', 'candle_cash', 'referral', 'review', 'birthday', 'wholesale'];
+                return ['segment', 'candle_club', 'candle_cash', 'referral', 'review', 'birthday', 'wholesale'];
             }
 
             function activeFilterEntries() {

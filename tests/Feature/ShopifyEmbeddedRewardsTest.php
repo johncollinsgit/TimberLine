@@ -79,8 +79,8 @@ test('shopify embedded rewards route renders verified rewards admin page for map
 
     $response->assertOk()
         ->assertSeeText('Rewards')
-        ->assertSeeText('Manage rewards program settings.')
-        ->assertSeeText('This page reflects the live earn and redeem rows currently managed by Backstage.')
+        ->assertSeeText('See rewards impact and trend data.')
+        ->assertSeeText('Detailed analytics')
         ->assertSeeText('Ways to Earn')
         ->assertSeeText('Ways to Redeem')
         ->assertDontSeeText('This embedded program editor is unavailable for tenant-scoped stores until earn rows, redeem rows, and program settings are isolated per tenant.')

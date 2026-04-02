@@ -5,8 +5,11 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 use App\Models\CandleCashTask;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
+use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * @return array{
@@ -233,6 +236,25 @@ function shopifyAppCustomersManageUrl(array $query = []): string
     return route('shopify.app.customers.manage', array_merge($query, retailEmbeddedSignedQuery()));
 }
 
+function seedOrderForEmail(string $email): void
+{
+    $payload = [
+        'source' => 'manual',
+        'status' => 'new',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+
+    foreach (['customer_email', 'email', 'billing_email', 'shipping_email'] as $column) {
+        if (Schema::hasColumn('orders', $column)) {
+            $payload[$column] = $email;
+            break;
+        }
+    }
+
+    DB::table('orders')->insert($payload);
+}
+
 test('/customers/manage renders real customer rows from local data', function () {
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
@@ -241,7 +263,7 @@ test('/customers/manage renders real customer rows from local data', function ()
     $response = $this->get(shopifyAppCustomersManageUrl());
 
     $response->assertOk()
-        ->assertSeeText('Customer workspace')
+        ->assertSeeText('All customers')
         ->assertSeeText($fixtures['alice']->email)
         ->assertSeeText($fixtures['bob']->email)
         ->assertSeeText('Rewards Balance')
@@ -265,7 +287,7 @@ test('/shopify/app/customers and /shopify/app/customers/manage match manage page
 
     $this->get(route($routeName, retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Customer workspace')
+        ->assertSeeText('All customers')
         ->assertSeeText($fixtures['alice']->email);
 })->with([
     'alias /shopify/app/customers' => ['shopify.app.customers'],
@@ -296,6 +318,18 @@ test('search by email works for manage customers', function () {
         ->assertDontSeeText('alice@example.com');
 });
 
+test('email search is case insensitive for customer records', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+    startEmbeddedCustomersSession($this);
+
+    $response = $this->get(shopifyAppCustomersManageUrl(['search' => 'ALICE@EXAMPLE.COM']));
+
+    $response->assertOk()
+        ->assertSeeText('alice@example.com')
+        ->assertDontSeeText('bob@example.com');
+});
+
 test('search by phone and customer id works for manage customers', function () {
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
@@ -322,7 +356,18 @@ test('no-results state stays clean for unmatched customer searches', function ()
     $response = $this->get(shopifyAppCustomersManageUrl(['search' => 'nobody-will-match-this']));
 
     $response->assertOk()
-        ->assertSeeText('No customers matched the current search or filters.');
+        ->assertSeeText('No customers matched your search or filters.');
+});
+
+test('segment filters show zero-result state when no customers match', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+    startEmbeddedCustomersSession($this);
+
+    $response = $this->get(shopifyAppCustomersManageUrl(['segment' => 'needs_contact']));
+
+    $response->assertOk()
+        ->assertSeeText('No customers matched your search or filters.');
 });
 
 test('sorting by last activity works', function () {
@@ -345,6 +390,93 @@ test('sorting by candle cash works', function () {
 
     $response->assertOk()
         ->assertSeeTextInOrder(['alice@example.com', 'clara@example.com', 'bob@example.com']);
+});
+
+test('orders sort is stable when order counts tie', function () {
+    $alpha = MarketingProfile::query()->create([
+        'first_name' => 'Alpha',
+        'last_name' => 'Customer',
+        'email' => 'alpha@example.com',
+        'normalized_email' => 'alpha@example.com',
+    ]);
+    $beta = MarketingProfile::query()->create([
+        'first_name' => 'Beta',
+        'last_name' => 'Customer',
+        'email' => 'beta@example.com',
+        'normalized_email' => 'beta@example.com',
+    ]);
+
+    seedOrderForEmail('alpha@example.com');
+    seedOrderForEmail('ALPHA@example.com');
+    seedOrderForEmail('beta@example.com');
+    seedOrderForEmail('BETA@example.com');
+
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+    $result = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', [
+        'sort' => 'orders',
+        'direction' => 'desc',
+    ]));
+
+    $orderedIds = collect($result['paginator']->items())
+        ->pluck('id')
+        ->take(2)
+        ->values()
+        ->all();
+
+    expect($orderedIds)->toBe([$alpha->id, $beta->id]);
+});
+
+test('customers grid resolves missing contact data and vip tier fallbacks', function () {
+    $fixtures = seedEmbeddedCustomersGridFixtures();
+
+    $missingContact = MarketingProfile::query()->create([
+        'first_name' => 'No',
+        'last_name' => 'Contact',
+        'email' => null,
+        'normalized_email' => null,
+        'phone' => null,
+        'normalized_phone' => null,
+    ]);
+
+    $externalProfilePayload = [
+        'marketing_profile_id' => $fixtures['clara']->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify',
+        'store_key' => 'retail',
+        'external_customer_id' => 'retail-clara',
+        'email' => $fixtures['clara']->email,
+        'normalized_email' => $fixtures['clara']->normalized_email,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+    if (Schema::hasColumn('customer_external_profiles', 'vip_tier')) {
+        $externalProfilePayload['vip_tier'] = 'Gold';
+    }
+    DB::table('customer_external_profiles')->insert([$externalProfilePayload]);
+
+    seedOrderForEmail('alice@example.com');
+    seedOrderForEmail('ALICE@example.com');
+
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+
+    $aliceResult = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', ['search' => 'alice@example.com']));
+    $aliceRow = collect($aliceResult['paginator']->items())->first();
+
+    $bobResult = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', ['search' => 'bob@example.com']));
+    $bobRow = collect($bobResult['paginator']->items())->first();
+
+    $claraResult = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', ['search' => 'clara@example.com']));
+    $claraRow = collect($claraResult['paginator']->items())->first();
+
+    $needsContactResult = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', ['segment' => 'needs_contact']));
+    $needsContactRow = collect($needsContactResult['paginator']->items())->first();
+
+    expect($aliceRow['orders_count'] ?? 0)->toBe(2)
+        ->and($aliceRow['vip_tier'] ?? null)->toBe('Candle Club')
+        ->and($bobRow['vip_tier'] ?? null)->toBe('Standard')
+        ->and($claraRow['vip_tier'] ?? null)->toBe(Schema::hasColumn('customer_external_profiles', 'vip_tier') ? 'Gold' : 'Standard')
+        ->and($needsContactRow['id'] ?? null)->toBe($missingContact->id)
+        ->and($needsContactRow['status']['key'] ?? null)->toBe('needs_contact');
 });
 
 test('status filters work for candle club, referral, review, birthday, and wholesale columns', function (string $filter, string $expectedEmail, string $unexpectedEmail) {
@@ -444,9 +576,8 @@ test('embedded manage filters and sort controls preserve full Shopify context', 
         ->and($content)->toContain('name="session" value="embedded-session-token"')
         ->and($content)->toContain('/shopify/app/customers/manage?shop=modernforestry.myshopify.com')
         ->and($content)->toContain('sort=name')
-        ->and($content)->toContain('sort=email')
+        ->and($content)->toContain('sort=orders')
         ->and($content)->toContain('sort=candle_cash')
-        ->and($content)->toContain('sort=rewards_actions')
         ->and($content)->toContain('sort=last_activity')
         ->and($content)->toContain('id_token=')
         ->and($content)->toContain('locale=en')
@@ -573,7 +704,7 @@ test('embedded manage tenant scoping keeps empty state when no customers belong 
     $pageResponse = $this->get(shopifyAppCustomersManageUrl());
 
     $pageResponse->assertOk()
-        ->assertSeeText('No customers matched the current search or filters.')
+        ->assertSeeText('No customers matched your search or filters.')
         ->assertDontSeeText('outscope@example.com');
 
     $jsonResponse = $this
@@ -590,7 +721,7 @@ test('embedded manage tenant scoping keeps empty state when no customers belong 
     $resultsHtml = (string) data_get($jsonResponse->json(), 'data.results_html', '');
     $summaryLabel = (string) data_get($jsonResponse->json(), 'data.summary_label', '');
 
-    expect($resultsHtml)->toContain('No customers matched the current search or filters.')
+    expect($resultsHtml)->toContain('No customers matched your search or filters.')
         ->and($resultsHtml)->not->toContain('outscope@example.com')
         ->and($summaryLabel)->toContain('0 customers loaded');
 });

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Marketing\BirthdayReportingService;
+use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -34,6 +35,7 @@ class ShopifyEmbeddedRewardsController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         ShopifyEmbeddedRewardsService $rewardsService,
+        ShopifyEmbeddedDashboardDataService $dashboardDataService,
         TenantResolver $tenantResolver
     ): Response
     {
@@ -47,6 +49,12 @@ class ShopifyEmbeddedRewardsController extends Controller
         $overview = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
             ? $rewardsService->overview($tenantId)
             : [];
+        $analytics = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
+            ? $dashboardDataService->payload([
+                ...$request->query(),
+                'tenant_id' => $tenantId,
+            ])
+            : [];
 
         return $this->renderSection(
             $request,
@@ -56,6 +64,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'shopify.rewards-overview',
             [
                 'dashboard' => $overview,
+                'analytics' => $analytics,
                 'setupNote' => null,
             ]
         );

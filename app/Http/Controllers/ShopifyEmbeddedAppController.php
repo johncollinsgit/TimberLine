@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Marketing\CandleCashEarnedReminderService;
+use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Tenancy\TenantCommercialExperienceService;
@@ -35,6 +36,7 @@ class ShopifyEmbeddedAppController extends Controller
     ): Response {
         $context = $contextService->resolvePageContext($request);
         $fallbackRewardsLabel = $displayLabelResolver->label(null, 'rewards_label', 'Rewards');
+        $dashboardConfig = app(ShopifyEmbeddedDashboardConfig::class)->payload();
 
         if (($context['status'] ?? '') === 'open_from_shopify') {
             return $this->embeddedResponse(
@@ -45,11 +47,11 @@ class ShopifyEmbeddedAppController extends Controller
                     'shopDomain' => null,
                     'host' => null,
                     'storeLabel' => 'Shopify Admin',
-                    'headline' => 'Dashboard',
-                    'subheadline' => 'See '.$fallbackRewardsLabel.', customers, and setup status at a glance.',
-                    'appNavigation' => $this->embeddedAppNavigation('dashboard', null, null),
+                    'headline' => 'Home',
+                    'subheadline' => 'Revenue and setup at a glance.',
+                    'appNavigation' => $this->embeddedAppNavigation('home', null, null),
                     'pageActions' => [],
-                    'pageSubnav' => $this->dashboardExperienceSubnav('overview', null),
+                    'pageSubnav' => [],
                     'dashboardBootstrap' => [
                     'authorized' => false,
                     'status' => 'open_from_shopify',
@@ -58,7 +60,7 @@ class ShopifyEmbeddedAppController extends Controller
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
                         'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
-                        'config' => $this->dashboardDataService->payload()['config'],
+                        'config' => $dashboardConfig,
                     ],
                     'merchantJourney' => null,
                 ])
@@ -74,11 +76,11 @@ class ShopifyEmbeddedAppController extends Controller
                     'shopDomain' => $context['shop_domain'] ?? null,
                     'host' => $context['host'] ?? null,
                     'storeLabel' => 'Shopify Admin',
-                    'headline' => 'Dashboard',
-                    'subheadline' => 'See '.$fallbackRewardsLabel.', customers, and setup status at a glance.',
-                    'appNavigation' => $this->embeddedAppNavigation('dashboard', null, null),
+                    'headline' => 'Home',
+                    'subheadline' => 'Revenue and setup at a glance.',
+                    'appNavigation' => $this->embeddedAppNavigation('home', null, null),
                     'pageActions' => [],
-                    'pageSubnav' => $this->dashboardExperienceSubnav('overview', null),
+                    'pageSubnav' => [],
                     'dashboardBootstrap' => [
                         'authorized' => false,
                         'status' => 'invalid_request',
@@ -87,7 +89,7 @@ class ShopifyEmbeddedAppController extends Controller
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
                         'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
-                        'config' => $this->dashboardDataService->payload()['config'],
+                        'config' => $dashboardConfig,
                     ],
                     'merchantJourney' => null,
                 ]),
@@ -101,38 +103,16 @@ class ShopifyEmbeddedAppController extends Controller
         $tenantRewardsLabel = $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel);
         $dashboardLinks = [
             [
-                'label' => $tenantRewardsLabel.' Admin',
-                'href' => route('shopify.embedded.rewards', [], false),
-            ],
-            [
                 'label' => 'Customers',
                 'href' => route('shopify.app.customers.manage', [], false),
             ],
             [
-                'label' => 'Program Settings',
+                'label' => $tenantRewardsLabel,
+                'href' => route('shopify.app.rewards', [], false),
+            ],
+            [
+                'label' => 'Open settings',
                 'href' => route('shopify.app.settings', [], false),
-            ],
-            [
-                'label' => 'Start Here',
-                'href' => route('shopify.app.start', [], false),
-            ],
-            [
-                'label' => 'Plans & Add-ons',
-                'href' => route('shopify.app.plans', [], false),
-            ],
-            [
-                'label' => 'Integrations',
-                'href' => route('shopify.app.integrations', [], false),
-            ],
-            [
-                'label' => 'Birthdays in Backstage',
-                'href' => route('birthdays.customers'),
-                'external' => true,
-            ],
-            [
-                'label' => 'Marketing Overview',
-                'href' => route('marketing.overview'),
-                'external' => true,
             ],
         ];
         $dashboardData = $this->dashboardDataService->payload([
@@ -149,11 +129,11 @@ class ShopifyEmbeddedAppController extends Controller
                 'shopDomain' => (string) ($store['shop'] ?? ''),
                 'host' => (string) ($context['host'] ?? ''),
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
-                'headline' => 'Dashboard',
-                'subheadline' => 'See '.$tenantRewardsLabel.', customers, and setup status at a glance.',
-                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
+                'headline' => 'Home',
+                'subheadline' => 'Revenue and setup at a glance.',
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
                 'pageActions' => [],
-                'pageSubnav' => $this->dashboardExperienceSubnav('overview', $tenantId),
+                'pageSubnav' => [],
                 'dashboardBootstrap' => [
                     'authorized' => true,
                     'status' => 'ok',
@@ -217,7 +197,7 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Start Here'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Use this page to finish setup and see which modules are active, locked, or coming soon.'),
-                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('start', $tenantId),
                 'onboardingPayload' => $experienceService->onboardingPayload($tenantId),
@@ -253,7 +233,7 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Plans & Add-ons'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Review your current plan, available add-ons, and module access in plain language.'),
-                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('plans', $tenantId),
                 'plansPayload' => $experienceService->plansPayload($tenantId),
@@ -289,7 +269,7 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Integrations'),
                 'subheadline' => $this->subheadlineForStatus($status, 'See which connections are ready, what still needs setup, and safe fallback options.'),
-                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('integrations', $tenantId),
                 'integrationsPayload' => $experienceService->integrationsPayload($tenantId),
@@ -325,7 +305,7 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'App Store'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Discover active modules, add-ons, and upgrade paths from a single catalog surface.'),
-                'appNavigation' => $this->embeddedAppNavigation('dashboard', null, $tenantId),
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
                 'pageActions' => [],
                 'pageSubnav' => $this->dashboardExperienceSubnav('store', $tenantId),
                 'contextToken' => $authorized ? $contextService->issueContextToken($context) : null,
@@ -567,13 +547,13 @@ class ShopifyEmbeddedAppController extends Controller
         $status = (string) ($context['status'] ?? 'invalid_request');
 
         $messages = [
-            'open_from_shopify' => 'Open the app from Shopify Admin to load this dashboard.',
+            'open_from_shopify' => 'Open the app from Shopify Admin to load Home.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
             'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
-            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload the dashboard from Shopify Admin and try again.',
-            'invalid_session_token' => 'Shopify Admin verification failed. Reload the dashboard from Shopify Admin and try again.',
-            'expired_session_token' => 'Your Shopify Admin session expired. Reload the dashboard from Shopify Admin and try again.',
+            'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload Home from Shopify Admin and try again.',
+            'invalid_session_token' => 'Shopify Admin verification failed. Reload Home from Shopify Admin and try again.',
+            'expired_session_token' => 'Your Shopify Admin session expired. Reload Home from Shopify Admin and try again.',
             'missing_context_token' => 'This embedded action is missing its page context token. Reload the App Store and try again.',
             'invalid_context_token' => 'This embedded action could not be matched to the current Shopify page context.',
         ];

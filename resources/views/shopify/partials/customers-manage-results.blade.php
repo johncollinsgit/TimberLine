@@ -1,6 +1,7 @@
 @php
     $filters = array_merge([
         'search' => '',
+        'segment' => 'all',
         'candle_club' => 'all',
         'candle_cash' => 'all',
         'referral' => 'all',
@@ -14,8 +15,6 @@
 
     $sort = $sort ?? (string) ($filters['sort'] ?? 'last_activity');
     $direction = $direction ?? (string) ($filters['direction'] ?? 'desc');
-    $labelFor = static fn (bool $state): string => $state ? 'Completed' : 'Not completed';
-    $indicatorClassFor = static fn (bool $state): string => $state ? 'is-yes' : 'is-no';
     $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(request());
     $withEmbeddedContext = static function (string $url) use ($embeddedContext): string {
         return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
@@ -41,7 +40,6 @@
     if ($resolvedRewardsBalanceLabel === '') {
         $resolvedRewardsBalanceLabel = $resolvedRewardsLabel . ' balance';
     }
-    $resolvedRewardsActionsLabel = $resolvedRewardsLabel . ' actions';
 @endphp
 
 <section class="customers-table-wrap" aria-label="Manage customers table">
@@ -54,17 +52,17 @@
                             class="customers-sort-link"
                             href="{{ $sortUrl(['sort' => 'name', 'direction' => ($sort === 'name' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                         >
-                            Name
+                            Customer
                             <span class="customers-sort-indicator">{{ $sort === 'name' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
                         </a>
                     </th>
                     <th>
                         <a
                             class="customers-sort-link"
-                            href="{{ $sortUrl(['sort' => 'email', 'direction' => ($sort === 'email' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
+                            href="{{ $sortUrl(['sort' => 'orders', 'direction' => ($sort === 'orders' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                         >
-                            Email
-                            <span class="customers-sort-indicator">{{ $sort === 'email' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                            Orders
+                            <span class="customers-sort-indicator">{{ $sort === 'orders' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
                         </a>
                     </th>
                     <th>
@@ -76,36 +74,25 @@
                             <span class="customers-sort-indicator">{{ $sort === 'candle_cash' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
                         </a>
                     </th>
-                    <th>Candle Club</th>
-                    <th>Referral</th>
-                    <th>Review</th>
-                    <th>Birthday</th>
-                    <th>Wholesale</th>
-                    <th>
-                        <a
-                            class="customers-sort-link"
-                            href="{{ $sortUrl(['sort' => 'rewards_actions', 'direction' => ($sort === 'rewards_actions' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
-                        >
-                            {{ \Illuminate\Support\Str::title($resolvedRewardsActionsLabel) }}
-                            <span class="customers-sort-indicator">{{ $sort === 'rewards_actions' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
-                        </a>
-                    </th>
+                    <th>Tier</th>
                     <th>
                         <a
                             class="customers-sort-link"
                             href="{{ $sortUrl(['sort' => 'last_activity', 'direction' => ($sort === 'last_activity' && $direction === 'asc') ? 'desc' : 'asc', 'page' => 1]) }}"
                         >
-                            Last Activity
+                            Last activity
                             <span class="customers-sort-indicator">{{ $sort === 'last_activity' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</span>
                         </a>
                     </th>
-                    <th>Action</th>
+                    <th>Status</th>
+                    <th aria-label="Actions"></th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($customers as $row)
                     @php($detailUrl = $detailUrlFor((int) $row['id']))
                     @php($detailSectionsUrl = $detailSectionsUrlFor((int) $row['id']))
+                    @php($status = is_array($row['status'] ?? null) ? $row['status'] : ['key' => 'standard', 'label' => 'Standard'])
                     <tr
                         class="customers-row--clickable"
                         tabindex="0"
@@ -116,45 +103,24 @@
                     >
                         <td class="customers-name-cell">
                             <a class="customers-name-link" href="{{ $detailUrl }}" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">{{ $row['name'] }}</a>
-                            <div class="customers-subtext">ID #{{ $row['id'] }}</div>
+                            <div class="customers-subtext">{{ $row['email'] }}</div>
+                            <div class="customers-subtext">{{ $row['phone'] }}</div>
                         </td>
-                        <td>{{ $row['email'] }}</td>
+                        <td>{{ number_format((int) ($row['orders_count'] ?? 0)) }}</td>
                         <td>{{ number_format((int) $row['candle_cash_balance']) }}</td>
-                        <td>
-                            <span class="customers-status {{ $indicatorClassFor((bool) $row['candle_club_active']) }}">
-                                {{ (bool) $row['candle_club_active'] ? 'Yes' : 'No' }}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="customers-status {{ $indicatorClassFor((bool) $row['referral_completed']) }}">
-                                {{ $labelFor((bool) $row['referral_completed']) }}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="customers-status {{ $indicatorClassFor((bool) $row['review_completed']) }}">
-                                {{ $labelFor((bool) $row['review_completed']) }}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="customers-status {{ $indicatorClassFor((bool) $row['birthday_completed']) }}">
-                                {{ $labelFor((bool) $row['birthday_completed']) }}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="customers-status {{ $indicatorClassFor((bool) $row['wholesale_eligible']) }}">
-                                {{ (bool) $row['wholesale_eligible'] ? 'Eligible' : 'Not eligible' }}
-                            </span>
-                        </td>
-                        <td>{{ number_format((int) $row['rewards_actions_count']) }}</td>
+                        <td>{{ $row['vip_tier'] ?? 'Standard' }}</td>
                         <td>{{ $row['last_activity_display'] }}</td>
                         <td>
-                            <a href="{{ $detailUrl }}" class="customers-button customers-button--row" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">View</a>
+                            <span class="customers-status customers-status--{{ $status['key'] }}">{{ $status['label'] }}</span>
+                        </td>
+                        <td>
+                            <a href="{{ $detailUrl }}" class="customers-button customers-button--row" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">View record</a>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="customers-empty">
-                            No customers matched the current search or filters. Try a different name, email, phone, or clear filters to broaden the list.
+                        <td colspan="7" class="customers-empty">
+                            No customers matched your search or filters.
                         </td>
                     </tr>
                 @endforelse

@@ -20,7 +20,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
         })
         ->assertViewHas('pageActions', fn (array $actions): bool => count($actions) === 0);
 })->with([
-    'dashboard' => ['home', 'dashboard', null],
+    'home' => ['home', 'home', null],
     'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview'],
     'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn'],
     'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem'],
@@ -44,17 +44,37 @@ test('customers routes and aliases keep customers section active with correct su
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === $activeTab && ! empty($item['active']));
         });
 })->with([
-    'customers root manage' => ['shopify.app.customers', 'manage', 'Customer workspace'],
-    'customers manage' => ['shopify.app.customers.manage', 'manage', 'Customer workspace'],
-    'customers activity' => ['shopify.app.customers.activity', 'activity', 'Customer Activity'],
-    'customers questions' => ['shopify.app.customers.questions', 'questions', 'Customer Questions'],
-    'customers alias root manage' => ['shopify.app.customers', 'manage', 'Customer workspace'],
-    'customers alias manage' => ['shopify.app.customers.manage', 'manage', 'Customer workspace'],
-    'customers alias activity' => ['shopify.app.customers.activity', 'activity', 'Customer Activity'],
-    'customers alias questions' => ['shopify.app.customers.questions', 'questions', 'Customer Questions'],
+    'customers root manage' => ['shopify.app.customers', 'all', 'All customers'],
+    'customers manage' => ['shopify.app.customers.manage', 'all', 'All customers'],
+    'customers segments' => ['shopify.app.customers.segments', 'segments', 'Segments'],
+    'customers activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
+    'customers imports' => ['shopify.app.customers.imports', 'imports', 'Imports'],
+    'customers alias root manage' => ['shopify.app.customers', 'all', 'All customers'],
+    'customers alias manage' => ['shopify.app.customers.manage', 'all', 'All customers'],
+    'customers alias segments' => ['shopify.app.customers.segments', 'segments', 'Segments'],
+    'customers alias activity' => ['shopify.app.customers.activity', 'activity', 'Activity'],
+    'customers alias imports' => ['shopify.app.customers.imports', 'imports', 'Imports'],
 ]);
 
-test('customers detail route and alias resolve with manage tab active', function (string $routeName) {
+test('legacy customers questions route redirects to imports', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.app.customers.questions', retailEmbeddedSignedQuery()));
+
+    $response->assertRedirect();
+    expect($response->headers->get('Location', ''))->toContain('/shopify/app/customers/imports');
+});
+
+test('legacy customers route redirects to all customers', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.embedded.customers', retailEmbeddedSignedQuery()));
+
+    $response->assertRedirect();
+    expect($response->headers->get('Location', ''))->toContain('/shopify/app/customers/manage');
+});
+
+test('customers detail route and alias resolve with all customers tab active', function (string $routeName) {
     configureEmbeddedRetailStore();
 
     $profile = MarketingProfile::query()->create([
@@ -74,14 +94,14 @@ test('customers detail route and alias resolve with manage tab active', function
         ->assertSeeText('Profile #'.$profile->id)
         ->assertViewHas('appNavigation', fn (array $navigation): bool => ($navigation['activeSection'] ?? null) === 'customers')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
-            return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'manage' && ! empty($item['active']));
+            return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'all' && ! empty($item['active']));
         });
 })->with([
     'customers detail root route' => ['shopify.app.customers.detail'],
     'customers detail alias route' => ['shopify.app.customers.detail'],
 ]);
 
-test('dashboard no longer shows oversized legacy action labels', function () {
+test('home no longer shows oversized legacy action labels', function () {
     configureEmbeddedRetailStore();
 
     $this->get(route('home', retailEmbeddedSignedQuery()))
@@ -100,11 +120,29 @@ test('embedded shell renders shopify app nav with top-level links', function () 
     $response->assertOk()
         ->assertSee('<s-app-nav>', false)
         ->assertSee('rel="home"', false)
-        ->assertSee('<s-link href="/?shop=', false)
         ->assertSee('<s-link href="/shopify/app?shop=', false)
-        ->assertSee('<s-link href="/shopify/app/rewards?shop=', false)
         ->assertSee('<s-link href="/shopify/app/customers/manage?shop=', false)
+        ->assertSee('<s-link href="/shopify/app/rewards?shop=', false)
         ->assertSee('<s-link href="/shopify/app/settings?shop=', false);
+});
+
+test('embedded navigation metadata keeps expected top-level labels and order', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('home', retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertViewHas('appNavigation', function (array $navigation): bool {
+            $items = array_values(array_filter(is_array($navigation['items'] ?? null) ? $navigation['items'] : [], 'is_array'));
+            $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $items);
+            $labels = array_map(static fn (array $item): string => (string) ($item['label'] ?? ''), $items);
+
+            return $keys === ['home', 'customers', 'rewards', 'settings']
+                && $labels[0] === 'Home'
+                && $labels[1] === 'Customers'
+                && $labels[2] !== ''
+                && $labels[3] === 'Settings';
+        });
 });
 
 test('embedded navigation renders module-state indicators for placeholder and setup surfaces', function () {

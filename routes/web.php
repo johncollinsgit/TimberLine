@@ -178,8 +178,10 @@ Route::get('/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->na
 Route::get('/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.embedded.rewards.notifications');
 Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToManage'])->name('shopify.embedded.customers');
 Route::get('/customers/manage', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToManage'])->name('shopify.embedded.customers.manage');
+Route::get('/customers/segments', [ShopifyEmbeddedCustomersController::class, 'segments'])->name('shopify.embedded.customers.segments');
 Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.embedded.customers.activity');
-Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.embedded.customers.questions');
+Route::get('/customers/imports', [ShopifyEmbeddedCustomersController::class, 'imports'])->name('shopify.embedded.customers.imports');
+Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.embedded.customers.questions');
 Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToDetail'])->name('shopify.embedded.customers.detail');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
@@ -811,8 +813,10 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
     Route::get('/app/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers.manage');
+    Route::get('/app/customers/segments', [ShopifyEmbeddedCustomersController::class, 'segments'])->name('shopify.app.customers.segments');
     Route::get('/app/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.app.customers.activity');
-    Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'questions'])->name('shopify.app.customers.questions');
+    Route::get('/app/customers/imports', [ShopifyEmbeddedCustomersController::class, 'imports'])->name('shopify.app.customers.imports');
+    Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {

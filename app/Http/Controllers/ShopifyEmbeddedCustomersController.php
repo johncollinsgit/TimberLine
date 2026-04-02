@@ -98,9 +98,9 @@ class ShopifyEmbeddedCustomersController extends Controller
             request: $request,
             contextService: $contextService,
             view: 'shopify.customers-manage',
-            subnavKey: 'manage',
+            subnavKey: 'all',
             defaultHeadline: 'Customers',
-            defaultSubheadline: 'Manage {{rewards_label_lc}} customer records, statuses, and operational workflows from a single workspace.',
+            defaultSubheadline: 'Search, segment, and manage customer records.',
             extraViewData: [
                 'customers' => $grid['paginator'],
                 'gridFilters' => $grid['filters'],
@@ -109,6 +109,21 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'customersManageEndpoint' => $request->url(),
             ],
             resolvedContext: $context,
+        );
+    }
+
+    public function segments(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService
+    ): Response {
+        return $this->renderPage(
+            request: $request,
+            contextService: $contextService,
+            view: 'shopify.customers-segments',
+            subnavKey: 'segments',
+            defaultHeadline: 'Customers',
+            defaultSubheadline: 'Build and review saved customer segments.',
+            extraViewData: []
         );
     }
 
@@ -121,23 +136,23 @@ class ShopifyEmbeddedCustomersController extends Controller
             contextService: $contextService,
             view: 'shopify.customers-activity',
             subnavKey: 'activity',
-            defaultHeadline: 'Customer Activity',
-            defaultSubheadline: 'Track meaningful customer events and identify the next best follow-up action.',
+            defaultHeadline: 'Customers',
+            defaultSubheadline: 'Review recent customer events.',
             extraViewData: []
         );
     }
 
-    public function questions(
+    public function imports(
         Request $request,
         ShopifyEmbeddedAppContext $contextService
     ): Response {
         return $this->renderPage(
             request: $request,
             contextService: $contextService,
-            view: 'shopify.customers-questions',
-            subnavKey: 'questions',
-            defaultHeadline: 'Customer Questions',
-            defaultSubheadline: 'Keep support answers and escalation paths organized for faster customer resolution.',
+            view: 'shopify.customers-imports',
+            subnavKey: 'imports',
+            defaultHeadline: 'Customers',
+            defaultSubheadline: 'Track customer sync status and history.',
             extraViewData: []
         );
     }
@@ -222,9 +237,9 @@ class ShopifyEmbeddedCustomersController extends Controller
             request: $request,
             contextService: $contextService,
             view: 'shopify.customers-detail',
-            subnavKey: 'manage',
+            subnavKey: 'all',
             defaultHeadline: 'Customer Detail',
-            defaultSubheadline: 'A dedicated customer workspace for identity, {{rewards_balance_label_lc}}, and lifecycle status.',
+            defaultSubheadline: 'View identity, {{rewards_balance_label_lc}}, and recent customer activity.',
             extraViewData: [
                 'marketingProfile' => $authorized ? $marketingProfile : new MarketingProfile(),
                 'customerDisplayName' => $displayName,
@@ -458,6 +473,16 @@ class ShopifyEmbeddedCustomersController extends Controller
             'customers.detail',
             ['marketingProfile' => $marketingProfile->id]
         );
+    }
+
+    public function redirectLegacyToImports(Request $request): Response|RedirectResponse
+    {
+        Log::info('shopify.embedded.legacy.imports.access', [
+            'route' => $request->route()?->getName(),
+            'query' => $request->query->all(),
+        ]);
+
+        return $this->redirectToEmbeddedRoute($request, 'customers.imports');
     }
 
     protected function redirectToEmbeddedRoute(
@@ -1262,19 +1287,21 @@ class ShopifyEmbeddedCustomersController extends Controller
     {
         /** @var TenantModuleAccessResolver $resolver */
         $resolver = app(TenantModuleAccessResolver::class);
-        $moduleStates = $resolver->resolveForTenant($tenantId, ['customers', 'activity', 'questions']);
+        $moduleStates = $resolver->resolveForTenant($tenantId, ['customers', 'activity']);
         $resolvedStates = (array) ($moduleStates['modules'] ?? []);
 
         $items = [
-            ['key' => 'manage', 'label' => 'Manage', 'href' => route('shopify.app.customers.manage', [], false)],
+            ['key' => 'all', 'label' => 'All customers', 'href' => route('shopify.app.customers.manage', [], false)],
+            ['key' => 'segments', 'label' => 'Segments', 'href' => route('shopify.app.customers.segments', [], false)],
             ['key' => 'activity', 'label' => 'Activity', 'href' => route('shopify.app.customers.activity', [], false)],
-            ['key' => 'questions', 'label' => 'Questions & Support', 'href' => route('shopify.app.customers.questions', [], false)],
+            ['key' => 'imports', 'label' => 'Imports', 'href' => route('shopify.app.customers.imports', [], false)],
         ];
 
         $subnavModuleMap = [
-            'manage' => 'customers',
+            'all' => 'customers',
+            'segments' => 'customers',
             'activity' => 'activity',
-            'questions' => 'questions',
+            'imports' => 'customers',
         ];
 
         return array_map(
