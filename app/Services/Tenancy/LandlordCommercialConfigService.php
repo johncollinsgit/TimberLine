@@ -2006,6 +2006,7 @@ class LandlordCommercialConfigService
     {
         return Tenant::query()
             ->with(['accessProfile', 'accessAddons', 'moduleStates', 'moduleEntitlements', 'commercialOverride'])
+            ->withCount('users')
             ->orderBy('name')
             ->get()
             ->all();

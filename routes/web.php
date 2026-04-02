@@ -122,6 +122,10 @@ if ($landlordHost !== '') {
                 ->name('dashboard');
             Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
                 ->name('commercial.index');
+            Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
+                ->name('commercial.analytics.tenants');
+            Route::get('/landlord/commercial/analytics/activity', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsActivity'])
+                ->name('commercial.analytics.activity');
             Route::post('/landlord/commercial/catalog/{type}/upsert', [LandlordCommercialConfigurationController::class, 'upsertCatalogEntry'])
                 ->name('commercial.catalog.upsert');
             Route::post('/landlord/commercial/templates/{entryKey}/duplicate', [LandlordCommercialConfigurationController::class, 'duplicateTemplate'])
