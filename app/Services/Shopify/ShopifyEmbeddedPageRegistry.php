@@ -168,7 +168,7 @@ class ShopifyEmbeddedPageRegistry
                 'key' => 'messaging',
                 'route_name' => 'shopify.app.messaging',
                 'legacy_route_names' => ['shopify.embedded.messaging'],
-                'label' => 'Messaging',
+                'label' => 'Messages',
                 'section' => 'messaging',
                 'group' => 'primary',
                 'icon_key' => 'chat-bubble-left-right',

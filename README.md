@@ -774,7 +774,7 @@ Temporarily disable deploy:
 ## Shopify Embedded Messaging Workspace (Tenant-Gated Add-On)
 - New embedded workspace route/tab:
   - page route: `/shopify/app/messaging`
-  - nav registration: `app/Services/Shopify/ShopifyEmbeddedPageRegistry.php` (`key=messaging`, `requires_enabled_access=true`)
+  - nav registration: `app/Services/Shopify/ShopifyEmbeddedPageRegistry.php` (`key=messaging`, label `Messages`, `requires_enabled_access=true`)
 - Gating model:
   - module key: `messaging`
   - add-on mapping: `module_catalog.addons.messaging.modules=['messaging']`
@@ -789,9 +789,19 @@ Temporarily disable deploy:
   - members in `marketing_message_group_members`
   - tenant rail fields added by `2026_04_03_090000_extend_marketing_message_groups_for_tenant_workspace.php`.
 - Automatic audience:
-  - `All Subscribed` is channel-aware and based on canonical consent + contactability truth:
-    - SMS eligible: `accepts_sms_marketing` + valid phone
-    - Email eligible: `accepts_email_marketing` + valid email
+  - `All Subscribed` is optional (never auto-selected) and channel-aware.
+  - audience derivation uses effective consent truth:
+    - canonical channel consent flags, plus
+    - legacy-import subscribed signals (`yotpo_contacts_import`, `square_marketing_import`, `square_customer_sync`) when no newer opt-out/revoked event supersedes them.
+  - channel sendability still requires valid contact identity:
+    - SMS eligible: consent + valid phone normalization/E.164
+    - Email eligible: consent + normalized valid email
+  - audience diagnostics endpoint:
+    - `GET /shopify/app/api/messaging/audience-summary`
+    - returns displayed count + query candidate + resolved sendable count by channel
+- Preview/confirmation flow:
+  - `POST /shopify/app/api/messaging/preview/group` returns recipient estimate before final send
+  - group sends dispatch only after explicit preview confirmation in the Messaging UI
 - Send pipeline reuse:
   - SMS: existing `TwilioSmsService`
   - Email: existing `SendGridEmailService`/tenant email dispatch path

@@ -63,6 +63,14 @@ class MarketingDirectMessagingService
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
         $subject = $this->nullableString($options['subject'] ?? null);
 
+        $forceSendProfileIds = collect((array) ($options['force_send_profile_ids'] ?? []))
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+        $forceSendProfileLookup = array_fill_keys($forceSendProfileIds, true);
+
         $summary = [
             'processed' => 0,
             'sent' => 0,
@@ -95,7 +103,10 @@ class MarketingDirectMessagingService
 
             /** @var MarketingProfile $profile */
             $profile = $resolved['profile'];
-            if ((bool) ($resolved['requires_consent'] ?? false) && (
+            $profileId = (int) ($profile->id ?? 0);
+            $forceConsentBypass = $profileId > 0 && isset($forceSendProfileLookup[$profileId]);
+
+            if (! $forceConsentBypass && (bool) ($resolved['requires_consent'] ?? false) && (
                 ($channel === 'sms' && ! (bool) $profile->accepts_sms_marketing)
                 || ($channel === 'email' && ! (bool) $profile->accepts_email_marketing)
             )) {

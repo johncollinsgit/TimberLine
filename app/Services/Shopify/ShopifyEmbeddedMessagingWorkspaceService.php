@@ -3,6 +3,7 @@
 namespace App\Services\Shopify;
 
 use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
@@ -19,6 +20,19 @@ use Illuminate\Validation\ValidationException;
 class ShopifyEmbeddedMessagingWorkspaceService
 {
     public const AUTO_GROUP_ALL_SUBSCRIBED = 'all_subscribed';
+    /**
+     * @var array<int,string>
+     */
+    protected const LEGACY_CONSENT_SOURCE_TYPES = [
+        'yotpo_contacts_import',
+        'square_marketing_import',
+        'square_customer_sync',
+    ];
+
+    /**
+     * @var array<string,array<string,mixed>>
+     */
+    protected array $channelAudienceCache = [];
 
     public function __construct(
         protected ShopifyEmbeddedCustomersGridService $customersGridService,
@@ -72,11 +86,12 @@ class ShopifyEmbeddedMessagingWorkspaceService
      *   auto:array<int,array<string,mixed>>
      * }
      */
-    public function groups(?int $tenantId): array
+    public function groups(?int $tenantId, bool $includeAutoCounts = false): array
     {
         $savedGroups = $this->tenantScopedGroupQuery($tenantId)
             ->where('is_system', false)
             ->withCount('members')
+            ->orderByDesc('members_count')
             ->orderByDesc('last_used_at')
             ->orderBy('name')
             ->get([
@@ -100,7 +115,7 @@ class ShopifyEmbeddedMessagingWorkspaceService
             ->values()
             ->all();
 
-        $summary = $this->allSubscribedSummary($tenantId);
+        $summary = $includeAutoCounts ? $this->allSubscribedSummary($tenantId) : null;
         $autoGroups = [[
             'type' => 'auto',
             'key' => self::AUTO_GROUP_ALL_SUBSCRIBED,
@@ -112,6 +127,54 @@ class ShopifyEmbeddedMessagingWorkspaceService
         return [
             'saved' => $savedGroups,
             'auto' => $autoGroups,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   summary:array{sms:int,email:int,overlap:int,unique:int},
+     *   diagnostics:array<string,mixed>
+     * }
+     */
+    public function audienceSummary(?int $tenantId): array
+    {
+        $sms = $this->resolvedChannelAudience($tenantId, 'sms', includeRecipients: false);
+        $email = $this->resolvedChannelAudience($tenantId, 'email', includeRecipients: false);
+
+        $smsIds = collect((array) ($sms['profile_ids'] ?? []))
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+        $emailIds = collect((array) ($email['profile_ids'] ?? []))
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        $overlap = $smsIds->intersect($emailIds)->count();
+
+        return [
+            'summary' => [
+                'sms' => $smsIds->count(),
+                'email' => $emailIds->count(),
+                'overlap' => $overlap,
+                'unique' => $smsIds->merge($emailIds)->unique()->count(),
+            ],
+            'diagnostics' => [
+                'sms' => [
+                    'displayed_audience_count' => $smsIds->count(),
+                    'query_candidate_count' => (int) ($sms['candidate_count'] ?? 0),
+                    'effective_consent_count' => (int) ($sms['effective_consent_count'] ?? 0),
+                    'resolved_sendable_count' => (int) ($sms['resolved_sendable_count'] ?? 0),
+                ],
+                'email' => [
+                    'displayed_audience_count' => $emailIds->count(),
+                    'query_candidate_count' => (int) ($email['candidate_count'] ?? 0),
+                    'effective_consent_count' => (int) ($email['effective_consent_count'] ?? 0),
+                    'resolved_sendable_count' => (int) ($email['resolved_sendable_count'] ?? 0),
+                ],
+            ],
         ];
     }
 
@@ -259,7 +322,13 @@ class ShopifyEmbeddedMessagingWorkspaceService
         }
 
         $channel = $this->normalizedChannel($channel);
-        $this->assertContactMethodAvailable($profile, $channel);
+        $this->assertContactMethodAvailable($profile, $channel, $tenantId);
+
+        $forceSendProfileIds = [];
+        if (! $this->hasCanonicalConsent($profile, $channel)
+            && $this->profileHasEffectiveLegacyConsent($profile, $channel, $tenantId)) {
+            $forceSendProfileIds[] = (int) $profile->id;
+        }
 
         $summary = $this->directMessagingService->send(
             channel: $channel,
@@ -271,6 +340,7 @@ class ShopifyEmbeddedMessagingWorkspaceService
                 'actor_id' => $actorId,
                 'tenant_id' => $tenantId ?? $this->positiveInt($profile->tenant_id),
                 'source_label' => 'shopify_embedded_messaging_individual',
+                'force_send_profile_ids' => $forceSendProfileIds,
             ]
         );
 
@@ -298,74 +368,15 @@ class ShopifyEmbeddedMessagingWorkspaceService
         ?int $actorId
     ): array {
         $channel = $this->normalizedChannel($channel);
-        $targetType = strtolower(trim($targetType));
+        $resolvedTarget = $this->resolveGroupTarget($tenantId, $targetType, $groupId, $groupKey, $channel);
 
-        if (! in_array($targetType, ['saved', 'auto'], true)) {
-            throw ValidationException::withMessages([
-                'target_type' => 'Group target type is invalid.',
-            ]);
-        }
-
-        if ($targetType === 'saved') {
-            if ($groupId === null || $groupId <= 0) {
-                throw ValidationException::withMessages([
-                    'group_id' => 'Choose a saved group before sending.',
-                ]);
-            }
-
-            $group = $this->tenantScopedGroupQuery($tenantId)
-                ->whereKey($groupId)
-                ->with('members.profile:id,tenant_id,first_name,last_name,email,normalized_email,phone,normalized_phone')
-                ->first();
-
-            if (! $group instanceof MarketingMessageGroup) {
-                throw ValidationException::withMessages([
-                    'group_id' => 'Group not found for this tenant.',
-                ]);
-            }
-
-            $recipients = $this->savedGroupRecipients($group, $tenantId);
-            if ($recipients === []) {
-                throw ValidationException::withMessages([
-                    'group_id' => 'This group has no members that can be evaluated for messaging.',
-                ]);
-            }
-
-            $summary = $this->directMessagingService->send(
-                channel: $channel,
-                recipients: $recipients,
-                message: trim($body),
-                options: [
-                    'subject' => $subject,
-                    'sender_key' => $senderKey,
-                    'actor_id' => $actorId,
-                    'tenant_id' => $tenantId,
-                    'group_id' => (int) $group->id,
-                    'source_label' => 'shopify_embedded_messaging_group',
-                ]
-            );
-
-            return [
-                'summary' => $summary,
-                'target' => [
-                    'type' => 'saved',
-                    'id' => (int) $group->id,
-                    'name' => (string) $group->name,
-                ],
-            ];
-        }
-
-        $normalizedGroupKey = strtolower(trim((string) $groupKey));
-        if ($normalizedGroupKey !== self::AUTO_GROUP_ALL_SUBSCRIBED) {
-            throw ValidationException::withMessages([
-                'group_key' => 'Unsupported automatic group selection.',
-            ]);
-        }
-
-        $recipients = $this->allSubscribedRecipients($tenantId, $channel);
+        $recipients = (array) ($resolvedTarget['recipients'] ?? []);
         if ($recipients === []) {
+            $errorField = ((string) ($resolvedTarget['target']['type'] ?? 'saved')) === 'auto'
+                ? 'group_key'
+                : 'group_id';
             throw ValidationException::withMessages([
-                'group_key' => 'No subscribed recipients are currently eligible for this channel.',
+                $errorField => 'No recipients are currently eligible for this target and channel.',
             ]);
         }
 
@@ -378,17 +389,51 @@ class ShopifyEmbeddedMessagingWorkspaceService
                 'sender_key' => $senderKey,
                 'actor_id' => $actorId,
                 'tenant_id' => $tenantId,
-                'source_label' => 'shopify_embedded_messaging_auto_group',
+                'group_id' => $this->positiveInt(data_get($resolvedTarget, 'target.id')),
+                'source_label' => (string) ($resolvedTarget['source_label'] ?? 'shopify_embedded_messaging_group'),
+                'force_send_profile_ids' => array_values(array_unique(array_map(
+                    'intval',
+                    (array) ($resolvedTarget['force_send_profile_ids'] ?? [])
+                ))),
             ]
         );
 
         return [
             'summary' => $summary,
-            'target' => [
-                'type' => 'auto',
-                'key' => self::AUTO_GROUP_ALL_SUBSCRIBED,
-                'name' => 'All Subscribed',
+            'target' => (array) ($resolvedTarget['target'] ?? []),
+            'diagnostics' => [
+                'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
+                'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
             ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function previewGroupSend(
+        ?int $tenantId,
+        string $targetType,
+        ?int $groupId,
+        ?string $groupKey,
+        string $channel,
+        string $body,
+        ?string $subject
+    ): array {
+        $channel = $this->normalizedChannel($channel);
+        $resolvedTarget = $this->resolveGroupTarget($tenantId, $targetType, $groupId, $groupKey, $channel);
+        $recipients = (array) ($resolvedTarget['recipients'] ?? []);
+
+        return [
+            'target' => (array) ($resolvedTarget['target'] ?? []),
+            'channel' => $channel,
+            'subject' => $channel === 'email' ? $this->nullableString($subject) : null,
+            'body' => trim($body),
+            'message_preview' => Str::limit(trim($body), 280),
+            'estimated_recipients' => count($recipients),
+            'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
+            'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
+            'force_send_profile_ids_count' => count((array) ($resolvedTarget['force_send_profile_ids'] ?? [])),
         ];
     }
 
@@ -397,46 +442,14 @@ class ShopifyEmbeddedMessagingWorkspaceService
      */
     public function allSubscribedSummary(?int $tenantId): array
     {
-        $summary = [
+        $summary = $this->audienceSummary($tenantId);
+
+        return (array) ($summary['summary'] ?? [
             'sms' => 0,
             'email' => 0,
             'overlap' => 0,
             'unique' => 0,
-        ];
-
-        MarketingProfile::query()
-            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
-            ->select([
-                'id',
-                'email',
-                'normalized_email',
-                'phone',
-                'normalized_phone',
-                'accepts_sms_marketing',
-                'accepts_email_marketing',
-            ])
-            ->orderBy('id')
-            ->chunkById(500, function (Collection $profiles) use (&$summary): void {
-                foreach ($profiles as $profile) {
-                    $smsEligible = $this->sendableSmsPhone($profile) !== null;
-                    $emailEligible = $this->sendableEmailAddress($profile) !== null;
-
-                    if ($smsEligible) {
-                        $summary['sms']++;
-                    }
-                    if ($emailEligible) {
-                        $summary['email']++;
-                    }
-                    if ($smsEligible || $emailEligible) {
-                        $summary['unique']++;
-                    }
-                    if ($smsEligible && $emailEligible) {
-                        $summary['overlap']++;
-                    }
-                }
-            });
-
-        return $summary;
+        ]);
     }
 
     /**
@@ -523,6 +536,245 @@ class ShopifyEmbeddedMessagingWorkspaceService
     }
 
     /**
+     * @return array<string,mixed>
+     */
+    protected function resolveGroupTarget(
+        ?int $tenantId,
+        string $targetType,
+        ?int $groupId,
+        ?string $groupKey,
+        string $channel
+    ): array {
+        $targetType = strtolower(trim($targetType));
+        if (! in_array($targetType, ['saved', 'auto'], true)) {
+            throw ValidationException::withMessages([
+                'target_type' => 'Group target type is invalid.',
+            ]);
+        }
+
+        if ($targetType === 'saved') {
+            if ($groupId === null || $groupId <= 0) {
+                throw ValidationException::withMessages([
+                    'group_id' => 'Choose a saved group before sending.',
+                ]);
+            }
+
+            $group = $this->tenantScopedGroupQuery($tenantId)
+                ->whereKey($groupId)
+                ->with('members.profile:id,tenant_id,first_name,last_name,email,normalized_email,phone,normalized_phone')
+                ->first();
+
+            if (! $group instanceof MarketingMessageGroup) {
+                throw ValidationException::withMessages([
+                    'group_id' => 'Group not found for this tenant.',
+                ]);
+            }
+
+            $recipients = $this->savedGroupRecipients($group, $tenantId);
+
+            return [
+                'source_label' => 'shopify_embedded_messaging_group',
+                'target' => [
+                    'type' => 'saved',
+                    'id' => (int) $group->id,
+                    'name' => (string) $group->name,
+                ],
+                'recipients' => $recipients,
+                'force_send_profile_ids' => [],
+                'query_candidate_count' => count($recipients),
+                'resolved_sendable_count' => count($recipients),
+            ];
+        }
+
+        $normalizedGroupKey = strtolower(trim((string) $groupKey));
+        if ($normalizedGroupKey !== self::AUTO_GROUP_ALL_SUBSCRIBED) {
+            throw ValidationException::withMessages([
+                'group_key' => 'Unsupported automatic group selection.',
+            ]);
+        }
+
+        $audience = $this->resolvedChannelAudience($tenantId, $channel, includeRecipients: true);
+
+        return [
+            'source_label' => 'shopify_embedded_messaging_auto_group',
+            'target' => [
+                'type' => 'auto',
+                'key' => self::AUTO_GROUP_ALL_SUBSCRIBED,
+                'name' => 'All Subscribed',
+            ],
+            'recipients' => (array) ($audience['recipients'] ?? []),
+            'force_send_profile_ids' => (array) ($audience['force_send_profile_ids'] ?? []),
+            'query_candidate_count' => (int) ($audience['candidate_count'] ?? 0),
+            'resolved_sendable_count' => (int) ($audience['resolved_sendable_count'] ?? 0),
+        ];
+    }
+
+    /**
+     * @return array{
+     *   profile_ids:array<int,int>,
+     *   recipients:array<int,array<string,mixed>>,
+     *   force_send_profile_ids:array<int,int>,
+     *   candidate_count:int,
+     *   effective_consent_count:int,
+     *   resolved_sendable_count:int
+     * }
+     */
+    protected function resolvedChannelAudience(?int $tenantId, string $channel, bool $includeRecipients): array
+    {
+        $channel = $this->normalizedChannel($channel);
+        $cacheKey = implode(':', [
+            (string) ($tenantId ?? 'null'),
+            $channel,
+            $includeRecipients ? 'with_recipients' : 'summary_only',
+        ]);
+
+        if (isset($this->channelAudienceCache[$cacheKey]) && is_array($this->channelAudienceCache[$cacheKey])) {
+            /** @var array<string,mixed> $cached */
+            $cached = $this->channelAudienceCache[$cacheKey];
+
+            return [
+                'profile_ids' => array_values(array_map('intval', (array) ($cached['profile_ids'] ?? []))),
+                'recipients' => $includeRecipients ? array_values((array) ($cached['recipients'] ?? [])) : [],
+                'force_send_profile_ids' => array_values(array_map('intval', (array) ($cached['force_send_profile_ids'] ?? []))),
+                'candidate_count' => (int) ($cached['candidate_count'] ?? 0),
+                'effective_consent_count' => (int) ($cached['effective_consent_count'] ?? 0),
+                'resolved_sendable_count' => (int) ($cached['resolved_sendable_count'] ?? 0),
+            ];
+        }
+
+        $consentColumn = $channel === 'sms' ? 'accepts_sms_marketing' : 'accepts_email_marketing';
+
+        $query = MarketingProfile::query()
+            ->when($tenantId !== null, fn (Builder $builder) => $builder->forTenantId($tenantId))
+            ->select([
+                'id',
+                'tenant_id',
+                'first_name',
+                'last_name',
+                'email',
+                'normalized_email',
+                'phone',
+                'normalized_phone',
+                'accepts_sms_marketing',
+                'accepts_email_marketing',
+            ])
+            ->where(function (Builder $builder) use ($consentColumn, $channel, $tenantId): void {
+                $builder->where($consentColumn, true)
+                    ->orWhereExists(function ($exists) use ($channel, $tenantId): void {
+                        $exists->selectRaw('1')
+                            ->from('marketing_consent_events as legacy_events')
+                            ->whereColumn('legacy_events.marketing_profile_id', 'marketing_profiles.id')
+                            ->where('legacy_events.channel', $channel)
+                            ->where('legacy_events.event_type', 'imported')
+                            ->whereIn('legacy_events.source_type', self::LEGACY_CONSENT_SOURCE_TYPES);
+
+                        if (Schema::hasColumn('marketing_consent_events', 'tenant_id')) {
+                            if ($tenantId === null) {
+                                $exists->whereNull('legacy_events.tenant_id');
+                            } else {
+                                $exists->where('legacy_events.tenant_id', $tenantId);
+                            }
+                        }
+                    });
+            })
+            ->where(function (Builder $builder) use ($channel): void {
+                if ($channel === 'sms') {
+                    $builder->whereNotNull('phone')
+                        ->orWhereNotNull('normalized_phone');
+
+                    return;
+                }
+
+                $builder->whereNotNull('email')
+                    ->orWhereNotNull('normalized_email');
+            });
+
+        $candidateCount = (int) (clone $query)->count('marketing_profiles.id');
+        $profileIds = [];
+        $forceSendProfileIds = [];
+        $recipients = [];
+        $effectiveConsentCount = 0;
+        $resolvedSendableCount = 0;
+
+        $query
+            ->orderBy('marketing_profiles.id')
+            ->chunkById(300, function (Collection $profiles) use (
+                $channel,
+                $tenantId,
+                $includeRecipients,
+                &$profileIds,
+                &$forceSendProfileIds,
+                &$recipients,
+                &$effectiveConsentCount,
+                &$resolvedSendableCount
+            ): void {
+                $chunkIds = $profiles
+                    ->pluck('id')
+                    ->map(fn ($id): int => (int) $id)
+                    ->filter(fn (int $id): bool => $id > 0)
+                    ->values()
+                    ->all();
+
+                if ($chunkIds === []) {
+                    return;
+                }
+
+                $signals = $this->consentSignalsForProfiles($chunkIds, $channel, $tenantId);
+
+                foreach ($profiles as $profile) {
+                    $profileId = (int) ($profile->id ?? 0);
+                    if ($profileId <= 0) {
+                        continue;
+                    }
+
+                    $canonicalConsent = $this->hasCanonicalConsent($profile, $channel);
+                    $signal = (array) ($signals[$profileId] ?? []);
+                    $hasLegacyImport = (bool) ($signal['has_legacy_import'] ?? false);
+                    $latestEventType = strtolower(trim((string) ($signal['latest_event_type'] ?? '')));
+
+                    $effectiveConsent = $canonicalConsent
+                        || ($hasLegacyImport && ! in_array($latestEventType, ['opted_out', 'revoked'], true));
+                    if (! $effectiveConsent) {
+                        continue;
+                    }
+
+                    $effectiveConsentCount++;
+
+                    $sendableContact = $channel === 'sms'
+                        ? $this->sendableSmsPhoneWithEffectiveConsent($profile, null, true)
+                        : $this->sendableEmailWithEffectiveConsent($profile, null, true);
+                    if ($sendableContact === null) {
+                        continue;
+                    }
+
+                    $resolvedSendableCount++;
+                    $profileIds[] = $profileId;
+
+                    if (! $canonicalConsent) {
+                        $forceSendProfileIds[] = $profileId;
+                    }
+
+                    if ($includeRecipients) {
+                        $recipients[] = $this->profileRecipient($profile);
+                    }
+                }
+            });
+
+        $resolved = [
+            'profile_ids' => array_values(array_unique(array_map('intval', $profileIds))),
+            'recipients' => $includeRecipients ? array_values($recipients) : [],
+            'force_send_profile_ids' => array_values(array_unique(array_map('intval', $forceSendProfileIds))),
+            'candidate_count' => $candidateCount,
+            'effective_consent_count' => $effectiveConsentCount,
+            'resolved_sendable_count' => $resolvedSendableCount,
+        ];
+
+        $this->channelAudienceCache[$cacheKey] = $resolved;
+
+        return $resolved;
+    }
+
+    /**
      * @param  array<int,int>  $profileIds
      * @return Collection<int,MarketingProfile>
      */
@@ -605,32 +857,9 @@ class ShopifyEmbeddedMessagingWorkspaceService
      */
     protected function allSubscribedRecipients(?int $tenantId, string $channel): array
     {
-        $profiles = MarketingProfile::query()
-            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
-            ->select([
-                'id',
-                'tenant_id',
-                'first_name',
-                'last_name',
-                'email',
-                'normalized_email',
-                'phone',
-                'normalized_phone',
-                'accepts_sms_marketing',
-                'accepts_email_marketing',
-            ])
-            ->orderBy('id')
-            ->get();
+        $audience = $this->resolvedChannelAudience($tenantId, $channel, includeRecipients: true);
 
-        return $profiles
-            ->filter(function (MarketingProfile $profile) use ($channel): bool {
-                return $channel === 'sms'
-                    ? $this->sendableSmsPhone($profile) !== null
-                    : $this->sendableEmailAddress($profile) !== null;
-            })
-            ->map(fn (MarketingProfile $profile): array => $this->profileRecipient($profile))
-            ->values()
-            ->all();
+        return array_values((array) ($audience['recipients'] ?? []));
     }
 
     protected function groupPayload(MarketingMessageGroup $group, ?int $tenantId): array
@@ -760,15 +989,103 @@ class ShopifyEmbeddedMessagingWorkspaceService
         return in_array($channel, ['sms', 'email', 'multi'], true) ? $channel : 'multi';
     }
 
-    protected function assertContactMethodAvailable(MarketingProfile $profile, string $channel): void
+    /**
+     * @param  array<int,int>  $profileIds
+     * @return array<int,array{has_legacy_import:bool,latest_event_type:?string}>
+     */
+    protected function consentSignalsForProfiles(array $profileIds, string $channel, ?int $tenantId): array
     {
-        if ($channel === 'sms' && $this->sendableSmsPhone($profile) === null) {
+        $resolvedIds = collect($profileIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($resolvedIds === []) {
+            return [];
+        }
+
+        $eventsQuery = MarketingConsentEvent::query()
+            ->select([
+                'id',
+                'marketing_profile_id',
+                'event_type',
+                'source_type',
+                'occurred_at',
+            ])
+            ->whereIn('marketing_profile_id', $resolvedIds)
+            ->where('channel', $channel)
+            ->orderBy('marketing_profile_id')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id');
+
+        if (Schema::hasColumn('marketing_consent_events', 'tenant_id')) {
+            if ($tenantId === null) {
+                $eventsQuery->whereNull('tenant_id');
+            } else {
+                $eventsQuery->where('tenant_id', $tenantId);
+            }
+        }
+
+        $signals = [];
+        foreach ($eventsQuery->get() as $event) {
+            $profileId = (int) ($event->marketing_profile_id ?? 0);
+            if ($profileId <= 0) {
+                continue;
+            }
+
+            if (! isset($signals[$profileId])) {
+                $signals[$profileId] = [
+                    'has_legacy_import' => false,
+                    'latest_event_type' => strtolower(trim((string) ($event->event_type ?? ''))),
+                ];
+            }
+
+            $eventType = strtolower(trim((string) ($event->event_type ?? '')));
+            $sourceType = strtolower(trim((string) ($event->source_type ?? '')));
+            if ($eventType === 'imported' && in_array($sourceType, self::LEGACY_CONSENT_SOURCE_TYPES, true)) {
+                $signals[$profileId]['has_legacy_import'] = true;
+            }
+        }
+
+        return $signals;
+    }
+
+    protected function hasCanonicalConsent(MarketingProfile $profile, string $channel): bool
+    {
+        return $channel === 'sms'
+            ? (bool) ($profile->accepts_sms_marketing ?? false)
+            : (bool) ($profile->accepts_email_marketing ?? false);
+    }
+
+    protected function profileHasEffectiveLegacyConsent(MarketingProfile $profile, string $channel, ?int $tenantId): bool
+    {
+        if ($this->hasCanonicalConsent($profile, $channel)) {
+            return true;
+        }
+
+        $signals = $this->consentSignalsForProfiles([(int) $profile->id], $channel, $tenantId);
+        $signal = (array) ($signals[(int) $profile->id] ?? []);
+        $hasLegacyImport = (bool) ($signal['has_legacy_import'] ?? false);
+        if (! $hasLegacyImport) {
+            return false;
+        }
+
+        $latestEventType = strtolower(trim((string) ($signal['latest_event_type'] ?? '')));
+
+        return ! in_array($latestEventType, ['opted_out', 'revoked'], true);
+    }
+
+    protected function assertContactMethodAvailable(MarketingProfile $profile, string $channel, ?int $tenantId = null): void
+    {
+        if ($channel === 'sms' && $this->sendableSmsPhoneWithEffectiveConsent($profile, null, $this->profileHasEffectiveLegacyConsent($profile, 'sms', $tenantId)) === null) {
             throw ValidationException::withMessages([
                 'profile_id' => 'The selected customer does not have an SMS-contactable profile (consent + phone).',
             ]);
         }
 
-        if ($channel === 'email' && $this->sendableEmailAddress($profile) === null) {
+        if ($channel === 'email' && $this->sendableEmailWithEffectiveConsent($profile, null, $this->profileHasEffectiveLegacyConsent($profile, 'email', $tenantId)) === null) {
             throw ValidationException::withMessages([
                 'profile_id' => 'The selected customer does not have an email-contactable profile (consent + email).',
             ]);
@@ -786,29 +1103,47 @@ class ShopifyEmbeddedMessagingWorkspaceService
 
     protected function sendableEmailAddress(MarketingProfile $profile): ?string
     {
-        return $this->sendableEmailFromValues(
+        return $this->sendableEmailWithEffectiveConsent(
             $profile->email,
             $profile->normalized_email,
             (bool) ($profile->accepts_email_marketing ?? false)
         );
     }
 
-    protected function sendableSmsPhoneFromValues(mixed $phone, mixed $normalizedPhone, bool $consented): ?string
+    protected function sendableSmsPhoneWithEffectiveConsent(mixed $phone, mixed $normalizedPhone = null, bool $consented = false): ?string
     {
         if (! $consented) {
             return null;
+        }
+
+        if ($phone instanceof MarketingProfile) {
+            return $this->identityNormalizer->toE164((string) ($phone->normalized_phone ?: $phone->phone));
         }
 
         return $this->identityNormalizer->toE164((string) ($normalizedPhone ?: $phone));
     }
 
-    protected function sendableEmailFromValues(mixed $email, mixed $normalizedEmail, bool $consented): ?string
+    protected function sendableEmailWithEffectiveConsent(mixed $email, mixed $normalizedEmail = null, bool $consented = false): ?string
     {
         if (! $consented) {
             return null;
         }
 
+        if ($email instanceof MarketingProfile) {
+            return $this->identityNormalizer->normalizeEmail((string) ($email->normalized_email ?: $email->email));
+        }
+
         return $this->identityNormalizer->normalizeEmail((string) ($normalizedEmail ?: $email));
+    }
+
+    protected function sendableSmsPhoneFromValues(mixed $phone, mixed $normalizedPhone, bool $consented): ?string
+    {
+        return $this->sendableSmsPhoneWithEffectiveConsent($phone, $normalizedPhone, $consented);
+    }
+
+    protected function sendableEmailFromValues(mixed $email, mixed $normalizedEmail, bool $consented): ?string
+    {
+        return $this->sendableEmailWithEffectiveConsent($email, $normalizedEmail, $consented);
     }
 
     protected function nullableString(mixed $value): ?string

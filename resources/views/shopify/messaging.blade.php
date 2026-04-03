@@ -17,336 +17,375 @@
     @endphp
 
     <style>
-        .messaging-root {
+        .messages-root {
+            --messages-bg: #f6f7f8;
+            --messages-surface: #ffffff;
+            --messages-border: rgba(15, 23, 42, 0.1);
+            --messages-muted: rgba(15, 23, 42, 0.62);
+            --messages-text: #0f172a;
+            --messages-accent: #10633f;
+            --messages-accent-soft: rgba(16, 99, 63, 0.12);
+
+            width: 100%;
+            max-width: 1220px;
+            margin: 0 auto;
             display: grid;
             gap: 14px;
-            max-width: 1240px;
-            width: 100%;
-            margin: 0 auto;
         }
 
-        .messaging-card {
-            border-radius: 16px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255, 255, 255, 0.96);
-            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
-            padding: 16px;
+        .messages-card {
+            border: 1px solid var(--messages-border);
+            background: var(--messages-surface);
+            border-radius: 14px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            padding: 14px;
             display: grid;
-            gap: 12px;
+            gap: 10px;
         }
 
-        .messaging-card h2 {
+        .messages-card h2,
+        .messages-card h3,
+        .messages-card h4,
+        .messages-card p {
             margin: 0;
-            font-size: 1.03rem;
+        }
+
+        .messages-card h2 {
+            color: var(--messages-text);
+            font-size: 1rem;
             font-weight: 700;
-            color: #0f172a;
         }
 
-        .messaging-card p {
-            margin: 0;
+        .messages-card p {
+            color: var(--messages-muted);
             font-size: 13px;
-            line-height: 1.55;
-            color: rgba(15, 23, 42, 0.66);
+            line-height: 1.5;
         }
 
-        .messaging-card[data-tone="error"] {
-            border-color: rgba(180, 35, 24, 0.22);
+        .messages-card[data-tone="error"] {
+            border-color: rgba(180, 35, 24, 0.2);
             background: rgba(180, 35, 24, 0.06);
         }
 
-        .messaging-card[data-tone="success"] {
+        .messages-card[data-tone="success"] {
             border-color: rgba(15, 118, 110, 0.22);
             background: rgba(15, 118, 110, 0.08);
         }
 
-        .messaging-segmented {
-            display: inline-flex;
-            gap: 8px;
+        .messages-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             flex-wrap: wrap;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.1);
-            background: rgba(248, 250, 252, 0.94);
-            padding: 6px;
-            align-self: flex-start;
+            gap: 10px;
         }
 
-        .messaging-segmented button {
+        .messages-tabs {
+            display: inline-flex;
+            gap: 6px;
+            padding: 5px;
+            border: 1px solid var(--messages-border);
+            border-radius: 999px;
+            background: var(--messages-bg);
+        }
+
+        .messages-tabs button {
             border: 0;
+            border-radius: 999px;
             background: transparent;
             color: rgba(15, 23, 42, 0.72);
-            border-radius: 999px;
             min-height: 34px;
             padding: 0 12px;
             font-size: 12px;
             font-weight: 700;
-            letter-spacing: 0.03em;
             cursor: pointer;
         }
 
-        .messaging-segmented button[aria-selected="true"] {
-            background: rgba(15, 143, 97, 0.14);
-            color: #0f6f4c;
+        .messages-tabs button[aria-selected="true"] {
+            background: var(--messages-accent-soft);
+            color: var(--messages-accent);
         }
 
-        .messaging-grid {
+        .messages-layout {
             display: grid;
+            grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
             gap: 12px;
         }
 
-        .messaging-grid--individuals {
-            grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+        .messages-audience-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
         }
 
-        .messaging-grid--groups {
-            grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.3fr);
+        .messages-audience-row {
+            width: 100%;
+            border: 1px solid var(--messages-border);
+            border-radius: 10px;
+            background: #fff;
+            color: var(--messages-text);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px;
+            cursor: pointer;
         }
 
-        .messaging-field {
+        .messages-audience-row[aria-current="true"] {
+            border-color: rgba(16, 99, 63, 0.38);
+            background: var(--messages-accent-soft);
+        }
+
+        .messages-audience-name {
+            display: grid;
+            gap: 2px;
+            text-align: left;
+        }
+
+        .messages-audience-name strong {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .messages-audience-name small,
+        .messages-muted {
+            color: var(--messages-muted);
+            font-size: 12px;
+        }
+
+        .messages-audience-row[aria-current="true"] .messages-muted {
+            color: rgba(15, 23, 42, 0.74);
+        }
+
+        .messages-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .messages-pill {
+            border: 1px solid var(--messages-border);
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--messages-text);
+            background: #fff;
+        }
+
+        .messages-inline-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .messages-button {
+            min-height: 36px;
+            border-radius: 999px;
+            border: 1px solid var(--messages-border);
+            background: #fff;
+            color: var(--messages-text);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            padding: 0 12px;
+            cursor: pointer;
+        }
+
+        .messages-button:hover:not(:disabled) {
+            border-color: rgba(15, 23, 42, 0.25);
+        }
+
+        .messages-button:disabled {
+            opacity: 0.62;
+            cursor: not-allowed;
+        }
+
+        .messages-button--primary {
+            border-color: rgba(16, 99, 63, 0.35);
+            color: var(--messages-accent);
+            background: var(--messages-accent-soft);
+        }
+
+        .messages-button--danger {
+            border-color: rgba(180, 35, 24, 0.26);
+            color: #9f2419;
+            background: rgba(180, 35, 24, 0.08);
+        }
+
+        .messages-field {
             display: grid;
             gap: 6px;
             position: relative;
         }
 
-        .messaging-field label {
+        .messages-field label {
             font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
             text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 700;
             color: rgba(15, 23, 42, 0.5);
         }
 
-        .messaging-field input,
-        .messaging-field select,
-        .messaging-field textarea {
+        .messages-field input,
+        .messages-field textarea,
+        .messages-field select {
             width: 100%;
             box-sizing: border-box;
-            min-height: 42px;
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.13);
-            background: #fff;
-            color: rgba(15, 23, 42, 0.9);
-            padding: 10px 12px;
+            border: 1px solid var(--messages-border);
+            border-radius: 11px;
+            min-height: 40px;
+            padding: 9px 11px;
             font-size: 14px;
-            transition: border-color 0.16s ease, box-shadow 0.16s ease;
+            color: var(--messages-text);
+            background: #fff;
         }
 
-        .messaging-field textarea {
-            min-height: 124px;
+        .messages-field textarea {
+            min-height: 130px;
             resize: vertical;
             line-height: 1.5;
         }
 
-        .messaging-field input:focus,
-        .messaging-field select:focus,
-        .messaging-field textarea:focus {
+        .messages-field input:focus,
+        .messages-field textarea:focus,
+        .messages-field select:focus {
             outline: none;
-            border-color: rgba(15, 143, 97, 0.38);
-            box-shadow: 0 0 0 4px rgba(15, 143, 97, 0.1);
+            border-color: rgba(16, 99, 63, 0.36);
+            box-shadow: 0 0 0 3px rgba(16, 99, 63, 0.12);
         }
 
-        .messaging-helper {
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.58);
-            line-height: 1.5;
-        }
-
-        .messaging-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .messaging-button {
+        .messages-channel-toggle {
             display: inline-flex;
-            align-items: center;
-            justify-content: center;
             border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            background: #fff;
-            color: rgba(15, 23, 42, 0.82);
-            min-height: 38px;
-            padding: 0 14px;
+            border: 1px solid var(--messages-border);
+            overflow: hidden;
+            width: fit-content;
+            background: var(--messages-bg);
+        }
+
+        .messages-channel-toggle button {
+            border: 0;
+            min-height: 34px;
+            padding: 0 12px;
+            background: transparent;
+            color: var(--messages-text);
             font-size: 12px;
             font-weight: 700;
-            letter-spacing: 0.03em;
             cursor: pointer;
-            transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
         }
 
-        .messaging-button:hover:not(:disabled) {
-            border-color: rgba(15, 23, 42, 0.22);
-            color: rgba(15, 23, 42, 0.96);
+        .messages-channel-toggle button[aria-pressed="true"] {
+            background: var(--messages-accent-soft);
+            color: var(--messages-accent);
         }
 
-        .messaging-button:disabled {
-            opacity: 0.62;
-            cursor: not-allowed;
-        }
-
-        .messaging-button--primary {
-            border-color: rgba(15, 143, 97, 0.34);
-            background: rgba(15, 143, 97, 0.12);
-            color: #0f6f4c;
-        }
-
-        .messaging-results {
+        .messages-results {
             position: absolute;
-            z-index: 8;
-            top: calc(100% + 4px);
             left: 0;
             right: 0;
-            max-height: 260px;
-            overflow: auto;
+            top: calc(100% + 4px);
+            z-index: 12;
             list-style: none;
             margin: 0;
             padding: 6px;
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 10px;
+            border: 1px solid var(--messages-border);
             background: #fff;
-            box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+            box-shadow: 0 16px 30px rgba(15, 23, 42, 0.14);
             display: grid;
             gap: 4px;
+            max-height: 250px;
+            overflow: auto;
         }
 
-        .messaging-results[hidden] {
+        .messages-results[hidden] {
             display: none;
         }
 
-        .messaging-result-button {
+        .messages-results button {
             width: 100%;
-            text-align: left;
             border: 0;
-            border-radius: 10px;
-            background: rgba(248, 250, 252, 0.78);
-            color: rgba(15, 23, 42, 0.86);
-            padding: 9px 10px;
-            display: grid;
-            gap: 3px;
-            cursor: pointer;
-        }
-
-        .messaging-result-button strong {
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .messaging-result-button span {
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.62);
-        }
-
-        .messaging-result-button:hover {
-            background: rgba(15, 143, 97, 0.12);
-            color: #0f6f4c;
-        }
-
-        .messaging-customer-card {
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.1);
-            background: rgba(248, 250, 252, 0.92);
-            padding: 12px;
-            display: grid;
-            gap: 6px;
-        }
-
-        .messaging-customer-card h3 {
-            margin: 0;
-            font-size: 15px;
-            color: #0f172a;
-        }
-
-        .messaging-customer-meta {
-            display: grid;
-            gap: 4px;
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.66);
-        }
-
-        .messaging-status-pills {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .messaging-pill {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            background: #fff;
-            color: rgba(15, 23, 42, 0.74);
-            padding: 4px 8px;
-            font-size: 11px;
-            font-weight: 650;
-        }
-
-        .messaging-pill[data-tone="ok"] {
-            border-color: rgba(15, 118, 110, 0.24);
-            background: rgba(15, 118, 110, 0.1);
-            color: #0f766e;
-        }
-
-        .messaging-pill[data-tone="warn"] {
-            border-color: rgba(146, 64, 14, 0.25);
-            background: rgba(217, 119, 6, 0.12);
-            color: #92400e;
-        }
-
-        .messaging-list {
-            display: grid;
-            gap: 8px;
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .messaging-list button {
-            width: 100%;
+            border-radius: 8px;
             text-align: left;
-            border-radius: 10px;
-            border: 1px solid rgba(15, 23, 42, 0.1);
-            background: rgba(248, 250, 252, 0.92);
-            color: rgba(15, 23, 42, 0.84);
-            padding: 10px;
+            background: rgba(246, 247, 248, 0.95);
+            color: var(--messages-text);
+            padding: 8px 10px;
             display: grid;
             gap: 3px;
             cursor: pointer;
         }
 
-        .messaging-list button[aria-current="true"] {
-            border-color: rgba(15, 143, 97, 0.35);
-            background: rgba(15, 143, 97, 0.13);
-            color: #0f6f4c;
+        .messages-results button:hover {
+            background: var(--messages-accent-soft);
+            color: var(--messages-accent);
         }
 
-        .messaging-members {
+        .messages-members {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
         }
 
-        .messaging-member-chip {
+        .messages-member-chip {
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            border: 1px solid var(--messages-border);
             border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            background: rgba(248, 250, 252, 0.95);
-            padding: 5px 8px;
+            background: var(--messages-bg);
+            padding: 5px 9px;
             font-size: 11px;
-            color: rgba(15, 23, 42, 0.8);
+            color: var(--messages-text);
         }
 
-        .messaging-member-chip button {
+        .messages-member-chip button {
             border: 0;
             background: transparent;
-            color: rgba(15, 23, 42, 0.56);
+            color: var(--messages-muted);
             cursor: pointer;
-            font-size: 11px;
             padding: 0;
+            font-size: 11px;
         }
 
-        .messaging-history {
+        .messages-preview-box {
+            border: 1px solid var(--messages-border);
+            border-radius: 12px;
+            background: #fff;
+            padding: 10px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .messages-sms-preview {
+            border-radius: 16px;
+            background: #eef2f7;
+            border: 1px solid #d8dde8;
+            padding: 10px;
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.4;
+            color: var(--messages-text);
+        }
+
+        .messages-email-preview-frame {
+            width: 100%;
+            min-height: 280px;
+            border: 1px solid var(--messages-border);
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .messages-send-card {
+            width: 100%;
+            display: grid;
+            gap: 8px;
+        }
+
+        .messages-history {
             list-style: none;
             margin: 0;
             padding: 0;
@@ -354,44 +393,53 @@
             gap: 8px;
         }
 
-        .messaging-history li {
-            border-radius: 12px;
-            border: 1px solid rgba(15, 23, 42, 0.1);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 12px;
+        .messages-history li {
+            border: 1px solid var(--messages-border);
+            border-radius: 11px;
+            padding: 10px;
+            background: #fff;
             display: grid;
-            gap: 5px;
+            gap: 4px;
         }
 
-        .messaging-history strong {
-            font-size: 13px;
-            color: #0f172a;
+        .messages-customer-card {
+            border: 1px solid var(--messages-border);
+            border-radius: 12px;
+            background: var(--messages-bg);
+            padding: 10px;
+            display: grid;
+            gap: 6px;
         }
 
-        .messaging-history small {
-            font-size: 12px;
-            color: rgba(15, 23, 42, 0.62);
+        .messages-customer-card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--messages-text);
+            margin: 0;
         }
 
-        .messaging-muted {
-            color: rgba(15, 23, 42, 0.56);
-            font-size: 12px;
-            line-height: 1.45;
+        .messages-status-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
         }
 
         [hidden] {
             display: none !important;
         }
 
-        @media (max-width: 980px) {
-            .messaging-grid--individuals,
-            .messaging-grid--groups {
+        @media (max-width: 1060px) {
+            .messages-layout {
                 grid-template-columns: minmax(0, 1fr);
+            }
+
+            .messages-send-card {
+                position: static;
             }
         }
     </style>
 
-    <section class="messaging-root" id="messaging-root">
+    <section class="messages-root" id="messages-root">
         @if(is_array($messagingModuleState))
             <x-tenancy.module-state-card
                 :module-state="$messagingModuleState"
@@ -400,157 +448,218 @@
             />
         @endif
 
-        <article class="messaging-card" id="messaging-global-alert" hidden></article>
+        <article class="messages-card" id="messages-global-alert" hidden></article>
 
         @if(! $authorized)
-            <article class="messaging-card">
-                <h2>Messaging requires Shopify context</h2>
+            <article class="messages-card">
+                <h2>Messages requires Shopify context</h2>
                 <p>Open this page from Shopify Admin so Backstage can verify the store session and tenant scope.</p>
             </article>
         @elseif(! $messagingEnabled)
-            <article class="messaging-card" data-tone="error">
+            <article class="messages-card" data-tone="error">
                 <h2>Messaging is locked</h2>
                 <p>{{ $messagingMessage !== '' ? $messagingMessage : 'Messaging is not enabled for this tenant.' }}</p>
                 @if($messagingStatus !== '')
-                    <p class="messaging-muted">Status: {{ $messagingStatus }}</p>
+                    <p class="messages-muted">Status: {{ $messagingStatus }}</p>
                 @endif
             </article>
         @else
-            <nav class="messaging-segmented" aria-label="Messaging workspace tabs">
-                <button type="button" data-tab-button="individuals" aria-selected="true">Individuals</button>
-                <button type="button" data-tab-button="groups" aria-selected="false">Groups</button>
-                <button type="button" data-tab-button="history" aria-selected="false">History</button>
-            </nav>
+            <article class="messages-card">
+                <div class="messages-header">
+                    <div>
+                        <h2>Messages Workspace</h2>
+                        <p>Choose an audience, pick channel, compose, preview, then confirm send.</p>
+                    </div>
+                    <nav class="messages-tabs" aria-label="Messages tabs">
+                        <button type="button" data-tab-button="groups" aria-selected="true">Groups</button>
+                        <button type="button" data-tab-button="individuals" aria-selected="false">Individuals</button>
+                        <button type="button" data-tab-button="history" aria-selected="false">History</button>
+                    </nav>
+                </div>
+            </article>
 
-            <section class="messaging-grid messaging-grid--individuals" data-tab-panel="individuals">
-                <article class="messaging-card">
-                    <h2>Select Customer</h2>
-                    <p class="messaging-helper">Search by name, email, or phone using the same customer lookup behavior as Customers.</p>
+            <section data-tab-panel="groups">
+                <div class="messages-layout">
+                    <aside class="messages-card">
+                        <div class="messages-header" style="align-items:flex-start;">
+                            <div>
+                                <h3>Audience Groups</h3>
+                                <p class="messages-muted">Select or deselect a target group. Nothing is auto-selected.</p>
+                            </div>
+                            <button type="button" class="messages-button" id="messages-open-group-editor">Edit groups</button>
+                        </div>
 
-                    <div class="messaging-field">
-                        <label for="messaging-individual-search">Customer search</label>
-                        <input
-                            id="messaging-individual-search"
-                            type="search"
-                            autocomplete="off"
-                            placeholder="Search customer"
-                        />
-                        <ul class="messaging-results" id="messaging-individual-results" hidden></ul>
+                        <div class="messages-pills" id="messages-audience-pills">
+                            <span class="messages-pill">SMS: --</span>
+                            <span class="messages-pill">Email: --</span>
+                            <span class="messages-pill">Unique: --</span>
+                        </div>
+
+                        <ul class="messages-audience-list" id="messages-audience-list"></ul>
+                        <p class="messages-muted" id="messages-audience-diagnostics"></p>
+                    </aside>
+
+                    <article class="messages-card">
+                        <h3>Compose Group Message</h3>
+                        <p class="messages-muted" id="messages-selected-target">No group selected.</p>
+
+                        <div class="messages-field">
+                            <label>Channel</label>
+                            <div class="messages-channel-toggle" id="messages-group-channel-toggle">
+                                <button type="button" data-group-channel="sms" aria-pressed="true">SMS</button>
+                                <button type="button" data-group-channel="email" aria-pressed="false">Email</button>
+                            </div>
+                        </div>
+
+                        <div class="messages-field" id="messages-group-subject-wrap" hidden>
+                            <label for="messages-group-subject">Email subject</label>
+                            <input id="messages-group-subject" type="text" maxlength="200" placeholder="Subject line" />
+                        </div>
+
+                        <div class="messages-field">
+                            <label for="messages-group-body">Message</label>
+                            <textarea id="messages-group-body" maxlength="5000" placeholder="Write your message"></textarea>
+                        </div>
+
+                        <div class="messages-field" id="messages-group-sender-wrap">
+                            <label for="messages-group-sender">SMS sender key (optional)</label>
+                            <input id="messages-group-sender" type="text" maxlength="80" placeholder="default sender" />
+                        </div>
+
+                        <div id="messages-email-editor-shell" hidden>
+                            <div class="messages-inline-actions">
+                                <button type="button" class="messages-button" id="messages-email-editor-toggle">Open email template editor</button>
+                            </div>
+                            <section class="messages-card" id="messages-email-editor" hidden>
+                                <div class="messages-field">
+                                    <label for="messages-email-template-kind">Template preset</label>
+                                    <select id="messages-email-template-kind">
+                                        <option value="simple">Simple</option>
+                                        <option value="announcement">Announcement</option>
+                                        <option value="reminder">Reminder</option>
+                                    </select>
+                                </div>
+                                <div class="messages-field">
+                                    <label for="messages-email-template-html">Template HTML</label>
+                                    <textarea id="messages-email-template-html" spellcheck="false"></textarea>
+                                </div>
+                                <div class="messages-field">
+                                    <label>Live email preview</label>
+                                    <iframe title="Email preview" class="messages-email-preview-frame" id="messages-email-live-preview" sandbox="allow-same-origin"></iframe>
+                                </div>
+                            </section>
+                        </div>
+
+                        <section class="messages-preview-box" id="messages-group-preview" hidden>
+                            <h4 style="margin:0;font-size:13px;color:#0f172a;">Preview & confirmation</h4>
+                            <p class="messages-muted" id="messages-group-preview-summary"></p>
+                            <div id="messages-group-preview-body"></div>
+                        </section>
+                    </article>
+                </div>
+
+                <article class="messages-card" id="messages-group-editor" hidden>
+                    <h3>Group Editor</h3>
+                    <p class="messages-muted">Create or update saved groups without cluttering the composer.</p>
+
+                    <div class="messages-field">
+                        <label for="messages-group-name">Group name</label>
+                        <input id="messages-group-name" type="text" maxlength="120" placeholder="VIP customers" />
                     </div>
 
-                    <div class="messaging-customer-card" id="messaging-selected-customer">
-                        <h3>No customer selected</h3>
-                        <p class="messaging-muted">Select a customer to start a direct message.</p>
+                    <div class="messages-field">
+                        <label for="messages-group-description">Description (optional)</label>
+                        <input id="messages-group-description" type="text" maxlength="500" placeholder="Internal notes" />
                     </div>
+
+                    <div class="messages-field">
+                        <label for="messages-group-member-search">Add members</label>
+                        <input id="messages-group-member-search" type="search" autocomplete="off" placeholder="Search customer" />
+                        <ul class="messages-results" id="messages-group-member-results" hidden></ul>
+                    </div>
+
+                    <div class="messages-members" id="messages-group-members"></div>
+
+                    <div class="messages-inline-actions">
+                        <button type="button" class="messages-button messages-button--primary" id="messages-group-save">Save group</button>
+                        <button type="button" class="messages-button" id="messages-group-reset">New group</button>
+                        <button type="button" class="messages-button messages-button--danger" id="messages-group-close">Close editor</button>
+                    </div>
+                    <p class="messages-muted" id="messages-group-status"></p>
                 </article>
 
-                <article class="messaging-card">
-                    <h2>Compose Message</h2>
-                    <div class="messaging-field">
-                        <label for="messaging-individual-channel">Channel</label>
-                        <select id="messaging-individual-channel">
-                            <option value="sms">SMS</option>
-                            <option value="email">Email</option>
-                        </select>
+                <article class="messages-card messages-send-card" id="messages-send-card">
+                    <h3>Send to group</h3>
+                    <p class="messages-muted" id="messages-send-estimate">Select a group to estimate recipients.</p>
+                    <div class="messages-inline-actions">
+                        <button type="button" class="messages-button" id="messages-group-preview-button">Preview message</button>
+                        <button type="button" class="messages-button" id="messages-group-preview-back" hidden>Back to edit</button>
+                        <button type="button" class="messages-button messages-button--primary" id="messages-group-send-button" hidden>Confirm and send</button>
                     </div>
-
-                    <div class="messaging-field" id="messaging-individual-subject-wrap" hidden>
-                        <label for="messaging-individual-subject">Email subject</label>
-                        <input id="messaging-individual-subject" type="text" maxlength="200" placeholder="Subject" />
-                    </div>
-
-                    <div class="messaging-field">
-                        <label for="messaging-individual-body">Message body</label>
-                        <textarea id="messaging-individual-body" maxlength="5000" placeholder="Write your message"></textarea>
-                    </div>
-
-                    <div class="messaging-field">
-                        <label for="messaging-individual-sender">SMS sender key (optional)</label>
-                        <input id="messaging-individual-sender" type="text" maxlength="80" placeholder="default sender" />
-                    </div>
-
-                    <div class="messaging-actions">
-                        <button class="messaging-button messaging-button--primary" id="messaging-individual-send" type="button">
-                            Send Message
-                        </button>
-                    </div>
-                    <p class="messaging-muted" id="messaging-individual-status"></p>
+                    <p class="messages-muted" id="messages-group-send-status"></p>
                 </article>
             </section>
 
-            <section class="messaging-grid messaging-grid--groups" data-tab-panel="groups" hidden>
-                <article class="messaging-card">
-                    <h2>Groups</h2>
-                    <p class="messaging-helper">Open a saved group or use the auto audience below.</p>
+            <section data-tab-panel="individuals" hidden>
+                <div class="messages-layout" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);">
+                    <article class="messages-card">
+                        <h3>Select Customer</h3>
+                        <p class="messages-muted">Search by name, email, or phone using the Customers lookup behavior.</p>
+                        <div class="messages-field">
+                            <label for="messages-individual-search">Customer search</label>
+                            <input id="messages-individual-search" type="search" autocomplete="off" placeholder="Search customer" />
+                            <ul class="messages-results" id="messages-individual-results" hidden></ul>
+                        </div>
+                        <div class="messages-customer-card" id="messages-individual-customer"></div>
+                    </article>
 
-                    <div>
-                        <strong class="messaging-muted">Saved groups</strong>
-                        <ul class="messaging-list" id="messaging-saved-groups"></ul>
-                    </div>
+                    <article class="messages-card">
+                        <h3>Compose Individual Message</h3>
 
-                    <div>
-                        <strong class="messaging-muted">Automatic audiences</strong>
-                        <ul class="messaging-list" id="messaging-auto-groups"></ul>
-                    </div>
-                </article>
+                        <div class="messages-field">
+                            <label for="messages-individual-channel">Channel</label>
+                            <select id="messages-individual-channel">
+                                <option value="sms">SMS</option>
+                                <option value="email">Email</option>
+                            </select>
+                        </div>
 
-                <article class="messaging-card">
-                    <h2>Create or Edit Group</h2>
-                    <div class="messaging-field">
-                        <label for="messaging-group-name">Group name</label>
-                        <input id="messaging-group-name" type="text" maxlength="120" placeholder="VIP customers" />
-                    </div>
-                    <div class="messaging-field">
-                        <label for="messaging-group-description">Description (optional)</label>
-                        <input id="messaging-group-description" type="text" maxlength="500" placeholder="Internal notes" />
-                    </div>
-                    <div class="messaging-field">
-                        <label for="messaging-group-member-search">Add members</label>
-                        <input id="messaging-group-member-search" type="search" autocomplete="off" placeholder="Search customer" />
-                        <ul class="messaging-results" id="messaging-group-member-results" hidden></ul>
-                    </div>
-                    <div class="messaging-members" id="messaging-group-members"></div>
-                    <div class="messaging-actions">
-                        <button class="messaging-button messaging-button--primary" id="messaging-group-save" type="button">Save Group</button>
-                        <button class="messaging-button" id="messaging-group-reset" type="button">New Group</button>
-                    </div>
-                    <p class="messaging-muted" id="messaging-group-status"></p>
+                        <div class="messages-field" id="messages-individual-subject-wrap" hidden>
+                            <label for="messages-individual-subject">Email subject</label>
+                            <input id="messages-individual-subject" type="text" maxlength="200" placeholder="Subject line" />
+                        </div>
 
-                    <hr style="border:0;height:1px;background:rgba(15,23,42,0.08);margin:2px 0;">
+                        <div class="messages-field">
+                            <label for="messages-individual-body">Message</label>
+                            <textarea id="messages-individual-body" maxlength="5000" placeholder="Write your message"></textarea>
+                        </div>
 
-                    <h2>Send to Group</h2>
-                    <p class="messaging-muted" id="messaging-target-summary">Select a saved or automatic group target.</p>
-                    <div class="messaging-field">
-                        <label for="messaging-group-channel">Channel</label>
-                        <select id="messaging-group-channel">
-                            <option value="sms">SMS</option>
-                            <option value="email">Email</option>
-                        </select>
-                    </div>
-                    <div class="messaging-field" id="messaging-group-subject-wrap" hidden>
-                        <label for="messaging-group-subject">Email subject</label>
-                        <input id="messaging-group-subject" type="text" maxlength="200" placeholder="Subject" />
-                    </div>
-                    <div class="messaging-field">
-                        <label for="messaging-group-body">Message body</label>
-                        <textarea id="messaging-group-body" maxlength="5000" placeholder="Write your message"></textarea>
-                    </div>
-                    <div class="messaging-field">
-                        <label for="messaging-group-sender">SMS sender key (optional)</label>
-                        <input id="messaging-group-sender" type="text" maxlength="80" placeholder="default sender" />
-                    </div>
-                    <div class="messaging-actions">
-                        <button class="messaging-button messaging-button--primary" id="messaging-group-send" type="button">Send Group Message</button>
-                    </div>
-                    <p class="messaging-muted" id="messaging-group-send-status"></p>
-                </article>
+                        <div class="messages-field">
+                            <label for="messages-individual-sender">SMS sender key (optional)</label>
+                            <input id="messages-individual-sender" type="text" maxlength="80" placeholder="default sender" />
+                        </div>
+
+                        <div class="messages-inline-actions">
+                            <button type="button" class="messages-button" id="messages-individual-preview">Preview message</button>
+                            <button type="button" class="messages-button" id="messages-individual-preview-back" hidden>Back to edit</button>
+                            <button type="button" class="messages-button messages-button--primary" id="messages-individual-send" hidden>Confirm and send</button>
+                        </div>
+
+                        <section class="messages-preview-box" id="messages-individual-preview-box" hidden>
+                            <p class="messages-muted" id="messages-individual-preview-summary"></p>
+                            <div id="messages-individual-preview-body"></div>
+                        </section>
+
+                        <p class="messages-muted" id="messages-individual-status"></p>
+                    </article>
+                </div>
             </section>
 
             <section data-tab-panel="history" hidden>
-                <article class="messaging-card">
-                    <h2>Recent Messaging</h2>
-                    <p class="messaging-helper">Recent sends from this embedded messaging workspace.</p>
-                    <ul class="messaging-history" id="messaging-history-list"></ul>
+                <article class="messages-card">
+                    <h3>Recent Messaging</h3>
+                    <p class="messages-muted">History loads only when needed for faster page startup.</p>
+                    <ul class="messages-history" id="messages-history-list"></ul>
                 </article>
             </section>
         @endif
@@ -567,54 +676,93 @@
                     ? bootstrap.data
                     : {};
 
+                const EMAIL_TEMPLATES = {
+                    simple: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f3f4f6;padding:16px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="620" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;padding:22px;"><tr><td><h2 style="margin:0 0 12px 0;color:#0f172a;">@{{subject}}</h2><div style="font-size:15px;line-height:1.55;color:#1f2937;">@{{message_body}}</div></td></tr></table></td></tr></table></body></html>`,
+                    announcement: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#eef6f1;padding:16px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;border:1px solid #d1e6db;"><tr><td style="padding:16px 18px;background:#0f6f4c;color:#ffffff;border-radius:12px 12px 0 0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Backstage Message</td></tr><tr><td style="padding:18px;"><h2 style="margin:0 0 12px 0;color:#0f172a;">@{{subject}}</h2><div style="font-size:15px;line-height:1.55;color:#1f2937;">@{{message_body}}</div></td></tr></table></td></tr></table></body></html>`,
+                    reminder: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:16px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="620" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;padding:20px;border:1px solid #e2e8f0;"><tr><td><div style="display:inline-block;background:#e2e8f0;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;color:#334155;margin-bottom:10px;">Reminder</div><h2 style="margin:0 0 12px 0;color:#0f172a;">@{{subject}}</h2><div style="font-size:15px;line-height:1.55;color:#334155;">@{{message_body}}</div></td></tr></table></td></tr></table></body></html>`,
+                };
+
                 const state = {
-                    tab: "individuals",
+                    tab: "groups",
                     groups: typeof initialData.groups === "object" && initialData.groups !== null
                         ? initialData.groups
                         : { saved: [], auto: [] },
-                    history: Array.isArray(initialData.history) ? initialData.history : [],
-                    selectedCustomer: null,
-                    groupMembers: new Map(),
-                    editingGroupId: null,
+                    audienceSummary: { sms: 0, email: 0, overlap: 0, unique: 0 },
+                    audienceDiagnostics: {},
+                    history: [],
+                    historyLoaded: false,
                     selectedTarget: null,
+                    groupChannel: "sms",
+                    previewReady: false,
+                    groupPreviewPayload: null,
+                    emailEditorOpen: false,
+                    editingGroupId: null,
+                    groupMembers: new Map(),
+                    selectedCustomer: null,
+                    individualPreviewReady: false,
                 };
 
-                const alertCard = document.getElementById("messaging-global-alert");
+                const alertCard = document.getElementById("messages-global-alert");
                 const tabButtons = Array.from(document.querySelectorAll("[data-tab-button]"));
                 const tabPanels = Array.from(document.querySelectorAll("[data-tab-panel]"));
 
-                const individualSearchInput = document.getElementById("messaging-individual-search");
-                const individualResults = document.getElementById("messaging-individual-results");
-                const selectedCustomerCard = document.getElementById("messaging-selected-customer");
-                const individualChannel = document.getElementById("messaging-individual-channel");
-                const individualSubjectWrap = document.getElementById("messaging-individual-subject-wrap");
-                const individualSubject = document.getElementById("messaging-individual-subject");
-                const individualBody = document.getElementById("messaging-individual-body");
-                const individualSender = document.getElementById("messaging-individual-sender");
-                const individualSend = document.getElementById("messaging-individual-send");
-                const individualStatus = document.getElementById("messaging-individual-status");
+                const audienceList = document.getElementById("messages-audience-list");
+                const audiencePills = document.getElementById("messages-audience-pills");
+                const audienceDiagnostics = document.getElementById("messages-audience-diagnostics");
+                const selectedTargetSummary = document.getElementById("messages-selected-target");
+                const sendEstimate = document.getElementById("messages-send-estimate");
+                const groupSendStatus = document.getElementById("messages-group-send-status");
 
-                const savedGroupsList = document.getElementById("messaging-saved-groups");
-                const autoGroupsList = document.getElementById("messaging-auto-groups");
-                const groupNameInput = document.getElementById("messaging-group-name");
-                const groupDescriptionInput = document.getElementById("messaging-group-description");
-                const groupMemberSearchInput = document.getElementById("messaging-group-member-search");
-                const groupMemberResults = document.getElementById("messaging-group-member-results");
-                const groupMembersWrap = document.getElementById("messaging-group-members");
-                const groupSaveButton = document.getElementById("messaging-group-save");
-                const groupResetButton = document.getElementById("messaging-group-reset");
-                const groupStatus = document.getElementById("messaging-group-status");
+                const groupChannelToggle = document.getElementById("messages-group-channel-toggle");
+                const groupSubjectWrap = document.getElementById("messages-group-subject-wrap");
+                const groupSubject = document.getElementById("messages-group-subject");
+                const groupBody = document.getElementById("messages-group-body");
+                const groupSenderWrap = document.getElementById("messages-group-sender-wrap");
+                const groupSender = document.getElementById("messages-group-sender");
 
-                const targetSummary = document.getElementById("messaging-target-summary");
-                const groupChannel = document.getElementById("messaging-group-channel");
-                const groupSubjectWrap = document.getElementById("messaging-group-subject-wrap");
-                const groupSubject = document.getElementById("messaging-group-subject");
-                const groupBody = document.getElementById("messaging-group-body");
-                const groupSender = document.getElementById("messaging-group-sender");
-                const groupSendButton = document.getElementById("messaging-group-send");
-                const groupSendStatus = document.getElementById("messaging-group-send-status");
+                const emailEditorShell = document.getElementById("messages-email-editor-shell");
+                const emailEditorToggle = document.getElementById("messages-email-editor-toggle");
+                const emailEditor = document.getElementById("messages-email-editor");
+                const emailTemplateKind = document.getElementById("messages-email-template-kind");
+                const emailTemplateHtml = document.getElementById("messages-email-template-html");
+                const emailLivePreview = document.getElementById("messages-email-live-preview");
 
-                const historyList = document.getElementById("messaging-history-list");
+                const groupPreviewWrap = document.getElementById("messages-group-preview");
+                const groupPreviewSummary = document.getElementById("messages-group-preview-summary");
+                const groupPreviewBody = document.getElementById("messages-group-preview-body");
+                const groupPreviewButton = document.getElementById("messages-group-preview-button");
+                const groupPreviewBack = document.getElementById("messages-group-preview-back");
+                const groupSendButton = document.getElementById("messages-group-send-button");
+
+                const groupEditor = document.getElementById("messages-group-editor");
+                const groupEditorOpen = document.getElementById("messages-open-group-editor");
+                const groupEditorClose = document.getElementById("messages-group-close");
+                const groupName = document.getElementById("messages-group-name");
+                const groupDescription = document.getElementById("messages-group-description");
+                const groupMemberSearch = document.getElementById("messages-group-member-search");
+                const groupMemberResults = document.getElementById("messages-group-member-results");
+                const groupMembersWrap = document.getElementById("messages-group-members");
+                const groupSave = document.getElementById("messages-group-save");
+                const groupReset = document.getElementById("messages-group-reset");
+                const groupStatus = document.getElementById("messages-group-status");
+
+                const historyList = document.getElementById("messages-history-list");
+
+                const individualSearch = document.getElementById("messages-individual-search");
+                const individualResults = document.getElementById("messages-individual-results");
+                const individualCustomer = document.getElementById("messages-individual-customer");
+                const individualChannel = document.getElementById("messages-individual-channel");
+                const individualSubjectWrap = document.getElementById("messages-individual-subject-wrap");
+                const individualSubject = document.getElementById("messages-individual-subject");
+                const individualBody = document.getElementById("messages-individual-body");
+                const individualSender = document.getElementById("messages-individual-sender");
+                const individualPreview = document.getElementById("messages-individual-preview");
+                const individualPreviewBack = document.getElementById("messages-individual-preview-back");
+                const individualSend = document.getElementById("messages-individual-send");
+                const individualPreviewBox = document.getElementById("messages-individual-preview-box");
+                const individualPreviewSummary = document.getElementById("messages-individual-preview-summary");
+                const individualPreviewBody = document.getElementById("messages-individual-preview-body");
+                const individualStatus = document.getElementById("messages-individual-status");
 
                 function authFailureMessage(status, fallbackMessage) {
                     const messages = {
@@ -679,10 +827,20 @@
                     return payload;
                 }
 
+                function escapeHtml(value) {
+                    return String(value ?? "")
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#039;");
+                }
+
                 function setAlert(message, tone = "neutral") {
                     if (!alertCard) {
                         return;
                     }
+
                     const text = typeof message === "string" ? message.trim() : "";
                     if (text === "") {
                         alertCard.hidden = true;
@@ -690,16 +848,26 @@
                         alertCard.removeAttribute("data-tone");
                         return;
                     }
+
                     alertCard.hidden = false;
                     alertCard.setAttribute("data-tone", tone);
                     alertCard.textContent = text;
                 }
 
-                function setInlineStatus(element, message) {
-                    if (!element) {
-                        return;
+                function setInlineStatus(el, message) {
+                    if (el) {
+                        el.textContent = typeof message === "string" ? message : "";
                     }
-                    element.textContent = typeof message === "string" ? message : "";
+                }
+
+                function debounce(fn, wait = 240) {
+                    let timer = null;
+                    return (...args) => {
+                        if (timer) {
+                            window.clearTimeout(timer);
+                        }
+                        timer = window.setTimeout(() => fn(...args), wait);
+                    };
                 }
 
                 function switchTab(tab) {
@@ -711,44 +879,17 @@
                     tabPanels.forEach((panel) => {
                         panel.hidden = panel.dataset.tabPanel !== tab;
                     });
+
+                    if (tab === "history" && !state.historyLoaded) {
+                        refreshHistory();
+                    }
                 }
 
-                function syncSubjectVisibility(channelSelect, subjectWrap) {
-                    if (!channelSelect || !subjectWrap) {
-                        return;
-                    }
-                    subjectWrap.hidden = channelSelect.value !== "email";
+                function replaceGroupEndpoint(base, groupId) {
+                    return String(base || "").replace("__GROUP__", encodeURIComponent(String(groupId)));
                 }
 
-                function renderCustomerCard() {
-                    if (!selectedCustomerCard) {
-                        return;
-                    }
-                    const customer = state.selectedCustomer;
-                    if (!customer) {
-                        selectedCustomerCard.innerHTML = `
-                            <h3>No customer selected</h3>
-                            <p class="messaging-muted">Select a customer to start a direct message.</p>
-                        `;
-                        return;
-                    }
-
-                    const smsTone = customer.sms_contactable ? "ok" : "warn";
-                    const emailTone = customer.email_contactable ? "ok" : "warn";
-                    selectedCustomerCard.innerHTML = `
-                        <h3>${escapeHtml(customer.name || "Customer")}</h3>
-                        <div class="messaging-customer-meta">
-                            <span>Email: ${escapeHtml(customer.email || "Not set")}</span>
-                            <span>Phone: ${escapeHtml(customer.phone || "Not set")}</span>
-                        </div>
-                        <div class="messaging-status-pills">
-                            <span class="messaging-pill" data-tone="${smsTone}">SMS ${customer.sms_contactable ? "contactable" : "not contactable"}</span>
-                            <span class="messaging-pill" data-tone="${emailTone}">Email ${customer.email_contactable ? "contactable" : "not contactable"}</span>
-                        </div>
-                    `;
-                }
-
-                function normalizeCustomer(row) {
+                function normalizedCustomer(row) {
                     if (!row || typeof row !== "object") {
                         return null;
                     }
@@ -760,14 +901,466 @@
 
                     return {
                         id,
-                        name: (row.name || `Customer #${id}`).toString(),
-                        email: row.email ? row.email.toString() : null,
-                        phone: row.phone ? row.phone.toString() : null,
-                        accepts_sms_marketing: Boolean(row.accepts_sms_marketing),
-                        accepts_email_marketing: Boolean(row.accepts_email_marketing),
+                        name: String(row.name || `Customer #${id}`),
+                        email: row.email ? String(row.email) : null,
+                        phone: row.phone ? String(row.phone) : null,
                         sms_contactable: Boolean(row.sms_contactable),
                         email_contactable: Boolean(row.email_contactable),
                     };
+                }
+
+                function targetRows() {
+                    const saved = Array.isArray(state.groups?.saved) ? state.groups.saved : [];
+                    const auto = Array.isArray(state.groups?.auto) ? state.groups.auto : [];
+
+                    const rows = [];
+                    auto.forEach((group) => {
+                        if (String(group?.key || "") !== "all_subscribed") {
+                            return;
+                        }
+                        rows.push({
+                            type: "auto",
+                            key: "all_subscribed",
+                            name: String(group?.name || "All Subscribed"),
+                            description: String(group?.description || "Subscribed SMS and/or email recipients."),
+                            count: Number(state.audienceSummary.unique || 0),
+                            counts: {
+                                sms: Number(state.audienceSummary.sms || 0),
+                                email: Number(state.audienceSummary.email || 0),
+                                unique: Number(state.audienceSummary.unique || 0),
+                            },
+                        });
+                    });
+
+                    saved.forEach((group) => {
+                        rows.push({
+                            type: "saved",
+                            id: Number(group?.id || 0),
+                            name: String(group?.name || "Saved group"),
+                            description: String(group?.description || ""),
+                            count: Number(group?.members_count || 0),
+                        });
+                    });
+
+                    return rows
+                        .filter((row) => row.type === "auto" || (Number(row.id || 0) > 0))
+                        .sort((a, b) => Number(b.count || 0) - Number(a.count || 0));
+                }
+
+                function renderAudiencePills() {
+                    if (!audiencePills) {
+                        return;
+                    }
+
+                    audiencePills.innerHTML = "";
+                    const entries = [
+                        `SMS: ${Number(state.audienceSummary.sms || 0).toLocaleString()}`,
+                        `Email: ${Number(state.audienceSummary.email || 0).toLocaleString()}`,
+                        `Unique: ${Number(state.audienceSummary.unique || 0).toLocaleString()}`,
+                    ];
+
+                    entries.forEach((value) => {
+                        const pill = document.createElement("span");
+                        pill.className = "messages-pill";
+                        pill.textContent = value;
+                        audiencePills.appendChild(pill);
+                    });
+                }
+
+                function renderAudienceDiagnostics() {
+                    if (!audienceDiagnostics) {
+                        return;
+                    }
+
+                    const sms = state.audienceDiagnostics?.sms || {};
+                    const email = state.audienceDiagnostics?.email || {};
+                    audienceDiagnostics.textContent = `SMS displayed ${Number(sms.displayed_audience_count || 0).toLocaleString()} (query ${Number(sms.query_candidate_count || 0).toLocaleString()} · sendable ${Number(sms.resolved_sendable_count || 0).toLocaleString()}) · Email displayed ${Number(email.displayed_audience_count || 0).toLocaleString()} (query ${Number(email.query_candidate_count || 0).toLocaleString()} · sendable ${Number(email.resolved_sendable_count || 0).toLocaleString()})`;
+                }
+
+                function renderAudienceList() {
+                    if (!audienceList) {
+                        return;
+                    }
+
+                    audienceList.innerHTML = "";
+                    const rows = targetRows();
+                    if (rows.length === 0) {
+                        const li = document.createElement("li");
+                        li.className = "messages-muted";
+                        li.textContent = "No audience groups available.";
+                        audienceList.appendChild(li);
+                        return;
+                    }
+
+                    rows.forEach((row) => {
+                        const li = document.createElement("li");
+                        const button = document.createElement("button");
+                        button.type = "button";
+                        button.className = "messages-audience-row";
+
+                        const active = row.type === "auto"
+                            ? state.selectedTarget?.type === "auto" && state.selectedTarget?.key === row.key
+                            : state.selectedTarget?.type === "saved" && Number(state.selectedTarget?.id || 0) === Number(row.id || 0);
+                        button.setAttribute("aria-current", active ? "true" : "false");
+
+                        const countLabel = Number(row.count || 0).toLocaleString();
+                        const subtitle = row.type === "auto"
+                            ? `SMS ${Number(row.counts?.sms || 0).toLocaleString()} · Email ${Number(row.counts?.email || 0).toLocaleString()} · Unique ${Number(row.counts?.unique || 0).toLocaleString()}`
+                            : `${countLabel} member${Number(row.count || 0) === 1 ? "" : "s"}`;
+
+                        button.innerHTML = `
+                            <span class="messages-audience-name">
+                                <strong>${escapeHtml(row.name || "Group")}</strong>
+                                <small class="messages-muted">${escapeHtml(subtitle)}</small>
+                            </span>
+                            <span class="messages-muted">${active ? "Selected" : "Select"}</span>
+                        `;
+
+                        button.addEventListener("click", async () => {
+                            if (active) {
+                                state.selectedTarget = null;
+                                resetGroupPreviewState();
+                                renderAudienceList();
+                                renderSelectedTargetSummary();
+                                renderGroupEstimate();
+                                return;
+                            }
+
+                            state.selectedTarget = row.type === "auto"
+                                ? { type: "auto", key: row.key, name: row.name }
+                                : { type: "saved", id: row.id, name: row.name, members_count: row.count };
+
+                            resetGroupPreviewState();
+                            renderAudienceList();
+                            renderSelectedTargetSummary();
+                            renderGroupEstimate();
+                        });
+
+                        li.appendChild(button);
+                        audienceList.appendChild(li);
+                    });
+                }
+
+                function renderSelectedTargetSummary() {
+                    if (!selectedTargetSummary) {
+                        return;
+                    }
+
+                    if (!state.selectedTarget) {
+                        selectedTargetSummary.textContent = "No group selected.";
+                        return;
+                    }
+
+                    if (state.selectedTarget.type === "auto") {
+                        selectedTargetSummary.textContent = `Selected: ${state.selectedTarget.name || "All Subscribed"} (optional automatic audience)`;
+                        return;
+                    }
+
+                    selectedTargetSummary.textContent = `Selected: ${state.selectedTarget.name || "Saved group"} (saved group)`;
+                }
+
+                function renderGroupEstimate() {
+                    if (!sendEstimate) {
+                        return;
+                    }
+
+                    if (!state.selectedTarget) {
+                        sendEstimate.textContent = "Select a group to estimate recipients.";
+                        return;
+                    }
+
+                    if (state.groupPreviewPayload && state.previewReady) {
+                        sendEstimate.textContent = `Preview ready: ${Number(state.groupPreviewPayload.estimated_recipients || 0).toLocaleString()} recipients estimated.`;
+                        return;
+                    }
+
+                    if (state.selectedTarget.type === "auto") {
+                        const estimated = state.groupChannel === "email"
+                            ? Number(state.audienceSummary.email || 0)
+                            : Number(state.audienceSummary.sms || 0);
+                        sendEstimate.textContent = `Estimated recipients (${state.groupChannel.toUpperCase()}): ${estimated.toLocaleString()} before final preview resolution.`;
+                        return;
+                    }
+
+                    const estimate = Number(state.selectedTarget.members_count || 0);
+                    sendEstimate.textContent = `Estimated recipients: ${estimate.toLocaleString()} members before channel filtering.`;
+                }
+
+                function updateGroupChannelUi() {
+                    const buttons = Array.from(groupChannelToggle?.querySelectorAll("button[data-group-channel]") || []);
+                    buttons.forEach((button) => {
+                        const active = String(button.dataset.groupChannel || "") === state.groupChannel;
+                        button.setAttribute("aria-pressed", active ? "true" : "false");
+                    });
+
+                    const isEmail = state.groupChannel === "email";
+                    if (groupSubjectWrap) {
+                        groupSubjectWrap.hidden = !isEmail;
+                    }
+                    if (groupSenderWrap) {
+                        groupSenderWrap.hidden = isEmail;
+                    }
+                    if (emailEditorShell) {
+                        emailEditorShell.hidden = !isEmail;
+                    }
+                    if (!isEmail) {
+                        state.emailEditorOpen = false;
+                        if (emailEditor) {
+                            emailEditor.hidden = true;
+                        }
+                        if (emailEditorToggle) {
+                            emailEditorToggle.textContent = "Open email template editor";
+                        }
+                    }
+
+                    renderGroupEstimate();
+                    resetGroupPreviewState();
+                }
+
+                function resetGroupPreviewState() {
+                    state.previewReady = false;
+                    state.groupPreviewPayload = null;
+                    if (groupPreviewWrap) {
+                        groupPreviewWrap.hidden = true;
+                    }
+                    if (groupPreviewSummary) {
+                        groupPreviewSummary.textContent = "";
+                    }
+                    if (groupPreviewBody) {
+                        groupPreviewBody.innerHTML = "";
+                    }
+                    if (groupSendButton) {
+                        groupSendButton.hidden = true;
+                    }
+                    if (groupPreviewBack) {
+                        groupPreviewBack.hidden = true;
+                    }
+                    if (groupPreviewButton) {
+                        groupPreviewButton.hidden = false;
+                    }
+                }
+
+                function renderedMessageBodyAsHtml(messageText) {
+                    return escapeHtml(messageText || "")
+                        .replace(/\n{2,}/g, "</p><p>")
+                        .replace(/\n/g, "<br>");
+                }
+
+                function currentEmailTemplateHtml() {
+                    const kind = String(emailTemplateKind?.value || "simple");
+                    const fallback = EMAIL_TEMPLATES.simple;
+                    return String(emailTemplateHtml?.value || EMAIL_TEMPLATES[kind] || fallback);
+                }
+
+                function buildEmailHtml(subject, message) {
+                    const safeSubject = escapeHtml(subject || "Message from Backstage");
+                    const messageHtml = `<p>${renderedMessageBodyAsHtml(message)}</p>`;
+                    return currentEmailTemplateHtml()
+                        .replace(/@{{\s*subject\s*}}/gi, safeSubject)
+                        .replace(/@{{\s*message_body\s*}}/gi, messageHtml);
+                }
+
+                function renderEmailLivePreview() {
+                    if (!emailLivePreview) {
+                        return;
+                    }
+
+                    const subject = String(groupSubject?.value || "Message from Backstage");
+                    const message = String(groupBody?.value || "");
+                    emailLivePreview.srcdoc = buildEmailHtml(subject, message);
+                }
+
+                function renderGroupPreview(payload) {
+                    if (!groupPreviewWrap || !groupPreviewSummary || !groupPreviewBody) {
+                        return;
+                    }
+
+                    const targetName = String(payload?.target?.name || state.selectedTarget?.name || "Selected group");
+                    const channel = String(payload?.channel || state.groupChannel || "sms").toLowerCase();
+                    const recipients = Number(payload?.estimated_recipients || 0);
+
+                    groupPreviewWrap.hidden = false;
+                    groupPreviewSummary.textContent = `${targetName} · ${channel.toUpperCase()} · ${recipients.toLocaleString()} recipients`;
+
+                    if (channel === "email") {
+                        const subject = String(payload?.subject || groupSubject?.value || "");
+                        const message = String(payload?.body || groupBody?.value || "");
+                        const html = buildEmailHtml(subject, message);
+                        groupPreviewBody.innerHTML = `
+                            <div class="messages-muted">Subject: ${escapeHtml(subject || "(No subject)")}</div>
+                            <iframe class="messages-email-preview-frame" sandbox="allow-same-origin" title="Email preview confirmation"></iframe>
+                        `;
+                        const frame = groupPreviewBody.querySelector("iframe");
+                        if (frame) {
+                            frame.srcdoc = html;
+                        }
+                        return;
+                    }
+
+                    const bodyText = String(payload?.body || groupBody?.value || "");
+                    groupPreviewBody.innerHTML = `<div class="messages-sms-preview">${escapeHtml(bodyText)}</div>`;
+                }
+
+                function renderIndividualCustomer() {
+                    if (!individualCustomer) {
+                        return;
+                    }
+
+                    const customer = state.selectedCustomer;
+                    if (!customer) {
+                        individualCustomer.innerHTML = `
+                            <h3>No customer selected</h3>
+                            <p class="messages-muted">Select a customer to start a direct message.</p>
+                        `;
+                        return;
+                    }
+
+                    individualCustomer.innerHTML = `
+                        <h3>${escapeHtml(customer.name || "Customer")}</h3>
+                        <p class="messages-muted">Email: ${escapeHtml(customer.email || "Not set")}</p>
+                        <p class="messages-muted">Phone: ${escapeHtml(customer.phone || "Not set")}</p>
+                        <div class="messages-status-row">
+                            <span class="messages-pill">SMS ${customer.sms_contactable ? "contactable" : "not contactable"}</span>
+                            <span class="messages-pill">Email ${customer.email_contactable ? "contactable" : "not contactable"}</span>
+                        </div>
+                    `;
+                }
+
+                function renderIndividualPreview() {
+                    if (!individualPreviewBox || !individualPreviewSummary || !individualPreviewBody) {
+                        return;
+                    }
+
+                    if (!state.individualPreviewReady) {
+                        individualPreviewBox.hidden = true;
+                        individualPreviewSummary.textContent = "";
+                        individualPreviewBody.innerHTML = "";
+                        return;
+                    }
+
+                    const customer = state.selectedCustomer || {};
+                    const channel = String(individualChannel?.value || "sms");
+                    const body = String(individualBody?.value || "");
+                    individualPreviewBox.hidden = false;
+                    individualPreviewSummary.textContent = `${customer.name || "Customer"} · ${channel.toUpperCase()}`;
+
+                    if (channel === "email") {
+                        const subject = String(individualSubject?.value || "");
+                        individualPreviewBody.innerHTML = `
+                            <div class="messages-muted">Subject: ${escapeHtml(subject || "(No subject)")}</div>
+                            <div class="messages-sms-preview">${escapeHtml(body)}</div>
+                        `;
+                        return;
+                    }
+
+                    individualPreviewBody.innerHTML = `<div class="messages-sms-preview">${escapeHtml(body)}</div>`;
+                }
+
+                function renderHistory() {
+                    if (!historyList) {
+                        return;
+                    }
+
+                    historyList.innerHTML = "";
+                    if (!Array.isArray(state.history) || state.history.length === 0) {
+                        const li = document.createElement("li");
+                        li.className = "messages-muted";
+                        li.textContent = "No messaging history yet.";
+                        historyList.appendChild(li);
+                        return;
+                    }
+
+                    state.history.forEach((row) => {
+                        const li = document.createElement("li");
+                        li.innerHTML = `
+                            <strong style="font-size:13px;color:#0f172a;">${escapeHtml(String(row.channel || "message").toUpperCase())} · ${escapeHtml(String(row.profile_name || "Customer"))}</strong>
+                            <span class="messages-muted">${escapeHtml(String(row.recipient || ""))}</span>
+                            <span class="messages-muted">Status: ${escapeHtml(String(row.status || "sent"))}</span>
+                            <span class="messages-muted">${escapeHtml(String(row.message_preview || ""))}</span>
+                            <span class="messages-muted">${escapeHtml(formatDate(row.sent_at))}</span>
+                        `;
+                        historyList.appendChild(li);
+                    });
+                }
+
+                function formatDate(value) {
+                    if (!value) {
+                        return "Sent time unavailable";
+                    }
+                    const date = new Date(value);
+                    if (Number.isNaN(date.getTime())) {
+                        return String(value);
+                    }
+                    return date.toLocaleString();
+                }
+
+                async function refreshBootstrap() {
+                    if (!endpoints.bootstrap) {
+                        return;
+                    }
+
+                    const payload = await fetchJson(endpoints.bootstrap, { method: "GET" });
+                    const data = typeof payload?.data === "object" && payload.data !== null
+                        ? payload.data
+                        : {};
+                    state.groups = typeof data.groups === "object" && data.groups !== null
+                        ? data.groups
+                        : { saved: [], auto: [] };
+
+                    renderAudienceList();
+                    renderGroupEstimate();
+                }
+
+                async function refreshAudienceSummary() {
+                    if (!endpoints.audience_summary) {
+                        return;
+                    }
+
+                    const payload = await fetchJson(endpoints.audience_summary, { method: "GET" });
+                    const data = typeof payload?.data === "object" && payload.data !== null
+                        ? payload.data
+                        : {};
+
+                    state.audienceSummary = typeof data.all_subscribed_summary === "object" && data.all_subscribed_summary !== null
+                        ? data.all_subscribed_summary
+                        : { sms: 0, email: 0, overlap: 0, unique: 0 };
+                    state.audienceDiagnostics = typeof data.diagnostics === "object" && data.diagnostics !== null
+                        ? data.diagnostics
+                        : {};
+
+                    renderAudiencePills();
+                    renderAudienceDiagnostics();
+                    renderAudienceList();
+                    renderGroupEstimate();
+                }
+
+                async function refreshHistory() {
+                    if (!endpoints.history) {
+                        return;
+                    }
+
+                    try {
+                        const payload = await fetchJson(`${endpoints.history}?limit=40`, { method: "GET" });
+                        state.history = Array.isArray(payload?.data) ? payload.data : [];
+                        state.historyLoaded = true;
+                        renderHistory();
+                    } catch (error) {
+                        setAlert(error?.payload?.message || error?.message || "History could not be loaded.", "error");
+                    }
+                }
+
+                async function searchCustomers(query) {
+                    const q = String(query || "").trim();
+                    if (q.length < 2 || !endpoints.search_customers) {
+                        return [];
+                    }
+
+                    const url = new URL(endpoints.search_customers, window.location.origin);
+                    url.searchParams.set("q", q);
+                    url.searchParams.set("limit", "12");
+
+                    const payload = await fetchJson(url.toString(), { method: "GET" });
+                    return Array.isArray(payload?.data) ? payload.data : [];
                 }
 
                 function renderSearchResults(container, rows, onSelect) {
@@ -782,7 +1375,7 @@
                     }
 
                     rows.forEach((row) => {
-                        const customer = normalizeCustomer(row);
+                        const customer = normalizedCustomer(row);
                         if (!customer) {
                             return;
                         }
@@ -790,7 +1383,6 @@
                         const li = document.createElement("li");
                         const button = document.createElement("button");
                         button.type = "button";
-                        button.className = "messaging-result-button";
                         button.innerHTML = `
                             <strong>${escapeHtml(customer.name)}</strong>
                             <span>${escapeHtml(customer.email || customer.phone || "No contact details")}</span>
@@ -803,123 +1395,6 @@
                     container.hidden = container.children.length === 0;
                 }
 
-                function escapeHtml(value) {
-                    return String(value ?? "")
-                        .replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;")
-                        .replace(/"/g, "&quot;")
-                        .replace(/'/g, "&#039;");
-                }
-
-                function debounce(fn, wait = 220) {
-                    let timer = null;
-                    return (...args) => {
-                        if (timer) {
-                            window.clearTimeout(timer);
-                        }
-                        timer = window.setTimeout(() => fn(...args), wait);
-                    };
-                }
-
-                async function searchCustomers(query) {
-                    const q = (query || "").trim();
-                    if (q.length < 2 || !endpoints.search_customers) {
-                        return [];
-                    }
-
-                    const url = new URL(endpoints.search_customers, window.location.origin);
-                    url.searchParams.set("q", q);
-                    url.searchParams.set("limit", "12");
-
-                    const payload = await fetchJson(url.toString(), { method: "GET" });
-                    return Array.isArray(payload?.data) ? payload.data : [];
-                }
-
-                function replaceGroupEndpoint(base, groupId) {
-                    return String(base || "").replace("__GROUP__", encodeURIComponent(String(groupId)));
-                }
-
-                async function refreshBootstrap() {
-                    if (!endpoints.bootstrap) {
-                        return;
-                    }
-                    const payload = await fetchJson(endpoints.bootstrap, { method: "GET" });
-                    const data = typeof payload?.data === "object" && payload.data !== null ? payload.data : {};
-                    state.groups = typeof data.groups === "object" && data.groups !== null
-                        ? data.groups
-                        : { saved: [], auto: [] };
-                    state.history = Array.isArray(data.history) ? data.history : [];
-                    renderGroups();
-                    renderHistory();
-                }
-
-                async function refreshHistory() {
-                    if (!endpoints.history) {
-                        return;
-                    }
-                    const payload = await fetchJson(`${endpoints.history}?limit=40`, { method: "GET" });
-                    state.history = Array.isArray(payload?.data) ? payload.data : [];
-                    renderHistory();
-                }
-
-                function renderGroups() {
-                    if (savedGroupsList) {
-                        savedGroupsList.innerHTML = "";
-                        const savedRows = Array.isArray(state.groups?.saved) ? state.groups.saved : [];
-                        if (savedRows.length === 0) {
-                            const li = document.createElement("li");
-                            li.className = "messaging-muted";
-                            li.textContent = "No saved groups yet.";
-                            savedGroupsList.appendChild(li);
-                        } else {
-                            savedRows.forEach((group) => {
-                                const li = document.createElement("li");
-                                const button = document.createElement("button");
-                                button.type = "button";
-                                button.setAttribute("aria-current", state.selectedTarget?.type === "saved" && state.selectedTarget?.id === group.id ? "true" : "false");
-                                button.innerHTML = `
-                                    <strong>${escapeHtml(group.name || "Group")}</strong>
-                                    <span class="messaging-muted">${Number(group.members_count || 0)} members</span>
-                                `;
-                                button.addEventListener("click", () => openSavedGroup(group.id));
-                                li.appendChild(button);
-                                savedGroupsList.appendChild(li);
-                            });
-                        }
-                    }
-
-                    if (autoGroupsList) {
-                        autoGroupsList.innerHTML = "";
-                        const autoRows = Array.isArray(state.groups?.auto) ? state.groups.auto : [];
-                        autoRows.forEach((group) => {
-                            const counts = group?.counts || {};
-                            const li = document.createElement("li");
-                            const button = document.createElement("button");
-                            const active = state.selectedTarget?.type === "auto" && state.selectedTarget?.key === group.key;
-                            button.type = "button";
-                            button.setAttribute("aria-current", active ? "true" : "false");
-                            button.innerHTML = `
-                                <strong>${escapeHtml(group.name || "Automatic group")}</strong>
-                                <span class="messaging-muted">SMS: ${Number(counts.sms || 0)} · Email: ${Number(counts.email || 0)} · Unique: ${Number(counts.unique || 0)}</span>
-                            `;
-                            button.addEventListener("click", () => {
-                                state.selectedTarget = {
-                                    type: "auto",
-                                    key: String(group.key || "all_subscribed"),
-                                    name: String(group.name || "All Subscribed"),
-                                };
-                                renderGroups();
-                                renderTargetSummary();
-                            });
-                            li.appendChild(button);
-                            autoGroupsList.appendChild(li);
-                        });
-                    }
-
-                    renderTargetSummary();
-                }
-
                 function renderGroupMembers() {
                     if (!groupMembersWrap) {
                         return;
@@ -927,23 +1402,20 @@
 
                     groupMembersWrap.innerHTML = "";
                     if (state.groupMembers.size === 0) {
-                        const empty = document.createElement("span");
-                        empty.className = "messaging-muted";
-                        empty.textContent = "No members selected.";
-                        groupMembersWrap.appendChild(empty);
+                        const span = document.createElement("span");
+                        span.className = "messages-muted";
+                        span.textContent = "No members selected.";
+                        groupMembersWrap.appendChild(span);
                         return;
                     }
 
                     state.groupMembers.forEach((customer, id) => {
                         const chip = document.createElement("span");
-                        chip.className = "messaging-member-chip";
-                        chip.innerHTML = `
-                            ${escapeHtml(customer.name || `Customer #${id}`)}
-                            <button type="button" aria-label="Remove ${escapeHtml(customer.name || `Customer ${id}`)}">Remove</button>
-                        `;
-                        const removeButton = chip.querySelector("button");
-                        if (removeButton) {
-                            removeButton.addEventListener("click", () => {
+                        chip.className = "messages-member-chip";
+                        chip.innerHTML = `${escapeHtml(customer.name || `Customer #${id}`)} <button type="button" aria-label="Remove">Remove</button>`;
+                        const remove = chip.querySelector("button");
+                        if (remove) {
+                            remove.addEventListener("click", () => {
                                 state.groupMembers.delete(id);
                                 renderGroupMembers();
                             });
@@ -952,135 +1424,68 @@
                     });
                 }
 
-                function renderTargetSummary() {
-                    if (!targetSummary) {
-                        return;
-                    }
-                    if (!state.selectedTarget) {
-                        targetSummary.textContent = "Select a saved or automatic group target.";
-                        return;
-                    }
-                    if (state.selectedTarget.type === "saved") {
-                        targetSummary.textContent = `Target: ${state.selectedTarget.name || "Saved group"} (saved group)`;
-                        return;
-                    }
-                    targetSummary.textContent = `Target: ${state.selectedTarget.name || "All Subscribed"} (automatic audience)`;
-                }
-
-                function renderHistory() {
-                    if (!historyList) {
-                        return;
-                    }
-                    historyList.innerHTML = "";
-                    if (!Array.isArray(state.history) || state.history.length === 0) {
-                        const row = document.createElement("li");
-                        row.className = "messaging-muted";
-                        row.textContent = "No messaging history yet.";
-                        historyList.appendChild(row);
-                        return;
-                    }
-
-                    state.history.forEach((row) => {
-                        const item = document.createElement("li");
-                        const channel = String(row.channel || "message").toUpperCase();
-                        const recipient = String(row.recipient || "Recipient");
-                        const name = String(row.profile_name || "Customer");
-                        const preview = String(row.message_preview || "");
-                        const sentAt = String(row.sent_at || "");
-                        const status = String(row.status || "sent");
-                        item.innerHTML = `
-                            <strong>${escapeHtml(channel)} · ${escapeHtml(name)}</strong>
-                            <small>${escapeHtml(recipient)}</small>
-                            <small>Status: ${escapeHtml(status)}</small>
-                            <small>${escapeHtml(preview)}</small>
-                            <small>${escapeHtml(formatDate(sentAt))}</small>
-                        `;
-                        historyList.appendChild(item);
-                    });
-                }
-
-                function formatDate(value) {
-                    if (!value) {
-                        return "Sent time unavailable";
-                    }
-                    const date = new Date(value);
-                    if (Number.isNaN(date.getTime())) {
-                        return value;
-                    }
-                    return date.toLocaleString();
-                }
-
                 function resetGroupEditor() {
                     state.editingGroupId = null;
                     state.groupMembers.clear();
-                    if (groupNameInput) {
-                        groupNameInput.value = "";
+                    if (groupName) {
+                        groupName.value = "";
                     }
-                    if (groupDescriptionInput) {
-                        groupDescriptionInput.value = "";
+                    if (groupDescription) {
+                        groupDescription.value = "";
                     }
                     renderGroupMembers();
                     setInlineStatus(groupStatus, "");
                 }
 
-                async function openSavedGroup(groupId) {
+                async function openSavedGroupForEditing(groupId) {
                     if (!endpoints.group_detail_base) {
                         return;
                     }
+
                     try {
-                        setInlineStatus(groupStatus, "Loading group…");
+                        setInlineStatus(groupStatus, "Loading group...");
                         const endpoint = replaceGroupEndpoint(endpoints.group_detail_base, groupId);
                         const payload = await fetchJson(endpoint, { method: "GET" });
                         const group = payload?.data || {};
-                        const members = Array.isArray(group.members) ? group.members : [];
+
                         state.groupMembers.clear();
+                        const members = Array.isArray(group.members) ? group.members : [];
                         members.forEach((row) => {
-                            const customer = normalizeCustomer(row);
+                            const customer = normalizedCustomer(row);
                             if (customer) {
                                 state.groupMembers.set(customer.id, customer);
                             }
                         });
 
-                        state.editingGroupId = Number.parseInt(group.id, 10) || null;
-                        if (groupNameInput) {
-                            groupNameInput.value = String(group.name || "");
+                        state.editingGroupId = Number(group.id || 0) || null;
+                        if (groupName) {
+                            groupName.value = String(group.name || "");
                         }
-                        if (groupDescriptionInput) {
-                            groupDescriptionInput.value = String(group.description || "");
+                        if (groupDescription) {
+                            groupDescription.value = String(group.description || "");
                         }
-                        state.selectedTarget = {
-                            type: "saved",
-                            id: state.editingGroupId,
-                            name: String(group.name || "Saved group"),
-                        };
+
                         renderGroupMembers();
-                        renderGroups();
                         setInlineStatus(groupStatus, "Group loaded.");
                     } catch (error) {
-                        const payload = error?.payload || null;
-                        setInlineStatus(groupStatus, payload?.message || error?.message || "Failed to load group.");
+                        setInlineStatus(groupStatus, error?.payload?.message || error?.message || "Could not load group.");
                     }
                 }
 
                 async function saveGroup() {
-                    const name = (groupNameInput?.value || "").trim();
-                    const description = (groupDescriptionInput?.value || "").trim();
+                    const name = String(groupName?.value || "").trim();
+                    const description = String(groupDescription?.value || "").trim();
                     const memberIds = Array.from(state.groupMembers.keys());
 
                     if (name === "") {
                         setInlineStatus(groupStatus, "Group name is required.");
                         return;
                     }
+
                     if (memberIds.length === 0) {
-                        setInlineStatus(groupStatus, "Choose at least one group member.");
+                        setInlineStatus(groupStatus, "Choose at least one member.");
                         return;
                     }
-
-                    const payload = {
-                        name,
-                        description: description || null,
-                        member_profile_ids: memberIds,
-                    };
 
                     const isUpdate = Number.isFinite(state.editingGroupId) && state.editingGroupId > 0;
                     const endpoint = isUpdate
@@ -1092,114 +1497,65 @@
                         return;
                     }
 
-                    groupSaveButton.disabled = true;
-                    setInlineStatus(groupStatus, "Saving group…");
                     try {
+                        groupSave.disabled = true;
+                        setInlineStatus(groupStatus, "Saving group...");
                         const response = await fetchJson(endpoint, {
                             method: isUpdate ? "PATCH" : "POST",
-                            body: JSON.stringify(payload),
-                        });
-                        const group = response?.data || {};
-                        const groupId = Number.parseInt(group.id, 10);
-                        if (Number.isFinite(groupId) && groupId > 0) {
-                            state.editingGroupId = groupId;
-                            state.selectedTarget = {
-                                type: "saved",
-                                id: groupId,
-                                name: String(group.name || name),
-                            };
-                        }
-                        await refreshBootstrap();
-                        setInlineStatus(groupStatus, response?.message || "Group saved.");
-                    } catch (error) {
-                        const payloadData = error?.payload || null;
-                        setInlineStatus(groupStatus, payloadData?.message || error?.message || "Failed to save group.");
-                    } finally {
-                        groupSaveButton.disabled = false;
-                    }
-                }
-
-                async function sendIndividualMessage() {
-                    const customer = state.selectedCustomer;
-                    const channel = (individualChannel?.value || "sms").toLowerCase();
-                    const subject = (individualSubject?.value || "").trim();
-                    const body = (individualBody?.value || "").trim();
-                    const senderKey = (individualSender?.value || "").trim();
-
-                    if (!customer || !Number.isFinite(customer.id)) {
-                        setInlineStatus(individualStatus, "Select a customer first.");
-                        return;
-                    }
-                    if (channel === "sms" && !customer.sms_contactable) {
-                        setInlineStatus(individualStatus, "Selected customer is not SMS contactable.");
-                        return;
-                    }
-                    if (channel === "email" && !customer.email_contactable) {
-                        setInlineStatus(individualStatus, "Selected customer is not email contactable.");
-                        return;
-                    }
-                    if (channel === "email" && subject === "") {
-                        setInlineStatus(individualStatus, "Email subject is required.");
-                        return;
-                    }
-                    if (body === "") {
-                        setInlineStatus(individualStatus, "Message body is required.");
-                        return;
-                    }
-                    if (!endpoints.send_individual) {
-                        setInlineStatus(individualStatus, "Send endpoint is unavailable.");
-                        return;
-                    }
-
-                    individualSend.disabled = true;
-                    setInlineStatus(individualStatus, "Sending message…");
-                    try {
-                        const response = await fetchJson(endpoints.send_individual, {
-                            method: "POST",
                             body: JSON.stringify({
-                                profile_id: customer.id,
-                                channel,
-                                subject: channel === "email" ? subject : null,
-                                body,
-                                sender_key: senderKey || null,
+                                name,
+                                description: description || null,
+                                member_profile_ids: memberIds,
                             }),
                         });
-                        setInlineStatus(individualStatus, response?.message || "Message sent.");
-                        individualBody.value = "";
-                        if (individualSubject) {
-                            individualSubject.value = "";
-                        }
-                        await refreshHistory();
-                        setAlert("Individual message sent.", "success");
+
+                        setInlineStatus(groupStatus, response?.message || "Group saved.");
+                        await refreshBootstrap();
                     } catch (error) {
-                        const payload = error?.payload || null;
-                        setInlineStatus(individualStatus, payload?.message || error?.message || "Failed to send message.");
+                        setInlineStatus(groupStatus, error?.payload?.message || error?.message || "Group save failed.");
                     } finally {
-                        individualSend.disabled = false;
+                        groupSave.disabled = false;
                     }
                 }
 
-                async function sendGroupMessage() {
+                function openGroupEditor() {
+                    if (!groupEditor) {
+                        return;
+                    }
+                    groupEditor.hidden = false;
+                    if (state.selectedTarget?.type === "saved" && Number(state.selectedTarget.id || 0) > 0) {
+                        openSavedGroupForEditing(Number(state.selectedTarget.id));
+                    }
+                }
+
+                function closeGroupEditor() {
+                    if (!groupEditor) {
+                        return;
+                    }
+                    groupEditor.hidden = true;
+                    setInlineStatus(groupStatus, "");
+                }
+
+                async function previewGroupSend() {
                     if (!state.selectedTarget) {
-                        setInlineStatus(groupSendStatus, "Choose a target group first.");
+                        setInlineStatus(groupSendStatus, "Choose a group before preview.");
                         return;
                     }
 
-                    const channel = (groupChannel?.value || "sms").toLowerCase();
-                    const subject = (groupSubject?.value || "").trim();
-                    const body = (groupBody?.value || "").trim();
-                    const senderKey = (groupSender?.value || "").trim();
-
-                    if (channel === "email" && subject === "") {
-                        setInlineStatus(groupSendStatus, "Email subject is required.");
-                        return;
-                    }
+                    const body = String(groupBody?.value || "").trim();
                     if (body === "") {
                         setInlineStatus(groupSendStatus, "Message body is required.");
                         return;
                     }
-                    if (!endpoints.send_group) {
-                        setInlineStatus(groupSendStatus, "Send endpoint is unavailable.");
+
+                    const subject = String(groupSubject?.value || "").trim();
+                    if (state.groupChannel === "email" && subject === "") {
+                        setInlineStatus(groupSendStatus, "Email subject is required.");
+                        return;
+                    }
+
+                    if (!endpoints.preview_group) {
+                        setInlineStatus(groupSendStatus, "Preview endpoint is unavailable.");
                         return;
                     }
 
@@ -1207,72 +1563,309 @@
                         target_type: state.selectedTarget.type,
                         group_id: state.selectedTarget.type === "saved" ? state.selectedTarget.id : null,
                         group_key: state.selectedTarget.type === "auto" ? state.selectedTarget.key : null,
-                        channel,
-                        subject: channel === "email" ? subject : null,
+                        channel: state.groupChannel,
+                        subject: state.groupChannel === "email" ? subject : null,
                         body,
-                        sender_key: senderKey || null,
                     };
 
-                    groupSendButton.disabled = true;
-                    setInlineStatus(groupSendStatus, "Sending group message…");
                     try {
+                        groupPreviewButton.disabled = true;
+                        setInlineStatus(groupSendStatus, "Building preview...");
+                        const response = await fetchJson(endpoints.preview_group, {
+                            method: "POST",
+                            body: JSON.stringify(payload),
+                        });
+
+                        state.groupPreviewPayload = response?.data || null;
+                        state.previewReady = true;
+
+                        renderGroupPreview(state.groupPreviewPayload || payload);
+                        renderGroupEstimate();
+                        setInlineStatus(groupSendStatus, "Preview ready. Confirm to send.");
+
+                        if (groupSendButton) {
+                            groupSendButton.hidden = false;
+                        }
+                        if (groupPreviewBack) {
+                            groupPreviewBack.hidden = false;
+                        }
+                        if (groupPreviewButton) {
+                            groupPreviewButton.hidden = true;
+                        }
+                    } catch (error) {
+                        setInlineStatus(groupSendStatus, error?.payload?.message || error?.message || "Preview failed.");
+                    } finally {
+                        groupPreviewButton.disabled = false;
+                    }
+                }
+
+                async function confirmGroupSend() {
+                    if (!state.selectedTarget || !state.previewReady) {
+                        setInlineStatus(groupSendStatus, "Run preview before sending.");
+                        return;
+                    }
+
+                    if (!endpoints.send_group) {
+                        setInlineStatus(groupSendStatus, "Send endpoint is unavailable.");
+                        return;
+                    }
+
+                    const body = String(groupBody?.value || "").trim();
+                    const subject = String(groupSubject?.value || "").trim();
+                    const senderKey = String(groupSender?.value || "").trim();
+
+                    const payload = {
+                        target_type: state.selectedTarget.type,
+                        group_id: state.selectedTarget.type === "saved" ? state.selectedTarget.id : null,
+                        group_key: state.selectedTarget.type === "auto" ? state.selectedTarget.key : null,
+                        channel: state.groupChannel,
+                        subject: state.groupChannel === "email" ? subject : null,
+                        body,
+                        sender_key: state.groupChannel === "sms" ? (senderKey || null) : null,
+                    };
+
+                    try {
+                        groupSendButton.disabled = true;
+                        setInlineStatus(groupSendStatus, "Sending message...");
                         const response = await fetchJson(endpoints.send_group, {
                             method: "POST",
                             body: JSON.stringify(payload),
                         });
-                        setInlineStatus(groupSendStatus, response?.message || "Group message sent.");
+
+                        setInlineStatus(groupSendStatus, response?.message || "Message sent.");
+                        setAlert("Group message sent.", "success");
+
                         if (groupBody) {
                             groupBody.value = "";
                         }
                         if (groupSubject) {
                             groupSubject.value = "";
                         }
-                        await refreshBootstrap();
-                        setAlert("Group message sent.", "success");
+
+                        resetGroupPreviewState();
+                        await refreshAudienceSummary();
+                        if (state.tab === "history") {
+                            await refreshHistory();
+                        }
                     } catch (error) {
-                        const payloadData = error?.payload || null;
-                        setInlineStatus(groupSendStatus, payloadData?.message || error?.message || "Failed to send message.");
+                        setInlineStatus(groupSendStatus, error?.payload?.message || error?.message || "Send failed.");
                     } finally {
                         groupSendButton.disabled = false;
                     }
                 }
 
+                function resetIndividualPreviewState() {
+                    state.individualPreviewReady = false;
+                    if (individualSend) {
+                        individualSend.hidden = true;
+                    }
+                    if (individualPreviewBack) {
+                        individualPreviewBack.hidden = true;
+                    }
+                    if (individualPreview) {
+                        individualPreview.hidden = false;
+                    }
+                    renderIndividualPreview();
+                }
+
+                function validateIndividualPayload() {
+                    const customer = state.selectedCustomer;
+                    const channel = String(individualChannel?.value || "sms").toLowerCase();
+                    const subject = String(individualSubject?.value || "").trim();
+                    const body = String(individualBody?.value || "").trim();
+
+                    if (!customer || !Number.isFinite(customer.id)) {
+                        return { ok: false, message: "Select a customer first." };
+                    }
+
+                    if (channel === "sms" && !customer.sms_contactable) {
+                        return { ok: false, message: "Selected customer is not SMS contactable." };
+                    }
+
+                    if (channel === "email" && !customer.email_contactable) {
+                        return { ok: false, message: "Selected customer is not email contactable." };
+                    }
+
+                    if (channel === "email" && subject === "") {
+                        return { ok: false, message: "Email subject is required." };
+                    }
+
+                    if (body === "") {
+                        return { ok: false, message: "Message body is required." };
+                    }
+
+                    return {
+                        ok: true,
+                        payload: {
+                            profile_id: customer.id,
+                            channel,
+                            subject: channel === "email" ? subject : null,
+                            body,
+                            sender_key: String(individualSender?.value || "").trim() || null,
+                        },
+                    };
+                }
+
+                function previewIndividualMessage() {
+                    const validation = validateIndividualPayload();
+                    if (!validation.ok) {
+                        setInlineStatus(individualStatus, validation.message || "Preview failed.");
+                        return;
+                    }
+
+                    state.individualPreviewReady = true;
+                    renderIndividualPreview();
+                    setInlineStatus(individualStatus, "Preview ready. Confirm to send.");
+
+                    if (individualSend) {
+                        individualSend.hidden = false;
+                    }
+                    if (individualPreviewBack) {
+                        individualPreviewBack.hidden = false;
+                    }
+                    if (individualPreview) {
+                        individualPreview.hidden = true;
+                    }
+                }
+
+                async function confirmIndividualSend() {
+                    const validation = validateIndividualPayload();
+                    if (!validation.ok) {
+                        setInlineStatus(individualStatus, validation.message || "Send failed.");
+                        return;
+                    }
+
+                    if (!state.individualPreviewReady) {
+                        setInlineStatus(individualStatus, "Run preview before sending.");
+                        return;
+                    }
+
+                    if (!endpoints.send_individual) {
+                        setInlineStatus(individualStatus, "Send endpoint is unavailable.");
+                        return;
+                    }
+
+                    try {
+                        individualSend.disabled = true;
+                        setInlineStatus(individualStatus, "Sending message...");
+                        const response = await fetchJson(endpoints.send_individual, {
+                            method: "POST",
+                            body: JSON.stringify(validation.payload),
+                        });
+
+                        setInlineStatus(individualStatus, response?.message || "Message sent.");
+                        setAlert("Individual message sent.", "success");
+                        resetIndividualPreviewState();
+                        if (individualBody) {
+                            individualBody.value = "";
+                        }
+                        if (individualSubject) {
+                            individualSubject.value = "";
+                        }
+                        if (state.tab === "history") {
+                            await refreshHistory();
+                        }
+                    } catch (error) {
+                        setInlineStatus(individualStatus, error?.payload?.message || error?.message || "Send failed.");
+                    } finally {
+                        individualSend.disabled = false;
+                    }
+                }
+
                 function bindEvents() {
                     tabButtons.forEach((button) => {
-                        button.addEventListener("click", () => switchTab(button.dataset.tabButton));
+                        button.addEventListener("click", () => switchTab(String(button.dataset.tabButton || "groups")));
                     });
 
-                    if (individualChannel) {
-                        individualChannel.addEventListener("change", () => syncSubjectVisibility(individualChannel, individualSubjectWrap));
+                    const groupButtons = Array.from(groupChannelToggle?.querySelectorAll("button[data-group-channel]") || []);
+                    groupButtons.forEach((button) => {
+                        button.addEventListener("click", () => {
+                            state.groupChannel = String(button.dataset.groupChannel || "sms");
+                            updateGroupChannelUi();
+                            renderEmailLivePreview();
+                        });
+                    });
+
+                    if (groupBody) {
+                        groupBody.addEventListener("input", debounce(() => {
+                            resetGroupPreviewState();
+                            renderEmailLivePreview();
+                        }, 180));
                     }
-                    if (groupChannel) {
-                        groupChannel.addEventListener("change", () => syncSubjectVisibility(groupChannel, groupSubjectWrap));
+                    if (groupSubject) {
+                        groupSubject.addEventListener("input", debounce(() => {
+                            resetGroupPreviewState();
+                            renderEmailLivePreview();
+                        }, 180));
                     }
 
-                    if (individualSearchInput) {
-                        individualSearchInput.addEventListener("input", debounce(async () => {
-                            try {
-                                const rows = await searchCustomers(individualSearchInput.value);
-                                renderSearchResults(individualResults, rows, (customer) => {
-                                    state.selectedCustomer = customer;
-                                    renderCustomerCard();
-                                    individualSearchInput.value = customer.name || "";
-                                    individualResults.hidden = true;
-                                });
-                            } catch (error) {
-                                individualResults.hidden = true;
+                    if (emailEditorToggle) {
+                        emailEditorToggle.addEventListener("click", () => {
+                            state.emailEditorOpen = !state.emailEditorOpen;
+                            if (emailEditor) {
+                                emailEditor.hidden = !state.emailEditorOpen;
                             }
-                        }, 240));
+                            emailEditorToggle.textContent = state.emailEditorOpen
+                                ? "Hide email template editor"
+                                : "Open email template editor";
+                            if (state.emailEditorOpen) {
+                                renderEmailLivePreview();
+                            }
+                        });
                     }
 
-                    if (groupMemberSearchInput) {
-                        groupMemberSearchInput.addEventListener("input", debounce(async () => {
+                    if (emailTemplateKind) {
+                        emailTemplateKind.addEventListener("change", () => {
+                            const preset = EMAIL_TEMPLATES[String(emailTemplateKind.value || "simple")] || EMAIL_TEMPLATES.simple;
+                            if (emailTemplateHtml) {
+                                emailTemplateHtml.value = preset;
+                            }
+                            renderEmailLivePreview();
+                            resetGroupPreviewState();
+                        });
+                    }
+
+                    if (emailTemplateHtml) {
+                        emailTemplateHtml.addEventListener("input", debounce(() => {
+                            renderEmailLivePreview();
+                            resetGroupPreviewState();
+                        }, 180));
+                    }
+
+                    if (groupPreviewButton) {
+                        groupPreviewButton.addEventListener("click", previewGroupSend);
+                    }
+                    if (groupPreviewBack) {
+                        groupPreviewBack.addEventListener("click", () => {
+                            resetGroupPreviewState();
+                            setInlineStatus(groupSendStatus, "Returned to edit mode.");
+                        });
+                    }
+                    if (groupSendButton) {
+                        groupSendButton.addEventListener("click", confirmGroupSend);
+                    }
+
+                    if (groupEditorOpen) {
+                        groupEditorOpen.addEventListener("click", openGroupEditor);
+                    }
+                    if (groupEditorClose) {
+                        groupEditorClose.addEventListener("click", closeGroupEditor);
+                    }
+                    if (groupReset) {
+                        groupReset.addEventListener("click", resetGroupEditor);
+                    }
+                    if (groupSave) {
+                        groupSave.addEventListener("click", saveGroup);
+                    }
+
+                    if (groupMemberSearch) {
+                        groupMemberSearch.addEventListener("input", debounce(async () => {
                             try {
-                                const rows = await searchCustomers(groupMemberSearchInput.value);
+                                const rows = await searchCustomers(groupMemberSearch.value);
                                 renderSearchResults(groupMemberResults, rows, (customer) => {
                                     state.groupMembers.set(customer.id, customer);
                                     renderGroupMembers();
-                                    groupMemberSearchInput.value = "";
+                                    groupMemberSearch.value = "";
                                     groupMemberResults.hidden = true;
                                 });
                             } catch (error) {
@@ -1281,48 +1874,75 @@
                         }, 240));
                     }
 
-                    if (individualSend) {
-                        individualSend.addEventListener("click", sendIndividualMessage);
+                    if (individualSearch) {
+                        individualSearch.addEventListener("input", debounce(async () => {
+                            try {
+                                const rows = await searchCustomers(individualSearch.value);
+                                renderSearchResults(individualResults, rows, (customer) => {
+                                    state.selectedCustomer = customer;
+                                    individualSearch.value = customer.name || "";
+                                    individualResults.hidden = true;
+                                    renderIndividualCustomer();
+                                    resetIndividualPreviewState();
+                                });
+                            } catch (error) {
+                                individualResults.hidden = true;
+                            }
+                        }, 240));
                     }
-                    if (groupSaveButton) {
-                        groupSaveButton.addEventListener("click", saveGroup);
-                    }
-                    if (groupResetButton) {
-                        groupResetButton.addEventListener("click", resetGroupEditor);
-                    }
-                    if (groupSendButton) {
-                        groupSendButton.addEventListener("click", sendGroupMessage);
-                    }
-                }
 
-                function initializeDefaultTarget() {
-                    const autoRows = Array.isArray(state.groups?.auto) ? state.groups.auto : [];
-                    if (autoRows.length > 0) {
-                        const group = autoRows[0];
-                        state.selectedTarget = {
-                            type: "auto",
-                            key: String(group.key || "all_subscribed"),
-                            name: String(group.name || "All Subscribed"),
-                        };
+                    if (individualChannel) {
+                        individualChannel.addEventListener("change", () => {
+                            individualSubjectWrap.hidden = individualChannel.value !== "email";
+                            resetIndividualPreviewState();
+                        });
+                    }
+
+                    if (individualBody) {
+                        individualBody.addEventListener("input", () => resetIndividualPreviewState());
+                    }
+                    if (individualSubject) {
+                        individualSubject.addEventListener("input", () => resetIndividualPreviewState());
+                    }
+
+                    if (individualPreview) {
+                        individualPreview.addEventListener("click", previewIndividualMessage);
+                    }
+                    if (individualPreviewBack) {
+                        individualPreviewBack.addEventListener("click", () => {
+                            resetIndividualPreviewState();
+                            setInlineStatus(individualStatus, "Returned to edit mode.");
+                        });
+                    }
+                    if (individualSend) {
+                        individualSend.addEventListener("click", confirmIndividualSend);
                     }
                 }
 
                 async function initialize() {
                     bindEvents();
-                    syncSubjectVisibility(individualChannel, individualSubjectWrap);
-                    syncSubjectVisibility(groupChannel, groupSubjectWrap);
-                    renderCustomerCard();
+
+                    if (emailTemplateHtml && emailTemplateHtml.value.trim() === "") {
+                        emailTemplateHtml.value = EMAIL_TEMPLATES.simple;
+                    }
+
+                    renderAudiencePills();
+                    renderAudienceDiagnostics();
+                    renderAudienceList();
+                    renderSelectedTargetSummary();
+                    renderGroupEstimate();
                     renderGroupMembers();
-                    initializeDefaultTarget();
-                    renderGroups();
-                    renderHistory();
-                    switchTab("individuals");
+                    renderIndividualCustomer();
+                    resetGroupPreviewState();
+                    resetIndividualPreviewState();
+                    updateGroupChannelUi();
+                    switchTab("groups");
 
                     try {
                         await refreshBootstrap();
+                        await refreshAudienceSummary();
                     } catch (error) {
-                        const payload = error?.payload || null;
-                        setAlert(payload?.message || error?.message || "Unable to load messaging workspace.", "error");
+                        setAlert(error?.payload?.message || error?.message || "Unable to load messages workspace.", "error");
                     }
                 }
 

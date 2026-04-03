@@ -905,6 +905,8 @@ Route::prefix('shopify')->middleware('web')->group(function () {
             ->name('customers.candle-cash.send');
         Route::get('/messaging/bootstrap', [ShopifyEmbeddedMessagingController::class, 'bootstrap'])
             ->name('messaging.bootstrap');
+        Route::get('/messaging/audience-summary', [ShopifyEmbeddedMessagingController::class, 'audienceSummary'])
+            ->name('messaging.audience.summary');
         Route::get('/messaging/customers/search', [ShopifyEmbeddedMessagingController::class, 'searchCustomers'])
             ->name('messaging.customers.search');
         Route::get('/messaging/groups', [ShopifyEmbeddedMessagingController::class, 'groups'])
@@ -920,6 +922,9 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/send/individual', [ShopifyEmbeddedMessagingController::class, 'sendIndividual'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.send.individual');
+        Route::post('/messaging/preview/group', [ShopifyEmbeddedMessagingController::class, 'previewGroup'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.preview.group');
         Route::post('/messaging/send/group', [ShopifyEmbeddedMessagingController::class, 'sendGroup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.send.group');

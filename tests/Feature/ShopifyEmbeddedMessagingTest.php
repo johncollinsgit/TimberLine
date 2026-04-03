@@ -3,6 +3,7 @@
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingProfile;
@@ -125,9 +126,10 @@ test('messaging nav and workspace load when entitlement is enabled', function ()
 
     $this->get(route('shopify.app.messaging', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Individuals')
-        ->assertSeeText('Groups')
-        ->assertSeeText('Recent Messaging');
+        ->assertSeeText('Messages Workspace')
+        ->assertSeeText('Audience Groups')
+        ->assertSeeText('Send to group')
+        ->assertSee('id="messages-group-editor" hidden', false);
 
     $this->withHeaders(shopifyMessagingApiHeaders())
         ->getJson(route('shopify.app.api.messaging.bootstrap'))
@@ -137,10 +139,10 @@ test('messaging nav and workspace load when entitlement is enabled', function ()
             'ok',
             'data' => [
                 'groups' => ['saved', 'auto'],
-                'all_subscribed_summary' => ['sms', 'email', 'overlap', 'unique'],
-                'history',
             ],
-        ]);
+        ])
+        ->assertJsonMissingPath('data.history')
+        ->assertJsonMissingPath('data.all_subscribed_summary');
 });
 
 test('modern forestry default seed migration enables messaging entitlement', function () {
@@ -401,17 +403,70 @@ test('all subscribed summary follows consent plus channel eligibility rules', fu
         'accepts_sms_marketing' => false,
         'accepts_email_marketing' => false,
     ]);
+    $legacySms = shopifyMessagingProfile($tenant->id, [
+        'first_name' => 'Legacy',
+        'last_name' => 'Sms',
+        'email' => null,
+        'normalized_email' => null,
+        'phone' => '5551111006',
+        'normalized_phone' => '5551111006',
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacyEmail = shopifyMessagingProfile($tenant->id, [
+        'first_name' => 'Legacy',
+        'last_name' => 'Email',
+        'email' => 'legacy-email@example.com',
+        'normalized_email' => 'legacy-email@example.com',
+        'phone' => null,
+        'normalized_phone' => null,
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySms->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_marketing_import',
+        'source_id' => 'legacy-sms-import',
+        'occurred_at' => now()->subMonths(3),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyEmail->id,
+        'channel' => 'email',
+        'event_type' => 'imported',
+        'source_type' => 'yotpo_contacts_import',
+        'source_id' => 'legacy-email-import',
+        'occurred_at' => now()->subMonths(4),
+    ]);
 
     $this->withHeaders(shopifyMessagingApiHeaders())
         ->getJson(route('shopify.app.api.messaging.bootstrap'))
         ->assertOk()
         ->assertJsonPath('ok', true)
-        ->assertJsonPath('data.all_subscribed_summary.sms', 2)
-        ->assertJsonPath('data.all_subscribed_summary.email', 2)
+        ->assertJsonPath('data.groups.auto.0.key', 'all_subscribed');
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.audience.summary'))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.all_subscribed_summary.sms', 3)
+        ->assertJsonPath('data.all_subscribed_summary.email', 3)
         ->assertJsonPath('data.all_subscribed_summary.overlap', 1)
-        ->assertJsonPath('data.all_subscribed_summary.unique', 3)
-        ->assertJsonPath('data.groups.auto.0.key', 'all_subscribed')
-        ->assertJsonPath('data.groups.auto.0.counts.unique', 3);
+        ->assertJsonPath('data.all_subscribed_summary.unique', 5)
+        ->assertJsonStructure([
+            'ok',
+            'data' => [
+                'all_subscribed_summary' => ['sms', 'email', 'overlap', 'unique'],
+                'diagnostics' => [
+                    'sms' => ['displayed_audience_count', 'query_candidate_count', 'effective_consent_count', 'resolved_sendable_count'],
+                    'email' => ['displayed_audience_count', 'query_candidate_count', 'effective_consent_count', 'resolved_sendable_count'],
+                ],
+            ],
+        ]);
 });
 
 test('individual sms send uses twilio path and records delivery metadata', function () {
@@ -562,6 +617,23 @@ test('auto group send dispatches to all subscribed sms recipients only', functio
         'normalized_phone' => '5554440003',
         'accepts_sms_marketing' => false,
     ]);
+    $legacyImported = shopifyMessagingProfile($tenant->id, [
+        'first_name' => 'Legacy',
+        'last_name' => 'Imported',
+        'phone' => '5554440004',
+        'normalized_phone' => '5554440004',
+        'accepts_sms_marketing' => false,
+    ]);
+
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyImported->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_marketing_import',
+        'source_id' => 'legacy-auto-group-sms',
+        'occurred_at' => now()->subMonths(2),
+    ]);
 
     $response = $this->withHeaders(shopifyMessagingApiHeaders())
         ->postJson(route('shopify.app.api.messaging.send.group'), [
@@ -574,8 +646,8 @@ test('auto group send dispatches to all subscribed sms recipients only', functio
     $response->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('message', 'Message sent.')
-        ->assertJsonPath('data.summary.processed', 2)
-        ->assertJsonPath('data.summary.sent', 2)
+        ->assertJsonPath('data.summary.processed', 3)
+        ->assertJsonPath('data.summary.sent', 3)
         ->assertJsonPath('data.target.type', 'auto')
         ->assertJsonPath('data.target.key', 'all_subscribed');
 
@@ -583,9 +655,45 @@ test('auto group send dispatches to all subscribed sms recipients only', functio
         ->where('channel', 'sms')
         ->get();
 
-    expect($deliveries)->toHaveCount(2)
+    expect($deliveries)->toHaveCount(3)
         ->and($deliveries->every(fn (MarketingMessageDelivery $delivery): bool => (string) data_get($delivery->provider_payload, 'source_label') === 'shopify_embedded_messaging_auto_group'))
         ->toBeTrue();
+});
+
+test('group preview returns resolved recipient estimate before send and does not dispatch deliveries', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Preview Tenant',
+        'slug' => 'preview-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    shopifyMessagingProfile($tenant->id, [
+        'phone' => '5556000001',
+        'normalized_phone' => '5556000001',
+        'accepts_sms_marketing' => true,
+    ]);
+    shopifyMessagingProfile($tenant->id, [
+        'phone' => '5556000002',
+        'normalized_phone' => '5556000002',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.preview.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'sms',
+            'body' => 'To God be the Glory',
+        ])
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.target.key', 'all_subscribed')
+        ->assertJsonPath('data.channel', 'sms')
+        ->assertJsonPath('data.estimated_recipients', 2);
+
+    expect(MarketingMessageDelivery::query()->count())->toBe(0)
+        ->and(MarketingEmailDelivery::query()->count())->toBe(0);
 });
 
 test('groups list excludes system and cross-tenant groups', function () {

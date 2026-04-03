@@ -1,13 +1,15 @@
 # Shopify Embedded Messaging Workspace
 
 ## Overview
-- Adds a tenant-gated `Messaging` workspace inside the existing Shopify embedded Backstage shell.
+- Adds a tenant-gated `Messages` workspace inside the existing Shopify embedded Backstage shell.
 - Supports:
   - 1:1 messaging to customers
   - saved group creation/editing and group sends
-  - automatic `All Subscribed` audience targeting
+  - optional `All Subscribed` audience targeting
   - SMS via existing Twilio path
   - Email via existing tenant email/send pipeline
+  - preview/confirmation before group send dispatch
+  - channel-aware audience diagnostics (displayed vs query candidates vs resolved sendable)
 
 ## Commercial Modeling
 - Canonical module/add-on configuration:
@@ -34,6 +36,7 @@
 - Page registration:
   - `app/Services/Shopify/ShopifyEmbeddedPageRegistry.php`
   - page key: `messaging`
+  - label: `Messages`
   - route: `shopify.app.messaging`
   - `requires_enabled_access = true`
 - Shell filtering:
@@ -46,11 +49,25 @@
 - Routes:
   - page: `GET /shopify/app/messaging`
   - bootstrap: `GET /shopify/app/api/messaging/bootstrap`
+    - lightweight startup payload (groups only; heavy audience/history loading is deferred)
+  - audience summary: `GET /shopify/app/api/messaging/audience-summary`
   - customer search: `GET /shopify/app/api/messaging/customers/search`
+  - group preview: `POST /shopify/app/api/messaging/preview/group`
   - groups list/detail/create/update
   - send individual/group
   - history
 - All API routes use strict Shopify bearer-token verification via `ShopifyEmbeddedAppContext::resolveAuthenticatedApiContext`.
+
+## UX Structure
+- Default workflow is group messaging with a compact, left-side audience selector ordered high-to-low by audience size.
+- `All Subscribed` is selectable/deselectable and never applied automatically.
+- Group editor is hidden by default and only shown when explicitly opened.
+- Send controls live in a full-width bottom card.
+- Clicking send first opens preview/confirmation; only confirmation dispatches.
+- Email-only tools:
+  - conditional email template editor
+  - live preview pane
+  - hidden entirely for SMS.
 
 ## Customer Search Reuse
 - Messaging search reuses embedded Customers query behavior instead of introducing a separate picker implementation.
@@ -77,14 +94,24 @@
 
 ## Automatic Audience Rule (`All Subscribed`)
 - Exposed as an automatic audience in the Messaging workspace.
-- Canonical rule: include customers with both:
-  - consent for channel, and
-  - reachable channel identity
+- Optional audience (not auto-selected by default).
+- Effective consent rule: include profiles with both:
+  - channel sendability (reachable identity), and
+  - either canonical consent flag OR legacy-import subscribed signal without a newer opt-out/revoked event.
+- Legacy import consent sources honored:
+  - `yotpo_contacts_import`
+  - `square_marketing_import`
+  - `square_customer_sync`
 - Channel-specific eligibility:
-  - SMS: `accepts_sms_marketing` + valid phone normalization/E.164
-  - Email: `accepts_email_marketing` + normalized valid email
+  - SMS: effective consent + valid phone normalization/E.164
+  - Email: effective consent + normalized valid email
 - Summary API reports:
   - `sms`, `email`, `overlap`, `unique`
+  - plus diagnostics for each channel:
+    - `displayed_audience_count`
+    - `query_candidate_count`
+    - `effective_consent_count`
+    - `resolved_sendable_count`
 
 ## Send Pipelines And History
 - Direct messaging orchestration:
@@ -110,7 +137,9 @@
   - tab visibility gating
   - Modern Forestry default entitlement seed
   - tenant-scoped search/groups/send behavior
-  - all-subscribed counts
+  - all-subscribed counts including legacy-import effective consent handling
+  - group preview endpoint estimate behavior
+  - lightweight bootstrap contract (deferred heavy loads)
   - SMS and email send-path logging.
 
 ## Operational Requirements

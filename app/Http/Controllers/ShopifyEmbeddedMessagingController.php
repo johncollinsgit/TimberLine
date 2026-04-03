@@ -46,8 +46,6 @@ class ShopifyEmbeddedMessagingController extends Controller
         $bootstrap = ($authorized && $tenantId !== null && $hasMessagingAccess)
             ? $probe->time('page_payload', fn (): array => [
                 'groups' => $workspaceService->groups($tenantId),
-                'all_subscribed_summary' => $workspaceService->allSubscribedSummary($tenantId),
-                'history' => $workspaceService->history($tenantId, 24),
             ])
             : null;
 
@@ -88,11 +86,13 @@ class ShopifyEmbeddedMessagingController extends Controller
                     'data' => $bootstrap,
                     'endpoints' => [
                         'bootstrap' => route('shopify.app.api.messaging.bootstrap', [], false),
+                        'audience_summary' => route('shopify.app.api.messaging.audience.summary', [], false),
                         'search_customers' => route('shopify.app.api.messaging.customers.search', [], false),
                         'groups' => route('shopify.app.api.messaging.groups', [], false),
                         'group_detail_base' => route('shopify.app.api.messaging.groups.detail', ['group' => '__GROUP__'], false),
                         'create_group' => route('shopify.app.api.messaging.groups.create', [], false),
                         'update_group_base' => route('shopify.app.api.messaging.groups.update', ['group' => '__GROUP__'], false),
+                        'preview_group' => route('shopify.app.api.messaging.preview.group', [], false),
                         'send_individual' => route('shopify.app.api.messaging.send.individual', [], false),
                         'send_group' => route('shopify.app.api.messaging.send.group', [], false),
                         'history' => route('shopify.app.api.messaging.history', [], false),
@@ -127,8 +127,30 @@ class ShopifyEmbeddedMessagingController extends Controller
             'ok' => true,
             'data' => [
                 'groups' => $workspaceService->groups($tenantId),
-                'all_subscribed_summary' => $workspaceService->allSubscribedSummary($tenantId),
-                'history' => $workspaceService->history($tenantId, 24),
+            ],
+        ]);
+    }
+
+    public function audienceSummary(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $tenantId = (int) $access['tenant_id'];
+        $summary = $workspaceService->audienceSummary($tenantId);
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'all_subscribed_summary' => (array) ($summary['summary'] ?? []),
+                'diagnostics' => (array) ($summary['diagnostics'] ?? []),
             ],
         ]);
     }
@@ -402,6 +424,51 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'message' => 'Message sent.',
+            'data' => $payload,
+        ]);
+    }
+
+    public function previewGroup(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $data = validator($request->all(), [
+                'target_type' => ['required', 'in:saved,auto'],
+                'group_id' => ['nullable', 'integer', 'min:1', 'required_if:target_type,saved'],
+                'group_key' => ['nullable', 'string', 'max:120', 'required_if:target_type,auto'],
+                'channel' => ['required', 'in:sms,email'],
+                'subject' => ['nullable', 'string', 'max:200', 'required_if:channel,email'],
+                'body' => ['required', 'string', 'max:5000'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Preview could not be generated.', $exception);
+        }
+
+        try {
+            $payload = $workspaceService->previewGroupSend(
+                tenantId: (int) $access['tenant_id'],
+                targetType: (string) $data['target_type'],
+                groupId: isset($data['group_id']) ? (int) $data['group_id'] : null,
+                groupKey: isset($data['group_key']) ? (string) $data['group_key'] : null,
+                channel: (string) $data['channel'],
+                body: (string) $data['body'],
+                subject: isset($data['subject']) ? (string) $data['subject'] : null
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Preview could not be generated.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
             'data' => $payload,
         ]);
     }
