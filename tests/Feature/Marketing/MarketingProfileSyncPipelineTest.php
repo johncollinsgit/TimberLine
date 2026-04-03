@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingProfileSyncService;
 
 test('shopify-only candidate creates profile from operational order data', function () {
@@ -64,6 +65,43 @@ test('growave-only candidate creates canonical marketing profile', function () {
     expect(MarketingProfile::query()->count())->toBe(1)
         ->and(MarketingProfileLink::query()->where('source_type', 'growave_customer')->count())->toBe(1)
         ->and(CustomerExternalProfile::query()->whereNotNull('marketing_profile_id')->count())->toBe(1);
+});
+
+test('shopify external candidate preserves tenant ownership on canonical profile', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Acme Retail',
+        'slug' => 'acme-retail',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_customer',
+        'store_key' => 'retail',
+        'external_customer_id' => 'SHOP-4101',
+        'external_customer_gid' => 'gid://shopify/Customer/4101',
+        'first_name' => 'Tenant',
+        'last_name' => 'Scoped',
+        'email' => 'tenant.scoped@example.com',
+        'normalized_email' => 'tenant.scoped@example.com',
+        'phone' => '(555) 888-1122',
+        'normalized_phone' => '5558881122',
+        'source_channels' => ['shopify'],
+        'synced_at' => now(),
+    ]);
+
+    $this->artisan('marketing:sync-profiles --source=shopify')
+        ->assertExitCode(0);
+
+    $profile = MarketingProfile::query()->sole();
+
+    expect((int) $profile->tenant_id)->toBe((int) $tenant->id)
+        ->and(MarketingProfileLink::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('tenant_id', $tenant->id)
+            ->where('source_type', 'shopify_customer')
+            ->where('source_id', 'retail:SHOP-4101')
+            ->exists())->toBeTrue();
 });
 
 test('square-only customer candidate creates canonical marketing profile', function () {

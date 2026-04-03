@@ -829,6 +829,9 @@ class MarketingSyncProfiles extends Command
             'full_name' => $this->nullableString($external->full_name),
             'raw_email' => $this->nullableString($external->email),
             'raw_phone' => $this->nullableString($external->phone),
+            'tenant_id' => is_numeric($external->tenant_id) && (int) $external->tenant_id > 0
+                ? (int) $external->tenant_id
+                : null,
             'source_channels' => array_values(array_unique(array_filter($sourceChannels))),
             'source_links' => $sourceLinks,
             'primary_source' => [
