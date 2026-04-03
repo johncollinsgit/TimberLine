@@ -1,12 +1,25 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { actionSearchProvider } from "./ActionSearchProvider.js";
 import { discoverCurrentViewActions } from "./currentViewActions.js";
-import { createNavigateAction } from "./navigationHelpers.js";
 import { buildCustomerIdAction } from "./defaultShopifySearchActions.js";
-import { groupDocuments, rankDocuments } from "./searchRanking.js";
+import { createNavigateAction } from "./navigationHelpers.js";
+import { normalizeQueryIntent } from "./queryNormalization.js";
+import {
+  buildSuggestedDocuments,
+  DEFAULT_MAX_RECENT,
+  isRecentEligibleDocument,
+  materializeRecentDocuments,
+  mergeRecentIds,
+} from "./recentActions.js";
+import { createSearchIndex, groupDocuments, rankWithIndex } from "./searchRanking.js";
 
 const RECENT_STORAGE_KEY = "fb:shopify:command-menu:recent";
-const MAX_RECENT = 8;
+const PINNED_SUGGESTION_IDS = [
+  "shopify:action:create-product",
+  "shopify:action:go-orders",
+  "shopify:action:create-discount",
+  "shopify:action:settings-shipping",
+];
 
 export const SECTION_TITLES = {
   actions: "Actions",
@@ -37,19 +50,28 @@ function readRecentIds() {
   }
 }
 
-export function rememberRecentAction(documentId) {
-  const id = String(documentId || "").trim();
-  if (id === "") {
-    return;
-  }
-
+function writeRecentIds(ids) {
   const storage = safeLocalStorage();
   if (!storage) {
     return;
   }
 
-  const next = [id, ...readRecentIds().filter((entry) => entry !== id)].slice(0, MAX_RECENT);
-  storage.setItem(RECENT_STORAGE_KEY, JSON.stringify(next));
+  storage.setItem(RECENT_STORAGE_KEY, JSON.stringify(ids.slice(0, DEFAULT_MAX_RECENT)));
+}
+
+export function rememberRecentAction(documentOrId) {
+  const isDocument = documentOrId && typeof documentOrId === "object";
+  if (isDocument && !isRecentEligibleDocument(documentOrId)) {
+    return;
+  }
+
+  const id = String(isDocument ? documentOrId.id : documentOrId || "").trim();
+  if (id === "") {
+    return;
+  }
+
+  const next = mergeRecentIds(readRecentIds(), id, DEFAULT_MAX_RECENT);
+  writeRecentIds(next);
 }
 
 function useProviderDocuments() {
@@ -61,11 +83,7 @@ function useProviderDocuments() {
 }
 
 function normalizeDocument(document) {
-  if (!document || typeof document !== "object") {
-    return null;
-  }
-
-  if (typeof document.execute !== "function") {
+  if (!document || typeof document !== "object" || typeof document.execute !== "function") {
     return null;
   }
 
@@ -82,63 +100,66 @@ function normalizeDocument(document) {
     section: String(document.section || "actions").trim() || "actions",
     keywords: Array.isArray(document.keywords) ? document.keywords : [],
     aliases: Array.isArray(document.aliases) ? document.aliases : [],
+    synonyms: Array.isArray(document.synonyms) ? document.synonyms : [],
     breadcrumbs: Array.isArray(document.breadcrumbs) ? document.breadcrumbs : [],
+    entityLabels: Array.isArray(document.entityLabels) ? document.entityLabels : [],
+    intentPhrases: Array.isArray(document.intentPhrases) ? document.intentPhrases : [],
     entityType: String(document.entityType || "action").trim() || "action",
+    source: String(document.source || "explicit").trim() || "explicit",
     execute: document.execute,
     executeKey: String(document.executeKey || document.id || "").trim(),
     priority: Number.isFinite(document.priority) ? Number(document.priority) : 120,
   };
 }
 
-function toRecentDocuments(allDocuments) {
-  const lookup = new Map(allDocuments.map((document) => [document.id, document]));
-
-  return readRecentIds()
-    .map((id, index) => {
-      const document = lookup.get(id);
-      if (!document) {
-        return null;
-      }
-
-      return {
-        ...document,
-        section: "recent",
-        priority: 360 - index,
-      };
-    })
-    .filter(Boolean);
-}
-
 export function useActionSearch({ query, refreshToken = 0, baseQuery = "" } = {}) {
   const providerDocuments = useProviderDocuments();
 
-  const currentViewDocuments = useMemo(() => {
-    return discoverCurrentViewActions({
-      createNavigateAction: (url) => createNavigateAction(url, { appendContext: true, baseQuery }),
-    });
-  }, [refreshToken, baseQuery]);
+  const currentViewDocuments = useMemo(() => discoverCurrentViewActions({
+    createNavigateAction: (url) => createNavigateAction(url, { appendContext: true, baseQuery }),
+  }), [refreshToken, baseQuery]);
 
   const dynamicDocument = useMemo(() => buildCustomerIdAction(query, { baseQuery }), [query, baseQuery]);
 
-  const allDocuments = useMemo(() => {
-    return [
+  const allDocuments = useMemo(() => (
+    [
       ...providerDocuments,
       ...currentViewDocuments,
       ...(dynamicDocument ? [dynamicDocument] : []),
     ]
       .map(normalizeDocument)
-      .filter(Boolean);
-  }, [providerDocuments, currentViewDocuments, dynamicDocument]);
+      .filter(Boolean)
+  ), [providerDocuments, currentViewDocuments, dynamicDocument]);
+
+  const queryContext = useMemo(() => normalizeQueryIntent(query), [query]);
 
   const ranked = useMemo(() => {
-    const documents = [...allDocuments, ...toRecentDocuments(allDocuments)];
-    return rankDocuments(documents, query);
-  }, [allDocuments, query]);
+    const { recentDocuments, retainedIds } = materializeRecentDocuments(readRecentIds(), allDocuments, {
+      maxRecent: DEFAULT_MAX_RECENT,
+    });
+    const existingIds = readRecentIds();
+    if (retainedIds.length !== existingIds.length) {
+      writeRecentIds(retainedIds);
+    }
+
+    const recentLookup = new Set(recentDocuments.map((document) => document.id));
+    const suggestedDocuments = queryContext.normalizedQuery === ""
+      ? buildSuggestedDocuments(allDocuments, recentLookup, PINNED_SUGGESTION_IDS)
+      : [];
+    const index = createSearchIndex([
+      ...allDocuments,
+      ...recentDocuments,
+      ...suggestedDocuments,
+    ]);
+
+    return rankWithIndex(index, query);
+  }, [allDocuments, queryContext.normalizedQuery, query]);
 
   const grouped = useMemo(() => groupDocuments(ranked), [ranked]);
 
   return {
     results: ranked,
     groups: grouped,
+    queryContext,
   };
 }

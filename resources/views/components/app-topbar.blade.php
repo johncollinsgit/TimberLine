@@ -86,7 +86,7 @@
             </nav>
             <div class="app-topbar-right">
                 @if($commandSearchEnabled)
-                    <div class="app-topbar-search" role="search">
+                    <form class="app-topbar-search" role="search" data-command-form>
                         <label class="sr-only" for="app-topbar-command-search">Search Backstage</label>
                         <input
                             id="app-topbar-command-search"
@@ -98,13 +98,13 @@
                             data-command-field
                         />
                         <button
-                            type="button"
+                            type="submit"
                             class="app-topbar-search-button"
                             data-command-trigger
                         >
                             Search
                         </button>
-                    </div>
+                    </form>
                 @else
                     <button
                         type="button"
@@ -113,9 +113,6 @@
                     >
                         Search
                     </button>
-                @endif
-                @if(filled($storeLabel))
-                    <span class="app-topbar-store">{{ $storeLabel }}</span>
                 @endif
             </div>
         </div>
@@ -148,6 +145,12 @@
                                 rel="{{ str_starts_with($action['href'] ?? '', 'http') ? 'noreferrer noopener' : 'noopener' }}"
                                 data-embedded-prefetch-link="1"
                                 data-prefetch-priority="{{ $action['prefetch_priority'] ?? 'normal' }}"
+                                data-search-action="1"
+                                data-search-id="current-view:action:{{ \Illuminate\Support\Str::slug((string) ($action['label'] ?? 'action')) }}"
+                                data-search-title="{{ $action['label'] ?? '' }}"
+                                data-search-subtitle="Run this action in the current view"
+                                data-search-keywords="{{ $action['label'] ?? '' }},action,current view"
+                                data-search-intent="open,view,manage"
                             >
                                 {{ $action['label'] }}
                             </a>
@@ -164,6 +167,12 @@
                             class="app-topbar-subnav-link{{ ! empty($item['active']) ? ' is-active' : '' }}"
                             data-embedded-prefetch-link="1"
                             data-prefetch-priority="{{ $item['prefetch_priority'] ?? 'normal' }}"
+                            data-search-action="1"
+                            data-search-id="current-view:subnav:{{ \Illuminate\Support\Str::slug((string) ($item['key'] ?? $item['label'] ?? 'section')) }}"
+                            data-search-title="{{ $item['label'] ?? '' }}"
+                            data-search-subtitle="Open this section in the current view"
+                            data-search-keywords="{{ $item['label'] ?? '' }},section,current view"
+                            data-search-intent="open,go to,view"
                         >
                             <span>{{ $item['label'] }}</span>
                             @if(is_array($item['module_state'] ?? null))

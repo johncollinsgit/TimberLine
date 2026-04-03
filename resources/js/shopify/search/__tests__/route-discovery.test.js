@@ -31,5 +31,7 @@ test("route discovery registration turns route docs into executable page actions
   assert.equal(docs.length, 1);
   assert.equal(docs[0].id, "page:settings");
   assert.equal(docs[0].section, "pages");
+  assert.equal(docs[0].source, "route-discovery");
+  assert.ok(Array.isArray(docs[0].intentPhrases));
   assert.equal(typeof docs[0].execute, "function");
 });

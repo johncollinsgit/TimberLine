@@ -22,8 +22,15 @@ function readJsonScript(root, selector, fallback = {}) {
 }
 
 function mountCommandMenu(root) {
-  if (!(root instanceof HTMLElement) || mountedRoots.has(root)) {
+  if (!(root instanceof HTMLElement)) {
     return;
+  }
+
+  const mounted = mountedRoots.get(root);
+  if (mounted) {
+    mounted.unregister?.();
+    mounted.reactRoot?.unmount?.();
+    mountedRoots.delete(root);
   }
 
   const placeholder = String(root.dataset.placeholder || "Search actions, pages, and Shopify tools");

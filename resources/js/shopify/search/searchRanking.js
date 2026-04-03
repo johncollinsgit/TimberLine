@@ -1,50 +1,36 @@
 import Fuse from "fuse.js";
+import {
+  normalizeList,
+  normalizeQueryIntent,
+  normalizeText,
+} from "./queryNormalization.js";
 
 export const SECTION_ORDER = ["actions", "current-view", "pages", "recent"];
 
-function normalize(value) {
-  return String(value || "").toLowerCase().trim();
-}
+export const SOURCE_PRECEDENCE = [
+  "explicit",
+  "current-view-explicit",
+  "route-discovery",
+  "current-view-harvested",
+  "recent",
+];
 
-function normalizeList(values) {
-  if (!Array.isArray(values)) {
-    return [];
-  }
+const SECTION_LIMITS = {
+  actions: 8,
+  "current-view": 6,
+  pages: 8,
+  recent: 6,
+};
 
-  return values
-    .map((value) => normalize(value))
-    .filter((value, index, list) => value !== "" && list.indexOf(value) === index);
-}
+const SOURCE_WEIGHT = SOURCE_PRECEDENCE.reduce((carry, source, index) => {
+  carry[source] = (SOURCE_PRECEDENCE.length - index) * 16;
+  return carry;
+}, {});
 
-function contains(list, query) {
-  return list.some((value) => value === query || value.includes(query));
-}
-
-function exactPriority(document, query) {
-  const title = normalize(document.title);
-  const subtitle = normalize(document.subtitle);
-  const keywords = normalizeList(document.keywords);
-  const aliases = normalizeList(document.aliases);
-  const breadcrumbs = normalizeList(document.breadcrumbs);
-
-  if (title === query) {
-    return 1000;
-  }
-
-  if (keywords.includes(query) || aliases.includes(query)) {
-    return 960;
-  }
-
-  if (title.startsWith(query)) {
-    return 910;
-  }
-
-  if (subtitle.includes(query) || contains(breadcrumbs, query)) {
-    return 820;
-  }
-
-  return 0;
-}
+const DEDUPE_SOURCE_WEIGHT = SOURCE_PRECEDENCE.reduce((carry, source, index) => {
+  carry[source] = (SOURCE_PRECEDENCE.length - index) * 100000;
+  return carry;
+}, {});
 
 function sectionWeight(section) {
   const index = SECTION_ORDER.indexOf(String(section || ""));
@@ -55,81 +41,297 @@ function sectionWeight(section) {
   return (SECTION_ORDER.length - index) * 8;
 }
 
-function dedupeKey(document) {
-  return `${normalize(document.id)}|${normalize(document.title)}|${normalize(document.subtitle)}|${normalize(document.executeKey)}`;
+function sourceWeight(source) {
+  const key = String(source || "").trim().toLowerCase();
+  return SOURCE_WEIGHT[key] || 0;
+}
+
+function executeKind(executeKey) {
+  const key = String(executeKey || "").trim().toLowerCase();
+  if (key === "") {
+    return "unknown";
+  }
+
+  if (!key.includes(":")) {
+    return key;
+  }
+
+  return key.split(":")[0];
+}
+
+function normalizedDestination(executeKey) {
+  const value = String(executeKey || "").trim().toLowerCase();
+  if (value === "") {
+    return "";
+  }
+
+  const target = value.includes(":") ? value.split(":").slice(1).join(":") : value;
+  if (target === "") {
+    return "";
+  }
+
+  return target.replace(/\?.*$/, "").replace(/#.*$/, "");
+}
+
+function dedupeKeys(document) {
+  const title = normalizeText(document.title);
+  const id = normalizeText(document.id);
+  const destination = normalizedDestination(document.executeKey);
+  const kind = executeKind(document.executeKey);
+  const keys = [];
+
+  if (id !== "") {
+    keys.push(`id:${id}`);
+  }
+
+  if (title !== "" && destination !== "") {
+    keys.push(`title-destination:${title}|${destination}`);
+  }
+
+  if (title !== "" && kind !== "") {
+    keys.push(`title-kind:${title}|${kind}`);
+  }
+
+  return keys;
+}
+
+function qualityScore(document) {
+  const priority = Number.isFinite(document.priority) ? Number(document.priority) : 100;
+  const source = String(document.source || "").trim().toLowerCase();
+  return (DEDUPE_SOURCE_WEIGHT[source] || 0) + (sectionWeight(document.section) * 1000) + priority;
+}
+
+function compareQuality(a, b) {
+  const rankDelta = qualityScore(b) - qualityScore(a);
+  if (rankDelta !== 0) {
+    return rankDelta;
+  }
+
+  const titleDelta = String(a.title || "").localeCompare(String(b.title || ""));
+  if (titleDelta !== 0) {
+    return titleDelta;
+  }
+
+  return String(a.id || "").localeCompare(String(b.id || ""));
+}
+
+function containsPhrase(list, value) {
+  const normalized = normalizeText(value);
+  if (normalized === "") {
+    return false;
+  }
+
+  return normalizeList(list).some((candidate) => candidate === normalized || candidate.includes(normalized));
 }
 
 export function dedupeDocuments(documents) {
+  const sorted = (Array.isArray(documents) ? documents : [])
+    .filter((document) => document && typeof document === "object")
+    .sort(compareQuality);
   const seen = new Set();
+  const kept = [];
 
-  return (Array.isArray(documents) ? documents : []).filter((document) => {
-    const key = dedupeKey(document);
-    if (seen.has(key)) {
-      return false;
+  sorted.forEach((document) => {
+    const keys = dedupeKeys(document);
+    if (keys.length === 0) {
+      return;
     }
 
-    seen.add(key);
-    return true;
+    if (keys.some((key) => seen.has(key))) {
+      return;
+    }
+
+    keys.forEach((key) => seen.add(key));
+    kept.push(document);
   });
+
+  return kept;
 }
 
-function buildFuse(documents) {
-  return new Fuse(documents, {
+function buildFuseOptions() {
+  return {
     includeScore: true,
-    threshold: 0.4,
+    threshold: 0.42,
     ignoreLocation: true,
     minMatchCharLength: 2,
     keys: [
-      { name: "title", weight: 0.45 },
-      { name: "keywords", weight: 0.25 },
-      { name: "aliases", weight: 0.15 },
-      { name: "breadcrumbs", weight: 0.1 },
-      { name: "subtitle", weight: 0.05 },
+      { name: "title", weight: 0.34 },
+      { name: "aliases", weight: 0.2 },
+      { name: "keywords", weight: 0.15 },
+      { name: "synonyms", weight: 0.12 },
+      { name: "intentPhrases", weight: 0.08 },
+      { name: "entityLabels", weight: 0.06 },
+      { name: "breadcrumbs", weight: 0.03 },
+      { name: "subtitle", weight: 0.02 },
     ],
-  });
+  };
 }
 
-export function rankDocuments(documents, query) {
+export function createSearchIndex(documents, { fuseFactory = Fuse } = {}) {
   const deduped = dedupeDocuments(documents);
-  const normalizedQuery = normalize(query);
+  const fuse = new fuseFactory(deduped, buildFuseOptions());
 
-  if (normalizedQuery === "") {
-    return deduped
+  return {
+    documents: deduped,
+    fuse,
+  };
+}
+
+function fuzzyScores(index, queryContext) {
+  const scores = new Map();
+  const terms = queryContext.expandedTerms.slice(0, 6);
+
+  terms.forEach((term, termIndex) => {
+    index.fuse.search(term, { limit: 120 }).forEach((entry) => {
+      const fuseScore = typeof entry.score === "number" ? entry.score : 1;
+      const base = Math.max(0, 680 - Math.round(fuseScore * 360));
+      const exactTermBoost = termIndex === 0 ? 70 : 25;
+      const candidate = base + exactTermBoost;
+      const previous = scores.get(entry.item.id) || 0;
+      if (candidate > previous) {
+        scores.set(entry.item.id, candidate);
+      }
+    });
+  });
+
+  return scores;
+}
+
+function exactBoost(document, queryContext) {
+  const query = queryContext.normalizedQuery;
+  if (query === "") {
+    return 0;
+  }
+
+  const title = normalizeText(document.title);
+  const subtitle = normalizeText(document.subtitle);
+  const aliases = normalizeList([
+    ...(Array.isArray(document.aliases) ? document.aliases : []),
+    ...(Array.isArray(document.synonyms) ? document.synonyms : []),
+  ]);
+  const keywords = normalizeList(document.keywords);
+  const breadcrumbs = normalizeList(document.breadcrumbs);
+  const entityLabels = normalizeList(document.entityLabels);
+  const intentPhrases = normalizeList(document.intentPhrases);
+
+  let boost = 0;
+
+  if (title === query) {
+    boost += 560;
+  }
+
+  if (aliases.includes(query)) {
+    boost += 500;
+  }
+
+  if (keywords.includes(query)) {
+    boost += 470;
+  }
+
+  if (title.startsWith(query)) {
+    boost += 420;
+  }
+
+  if (queryContext.imperative && (title.startsWith(queryContext.imperative) || intentPhrases.includes(queryContext.imperative))) {
+    boost += 260;
+  }
+
+  queryContext.normalizedTokens.forEach((token) => {
+    if (token === "") {
+      return;
+    }
+
+    if (title.includes(token)) {
+      boost += 24;
+    }
+
+    if (aliases.some((alias) => alias.includes(token))) {
+      boost += 16;
+    }
+
+    if (keywords.some((keyword) => keyword.includes(token))) {
+      boost += 14;
+    }
+  });
+
+  const strongMatch = title.includes(query)
+    || aliases.some((value) => value.includes(query))
+    || keywords.some((value) => value.includes(query))
+    || entityLabels.some((value) => value.includes(query))
+    || subtitle.includes(query);
+
+  const breadcrumbOnly = !strongMatch && breadcrumbs.some((value) => value.includes(query));
+  if (breadcrumbOnly) {
+    boost -= 120;
+  }
+
+  if (query.includes("shipping")) {
+    const genericSettings = title === "settings" && !keywords.includes("shipping") && !aliases.includes("shipping");
+    if (genericSettings) {
+      boost += 80;
+      boost -= 160;
+    }
+  }
+
+  return boost;
+}
+
+function baseRank(document) {
+  const priority = Number.isFinite(document.priority) ? Number(document.priority) : 100;
+  return priority + sectionWeight(document.section) + sourceWeight(document.source);
+}
+
+export function rankWithIndex(index, query, options = {}) {
+  const queryContext = normalizeQueryIntent(query, {
+    extraSynonyms: options.extraSynonyms || {},
+  });
+
+  if (queryContext.normalizedQuery === "") {
+    return index.documents
       .map((document) => ({
         ...document,
-        __rank: (Number.isFinite(document.priority) ? Number(document.priority) : 100)
-          + sectionWeight(document.section),
+        __rank: baseRank(document),
       }))
       .sort((a, b) => b.__rank - a.__rank)
       .map(({ __rank, ...document }) => document);
   }
 
-  const fuse = buildFuse(deduped);
-  const fuzzyScores = new Map(
-    fuse.search(normalizedQuery).map((entry) => {
-      const score = typeof entry.score === "number" ? entry.score : 1;
-      return [entry.item.id, Math.max(0, 760 - Math.round(score * 320))];
-    })
-  );
+  const fuzzyById = fuzzyScores(index, queryContext);
 
-  return deduped
+  return index.documents
     .map((document) => {
-      const exact = exactPriority(document, normalizedQuery);
-      const fuzzy = fuzzyScores.get(document.id) || 0;
-      const rank = Math.max(exact, fuzzy);
+      const fuzzy = fuzzyById.get(document.id) || 0;
+      const boost = exactBoost(document, queryContext);
+      const rank = baseRank(document) + boost + fuzzy;
+      const title = normalizeText(document.title);
+      const weakSettingsIntent = title === "settings"
+        && queryContext.normalizedTokens.some((token) => token === "shipping" || token === "settings");
+      const hasMatch = fuzzy > 0 || boost > 0 || weakSettingsIntent;
 
-      if (rank <= 0) {
+      if (!hasMatch) {
         return null;
+      }
+
+      if (queryContext.normalizedQuery.length > 18 && fuzzy < 220 && boost < 180) {
+        return {
+          ...document,
+          __rank: rank - 120,
+        };
       }
 
       return {
         ...document,
-        __rank: rank + sectionWeight(document.section),
+        __rank: rank,
       };
     })
     .filter(Boolean)
     .sort((a, b) => b.__rank - a.__rank)
     .map(({ __rank, ...document }) => document);
+}
+
+export function rankDocuments(documents, query, options = {}) {
+  const index = createSearchIndex(documents, options);
+  return rankWithIndex(index, query, options);
 }
 
 export function groupDocuments(documents) {
@@ -144,6 +346,9 @@ export function groupDocuments(documents) {
   });
 
   return SECTION_ORDER
-    .map((section) => ({ section, items: grouped.get(section) || [] }))
+    .map((section) => ({
+      section,
+      items: (grouped.get(section) || []).slice(0, SECTION_LIMITS[section] || 6),
+    }))
     .filter((group) => group.items.length > 0);
 }

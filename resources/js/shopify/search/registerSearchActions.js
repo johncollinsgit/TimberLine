@@ -25,7 +25,11 @@ export function registerSearchActions(scope, actions, provider = actionSearchPro
         section: String(action.section || "actions"),
         keywords: Array.isArray(action.keywords) ? action.keywords : [],
         aliases: Array.isArray(action.aliases) ? action.aliases : [],
+        synonyms: Array.isArray(action.synonyms) ? action.synonyms : [],
         breadcrumbs: Array.isArray(action.breadcrumbs) ? action.breadcrumbs : [],
+        entityLabels: Array.isArray(action.entityLabels) ? action.entityLabels : [],
+        intentPhrases: Array.isArray(action.intentPhrases) ? action.intentPhrases : [],
+        source: String(action.source || "explicit").trim() || "explicit",
       };
     });
 

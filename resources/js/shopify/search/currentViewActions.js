@@ -2,6 +2,13 @@ function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function parseCsv(value) {
+  return normalizeText(value)
+    .split(",")
+    .map((entry) => normalizeText(entry))
+    .filter(Boolean);
+}
+
 function isVisible(element) {
   if (!(element instanceof HTMLElement)) {
     return false;
@@ -11,8 +18,97 @@ function isVisible(element) {
     return false;
   }
 
+  const role = String(element.getAttribute("role") || "").toLowerCase();
+  if (role === "presentation" || role === "none") {
+    return false;
+  }
+
   const style = window.getComputedStyle(element);
   return style.display !== "none" && style.visibility !== "hidden";
+}
+
+function sameOriginAppPath(href) {
+  const raw = normalizeText(href);
+  if (raw === "") {
+    return false;
+  }
+
+  try {
+    const url = new URL(raw, window.location.origin);
+    return url.origin === window.location.origin && url.pathname.startsWith("/shopify/app");
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isExplicitSearchAction(element) {
+  const raw = String(element.getAttribute("data-search-action") || "").toLowerCase().trim();
+  if (raw === "0" || raw === "false" || raw === "off" || raw === "no") {
+    return false;
+  }
+
+  return element.hasAttribute("data-search-action");
+}
+
+function isStrictSearchableFallback(element) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  const isTopbarActionLink = element.matches(".app-topbar-subnav-link, .app-topbar-actions .app-topbar-action");
+  if (!isTopbarActionLink) {
+    return false;
+  }
+
+  if (!(element instanceof HTMLAnchorElement)) {
+    return false;
+  }
+
+  return sameOriginAppPath(element.getAttribute("href") || element.href);
+}
+
+function readDataset(element, key, legacyKey) {
+  return normalizeText(element.dataset[key] || element.dataset[legacyKey] || "");
+}
+
+function buildIdentity(element, executeKey, source, index) {
+  const explicitId = readDataset(element, "searchId", "searchActionId");
+  if (explicitId !== "") {
+    return explicitId;
+  }
+
+  const fallback = executeKey !== ""
+    ? executeKey.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    : `${source}-${index}`;
+
+  return `current-view:${source}:${fallback}`.replace(/-+/g, "-");
+}
+
+function actionDescriptor(element) {
+  if (element instanceof HTMLAnchorElement && (element.getAttribute("href") || element.href)) {
+    return {
+      execute: "navigate",
+      executeKey: `navigate:${element.getAttribute("href") || element.href}`,
+    };
+  }
+
+  const eventName = readDataset(element, "searchEvent", "searchActionEvent");
+  if (eventName !== "") {
+    return {
+      execute: "event",
+      eventName,
+      executeKey: `event:${eventName}`,
+    };
+  }
+
+  if (element instanceof HTMLButtonElement && !element.disabled && isExplicitSearchAction(element)) {
+    return {
+      execute: "button",
+      executeKey: `button:${normalizeText(element.textContent)}`,
+    };
+  }
+
+  return null;
 }
 
 export function discoverCurrentViewActions({ createNavigateAction }) {
@@ -21,9 +117,9 @@ export function discoverCurrentViewActions({ createNavigateAction }) {
   }
 
   const selectors = [
+    "[data-search-action]",
     ".app-topbar-subnav-link",
     ".app-topbar-actions .app-topbar-action",
-    "[data-search-action]",
   ];
 
   const seen = new Set();
@@ -32,71 +128,73 @@ export function discoverCurrentViewActions({ createNavigateAction }) {
     .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
     .filter((element) => element instanceof HTMLElement)
     .filter((element) => isVisible(element))
-    .filter((element) => {
-      if (element instanceof HTMLButtonElement) {
-        return !element.disabled;
-      }
-
-      return true;
-    })
     .map((element, index) => {
-      const title = normalizeText(
-        element.dataset.searchActionTitle || element.getAttribute("aria-label") || element.textContent
-      );
-      if (title.length < 3) {
+      const explicit = isExplicitSearchAction(element);
+      const strictFallback = !explicit && isStrictSearchableFallback(element);
+      if (!explicit && !strictFallback) {
         return null;
       }
 
-      const keywords = normalizeText(element.dataset.searchActionKeywords)
-        .split(",")
-        .map((value) => normalizeText(value))
-        .filter(Boolean);
+      const descriptor = actionDescriptor(element);
+      if (!descriptor) {
+        return null;
+      }
+
+      const title = readDataset(element, "searchTitle", "searchActionTitle")
+        || normalizeText(element.getAttribute("aria-label") || element.textContent);
+      if (title.length < 3 || title.length > 96) {
+        return null;
+      }
 
       let execute = null;
-      let executeKey = "";
-      let subtitle = normalizeText(element.dataset.searchActionSubtitle);
-
-      if (element instanceof HTMLAnchorElement && element.href) {
-        execute = createNavigateAction(element.getAttribute("href") || element.href);
-        executeKey = `href:${element.getAttribute("href") || element.href}`;
-      } else if (element.dataset.searchActionEvent) {
-        const eventName = element.dataset.searchActionEvent;
+      if (descriptor.execute === "navigate") {
+        execute = createNavigateAction(descriptor.executeKey.replace(/^navigate:/, ""));
+      } else if (descriptor.execute === "event") {
         execute = () => {
-          document.dispatchEvent(new CustomEvent(eventName, { detail: { source: "command-menu" } }));
+          document.dispatchEvent(new CustomEvent(descriptor.eventName, { detail: { source: "command-menu" } }));
         };
-        executeKey = `event:${eventName}`;
-      } else if (element instanceof HTMLButtonElement) {
+      } else if (descriptor.execute === "button") {
         execute = () => element.click();
-        executeKey = `button:${title}:${index}`;
       }
 
-      if (!execute) {
+      if (typeof execute !== "function") {
         return null;
       }
 
-      const key = `${title.toLowerCase()}|${executeKey}`;
-      if (seen.has(key)) {
+      const source = explicit ? "current-view-explicit" : "current-view-harvested";
+      const id = buildIdentity(element, descriptor.executeKey, source, index);
+      const dedupeKey = `${id}|${descriptor.executeKey}`;
+      if (seen.has(dedupeKey)) {
         return null;
       }
-      seen.add(key);
+      seen.add(dedupeKey);
 
-      if (subtitle === "") {
-        subtitle = "Action available in the current view";
-      }
+      const subtitle = readDataset(element, "searchSubtitle", "searchActionSubtitle")
+        || (explicit ? "Action available in this view" : "Current view navigation");
+      const keywords = parseCsv(readDataset(element, "searchKeywords", "searchActionKeywords"));
+      const aliases = parseCsv(readDataset(element, "searchAliases", "searchActionAliases"));
+      const synonyms = parseCsv(readDataset(element, "searchSynonyms", "searchActionSynonyms"));
+      const entityLabels = parseCsv(readDataset(element, "searchEntity", "searchActionEntity"));
+      const intentPhrases = parseCsv(readDataset(element, "searchIntent", "searchActionIntent"));
 
       return {
-        id: `current-view:${index}:${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        id,
         title,
         subtitle,
         section: "current-view",
         keywords,
-        aliases: [],
+        aliases,
+        synonyms,
+        entityLabels,
+        intentPhrases,
         breadcrumbs: ["Current view"],
         entityType: "ui-action",
+        source,
         execute,
-        executeKey,
-        priority: 340,
+        executeKey: descriptor.executeKey,
+        priority: explicit ? 380 : 330,
       };
     })
     .filter(Boolean);
 }
+

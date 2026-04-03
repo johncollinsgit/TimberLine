@@ -334,6 +334,18 @@ class ShopifyEmbeddedShellPayloadBuilder
                     'keywords' => $keywords,
                     'breadcrumbs' => $breadcrumbs,
                     'aliases' => array_values(array_filter((array) ($page['legacy_route_names'] ?? []))),
+                    'synonyms' => array_values(array_filter([
+                        $pageSection,
+                        $pageChild,
+                    ])),
+                    'entityLabels' => array_values(array_filter([
+                        ucfirst(str_replace(['_', '-'], ' ', $pageSection)),
+                        in_array((string) ($page['group'] ?? ''), ['customers_subnav', 'dashboard_subnav', 'rewards_children'], true)
+                            ? 'Section'
+                            : null,
+                    ])),
+                    'intentPhrases' => ['open', 'go to', 'view'],
+                    'source' => 'route-discovery',
                     'entityType' => 'page',
                     'execute' => [
                         'type' => 'navigate',

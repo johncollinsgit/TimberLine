@@ -30,6 +30,44 @@ test("newly registered feature action becomes searchable without changing search
   assert.equal(ranked[0].id, "feature:shipping:rates");
 });
 
+test("synonym intent queries rank expected actions", () => {
+  const provider = new ActionSearchProvider();
+
+  registerSearchActions(
+    "feature:settings",
+    [
+      {
+        id: "feature:shipping:rates",
+        title: "Go to settings > shipping",
+        subtitle: "Open shipping settings",
+        section: "actions",
+        keywords: ["shipping", "rates", "settings"],
+        aliases: ["shipping settings"],
+        synonyms: ["delivery", "ship"],
+        intentPhrases: ["go to", "open", "manage"],
+        source: "explicit",
+        execute: () => {},
+        executeKey: "navigate:/admin/settings/shipping",
+      },
+      {
+        id: "feature:settings:root",
+        title: "Settings",
+        subtitle: "Open settings",
+        section: "pages",
+        keywords: ["settings", "preferences"],
+        aliases: ["prefs"],
+        source: "route-discovery",
+        execute: () => {},
+        executeKey: "navigate:/shopify/app/settings",
+      },
+    ],
+    provider
+  );
+
+  assert.equal(rankDocuments(provider.snapshot(), "delivery")[0].id, "feature:shipping:rates");
+  assert.equal(rankDocuments(provider.snapshot(), "prefs")[0].id, "feature:settings:root");
+});
+
 test("dynamic customer action executes navigation with embedded context", () => {
   const originalWindow = globalThis.window;
   const destination = { value: "" };
