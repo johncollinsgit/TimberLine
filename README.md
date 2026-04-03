@@ -798,3 +798,22 @@ Temporarily disable deploy:
   - history/logging uses `marketing_message_deliveries` and `marketing_email_deliveries`.
 - Implementation/testing details:
   - `docs/architecture/shopify-embedded-messaging-workspace.md`
+
+## Legacy Subscription Reconciliation (Yotpo + Square)
+- Tenant-scoped maintenance command:
+  - `php artisan marketing:reconcile-legacy-subscriptions --tenant-id={id} [--dry-run] [--limit=500]`
+- Purpose:
+  - reconcile legacy imported subscribed customers back into canonical profile consent flags when historical import truth exists but current flags are off.
+- Legacy source truth used:
+  - `marketing_consent_events.event_type=imported` from:
+    - `yotpo_contacts_import`
+    - `square_marketing_import`
+    - `square_customer_sync`
+- Safety rails:
+  - command fails closed without `--tenant-id`
+  - channels with newer explicit opt-out/revoked events are not re-enabled
+  - reconciliation updates are tagged with `source_type=legacy_import_reconciliation`
+  - context includes reward/task suppression intent (`suppress_subscription_rewards`, `do_not_issue_candle_cash`, `do_not_enqueue_new_subscriber_tasks`)
+- Canonical behavior:
+  - reconciliation mode re-enables imported subscribed channels and clears stale `*_opted_out_at` values only for channels being reconciled
+  - standard opt-in flows still keep their normal reward behavior (`email-signup`, SMS consent bonus)

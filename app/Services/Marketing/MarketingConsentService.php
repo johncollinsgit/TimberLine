@@ -15,6 +15,7 @@ class MarketingConsentService
     public function applyToProfile(MarketingProfile $profile, array $incoming, array $context = []): bool
     {
         $changed = false;
+        $legacyImportReconciliation = $this->isLegacyImportReconciliation($context);
 
         $emailOptIn = $this->nullableBool($incoming['accepts_email_marketing'] ?? null);
         $smsOptIn = $this->nullableBool($incoming['accepts_sms_marketing'] ?? null);
@@ -39,9 +40,14 @@ class MarketingConsentService
                 $changed = true;
             }
         } elseif ($emailOptIn === true) {
-            // Do not override an explicit prior opt-out with weaker imported opt-in.
-            if (! $profile->email_opted_out_at && $profile->accepts_email_marketing !== true) {
+            // Default import behavior does not override explicit opt-out unless reconciliation mode is enabled.
+            if (($legacyImportReconciliation || ! $profile->email_opted_out_at) && $profile->accepts_email_marketing !== true) {
                 $profile->accepts_email_marketing = true;
+                $changed = true;
+            }
+
+            if ($legacyImportReconciliation && $profile->email_opted_out_at !== null) {
+                $profile->email_opted_out_at = null;
                 $changed = true;
             }
         }
@@ -56,8 +62,13 @@ class MarketingConsentService
                 $changed = true;
             }
         } elseif ($smsOptIn === true) {
-            if (! $profile->sms_opted_out_at && $profile->accepts_sms_marketing !== true) {
+            if (($legacyImportReconciliation || ! $profile->sms_opted_out_at) && $profile->accepts_sms_marketing !== true) {
                 $profile->accepts_sms_marketing = true;
+                $changed = true;
+            }
+
+            if ($legacyImportReconciliation && $profile->sms_opted_out_at !== null) {
+                $profile->sms_opted_out_at = null;
                 $changed = true;
             }
         }
@@ -302,5 +313,20 @@ class MarketingConsentService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    protected function isLegacyImportReconciliation(array $context): bool
+    {
+        if ((bool) ($context['legacy_import_reconciliation'] ?? false)) {
+            return true;
+        }
+
+        $sourceType = strtolower(trim((string) ($context['source_type'] ?? '')));
+
+        return $sourceType === 'legacy_import_reconciliation'
+            || str_contains($sourceType, 'legacy_import_reconciliation');
     }
 }
