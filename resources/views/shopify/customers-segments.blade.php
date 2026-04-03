@@ -12,11 +12,13 @@
     :merchant-journey="$merchantJourney ?? []"
 >
     @php
-        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
-        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
     @endphp
 
     <style>

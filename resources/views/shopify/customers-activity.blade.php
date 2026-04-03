@@ -15,11 +15,13 @@
         $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
-        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
-        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
     @endphp
 
     <style>

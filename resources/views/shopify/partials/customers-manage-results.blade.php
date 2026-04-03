@@ -15,10 +15,10 @@
 
     $sort = $sort ?? (string) ($filters['sort'] ?? 'last_activity');
     $direction = $direction ?? (string) ($filters['direction'] ?? 'desc');
-    $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(request());
-    $withEmbeddedContext = static function (string $url) use ($embeddedContext): string {
-        return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
-    };
+    /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+    $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+    $embeddedContext = $embeddedUrls->contextQuery(request());
+    $withEmbeddedContext = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
     $sortUrl = static function (array $overrides) use ($withEmbeddedContext): string {
         return $withEmbeddedContext(
             url()->current() . '?' . http_build_query(array_merge(request()->query(), $overrides), '', '&', PHP_QUERY_RFC3986)

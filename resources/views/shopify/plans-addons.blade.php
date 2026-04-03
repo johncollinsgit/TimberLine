@@ -27,11 +27,13 @@
         $availableNext = is_array($journey['available_next'] ?? null) ? $journey['available_next'] : [];
         $purchasable = is_array($journey['purchasable'] ?? null) ? $journey['purchasable'] : [];
 
-        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
-        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
 
         $importCta = is_array($importSummary['cta'] ?? null) ? $importSummary['cta'] : ['label' => 'Import Customers', 'href' => route('shopify.app.integrations', [], false)];
         $activeNowCount = count($activeNow);

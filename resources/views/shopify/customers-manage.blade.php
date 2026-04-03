@@ -81,11 +81,13 @@
         } elseif (filled($importSummary['label'] ?? null)) {
             $lastSync = (string) $importSummary['label'];
         }
-        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
-        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
     @endphp
 
     <style>
@@ -779,7 +781,7 @@
         @endif
 
         <form method="GET" action="{{ url()->current() }}" class="customers-toolbar" data-customers-form novalidate>
-            @foreach(\App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(request(), filled($host ?? null) ? (string) $host : null) as $key => $value)
+            @foreach($embeddedContext as $key => $value)
                 <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
             @endforeach
 
