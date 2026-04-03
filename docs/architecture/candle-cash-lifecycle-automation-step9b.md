@@ -1,5 +1,10 @@
 # Candle Cash Lifecycle Automation Foundation (Step 9B)
 
+## Canonical conversion note (2026-04-03)
+- Legacy Growave points convert as `candle_cash = legacy_points * 0.3`.
+- Converted legacy balances are treated as grandfathered opening credit (`earned-limit exempt`), so lifecycle earned cohorts continue to evaluate only program-earned balances.
+- Canonical migration reference customer: `Rynda Baker <bakery25@gmail.com>`, `1494 * 0.3 = 448.200`.
+
 ## What This Adds
 - A tenant-safe lifecycle evaluation service: `App\Services\Marketing\CandleCashLifecycleService`
 - A minimal suppression/intent tracking table: `marketing_automation_events`
@@ -45,4 +50,3 @@ php artisan marketing:candle-cash-lifecycle-preview --tenant-id=1 --trigger=cand
 ```
 
 Use `--dry-run` to preview without writes, even when `--record-intents` is set.
-

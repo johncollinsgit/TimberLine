@@ -2,6 +2,15 @@
 
 Use this to validate whether imported Backstage data is trustworthy enough to cancel Growave for normal operations.
 
+## Canonical conversion and reporting notes (2026-04-03)
+
+- Legacy Growave points convert to Candle Cash with `candle_cash = legacy_points * 0.3`.
+- Converted legacy Growave balances are grandfathered opening credit and are excluded from earned-limit scope.
+- Canonical reference customer for this migration:
+  - `Rynda Baker <bakery25@gmail.com>`
+  - `legacy_points_total = 1494`
+  - canonical converted balance at `0.3` = `448.200`.
+
 ## Resumable full-import run strategy
 
 1) Start uncapped pass (retail example):
@@ -190,3 +199,36 @@ foreach (\$rows as \$row) { echo json_encode(\$row).PHP_EOL; }
 ```
 
 If acceptance thresholds fail, rerun `marketing:sync-growave` for the affected store and re-check.
+
+## 5) Canonical Rynda verification (legacy conversion)
+
+```bash
+php artisan tinker --execute="
+\$profile = DB::table('marketing_profiles')
+  ->whereRaw('LOWER(first_name) = ?', ['rynda'])
+  ->whereRaw('LOWER(last_name) = ?', ['baker'])
+  ->whereRaw('LOWER(email) = ?', ['bakery25@gmail.com'])
+  ->first(['id','email']);
+
+if (! \$profile) {
+  echo json_encode(['error' => 'canonical profile not found']).PHP_EOL;
+  return;
+}
+
+\$legacyPoints = DB::table('candle_cash_transactions')
+  ->where('marketing_profile_id', \$profile->id)
+  ->where(function(\$q){
+    \$q->whereIn('source', ['growave_activity', 'growave', 'legacy_rebase'])
+      ->orWhere('type', 'import_opening_balance')
+      ->orWhere('legacy_points_origin', true);
+  })
+  ->sum(DB::raw('COALESCE(legacy_points_value, points, 0)'));
+
+echo json_encode([
+  'marketing_profile_id' => (int) \$profile->id,
+  'email' => (string) \$profile->email,
+  'legacy_points_total' => (int) \$legacyPoints,
+  'canonical_balance_at_0_3' => round(((float) \$legacyPoints) * 0.3, 3),
+]).PHP_EOL;
+"
+```

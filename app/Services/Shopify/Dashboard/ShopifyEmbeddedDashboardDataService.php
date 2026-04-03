@@ -1183,7 +1183,7 @@ class ShopifyEmbeddedDashboardDataService
             ->whereBetween('created_at', [$from, $to])
             ->orderBy('created_at')
             ->get(['id', 'type', 'candle_cash_delta', 'source', 'source_id', 'description', 'created_at'])
-            ->reject(fn (CandleCashTransaction $transaction): bool => $this->candleCashLedgerNormalizationService->isGrandfatheredOpening($transaction))
+            ->filter(fn (CandleCashTransaction $transaction): bool => $this->candleCashLedgerNormalizationService->isEarnedLimitEligible($transaction))
             ->map(function (CandleCashTransaction $transaction): array {
                 $amount = CandleCashMeasurement::normalizeStoredAmount($transaction->candle_cash_delta ?? 0);
 

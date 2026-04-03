@@ -4,7 +4,7 @@ namespace App\Support\Marketing;
 
 final class CandleCashMeasurement
 {
-    public const LEGACY_STARTING_CANDLE_CASH_PER_POINT = 0.003;
+    public const LEGACY_STARTING_CANDLE_CASH_PER_POINT = 0.3;
     public const STORAGE_SCALE = 3;
     public const DISPLAY_SCALE = 2;
 

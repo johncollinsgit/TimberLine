@@ -46,14 +46,14 @@ test('legacy candle cash correction dry run previews corrected legacy totals wit
     ]);
 
     $this->artisan('marketing:rebase-candle-cash-balances', [
-        '--factor' => '0.003',
+        '--factor' => '0.3',
         '--dry-run' => true,
     ])
         ->expectsOutput('profiles=2')
         ->expectsOutput('legacy_transactions=2')
         ->expectsOutput('legacy_rebases=0')
         ->expectsOutput('legacy_points_total=120')
-        ->expectsOutput('corrected_candle_cash_total=0.36')
+        ->expectsOutput('corrected_candle_cash_total=36')
         ->assertExitCode(0);
 
     expect((float) CandleCashBalance::query()->where('marketing_profile_id', $alpha->id)->value('balance'))->toBe(100.0)
@@ -109,12 +109,12 @@ test('legacy candle cash correction applies once per run key and leaves modern b
     ]);
 
     $exit = Artisan::call('marketing:rebase-candle-cash-balances', [
-        '--factor' => '0.003',
+        '--factor' => '0.3',
         '--run-key' => 'legacy-correction-test',
     ]);
 
     expect($exit)->toBe(0)
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $legacyProfile->id)->value('balance'))->toBe(0.3)
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $legacyProfile->id)->value('balance'))->toBe(30.0)
         ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $modernProfile->id)->value('balance'))->toBe(25.0);
 
     $legacyTransaction = CandleCashTransaction::query()
@@ -128,7 +128,7 @@ test('legacy candle cash correction applies once per run key and leaves modern b
         ->where('source', 'legacy_rebase')
         ->sole();
 
-    expect((float) $legacyTransaction->candle_cash_delta)->toBe(0.3)
+    expect((float) $legacyTransaction->candle_cash_delta)->toBe(30.0)
         ->and((bool) $legacyTransaction->legacy_points_origin)->toBeTrue()
         ->and((int) $legacyTransaction->legacy_points_value)->toBe(100)
         ->and((float) $rebaseTransaction->candle_cash_delta)->toBe(0.0);
@@ -140,12 +140,12 @@ test('legacy candle cash correction applies once per run key and leaves modern b
         ->exists())->toBeTrue();
 
     $exitAgain = Artisan::call('marketing:rebase-candle-cash-balances', [
-        '--factor' => '0.003',
+        '--factor' => '0.3',
         '--run-key' => 'legacy-correction-test',
     ]);
 
     expect($exitAgain)->toBe(0)
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $legacyProfile->id)->value('balance'))->toBe(0.3)
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $legacyProfile->id)->value('balance'))->toBe(30.0)
         ->and(CandleCashTransaction::query()
             ->where('marketing_profile_id', $legacyProfile->id)
             ->where('source', 'legacy_rebase')

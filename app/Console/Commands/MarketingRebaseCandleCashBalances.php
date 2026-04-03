@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 class MarketingRebaseCandleCashBalances extends Command
 {
     protected $signature = 'marketing:rebase-candle-cash-balances
-        {--factor=0.003 : Deprecated legacy option. Must match the corrected legacy points conversion rate.}
+        {--factor=0.3 : Deprecated legacy option. Must match the corrected legacy points conversion rate.}
         {--run-key= : Idempotency key for the correction run}
         {--dry-run : Preview the correction without mutating balances or transactions}';
 
@@ -27,7 +27,7 @@ class MarketingRebaseCandleCashBalances extends Command
         $factor = $this->parseFactor($this->option('factor'));
         $expectedFactor = CandleCashMeasurement::LEGACY_STARTING_CANDLE_CASH_PER_POINT;
         if (abs($factor - $expectedFactor) >= 0.0000005) {
-            $this->error('Legacy Candle Cash correction now uses a fixed conversion rate of '.number_format($expectedFactor, 3, '.', '').'. Custom factors have been retired.');
+            $this->error('Legacy Candle Cash correction now uses a fixed conversion rate of '.$this->formatFactor($expectedFactor).'. Custom factors have been retired.');
 
             return self::FAILURE;
         }
@@ -118,5 +118,10 @@ class MarketingRebaseCandleCashBalances extends Command
         }
 
         return (float) $value;
+    }
+
+    protected function formatFactor(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 3, '.', ''), '0'), '.');
     }
 }

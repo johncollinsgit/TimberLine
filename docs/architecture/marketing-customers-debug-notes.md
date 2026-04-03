@@ -1,5 +1,10 @@
 # Marketing Customers Debug Notes (2026-03-11)
 
+## Canonical conversion note (2026-04-03)
+- Legacy Growave points now convert with `candle_cash = legacy_points * 0.3`.
+- Converted legacy balances are grandfathered opening credit and excluded from earned-limit scope.
+- Canonical reference customer for migration reporting: `Rynda Baker <bakery25@gmail.com>` with `1494 * 0.3 = 448.200` Candle Cash.
+
 ## Root cause (empty customer table)
 - `Marketing Customers` reads from `marketing_profiles` (`app/Http/Controllers/Marketing/MarketingCustomersController.php`).
 - Existing backfill command `marketing:sync-profiles` can skip orders when no normalized email/phone is available.

@@ -136,7 +136,7 @@ class TenantRewardsExportService
             ->get();
 
         return $rows
-            ->reject(fn (CandleCashTransaction $transaction): bool => $this->normalizer->isGrandfatheredOpening($transaction))
+            ->filter(fn (CandleCashTransaction $transaction): bool => $this->normalizer->isEarnedLimitEligible($transaction))
             ->filter(fn (CandleCashTransaction $transaction): bool => $this->withinRange($transaction->created_at, $filters))
             ->map(function (CandleCashTransaction $transaction): array {
                 $profile = $transaction->profile;

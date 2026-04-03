@@ -505,7 +505,7 @@ class TenantRewardsOperationsService
             ->where('candle_cash_delta', '>', 0)
             ->where('created_at', '>=', $now->subDays(30))
             ->get()
-            ->filter(fn (CandleCashTransaction $transaction): bool => ! $this->normalizer->isGrandfatheredOpening($transaction))
+            ->filter(fn (CandleCashTransaction $transaction): bool => $this->normalizer->isEarnedLimitEligible($transaction))
             ->filter(fn (CandleCashTransaction $transaction): bool => $this->normalizer->classifyEarnSource($transaction) === 'order_purchase_earn')
             ->count();
 

@@ -38,7 +38,7 @@ class TenantRewardsFinanceSummaryService
             ->get();
 
         $issuedTransactions = $issuedTransactions
-            ->reject(fn (CandleCashTransaction $transaction): bool => $this->normalizer->isGrandfatheredOpening($transaction))
+            ->filter(fn (CandleCashTransaction $transaction): bool => $this->normalizer->isEarnedLimitEligible($transaction))
             ->values();
 
         $issuedPoints = CandleCashMeasurement::normalizeStoredAmount($issuedTransactions->sum('candle_cash_delta'));

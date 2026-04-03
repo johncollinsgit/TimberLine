@@ -2,6 +2,16 @@
 
 Date: 2026-03-11
 
+## Canonical update (2026-04-03)
+
+- Legacy Growave conversion factor is now `0.3` (`candle_cash = legacy_points * 0.3`) across legacy import/sync/correction paths.
+- Historical legacy-origin rows are rebased through `marketing:rebase-candle-cash-balances` with factor `0.3`.
+- Converted legacy balances are grandfathered opening credit and are excluded from earned-limit scope.
+- Canonical reference customer:
+  - `Rynda Baker <bakery25@gmail.com>`
+  - `legacy_points_total = 1494`
+  - canonical converted balance at factor `0.3` = `448.200` Candle Cash.
+
 ## Current state (verified in code)
 
 Implemented now:
@@ -31,7 +41,7 @@ Behavior:
 - Imports snapshot into Candle Cash as immutable opening event:
   - `candle_cash_transactions.type = import_opening_balance`
   - `candle_cash_transactions.source = growave`
-- Sets `candle_cash_balances.balance` to imported snapshot value
+- Converts snapshot points using canonical legacy factor (`0.3`) and sets `candle_cash_balances.balance` to the converted value
 - Idempotent guardrail: skips profiles that already have a Growave opening import
 - Safety guardrail: skips profiles that already have any Candle Cash transactions
 - Supports dry-run mode
@@ -83,4 +93,3 @@ php artisan marketing:import-growave-opening-balances --limit=500
 4. Redemption parity hardening:
 - refund/cancel reversal policies
 - cross-channel double-spend prevention checks
-

@@ -1,5 +1,11 @@
 # Stage 10 Shopify Storefront Widgets
 
+## Canonical conversion note (2026-04-03)
+
+- Legacy Growave points convert with `candle_cash = legacy_points * 0.3`.
+- Converted legacy balances are grandfathered opening credit and are earned-limit exempt.
+- Canonical migration reference customer: `Rynda Baker <bakery25@gmail.com>`, `1494 * 0.3 = 448.200`.
+
 ## Extension structure
 
 ```text

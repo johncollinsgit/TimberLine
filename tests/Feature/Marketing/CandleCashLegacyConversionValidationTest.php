@@ -33,7 +33,7 @@ test('legacy conversion validation command summarizes legacy, mixed, and modern 
     ]);
     CandleCashBalance::query()->create([
         'marketing_profile_id' => $legacyOnly->id,
-        'balance' => 0.3,
+        'balance' => 30.0,
     ]);
 
     app(CandleCashService::class)->addPoints($mixed, 5, 'earn', 'admin', 'mixed-admin', 'Modern admin earn');
@@ -46,7 +46,7 @@ test('legacy conversion validation command summarizes legacy, mixed, and modern 
         'description' => 'Imported Growave activity',
     ]);
     CandleCashBalance::query()->where('marketing_profile_id', $mixed->id)->update([
-        'balance' => 5.06,
+        'balance' => 11.0,
     ]);
 
     app(CandleCashService::class)->addPoints($modernOnly, 7, 'earn', 'admin', 'modern-seed', 'Modern seed');
@@ -62,8 +62,8 @@ test('legacy conversion validation command summarizes legacy, mixed, and modern 
         ->and(data_get($summary, 'legacy.tagged_rows'))->toBe(2)
         ->and(data_get($summary, 'legacy.untagged_candidate_rows'))->toBe(0)
         ->and(data_get($summary, 'legacy.preview.legacy_rows_needing_correction'))->toBe(0)
-        ->and(data_get($summary, 'legacy.expected_candle_cash_total'))->toBe(0.36)
-        ->and(data_get($summary, 'legacy.actual_candle_cash_total'))->toBe(0.36)
+        ->and(data_get($summary, 'legacy.expected_candle_cash_total'))->toBe(36)
+        ->and(data_get($summary, 'legacy.actual_candle_cash_total'))->toBe(36)
         ->and(data_get($summary, 'balances.mismatch_count'))->toBe(0)
         ->and(data_get($summary, 'modern.row_count'))->toBe(2)
         ->and(data_get($summary, 'modern.fractional_row_count'))->toBe(0);

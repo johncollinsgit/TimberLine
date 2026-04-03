@@ -576,7 +576,7 @@ class CandleCashEarnedAnalyticsService
             }
 
             if ($points > 0) {
-                $isOpening = $this->normalizer->isGrandfatheredOpening($transaction);
+                $isOpening = $this->normalizer->isEarnedLimitExempt($transaction);
                 $taskHandle = $taskHandlesByTransactionId[(int) $transaction->id] ?? null;
                 $sourceKey = $isOpening ? 'opening_balance' : $this->normalizer->classifyEarnSource($transaction, $taskHandle);
                 $sourceDefinition = (array) ($this->normalizer->sourceDefinitions()[$sourceKey] ?? [
@@ -598,7 +598,7 @@ class CandleCashEarnedAnalyticsService
 
                 $bucketsByProfile[$profileId][] = $bucket;
 
-                if (! $isOpening) {
+                if ($this->normalizer->isEarnedLimitEligible($transaction)) {
                     $programEarnEvents[] = [
                         'transaction_id' => (int) $transaction->id,
                         'marketing_profile_id' => $profileId,

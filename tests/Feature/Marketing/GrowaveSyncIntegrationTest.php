@@ -217,7 +217,7 @@ test('growave sync imports external profile, review snapshots, and loyalty activ
         ->and((int) MarketingReviewSummary::query()->value('review_count'))->toBe(2)
         ->and(MarketingReviewHistory::query()->count())->toBe(2)
         ->and(CandleCashTransaction::query()->where('source', 'growave_activity')->count())->toBe(3)
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $external->marketing_profile_id)->value('balance'))->toBe(0.054)
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $external->marketing_profile_id)->value('balance'))->toBe(5.4)
         ->and((bool) $firstLegacyTransaction?->legacy_points_origin)->toBeTrue();
 });
 

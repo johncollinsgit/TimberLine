@@ -2,6 +2,12 @@
 
 Use this template to estimate Candle Cash economics for the latest non-wholesale order cohort.
 
+## Canonical conversion note (2026-04-03)
+
+- Legacy Growave conversion factor is `0.3` (`candle_cash = legacy_points * 0.3`).
+- Converted legacy balances are grandfathered opening credit and excluded from earned-limit scope; CFO scenario modeling should continue to treat program-earned flows as the variable operating signal.
+- Canonical migration reference customer: `Rynda Baker <bakery25@gmail.com>`, `1494 * 0.3 = 448.200`.
+
 ## Purpose
 
 This sheet answers:

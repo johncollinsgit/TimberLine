@@ -949,8 +949,8 @@ test('candle cash earned analytics exclude imported opening balances and report 
     ]));
 
     $expectedEarnedAmount = app(CandleCashService::class)->amountFromPoints(500);
-    $expectedOutstandingAmount = app(CandleCashService::class)->amountFromPoints(402.7);
-    $expectedExcludedAmount = app(CandleCashService::class)->amountFromPoints(0);
+    $expectedOutstandingAmount = app(CandleCashService::class)->amountFromPoints(500);
+    $expectedExcludedAmount = app(CandleCashService::class)->amountFromPoints(170);
 
     $response
         ->assertOk()

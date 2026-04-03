@@ -101,12 +101,12 @@ test('growave snapshot merge remaps donor rows to target profiles and stays idem
         ->and(MarketingReviewHistory::query()->where('integration', 'growave')->count())->toBe(1)
         ->and($transaction)->not->toBeNull()
         ->and((int) $transaction->marketing_profile_id)->toBe($profile->id)
-        ->and((float) $transaction->candle_cash_delta)->toBe(0.06)
+        ->and((float) $transaction->candle_cash_delta)->toBe(6.0)
         ->and((bool) $transaction->legacy_points_origin)->toBeTrue()
         ->and((int) $transaction->legacy_points_value)->toBe(20)
         ->and((string) optional($transaction->created_at)->toDateTimeString())->toBe('2026-03-01 10:00:00')
         ->and(CandleCashTransaction::query()->where('source', 'growave_activity')->count())->toBe(1)
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(5.06);
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(11.0);
 
     @unlink($snapshotPath);
 });

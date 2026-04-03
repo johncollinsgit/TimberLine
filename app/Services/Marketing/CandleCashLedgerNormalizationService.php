@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Models\CandleCashTransaction;
+use App\Support\Marketing\CandleCashMeasurement;
 
 class CandleCashLedgerNormalizationService
 {
@@ -45,6 +46,11 @@ class CandleCashLedgerNormalizationService
 
     public function isGrandfatheredOpening(CandleCashTransaction $transaction): bool
     {
+        return $this->isEarnedLimitExempt($transaction);
+    }
+
+    public function isEarnedLimitExempt(CandleCashTransaction $transaction): bool
+    {
         $type = strtolower(trim((string) $transaction->type));
         $source = strtolower(trim((string) $transaction->source));
         $sourceId = strtolower(trim((string) $transaction->source_id));
@@ -77,6 +83,13 @@ class CandleCashLedgerNormalizationService
         }
 
         return false;
+    }
+
+    public function isEarnedLimitEligible(CandleCashTransaction $transaction): bool
+    {
+        $delta = CandleCashMeasurement::normalizeStoredAmount($transaction->candle_cash_delta ?? 0);
+
+        return $delta > 0 && ! $this->isEarnedLimitExempt($transaction);
     }
 
     public function classifyEarnSource(CandleCashTransaction $transaction, ?string $taskHandle = null): string
