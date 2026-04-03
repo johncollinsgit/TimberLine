@@ -532,6 +532,7 @@ test('billing readiness config includes canonical stripe-first mapping for tiers
         ->and(config('commercial.stripe_mapping.tiers.pro.recurring_price_lookup_key'))->toBe('tier_pro_monthly')
         ->and(config('commercial.stripe_mapping.addons.referrals.recurring_price_lookup_key'))->toBe('addon_referrals_monthly')
         ->and(config('commercial.stripe_mapping.addons.sms.recurring_price_lookup_key'))->toBe('addon_sms_monthly')
+        ->and(config('commercial.stripe_mapping.addons.messaging.recurring_price_lookup_key'))->toBe('addon_messaging_monthly')
         ->and(config('commercial.stripe_mapping.addons.additional_channels.recurring_price_lookup_key'))->toBe('addon_additional_channels_monthly')
         ->and(config('commercial.stripe_mapping.addons.bulk_email_marketing.recurring_price_lookup_key'))->toBe('addon_bulk_email_marketing_monthly')
         ->and(config('commercial.stripe_mapping.addons.future_niche_modules.recurring_price_lookup_key'))->toBe('addon_future_niche_modules_monthly')

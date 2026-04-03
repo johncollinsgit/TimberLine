@@ -770,3 +770,31 @@ Temporarily disable deploy:
 - Prefer extending existing signed storefront/API contracts before adding new surfaces.
 - Feature access must be tenant-scoped and billing-aware (no global hardcoded availability).
 - Do not fork per-tenant architecture; use one reusable module with tenant-level configuration.
+
+## Shopify Embedded Messaging Workspace (Tenant-Gated Add-On)
+- New embedded workspace route/tab:
+  - page route: `/shopify/app/messaging`
+  - nav registration: `app/Services/Shopify/ShopifyEmbeddedPageRegistry.php` (`key=messaging`, `requires_enabled_access=true`)
+- Gating model:
+  - module key: `messaging`
+  - add-on mapping: `module_catalog.addons.messaging.modules=['messaging']`
+  - commercial/Stripe readiness mapping: `commercial.addons.messaging` + `commercial.stripe_mapping.addons.messaging`
+  - non-enabled tenants do not see the tab and cannot use messaging APIs.
+- Modern Forestry default:
+  - migration `2026_04_03_091000_seed_modern_forestry_messaging_entitlement.php` seeds an enabled entitlement for tenant slug `modern-forestry`.
+- Customer search reuse:
+  - reuses existing Customers-grid query conventions via `ShopifyEmbeddedCustomersGridService::searchProfilesForMessaging`.
+- Group model/persistence:
+  - tenant-scoped saved groups in `marketing_message_groups`
+  - members in `marketing_message_group_members`
+  - tenant rail fields added by `2026_04_03_090000_extend_marketing_message_groups_for_tenant_workspace.php`.
+- Automatic audience:
+  - `All Subscribed` is channel-aware and based on canonical consent + contactability truth:
+    - SMS eligible: `accepts_sms_marketing` + valid phone
+    - Email eligible: `accepts_email_marketing` + valid email
+- Send pipeline reuse:
+  - SMS: existing `TwilioSmsService`
+  - Email: existing `SendGridEmailService`/tenant email dispatch path
+  - history/logging uses `marketing_message_deliveries` and `marketing_email_deliveries`.
+- Implementation/testing details:
+  - `docs/architecture/shopify-embedded-messaging-workspace.md`

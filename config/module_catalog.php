@@ -184,6 +184,11 @@ return [
             'description' => 'Reserved niche/vertical module packaging.',
             'module_key' => 'future_niche_modules',
         ],
+        'messaging.workspace' => [
+            'display_name' => 'Messaging workspace',
+            'description' => 'Direct 1:1 and group messaging workspace for SMS and email outreach.',
+            'module_key' => 'messaging',
+        ],
     ],
 
     'modules' => [
@@ -635,6 +640,22 @@ return [
             'cta_routing' => 'add_module',
             'capabilities' => ['bulk_email.campaigns'],
         ],
+        'messaging' => [
+            'display_name' => 'Messaging',
+            'description' => 'Operational workspace for direct customer and group messaging.',
+            'status' => 'beta',
+            'market_state' => 'SAFE_TO_MARKET',
+            'channels' => ['shopify'],
+            'classification' => 'add-on',
+            'included_in_plans' => [],
+            'default_enabled' => false,
+            'default_setup_status' => 'configured',
+            'dependencies' => ['customers'],
+            'billing_mode' => 'add_on',
+            'visibility' => ['public_site' => true, 'app_store' => true],
+            'cta_routing' => 'add_module',
+            'capabilities' => ['messaging.workspace'],
+        ],
         'additional_channels' => [
             'display_name' => 'Additional Channels',
             'description' => 'Expand beyond the base included store or channel allowance.',
@@ -692,6 +713,7 @@ return [
             'eligible_addons' => [
                 'referrals',
                 'sms',
+                'messaging',
                 'additional_channels',
                 'bulk_email_marketing',
                 'future_niche_modules',
@@ -723,6 +745,7 @@ return [
             'eligible_addons' => [
                 'referrals',
                 'sms',
+                'messaging',
                 'additional_channels',
                 'bulk_email_marketing',
                 'future_niche_modules',
@@ -756,6 +779,7 @@ return [
             'eligible_addons' => [
                 'referrals',
                 'sms',
+                'messaging',
                 'additional_channels',
                 'bulk_email_marketing',
                 'future_niche_modules',
@@ -776,6 +800,13 @@ return [
             'label' => 'SMS',
             'modules' => ['sms'],
             'legacy_grants' => ['sms'],
+            'billing_mode' => 'add_on',
+        ],
+        'messaging' => [
+            'display_name' => 'Messaging',
+            'label' => 'Messaging',
+            'modules' => ['messaging'],
+            'legacy_grants' => ['messaging'],
             'billing_mode' => 'add_on',
         ],
         'additional_channels' => [

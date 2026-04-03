@@ -159,9 +159,17 @@ return [
             'setup_price_cents' => 0,
             'modules' => (array) ($canonicalAddons['sms']['modules'] ?? ['sms']),
         ],
+        'messaging' => [
+            'name' => (string) ($canonicalAddons['messaging']['name'] ?? 'Messaging'),
+            'position' => 30,
+            'currency' => 'USD',
+            'recurring_price_cents' => 11900,
+            'setup_price_cents' => 0,
+            'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging']),
+        ],
         'additional_channels' => [
             'name' => (string) ($canonicalAddons['additional_channels']['name'] ?? 'Additional Stores/Channels'),
-            'position' => 30,
+            'position' => 40,
             'currency' => 'USD',
             'recurring_price_cents' => 5900,
             'setup_price_cents' => 0,
@@ -170,7 +178,7 @@ return [
         ],
         'bulk_email_marketing' => [
             'name' => (string) ($canonicalAddons['bulk_email_marketing']['name'] ?? 'Bulk Marketing Email'),
-            'position' => 40,
+            'position' => 50,
             'currency' => 'USD',
             'recurring_price_cents' => 12900,
             'setup_price_cents' => 0,
@@ -443,6 +451,10 @@ return [
             'sms' => [
                 'product_lookup_key' => 'addon_sms',
                 'recurring_price_lookup_key' => 'addon_sms_monthly',
+            ],
+            'messaging' => [
+                'product_lookup_key' => 'addon_messaging',
+                'recurring_price_lookup_key' => 'addon_messaging_monthly',
             ],
             'additional_channels' => [
                 'product_lookup_key' => 'addon_additional_channels',

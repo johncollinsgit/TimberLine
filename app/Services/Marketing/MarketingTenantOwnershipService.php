@@ -414,6 +414,12 @@ class MarketingTenantOwnershipService
 
     protected function messageGroupEvidenceQuery(): QueryBuilder
     {
+        if ($this->hasMessageGroupTenantRail()) {
+            return DB::table('marketing_message_groups')
+                ->whereNotNull('tenant_id')
+                ->selectRaw('id as entity_id, tenant_id');
+        }
+
         if (! Schema::hasTable('marketing_message_group_members') || ! Schema::hasTable('marketing_profiles')) {
             return $this->emptyEvidenceQuery();
         }
@@ -486,6 +492,12 @@ class MarketingTenantOwnershipService
     {
         return Schema::hasTable('marketing_message_templates')
             && Schema::hasColumn('marketing_message_templates', 'tenant_id');
+    }
+
+    protected function hasMessageGroupTenantRail(): bool
+    {
+        return Schema::hasTable('marketing_message_groups')
+            && Schema::hasColumn('marketing_message_groups', 'tenant_id');
     }
 
     protected function positiveInt(mixed $value): ?int

@@ -74,7 +74,10 @@ class ShopifyEmbeddedShellPayloadBuilder
             $item['children'] = $children;
 
             return $item;
-        }, $this->pageRegistry->pagesForGroup('primary'));
+        }, array_values(array_filter(
+            $this->pageRegistry->pagesForGroup('primary'),
+            fn (array $page): bool => $this->pageVisibleForNavigation($page, $moduleStates)
+        )));
 
         return [
             'items' => $items,
@@ -382,17 +385,52 @@ class ShopifyEmbeddedShellPayloadBuilder
     {
         $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
         if ($moduleKey === '') {
-            return true;
+            return ! $this->pageRequiresEnabledAccess($page);
         }
 
         $state = is_array($moduleStates[$moduleKey] ?? null) ? $moduleStates[$moduleKey] : null;
         if (! is_array($state)) {
-            return true;
+            return ! $this->pageRequiresEnabledAccess($page);
+        }
+
+        if ($this->pageRequiresEnabledAccess($page) && ! (bool) ($state['has_access'] ?? false)) {
+            return false;
         }
 
         $reason = strtolower(trim((string) ($state['reason'] ?? '')));
 
         return ! in_array($reason, ['channel_not_supported', 'module_unavailable'], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $page
+     * @param  array<string,array<string,mixed>>  $moduleStates
+     */
+    protected function pageVisibleForNavigation(array $page, array $moduleStates): bool
+    {
+        $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
+        if (! $this->pageRequiresEnabledAccess($page)) {
+            return true;
+        }
+
+        if ($moduleKey === '') {
+            return false;
+        }
+
+        $state = is_array($moduleStates[$moduleKey] ?? null) ? $moduleStates[$moduleKey] : null;
+        if (! is_array($state)) {
+            return false;
+        }
+
+        return (bool) ($state['has_access'] ?? false);
+    }
+
+    /**
+     * @param  array<string,mixed>  $page
+     */
+    protected function pageRequiresEnabledAccess(array $page): bool
+    {
+        return (bool) ($page['requires_enabled_access'] ?? false);
     }
 
     protected function searchScore(string $query, array $haystacks, int $base = 260): int

@@ -3,10 +3,30 @@
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\MarketingProfile;
+use App\Models\Tenant;
+use App\Models\TenantModuleEntitlement;
 
 beforeEach(function (): void {
     config()->set('entitlements.default_plan', 'growth');
 });
+
+function grantMessagingEntitlement(Tenant $tenant): void
+{
+    TenantModuleEntitlement::query()->updateOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'module_key' => 'messaging',
+        ],
+        [
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
+            'billing_status' => 'add_on_comped',
+            'currency' => 'USD',
+            'entitlement_source' => 'test',
+            'price_source' => 'test',
+        ]
+    );
+}
 
 test('embedded app navigation metadata matches each top-level section route', function (string $routeName, string $expectedSection, ?string $expectedChild) {
     configureEmbeddedRetailStore();
@@ -29,6 +49,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'rewards vip' => ['shopify.app.rewards.vip', 'rewards', 'vip'],
     'rewards notifications' => ['shopify.app.rewards.notifications', 'rewards', 'notifications'],
     'customers' => ['shopify.app.customers', 'customers', null],
+    'messaging' => ['shopify.app.messaging', 'messaging', null],
     'settings' => ['shopify.app.settings', 'settings', null],
 ]);
 
@@ -122,6 +143,7 @@ test('embedded shell renders shopify app nav with top-level links', function () 
         ->assertSee('rel="home"', false)
         ->assertSee('href="/shopify/app?shop=', false)
         ->assertSee('href="/shopify/app/customers/manage?shop=', false)
+        ->assertDontSee('href="/shopify/app/messaging?shop=', false)
         ->assertSee('href="/shopify/app/rewards?shop=', false)
         ->assertSee('href="/shopify/app/settings?shop=', false);
 });
@@ -142,6 +164,41 @@ test('embedded navigation metadata keeps expected top-level labels and order', f
                 && $labels[1] === 'Customers'
                 && $labels[2] !== ''
                 && $labels[3] === 'Settings';
+        });
+});
+
+test('embedded shell includes messaging nav link when messaging entitlement is enabled', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Nav Tenant',
+        'slug' => 'messaging-nav-tenant',
+    ]);
+    grantMessagingEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $response = $this->get(route('home', retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSee('href="/shopify/app/messaging?shop=', false);
+});
+
+test('embedded navigation order includes messaging when module access is enabled', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Nav Order Tenant',
+        'slug' => 'messaging-nav-order-tenant',
+    ]);
+    grantMessagingEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $response = $this->get(route('home', retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertViewHas('appNavigation', function (array $navigation): bool {
+            $items = array_values(array_filter(is_array($navigation['items'] ?? null) ? $navigation['items'] : [], 'is_array'));
+            $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $items);
+            $labels = array_map(static fn (array $item): string => (string) ($item['label'] ?? ''), $items);
+
+            return $keys === ['home', 'customers', 'messaging', 'rewards', 'settings']
+                && $labels[2] === 'Messaging';
         });
 });
 

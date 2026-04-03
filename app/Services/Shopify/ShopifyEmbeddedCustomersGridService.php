@@ -81,6 +81,71 @@ class ShopifyEmbeddedCustomersGridService
     }
 
     /**
+     * @return array<int,array{
+     *   id:int,
+     *   name:string,
+     *   email:?string,
+     *   normalized_email:?string,
+     *   phone:?string,
+     *   normalized_phone:?string,
+     *   accepts_sms_marketing:bool,
+     *   accepts_email_marketing:bool
+     * }>
+     */
+    public function searchProfilesForMessaging(string $query, ?int $tenantId = null, int $limit = 12): array
+    {
+        $limit = max(1, min($limit, 50));
+        $searchContext = $this->resolveSearchContext($query, $tenantId);
+
+        $profiles = DB::table('marketing_profiles as mp');
+        $profiles = $this->applyTenantScope($profiles, 'marketing_profiles', 'mp', $tenantId);
+
+        if (($searchContext['scoped_profile_ids'] ?? null) !== null) {
+            $profileIds = is_array($searchContext['scoped_profile_ids'])
+                ? array_values(array_map('intval', (array) $searchContext['scoped_profile_ids']))
+                : [];
+            $profiles->whereIn('mp.id', $profileIds !== [] ? $profileIds : [0]);
+        }
+
+        $this->applySearch($profiles, $searchContext);
+
+        $rows = $profiles
+            ->select([
+                'mp.id',
+                'mp.first_name',
+                'mp.last_name',
+                'mp.email',
+                'mp.normalized_email',
+                'mp.phone',
+                'mp.normalized_phone',
+                'mp.accepts_sms_marketing',
+                'mp.accepts_email_marketing',
+            ])
+            ->orderByDesc('mp.updated_at')
+            ->orderByDesc('mp.id')
+            ->limit($limit)
+            ->get();
+
+        return $rows->map(function (object $row): array {
+            $displayName = trim((string) (($row->first_name ?? '') . ' ' . ($row->last_name ?? '')));
+            if ($displayName === '') {
+                $displayName = (string) ($row->email ?: ($row->phone ?: ('Customer #' . (int) $row->id)));
+            }
+
+            return [
+                'id' => (int) $row->id,
+                'name' => $displayName,
+                'email' => $row->email !== null ? (string) $row->email : null,
+                'normalized_email' => $row->normalized_email !== null ? (string) $row->normalized_email : null,
+                'phone' => $row->phone !== null ? (string) $row->phone : null,
+                'normalized_phone' => $row->normalized_phone !== null ? (string) $row->normalized_phone : null,
+                'accepts_sms_marketing' => (bool) ($row->accepts_sms_marketing ?? false),
+                'accepts_email_marketing' => (bool) ($row->accepts_email_marketing ?? false),
+            ];
+        })->values()->all();
+    }
+
+    /**
      * @return array<string,string|int>
      */
     protected function normalizeFilters(Request $request): array

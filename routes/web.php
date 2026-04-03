@@ -33,6 +33,7 @@ use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
+use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyWebhookController;
@@ -198,6 +199,9 @@ Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'r
 Route::get('/customers/imports', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.embedded.customers.imports');
 Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.embedded.customers.questions');
 Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToDetail'])->name('shopify.embedded.customers.detail');
+Route::get('/messaging', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.messaging', [], false, $request));
+})->name('shopify.embedded.messaging');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
@@ -839,6 +843,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/customers/imports', [ShopifyEmbeddedCustomersController::class, 'imports'])->name('shopify.app.customers.imports');
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
+    Route::get('/app/messaging', [ShopifyEmbeddedMessagingController::class, 'show'])->name('shopify.app.messaging');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
@@ -898,6 +903,28 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCashJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.candle-cash.send');
+        Route::get('/messaging/bootstrap', [ShopifyEmbeddedMessagingController::class, 'bootstrap'])
+            ->name('messaging.bootstrap');
+        Route::get('/messaging/customers/search', [ShopifyEmbeddedMessagingController::class, 'searchCustomers'])
+            ->name('messaging.customers.search');
+        Route::get('/messaging/groups', [ShopifyEmbeddedMessagingController::class, 'groups'])
+            ->name('messaging.groups');
+        Route::get('/messaging/groups/{group}', [ShopifyEmbeddedMessagingController::class, 'groupDetail'])
+            ->name('messaging.groups.detail');
+        Route::post('/messaging/groups', [ShopifyEmbeddedMessagingController::class, 'createGroup'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.groups.create');
+        Route::patch('/messaging/groups/{group}', [ShopifyEmbeddedMessagingController::class, 'updateGroup'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.groups.update');
+        Route::post('/messaging/send/individual', [ShopifyEmbeddedMessagingController::class, 'sendIndividual'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.send.individual');
+        Route::post('/messaging/send/group', [ShopifyEmbeddedMessagingController::class, 'sendGroup'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.send.group');
+        Route::get('/messaging/history', [ShopifyEmbeddedMessagingController::class, 'history'])
+            ->name('messaging.history');
         Route::get('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'widgetSettings'])
             ->name('settings.widgets');
         Route::post('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'saveWidgetSettings'])
