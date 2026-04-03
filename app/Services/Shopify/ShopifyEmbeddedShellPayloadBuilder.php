@@ -6,6 +6,7 @@ use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\UrlGenerationException;
 
 class ShopifyEmbeddedShellPayloadBuilder
 {
@@ -84,7 +85,13 @@ class ShopifyEmbeddedShellPayloadBuilder
             'displayLabels' => $displayLabels,
             'workspaceLabel' => (string) data_get($profile, 'workspace.label', 'Commerce'),
             'commandSearchEndpoint' => $this->urlGenerator->route('shopify.app.api.search'),
-            'commandSearchPlaceholder' => (string) data_get($profile, 'workspace.command_placeholder', 'Search customers, rewards, and settings'),
+            'commandSearchPlaceholder' => (string) data_get($profile, 'workspace.command_placeholder', 'Search actions, pages, and Shopify tools'),
+            'commandSearchDocuments' => $this->commandSearchDocuments(
+                tenantId: $tenantId,
+                request: $request,
+                activeSection: $activeSection,
+                activeChild: $activeChild
+            ),
         ];
     }
 
@@ -254,6 +261,90 @@ class ShopifyEmbeddedShellPayloadBuilder
         }
 
         return trim((string) ($page['label'] ?? ''));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function commandSearchDocuments(
+        ?int $tenantId,
+        Request $request,
+        string $activeSection,
+        ?string $activeChild = null
+    ): array {
+        $displayLabels = $this->displayLabels($tenantId, $request);
+        $moduleStates = $this->moduleStates($tenantId, $request);
+        $currentRoute = strtolower(trim((string) ($request->route()?->getName() ?? '')));
+        $activeSection = strtolower(trim($activeSection));
+        $activeChild = strtolower(trim((string) $activeChild));
+
+        return collect($this->pageRegistry->pages())
+            ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates))
+            ->map(function (array $page) use ($displayLabels, $currentRoute, $activeSection, $activeChild): ?array {
+                $routeName = strtolower(trim((string) ($page['route_name'] ?? '')));
+                if ($routeName === '') {
+                    return null;
+                }
+
+                try {
+                    $url = trim((string) $this->urlGenerator->route($routeName, [], false));
+                } catch (UrlGenerationException) {
+                    return null;
+                }
+
+                if ($url === '' || str_contains($url, '{')) {
+                    return null;
+                }
+
+                $pageKey = strtolower(trim((string) ($page['key'] ?? '')));
+                $pageSection = strtolower(trim((string) ($page['section'] ?? '')));
+                $pageChild = strtolower(trim((string) $this->childKeyFromPage((string) ($page['key'] ?? ''))));
+                $isCurrentView = $currentRoute !== ''
+                    && ($routeName === $currentRoute || in_array($currentRoute, array_map('strtolower', (array) ($page['legacy_route_names'] ?? [])), true));
+                if (! $isCurrentView && $pageSection !== '' && $pageSection === $activeSection) {
+                    $isCurrentView = $activeChild === '' || $pageChild === $activeChild;
+                }
+
+                $label = $this->resolvedLabel($page, $displayLabels);
+                if ($label === '') {
+                    return null;
+                }
+
+                $subtitle = trim((string) ($page['search_subtitle'] ?? 'Open this workspace page.'));
+                $keywords = array_values(array_filter(array_map(
+                    static fn ($keyword): string => trim((string) $keyword),
+                    array_merge(
+                        [$label, $pageKey, $pageSection, $pageChild, (string) ($page['label_key'] ?? '')],
+                        (array) ($page['search_keywords'] ?? []),
+                        (array) ($page['legacy_route_names'] ?? [])
+                    )
+                ), static fn (string $keyword): bool => $keyword !== ''));
+                $breadcrumbs = array_values(array_filter([
+                    $pageSection !== '' ? str_replace(['_', '-'], ' ', ucfirst($pageSection)) : null,
+                    in_array((string) ($page['group'] ?? ''), ['customers_subnav', 'dashboard_subnav', 'rewards_children'], true)
+                        ? 'Section'
+                        : null,
+                ]));
+
+                return [
+                    'id' => 'page:'.$pageKey,
+                    'title' => $label,
+                    'subtitle' => $subtitle,
+                    'section' => $isCurrentView ? 'current-view' : 'pages',
+                    'keywords' => $keywords,
+                    'breadcrumbs' => $breadcrumbs,
+                    'aliases' => array_values(array_filter((array) ($page['legacy_route_names'] ?? []))),
+                    'entityType' => 'page',
+                    'execute' => [
+                        'type' => 'navigate',
+                        'url' => $url,
+                    ],
+                ];
+            })
+            ->filter()
+            ->unique(fn (array $row): string => strtolower(trim((string) ($row['id'] ?? '')).':'.trim((string) data_get($row, 'execute.url', ''))))
+            ->values()
+            ->all();
     }
 
     protected function childKeyFromPage(string $pageKey): string

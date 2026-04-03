@@ -178,3 +178,14 @@ test('embedded shell includes lightweight internal prefetch hooks for embedded l
         ->assertSee('__fbEmbeddedLinkPrefetchBound', false)
         ->assertSee('X-Forestry-Prefetch', false);
 });
+
+test('embedded shell mounts shopify command menu with registry-backed route discovery payload', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('home', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('data-shopify-global-command-menu', false)
+        ->assertDontSee('data-app-command-palette', false)
+        ->assertSee('"id":"page:settings"', false)
+        ->assertSee('"section":"pages"', false);
+});

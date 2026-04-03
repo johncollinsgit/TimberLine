@@ -70,9 +70,13 @@ test('shopify embedded shell payload builder memoizes tenant shell data within a
     $builder->customerSubnav('all', 42, $request);
     $builder->dashboardSubnav('overview', 42, $request);
     $builder->embeddedSearchResults('reward', 42, $request);
+    $commandDocuments = collect((array) ($navigation['commandSearchDocuments'] ?? []));
 
     expect($navigation['workspaceLabel'] ?? null)->toBe('Commerce')
-        ->and($navigation['displayLabels']['rewards_label'] ?? null)->toBe('Loyalty');
+        ->and($navigation['displayLabels']['rewards_label'] ?? null)->toBe('Loyalty')
+        ->and($commandDocuments->pluck('title')->contains('Settings'))->toBeTrue()
+        ->and($commandDocuments->contains(fn (array $row): bool => ($row['id'] ?? null) === 'page:customers.detail'))
+            ->toBeFalse();
 });
 
 test('shopify embedded shell payload builder picks up future pages from registry without controller changes', function () {
@@ -142,6 +146,9 @@ test('shopify embedded shell payload builder picks up future pages from registry
 
     $navigation = $builder->appNavigation('labs', null, 99, $request);
     $searchResults = $builder->embeddedSearchResults('labs', 99, $request);
+    $commandDocuments = is_array($navigation['commandSearchDocuments'] ?? null)
+        ? $navigation['commandSearchDocuments']
+        : [];
 
     $keys = collect((array) ($navigation['items'] ?? []))
         ->pluck('key')
@@ -149,5 +156,6 @@ test('shopify embedded shell payload builder picks up future pages from registry
         ->all();
 
     expect($keys)->toContain('labs')
-        ->and(collect($searchResults)->pluck('title')->all())->toContain('Labs');
+        ->and(collect($searchResults)->pluck('title')->all())->toContain('Labs')
+        ->and(collect($commandDocuments)->pluck('title')->all())->toContain('Labs');
 });

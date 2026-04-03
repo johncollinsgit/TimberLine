@@ -33,7 +33,13 @@
     }
     $navItems = is_array($appNavigation['items'] ?? null) ? $appNavigation['items'] : [];
     $commandSearchEndpoint = $appNavigation['commandSearchEndpoint'] ?? null;
-    $commandSearchPlaceholder = trim((string) ($appNavigation['commandSearchPlaceholder'] ?? 'Search customers, rewards, and settings'));
+    $commandSearchPlaceholder = trim((string) ($appNavigation['commandSearchPlaceholder'] ?? 'Search actions, pages, and Shopify tools'));
+    $commandSearchDocuments = is_array($appNavigation['commandSearchDocuments'] ?? null) ? $appNavigation['commandSearchDocuments'] : [];
+    $commandSearchContext = [
+        'shopDomain' => $shopDomain,
+        'host' => $host,
+        'currentRouteName' => request()->route()?->getName(),
+    ];
 @endphp
 
 <!DOCTYPE html>
@@ -84,6 +90,9 @@
         :workspace-label="$workspaceLabel"
         :command-search-endpoint="$commandSearchEndpoint"
         :command-search-placeholder="$commandSearchPlaceholder"
+        :command-search-documents="$commandSearchDocuments"
+        :command-search-context="$commandSearchContext"
+        :command-palette-variant="'shopify-actions'"
     >
         {{ $slot }}
     </x-app-shell>

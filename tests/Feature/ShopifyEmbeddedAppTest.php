@@ -168,6 +168,7 @@ test('shopify embedded home renders concise setup surface', function () {
         ->assertSeeText('Setup progress')
         ->assertSee('data-command-field', false)
         ->assertSee('id="app-topbar-command-search"', false)
+        ->assertDontSeeText('Cmd/Ctrl + K')
         ->assertSee('data-setup-panel', false)
         ->assertSee('aria-expanded="false"', false)
         ->assertSeeText('Attention needed')

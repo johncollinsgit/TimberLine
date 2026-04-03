@@ -10,7 +10,7 @@
     'activeChild' => null,
     'workspaceLabel' => 'Unified workspace',
     'commandSearchEnabled' => false,
-    'commandSearchPlaceholder' => 'Search the workspace',
+    'commandSearchPlaceholder' => 'Search actions, pages, and Shopify tools',
 ])
 
 @php
@@ -104,7 +104,6 @@
                         >
                             Search
                         </button>
-                        <span class="app-topbar-search-shortcut">Cmd/Ctrl + K</span>
                     </div>
                 @else
                     <button

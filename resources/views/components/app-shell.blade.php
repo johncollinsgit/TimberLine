@@ -8,7 +8,10 @@
     'host' => null,
     'showSidebar' => true,
     'commandSearchEndpoint' => null,
-    'commandSearchPlaceholder' => 'Search the workspace',
+    'commandSearchPlaceholder' => 'Search actions, pages, and Shopify tools',
+    'commandSearchDocuments' => [],
+    'commandSearchContext' => [],
+    'commandPaletteVariant' => 'legacy',
     'workspaceLabel' => 'Unified workspace',
 ])
 
@@ -45,9 +48,19 @@
 </div>
 
 @if(filled($commandSearchEndpoint))
-    <x-app-command-palette
-        :search-endpoint="$commandSearchEndpoint"
-        :placeholder="$commandSearchPlaceholder"
-        :context-label="$workspaceLabel"
-    />
+    @if($commandPaletteVariant === 'shopify-actions')
+        <x-shopify-global-command-menu
+            :search-endpoint="$commandSearchEndpoint"
+            :placeholder="$commandSearchPlaceholder"
+            :context-label="$workspaceLabel"
+            :documents="$commandSearchDocuments"
+            :context="$commandSearchContext"
+        />
+    @else
+        <x-app-command-palette
+            :search-endpoint="$commandSearchEndpoint"
+            :placeholder="$commandSearchPlaceholder"
+            :context-label="$workspaceLabel"
+        />
+    @endif
 @endif
