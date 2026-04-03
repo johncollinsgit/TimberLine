@@ -84,10 +84,10 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
   const [query, setQuery] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
   const [pendingSubmit, setPendingSubmit] = useState(null);
-  const [highlightedItemId, setHighlightedItemId] = useState("");
   const openRef = useRef(false);
   const selectedDuringSessionRef = useRef(false);
   const zeroResultTrackedRef = useRef("");
+  const panelRef = useRef(null);
 
   const {
     groups,
@@ -119,19 +119,6 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
   useEffect(() => {
     openRef.current = open;
   }, [open]);
-
-  useEffect(() => {
-    if (!hasResults) {
-      if (highlightedItemId !== "") {
-        setHighlightedItemId("");
-      }
-      return;
-    }
-
-    if (!resultEntryById.has(highlightedItemId)) {
-      setHighlightedItemId(topResultEntry?.document.id || "");
-    }
-  }, [hasResults, highlightedItemId, resultEntryById, topResultEntry]);
 
   useEffect(() => {
     const expanded = open ? "true" : "false";
@@ -230,7 +217,18 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
   };
 
   const executeHighlightedDocument = ({ source = "unknown", queryOverride } = {}) => {
-    const selectedEntry = resultEntryById.get(highlightedItemId) || topResultEntry;
+    let selectedEntry = topResultEntry;
+    const panel = panelRef.current;
+    if (panel instanceof HTMLElement) {
+      const selectedItem = panel.querySelector('[cmdk-item][aria-selected="true"][data-result-id]');
+      if (selectedItem instanceof HTMLElement) {
+        const selectedId = String(selectedItem.dataset.resultId || "").trim();
+        if (selectedId !== "" && resultEntryById.has(selectedId)) {
+          selectedEntry = resultEntryById.get(selectedId) || selectedEntry;
+        }
+      }
+    }
+
     const effectiveQuery = queryOverride ?? query;
 
     if (!selectedEntry?.document) {
@@ -426,7 +424,7 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
       queryOverride: pendingSubmit.query,
     });
     setPendingSubmit(null);
-  }, [pendingSubmit, query, open, highlightedItemId, resultEntryById, topResultEntry]);
+  }, [pendingSubmit, query, open, resultEntryById, topResultEntry]);
 
   if (typeof document === "undefined") {
     return null;
@@ -437,6 +435,7 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
       <div className="fixed inset-0 z-[78] fb-overlay-subtle" onClick={() => closeMenu("overlay")} />
       <div
         id={COMMAND_PANEL_ID}
+        ref={panelRef}
         className="fixed inset-x-0 top-[8vh] z-[79] px-4"
         role="dialog"
         aria-modal="true"
@@ -446,8 +445,6 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
           <Command
             shouldFilter={false}
             loop
-            value={highlightedItemId}
-            onValueChange={setHighlightedItemId}
             label="Global command menu"
           >
             <div className="border-b border-zinc-200 px-5 py-4">
@@ -503,12 +500,13 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
                     {group.items.map((item) => {
                       const badge = badgeForItem(item);
                       const breadcrumbs = Array.isArray(item.breadcrumbs) ? item.breadcrumbs.filter(Boolean) : [];
-                      const position = resultEntries.findIndex((entry) => entry.document.id === item.id);
+                      const position = resultEntryById.get(item.id)?.position ?? null;
 
                       return (
                         <Command.Item
                           key={item.id}
                           value={item.id}
+                          data-result-id={item.id}
                           onSelect={() => executeDocument(item, { position })}
                           className="block cursor-pointer rounded-2xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-emerald-700/35 hover:bg-emerald-50/55"
                         >

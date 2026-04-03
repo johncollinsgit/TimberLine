@@ -256,5 +256,5 @@ test('embedded topbar search exposes accessible command menu controls and endpoi
         ->assertSee('aria-controls="shopify-global-command-menu-panel"', false)
         ->assertSee('aria-haspopup="dialog"', false)
         ->assertSee('aria-expanded="false"', false)
-        ->assertSee('action="/shopify/app/api/search"', false);
+        ->assertDontSee('action="/shopify/app/api/search"', false);
 });

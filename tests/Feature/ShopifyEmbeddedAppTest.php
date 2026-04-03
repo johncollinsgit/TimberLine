@@ -209,6 +209,27 @@ test('shopify embedded search reuses page context and returns embedded backstage
         ->toContain('/shopify/app/settings?host=admin-host-token');
 });
 
+test('shopify embedded search accepts person-name queries with spaces and does not return open_from_shopify state when context is present', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $response = $this->getJson(route('shopify.app.api.search', array_merge(
+        retailEmbeddedSignedQuery(),
+        ['q' => 'John collins']
+    )));
+
+    $response->assertOk()
+        ->assertJsonPath('query', 'John collins')
+        ->assertJsonMissing(['status' => 'open_from_shopify'])
+        ->assertJsonStructure([
+            'query',
+            'results',
+            'groups',
+            'total',
+        ]);
+});
+
 test('home does not flag sync as stale before the configured threshold', function () {
     $this->travelTo(CarbonImmutable::parse('2026-04-02 12:00:00'));
 

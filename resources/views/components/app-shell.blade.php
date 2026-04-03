@@ -39,7 +39,6 @@
             :store-label="$storeLabel"
             :workspace-label="$workspaceLabel"
             :command-search-enabled="filled($commandSearchEndpoint)"
-            :command-search-endpoint="$commandSearchEndpoint"
             :command-search-placeholder="$commandSearchPlaceholder"
         />
         <div class="app-shell-content">
