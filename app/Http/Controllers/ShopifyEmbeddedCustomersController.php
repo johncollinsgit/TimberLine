@@ -8,6 +8,7 @@ use App\Services\Marketing\CandleCashService;
 use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
+use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
@@ -80,13 +81,15 @@ class ShopifyEmbeddedCustomersController extends Controller
             ]);
         }
 
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $authorized = (bool) ($context['ok'] ?? false);
         $tenantId = $authorized
-            ? $this->resolveEmbeddedTenantId($context, app(TenantResolver::class))
+            ? $probe->time('tenant_resolve', fn (): ?int => $this->resolveEmbeddedTenantId($context, app(TenantResolver::class)))
             : null;
+        $probe->forTenant($tenantId);
         $grid = $authorized
-            ? $gridService->resolve($request, $tenantId)
+            ? $probe->time('page_payload', fn (): array => $gridService->resolve($request, $tenantId))
             : $gridService->emptyResult($request);
 
         Log::info('shopify.embedded.manage.render', [
@@ -109,6 +112,8 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'customersManageEndpoint' => $request->url(),
             ],
             resolvedContext: $context,
+            resolvedTenantId: $tenantId,
+            probe: $probe,
         );
     }
 
@@ -165,12 +170,14 @@ class ShopifyEmbeddedCustomersController extends Controller
         TenantResolver $tenantResolver,
         MarketingProfile $marketingProfile
     ): Response {
+        $probe = $this->embeddedProbe($request);
         $criticalStartedAt = microtime(true);
-        $context = $contextService->resolvePageContext($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $authorized = (bool) ($context['ok'] ?? false);
         $tenantId = $authorized
-            ? $this->resolveEmbeddedTenantId($context, $tenantResolver)
+            ? $probe->time('tenant_resolve', fn (): ?int => $this->resolveEmbeddedTenantId($context, $tenantResolver))
             : null;
+        $probe->forTenant($tenantId);
 
         if ($authorized) {
             abort_unless(
@@ -184,7 +191,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             $displayName = $this->customerDisplayName($marketingProfile);
         }
 
-        $detail = $authorized ? $detailService->buildCritical($marketingProfile, $tenantId) : [
+        $detail = $authorized ? $probe->time('page_payload', fn (): array => $detailService->buildCritical($marketingProfile, $tenantId)) : [
             'summary' => [],
             'statuses' => [],
             'activity' => [],
@@ -271,6 +278,8 @@ class ShopifyEmbeddedCustomersController extends Controller
                 ] : null,
             ],
             resolvedContext: $context,
+            resolvedTenantId: $tenantId,
+            probe: $probe,
         );
 
         return $this->withServerTiming($response, [
@@ -638,9 +647,12 @@ class ShopifyEmbeddedCustomersController extends Controller
         string $defaultHeadline,
         string $defaultSubheadline,
         array $extraViewData,
-        ?array $resolvedContext = null
+        ?array $resolvedContext = null,
+        ?int $resolvedTenantId = null,
+        ?ShopifyEmbeddedPerformanceProbe $probe = null
     ): Response {
-        $context = $resolvedContext ?? $contextService->resolvePageContext($request);
+        $probe ??= $this->embeddedProbe($request);
+        $context = $resolvedContext ?? $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
 
         Log::info('shopify.embedded.manage.context', [
             'route' => $request->route()?->getName(),
@@ -652,11 +664,12 @@ class ShopifyEmbeddedCustomersController extends Controller
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? app(TenantResolver::class)->resolveTenantIdForStoreContext($store)
+            ? ($resolvedTenantId ?? $probe->time('tenant_resolve', fn (): ?int => app(TenantResolver::class)->resolveTenantIdForStoreContext($store)))
             : null;
+        $probe->forTenant($tenantId);
         /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
         $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
-        $labels = $payloadBuilder->displayLabels($tenantId, $request);
+        $labels = $probe->time('shell_payload', fn (): array => $payloadBuilder->displayLabels($tenantId, $request));
         $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
         if ($rewardsLabel === '') {
             $rewardsLabel = 'Rewards';
@@ -680,7 +693,13 @@ class ShopifyEmbeddedCustomersController extends Controller
         $resolvedHeadline = strtr($this->headlineForStatus($status, $defaultHeadline), $tokenMap);
         $resolvedSubheadline = strtr($this->subheadlineForStatus($status, $defaultSubheadline), $tokenMap);
 
-        return $this->embeddedResponse(
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('customers', null, $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->customerSubnav($subnavKey, $tenantId));
+        $merchantJourney = $authorized
+            ? $probe->time('page_payload', fn (): array => app(TenantCommercialExperienceService::class)->merchantJourneyPayload($tenantId))
+            : null;
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view($view, array_merge([
                 'authorized' => $authorized,
                 'status' => $status,
@@ -692,17 +711,22 @@ class ShopifyEmbeddedCustomersController extends Controller
                     : 'Shopify Admin',
                 'headline' => $resolvedHeadline,
                 'subheadline' => $resolvedSubheadline,
-                'appNavigation' => $this->embeddedAppNavigation('customers', null, $tenantId),
-                'pageSubnav' => $this->customerSubnav($subnavKey, $tenantId),
+                'appNavigation' => $appNavigation,
+                'pageSubnav' => $pageSubnav,
                 'pageActions' => [],
                 'displayLabels' => $labels,
                 'rewardsLabel' => $rewardsLabel,
                 'rewardsBalanceLabel' => $rewardsBalanceLabel,
                 'rewardCreditLabel' => $rewardCreditLabel,
-                'merchantJourney' => app(TenantCommercialExperienceService::class)->merchantJourneyPayload($tenantId),
+                'merchantJourney' => $merchantJourney,
             ], $extraViewData)),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     protected function embeddedResponse(Response $response, int $status = 200): Response
@@ -1293,10 +1317,20 @@ class ShopifyEmbeddedCustomersController extends Controller
             ->all();
 
         if ($values !== []) {
-            $response->headers->set('Server-Timing', implode(', ', $values));
+            $existing = trim((string) $response->headers->get('Server-Timing', ''));
+            $combined = array_filter([$existing, implode(', ', $values)]);
+            $response->headers->set('Server-Timing', implode(', ', $combined));
         }
 
         return $response;
+    }
+
+    protected function embeddedProbe(Request $request): ShopifyEmbeddedPerformanceProbe
+    {
+        /** @var ShopifyEmbeddedPerformanceProbe $probe */
+        $probe = app(ShopifyEmbeddedPerformanceProbe::class);
+
+        return $probe->forRequest($request);
     }
 
     /**

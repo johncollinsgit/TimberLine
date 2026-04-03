@@ -52,6 +52,22 @@ test('shopify embedded app route renders verified admin shell for configured sto
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
 
+test('shopify embedded app route emits server timing header only when profiling is enabled', function () {
+    configureEmbeddedRetailStore();
+
+    config()->set('shopify_embedded.perf_profiling_enabled', true);
+    $withProfiling = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
+    $withProfiling->assertOk();
+    expect((string) $withProfiling->headers->get('Server-Timing', ''))
+        ->toContain('context;dur=')
+        ->toContain('total;dur=');
+
+    config()->set('shopify_embedded.perf_profiling_enabled', false);
+    $withoutProfiling = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
+    $withoutProfiling->assertOk();
+    expect($withoutProfiling->headers->get('Server-Timing'))->toBeNull();
+});
+
 test('shopify embedded app route rejects invalid hmac', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');

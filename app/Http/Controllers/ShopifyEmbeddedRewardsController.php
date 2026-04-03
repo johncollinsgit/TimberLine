@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -39,21 +40,26 @@ class ShopifyEmbeddedRewardsController extends Controller
         TenantResolver $tenantResolver
     ): Response
     {
-        $pageContext = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $pageContext = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $authorized = (bool) ($pageContext['ok'] ?? false);
         $store = (array) ($pageContext['store'] ?? []);
+        $resolvedTenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
         $configState = $authorized
-            ? $this->rewardsConfigState($store, $tenantResolver)
+            ? $probe->time('page_payload', fn (): array => $this->rewardsConfigState($store, $tenantResolver, $resolvedTenantId))
             : ['available' => false];
-        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null;
+        $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : $resolvedTenantId;
+        $probe->forTenant($tenantId);
         $overview = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
-            ? $rewardsService->overview($tenantId)
+            ? $probe->time('page_payload', fn (): array => $rewardsService->overview($tenantId))
             : [];
         $analytics = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
-            ? $dashboardDataService->payload([
+            ? $probe->time('page_payload', fn (): array => $dashboardDataService->payload([
                 ...$request->query(),
                 'tenant_id' => $tenantId,
-            ])
+            ]))
             : [];
 
         return $this->renderSection(
@@ -66,7 +72,11 @@ class ShopifyEmbeddedRewardsController extends Controller
                 'dashboard' => $overview,
                 'analytics' => $analytics,
                 'setupNote' => null,
-            ]
+            ],
+            resolvedContext: $pageContext,
+            resolvedConfigState: $configState,
+            resolvedTenantId: $resolvedTenantId,
+            probe: $probe
         );
     }
 
@@ -125,12 +135,14 @@ class ShopifyEmbeddedRewardsController extends Controller
         TenantResolver $tenantResolver
     ): Response
     {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
+        $probe->forTenant($tenantId);
 
         return $this->renderSection(
             $request,
@@ -164,7 +176,10 @@ class ShopifyEmbeddedRewardsController extends Controller
                         'analytics_export' => route('shopify.app.api.rewards.birthdays.analytics.export', [], false),
                     ],
                 ],
-            ]
+            ],
+            resolvedContext: $context,
+            resolvedTenantId: $tenantId,
+            probe: $probe
         );
     }
 
@@ -312,12 +327,21 @@ class ShopifyEmbeddedRewardsController extends Controller
         TenantResolver $tenantResolver
     ): Response
     {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
+        $resolvedTenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
         $configState = $authorized
-            ? $this->rewardsConfigState($store, $tenantResolver)
+            ? $probe->time('page_payload', fn (): array => $this->rewardsConfigState(
+                $store,
+                $tenantResolver,
+                $resolvedTenantId
+            ))
             : ['available' => false, 'editable' => false];
+        $probe->forTenant(is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : null);
 
         return $this->renderSection(
             $request,
@@ -340,7 +364,11 @@ class ShopifyEmbeddedRewardsController extends Controller
                 'rewardsPolicyExpiringExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'expiring_rewards'], false),
                 'rewardsPolicyFinanceExportEndpoint' => route('shopify.app.api.rewards.policy.exports', ['type' => 'finance_summary'], false),
                 'rewardsPolicyEditable' => (bool) ($configState['editable'] ?? false),
-            ]
+            ],
+            resolvedContext: $context,
+            resolvedConfigState: $configState,
+            resolvedTenantId: $resolvedTenantId,
+            probe: $probe
         );
     }
 
@@ -1062,16 +1090,35 @@ class ShopifyEmbeddedRewardsController extends Controller
         TenantResolver $tenantResolver,
         string $section,
         string $view,
-        array $extra = []
+        array $extra = [],
+        ?array $resolvedContext = null,
+        ?array $resolvedConfigState = null,
+        ?int $resolvedTenantId = null,
+        ?ShopifyEmbeddedPerformanceProbe $probe = null
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $probe ??= $this->embeddedProbe($request);
+        $context = $resolvedContext ?? $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
-        $configState = $authorized
-            ? $this->rewardsConfigState($store, $tenantResolver)
-            : ['available' => false, 'tenant_id' => null, 'status' => null, 'message' => null];
-        $displayLabels = app(TenantDisplayLabelResolver::class)->resolve($configState['tenant_id'] ?? null);
+        $configTenantId = is_numeric($resolvedConfigState['tenant_id'] ?? null)
+            ? (int) $resolvedConfigState['tenant_id']
+            : null;
+        $resolvedTenantId = $authorized
+            ? ($resolvedTenantId ?? $configTenantId ?? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store)))
+            : null;
+        $configState = $resolvedConfigState ?? ($authorized
+            ? $probe->time('page_payload', fn (): array => $this->rewardsConfigState($store, $tenantResolver, $resolvedTenantId))
+            : [
+                'available' => false,
+                'editable' => false,
+                'tenant_id' => null,
+                'status' => null,
+                'message' => null,
+                'sms_channel_enabled' => false,
+            ]);
+        $probe->forTenant(is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : $resolvedTenantId);
+        $displayLabels = $probe->time('shell_payload', fn (): array => app(TenantDisplayLabelResolver::class)->resolve($configState['tenant_id'] ?? null));
         $labels = is_array($displayLabels['labels'] ?? null) ? (array) $displayLabels['labels'] : [];
         $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
         if ($rewardsLabel === '') {
@@ -1103,6 +1150,12 @@ class ShopifyEmbeddedRewardsController extends Controller
         if ($birthdayRewardLabel === '') {
             $birthdayRewardLabel = 'Birthday reward';
         }
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation(
+            'rewards',
+            $section,
+            $configState['tenant_id'] ?? null
+        ));
 
         $viewData = [
             'authorized' => $authorized,
@@ -1143,11 +1196,7 @@ class ShopifyEmbeddedRewardsController extends Controller
                     ],
                 ]
                 : [],
-            'appNavigation' => $this->embeddedAppNavigation(
-                'rewards',
-                $section,
-                $configState['tenant_id'] ?? null
-            ),
+            'appNavigation' => $appNavigation,
             'pageActions' => [],
             'displayLabels' => $labels,
             'rewardsLabel' => $rewardsLabel,
@@ -1160,10 +1209,15 @@ class ShopifyEmbeddedRewardsController extends Controller
 
         $viewData = array_merge($viewData, $extra);
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view($view, $viewData),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     protected function embeddedResponse(Response $response, int $status = 200): Response
@@ -1176,6 +1230,14 @@ class ShopifyEmbeddedRewardsController extends Controller
         $response->headers->remove('X-Frame-Options');
 
         return $response;
+    }
+
+    protected function embeddedProbe(Request $request): ShopifyEmbeddedPerformanceProbe
+    {
+        /** @var ShopifyEmbeddedPerformanceProbe $probe */
+        $probe = app(ShopifyEmbeddedPerformanceProbe::class);
+
+        return $probe->forRequest($request);
     }
 
     protected function validateEarnPayload(Request $request): array
@@ -1514,9 +1576,9 @@ class ShopifyEmbeddedRewardsController extends Controller
      * @param  array<string,mixed>  $store
      * @return array{available:bool,editable:bool,tenant_id:?int,status:?string,message:?string,sms_channel_enabled:bool}
      */
-    protected function rewardsConfigState(array $store, TenantResolver $tenantResolver): array
+    protected function rewardsConfigState(array $store, TenantResolver $tenantResolver, ?int $resolvedTenantId = null): array
     {
-        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
+        $tenantId = $resolvedTenantId ?? $tenantResolver->resolveTenantIdForStoreContext($store);
         if ($tenantId === null) {
             return [
                 'available' => false,

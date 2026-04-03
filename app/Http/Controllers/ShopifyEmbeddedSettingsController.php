@@ -6,6 +6,7 @@ use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Models\ShopifyStore;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
@@ -25,16 +26,26 @@ class ShopifyEmbeddedSettingsController extends Controller
         TenantResolver $tenantResolver,
         TenantEmailSettingsService $emailSettingsService
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
 
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
+        $probe->forTenant($tenantId);
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('settings', null, $tenantId));
+        $emailSettings = ($authorized && $tenantId !== null)
+            ? $probe->time('page_payload', fn (): array => $emailSettingsService->forAdmin($tenantId))
+            : null;
+        $widgetSettings = $probe->time('page_payload', fn (): array => $this->widgetSettingsBootstrap(
+            $authorized ? (string) ($store['key'] ?? '') : null,
+            $authorized ? ($store['storefront_widget_settings'] ?? null) : null
+        ));
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.settings', [
                 'authorized' => $authorized,
                 'status' => $status,
@@ -46,7 +57,7 @@ class ShopifyEmbeddedSettingsController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status),
                 'subheadline' => $this->subheadlineForStatus($status),
-                'appNavigation' => $this->embeddedAppNavigation('settings', null, $tenantId),
+                'appNavigation' => $appNavigation,
                 'pageActions' => [],
                 'smsSenders' => $senderConfigService->all(),
                 'defaultSmsSender' => $senderConfigService->defaultSender(),
@@ -56,7 +67,7 @@ class ShopifyEmbeddedSettingsController extends Controller
                     'store_key' => $authorized ? ($store['key'] ?? null) : null,
                     'status' => $status,
                     'settings' => $authorized && $tenantId !== null
-                        ? $emailSettingsService->forAdmin($tenantId)
+                        ? $emailSettings
                         : null,
                     'endpoints' => [
                         'load' => route('shopify.app.api.settings.email', [], false),
@@ -66,13 +77,15 @@ class ShopifyEmbeddedSettingsController extends Controller
                         'health' => route('shopify.app.api.settings.email.health', [], false),
                     ],
                 ],
-                'widgetSettingsBootstrap' => $this->widgetSettingsBootstrap(
-                    $authorized ? (string) ($store['key'] ?? '') : null,
-                    $authorized ? ($store['storefront_widget_settings'] ?? null) : null
-                ),
+                'widgetSettingsBootstrap' => $widgetSettings,
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     public function widgetSettings(
@@ -409,6 +422,14 @@ class ShopifyEmbeddedSettingsController extends Controller
         $response->headers->remove('X-Frame-Options');
 
         return $response;
+    }
+
+    protected function embeddedProbe(Request $request): ShopifyEmbeddedPerformanceProbe
+    {
+        /** @var ShopifyEmbeddedPerformanceProbe $probe */
+        $probe = app(ShopifyEmbeddedPerformanceProbe::class);
+
+        return $probe->forRequest($request);
     }
 
     /**

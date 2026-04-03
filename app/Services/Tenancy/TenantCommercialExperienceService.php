@@ -11,11 +11,27 @@ use App\Models\TenantAccessAddon;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Support\Tenancy\TenantModuleUi;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class TenantCommercialExperienceService
 {
+    /**
+     * @var array<string,bool>
+     */
+    protected array $schemaTableCache = [];
+
+    /**
+     * @var array<string,bool>
+     */
+    protected array $schemaColumnCache = [];
+
+    /**
+     * @var array<string,array<string,mixed>>
+     */
+    protected array $journeySummaryCache = [];
+
     public function __construct(
         protected TenantModuleAccessResolver $accessResolver,
         protected LandlordCommercialConfigService $commercialConfigService,
@@ -57,7 +73,8 @@ class TenantCommercialExperienceService
      */
     public function onboardingPayload(?int $tenantId): array
     {
-        $content = (array) config('product_surfaces.onboarding', []);
+        return $this->rememberJourneyPayload($tenantId, 'onboarding', function () use ($tenantId): array {
+            $content = (array) config('product_surfaces.onboarding', []);
         $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
 
         if ($moduleOrder === []) {
@@ -77,24 +94,25 @@ class TenantCommercialExperienceService
             ? (array) config('entitlements.plans.'.$planKey)
             : [];
 
-        return [
-            'content' => $content,
-            'tenant_id' => $tenantId,
-            'plan' => [
-                'key' => $planKey,
-                'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
-                'track' => (string) ($planDefinition['track'] ?? 'shopify'),
-                'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
-            ],
-            'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
-            'module_states' => $moduleStates,
-            'module_order' => $moduleOrder,
-            'checklist' => $checklist,
-            'recommended_actions' => $this->recommendedActions(
-                actions: (array) ($content['recommended_actions'] ?? []),
-                moduleStates: $moduleStates
-            ),
-        ];
+            return [
+                'content' => $content,
+                'tenant_id' => $tenantId,
+                'plan' => [
+                    'key' => $planKey,
+                    'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
+                    'track' => (string) ($planDefinition['track'] ?? 'shopify'),
+                    'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
+                ],
+                'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
+                'module_states' => $moduleStates,
+                'module_order' => $moduleOrder,
+                'checklist' => $checklist,
+                'recommended_actions' => $this->recommendedActions(
+                    actions: (array) ($content['recommended_actions'] ?? []),
+                    moduleStates: $moduleStates
+                ),
+            ];
+        });
     }
 
     /**
@@ -118,7 +136,8 @@ class TenantCommercialExperienceService
      */
     public function merchantJourneyPayload(?int $tenantId): array
     {
-        $content = (array) config('product_surfaces.onboarding', []);
+        return $this->rememberJourneyPayload($tenantId, 'merchant_journey', function () use ($tenantId): array {
+            $content = (array) config('product_surfaces.onboarding', []);
         $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
 
         if ($moduleOrder === []) {
@@ -138,33 +157,35 @@ class TenantCommercialExperienceService
             ? (array) config('entitlements.plans.'.$planKey)
             : [];
 
-        $customerSummary = $this->customerSummary($tenantId);
-        $importSummary = $this->importSummary($tenantId, (int) ($customerSummary['total_profiles'] ?? 0));
+            $summary = $this->merchantJourneySummary($tenantId);
+            $customerSummary = $summary['customer_summary'];
+            $importSummary = $summary['import_summary'];
 
-        return [
-            'tenant_id' => $tenantId,
-            'plan' => [
-                'key' => $planKey,
-                'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
-                'track' => (string) ($planDefinition['track'] ?? 'shopify'),
-                'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
-            ],
-            'module_states' => $moduleStates,
-            'module_order' => $moduleOrder,
-            'checklist' => $checklist,
-            'recommended_actions' => $this->recommendedActions(
-                actions: (array) ($content['recommended_actions'] ?? []),
-                moduleStates: $moduleStates
-            ),
-            'customer_summary' => $customerSummary,
-            'import_summary' => $importSummary,
-            'active_now' => array_values((array) ($checklist['active'] ?? [])),
-            'available_next' => array_values((array) ($checklist['setup'] ?? [])),
-            'purchasable' => array_values(array_filter(
-                (array) ($checklist['locked'] ?? []),
-                static fn (array $module): bool => (bool) ($module['upgrade_prompt_eligible'] ?? false)
-            )),
-        ];
+            return [
+                'tenant_id' => $tenantId,
+                'plan' => [
+                    'key' => $planKey,
+                    'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
+                    'track' => (string) ($planDefinition['track'] ?? 'shopify'),
+                    'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
+                ],
+                'module_states' => $moduleStates,
+                'module_order' => $moduleOrder,
+                'checklist' => $checklist,
+                'recommended_actions' => $this->recommendedActions(
+                    actions: (array) ($content['recommended_actions'] ?? []),
+                    moduleStates: $moduleStates
+                ),
+                'customer_summary' => $customerSummary,
+                'import_summary' => $importSummary,
+                'active_now' => array_values((array) ($checklist['active'] ?? [])),
+                'available_next' => array_values((array) ($checklist['setup'] ?? [])),
+                'purchasable' => array_values(array_filter(
+                    (array) ($checklist['locked'] ?? []),
+                    static fn (array $module): bool => (bool) ($module['upgrade_prompt_eligible'] ?? false)
+                )),
+            ];
+        });
     }
 
     /**
@@ -185,7 +206,8 @@ class TenantCommercialExperienceService
      */
     public function plansPayload(?int $tenantId): array
     {
-        $content = (array) config('product_surfaces.plans', []);
+        return $this->rememberJourneyPayload($tenantId, 'plans', function () use ($tenantId): array {
+            $content = (array) config('product_surfaces.plans', []);
         $moduleCatalog = (array) config('entitlements.modules', []);
         $moduleKeys = array_keys($moduleCatalog);
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
@@ -258,30 +280,31 @@ class TenantCommercialExperienceService
             ];
         }
 
-        return [
-            'content' => $content,
-            'tenant_id' => $tenantId,
-            'current_plan' => [
-                'key' => $planKey,
-                'label' => (string) ($currentPlan['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
-                'track' => (string) ($currentPlan['track'] ?? 'shopify'),
-                'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
-                'includes' => $currentPlanIncludes,
-            ],
-            'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
-            'module_states' => $moduleStates,
-            'checklist' => $checklist,
-            'current_plan_modules' => $currentPlanModules,
-            'locked_modules' => array_values((array) ($checklist['locked'] ?? [])),
-            'add_on_capable_modules' => $this->addOnCapableModules($moduleStates, $addonCatalog),
-            'plan_cards' => $this->planCards(
-                cardsConfig: (array) ($content['cards'] ?? []),
-                preferredOrder: $this->normalizeKeys((array) ($content['plan_order'] ?? [])),
-                activePlanKey: $planKey
-            ),
-            'addon_cards' => $addonCards,
-            'enabled_addon_keys' => $enabledAddonKeys,
-        ];
+            return [
+                'content' => $content,
+                'tenant_id' => $tenantId,
+                'current_plan' => [
+                    'key' => $planKey,
+                    'label' => (string) ($currentPlan['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
+                    'track' => (string) ($currentPlan['track'] ?? 'shopify'),
+                    'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
+                    'includes' => $currentPlanIncludes,
+                ],
+                'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
+                'module_states' => $moduleStates,
+                'checklist' => $checklist,
+                'current_plan_modules' => $currentPlanModules,
+                'locked_modules' => array_values((array) ($checklist['locked'] ?? [])),
+                'add_on_capable_modules' => $this->addOnCapableModules($moduleStates, $addonCatalog),
+                'plan_cards' => $this->planCards(
+                    cardsConfig: (array) ($content['cards'] ?? []),
+                    preferredOrder: $this->normalizeKeys((array) ($content['plan_order'] ?? [])),
+                    activePlanKey: $planKey
+                ),
+                'addon_cards' => $addonCards,
+                'enabled_addon_keys' => $enabledAddonKeys,
+            ];
+        });
     }
 
     /**
@@ -299,7 +322,8 @@ class TenantCommercialExperienceService
      */
     public function integrationsPayload(?int $tenantId): array
     {
-        $content = (array) config('product_surfaces.integrations', []);
+        return $this->rememberJourneyPayload($tenantId, 'integrations', function () use ($tenantId): array {
+            $content = (array) config('product_surfaces.integrations', []);
         $cardsConfig = (array) ($content['cards'] ?? []);
         $moduleKeys = [];
 
@@ -380,28 +404,110 @@ class TenantCommercialExperienceService
             ? (array) config('entitlements.plans.'.$planKey)
             : [];
 
-        return [
-            'content' => $content,
-            'tenant_id' => $tenantId,
-            'plan' => [
-                'key' => $planKey,
-                'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
-                'track' => (string) ($planDefinition['track'] ?? 'shopify'),
-                'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
-            ],
-            'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
-            'module_states' => $moduleStates,
-            'cards' => $cards,
-            'status_registry' => $statusRegistry,
-            'categories' => $categories,
-            'counts' => [
-                'total' => count($cards),
-                'connected' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'connected')),
-                'setup_needed' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'setup_needed')),
-                'locked' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'locked')),
-                'coming_soon' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'coming_soon')),
-            ],
+            return [
+                'content' => $content,
+                'tenant_id' => $tenantId,
+                'plan' => [
+                    'key' => $planKey,
+                    'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
+                    'track' => (string) ($planDefinition['track'] ?? 'shopify'),
+                    'operating_mode' => (string) ($resolved['operating_mode'] ?? config('entitlements.default_operating_mode', 'shopify')),
+                ],
+                'commercial_context' => $this->commercialContext($tenantId, $moduleStates),
+                'module_states' => $moduleStates,
+                'cards' => $cards,
+                'status_registry' => $statusRegistry,
+                'categories' => $categories,
+                'counts' => [
+                    'total' => count($cards),
+                    'connected' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'connected')),
+                    'setup_needed' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'setup_needed')),
+                    'locked' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'locked')),
+                    'coming_soon' => count(array_filter($cards, static fn (array $card): bool => ($card['state'] ?? '') === 'coming_soon')),
+                ],
+            ];
+        });
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable():T  $resolver
+     * @return T
+     */
+    protected function rememberJourneyPayload(?int $tenantId, string $payloadType, callable $resolver)
+    {
+        $ttlSeconds = $this->journeyCacheTtlSeconds();
+        if ($ttlSeconds <= 0) {
+            return $resolver();
+        }
+
+        try {
+            return Cache::remember(
+                $this->journeyCacheKey($tenantId, $payloadType),
+                now()->addSeconds($ttlSeconds),
+                $resolver
+            );
+        } catch (\Throwable) {
+            return $resolver();
+        }
+    }
+
+    protected function journeyCacheKey(?int $tenantId, string $payloadType): string
+    {
+        $tenantCacheKey = $tenantId === null ? 'none' : (string) max(0, $tenantId);
+
+        return sprintf(
+            'shopify:embedded:tenant:%s:%s:v1',
+            $tenantCacheKey,
+            strtolower(trim($payloadType))
+        );
+    }
+
+    protected function journeyCacheTtlSeconds(): int
+    {
+        return max(0, (int) config('shopify_embedded.journey_cache_ttl_seconds', 60));
+    }
+
+    /**
+     * @return array{
+     *   customer_summary:array<string,mixed>,
+     *   import_summary:array<string,mixed>
+     * }
+     */
+    protected function merchantJourneySummary(?int $tenantId): array
+    {
+        $cacheKey = $tenantId === null ? 'tenant:none' : 'tenant:'.$tenantId;
+        if (isset($this->journeySummaryCache[$cacheKey])) {
+            return $this->journeySummaryCache[$cacheKey];
+        }
+
+        $customerSummary = $this->customerSummary($tenantId);
+        $importSummary = $this->importSummary($tenantId, (int) ($customerSummary['total_profiles'] ?? 0));
+
+        return $this->journeySummaryCache[$cacheKey] = [
+            'customer_summary' => $customerSummary,
+            'import_summary' => $importSummary,
         ];
+    }
+
+    protected function hasTable(string $table): bool
+    {
+        if (array_key_exists($table, $this->schemaTableCache)) {
+            return $this->schemaTableCache[$table];
+        }
+
+        return $this->schemaTableCache[$table] = Schema::hasTable($table);
+    }
+
+    protected function hasColumn(string $table, string $column): bool
+    {
+        $cacheKey = $table.':'.$column;
+        if (array_key_exists($cacheKey, $this->schemaColumnCache)) {
+            return $this->schemaColumnCache[$cacheKey];
+        }
+
+        return $this->schemaColumnCache[$cacheKey] = Schema::hasColumn($table, $column);
     }
 
     /**
@@ -1125,7 +1231,7 @@ class TenantCommercialExperienceService
      */
     protected function customerSummary(?int $tenantId): array
     {
-        if (! Schema::hasTable('marketing_profiles')) {
+        if (! $this->hasTable('marketing_profiles')) {
             return [
                 'total_profiles' => 0,
                 'reachable_profiles' => 0,
@@ -1158,7 +1264,7 @@ class TenantCommercialExperienceService
             })
             ->count();
         $customersWithPoints = 0;
-        if (Schema::hasTable('candle_cash_balances')) {
+        if ($this->hasTable('candle_cash_balances')) {
             $customersWithPoints = (int) (clone $profilesQuery)
                 ->whereIn('id', function ($query): void {
                     $query->from('candle_cash_balances')
@@ -1169,10 +1275,10 @@ class TenantCommercialExperienceService
         }
 
         $linkedExternalProfiles = 0;
-        if (Schema::hasTable('customer_external_profiles')) {
+        if ($this->hasTable('customer_external_profiles')) {
             $externalQuery = CustomerExternalProfile::query();
 
-            if (Schema::hasColumn('customer_external_profiles', 'tenant_id')) {
+            if ($this->hasColumn('customer_external_profiles', 'tenant_id')) {
                 if ($tenantId === null) {
                     $externalQuery->whereNull('tenant_id');
                 } else {
@@ -1303,13 +1409,13 @@ class TenantCommercialExperienceService
 
     protected function latestMarketingImportRun(?int $tenantId): ?MarketingImportRun
     {
-        if (! Schema::hasTable('marketing_import_runs')) {
+        if (! $this->hasTable('marketing_import_runs')) {
             return null;
         }
 
         $query = MarketingImportRun::query()->orderByDesc('id');
 
-        if (Schema::hasColumn('marketing_import_runs', 'tenant_id')) {
+        if ($this->hasColumn('marketing_import_runs', 'tenant_id')) {
             if ($tenantId === null) {
                 $query->whereNull('tenant_id');
             } else {
@@ -1324,7 +1430,7 @@ class TenantCommercialExperienceService
 
     protected function latestShopifyImportRun(?int $tenantId): ?ShopifyImportRun
     {
-        if (! Schema::hasTable('shopify_import_runs') || ! Schema::hasTable('shopify_stores')) {
+        if (! $this->hasTable('shopify_import_runs') || ! $this->hasTable('shopify_stores')) {
             return null;
         }
 
@@ -1344,7 +1450,7 @@ class TenantCommercialExperienceService
      */
     protected function shopifyStoreKeysForTenant(?int $tenantId): array
     {
-        if (! Schema::hasTable('shopify_stores')) {
+        if (! $this->hasTable('shopify_stores')) {
             return [];
         }
 
@@ -1448,7 +1554,7 @@ class TenantCommercialExperienceService
      */
     protected function enabledAddonKeys(?int $tenantId): array
     {
-        if ($tenantId === null || ! Schema::hasTable('tenant_access_addons')) {
+        if ($tenantId === null || ! $this->hasTable('tenant_access_addons')) {
             return [];
         }
 

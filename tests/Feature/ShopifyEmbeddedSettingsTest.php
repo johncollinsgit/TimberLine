@@ -32,6 +32,26 @@ test('shopify embedded settings route renders email settings surface', function 
         ->assertSeeText('SMS Sender Visibility');
 });
 
+test('shopify embedded settings route includes server timing only when profiling is enabled', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Retail Tenant',
+        'slug' => 'retail-email-settings-server-timing',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    config()->set('shopify_embedded.perf_profiling_enabled', true);
+    $withProfiling = $this->get(route('shopify.app.settings', retailEmbeddedSignedQuery()));
+    $withProfiling->assertOk();
+    expect((string) $withProfiling->headers->get('Server-Timing', ''))
+        ->toContain('context;dur=')
+        ->toContain('total;dur=');
+
+    config()->set('shopify_embedded.perf_profiling_enabled', false);
+    $withoutProfiling = $this->get(route('shopify.app.settings', retailEmbeddedSignedQuery()));
+    $withoutProfiling->assertOk();
+    expect($withoutProfiling->headers->get('Server-Timing'))->toBeNull();
+});
+
 test('shopify embedded email settings api requires bearer token auth', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Retail Tenant',

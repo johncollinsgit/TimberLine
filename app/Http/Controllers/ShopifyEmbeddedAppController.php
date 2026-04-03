@@ -7,6 +7,7 @@ use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Tenancy\TenantCommercialExperienceService;
@@ -36,12 +37,15 @@ class ShopifyEmbeddedAppController extends Controller
         TenantDisplayLabelResolver $displayLabelResolver,
         TenantCommercialExperienceService $experienceService
     ): Response {
-        $context = $contextService->resolvePageContext($request);
-        $fallbackRewardsLabel = $displayLabelResolver->label(null, 'rewards_label', 'Rewards');
-        $dashboardConfig = app(ShopifyEmbeddedDashboardConfig::class)->payload();
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+        $fallbackRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label(null, 'rewards_label', 'Rewards'));
+        $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
 
         if (($context['status'] ?? '') === 'open_from_shopify') {
-            return $this->embeddedResponse(
+            $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
+
+            $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
                 response()->view('shopify.dashboard', [
                     'authorized' => false,
                     'status' => 'open_from_shopify',
@@ -51,13 +55,13 @@ class ShopifyEmbeddedAppController extends Controller
                     'storeLabel' => 'Shopify Admin',
                     'headline' => 'Home',
                     'subheadline' => 'Revenue and setup at a glance.',
-                    'appNavigation' => $this->embeddedAppNavigation('home', null, null),
+                    'appNavigation' => $appNavigation,
                     'pageActions' => [],
                     'pageSubnav' => [],
                     'dashboardBootstrap' => [
-                    'authorized' => false,
-                    'status' => 'open_from_shopify',
-                    'storeLabel' => 'Shopify Admin',
+                        'authorized' => false,
+                        'status' => 'open_from_shopify',
+                        'storeLabel' => 'Shopify Admin',
                         'links' => [],
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
                         'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
@@ -66,11 +70,18 @@ class ShopifyEmbeddedAppController extends Controller
                     ],
                     'merchantJourney' => null,
                 ])
-            );
+            ));
+
+            return $probe->addContext([
+                'authorized' => false,
+                'status' => 'open_from_shopify',
+            ])->finish($response);
         }
 
         if (! ($context['ok'] ?? false)) {
-            return $this->embeddedResponse(
+            $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
+
+            $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
                 response()->view('shopify.dashboard', [
                     'authorized' => false,
                     'status' => 'invalid_request',
@@ -80,7 +91,7 @@ class ShopifyEmbeddedAppController extends Controller
                     'storeLabel' => 'Shopify Admin',
                     'headline' => 'Home',
                     'subheadline' => 'Revenue and setup at a glance.',
-                    'appNavigation' => $this->embeddedAppNavigation('home', null, null),
+                    'appNavigation' => $appNavigation,
                     'pageActions' => [],
                     'pageSubnav' => [],
                     'dashboardBootstrap' => [
@@ -96,13 +107,20 @@ class ShopifyEmbeddedAppController extends Controller
                     'merchantJourney' => null,
                 ]),
                 401
-            );
+            ));
+
+            return $probe->addContext([
+                'authorized' => false,
+                'status' => (string) ($context['status'] ?? 'invalid_request'),
+            ])->finish($response);
         }
 
         /** @var array<string,mixed> $store */
         $store = $context['store'];
-        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
-        $tenantRewardsLabel = $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel);
+        $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
+        $probe->forTenant($tenantId);
+
+        $tenantRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel));
         $dashboardLinks = [
             [
                 'label' => 'Customers',
@@ -117,13 +135,14 @@ class ShopifyEmbeddedAppController extends Controller
                 'href' => route('shopify.app.settings', [], false),
             ],
         ];
-        $dashboardData = $this->dashboardDataService->payload([
+        $dashboardData = $probe->time('page_payload', fn (): array => $this->dashboardDataService->payload([
             ...$request->query(),
             'tenant_id' => $tenantId,
-        ]);
-        $merchantJourney = $experienceService->merchantJourneyPayload($tenantId);
+        ]));
+        $merchantJourney = $probe->time('page_payload', fn (): array => $experienceService->merchantJourneyPayload($tenantId));
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.dashboard', [
                 'authorized' => true,
                 'status' => 'ok',
@@ -133,7 +152,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                 'headline' => 'Home',
                 'subheadline' => 'Revenue and setup at a glance.',
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $appNavigation,
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'dashboardBootstrap' => [
@@ -148,7 +167,12 @@ class ShopifyEmbeddedAppController extends Controller
                 ],
                 'merchantJourney' => $merchantJourney,
             ])
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => true,
+            'status' => 'ok',
+        ])->finish($response);
     }
 
     public function data(
@@ -179,15 +203,26 @@ class ShopifyEmbeddedAppController extends Controller
         TenantResolver $tenantResolver,
         TenantCommercialExperienceService $experienceService
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        $probe->forTenant($tenantId);
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->dashboardExperienceSubnav('start', $tenantId));
+        $onboardingPayload = $authorized
+            ? $probe->time('page_payload', fn (): array => $experienceService->onboardingPayload($tenantId))
+            : null;
+        $merchantJourney = $authorized
+            ? $probe->time('page_payload', fn (): array => $experienceService->merchantJourneyPayload($tenantId))
             : null;
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.start-here', [
                 'authorized' => $authorized,
                 'status' => $status,
@@ -199,14 +234,19 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Start Here'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Use this page to finish setup and see which modules are active, locked, or coming soon.'),
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $appNavigation,
                 'pageActions' => [],
-                'pageSubnav' => $this->dashboardExperienceSubnav('start', $tenantId),
-                'onboardingPayload' => $experienceService->onboardingPayload($tenantId),
-                'merchantJourney' => $experienceService->merchantJourneyPayload($tenantId),
+                'pageSubnav' => $pageSubnav,
+                'onboardingPayload' => $onboardingPayload,
+                'merchantJourney' => $merchantJourney,
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     public function plansAndAddons(
@@ -215,15 +255,26 @@ class ShopifyEmbeddedAppController extends Controller
         TenantResolver $tenantResolver,
         TenantCommercialExperienceService $experienceService
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        $probe->forTenant($tenantId);
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->dashboardExperienceSubnav('plans', $tenantId));
+        $plansPayload = $authorized
+            ? $probe->time('page_payload', fn (): array => $experienceService->plansPayload($tenantId))
+            : null;
+        $merchantJourney = $authorized
+            ? $probe->time('page_payload', fn (): array => $experienceService->merchantJourneyPayload($tenantId))
             : null;
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.plans-addons', [
                 'authorized' => $authorized,
                 'status' => $status,
@@ -235,14 +286,19 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Plans & Add-ons'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Review your current plan, available add-ons, and module access in plain language.'),
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $appNavigation,
                 'pageActions' => [],
-                'pageSubnav' => $this->dashboardExperienceSubnav('plans', $tenantId),
-                'plansPayload' => $experienceService->plansPayload($tenantId),
-                'merchantJourney' => $experienceService->merchantJourneyPayload($tenantId),
+                'pageSubnav' => $pageSubnav,
+                'plansPayload' => $plansPayload,
+                'merchantJourney' => $merchantJourney,
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     public function integrations(
@@ -251,15 +307,26 @@ class ShopifyEmbeddedAppController extends Controller
         TenantResolver $tenantResolver,
         TenantCommercialExperienceService $experienceService
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        $probe->forTenant($tenantId);
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->dashboardExperienceSubnav('integrations', $tenantId));
+        $integrationsPayload = $authorized
+            ? $probe->time('page_payload', fn (): array => $experienceService->integrationsPayload($tenantId))
+            : null;
+        $merchantJourney = $authorized
+            ? $probe->time('page_payload', fn (): array => $experienceService->merchantJourneyPayload($tenantId))
             : null;
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.integrations', [
                 'authorized' => $authorized,
                 'status' => $status,
@@ -271,14 +338,19 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Integrations'),
                 'subheadline' => $this->subheadlineForStatus($status, 'See which connections are ready, what still needs setup, and safe fallback options.'),
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $appNavigation,
                 'pageActions' => [],
-                'pageSubnav' => $this->dashboardExperienceSubnav('integrations', $tenantId),
-                'integrationsPayload' => $experienceService->integrationsPayload($tenantId),
-                'merchantJourney' => $experienceService->merchantJourneyPayload($tenantId),
+                'pageSubnav' => $pageSubnav,
+                'integrationsPayload' => $integrationsPayload,
+                'merchantJourney' => $merchantJourney,
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     public function moduleStore(
@@ -287,15 +359,23 @@ class ShopifyEmbeddedAppController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleCatalogService $catalogService
     ): Response {
-        $context = $contextService->resolvePageContext($request);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $status = (string) ($context['status'] ?? 'invalid_request');
         $authorized = (bool) ($context['ok'] ?? false);
         $store = (array) ($context['store'] ?? []);
         $tenantId = $authorized
-            ? $tenantResolver->resolveTenantIdForStoreContext($store)
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        $probe->forTenant($tenantId);
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->dashboardExperienceSubnav('store', $tenantId));
+        $moduleStorePayload = $authorized
+            ? $probe->time('page_payload', fn (): array => $catalogService->tenantStorePayload($tenantId, 'shopify'))
             : null;
 
-        return $this->embeddedResponse(
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.app-store', [
                 'authorized' => $authorized,
                 'status' => $status,
@@ -307,14 +387,19 @@ class ShopifyEmbeddedAppController extends Controller
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'App Store'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Discover active modules, add-ons, and upgrade paths from a single catalog surface.'),
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $appNavigation,
                 'pageActions' => [],
-                'pageSubnav' => $this->dashboardExperienceSubnav('store', $tenantId),
+                'pageSubnav' => $pageSubnav,
                 'contextToken' => $authorized ? $contextService->issueContextToken($context) : null,
-                'moduleStorePayload' => $catalogService->tenantStorePayload($tenantId, 'shopify'),
+                'moduleStorePayload' => $moduleStorePayload,
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
-        );
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
     }
 
     public function activateModule(
@@ -524,6 +609,14 @@ class ShopifyEmbeddedAppController extends Controller
         $response->headers->remove('X-Frame-Options');
 
         return $response;
+    }
+
+    protected function embeddedProbe(Request $request): ShopifyEmbeddedPerformanceProbe
+    {
+        /** @var ShopifyEmbeddedPerformanceProbe $probe */
+        $probe = app(ShopifyEmbeddedPerformanceProbe::class);
+
+        return $probe->forRequest($request);
     }
 
     /**
