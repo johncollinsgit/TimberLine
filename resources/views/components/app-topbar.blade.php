@@ -10,6 +10,7 @@
     'activeChild' => null,
     'workspaceLabel' => 'Unified workspace',
     'commandSearchEnabled' => false,
+    'commandSearchEndpoint' => null,
     'commandSearchPlaceholder' => 'Search actions, pages, and Shopify tools',
 ])
 
@@ -86,7 +87,13 @@
             </nav>
             <div class="app-topbar-right">
                 @if($commandSearchEnabled)
-                    <form class="app-topbar-search" role="search" data-command-form>
+                    <form
+                        class="app-topbar-search"
+                        role="search"
+                        action="{{ $commandSearchEndpoint }}"
+                        method="get"
+                        data-command-form
+                    >
                         <label class="sr-only" for="app-topbar-command-search">Search Backstage</label>
                         <input
                             id="app-topbar-command-search"
@@ -95,11 +102,18 @@
                             placeholder="{{ $commandSearchPlaceholder }}"
                             autocomplete="off"
                             enterkeyhint="search"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="shopify-global-command-menu-panel"
                             data-command-field
                         />
                         <button
+                            id="app-topbar-command-search-trigger"
                             type="submit"
                             class="app-topbar-search-button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="shopify-global-command-menu-panel"
                             data-command-trigger
                         >
                             Search

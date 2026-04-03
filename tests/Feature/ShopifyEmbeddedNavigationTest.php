@@ -189,3 +189,15 @@ test('embedded shell mounts shopify command menu with registry-backed route disc
         ->assertSee('"id":"page:settings"', false)
         ->assertSee('"section":"pages"', false);
 });
+
+test('embedded topbar search exposes accessible command menu controls and endpoint fallback wiring', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('home', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('id="app-topbar-command-search"', false)
+        ->assertSee('aria-controls="shopify-global-command-menu-panel"', false)
+        ->assertSee('aria-haspopup="dialog"', false)
+        ->assertSee('aria-expanded="false"', false)
+        ->assertSee('action="/shopify/app/api/search"', false);
+});

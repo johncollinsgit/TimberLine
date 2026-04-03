@@ -23,6 +23,7 @@ test("telemetry adapter receives open/select/zero-result/abandon events", () => 
   trackCommandMenuEvent("command_menu_opened", { queryLength: 0 });
   trackCommandMenuEvent("command_menu_result_selected", { resultId: "shopify:action:create-product" });
   trackCommandMenuEvent("command_menu_zero_result_query", { queryLength: 12 });
+  trackCommandMenuEvent("command_menu_submit_no_results", { queryLength: 9 });
   trackCommandMenuEvent("command_menu_query_abandoned", { queryLength: 4 });
 
   assert.deepEqual(
@@ -31,6 +32,7 @@ test("telemetry adapter receives open/select/zero-result/abandon events", () => 
       "command_menu_opened",
       "command_menu_result_selected",
       "command_menu_zero_result_query",
+      "command_menu_submit_no_results",
       "command_menu_query_abandoned",
     ]
   );

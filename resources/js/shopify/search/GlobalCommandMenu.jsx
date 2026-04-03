@@ -17,6 +17,8 @@ import {
   useActionSearch,
 } from "./useActionSearch.js";
 
+const COMMAND_PANEL_ID = "shopify-global-command-menu-panel";
+
 function safeTarget(element) {
   return element instanceof HTMLElement ? element : null;
 }
@@ -82,10 +84,10 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
   const [query, setQuery] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
   const [pendingSubmit, setPendingSubmit] = useState(null);
+  const [highlightedItemId, setHighlightedItemId] = useState("");
   const openRef = useRef(false);
   const selectedDuringSessionRef = useRef(false);
   const zeroResultTrackedRef = useRef("");
-  const resultsRef = useRef([]);
 
   const {
     groups,
@@ -97,16 +99,52 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
     baseQuery,
   });
 
-  const hasResults = results.length > 0;
-  const topResult = results[0] || null;
+  const resultEntries = useMemo(
+    () => results.map((document, position) => ({ document, position })),
+    [results]
+  );
+
+  const resultEntryById = useMemo(() => {
+    const lookup = new Map();
+    resultEntries.forEach((entry) => {
+      lookup.set(entry.document.id, entry);
+    });
+
+    return lookup;
+  }, [resultEntries]);
+
+  const hasResults = resultEntries.length > 0;
+  const topResultEntry = resultEntries[0] || null;
 
   useEffect(() => {
     openRef.current = open;
   }, [open]);
 
   useEffect(() => {
-    resultsRef.current = results;
-  }, [results]);
+    if (!hasResults) {
+      if (highlightedItemId !== "") {
+        setHighlightedItemId("");
+      }
+      return;
+    }
+
+    if (!resultEntryById.has(highlightedItemId)) {
+      setHighlightedItemId(topResultEntry?.document.id || "");
+    }
+  }, [hasResults, highlightedItemId, resultEntryById, topResultEntry]);
+
+  useEffect(() => {
+    const expanded = open ? "true" : "false";
+    document.querySelectorAll("[data-command-field], [data-command-trigger]").forEach((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return;
+      }
+
+      element.setAttribute("aria-expanded", expanded);
+      element.setAttribute("aria-controls", COMMAND_PANEL_ID);
+      element.setAttribute("aria-haspopup", "dialog");
+    });
+  }, [open]);
 
   const heading = useMemo(() => {
     const label = String(contextLabel || "").trim();
@@ -191,11 +229,37 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
       });
   };
 
+  const executeHighlightedDocument = ({ source = "unknown", queryOverride } = {}) => {
+    const selectedEntry = resultEntryById.get(highlightedItemId) || topResultEntry;
+    const effectiveQuery = queryOverride ?? query;
+
+    if (!selectedEntry?.document) {
+      trackCommandMenuEvent("command_menu_submit_no_results", {
+        source,
+        ...buildQueryTelemetry(effectiveQuery),
+      });
+      return false;
+    }
+
+    executeDocument(selectedEntry.document, {
+      position: selectedEntry.position,
+      query: effectiveQuery,
+      source,
+    });
+
+    return true;
+  };
+
   useEffect(() => {
     const handleGlobalKeydown = (event) => {
       const key = String(event.key || "").toLowerCase();
       const isShortcut = (event.metaKey || event.ctrlKey) && key === "k";
       if (isShortcut) {
+        const active = document.activeElement;
+        if (openRef.current && active instanceof HTMLElement && active.matches("[data-shopify-command-input]")) {
+          return;
+        }
+
         event.preventDefault();
         openMenu(query, { focus: true, refresh: !openRef.current, source: "shortcut" });
         return;
@@ -217,6 +281,7 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
     const queueSubmit = (nextQuery, source) => {
       const normalized = normalizeText(nextQuery);
       if (normalized === "") {
+        setPendingSubmit(null);
         openMenu("", { focus: true, refresh: !openRef.current, source });
         return;
       }
@@ -356,18 +421,12 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
       return;
     }
 
-    if (!topResult) {
-      setPendingSubmit(null);
-      return;
-    }
-
-    executeDocument(topResult, {
-      position: 0,
-      query: pendingSubmit.query,
+    executeHighlightedDocument({
       source: pendingSubmit.source,
+      queryOverride: pendingSubmit.query,
     });
     setPendingSubmit(null);
-  }, [pendingSubmit, topResult, query, open]);
+  }, [pendingSubmit, query, open, highlightedItemId, resultEntryById, topResultEntry]);
 
   if (typeof document === "undefined") {
     return null;
@@ -376,11 +435,19 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
   return createPortal(
     <div className={open ? "" : "hidden"} data-shopify-command-menu>
       <div className="fixed inset-0 z-[78] fb-overlay-subtle" onClick={() => closeMenu("overlay")} />
-      <div className="fixed inset-x-0 top-[8vh] z-[79] px-4" aria-hidden={!open}>
+      <div
+        id={COMMAND_PANEL_ID}
+        className="fixed inset-x-0 top-[8vh] z-[79] px-4"
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!open}
+      >
         <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-[0_26px_60px_-38px_rgba(15,23,42,0.35)]">
           <Command
             shouldFilter={false}
             loop
+            value={highlightedItemId}
+            onValueChange={setHighlightedItemId}
             label="Global command menu"
           >
             <div className="border-b border-zinc-200 px-5 py-4">
@@ -407,12 +474,9 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
                       return;
                     }
 
-                    if (resultsRef.current.length === 0) {
-                      return;
-                    }
-
                     event.preventDefault();
-                    executeDocument(resultsRef.current[0], { position: 0, query });
+                    event.stopPropagation();
+                    executeHighlightedDocument({ source: "menu_enter", queryOverride: query });
                   }}
                   autoComplete="off"
                   aria-autocomplete="list"
@@ -436,14 +500,16 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
                     {SECTION_TITLES[group.section] || group.section}
                   </div>
                   <div className="space-y-2">
-                    {group.items.map((item, index) => {
+                    {group.items.map((item) => {
                       const badge = badgeForItem(item);
                       const breadcrumbs = Array.isArray(item.breadcrumbs) ? item.breadcrumbs.filter(Boolean) : [];
+                      const position = resultEntries.findIndex((entry) => entry.document.id === item.id);
+
                       return (
                         <Command.Item
                           key={item.id}
-                          value={`${item.title} ${item.subtitle || ""}`}
-                          onSelect={() => executeDocument(item, { position: index })}
+                          value={item.id}
+                          onSelect={() => executeDocument(item, { position })}
                           className="block cursor-pointer rounded-2xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-emerald-700/35 hover:bg-emerald-50/55"
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -480,4 +546,3 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
     document.body
   );
 }
-
