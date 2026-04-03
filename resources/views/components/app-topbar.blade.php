@@ -14,13 +14,15 @@
 ])
 
 @php
-    $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+    /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+    $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+    $embeddedContext = $embeddedUrls->contextQuery(
         request(),
         filled($host) ? (string) $host : null
     );
 
-    $appendEmbeddedContext = static function (string $url) use ($embeddedContext): string {
-        return \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+    $appendEmbeddedContext = static function (string $url) use ($embeddedContext, $embeddedUrls): string {
+        return $embeddedUrls->append($url, $embeddedContext);
     };
 
     $activeSectionItem = collect($navigation)->first(
@@ -67,6 +69,8 @@
                     <a
                         href="{{ $appendEmbeddedContext($item['href']) }}"
                         class="app-topbar-nav-link{{ ($active ?? null) === ($item['key'] ?? null) ? ' is-active' : '' }}"
+                        data-embedded-prefetch-link="1"
+                        data-prefetch-priority="{{ $item['prefetch_priority'] ?? 'normal' }}"
                     >
                         <span>{{ $item['label'] }}</span>
                         @if(is_array($item['module_state'] ?? null))
@@ -143,6 +147,8 @@
                                 class="app-topbar-action"
                                 target="{{ str_starts_with($action['href'] ?? '', 'http') ? '_blank' : '_self' }}"
                                 rel="{{ str_starts_with($action['href'] ?? '', 'http') ? 'noreferrer noopener' : 'noopener' }}"
+                                data-embedded-prefetch-link="1"
+                                data-prefetch-priority="{{ $action['prefetch_priority'] ?? 'normal' }}"
                             >
                                 {{ $action['label'] }}
                             </a>
@@ -157,6 +163,8 @@
                         <a
                             href="{{ $appendEmbeddedContext($item['href']) }}"
                             class="app-topbar-subnav-link{{ ! empty($item['active']) ? ' is-active' : '' }}"
+                            data-embedded-prefetch-link="1"
+                            data-prefetch-priority="{{ $item['prefetch_priority'] ?? 'normal' }}"
                         >
                             <span>{{ $item['label'] }}</span>
                             @if(is_array($item['module_state'] ?? null))

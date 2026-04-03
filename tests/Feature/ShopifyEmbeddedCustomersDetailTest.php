@@ -668,7 +668,7 @@ test('embedded customer detail forms use helper-generated urls with Shopify quer
     $response->assertOk();
     $content = $response->getContent();
 
-    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $generator = app(ShopifyEmbeddedCustomerActionUrlGenerator::class);
     $signedRequest = Request::create('/', 'GET', $signature);
 
     $expected = $generator->url('customers.detail', ['marketingProfile' => $profile->id], $signedRequest);
@@ -749,14 +749,14 @@ test('embedded customer detail navigation links preserve Shopify query params', 
     $content = $response->getContent();
     $this->assertStringContainsString('href="/shopify/app/customers/manage?', $content);
     $this->assertStringContainsString('href="/shopify/app/customers/activity?', $content);
-    $this->assertStringContainsString('href="/shopify/app/customers/questions?', $content);
+    $this->assertStringContainsString('href="/shopify/app/customers/imports?', $content);
     $this->assertStringContainsString('shop=modernforestry.myshopify.com', $content);
     $this->assertStringContainsString('host=admin-host-token', $content);
     $this->assertStringContainsString('embedded=1', $content);
     $this->assertStringContainsString('id_token=', $content);
     $this->assertStringContainsString('locale=en', $content);
     $this->assertStringContainsString('session=embedded-session-token', $content);
-    $this->assertStringContainsString('href="/?shop=', $content);
+    $this->assertStringContainsString('href="/shopify/app?shop=', $content);
     $this->assertStringContainsString('href="/shopify/app/settings?shop=', $content);
     $this->assertStringContainsString('/marketing/customers/' . $profile->id, $content);
 });

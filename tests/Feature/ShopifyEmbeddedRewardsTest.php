@@ -88,7 +88,7 @@ test('shopify embedded rewards route renders verified rewards admin page for map
 });
 
 test('shopify embedded rewards editor route uses bearer-token bootstrap without legacy context tokens', function () {
-    $response = $this->get(route('shopify.embedded.rewards.earn', retailEmbeddedSignedQuery()));
+    $response = $this->get(route('shopify.app.rewards.earn', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
         ->assertSeeText('Ways to Earn')
@@ -145,7 +145,7 @@ test('shopify embedded rewards policy route returns tenant-scoped policy and edi
 });
 
 test('shopify embedded rewards notifications route renders review and preview workspace', function () {
-    $response = $this->get(route('shopify.embedded.rewards.notifications', retailEmbeddedSignedQuery()));
+    $response = $this->get(route('shopify.app.rewards.notifications', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
         ->assertSeeText('Review and Launch')
@@ -157,7 +157,7 @@ test('shopify embedded rewards notifications route renders review and preview wo
 });
 
 test('shopify embedded rewards data route requires bearer token auth and does not fall back to page state', function () {
-    $this->get(route('shopify.embedded.rewards.earn', retailEmbeddedSignedQuery()))->assertOk();
+    $this->get(route('shopify.app.rewards.earn', retailEmbeddedSignedQuery()))->assertOk();
 
     $this->getJson(route('shopify.app.api.rewards'))
         ->assertStatus(401)
@@ -1206,7 +1206,7 @@ test('shopify embedded rewards routes fail closed when store tenant context is m
         ->assertJsonPath('ok', false)
         ->assertJsonPath('status', 'tenant_not_mapped');
 
-    $this->get(route('shopify.embedded.rewards.earn', retailEmbeddedSignedQuery()))
+    $this->get(route('shopify.app.rewards.earn', retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('This Shopify store is not mapped to a tenant yet. Rewards settings are unavailable.')
         ->assertDontSee('shopify-rewards-admin', false);

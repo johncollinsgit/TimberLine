@@ -57,7 +57,7 @@
             $warnings[] = [
                 'title' => 'Enable rewards rules',
                 'detail' => 'Rewards are not live until rules are active.',
-                'action' => ['label' => 'Open rewards settings', 'href' => route('shopify.embedded.rewards.notifications', [], false)],
+                'action' => ['label' => 'Open rewards settings', 'href' => route('shopify.app.rewards.notifications', [], false)],
             ];
         }
         if (! $emailReady) {
@@ -90,7 +90,7 @@
                 'title' => 'Enable rewards rules',
                 'status' => $rewardsSetupStatus === 'live' ? 'Live' : 'Needs setup',
                 'done' => $rewardsSetupStatus === 'live',
-                'action' => ['label' => 'Open rewards settings', 'href' => route('shopify.embedded.rewards.notifications', [], false)],
+                'action' => ['label' => 'Open rewards settings', 'href' => route('shopify.app.rewards.notifications', [], false)],
             ],
             [
                 'title' => 'Verify email sender',
@@ -163,11 +163,13 @@
         $currentTimeframe = (string) data_get($dashboardData, 'query.timeframe', 'last_30_days');
         $currentTimeframeLabel = collect($timeframeOptions)->firstWhere('value', $currentTimeframe)['label'] ?? 'Last 30 days';
 
-        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
-        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
 
         $recentActivity = [];
         if (filled(data_get($importSummary, 'latest_run.source_label'))) {

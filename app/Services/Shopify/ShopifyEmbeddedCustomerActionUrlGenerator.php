@@ -2,27 +2,29 @@
 
 namespace App\Services\Shopify;
 
-use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use Illuminate\Http\Request;
 
 class ShopifyEmbeddedCustomerActionUrlGenerator
 {
+    public function __construct(
+        protected ShopifyEmbeddedUrlGenerator $urlGenerator
+    ) {
+    }
+
     public function url(string $routeName, array $routeParameters, Request $request): string
     {
-        $fullRoute = route('shopify.app.' . $routeName, $routeParameters, false);
+        $fullRoute = $this->urlGenerator->route('shopify.app.' . $routeName, $routeParameters);
 
         if (! $this->isEmbeddedRequest($request)) {
             return $fullRoute;
         }
 
-        $query = $this->embeddedContextQuery($request);
+        $query = $this->urlGenerator->contextQuery($request);
         if ($query === []) {
             return $fullRoute;
         }
 
-        $separator = str_contains($fullRoute, '?') ? '&' : '?';
-
-        return $fullRoute . $separator . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        return $this->urlGenerator->append($fullRoute, $query);
     }
 
     private function isEmbeddedRequest(Request $request): bool
@@ -39,8 +41,5 @@ class ShopifyEmbeddedCustomerActionUrlGenerator
         return $name !== null && str_starts_with($name, 'shopify.app.');
     }
 
-    private function embeddedContextQuery(Request $request): array
-    {
-        return ShopifyEmbeddedContextQuery::fromRequest($request);
-    }
+    // Context query extraction is centralized in ShopifyEmbeddedUrlGenerator.
 }

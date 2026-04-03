@@ -21,13 +21,13 @@ test('embedded app navigation metadata matches each top-level section route', fu
         ->assertViewHas('pageActions', fn (array $actions): bool => count($actions) === 0);
 })->with([
     'home' => ['home', 'home', null],
-    'rewards overview' => ['shopify.embedded.rewards', 'rewards', 'overview'],
-    'rewards earn' => ['shopify.embedded.rewards.earn', 'rewards', 'earn'],
-    'rewards redeem' => ['shopify.embedded.rewards.redeem', 'rewards', 'redeem'],
-    'rewards referrals' => ['shopify.embedded.rewards.referrals', 'rewards', 'referrals'],
-    'rewards birthdays' => ['shopify.embedded.rewards.birthdays', 'rewards', 'birthdays'],
-    'rewards vip' => ['shopify.embedded.rewards.vip', 'rewards', 'vip'],
-    'rewards notifications' => ['shopify.embedded.rewards.notifications', 'rewards', 'notifications'],
+    'rewards overview' => ['shopify.app.rewards', 'rewards', 'overview'],
+    'rewards earn' => ['shopify.app.rewards.earn', 'rewards', 'earn'],
+    'rewards redeem' => ['shopify.app.rewards.redeem', 'rewards', 'redeem'],
+    'rewards referrals' => ['shopify.app.rewards.referrals', 'rewards', 'referrals'],
+    'rewards birthdays' => ['shopify.app.rewards.birthdays', 'rewards', 'birthdays'],
+    'rewards vip' => ['shopify.app.rewards.vip', 'rewards', 'vip'],
+    'rewards notifications' => ['shopify.app.rewards.notifications', 'rewards', 'notifications'],
     'customers' => ['shopify.app.customers', 'customers', null],
     'settings' => ['shopify.app.settings', 'settings', null],
 ]);
@@ -120,10 +120,10 @@ test('embedded shell renders shopify app nav with top-level links', function () 
     $response->assertOk()
         ->assertSee('<s-app-nav>', false)
         ->assertSee('rel="home"', false)
-        ->assertSee('<s-link href="/shopify/app?shop=', false)
-        ->assertSee('<s-link href="/shopify/app/customers/manage?shop=', false)
-        ->assertSee('<s-link href="/shopify/app/rewards?shop=', false)
-        ->assertSee('<s-link href="/shopify/app/settings?shop=', false);
+        ->assertSee('href="/shopify/app?shop=', false)
+        ->assertSee('href="/shopify/app/customers/manage?shop=', false)
+        ->assertSee('href="/shopify/app/rewards?shop=', false)
+        ->assertSee('href="/shopify/app/settings?shop=', false);
 });
 
 test('embedded navigation metadata keeps expected top-level labels and order', function () {
@@ -148,7 +148,33 @@ test('embedded navigation metadata keeps expected top-level labels and order', f
 test('embedded navigation renders module-state indicators for placeholder and setup surfaces', function () {
     configureEmbeddedRetailStore();
 
-    $this->get(route('shopify.embedded.rewards.referrals', retailEmbeddedSignedQuery()))
+    $this->get(route('shopify.app.rewards.referrals', retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSee('data-module-state="coming_soon"', false);
+});
+
+test('legacy rewards routes redirect to canonical embedded app routes with context intact', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.embedded.rewards.earn', retailEmbeddedExtendedSignedQuery()));
+
+    $response->assertRedirect();
+
+    $location = $response->headers->get('Location', '');
+    expect($location)->toContain('/shopify/app/rewards/earn')
+        ->toContain('shop=modernforestry.myshopify.com')
+        ->toContain('host=admin-host-token')
+        ->toContain('embedded=1')
+        ->toContain('id_token=')
+        ->toContain('session=embedded-session-token');
+});
+
+test('embedded shell includes lightweight internal prefetch hooks for embedded links', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('home', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('data-embedded-prefetch-link="1"', false)
+        ->assertSee('__fbEmbeddedLinkPrefetchBound', false)
+        ->assertSee('X-Forestry-Prefetch', false);
 });

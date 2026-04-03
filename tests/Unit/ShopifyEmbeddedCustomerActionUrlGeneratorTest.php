@@ -21,7 +21,7 @@ test('returns app routes and appends signed query for embedded requests', functi
         'extra' => 'drop-this',
     ]);
 
-    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $generator = app(ShopifyEmbeddedCustomerActionUrlGenerator::class);
     $url = $generator->url('customers.detail', ['marketingProfile' => 17], $request);
 
     $base = route('shopify.app.customers.detail', ['marketingProfile' => 17], false);
@@ -41,7 +41,7 @@ test('returns app routes and appends signed query for embedded requests', functi
 test('returns app routes when context is missing', function () {
     $request = Request::create('/', 'GET', []);
 
-    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $generator = app(ShopifyEmbeddedCustomerActionUrlGenerator::class);
     $url = $generator->url('customers.detail', ['marketingProfile' => 8], $request);
 
     expect($url)->toEqual(route('shopify.app.customers.detail', ['marketingProfile' => 8], false));
@@ -55,7 +55,7 @@ test('treats named shopify app routes as embedded even without signed query', fu
 
     $request->setRouteResolver(fn () => $route);
 
-    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $generator = app(ShopifyEmbeddedCustomerActionUrlGenerator::class);
     $url = $generator->url('customers.detail', ['marketingProfile' => 8], $request);
 
     expect($url)->toEqual(route('shopify.app.customers.detail', ['marketingProfile' => 8], false));
@@ -67,7 +67,7 @@ test('treats partial context without host as an app-route fallback', function ()
         'timestamp' => '123',
     ]);
 
-    $generator = new ShopifyEmbeddedCustomerActionUrlGenerator();
+    $generator = app(ShopifyEmbeddedCustomerActionUrlGenerator::class);
 
     $url = $generator->url('customers.detail', ['marketingProfile' => 8], $request);
 

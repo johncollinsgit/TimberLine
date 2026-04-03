@@ -95,7 +95,7 @@ test('shopify embedded session lets root-style home route resolve after signed a
         ->assertSeeText('Revenue and setup at a glance.');
 });
 
-test('shopify embedded session keeps rewards root-style route but blocks legacy customer entry without Shopify context', function () {
+test('shopify embedded session redirects legacy rewards root to canonical app route and blocks legacy customer entry without Shopify context', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'shopify-client-id');
     config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
@@ -116,9 +116,10 @@ test('shopify embedded session keeps rewards root-style route but blocks legacy 
 
     $this->get(route('shopify.app', $query))->assertOk();
 
-    $this->get('/rewards')
-        ->assertOk()
-        ->assertSeeText('Manage Candle Cash rewards and program settings.');
+    $rewardsResponse = $this->get('/rewards');
+    $rewardsResponse->assertRedirect();
+    expect($rewardsResponse->headers->get('Location', ''))
+        ->toContain('/shopify/app/rewards');
 
     $this->get('/customers')
         ->assertStatus(400)

@@ -31,11 +31,13 @@
         $attributionSources = array_slice((array) data_get($analytics, 'attribution.sources', []), 0, 5);
         $financialItems = array_slice((array) data_get($analytics, 'financialSummary.items', []), 0, 4);
         $hasAnalyticsData = (bool) data_get($analytics, 'flags.hasAnyData', false);
-        $embeddedContext = \App\Support\Shopify\ShopifyEmbeddedContextQuery::fromRequest(
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
             request(),
             filled($host ?? null) ? (string) $host : null
         );
-        $embeddedUrl = static fn (string $url): string => \App\Support\Shopify\ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
     @endphp
 
     <style>
@@ -175,8 +177,8 @@
         @if($rewardsEditorAvailable ?? true)
             @include('shared.candle-cash.rewards-overview', [
                 'overview' => $dashboard ?? [],
-                'earnUrl' => route('shopify.embedded.rewards.earn'),
-                'redeemUrl' => route('shopify.embedded.rewards.redeem'),
+                'earnUrl' => route('shopify.app.rewards.earn', [], false),
+                'redeemUrl' => route('shopify.app.rewards.redeem', [], false),
                 'theme' => 'embedded',
                 'rewardsLabel' => $rewardsLabel ?? null,
                 'rewardsBalanceLabel' => $rewardsBalanceLabel ?? null,

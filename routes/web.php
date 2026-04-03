@@ -80,6 +80,7 @@ use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -169,18 +170,32 @@ if ($landlordHost !== '') {
         });
 }
 
-Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.embedded.rewards');
-Route::get('/rewards/earn', [ShopifyEmbeddedRewardsController::class, 'earn'])->name('shopify.embedded.rewards.earn');
-Route::get('/rewards/redeem', [ShopifyEmbeddedRewardsController::class, 'redeem'])->name('shopify.embedded.rewards.redeem');
-Route::get('/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'referrals'])->name('shopify.embedded.rewards.referrals');
-Route::get('/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.embedded.rewards.birthdays');
-Route::get('/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.embedded.rewards.vip');
-Route::get('/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.embedded.rewards.notifications');
+Route::get('/rewards', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards', [], false, $request));
+})->name('shopify.embedded.rewards');
+Route::get('/rewards/earn', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards.earn', [], false, $request));
+})->name('shopify.embedded.rewards.earn');
+Route::get('/rewards/redeem', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards.redeem', [], false, $request));
+})->name('shopify.embedded.rewards.redeem');
+Route::get('/rewards/referrals', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards.referrals', [], false, $request));
+})->name('shopify.embedded.rewards.referrals');
+Route::get('/rewards/birthdays', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards.birthdays', [], false, $request));
+})->name('shopify.embedded.rewards.birthdays');
+Route::get('/rewards/vip', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards.vip', [], false, $request));
+})->name('shopify.embedded.rewards.vip');
+Route::get('/rewards/notifications', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.rewards.notifications', [], false, $request));
+})->name('shopify.embedded.rewards.notifications');
 Route::get('/customers', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToManage'])->name('shopify.embedded.customers');
 Route::get('/customers/manage', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToManage'])->name('shopify.embedded.customers.manage');
-Route::get('/customers/segments', [ShopifyEmbeddedCustomersController::class, 'segments'])->name('shopify.embedded.customers.segments');
-Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.embedded.customers.activity');
-Route::get('/customers/imports', [ShopifyEmbeddedCustomersController::class, 'imports'])->name('shopify.embedded.customers.imports');
+Route::get('/customers/segments', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToSegments'])->name('shopify.embedded.customers.segments');
+Route::get('/customers/activity', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToActivity'])->name('shopify.embedded.customers.activity');
+Route::get('/customers/imports', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.embedded.customers.imports');
 Route::get('/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.embedded.customers.questions');
 Route::get('/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToDetail'])->name('shopify.embedded.customers.detail');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
@@ -811,6 +826,12 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::post('/app/store/modules/{moduleKey}/request', [ShopifyEmbeddedAppController::class, 'requestModuleAccess'])->name('shopify.app.store.request');
     Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
+    Route::get('/app/rewards/earn', [ShopifyEmbeddedRewardsController::class, 'earn'])->name('shopify.app.rewards.earn');
+    Route::get('/app/rewards/redeem', [ShopifyEmbeddedRewardsController::class, 'redeem'])->name('shopify.app.rewards.redeem');
+    Route::get('/app/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'referrals'])->name('shopify.app.rewards.referrals');
+    Route::get('/app/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.app.rewards.birthdays');
+    Route::get('/app/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.app.rewards.vip');
+    Route::get('/app/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.app.rewards.notifications');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
     Route::get('/app/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers.manage');
     Route::get('/app/customers/segments', [ShopifyEmbeddedCustomersController::class, 'segments'])->name('shopify.app.customers.segments');

@@ -8,16 +8,15 @@ use App\Services\Marketing\CandleCashService;
 use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
+use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
+use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
-use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantResolver;
-use App\Services\Tenancy\TenantModuleAccessResolver;
-use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use App\Services\Marketing\MarketingConsentService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -71,8 +70,9 @@ class ShopifyEmbeddedCustomersController extends Controller
 
             $tenantId = $this->resolveEmbeddedTenantId($context, app(TenantResolver::class));
             $grid = $gridService->resolve($request, $tenantId);
-            $resolvedLabels = app(TenantDisplayLabelResolver::class)->resolve($tenantId);
-            $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
+            /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
+            $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
+            $displayLabels = $payloadBuilder->displayLabels($tenantId, $request);
 
             return response()->json([
                 'ok' => true,
@@ -458,6 +458,26 @@ class ShopifyEmbeddedCustomersController extends Controller
         return $this->redirectToEmbeddedRoute($request, 'customers.manage');
     }
 
+    public function redirectLegacyToSegments(Request $request): Response|RedirectResponse
+    {
+        Log::info('shopify.embedded.legacy.segments.access', [
+            'route' => $request->route()?->getName(),
+            'query' => $request->query->all(),
+        ]);
+
+        return $this->redirectToEmbeddedRoute($request, 'customers.segments');
+    }
+
+    public function redirectLegacyToActivity(Request $request): Response|RedirectResponse
+    {
+        Log::info('shopify.embedded.legacy.activity.access', [
+            'route' => $request->route()?->getName(),
+            'query' => $request->query->all(),
+        ]);
+
+        return $this->redirectToEmbeddedRoute($request, 'customers.activity');
+    }
+
     public function redirectLegacyToDetail(
         Request $request,
         MarketingProfile $marketingProfile
@@ -490,15 +510,18 @@ class ShopifyEmbeddedCustomersController extends Controller
         string $routeName,
         array $routeParameters = []
     ): Response|RedirectResponse {
-        $context = $this->embeddedContextQuery($request);
+        /** @var ShopifyEmbeddedUrlGenerator $urlGenerator */
+        $urlGenerator = app(ShopifyEmbeddedUrlGenerator::class);
+        $target = $urlGenerator->route(
+            'shopify.app.'.$routeName,
+            $routeParameters,
+            false,
+            $request
+        );
 
-        if ($context === []) {
+        if ($target === '' || str_contains($target, '?') === false) {
             return $this->embeddedContextMissingResponse();
         }
-
-        $canonicalRoute = route('shopify.app.' . $routeName, $routeParameters, false);
-        $separator = str_contains($canonicalRoute, '?') ? '&' : '?';
-        $target = $canonicalRoute . $separator . http_build_query($context, '', '&', PHP_QUERY_RFC3986);
 
         Log::info('shopify.embedded.legacy.redirect', [
             'route' => $routeName,
@@ -507,11 +530,6 @@ class ShopifyEmbeddedCustomersController extends Controller
         ]);
 
         return redirect()->to($target);
-    }
-
-    protected function embeddedContextQuery(Request $request): array
-    {
-        return ShopifyEmbeddedContextQuery::fromRequest($request);
     }
 
     protected function embeddedContextMissingResponse(): Response
@@ -636,8 +654,9 @@ class ShopifyEmbeddedCustomersController extends Controller
         $tenantId = $authorized
             ? app(TenantResolver::class)->resolveTenantIdForStoreContext($store)
             : null;
-        $displayLabels = app(TenantDisplayLabelResolver::class)->resolve($tenantId);
-        $labels = is_array($displayLabels['labels'] ?? null) ? (array) $displayLabels['labels'] : [];
+        /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
+        $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
+        $labels = $payloadBuilder->displayLabels($tenantId, $request);
         $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
         if ($rewardsLabel === '') {
             $rewardsLabel = 'Rewards';
@@ -1285,37 +1304,10 @@ class ShopifyEmbeddedCustomersController extends Controller
      */
     protected function customerSubnav(string $activeKey, ?int $tenantId = null): array
     {
-        /** @var TenantModuleAccessResolver $resolver */
-        $resolver = app(TenantModuleAccessResolver::class);
-        $moduleStates = $resolver->resolveForTenant($tenantId, ['customers', 'activity']);
-        $resolvedStates = (array) ($moduleStates['modules'] ?? []);
+        /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
+        $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
 
-        $items = [
-            ['key' => 'all', 'label' => 'All customers', 'href' => route('shopify.app.customers.manage', [], false)],
-            ['key' => 'segments', 'label' => 'Segments', 'href' => route('shopify.app.customers.segments', [], false)],
-            ['key' => 'activity', 'label' => 'Activity', 'href' => route('shopify.app.customers.activity', [], false)],
-            ['key' => 'imports', 'label' => 'Imports', 'href' => route('shopify.app.customers.imports', [], false)],
-        ];
-
-        $subnavModuleMap = [
-            'all' => 'customers',
-            'segments' => 'customers',
-            'activity' => 'activity',
-            'imports' => 'customers',
-        ];
-
-        return array_map(
-            function (array $item) use ($activeKey, $subnavModuleMap, $resolvedStates): array {
-                $moduleKey = $subnavModuleMap[$item['key']] ?? null;
-                $state = $moduleKey !== null ? ($resolvedStates[$moduleKey] ?? null) : null;
-
-                return array_merge($item, [
-                    'active' => $item['key'] === $activeKey,
-                    'module_state' => $state,
-                ]);
-            },
-            $items
-        );
+        return $payloadBuilder->customerSubnav($activeKey, $tenantId, request());
     }
 
     protected function headlineForStatus(string $status, string $defaultHeadline): string

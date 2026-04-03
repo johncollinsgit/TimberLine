@@ -7,12 +7,12 @@ use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
+use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
-use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
-use App\Support\Shopify\ShopifyEmbeddedContextQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,7 +24,9 @@ class ShopifyEmbeddedAppController extends Controller
 
     public function __construct(
         protected ShopifyEmbeddedDashboardDataService $dashboardDataService,
-        protected CandleCashEarnedReminderService $candleCashEarnedReminderService
+        protected CandleCashEarnedReminderService $candleCashEarnedReminderService,
+        protected ShopifyEmbeddedShellPayloadBuilder $shellPayloadBuilder,
+        protected ShopifyEmbeddedUrlGenerator $urlGenerator
     ) {}
 
     public function show(
@@ -341,18 +343,22 @@ class ShopifyEmbeddedAppController extends Controller
             ]);
 
             return redirect(
-                ShopifyEmbeddedContextQuery::appendToUrl(
-                    route('shopify.app.store', [], false),
-                    ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+                $this->urlGenerator->redirectToRoute(
+                    'shopify.app.store',
+                    [],
+                    $request,
+                    (string) ($context['host'] ?? null)
                 )
             )->with('status_error', 'Tenant context is missing for this store.');
         }
         $result = $catalogService->activateModuleForTenant($tenantId, $moduleKey, null, 'shopify_app_store');
 
         return redirect(
-            ShopifyEmbeddedContextQuery::appendToUrl(
-                route('shopify.app.store', [], false),
-                ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+            $this->urlGenerator->redirectToRoute(
+                'shopify.app.store',
+                [],
+                $request,
+                (string) ($context['host'] ?? null)
             )
         )->with(($result['ok'] ?? false) ? 'status' : 'status_error', (string) ($result['message'] ?? 'Module action completed.'));
     }
@@ -383,9 +389,11 @@ class ShopifyEmbeddedAppController extends Controller
             ]);
 
             return redirect(
-                ShopifyEmbeddedContextQuery::appendToUrl(
-                    route('shopify.app.store', [], false),
-                    ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+                $this->urlGenerator->redirectToRoute(
+                    'shopify.app.store',
+                    [],
+                    $request,
+                    (string) ($context['host'] ?? null)
                 )
             )->with('status_error', 'Tenant context is missing for this store.');
         }
@@ -393,9 +401,11 @@ class ShopifyEmbeddedAppController extends Controller
         $result = $catalogService->requestModuleAccessForTenant($tenantId, $moduleKey, null, 'shopify_app_store_request');
 
         return redirect(
-            ShopifyEmbeddedContextQuery::appendToUrl(
-                route('shopify.app.store', [], false),
-                ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null))
+            $this->urlGenerator->redirectToRoute(
+                'shopify.app.store',
+                [],
+                $request,
+                (string) ($context['host'] ?? null)
             )
         )->with(($result['ok'] ?? false) ? 'status' : 'status_error', (string) ($result['message'] ?? 'Module request completed.'));
     }
@@ -469,15 +479,12 @@ class ShopifyEmbeddedAppController extends Controller
                 'limit' => $validated['limit'] ?? 10,
             ]
         );
-        $embeddedNavigationResults = $this->embeddedSearchResults(
-            (string) ($validated['q'] ?? ''),
-            $tenantId
-        );
-        $embeddedContext = ShopifyEmbeddedContextQuery::fromRequest($request, (string) ($context['host'] ?? null));
-        $appendContext = static function (array $row) use ($embeddedContext): array {
+        $embeddedNavigationResults = $this->embeddedSearchResults((string) ($validated['q'] ?? ''), $tenantId, $request);
+        $embeddedContext = $this->urlGenerator->contextQuery($request, (string) ($context['host'] ?? null));
+        $appendContext = function (array $row) use ($embeddedContext): array {
             $url = trim((string) ($row['url'] ?? ''));
             if ($url !== '' && ! str_starts_with($url, 'http')) {
-                $row['url'] = ShopifyEmbeddedContextQuery::appendToUrl($url, $embeddedContext);
+                $row['url'] = $this->urlGenerator->append($url, $embeddedContext);
             }
 
             return $row;
@@ -524,200 +531,15 @@ class ShopifyEmbeddedAppController extends Controller
      */
     protected function dashboardExperienceSubnav(string $activeKey, ?int $tenantId): array
     {
-        /** @var TenantModuleAccessResolver $resolver */
-        $resolver = app(TenantModuleAccessResolver::class);
-        $resolved = $resolver->resolveForTenant($tenantId, ['dashboard', 'onboarding', 'integrations']);
-        $moduleStates = (array) ($resolved['modules'] ?? []);
-
-        $items = [
-            ['key' => 'overview', 'label' => 'Overview', 'href' => route('shopify.app', [], false), 'module_key' => 'dashboard'],
-            ['key' => 'start', 'label' => 'Start Here', 'href' => route('shopify.app.start', [], false), 'module_key' => 'onboarding'],
-            ['key' => 'plans', 'label' => 'Plans & Add-ons', 'href' => route('shopify.app.plans', [], false), 'module_key' => 'onboarding'],
-            ['key' => 'store', 'label' => 'App Store', 'href' => route('shopify.app.store', [], false), 'module_key' => 'onboarding'],
-            ['key' => 'integrations', 'label' => 'Integrations', 'href' => route('shopify.app.integrations', [], false), 'module_key' => 'integrations'],
-        ];
-
-        return array_map(function (array $item) use ($activeKey, $moduleStates): array {
-            $moduleKey = strtolower(trim((string) ($item['module_key'] ?? '')));
-            $state = $moduleKey !== '' ? ($moduleStates[$moduleKey] ?? null) : null;
-            unset($item['module_key']);
-
-            return array_merge($item, [
-                'active' => $item['key'] === $activeKey,
-                'module_state' => is_array($state) ? $state : null,
-            ]);
-        }, $items);
+        return $this->shellPayloadBuilder->dashboardSubnav($activeKey, $tenantId, request());
     }
 
     /**
      * @return array<int,array<string,mixed>>
      */
-    protected function embeddedSearchResults(string $query, ?int $tenantId): array
+    protected function embeddedSearchResults(string $query, ?int $tenantId, ?Request $request = null): array
     {
-        $displayLabels = $this->embeddedDisplayLabels($tenantId);
-        $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
-        if ($rewardsLabel === '') {
-            $rewardsLabel = 'Rewards';
-        }
-
-        $entries = [
-            [
-                'title' => 'Home',
-                'subtitle' => 'Revenue, setup progress, and recent activity.',
-                'url' => route('shopify.app', [], false),
-                'badge' => 'Section',
-                'keywords' => ['dashboard', 'overview', 'home'],
-            ],
-            [
-                'title' => 'Start Here',
-                'subtitle' => 'Walk through onboarding and launch steps.',
-                'url' => route('shopify.app.start', [], false),
-                'badge' => 'Setup',
-                'keywords' => ['setup', 'getting started', 'onboarding'],
-            ],
-            [
-                'title' => 'Plans & Add-ons',
-                'subtitle' => 'Review plan options and add-on modules.',
-                'url' => route('shopify.app.plans', [], false),
-                'badge' => 'Setup',
-                'keywords' => ['plans', 'addons', 'pricing'],
-            ],
-            [
-                'title' => 'App Store',
-                'subtitle' => 'Browse modules available for this store.',
-                'url' => route('shopify.app.store', [], false),
-                'badge' => 'Modules',
-                'keywords' => ['modules', 'store', 'apps'],
-            ],
-            [
-                'title' => 'Integrations',
-                'subtitle' => 'Customer sync and connected app health.',
-                'url' => route('shopify.app.integrations', [], false),
-                'badge' => 'Sync',
-                'keywords' => ['sync', 'imports', 'integrations'],
-            ],
-            [
-                'title' => 'Customers',
-                'subtitle' => 'Search profiles, segments, and customer activity.',
-                'url' => route('shopify.app.customers.manage', [], false),
-                'badge' => 'Customers',
-                'keywords' => ['customers', 'profiles', 'audience'],
-            ],
-            [
-                'title' => 'Customer Segments',
-                'subtitle' => 'Review reusable customer groupings.',
-                'url' => route('shopify.app.customers.segments', [], false),
-                'badge' => 'Customers',
-                'keywords' => ['segments', 'groups', 'customers'],
-            ],
-            [
-                'title' => 'Customer Activity',
-                'subtitle' => 'See recent customer and rewards events.',
-                'url' => route('shopify.app.customers.activity', [], false),
-                'badge' => 'Customers',
-                'keywords' => ['activity', 'events', 'customers'],
-            ],
-            [
-                'title' => 'Customer Imports',
-                'subtitle' => 'Inspect imports and sync history.',
-                'url' => route('shopify.app.customers.imports', [], false),
-                'badge' => 'Sync',
-                'keywords' => ['imports', 'sync', 'customers'],
-            ],
-            [
-                'title' => $rewardsLabel,
-                'subtitle' => 'Review performance, rules, and live status.',
-                'url' => route('shopify.app.rewards', [], false),
-                'badge' => 'Rewards',
-                'keywords' => ['rewards', 'loyalty', 'analytics'],
-            ],
-            [
-                'title' => 'Ways to Earn',
-                'subtitle' => 'Manage how customers earn rewards.',
-                'url' => route('shopify.embedded.rewards.earn', [], false),
-                'badge' => 'Rewards',
-                'keywords' => ['earn', 'rules', 'rewards'],
-            ],
-            [
-                'title' => 'Ways to Redeem',
-                'subtitle' => 'Manage redemption options and discounts.',
-                'url' => route('shopify.embedded.rewards.redeem', [], false),
-                'badge' => 'Rewards',
-                'keywords' => ['redeem', 'discounts', 'rewards'],
-            ],
-            [
-                'title' => 'Notifications',
-                'subtitle' => 'Configure reminder and program messaging.',
-                'url' => route('shopify.embedded.rewards.notifications', [], false),
-                'badge' => 'Rewards',
-                'keywords' => ['notifications', 'emails', 'reminders'],
-            ],
-            [
-                'title' => 'Settings',
-                'subtitle' => 'Email sender, branding, and workspace preferences.',
-                'url' => route('shopify.app.settings', [], false),
-                'badge' => 'Settings',
-                'keywords' => ['settings', 'email', 'preferences'],
-            ],
-        ];
-
-        $normalized = strtolower(trim($query));
-
-        return collect($entries)
-            ->map(function (array $entry) use ($normalized): ?array {
-                $score = $this->embeddedSearchScore($normalized, array_merge(
-                    [(string) ($entry['title'] ?? ''), (string) ($entry['subtitle'] ?? '')],
-                    (array) ($entry['keywords'] ?? [])
-                ));
-
-                if ($normalized !== '' && $score === 0) {
-                    return null;
-                }
-
-                return [
-                    'type' => 'Backstage',
-                    'subtype' => 'section',
-                    'title' => (string) ($entry['title'] ?? 'Section'),
-                    'subtitle' => (string) ($entry['subtitle'] ?? ''),
-                    'url' => (string) ($entry['url'] ?? '#'),
-                    'badge' => (string) ($entry['badge'] ?? 'Section'),
-                    'score' => $score ?: 260,
-                    'icon' => 'rectangle-stack',
-                    'meta' => [],
-                ];
-            })
-            ->filter()
-            ->sortByDesc(fn (array $entry): int => (int) ($entry['score'] ?? 0))
-            ->values()
-            ->all();
-    }
-
-    protected function embeddedSearchScore(string $query, array $haystacks, int $base = 260): int
-    {
-        if ($query === '') {
-            return $base;
-        }
-
-        foreach ($haystacks as $index => $haystack) {
-            $normalized = strtolower(trim((string) $haystack));
-            if ($normalized === '') {
-                continue;
-            }
-
-            if ($normalized === $query) {
-                return $base + 120 - ($index * 5);
-            }
-
-            if (str_starts_with($normalized, $query)) {
-                return $base + 80 - ($index * 5);
-            }
-
-            if (str_contains($normalized, $query)) {
-                return $base + 40 - ($index * 5);
-            }
-        }
-
-        return 0;
+        return $this->shellPayloadBuilder->embeddedSearchResults($query, $tenantId, $request);
     }
 
     protected function headlineForStatus(string $status, string $defaultHeadline): string
