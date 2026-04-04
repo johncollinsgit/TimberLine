@@ -12,6 +12,7 @@ use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
+use App\Models\TenantModuleState;
 use App\Models\User;
 use App\Services\Marketing\SendGridEmailService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -113,6 +114,12 @@ test('messaging workspace is hidden and locked for non-enabled tenant mappings',
         ->assertStatus(403)
         ->assertJsonPath('ok', false)
         ->assertJsonPath('status', 'messaging_module_locked');
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.setup.complete'))
+        ->assertStatus(403)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('status', 'messaging_module_locked');
 });
 
 test('messaging nav and workspace load when entitlement is enabled', function () {
@@ -158,6 +165,43 @@ test('messaging analytics page is locked for non-enabled tenant mappings', funct
     $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery()))
         ->assertStatus(403)
         ->assertSeeText('Message analytics is locked');
+});
+
+test('messaging setup can be marked complete from embedded api', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Setup Tenant',
+        'slug' => 'messaging-setup-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    TenantModuleState::query()->updateOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'module_key' => 'messaging',
+        ],
+        [
+            'enabled_override' => true,
+            'setup_status' => 'not_started',
+            'setup_completed_at' => null,
+        ]
+    );
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.setup.complete'))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.module_key', 'messaging')
+        ->assertJsonPath('data.setup_status', 'configured');
+
+    $state = TenantModuleState::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'messaging')
+        ->first();
+
+    expect($state)->not->toBeNull()
+        ->and((string) ($state?->setup_status ?? ''))->toBe('configured')
+        ->and($state?->setup_completed_at)->not->toBeNull();
 });
 
 test('messaging analytics stays tenant and store scoped with attributed outcomes', function () {

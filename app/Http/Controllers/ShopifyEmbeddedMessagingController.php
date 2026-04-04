@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\TenantModuleState;
+use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\MessageAnalyticsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
@@ -13,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -123,7 +126,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
-        MessageAnalyticsService $messageAnalyticsService
+        MessageAnalyticsService $messageAnalyticsService,
+        TenantEmailSettingsService $tenantEmailSettingsService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -149,6 +153,49 @@ class ShopifyEmbeddedMessagingController extends Controller
         $analyticsPayload = ($authorized && $tenantId !== null && $hasMessagingAccess)
             ? $probe->time('page_payload', fn (): array => $messageAnalyticsService->index($tenantId, $storeKey, $filters))
             : null;
+        $emailSettings = ($authorized && $tenantId !== null && $hasMessagingAccess)
+            ? $probe->time('page_payload', fn (): array => $tenantEmailSettingsService->forAdmin($tenantId))
+            : [];
+        $messagesSent = (int) data_get($analyticsPayload, 'summary.messages_sent', 0);
+        $setupStatus = strtolower(trim((string) ($messagingModule['setup_status'] ?? 'not_started')));
+        $emailSettingsReady = (bool) data_get($emailSettings, 'email_enabled', false)
+            && (bool) data_get($emailSettings, 'analytics_enabled', false)
+            && trim((string) data_get($emailSettings, 'from_email', '')) !== '';
+        $setupGuide = [
+            'status' => $setupStatus,
+            'is_configured' => $setupStatus === 'configured',
+            'steps' => [
+                [
+                    'key' => 'module_access',
+                    'label' => 'Messaging module access is enabled',
+                    'done' => $hasMessagingAccess,
+                ],
+                [
+                    'key' => 'email_tracking',
+                    'label' => 'Email sending + analytics are enabled in Settings',
+                    'done' => $emailSettingsReady,
+                    'hint' => sprintf(
+                        'Provider: %s · Status: %s',
+                        strtoupper((string) data_get($emailSettings, 'email_provider', 'sendgrid')),
+                        strtolower(trim((string) data_get($emailSettings, 'provider_status', 'unknown')))
+                    ),
+                ],
+                [
+                    'key' => 'first_tracked_send',
+                    'label' => 'At least one tracked message has been sent',
+                    'done' => $messagesSent > 0,
+                    'hint' => $messagesSent > 0
+                        ? sprintf('%s tracked sends detected.', number_format($messagesSent))
+                        : 'Send a message from Messaging workspace to seed analytics.',
+                ],
+            ],
+            'actions' => [
+                'settings_href' => route('shopify.app.settings', [], false),
+                'workspace_href' => route('shopify.app.messaging', [], false),
+                'complete_endpoint' => route('shopify.app.api.messaging.setup.complete', [], false),
+            ],
+            'can_mark_complete' => $hasMessagingAccess,
+        ];
 
         $messageKey = trim((string) $request->query('message_key', ''));
         $detail = (is_array($analyticsPayload) && $messageKey !== '')
@@ -208,6 +255,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                     'model' => 'last_click_within_window',
                     'window_days' => max(1, (int) config('marketing.message_analytics.attribution_window_days', 7)),
                 ],
+                'messagingSetupGuide' => $setupGuide,
             ]),
             $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
         ));
@@ -217,6 +265,52 @@ class ShopifyEmbeddedMessagingController extends Controller
             'status' => $status,
             'messaging_enabled' => $hasMessagingAccess,
         ])->finish($response);
+    }
+
+    public function completeSetup(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        if (! Schema::hasTable('tenant_module_states')) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'setup_state_unavailable',
+                'message' => 'Module setup state storage is unavailable on this environment.',
+            ], 503);
+        }
+
+        $tenantId = (int) $access['tenant_id'];
+        $state = TenantModuleState::query()->firstOrNew([
+            'tenant_id' => $tenantId,
+            'module_key' => 'messaging',
+        ]);
+
+        $metadata = is_array($state->metadata) ? $state->metadata : [];
+        $state->setup_status = 'configured';
+        $state->setup_completed_at = now();
+        $state->metadata = [
+            ...$metadata,
+            'configured_via' => 'shopify_embedded_messaging_setup',
+            'configured_at' => now()->toIso8601String(),
+        ];
+        $state->save();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Messaging setup marked complete.',
+            'data' => [
+                'module_key' => 'messaging',
+                'setup_status' => (string) $state->setup_status,
+                'setup_completed_at' => optional($state->setup_completed_at)->toIso8601String(),
+            ],
+        ]);
     }
 
     public function bootstrap(

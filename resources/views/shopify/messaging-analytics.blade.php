@@ -29,6 +29,11 @@
         $selectedMessageKey = trim((string) ($messageAnalyticsSelectedMessageKey ?? ''));
         $attribution = is_array($messageAnalyticsAttribution ?? null) ? $messageAnalyticsAttribution : [];
         $attributionWindowDays = max(1, (int) ($attribution['window_days'] ?? 7));
+        $setupGuide = is_array($messagingSetupGuide ?? null) ? $messagingSetupGuide : [];
+        $setupConfigured = strtolower(trim((string) ($setupGuide['status'] ?? 'not_started'))) === 'configured';
+        $setupSteps = collect((array) ($setupGuide['steps'] ?? []))
+            ->filter(fn ($step) => is_array($step) && trim((string) ($step['label'] ?? '')) !== '')
+            ->values();
 
         $filterKeys = [
             'date_from',
@@ -356,6 +361,68 @@
             gap: 8px;
         }
 
+        .message-analytics-setup-guide {
+            border-radius: 12px;
+            border: 1px dashed rgba(15, 23, 42, 0.22);
+            background: rgba(248, 250, 252, 0.82);
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .message-analytics-setup-guide h4 {
+            margin: 0;
+            font-size: 13px;
+            color: #0f172a;
+        }
+
+        .message-analytics-setup-list {
+            margin: 0;
+            padding-left: 18px;
+            display: grid;
+            gap: 6px;
+            font-size: 13px;
+            color: #0f172a;
+        }
+
+        .message-analytics-setup-list li {
+            display: grid;
+            gap: 2px;
+        }
+
+        .message-analytics-setup-list li strong {
+            font-weight: 700;
+        }
+
+        .message-analytics-setup-list li[data-done="true"] strong {
+            color: #0e7a53;
+        }
+
+        .message-analytics-setup-list li[data-done="false"] strong {
+            color: #9a3412;
+        }
+
+        .message-analytics-setup-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .message-analytics-setup-inline-status {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.5;
+            color: rgba(15, 23, 42, 0.76);
+        }
+
+        .message-analytics-setup-inline-status[data-tone="success"] {
+            color: #0f766e;
+        }
+
+        .message-analytics-setup-inline-status[data-tone="error"] {
+            color: #b42318;
+        }
+
         @media (max-width: 1200px) {
             .message-analytics-summary {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -389,7 +456,50 @@
                 :module-state="$messagingModuleState"
                 title="Messaging module state"
                 description="Visibility and access follow tenant entitlement + module-state conventions."
-            />
+            >
+                <div class="message-analytics-setup-guide">
+                    @if($setupConfigured)
+                        <h4>Setup complete for this tenant</h4>
+                        <p class="message-analytics-muted">For new tenants, use the same sequence below and then click “Mark setup complete.”</p>
+                    @else
+                        <h4>How to set this up</h4>
+                        <p class="message-analytics-muted">Complete these steps in order, then mark the module configured.</p>
+                    @endif
+
+                    @if($setupSteps->isNotEmpty())
+                        <ol class="message-analytics-setup-list" aria-label="Messaging setup checklist">
+                            @foreach($setupSteps as $step)
+                                @php
+                                    $stepDone = (bool) ($step['done'] ?? false);
+                                @endphp
+                                <li data-done="{{ $stepDone ? 'true' : 'false' }}">
+                                    <strong>{{ $stepDone ? 'Done:' : 'Next:' }} {{ (string) ($step['label'] ?? '') }}</strong>
+                                    @if(filled($step['hint'] ?? null))
+                                        <span class="message-analytics-muted">{{ (string) $step['hint'] }}</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ol>
+                    @endif
+
+                    <div class="message-analytics-setup-actions">
+                        <a class="message-analytics-button" href="{{ route('shopify.app.settings', $embeddedContextQuery, false) }}">Open Settings</a>
+                        <a class="message-analytics-button" href="{{ route('shopify.app.messaging', $embeddedContextQuery, false) }}">Open Messaging</a>
+                        @if(! $setupConfigured && (bool) ($setupGuide['can_mark_complete'] ?? false))
+                            <button
+                                type="button"
+                                class="message-analytics-button message-analytics-button--primary"
+                                data-mark-setup-complete
+                                data-endpoint="{{ (string) data_get($setupGuide, 'actions.complete_endpoint', route('shopify.app.api.messaging.setup.complete', [], false)) }}"
+                            >
+                                Mark setup complete
+                            </button>
+                        @endif
+                    </div>
+
+                    <p class="message-analytics-setup-inline-status" id="message-analytics-setup-status" hidden></p>
+                </div>
+            </x-tenancy.module-state-card>
         @endif
 
         @if(! $authorized)
@@ -876,6 +986,109 @@
         <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
         <script>
             (function () {
+                const setupCompleteButton = document.querySelector('[data-mark-setup-complete]');
+                const setupStatusNode = document.getElementById('message-analytics-setup-status');
+
+                function setSetupStatus(message, tone = 'neutral') {
+                    if (!setupStatusNode) {
+                        return;
+                    }
+
+                    const text = typeof message === 'string' ? message.trim() : '';
+                    if (text === '') {
+                        setupStatusNode.hidden = true;
+                        setupStatusNode.textContent = '';
+                        setupStatusNode.removeAttribute('data-tone');
+                        return;
+                    }
+
+                    setupStatusNode.hidden = false;
+                    setupStatusNode.textContent = text;
+                    setupStatusNode.setAttribute('data-tone', tone);
+                }
+
+                function authFailureMessage(status, fallbackMessage) {
+                    const messages = {
+                        missing_api_auth: 'Shopify Admin verification is unavailable. Reload from Shopify Admin and try again.',
+                        invalid_session_token: 'Shopify Admin verification failed. Reload from Shopify Admin and try again.',
+                        expired_session_token: 'Your Shopify Admin session expired. Reload from Shopify Admin and try again.',
+                    };
+
+                    return messages[status] || fallbackMessage || null;
+                }
+
+                async function resolveEmbeddedAuthHeaders() {
+                    if (!window.shopify || typeof window.shopify.idToken !== 'function') {
+                        throw new Error(authFailureMessage('missing_api_auth', 'Shopify Admin verification is unavailable.'));
+                    }
+
+                    let token = null;
+                    try {
+                        token = await Promise.race([
+                            Promise.resolve(window.shopify.idToken()),
+                            new Promise((resolve) => window.setTimeout(() => resolve(null), 1500)),
+                        ]);
+                    } catch (error) {
+                        throw new Error(authFailureMessage('invalid_session_token', 'Shopify Admin verification failed.'));
+                    }
+
+                    if (typeof token !== 'string' || token.trim() === '') {
+                        throw new Error(authFailureMessage('missing_api_auth', 'Shopify Admin verification is unavailable.'));
+                    }
+
+                    return {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token.trim()}`,
+                    };
+                }
+
+                async function postJson(url) {
+                    const headers = await resolveEmbeddedAuthHeaders();
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers,
+                        credentials: 'same-origin',
+                    });
+
+                    const payload = await response.json().catch(() => ({
+                        ok: false,
+                        message: 'Unexpected response from Backstage.',
+                    }));
+
+                    if (!response.ok) {
+                        throw new Error(
+                            authFailureMessage(payload?.status, payload?.message || 'Request failed.')
+                            || payload?.message
+                            || 'Request failed.'
+                        );
+                    }
+
+                    return payload;
+                }
+
+                if (setupCompleteButton) {
+                    setupCompleteButton.addEventListener('click', async () => {
+                        const endpoint = String(setupCompleteButton.getAttribute('data-endpoint') || '').trim();
+                        if (endpoint === '') {
+                            return;
+                        }
+
+                        setupCompleteButton.disabled = true;
+                        setSetupStatus('Marking setup complete…');
+
+                        try {
+                            await postJson(endpoint);
+                            setSetupStatus('Messaging setup marked complete. Reloading…', 'success');
+                            window.setTimeout(() => window.location.reload(), 500);
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : 'Could not mark setup complete.';
+                            setSetupStatus(message, 'error');
+                            setupCompleteButton.disabled = false;
+                        }
+                    });
+                }
+
                 const chartNode = document.getElementById('message-analytics-chart');
                 const dataNode = document.getElementById('message-analytics-chart-data');
                 if (!chartNode || !dataNode || typeof window.ApexCharts === 'undefined') {

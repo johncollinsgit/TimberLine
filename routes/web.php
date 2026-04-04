@@ -950,6 +950,9 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/send/group', [ShopifyEmbeddedMessagingController::class, 'sendGroup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.send.group');
+        Route::post('/messaging/setup/complete', [ShopifyEmbeddedMessagingController::class, 'completeSetup'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.setup.complete');
         Route::get('/messaging/history', [ShopifyEmbeddedMessagingController::class, 'history'])
             ->name('messaging.history');
         Route::get('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'widgetSettings'])
