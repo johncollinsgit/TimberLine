@@ -13,6 +13,7 @@ use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -28,6 +29,7 @@ class ShopifyEmbeddedMessagingWorkspaceService
     protected const MODERN_FORESTRY_SLUG = 'modern-forestry';
     protected const AUDIENCE_SCOPE_EFFECTIVE = 'effective';
     protected const AUDIENCE_SCOPE_LEGACY_IMPORTED = 'legacy_imported';
+    protected const AUDIENCE_SUMMARY_CACHE_MINUTES = 10;
 
     /**
      * @var array<int,string>
@@ -269,6 +271,24 @@ GRAPHQL;
      * }
      */
     public function audienceSummary(?int $tenantId): array
+    {
+        $cacheKey = 'shopify_embedded_messaging:audience_summary:v1:' . (string) ($tenantId ?? 'none');
+
+        return Cache::remember(
+            $cacheKey,
+            now()->addMinutes(self::AUDIENCE_SUMMARY_CACHE_MINUTES),
+            fn (): array => $this->computeAudienceSummary($tenantId)
+        );
+    }
+
+    /**
+     * @return array{
+     *   summary:array{sms:int,email:int,overlap:int,unique:int},
+     *   group_summaries:array<string,array{sms:int,email:int,overlap:int,unique:int}>,
+     *   diagnostics:array<string,mixed>
+     * }
+     */
+    protected function computeAudienceSummary(?int $tenantId): array
     {
         $sms = $this->resolvedChannelAudience(
             $tenantId,
@@ -1042,7 +1062,7 @@ GRAPHQL;
 
         $query
             ->orderBy('marketing_profiles.id')
-            ->chunkById(300, function (Collection $profiles) use (
+            ->chunkById(1200, function (Collection $profiles) use (
                 $channel,
                 $tenantId,
                 $includeRecipients,

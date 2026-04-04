@@ -2985,8 +2985,10 @@
                     switchTab("groups");
 
                     try {
-                        await refreshBootstrap();
-                        await refreshAudienceSummary();
+                        await Promise.all([
+                            refreshBootstrap(),
+                            refreshAudienceSummary(),
+                        ]);
                     } catch (error) {
                         setAlert(error?.payload?.message || error?.message || "Unable to load messages workspace.", "error");
                     }
