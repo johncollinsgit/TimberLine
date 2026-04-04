@@ -71,15 +71,15 @@
             </div>
 
             <div class="mt-5 flex flex-wrap gap-2">
-                <button type="button" @click="showEdit = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Edit tenant</button>
-                <button type="button" @click="showRole = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Change role</button>
-                <button type="button" @click="showModules = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Manage modules</button>
-                <button type="button" @click="showType = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Change tenant type</button>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'applications']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">View applications</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'customers']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">View customers</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'activity']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">View activity</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'performance']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">View performance</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'settings']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">View settings</a>
+                <button type="button" @click="showEdit = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Tenant</button>
+                <button type="button" @click="showRole = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Role</button>
+                <button type="button" @click="showModules = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Modules</button>
+                <button type="button" @click="showType = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Tenant Type</button>
+                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'applications']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Applications</a>
+                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'customers']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Customers</a>
+                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'activity']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Activity</a>
+                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'performance']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Performance</a>
+                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'settings']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Settings</a>
                 <button type="button" @click="showDeleteTenant = true" class="rounded-full border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete tenant</button>
             </div>
         </section>
