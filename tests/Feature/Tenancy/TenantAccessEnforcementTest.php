@@ -113,3 +113,59 @@ test('invalid tenant context fails safely', function (): void {
         ->get(route('marketing.customers.show', ['marketingProfile' => $profile->id, 'tenant' => 'unknown-tenant']))
         ->assertForbidden();
 });
+
+test('privileged user without membership is auto-linked to host tenant for tenant-scoped access', function (): void {
+    config()->set('tenancy.auth.host_map', [
+        'backstage.theforestrystudio.com' => 'modern-forestry',
+    ]);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get('http://backstage.theforestrystudio.com/marketing/providers-integrations')
+        ->assertOk();
+
+    $this->assertDatabaseHas('tenant_user', [
+        'tenant_id' => $tenant->id,
+        'user_id' => $user->id,
+        'role' => 'marketing_manager',
+    ]);
+});
+
+test('non-privileged user without membership is not auto-linked to host tenant', function (): void {
+    config()->set('tenancy.auth.host_map', [
+        'backstage.theforestrystudio.com' => 'modern-forestry',
+    ]);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'pouring',
+        'email_verified_at' => now(),
+    ]);
+
+    $request = Request::create('http://backstage.theforestrystudio.com/marketing/providers-integrations');
+    $request->attributes->set('host_tenant_id', $tenant->id);
+    $request->attributes->set('host_tenant', $tenant);
+    $request->setLaravelSession(app('session')->driver());
+    $request->session()->start();
+
+    $resolved = app(AuthenticatedTenantContextResolver::class)->resolveForRequest($request, $user);
+
+    expect($resolved)->toBeNull();
+    $this->assertDatabaseMissing('tenant_user', [
+        'tenant_id' => $tenant->id,
+        'user_id' => $user->id,
+    ]);
+});

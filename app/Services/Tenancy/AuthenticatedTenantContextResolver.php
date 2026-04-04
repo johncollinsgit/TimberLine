@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 class AuthenticatedTenantContextResolver
 {
@@ -21,6 +22,30 @@ class AuthenticatedTenantContextResolver
             ->get();
 
         if ($memberships->isEmpty()) {
+            $hostTenant = $this->resolveHostTenant($request);
+            if ($hostTenant && $this->canBootstrapHostTenantMembership($user)) {
+                $bootstrapRole = $this->bootstrapTenantRole($user);
+
+                $user->tenants()->syncWithoutDetaching([
+                    (int) $hostTenant->id => ['role' => $bootstrapRole],
+                ]);
+
+                if ($request->hasSession()) {
+                    $request->session()->put('tenant_id', (int) $hostTenant->id);
+                }
+
+                Log::info('auth.tenant_context.bootstrap_membership', [
+                    'category' => 'auth.tenant_context',
+                    'event' => 'bootstrap_membership',
+                    'user_id' => (int) $user->id,
+                    'tenant_id' => (int) $hostTenant->id,
+                    'role' => $bootstrapRole,
+                    'host' => strtolower(trim((string) $request->getHost())),
+                ]);
+
+                return $hostTenant;
+            }
+
             return null;
         }
 
@@ -131,5 +156,52 @@ class AuthenticatedTenantContextResolver
         $cast = (int) $value;
 
         return $cast > 0 ? $cast : null;
+    }
+
+    protected function resolveHostTenant(Request $request): ?Tenant
+    {
+        if (! $this->bootstrapHostEligible($request)) {
+            return null;
+        }
+
+        $hostTenant = $request->attributes->get('host_tenant');
+        if ($hostTenant instanceof Tenant) {
+            return $hostTenant;
+        }
+
+        $hostTenantId = $this->positiveInt($request->attributes->get('host_tenant_id'));
+        if ($hostTenantId !== null) {
+            return Tenant::query()->find($hostTenantId);
+        }
+
+        return null;
+    }
+
+    protected function bootstrapHostEligible(Request $request): bool
+    {
+        $host = strtolower(trim((string) $request->getHost()));
+
+        return $host !== '' && ! in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+    }
+
+    protected function canBootstrapHostTenantMembership(User $user): bool
+    {
+        $role = strtolower(trim((string) ($user->role ?? '')));
+        if ($role === '') {
+            // Legacy compatibility: blank/null global role historically behaved like admin.
+            $role = 'admin';
+        }
+
+        return in_array($role, ['admin', 'manager', 'marketing_manager'], true);
+    }
+
+    protected function bootstrapTenantRole(User $user): string
+    {
+        $role = strtolower(trim((string) ($user->role ?? '')));
+        if ($role === '' || ! in_array($role, ['admin', 'manager', 'marketing_manager'], true)) {
+            return 'admin';
+        }
+
+        return $role;
     }
 }
