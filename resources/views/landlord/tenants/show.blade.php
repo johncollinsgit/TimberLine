@@ -83,23 +83,6 @@
             </div>
         </section>
 
-        <section class="rounded-3xl border border-zinc-200 bg-white p-2 shadow-sm">
-            <nav class="flex flex-wrap gap-1">
-                @foreach ($tabs as $tab)
-                    @php
-                        $label = Str::headline($tab);
-                        $tabUrl = route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => $tab]);
-                    @endphp
-                    <a
-                        href="{{ $tabUrl }}"
-                        class="rounded-2xl px-4 py-2 text-sm font-semibold transition {{ $activeTab === $tab ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100' }}"
-                    >
-                        {{ $label }}
-                    </a>
-                @endforeach
-            </nav>
-        </section>
-
         @if ($activeTab === 'overview')
             <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <article class="rounded-2xl border border-zinc-200 bg-white p-4">
