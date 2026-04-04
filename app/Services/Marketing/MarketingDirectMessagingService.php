@@ -62,6 +62,10 @@ class MarketingDirectMessagingService
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
         $subject = $this->nullableString($options['subject'] ?? null);
+        $htmlBody = $this->nullableString($options['html_body'] ?? null);
+        $emailTemplate = is_array($options['email_template'] ?? null)
+            ? $options['email_template']
+            : null;
 
         $forceSendProfileIds = collect((array) ($options['force_send_profile_ids'] ?? []))
             ->map(static fn ($id): int => (int) $id)
@@ -83,11 +87,14 @@ class MarketingDirectMessagingService
         ];
 
         $message = trim($message);
-        if ($message === '') {
+        if ($channel === 'sms' && $message === '') {
             throw new \InvalidArgumentException('Message body is required.');
         }
         if ($channel === 'email' && $subject === null) {
             throw new \InvalidArgumentException('Email subject is required.');
+        }
+        if ($channel === 'email' && $message === '' && $htmlBody === null) {
+            throw new \InvalidArgumentException('Email message content is required.');
         }
 
         foreach ($recipients as $recipient) {
@@ -221,6 +228,10 @@ class MarketingDirectMessagingService
                     'group_id' => $groupId,
                     'source_type' => (string) ($recipient['source_type'] ?? 'profile'),
                     'subject' => $subject,
+                    'template_mode' => $this->nullableString(data_get($emailTemplate, 'mode')),
+                    'template_sections' => is_array(data_get($emailTemplate, 'sections'))
+                        ? data_get($emailTemplate, 'sections')
+                        : [],
                 ],
             ]);
 
@@ -236,7 +247,12 @@ class MarketingDirectMessagingService
                     'group_id' => $groupId,
                     'source_type' => (string) ($recipient['source_type'] ?? 'profile'),
                     'subject' => $subject,
+                    'template_mode' => $this->nullableString(data_get($emailTemplate, 'mode')),
+                    'template_sections' => is_array(data_get($emailTemplate, 'sections'))
+                        ? data_get($emailTemplate, 'sections')
+                        : [],
                 ],
+                'html_body' => $htmlBody,
                 'categories' => [
                     'direct-message',
                     'shopify-embedded',
@@ -263,6 +279,10 @@ class MarketingDirectMessagingService
                 'metadata' => [
                     ...((array) ($delivery->metadata ?? [])),
                     'subject' => $subject,
+                    'template_mode' => $this->nullableString(data_get($emailTemplate, 'mode')),
+                    'template_sections' => is_array(data_get($emailTemplate, 'sections'))
+                        ? data_get($emailTemplate, 'sections')
+                        : [],
                 ],
                 'sent_at' => $success ? now() : null,
                 'failed_at' => $success ? null : now(),

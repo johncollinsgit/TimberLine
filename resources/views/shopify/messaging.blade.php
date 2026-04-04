@@ -379,6 +379,116 @@
             background: #fff;
         }
 
+        .messages-email-composer-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 10px;
+        }
+
+        .messages-email-sections {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .messages-email-section-row {
+            border: 1px solid var(--messages-border);
+            border-radius: 11px;
+            padding: 10px;
+            background: #fff;
+            display: grid;
+            gap: 8px;
+        }
+
+        .messages-email-section-row[data-selected="true"] {
+            border-color: rgba(16, 99, 63, 0.38);
+            background: var(--messages-accent-soft);
+        }
+
+        .messages-email-section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .messages-email-section-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--messages-text);
+        }
+
+        .messages-email-section-actions {
+            display: inline-flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .messages-email-icon-button {
+            border: 1px solid var(--messages-border);
+            border-radius: 999px;
+            min-height: 30px;
+            padding: 0 10px;
+            background: #fff;
+            color: var(--messages-text);
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .messages-email-icon-button:hover {
+            border-color: rgba(15, 23, 42, 0.25);
+        }
+
+        .messages-email-icon-button--danger {
+            color: #9f2419;
+            border-color: rgba(180, 35, 24, 0.26);
+            background: rgba(180, 35, 24, 0.08);
+        }
+
+        .messages-email-settings-empty {
+            border: 1px dashed var(--messages-border);
+            border-radius: 10px;
+            padding: 12px;
+            color: var(--messages-muted);
+            font-size: 12px;
+            background: var(--messages-bg);
+        }
+
+        .messages-email-product-results {
+            list-style: none;
+            margin: 0;
+            padding: 6px;
+            border: 1px solid var(--messages-border);
+            border-radius: 10px;
+            display: grid;
+            gap: 6px;
+            max-height: 220px;
+            overflow: auto;
+            background: #fff;
+        }
+
+        .messages-email-product-results button {
+            width: 100%;
+            border: 1px solid var(--messages-border);
+            border-radius: 10px;
+            background: #fff;
+            color: var(--messages-text);
+            text-align: left;
+            padding: 8px 10px;
+            cursor: pointer;
+            display: grid;
+            gap: 3px;
+        }
+
+        .messages-email-product-results button:hover {
+            border-color: rgba(16, 99, 63, 0.38);
+            background: var(--messages-accent-soft);
+        }
+
         .messages-send-card {
             width: 100%;
             display: grid;
@@ -430,6 +540,10 @@
 
         @media (max-width: 1060px) {
             .messages-layout {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .messages-email-composer-grid {
                 grid-template-columns: minmax(0, 1fr);
             }
 
@@ -527,22 +641,62 @@
                         </div>
 
                         <div id="messages-email-editor-shell" hidden>
-                            <div class="messages-inline-actions">
-                                <button type="button" class="messages-button" id="messages-email-editor-toggle">Open email template editor</button>
-                            </div>
-                            <section class="messages-card" id="messages-email-editor" hidden>
-                                <div class="messages-field">
-                                    <label for="messages-email-template-kind">Template preset</label>
-                                    <select id="messages-email-template-kind">
-                                        <option value="simple">Simple</option>
-                                        <option value="announcement">Announcement</option>
-                                        <option value="reminder">Reminder</option>
-                                    </select>
+                            <section class="messages-card" id="messages-email-editor">
+                                <div class="messages-header" style="align-items:flex-start;">
+                                    <div>
+                                        <h4>Email composer</h4>
+                                        <p class="messages-muted">Use sections instead of raw HTML. Add blocks, reorder, then send.</p>
+                                    </div>
+                                    <div class="messages-inline-actions">
+                                        <button type="button" class="messages-button" data-email-add-section="image">Add photo</button>
+                                        <button type="button" class="messages-button" data-email-add-section="product">Add Shopify product</button>
+                                        <button type="button" class="messages-button" data-email-add-section="button">Add button</button>
+                                        <button type="button" class="messages-button" data-email-add-section="text">Add rich text</button>
+                                        <button type="button" class="messages-button" data-email-add-section="heading">Add heading</button>
+                                        <button type="button" class="messages-button" data-email-add-section="divider">Add divider</button>
+                                        <button type="button" class="messages-button" data-email-add-section="spacer">Add spacer</button>
+                                        <button type="button" class="messages-button" id="messages-email-advanced-toggle">Advanced HTML</button>
+                                    </div>
                                 </div>
-                                <div class="messages-field">
-                                    <label for="messages-email-template-html">Template HTML</label>
-                                    <textarea id="messages-email-template-html" spellcheck="false"></textarea>
+
+                                <div class="messages-email-composer-grid">
+                                    <section class="messages-card messages-email-sections-card">
+                                        <h4>Sections</h4>
+                                        <p class="messages-muted">Use move up/down to reorder sections. Drag and drop can be added later.</p>
+                                        <ul class="messages-email-sections" id="messages-email-sections"></ul>
+                                    </section>
+
+                                    <section class="messages-card messages-email-settings-card">
+                                        <h4>Section settings</h4>
+                                        <p class="messages-muted">Select a section to edit its options.</p>
+                                        <div id="messages-email-section-settings"></div>
+                                    </section>
                                 </div>
+
+                                <section class="messages-card" id="messages-email-advanced-panel" hidden>
+                                    <div class="messages-header" style="align-items:flex-start;">
+                                        <div>
+                                            <h4>Advanced HTML</h4>
+                                            <p class="messages-muted">Legacy HTML mode is available for edge cases. Section JSON remains the primary model.</p>
+                                        </div>
+                                        <div class="messages-inline-actions">
+                                            <button type="button" class="messages-button" id="messages-email-use-sections">Use section composer</button>
+                                        </div>
+                                    </div>
+                                    <div class="messages-field">
+                                        <label for="messages-email-template-kind">Legacy preset</label>
+                                        <select id="messages-email-template-kind">
+                                            <option value="simple">Simple</option>
+                                            <option value="announcement">Announcement</option>
+                                            <option value="reminder">Reminder</option>
+                                        </select>
+                                    </div>
+                                    <div class="messages-field">
+                                        <label for="messages-email-template-html">Template HTML</label>
+                                        <textarea id="messages-email-template-html" spellcheck="false"></textarea>
+                                    </div>
+                                </section>
+
                                 <div class="messages-field">
                                     <label>Live email preview</label>
                                     <iframe title="Email preview" class="messages-email-preview-frame" id="messages-email-live-preview" sandbox="allow-same-origin"></iframe>
@@ -681,6 +835,7 @@
                     announcement: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#eef6f1;padding:16px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;border:1px solid #d1e6db;"><tr><td style="padding:16px 18px;background:#0f6f4c;color:#ffffff;border-radius:12px 12px 0 0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Backstage Message</td></tr><tr><td style="padding:18px;"><h2 style="margin:0 0 12px 0;color:#0f172a;">@{{subject}}</h2><div style="font-size:15px;line-height:1.55;color:#1f2937;">@{{message_body}}</div></td></tr></table></td></tr></table></body></html>`,
                     reminder: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:16px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="620" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;padding:20px;border:1px solid #e2e8f0;"><tr><td><div style="display:inline-block;background:#e2e8f0;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;color:#334155;margin-bottom:10px;">Reminder</div><h2 style="margin:0 0 12px 0;color:#0f172a;">@{{subject}}</h2><div style="font-size:15px;line-height:1.55;color:#334155;">@{{message_body}}</div></td></tr></table></td></tr></table></body></html>`,
                 };
+                const EMAIL_COMPOSER_STORAGE_KEY = "shopify-embedded-messaging-email-composer-v1";
 
                 const state = {
                     tab: "groups",
@@ -696,11 +851,16 @@
                     groupChannel: "sms",
                     previewReady: false,
                     groupPreviewPayload: null,
-                    emailEditorOpen: false,
                     editingGroupId: null,
                     groupMembers: new Map(),
                     selectedCustomer: null,
                     individualPreviewReady: false,
+                    emailComposer: {
+                        mode: "sections",
+                        sections: [],
+                        selectedSectionId: null,
+                        productSearchResults: [],
+                    },
                 };
 
                 const alertCard = document.getElementById("messages-global-alert");
@@ -722,8 +882,13 @@
                 const groupSender = document.getElementById("messages-group-sender");
 
                 const emailEditorShell = document.getElementById("messages-email-editor-shell");
-                const emailEditorToggle = document.getElementById("messages-email-editor-toggle");
                 const emailEditor = document.getElementById("messages-email-editor");
+                const emailAdvancedToggle = document.getElementById("messages-email-advanced-toggle");
+                const emailUseSections = document.getElementById("messages-email-use-sections");
+                const emailAdvancedPanel = document.getElementById("messages-email-advanced-panel");
+                const emailAddSectionButtons = Array.from(document.querySelectorAll("[data-email-add-section]"));
+                const emailSectionsList = document.getElementById("messages-email-sections");
+                const emailSectionSettings = document.getElementById("messages-email-section-settings");
                 const emailTemplateKind = document.getElementById("messages-email-template-kind");
                 const emailTemplateHtml = document.getElementById("messages-email-template-html");
                 const emailLivePreview = document.getElementById("messages-email-live-preview");
@@ -1161,13 +1326,11 @@
                         emailEditorShell.hidden = !isEmail;
                     }
                     if (!isEmail) {
-                        state.emailEditorOpen = false;
-                        if (emailEditor) {
-                            emailEditor.hidden = true;
+                        if (emailAdvancedPanel) {
+                            emailAdvancedPanel.hidden = true;
                         }
-                        if (emailEditorToggle) {
-                            emailEditorToggle.textContent = "Open email template editor";
-                        }
+                        state.emailComposer.mode = "sections";
+                        persistEmailComposerState();
                     }
 
                     renderGroupEstimate();
@@ -1203,18 +1366,704 @@
                         .replace(/\n/g, "<br>");
                 }
 
+                function randomSectionId() {
+                    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+                        return window.crypto.randomUUID();
+                    }
+
+                    return `sec_${Date.now()}_${Math.random().toString(16).slice(2, 9)}`;
+                }
+
+                function emailSectionTypeLabel(type) {
+                    const map = {
+                        image: "Photo",
+                        product: "Shopify product",
+                        button: "Button",
+                        text: "Rich text",
+                        divider: "Divider",
+                        heading: "Heading",
+                        spacer: "Spacer",
+                    };
+
+                    return map[type] || "Section";
+                }
+
+                function createSection(type) {
+                    const id = randomSectionId();
+                    const normalizedType = String(type || "").trim().toLowerCase();
+
+                    if (normalizedType === "image") {
+                        return { id, type: "image", imageUrl: "", alt: "", href: "", padding: "12px 0" };
+                    }
+                    if (normalizedType === "product") {
+                        return { id, type: "product", productId: "", title: "", imageUrl: "", price: "", href: "", buttonLabel: "View product" };
+                    }
+                    if (normalizedType === "button") {
+                        return { id, type: "button", label: "Learn more", href: "", align: "center" };
+                    }
+                    if (normalizedType === "heading") {
+                        return { id, type: "heading", text: "Heading", align: "left" };
+                    }
+                    if (normalizedType === "divider") {
+                        return { id, type: "divider" };
+                    }
+                    if (normalizedType === "spacer") {
+                        return { id, type: "spacer", height: 20 };
+                    }
+
+                    return { id, type: "text", html: "" };
+                }
+
+                function normalizeSection(section) {
+                    if (!section || typeof section !== "object") {
+                        return null;
+                    }
+
+                    const type = String(section.type || "").trim().toLowerCase();
+                    if (!["image", "product", "button", "text", "divider", "heading", "spacer"].includes(type)) {
+                        return null;
+                    }
+
+                    const normalized = createSection(type);
+                    return { ...normalized, ...section, id: String(section.id || normalized.id) };
+                }
+
+                function persistEmailComposerState() {
+                    try {
+                        window.localStorage.setItem(
+                            EMAIL_COMPOSER_STORAGE_KEY,
+                            JSON.stringify({
+                                mode: state.emailComposer.mode,
+                                sections: state.emailComposer.sections,
+                                selectedSectionId: state.emailComposer.selectedSectionId,
+                                legacyPreset: String(emailTemplateKind?.value || "simple"),
+                                legacyHtml: String(emailTemplateHtml?.value || ""),
+                            })
+                        );
+                    } catch (error) {
+                        // Storage is optional; keep runtime-only state when unavailable.
+                    }
+                }
+
+                function hydrateEmailComposerState() {
+                    try {
+                        const raw = window.localStorage.getItem(EMAIL_COMPOSER_STORAGE_KEY);
+                        if (!raw) {
+                            return;
+                        }
+
+                        const parsed = JSON.parse(raw);
+                        if (!parsed || typeof parsed !== "object") {
+                            return;
+                        }
+
+                        const sections = Array.isArray(parsed.sections)
+                            ? parsed.sections.map(normalizeSection).filter(Boolean)
+                            : [];
+                        if (sections.length > 0) {
+                            state.emailComposer.sections = sections;
+                        }
+
+                        const mode = String(parsed.mode || "").trim().toLowerCase();
+                        if (mode === "legacy_html" || mode === "sections") {
+                            state.emailComposer.mode = mode;
+                        }
+
+                        const selectedSectionId = String(parsed.selectedSectionId || "").trim();
+                        if (selectedSectionId !== "") {
+                            state.emailComposer.selectedSectionId = selectedSectionId;
+                        }
+
+                        const legacyPreset = String(parsed.legacyPreset || "").trim();
+                        if (legacyPreset !== "" && emailTemplateKind) {
+                            emailTemplateKind.value = legacyPreset;
+                        }
+
+                        const legacyHtml = String(parsed.legacyHtml || "").trim();
+                        if (legacyHtml !== "" && emailTemplateHtml) {
+                            emailTemplateHtml.value = legacyHtml;
+                        }
+                    } catch (error) {
+                        // Ignore bad persisted payloads and continue with defaults.
+                    }
+                }
+
+                function ensureEmailComposerState() {
+                    if (!Array.isArray(state.emailComposer.sections)) {
+                        state.emailComposer.sections = [];
+                    }
+
+                    state.emailComposer.sections = state.emailComposer.sections
+                        .map(normalizeSection)
+                        .filter(Boolean);
+
+                    if (state.emailComposer.sections.length === 0) {
+                        state.emailComposer.sections = [createSection("text")];
+                    }
+
+                    const selectedId = String(state.emailComposer.selectedSectionId || "");
+                    const hasSelected = state.emailComposer.sections.some((section) => section.id === selectedId);
+                    if (!hasSelected) {
+                        state.emailComposer.selectedSectionId = String(state.emailComposer.sections[0]?.id || "");
+                    }
+
+                    if (emailTemplateHtml && String(emailTemplateHtml.value || "").trim() === "") {
+                        emailTemplateHtml.value = EMAIL_TEMPLATES.simple;
+                    }
+                }
+
+                function selectedEmailSection() {
+                    const selectedId = String(state.emailComposer.selectedSectionId || "");
+                    return state.emailComposer.sections.find((section) => String(section.id) === selectedId) || null;
+                }
+
+                function moveEmailSection(sectionId, direction) {
+                    const id = String(sectionId || "");
+                    const index = state.emailComposer.sections.findIndex((section) => String(section.id) === id);
+                    if (index < 0) {
+                        return;
+                    }
+
+                    const targetIndex = direction === "up" ? index - 1 : index + 1;
+                    if (targetIndex < 0 || targetIndex >= state.emailComposer.sections.length) {
+                        return;
+                    }
+
+                    const copy = [...state.emailComposer.sections];
+                    const [item] = copy.splice(index, 1);
+                    copy.splice(targetIndex, 0, item);
+                    state.emailComposer.sections = copy;
+                    persistEmailComposerState();
+                    renderEmailSectionsList();
+                    renderEmailSectionSettings();
+                    renderEmailLivePreview();
+                    resetGroupPreviewState();
+                }
+
+                function removeEmailSection(sectionId) {
+                    const id = String(sectionId || "");
+                    const next = state.emailComposer.sections.filter((section) => String(section.id) !== id);
+                    if (next.length === 0) {
+                        state.emailComposer.sections = [createSection("text")];
+                    } else {
+                        state.emailComposer.sections = next;
+                    }
+
+                    state.emailComposer.selectedSectionId = String(state.emailComposer.sections[0]?.id || "");
+                    persistEmailComposerState();
+                    renderEmailSectionsList();
+                    renderEmailSectionSettings();
+                    renderEmailLivePreview();
+                    resetGroupPreviewState();
+                }
+
+                function addEmailSection(type) {
+                    const section = createSection(type);
+                    state.emailComposer.sections = [...state.emailComposer.sections, section];
+                    state.emailComposer.selectedSectionId = String(section.id);
+                    persistEmailComposerState();
+                    renderEmailSectionsList();
+                    renderEmailSectionSettings();
+                    renderEmailLivePreview();
+                    resetGroupPreviewState();
+                }
+
+                function updateSelectedEmailSectionField(field, value) {
+                    const selectedId = String(state.emailComposer.selectedSectionId || "");
+                    state.emailComposer.sections = state.emailComposer.sections.map((section) => {
+                        if (String(section.id) !== selectedId) {
+                            return section;
+                        }
+
+                        if (field === "height") {
+                            const parsed = Number.parseInt(value, 10);
+                            return { ...section, [field]: Number.isFinite(parsed) ? Math.max(4, Math.min(parsed, 80)) : 20 };
+                        }
+
+                        return { ...section, [field]: value };
+                    });
+
+                    persistEmailComposerState();
+                    renderEmailSectionsList();
+                    renderEmailLivePreview();
+                    resetGroupPreviewState();
+                }
+
+                function renderEmailSectionsList() {
+                    if (!emailSectionsList) {
+                        return;
+                    }
+
+                    emailSectionsList.innerHTML = "";
+                    state.emailComposer.sections.forEach((section, index) => {
+                        const li = document.createElement("li");
+                        li.className = "messages-email-section-row";
+                        const selected = String(section.id) === String(state.emailComposer.selectedSectionId || "");
+                        li.setAttribute("data-selected", selected ? "true" : "false");
+
+                        const subtitle = (() => {
+                            if (section.type === "image") {
+                                return section.imageUrl ? "Image selected" : "No image URL yet";
+                            }
+                            if (section.type === "product") {
+                                return section.title || section.productId || "No product selected";
+                            }
+                            if (section.type === "button") {
+                                return section.label || "Button";
+                            }
+                            if (section.type === "heading") {
+                                return section.text || "Heading";
+                            }
+                            if (section.type === "text") {
+                                return section.html ? "Rich text configured" : "No text yet";
+                            }
+                            if (section.type === "spacer") {
+                                return `Height ${Number(section.height || 20)}px`;
+                            }
+
+                            return "Visual separator";
+                        })();
+
+                        li.innerHTML = `
+                            <div class="messages-email-section-head">
+                                <span class="messages-email-section-name">${index + 1}. ${escapeHtml(emailSectionTypeLabel(section.type))}</span>
+                                <span class="messages-email-section-actions">
+                                    <button type="button" class="messages-email-icon-button" data-email-action="select" data-email-id="${escapeHtml(section.id)}">${selected ? "Selected" : "Edit"}</button>
+                                    <button type="button" class="messages-email-icon-button" data-email-action="up" data-email-id="${escapeHtml(section.id)}">Up</button>
+                                    <button type="button" class="messages-email-icon-button" data-email-action="down" data-email-id="${escapeHtml(section.id)}">Down</button>
+                                    <button type="button" class="messages-email-icon-button messages-email-icon-button--danger" data-email-action="remove" data-email-id="${escapeHtml(section.id)}">Remove</button>
+                                </span>
+                            </div>
+                            <span class="messages-muted">${escapeHtml(String(subtitle || ""))}</span>
+                        `;
+
+                        li.addEventListener("click", (event) => {
+                            const target = event.target;
+                            if (!(target instanceof HTMLElement)) {
+                                return;
+                            }
+
+                            const action = String(target.getAttribute("data-email-action") || "").trim();
+                            const sectionId = String(target.getAttribute("data-email-id") || "").trim();
+                            if (sectionId === "") {
+                                return;
+                            }
+
+                            if (action === "select") {
+                                state.emailComposer.selectedSectionId = sectionId;
+                                persistEmailComposerState();
+                                renderEmailSectionsList();
+                                renderEmailSectionSettings();
+                                return;
+                            }
+                            if (action === "up") {
+                                moveEmailSection(sectionId, "up");
+                                return;
+                            }
+                            if (action === "down") {
+                                moveEmailSection(sectionId, "down");
+                                return;
+                            }
+                            if (action === "remove") {
+                                removeEmailSection(sectionId);
+                            }
+                        });
+
+                        emailSectionsList.appendChild(li);
+                    });
+                }
+
+                function renderProductSearchResults() {
+                    const list = document.getElementById("messages-email-product-results");
+                    if (!list) {
+                        return;
+                    }
+
+                    const rows = Array.isArray(state.emailComposer.productSearchResults)
+                        ? state.emailComposer.productSearchResults
+                        : [];
+                    if (rows.length === 0) {
+                        list.hidden = true;
+                        list.innerHTML = "";
+                        return;
+                    }
+
+                    list.hidden = false;
+                    list.innerHTML = "";
+                    rows.forEach((row, index) => {
+                        const button = document.createElement("button");
+                        button.type = "button";
+                        button.setAttribute("data-email-product-index", String(index));
+                        button.innerHTML = `
+                            <strong>${escapeHtml(String(row.title || "Product"))}</strong>
+                            <span class="messages-muted">${escapeHtml(String(row.price || "Price unavailable"))}</span>
+                            <span class="messages-muted">${escapeHtml(String(row.url || ""))}</span>
+                        `;
+
+                        const li = document.createElement("li");
+                        li.appendChild(button);
+                        list.appendChild(li);
+                    });
+                }
+
+                function renderEmailSectionSettings() {
+                    if (!emailSectionSettings) {
+                        return;
+                    }
+
+                    const section = selectedEmailSection();
+                    if (!section) {
+                        emailSectionSettings.innerHTML = `<div class="messages-email-settings-empty">Select a section to edit.</div>`;
+                        return;
+                    }
+
+                    if (section.type === "image") {
+                        emailSectionSettings.innerHTML = `
+                            <div class="messages-field">
+                                <label>Image URL</label>
+                                <input type="url" data-section-field="imageUrl" value="${escapeHtml(String(section.imageUrl || ""))}" placeholder="https://..." />
+                            </div>
+                            <div class="messages-field">
+                                <label>Alt text</label>
+                                <input type="text" data-section-field="alt" value="${escapeHtml(String(section.alt || ""))}" placeholder="Image description" />
+                            </div>
+                            <div class="messages-field">
+                                <label>Optional link URL</label>
+                                <input type="url" data-section-field="href" value="${escapeHtml(String(section.href || ""))}" placeholder="https://..." />
+                            </div>
+                            <div class="messages-field">
+                                <label>Padding</label>
+                                <input type="text" data-section-field="padding" value="${escapeHtml(String(section.padding || "12px 0"))}" placeholder="12px 0" />
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    if (section.type === "product") {
+                        emailSectionSettings.innerHTML = `
+                            <div class="messages-field">
+                                <label>Find Shopify product</label>
+                                <input type="search" id="messages-email-product-search" placeholder="Search by product name" autocomplete="off" />
+                                <ul class="messages-email-product-results" id="messages-email-product-results" hidden></ul>
+                            </div>
+                            <div class="messages-field">
+                                <label>Product ID</label>
+                                <input type="text" data-section-field="productId" value="${escapeHtml(String(section.productId || ""))}" placeholder="Shopify product id" />
+                            </div>
+                            <div class="messages-field">
+                                <label>Title</label>
+                                <input type="text" data-section-field="title" value="${escapeHtml(String(section.title || ""))}" placeholder="Product title" />
+                            </div>
+                            <div class="messages-field">
+                                <label>Image URL</label>
+                                <input type="url" data-section-field="imageUrl" value="${escapeHtml(String(section.imageUrl || ""))}" placeholder="https://..." />
+                            </div>
+                            <div class="messages-field">
+                                <label>Price text</label>
+                                <input type="text" data-section-field="price" value="${escapeHtml(String(section.price || ""))}" placeholder="$29.00" />
+                            </div>
+                            <div class="messages-field">
+                                <label>Product URL</label>
+                                <input type="url" data-section-field="href" value="${escapeHtml(String(section.href || ""))}" placeholder="https://..." />
+                            </div>
+                            <div class="messages-field">
+                                <label>Button label</label>
+                                <input type="text" data-section-field="buttonLabel" value="${escapeHtml(String(section.buttonLabel || "View product"))}" placeholder="View product" />
+                            </div>
+                        `;
+                        renderProductSearchResults();
+                        return;
+                    }
+
+                    if (section.type === "button") {
+                        emailSectionSettings.innerHTML = `
+                            <div class="messages-field">
+                                <label>Label</label>
+                                <input type="text" data-section-field="label" value="${escapeHtml(String(section.label || ""))}" placeholder="Shop now" />
+                            </div>
+                            <div class="messages-field">
+                                <label>URL</label>
+                                <input type="url" data-section-field="href" value="${escapeHtml(String(section.href || ""))}" placeholder="https://..." />
+                            </div>
+                            <div class="messages-field">
+                                <label>Alignment</label>
+                                <select data-section-field="align">
+                                    <option value="left" ${String(section.align || "center") === "left" ? "selected" : ""}>Left</option>
+                                    <option value="center" ${String(section.align || "center") === "center" ? "selected" : ""}>Center</option>
+                                    <option value="right" ${String(section.align || "center") === "right" ? "selected" : ""}>Right</option>
+                                </select>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    if (section.type === "heading") {
+                        emailSectionSettings.innerHTML = `
+                            <div class="messages-field">
+                                <label>Heading text</label>
+                                <input type="text" data-section-field="text" value="${escapeHtml(String(section.text || ""))}" placeholder="Heading" />
+                            </div>
+                            <div class="messages-field">
+                                <label>Alignment</label>
+                                <select data-section-field="align">
+                                    <option value="left" ${String(section.align || "left") === "left" ? "selected" : ""}>Left</option>
+                                    <option value="center" ${String(section.align || "left") === "center" ? "selected" : ""}>Center</option>
+                                    <option value="right" ${String(section.align || "left") === "right" ? "selected" : ""}>Right</option>
+                                </select>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    if (section.type === "spacer") {
+                        emailSectionSettings.innerHTML = `
+                            <div class="messages-field">
+                                <label>Height (px)</label>
+                                <input type="number" min="4" max="80" data-section-field="height" value="${escapeHtml(String(section.height || 20))}" />
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    if (section.type === "divider") {
+                        emailSectionSettings.innerHTML = `<div class="messages-email-settings-empty">Divider has no extra settings.</div>`;
+                        return;
+                    }
+
+                    emailSectionSettings.innerHTML = `
+                        <div class="messages-field">
+                            <label>Rich text HTML</label>
+                            <textarea data-section-field="html" placeholder="<p>Your message here</p>">${escapeHtml(String(section.html || ""))}</textarea>
+                        </div>
+                    `;
+                }
+
+                async function searchShopifyProducts(query) {
+                    const q = String(query || "").trim();
+                    if (q.length < 2 || !endpoints.search_products) {
+                        state.emailComposer.productSearchResults = [];
+                        renderProductSearchResults();
+                        return;
+                    }
+
+                    try {
+                        const url = new URL(endpoints.search_products, window.location.origin);
+                        url.searchParams.set("q", q);
+                        url.searchParams.set("limit", "10");
+                        const payload = await fetchJson(url.toString(), { method: "GET" });
+                        state.emailComposer.productSearchResults = Array.isArray(payload?.data) ? payload.data : [];
+                        renderProductSearchResults();
+                    } catch (error) {
+                        state.emailComposer.productSearchResults = [];
+                        renderProductSearchResults();
+                        setAlert(error?.payload?.message || error?.message || "Product search failed.", "error");
+                    }
+                }
+
+                function applyProductToSelectedSection(product) {
+                    const selectedId = String(state.emailComposer.selectedSectionId || "");
+                    state.emailComposer.sections = state.emailComposer.sections.map((section) => {
+                        if (String(section.id) !== selectedId || String(section.type || "") !== "product") {
+                            return section;
+                        }
+
+                        return {
+                            ...section,
+                            productId: String(product?.id || section.productId || ""),
+                            title: String(product?.title || section.title || ""),
+                            imageUrl: String(product?.image_url || section.imageUrl || ""),
+                            price: String(product?.price || section.price || ""),
+                            href: String(product?.url || section.href || ""),
+                            buttonLabel: String(section.buttonLabel || "View product"),
+                        };
+                    });
+
+                    state.emailComposer.productSearchResults = [];
+                    persistEmailComposerState();
+                    renderEmailSectionsList();
+                    renderEmailSectionSettings();
+                    renderEmailLivePreview();
+                    resetGroupPreviewState();
+                }
+
                 function currentEmailTemplateHtml() {
                     const kind = String(emailTemplateKind?.value || "simple");
                     const fallback = EMAIL_TEMPLATES.simple;
                     return String(emailTemplateHtml?.value || EMAIL_TEMPLATES[kind] || fallback);
                 }
 
+                function currentEmailComposerPayload() {
+                    const mode = String(state.emailComposer.mode || "sections") === "legacy_html"
+                        ? "legacy_html"
+                        : "sections";
+
+                    return {
+                        email_template_mode: mode,
+                        email_sections: mode === "sections" ? state.emailComposer.sections : null,
+                        email_advanced_html: mode === "legacy_html" ? currentEmailTemplateHtml() : null,
+                    };
+                }
+
+                function emailPayloadHasContentForChannel(channel, messageBody) {
+                    const body = String(messageBody || "").trim();
+                    if (String(channel || "").toLowerCase() !== "email") {
+                        return body !== "";
+                    }
+
+                    if (body !== "") {
+                        return true;
+                    }
+
+                    if (String(state.emailComposer.mode || "sections") === "legacy_html") {
+                        return String(currentEmailTemplateHtml() || "").trim() !== "";
+                    }
+
+                    return Array.isArray(state.emailComposer.sections) && state.emailComposer.sections.length > 0;
+                }
+
+                function safePreviewUrl(url) {
+                    const value = String(url || "").trim();
+                    if (/^(https?:|mailto:|tel:)/i.test(value)) {
+                        return value;
+                    }
+
+                    return "";
+                }
+
+                function sanitizeRichTextForPreview(html) {
+                    const source = String(html || "");
+                    const noScripts = source.replace(/<\s*(script|style)[^>]*>.*?<\s*\/\s*\1\s*>/gis, "");
+                    const noEvents = noScripts
+                        .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, "")
+                        .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, "")
+                        .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, "")
+                        .replace(/javascript\s*:/gi, "");
+
+                    return noEvents;
+                }
+
+                function renderEmailSectionHtml(section) {
+                    if (!section || typeof section !== "object") {
+                        return "";
+                    }
+
+                    const type = String(section.type || "").trim().toLowerCase();
+                    if (type === "image") {
+                        const imageUrl = safePreviewUrl(section.imageUrl);
+                        if (!imageUrl) {
+                            return "";
+                        }
+                        const alt = escapeHtml(section.alt || "Image");
+                        const padding = escapeHtml(section.padding || "12px 0");
+                        const href = safePreviewUrl(section.href);
+                        const imageTag = `<img src="${escapeHtml(imageUrl)}" alt="${alt}" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:10px;" />`;
+                        const wrappedImage = href
+                            ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">${imageTag}</a>`
+                            : imageTag;
+                        return `<tr><td style="padding:${padding};">${wrappedImage}</td></tr>`;
+                    }
+
+                    if (type === "product") {
+                        const title = escapeHtml(section.title || "Product");
+                        const price = escapeHtml(section.price || "");
+                        const href = safePreviewUrl(section.href);
+                        const imageUrl = safePreviewUrl(section.imageUrl);
+                        const buttonLabel = escapeHtml(section.buttonLabel || "View product");
+
+                        const rows = [];
+                        if (imageUrl) {
+                            const image = `<img src="${escapeHtml(imageUrl)}" alt="${title}" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:10px;" />`;
+                            rows.push(`<tr><td style="padding:0 0 10px 0;">${href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">${image}</a>` : image}</td></tr>`);
+                        }
+                        rows.push(`<tr><td style="padding:0 0 4px 0;font-family:Arial,sans-serif;font-size:18px;font-weight:700;line-height:1.3;color:#0f172a;">${title}</td></tr>`);
+                        if (price) {
+                            rows.push(`<tr><td style="padding:0 0 10px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.4;color:#334155;">${price}</td></tr>`);
+                        }
+                        if (href) {
+                            rows.push(`<tr><td><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#10633f;color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:999px;">${buttonLabel}</a></td></tr>`);
+                        }
+
+                        return `<tr><td style="padding:12px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;">${rows.join("")}</table></td></tr>`;
+                    }
+
+                    if (type === "button") {
+                        const href = safePreviewUrl(section.href);
+                        if (!href) {
+                            return "";
+                        }
+                        const align = ["left", "center", "right"].includes(String(section.align || "").toLowerCase())
+                            ? String(section.align || "").toLowerCase()
+                            : "center";
+                        const label = escapeHtml(section.label || "Learn more");
+                        return `<tr><td style="padding:12px 0;text-align:${align};"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#10633f;color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:999px;">${label}</a></td></tr>`;
+                    }
+
+                    if (type === "text") {
+                        const html = sanitizeRichTextForPreview(section.html || "");
+                        if (!String(html || "").trim()) {
+                            return "";
+                        }
+                        return `<tr><td style="padding:0 0 12px 0;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">${html}</td></tr>`;
+                    }
+
+                    if (type === "heading") {
+                        const text = escapeHtml(section.text || "Heading");
+                        if (!text) {
+                            return "";
+                        }
+                        const align = ["left", "center", "right"].includes(String(section.align || "").toLowerCase())
+                            ? String(section.align || "").toLowerCase()
+                            : "left";
+                        return `<tr><td style="padding:0 0 10px 0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;line-height:1.3;color:#0f172a;text-align:${align};">${text}</td></tr>`;
+                    }
+
+                    if (type === "spacer") {
+                        const height = Number.parseInt(section.height, 10);
+                        const resolvedHeight = Number.isFinite(height) ? Math.max(4, Math.min(height, 80)) : 20;
+                        return `<tr><td aria-hidden="true" style="font-size:0;line-height:0;height:${resolvedHeight}px;">&nbsp;</td></tr>`;
+                    }
+
+                    if (type === "divider") {
+                        return `<tr><td style="padding:10px 0;"><hr style="margin:0;border:0;border-top:1px solid #dbe2ea;" /></td></tr>`;
+                    }
+
+                    return "";
+                }
+
                 function buildEmailHtml(subject, message) {
                     const safeSubject = escapeHtml(subject || "Message from Backstage");
-                    const messageHtml = `<p>${renderedMessageBodyAsHtml(message)}</p>`;
-                    return currentEmailTemplateHtml()
-                        .replace(/@{{\s*subject\s*}}/gi, safeSubject)
-                        .replace(/@{{\s*message_body\s*}}/gi, messageHtml);
+
+                    if (String(state.emailComposer.mode || "sections") === "legacy_html") {
+                        const messageHtml = `<p>${renderedMessageBodyAsHtml(message)}</p>`;
+                        return currentEmailTemplateHtml()
+                            .replace(/@{{\s*subject\s*}}/gi, safeSubject)
+                            .replace(/@{{\s*message_body\s*}}/gi, messageHtml);
+                    }
+
+                    const rows = [
+                        `<tr><td style="padding:8px 0 18px 0;"><h1 style="margin:0;font-family:Arial,sans-serif;font-size:24px;line-height:1.25;color:#0f172a;">${safeSubject}</h1></td></tr>`,
+                    ];
+                    const sections = Array.isArray(state.emailComposer.sections) ? state.emailComposer.sections : [];
+                    sections.forEach((section) => {
+                        const row = renderEmailSectionHtml(section);
+                        if (row) {
+                            rows.push(row);
+                        }
+                    });
+
+                    const hasBodySection = sections.some((section) => {
+                        const type = String(section?.type || "").toLowerCase();
+                        return type === "text" || type === "heading";
+                    });
+                    if (!hasBodySection && String(message || "").trim() !== "") {
+                        rows.push(`<tr><td style="padding:0 0 12px 0;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">${renderedMessageBodyAsHtml(message)}</td></tr>`);
+                    }
+
+                    if (rows.length === 1) {
+                        rows.push(`<tr><td style="padding:0 0 12px 0;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">Your email content will appear here.</td></tr>`);
+                    }
+
+                    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f3f4f6;padding:18px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #dbe2ea;border-radius:12px;padding:22px;">${rows.join("")}</table></td></tr></table></body></html>`;
                 }
 
                 function renderEmailLivePreview() {
@@ -1242,7 +2091,9 @@
                     if (channel === "email") {
                         const subject = String(payload?.subject || groupSubject?.value || "");
                         const message = String(payload?.body || groupBody?.value || "");
-                        const html = buildEmailHtml(subject, message);
+                        const html = String(payload?.email_html || "").trim() !== ""
+                            ? String(payload.email_html)
+                            : buildEmailHtml(subject, message);
                         groupPreviewBody.innerHTML = `
                             <div class="messages-muted">Subject: ${escapeHtml(subject || "(No subject)")}</div>
                             <iframe class="messages-email-preview-frame" sandbox="allow-same-origin" title="Email preview confirmation"></iframe>
@@ -1303,10 +2154,15 @@
 
                     if (channel === "email") {
                         const subject = String(individualSubject?.value || "");
+                        const html = buildEmailHtml(subject, body);
                         individualPreviewBody.innerHTML = `
                             <div class="messages-muted">Subject: ${escapeHtml(subject || "(No subject)")}</div>
-                            <div class="messages-sms-preview">${escapeHtml(body)}</div>
+                            <iframe class="messages-email-preview-frame" sandbox="allow-same-origin" title="Individual email preview"></iframe>
                         `;
+                        const frame = individualPreviewBody.querySelector("iframe");
+                        if (frame) {
+                            frame.srcdoc = html;
+                        }
                         return;
                     }
 
@@ -1603,7 +2459,7 @@
                     }
 
                     const body = String(groupBody?.value || "").trim();
-                    if (body === "") {
+                    if (state.groupChannel === "sms" && body === "") {
                         setInlineStatus(groupSendStatus, "Message body is required.");
                         return;
                     }
@@ -1613,12 +2469,17 @@
                         setInlineStatus(groupSendStatus, "Email subject is required.");
                         return;
                     }
+                    if (state.groupChannel === "email" && !emailPayloadHasContentForChannel("email", body)) {
+                        setInlineStatus(groupSendStatus, "Add message text, sections, or advanced HTML before preview.");
+                        return;
+                    }
 
                     if (!endpoints.preview_group) {
                         setInlineStatus(groupSendStatus, "Preview endpoint is unavailable.");
                         return;
                     }
 
+                    const composerPayload = currentEmailComposerPayload();
                     const payload = {
                         target_type: state.selectedTarget.type,
                         group_id: state.selectedTarget.type === "saved" ? state.selectedTarget.id : null,
@@ -1626,6 +2487,9 @@
                         channel: state.groupChannel,
                         subject: state.groupChannel === "email" ? subject : null,
                         body,
+                        email_template_mode: state.groupChannel === "email" ? composerPayload.email_template_mode : null,
+                        email_sections: state.groupChannel === "email" ? composerPayload.email_sections : null,
+                        email_advanced_html: state.groupChannel === "email" ? composerPayload.email_advanced_html : null,
                     };
 
                     try {
@@ -1673,7 +2537,12 @@
                     const body = String(groupBody?.value || "").trim();
                     const subject = String(groupSubject?.value || "").trim();
                     const senderKey = String(groupSender?.value || "").trim();
+                    if (state.groupChannel === "email" && !emailPayloadHasContentForChannel("email", body)) {
+                        setInlineStatus(groupSendStatus, "Add message text, sections, or advanced HTML before sending.");
+                        return;
+                    }
 
+                    const composerPayload = currentEmailComposerPayload();
                     const payload = {
                         target_type: state.selectedTarget.type,
                         group_id: state.selectedTarget.type === "saved" ? state.selectedTarget.id : null,
@@ -1682,6 +2551,9 @@
                         subject: state.groupChannel === "email" ? subject : null,
                         body,
                         sender_key: state.groupChannel === "sms" ? (senderKey || null) : null,
+                        email_template_mode: state.groupChannel === "email" ? composerPayload.email_template_mode : null,
+                        email_sections: state.groupChannel === "email" ? composerPayload.email_sections : null,
+                        email_advanced_html: state.groupChannel === "email" ? composerPayload.email_advanced_html : null,
                     };
 
                     try {
@@ -1750,9 +2622,13 @@
                         return { ok: false, message: "Email subject is required." };
                     }
 
-                    if (body === "") {
-                        return { ok: false, message: "Message body is required." };
+                    if (!emailPayloadHasContentForChannel(channel, body)) {
+                        return channel === "email"
+                            ? { ok: false, message: "Add message text, sections, or advanced HTML." }
+                            : { ok: false, message: "Message body is required." };
                     }
+
+                    const composerPayload = currentEmailComposerPayload();
 
                     return {
                         ok: true,
@@ -1762,6 +2638,9 @@
                             subject: channel === "email" ? subject : null,
                             body,
                             sender_key: String(individualSender?.value || "").trim() || null,
+                            email_template_mode: channel === "email" ? composerPayload.email_template_mode : null,
+                            email_sections: channel === "email" ? composerPayload.email_sections : null,
+                            email_advanced_html: channel === "email" ? composerPayload.email_advanced_html : null,
                         },
                     };
                 }
@@ -1859,18 +2738,35 @@
                         }, 180));
                     }
 
-                    if (emailEditorToggle) {
-                        emailEditorToggle.addEventListener("click", () => {
-                            state.emailEditorOpen = !state.emailEditorOpen;
-                            if (emailEditor) {
-                                emailEditor.hidden = !state.emailEditorOpen;
+                    emailAddSectionButtons.forEach((button) => {
+                        button.addEventListener("click", () => {
+                            const type = String(button.getAttribute("data-email-add-section") || "").trim().toLowerCase();
+                            addEmailSection(type || "text");
+                        });
+                    });
+
+                    if (emailAdvancedToggle) {
+                        emailAdvancedToggle.addEventListener("click", () => {
+                            const nextIsLegacy = String(state.emailComposer.mode || "sections") !== "legacy_html";
+                            state.emailComposer.mode = nextIsLegacy ? "legacy_html" : "sections";
+                            if (emailAdvancedPanel) {
+                                emailAdvancedPanel.hidden = !nextIsLegacy;
                             }
-                            emailEditorToggle.textContent = state.emailEditorOpen
-                                ? "Hide email template editor"
-                                : "Open email template editor";
-                            if (state.emailEditorOpen) {
-                                renderEmailLivePreview();
+                            persistEmailComposerState();
+                            renderEmailLivePreview();
+                            resetGroupPreviewState();
+                        });
+                    }
+
+                    if (emailUseSections) {
+                        emailUseSections.addEventListener("click", () => {
+                            state.emailComposer.mode = "sections";
+                            if (emailAdvancedPanel) {
+                                emailAdvancedPanel.hidden = true;
                             }
+                            persistEmailComposerState();
+                            renderEmailLivePreview();
+                            resetGroupPreviewState();
                         });
                     }
 
@@ -1880,6 +2776,11 @@
                             if (emailTemplateHtml) {
                                 emailTemplateHtml.value = preset;
                             }
+                            state.emailComposer.mode = "legacy_html";
+                            if (emailAdvancedPanel) {
+                                emailAdvancedPanel.hidden = false;
+                            }
+                            persistEmailComposerState();
                             renderEmailLivePreview();
                             resetGroupPreviewState();
                         });
@@ -1887,9 +2788,83 @@
 
                     if (emailTemplateHtml) {
                         emailTemplateHtml.addEventListener("input", debounce(() => {
+                            persistEmailComposerState();
                             renderEmailLivePreview();
                             resetGroupPreviewState();
                         }, 180));
+                    }
+
+                    const debouncedProductSearch = debounce((query) => {
+                        searchShopifyProducts(query);
+                    }, 260);
+
+                    if (emailSectionSettings) {
+                        emailSectionSettings.addEventListener("input", (event) => {
+                            const target = event.target;
+                            if (!(target instanceof HTMLElement)) {
+                                return;
+                            }
+
+                            if (target.id === "messages-email-product-search" && target instanceof HTMLInputElement) {
+                                debouncedProductSearch(target.value);
+                                return;
+                            }
+
+                            const field = String(target.getAttribute("data-section-field") || "").trim();
+                            if (field === "") {
+                                return;
+                            }
+
+                            if (
+                                target instanceof HTMLInputElement
+                                || target instanceof HTMLTextAreaElement
+                                || target instanceof HTMLSelectElement
+                            ) {
+                                updateSelectedEmailSectionField(field, target.value);
+                            }
+                        });
+
+                        emailSectionSettings.addEventListener("change", (event) => {
+                            const target = event.target;
+                            if (!(target instanceof HTMLElement)) {
+                                return;
+                            }
+
+                            const field = String(target.getAttribute("data-section-field") || "").trim();
+                            if (field === "") {
+                                return;
+                            }
+
+                            if (
+                                target instanceof HTMLInputElement
+                                || target instanceof HTMLTextAreaElement
+                                || target instanceof HTMLSelectElement
+                            ) {
+                                updateSelectedEmailSectionField(field, target.value);
+                            }
+                        });
+
+                        emailSectionSettings.addEventListener("click", (event) => {
+                            const target = event.target;
+                            if (!(target instanceof HTMLElement)) {
+                                return;
+                            }
+
+                            const button = target.closest("button[data-email-product-index]");
+                            if (!(button instanceof HTMLElement)) {
+                                return;
+                            }
+
+                            const index = Number.parseInt(String(button.getAttribute("data-email-product-index") || "-1"), 10);
+                            if (!Number.isFinite(index) || index < 0) {
+                                return;
+                            }
+
+                            const product = state.emailComposer.productSearchResults[index];
+                            if (product) {
+                                applyProductToSelectedSection(product);
+                            }
+                        });
                     }
 
                     if (groupPreviewButton) {
@@ -1980,10 +2955,18 @@
                 }
 
                 async function initialize() {
+                    hydrateEmailComposerState();
+                    ensureEmailComposerState();
                     bindEvents();
 
                     if (emailTemplateHtml && emailTemplateHtml.value.trim() === "") {
                         emailTemplateHtml.value = EMAIL_TEMPLATES.simple;
+                    }
+                    if (emailAdvancedPanel) {
+                        emailAdvancedPanel.hidden = String(state.emailComposer.mode || "sections") !== "legacy_html";
+                    }
+                    if (emailEditor) {
+                        emailEditor.hidden = false;
                     }
 
                     renderAudiencePills();
@@ -1992,10 +2975,13 @@
                     renderSelectedTargetSummary();
                     renderGroupEstimate();
                     renderGroupMembers();
+                    renderEmailSectionsList();
+                    renderEmailSectionSettings();
                     renderIndividualCustomer();
                     resetGroupPreviewState();
                     resetIndividualPreviewState();
                     updateGroupChannelUi();
+                    renderEmailLivePreview();
                     switchTab("groups");
 
                     try {

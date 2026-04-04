@@ -925,6 +925,8 @@ Route::prefix('shopify')->middleware('web')->group(function () {
             ->name('messaging.audience.summary');
         Route::get('/messaging/customers/search', [ShopifyEmbeddedMessagingController::class, 'searchCustomers'])
             ->name('messaging.customers.search');
+        Route::get('/messaging/products/search', [ShopifyEmbeddedMessagingController::class, 'searchProducts'])
+            ->name('messaging.products.search');
         Route::get('/messaging/groups', [ShopifyEmbeddedMessagingController::class, 'groups'])
             ->name('messaging.groups');
         Route::get('/messaging/groups/{group}', [ShopifyEmbeddedMessagingController::class, 'groupDetail'])

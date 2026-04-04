@@ -88,6 +88,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                         'bootstrap' => route('shopify.app.api.messaging.bootstrap', [], false),
                         'audience_summary' => route('shopify.app.api.messaging.audience.summary', [], false),
                         'search_customers' => route('shopify.app.api.messaging.customers.search', [], false),
+                        'search_products' => route('shopify.app.api.messaging.products.search', [], false),
                         'groups' => route('shopify.app.api.messaging.groups', [], false),
                         'group_detail_base' => route('shopify.app.api.messaging.groups.detail', ['group' => '__GROUP__'], false),
                         'create_group' => route('shopify.app.api.messaging.groups.create', [], false),
@@ -182,6 +183,43 @@ class ShopifyEmbeddedMessagingController extends Controller
             tenantId: (int) $access['tenant_id'],
             limit: isset($data['limit']) ? (int) $data['limit'] : 12
         );
+
+        return response()->json([
+            'ok' => true,
+            'data' => $results,
+        ]);
+    }
+
+    public function searchProducts(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $data = validator($request->query(), [
+                'q' => ['required', 'string', 'max:120'],
+                'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Product search query is invalid.', $exception);
+        }
+
+        try {
+            $results = $workspaceService->searchProducts(
+                query: trim((string) ($data['q'] ?? '')),
+                storeContext: (array) data_get($access, 'context.store', []),
+                limit: isset($data['limit']) ? (int) $data['limit'] : 12
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Product search failed.', $exception);
+        }
 
         return response()->json([
             'ok' => true,
@@ -352,11 +390,24 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'profile_id' => ['required', 'integer', 'min:1'],
                 'channel' => ['required', 'in:sms,email'],
                 'subject' => ['nullable', 'string', 'max:200', 'required_if:channel,email'],
-                'body' => ['required', 'string', 'max:5000'],
+                'body' => ['nullable', 'string', 'max:5000', 'required_if:channel,sms'],
                 'sender_key' => ['nullable', 'string', 'max:80'],
+                'email_template_mode' => ['nullable', 'in:sections,legacy_html'],
+                'email_sections' => ['nullable', 'array', 'max:60'],
+                'email_advanced_html' => ['nullable', 'string', 'max:200000'],
             ])->validate();
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
+        }
+
+        if (($data['channel'] ?? null) === 'email' && ! $this->emailPayloadHasContent($data)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Message could not be sent.',
+                'errors' => [
+                    'body' => ['Add message text, email sections, or advanced HTML before sending.'],
+                ],
+            ], 422);
         }
 
         try {
@@ -364,10 +415,13 @@ class ShopifyEmbeddedMessagingController extends Controller
                 tenantId: (int) $access['tenant_id'],
                 profileId: (int) $data['profile_id'],
                 channel: (string) $data['channel'],
-                body: (string) $data['body'],
+                body: (string) ($data['body'] ?? ''),
                 subject: isset($data['subject']) ? (string) $data['subject'] : null,
                 senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
-                actorId: auth()->id() !== null ? (int) auth()->id() : null
+                actorId: auth()->id() !== null ? (int) auth()->id() : null,
+                emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
+                emailSections: $data['email_sections'] ?? null,
+                emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
             );
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
@@ -399,11 +453,24 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'group_key' => ['nullable', 'string', 'max:120', 'required_if:target_type,auto'],
                 'channel' => ['required', 'in:sms,email'],
                 'subject' => ['nullable', 'string', 'max:200', 'required_if:channel,email'],
-                'body' => ['required', 'string', 'max:5000'],
+                'body' => ['nullable', 'string', 'max:5000', 'required_if:channel,sms'],
                 'sender_key' => ['nullable', 'string', 'max:80'],
+                'email_template_mode' => ['nullable', 'in:sections,legacy_html'],
+                'email_sections' => ['nullable', 'array', 'max:60'],
+                'email_advanced_html' => ['nullable', 'string', 'max:200000'],
             ])->validate();
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
+        }
+
+        if (($data['channel'] ?? null) === 'email' && ! $this->emailPayloadHasContent($data)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Message could not be sent.',
+                'errors' => [
+                    'body' => ['Add message text, email sections, or advanced HTML before sending.'],
+                ],
+            ], 422);
         }
 
         try {
@@ -413,10 +480,13 @@ class ShopifyEmbeddedMessagingController extends Controller
                 groupId: isset($data['group_id']) ? (int) $data['group_id'] : null,
                 groupKey: isset($data['group_key']) ? (string) $data['group_key'] : null,
                 channel: (string) $data['channel'],
-                body: (string) $data['body'],
+                body: (string) ($data['body'] ?? ''),
                 subject: isset($data['subject']) ? (string) $data['subject'] : null,
                 senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
-                actorId: auth()->id() !== null ? (int) auth()->id() : null
+                actorId: auth()->id() !== null ? (int) auth()->id() : null,
+                emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
+                emailSections: $data['email_sections'] ?? null,
+                emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
             );
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
@@ -448,10 +518,23 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'group_key' => ['nullable', 'string', 'max:120', 'required_if:target_type,auto'],
                 'channel' => ['required', 'in:sms,email'],
                 'subject' => ['nullable', 'string', 'max:200', 'required_if:channel,email'],
-                'body' => ['required', 'string', 'max:5000'],
+                'body' => ['nullable', 'string', 'max:5000', 'required_if:channel,sms'],
+                'email_template_mode' => ['nullable', 'in:sections,legacy_html'],
+                'email_sections' => ['nullable', 'array', 'max:60'],
+                'email_advanced_html' => ['nullable', 'string', 'max:200000'],
             ])->validate();
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Preview could not be generated.', $exception);
+        }
+
+        if (($data['channel'] ?? null) === 'email' && ! $this->emailPayloadHasContent($data)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Preview could not be generated.',
+                'errors' => [
+                    'body' => ['Add message text, email sections, or advanced HTML before previewing.'],
+                ],
+            ], 422);
         }
 
         try {
@@ -461,8 +544,11 @@ class ShopifyEmbeddedMessagingController extends Controller
                 groupId: isset($data['group_id']) ? (int) $data['group_id'] : null,
                 groupKey: isset($data['group_key']) ? (string) $data['group_key'] : null,
                 channel: (string) $data['channel'],
-                body: (string) $data['body'],
-                subject: isset($data['subject']) ? (string) $data['subject'] : null
+                body: (string) ($data['body'] ?? ''),
+                subject: isset($data['subject']) ? (string) $data['subject'] : null,
+                emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
+                emailSections: $data['email_sections'] ?? null,
+                emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
             );
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Preview could not be generated.', $exception);
@@ -500,6 +586,26 @@ class ShopifyEmbeddedMessagingController extends Controller
             'ok' => true,
             'data' => $workspaceService->history((int) $access['tenant_id'], $limit),
         ]);
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     */
+    protected function emailPayloadHasContent(array $payload): bool
+    {
+        $body = trim((string) ($payload['body'] ?? ''));
+        if ($body !== '') {
+            return true;
+        }
+
+        $sections = $payload['email_sections'] ?? null;
+        if (is_array($sections) && count($sections) > 0) {
+            return true;
+        }
+
+        $advanced = trim((string) ($payload['email_advanced_html'] ?? ''));
+
+        return $advanced !== '';
     }
 
     protected function pageStatusCode(bool $authorized, string $status, ?int $tenantId, bool $hasMessagingAccess): int

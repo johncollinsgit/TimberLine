@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class ShopifyEmbeddedMessagingWorkspaceService
 {
@@ -52,7 +53,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
     public function __construct(
         protected ShopifyEmbeddedCustomersGridService $customersGridService,
         protected MarketingDirectMessagingService $directMessagingService,
-        protected MarketingIdentityNormalizer $identityNormalizer
+        protected MarketingIdentityNormalizer $identityNormalizer,
+        protected ShopifyEmbeddedEmailComposerService $emailComposerService
     ) {
     }
 
@@ -93,6 +95,103 @@ class ShopifyEmbeddedMessagingWorkspaceService
                 'email_contactable' => $emailAddress !== null,
             ];
         }, $rows);
+    }
+
+    /**
+     * @param  array<string,mixed>  $storeContext
+     * @return array<int,array{
+     *   id:string,
+     *   gid:string,
+     *   title:string,
+     *   image_url:?string,
+     *   price:?string,
+     *   url:?string
+     * }>
+     */
+    public function searchProducts(string $query, array $storeContext, int $limit = 12): array
+    {
+        $search = trim($query);
+        if ($search === '') {
+            return [];
+        }
+
+        $shopDomain = trim((string) ($storeContext['shop'] ?? ''));
+        $token = trim((string) ($storeContext['token'] ?? ''));
+        $apiVersion = trim((string) ($storeContext['api_version'] ?? '2026-01'));
+
+        if ($shopDomain === '' || $token === '') {
+            throw ValidationException::withMessages([
+                'q' => 'Shopify product lookup is unavailable for this store session.',
+            ]);
+        }
+
+        $client = new ShopifyGraphqlClient($shopDomain, $token, $apiVersion !== '' ? $apiVersion : '2026-01');
+        $graphql = <<<'GRAPHQL'
+query EmbeddedMessagingProducts($query: String!, $first: Int!) {
+  products(first: $first, query: $query, sortKey: UPDATED_AT, reverse: true) {
+    edges {
+      node {
+        id
+        title
+        handle
+        onlineStoreUrl
+        featuredImage {
+          url
+          altText
+        }
+        priceRangeV2 {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL;
+
+        try {
+            $data = $client->query($graphql, [
+                'query' => $search,
+                'first' => max(1, min($limit, 20)),
+            ]);
+        } catch (RuntimeException $exception) {
+            throw ValidationException::withMessages([
+                'q' => 'Shopify product lookup failed. Confirm read_products scope is enabled.',
+            ]);
+        }
+
+        $edges = (array) data_get($data, 'products.edges', []);
+
+        return collect($edges)
+            ->map(function (mixed $edge) use ($shopDomain): ?array {
+                $node = is_array($edge) ? (array) ($edge['node'] ?? []) : [];
+                $gid = trim((string) ($node['id'] ?? ''));
+                if ($gid === '') {
+                    return null;
+                }
+
+                $title = trim((string) ($node['title'] ?? ''));
+                $handle = trim((string) ($node['handle'] ?? ''));
+                $onlineStoreUrl = $this->nullableString($node['onlineStoreUrl'] ?? null);
+                $fallbackUrl = $handle !== '' ? ('https://' . rtrim($shopDomain, '/') . '/products/' . ltrim($handle, '/')) : null;
+                $imageUrl = $this->nullableString(data_get($node, 'featuredImage.url'));
+                $priceAmount = $this->nullableString(data_get($node, 'priceRangeV2.minVariantPrice.amount'));
+                $priceCurrency = $this->nullableString(data_get($node, 'priceRangeV2.minVariantPrice.currencyCode'));
+
+                return [
+                    'id' => $this->numericShopifyIdFromGid($gid) ?? $gid,
+                    'gid' => $gid,
+                    'title' => $title !== '' ? $title : 'Shopify product',
+                    'image_url' => $imageUrl,
+                    'price' => $this->formatMoneyAmount($priceAmount, $priceCurrency),
+                    'url' => $onlineStoreUrl ?? $fallbackUrl,
+                ];
+            })
+            ->filter(fn (?array $row): bool => is_array($row))
+            ->values()
+            ->all();
     }
 
     /**
@@ -386,7 +485,10 @@ class ShopifyEmbeddedMessagingWorkspaceService
         string $body,
         ?string $subject,
         ?string $senderKey,
-        ?int $actorId
+        ?int $actorId,
+        ?string $emailTemplateMode = null,
+        mixed $emailSections = null,
+        ?string $emailAdvancedHtml = null
     ): array {
         $profile = MarketingProfile::query()
             ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
@@ -408,6 +510,24 @@ class ShopifyEmbeddedMessagingWorkspaceService
             $forceSendProfileIds[] = (int) $profile->id;
         }
 
+        $emailTemplate = null;
+        $htmlBody = null;
+        if ($channel === 'email') {
+            $composed = $this->emailComposerService->compose(
+                subject: (string) ($subject ?? ''),
+                body: trim($body),
+                mode: $emailTemplateMode,
+                sections: $emailSections,
+                legacyHtml: $emailAdvancedHtml
+            );
+            $emailTemplate = [
+                'mode' => (string) ($composed['mode'] ?? ShopifyEmbeddedEmailComposerService::MODE_SECTIONS),
+                'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : [],
+                'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
+            ];
+            $htmlBody = $this->nullableString($composed['html'] ?? null);
+        }
+
         $summary = $this->directMessagingService->send(
             channel: $channel,
             recipients: [$this->profileRecipient($profile)],
@@ -419,6 +539,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
                 'tenant_id' => $tenantId ?? $this->positiveInt($profile->tenant_id),
                 'source_label' => 'shopify_embedded_messaging_individual',
                 'force_send_profile_ids' => $forceSendProfileIds,
+                'html_body' => $htmlBody,
+                'email_template' => $emailTemplate,
             ]
         );
 
@@ -443,7 +565,10 @@ class ShopifyEmbeddedMessagingWorkspaceService
         string $body,
         ?string $subject,
         ?string $senderKey,
-        ?int $actorId
+        ?int $actorId,
+        ?string $emailTemplateMode = null,
+        mixed $emailSections = null,
+        ?string $emailAdvancedHtml = null
     ): array {
         $channel = $this->normalizedChannel($channel);
         $resolvedTarget = $this->resolveGroupTarget($tenantId, $targetType, $groupId, $groupKey, $channel);
@@ -456,6 +581,24 @@ class ShopifyEmbeddedMessagingWorkspaceService
             throw ValidationException::withMessages([
                 $errorField => 'No recipients are currently eligible for this target and channel.',
             ]);
+        }
+
+        $emailTemplate = null;
+        $htmlBody = null;
+        if ($channel === 'email') {
+            $composed = $this->emailComposerService->compose(
+                subject: (string) ($subject ?? ''),
+                body: trim($body),
+                mode: $emailTemplateMode,
+                sections: $emailSections,
+                legacyHtml: $emailAdvancedHtml
+            );
+            $emailTemplate = [
+                'mode' => (string) ($composed['mode'] ?? ShopifyEmbeddedEmailComposerService::MODE_SECTIONS),
+                'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : [],
+                'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
+            ];
+            $htmlBody = $this->nullableString($composed['html'] ?? null);
         }
 
         $summary = $this->directMessagingService->send(
@@ -473,6 +616,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
                     'intval',
                     (array) ($resolvedTarget['force_send_profile_ids'] ?? [])
                 ))),
+                'html_body' => $htmlBody,
+                'email_template' => $emailTemplate,
             ]
         );
 
@@ -496,11 +641,32 @@ class ShopifyEmbeddedMessagingWorkspaceService
         ?string $groupKey,
         string $channel,
         string $body,
-        ?string $subject
+        ?string $subject,
+        ?string $emailTemplateMode = null,
+        mixed $emailSections = null,
+        ?string $emailAdvancedHtml = null
     ): array {
         $channel = $this->normalizedChannel($channel);
         $resolvedTarget = $this->resolveGroupTarget($tenantId, $targetType, $groupId, $groupKey, $channel);
         $recipients = (array) ($resolvedTarget['recipients'] ?? []);
+        $emailTemplate = null;
+        $emailHtml = null;
+
+        if ($channel === 'email') {
+            $composed = $this->emailComposerService->compose(
+                subject: (string) ($subject ?? ''),
+                body: trim($body),
+                mode: $emailTemplateMode,
+                sections: $emailSections,
+                legacyHtml: $emailAdvancedHtml
+            );
+            $emailTemplate = [
+                'mode' => (string) ($composed['mode'] ?? ShopifyEmbeddedEmailComposerService::MODE_SECTIONS),
+                'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : [],
+                'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
+            ];
+            $emailHtml = $this->nullableString($composed['html'] ?? null);
+        }
 
         return [
             'target' => (array) ($resolvedTarget['target'] ?? []),
@@ -508,6 +674,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
             'subject' => $channel === 'email' ? $this->nullableString($subject) : null,
             'body' => trim($body),
             'message_preview' => Str::limit(trim($body), 280),
+            'email_template' => $emailTemplate,
+            'email_html' => $emailHtml,
             'estimated_recipients' => count($recipients),
             'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
             'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
@@ -1402,6 +1570,37 @@ class ShopifyEmbeddedMessagingWorkspaceService
     protected function sendableEmailFromValues(mixed $email, mixed $normalizedEmail, bool $consented): ?string
     {
         return $this->sendableEmailWithEffectiveConsent($email, $normalizedEmail, $consented);
+    }
+
+    protected function numericShopifyIdFromGid(?string $gid): ?string
+    {
+        $resolved = trim((string) $gid);
+        if ($resolved === '') {
+            return null;
+        }
+
+        if (preg_match('/\/Product\/(\d+)$/', $resolved, $matches) === 1) {
+            return (string) ($matches[1] ?? null);
+        }
+
+        return null;
+    }
+
+    protected function formatMoneyAmount(?string $amount, ?string $currency): ?string
+    {
+        $resolvedAmount = $this->nullableString($amount);
+        if ($resolvedAmount === null || ! is_numeric($resolvedAmount)) {
+            return null;
+        }
+
+        $resolvedCurrency = strtoupper(trim((string) $currency));
+        $formatted = number_format((float) $resolvedAmount, 2);
+
+        if ($resolvedCurrency !== '') {
+            return $resolvedCurrency . ' ' . $formatted;
+        }
+
+        return '$' . $formatted;
     }
 
     protected function nullableString(mixed $value): ?string
