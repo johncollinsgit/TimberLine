@@ -49,7 +49,8 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'rewards vip' => ['shopify.app.rewards.vip', 'rewards', 'vip'],
     'rewards notifications' => ['shopify.app.rewards.notifications', 'rewards', 'notifications'],
     'customers' => ['shopify.app.customers', 'customers', null],
-    'messaging' => ['shopify.app.messaging', 'messaging', null],
+    'messaging workspace' => ['shopify.app.messaging', 'messaging', 'workspace'],
+    'messaging analytics' => ['shopify.app.messaging.analytics', 'messaging', 'analytics'],
     'settings' => ['shopify.app.settings', 'settings', null],
 ]);
 
@@ -85,6 +86,27 @@ test('legacy customers questions route redirects to imports', function () {
     $response->assertRedirect();
     expect($response->headers->get('Location', ''))->toContain('/shopify/app/customers/imports');
 });
+
+test('messaging routes expose messaging subnav with expected active tab', function (string $routeName, string $activeTab, string $visibleText) {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Subnav Tenant',
+        'slug' => 'messaging-subnav-tenant',
+    ]);
+    grantMessagingEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $response = $this->get(route($routeName, retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSeeText($visibleText)
+        ->assertViewHas('appNavigation', fn (array $navigation): bool => ($navigation['activeSection'] ?? null) === 'messaging')
+        ->assertViewHas('pageSubnav', function (array $subnav) use ($activeTab): bool {
+            return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === $activeTab && ! empty($item['active']));
+        });
+})->with([
+    'messaging workspace tab' => ['shopify.app.messaging', 'workspace', 'Messages Workspace'],
+    'messaging analytics tab' => ['shopify.app.messaging.analytics', 'analytics', 'Message Analytics'],
+]);
 
 test('legacy customers route redirects to all customers', function () {
     configureEmbeddedRetailStore();
@@ -245,6 +267,20 @@ test('embedded shell mounts shopify command menu with registry-backed route disc
         ->assertDontSee('data-app-command-palette', false)
         ->assertSee('"id":"page:settings"', false)
         ->assertSee('"section":"pages"', false);
+});
+
+test('embedded command menu includes messaging analytics document when messaging access is enabled', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Search Tenant',
+        'slug' => 'messaging-search-tenant',
+    ]);
+    grantMessagingEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('home', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('"id":"page:messaging.analytics"', false)
+        ->assertSee('message analytics', false);
 });
 
 test('embedded topbar search exposes accessible command menu controls and endpoint fallback wiring', function () {

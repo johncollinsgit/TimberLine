@@ -63,7 +63,8 @@
   transition:
     transform 120ms ease,
     box-shadow 120ms ease,
-    background 120ms ease;
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .sf-dashboard-chart__series-toggle:hover {
@@ -72,9 +73,20 @@
   transform: translateY(-1px);
 }
 
-.sf-dashboard-chart__series-toggle.is-active {
-  background: rgba(15, 143, 97, 0.1);
-  border-color: rgba(15, 143, 97, 0.24);
+.sf-dashboard-chart__series-toggle.is-active,
+.sf-dashboard-chart__series-toggle[aria-pressed="true"] {
+  background: rgba(15, 143, 97, 0.16);
+  border-color: rgba(15, 143, 97, 0.46);
+}
+
+.sf-dashboard-chart__series-toggle.is-active .sf-dashboard-chart__series-text,
+.sf-dashboard-chart__series-toggle[aria-pressed="true"] .sf-dashboard-chart__series-text {
+  color: rgba(15, 99, 63, 0.95);
+}
+
+.sf-dashboard-chart__series-toggle:focus-visible {
+  outline: 2px solid rgba(15, 143, 97, 0.55);
+  outline-offset: 2px;
 }
 
 .sf-dashboard-chart__series-swatch {

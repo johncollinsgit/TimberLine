@@ -1,5 +1,27 @@
 # UI Changelog
 
+## 2026-04-04 — Shopify Messaging Analytics + Chart Toggle Reliability
+
+### What changed
+- Added a first-class embedded Shopify `Message Analytics` surface under Messaging sub-navigation:
+  - route: `/shopify/app/messaging/analytics`
+  - legacy redirect: `/messaging/analytics`
+  - discoverable through the existing command/search registry with messaging analytics keywords.
+- Introduced an operational analytics UI (table-first) with:
+  - summary cards (sent, delivered, opens, unique opens, clicks, unique clicks, attributed orders, attributed revenue, click-to-order conversion),
+  - practical filters (date, channel, campaign/message, opened/clicked state, attributed orders, URL/domain, customer),
+  - message-level table and detail drill-down (metadata, open timeline, URL-level performance, attributed orders).
+- Added the engagement trend XY chart for messaging analytics with toggleable metrics (email + text delivery/engagement + attributed orders), following the same interaction model as rewards chart controls.
+- Fixed rewards chart metric-toggle active-state styling reliability by hardening the control state CSS (`is-active` + `aria-pressed=true`) and improving active/focus contrast.
+
+### Why
+- Messaging needed a real operational analytics surface inside the unified embedded Backstage shell, not a standalone dashboard fragment.
+- Operators also needed stable visual feedback when toggling chart series, including in rewards where active-chip color state could appear stuck.
+
+### Scope boundary
+- No parallel app shell or alternate search path was introduced.
+- Messaging analytics remains gated by existing tenant/module access resolver patterns and Shopify tenant/store context.
+
 ## 2026-04-02 — Backstage Light-Surface Consistency Sweep (Deep Feature Views)
 
 ### What changed

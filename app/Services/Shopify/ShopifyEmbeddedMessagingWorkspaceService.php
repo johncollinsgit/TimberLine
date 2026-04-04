@@ -506,6 +506,7 @@ GRAPHQL;
         ?string $subject,
         ?string $senderKey,
         ?int $actorId,
+        ?string $storeKey = null,
         ?string $emailTemplateMode = null,
         mixed $emailSections = null,
         ?string $emailAdvancedHtml = null
@@ -557,6 +558,7 @@ GRAPHQL;
                 'sender_key' => $senderKey,
                 'actor_id' => $actorId,
                 'tenant_id' => $tenantId ?? $this->positiveInt($profile->tenant_id),
+                'store_key' => $this->nullableString($storeKey),
                 'source_label' => 'shopify_embedded_messaging_individual',
                 'force_send_profile_ids' => $forceSendProfileIds,
                 'html_body' => $htmlBody,
@@ -586,6 +588,7 @@ GRAPHQL;
         ?string $subject,
         ?string $senderKey,
         ?int $actorId,
+        ?string $storeKey = null,
         ?string $emailTemplateMode = null,
         mixed $emailSections = null,
         ?string $emailAdvancedHtml = null
@@ -630,6 +633,7 @@ GRAPHQL;
                 'sender_key' => $senderKey,
                 'actor_id' => $actorId,
                 'tenant_id' => $tenantId,
+                'store_key' => $this->nullableString($storeKey),
                 'group_id' => $this->positiveInt(data_get($resolvedTarget, 'target.id')),
                 'source_label' => (string) ($resolvedTarget['source_label'] ?? 'shopify_embedded_messaging_group'),
                 'force_send_profile_ids' => array_values(array_unique(array_map(

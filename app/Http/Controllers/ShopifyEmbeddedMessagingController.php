@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Marketing\MessageAnalyticsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
@@ -54,7 +55,8 @@ class ShopifyEmbeddedMessagingController extends Controller
             ])
             : null;
 
-        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', null, $tenantId));
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'workspace', $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('workspace', $tenantId));
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.messaging', [
@@ -69,6 +71,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'headline' => $this->headlineForStatus($status),
                 'subheadline' => $this->subheadlineForStatus($status),
                 'appNavigation' => $appNavigation,
+                'pageSubnav' => $pageSubnav,
                 'pageActions' => [],
                 'messagingModuleState' => $messagingModule,
                 'messagingAccess' => [
@@ -103,6 +106,107 @@ class ShopifyEmbeddedMessagingController extends Controller
                         'send_group' => route('shopify.app.api.messaging.send.group', [], false),
                         'history' => route('shopify.app.api.messaging.history', [], false),
                     ],
+                ],
+            ]),
+            $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+            'messaging_enabled' => $hasMessagingAccess,
+        ])->finish($response);
+    }
+
+    public function analytics(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        MessageAnalyticsService $messageAnalyticsService
+    ): Response {
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        $probe->forTenant($tenantId);
+
+        $messagingModule = $tenantId !== null
+            ? $probe->time('module_access', fn (): array => $moduleAccessResolver->module($tenantId, 'messaging'))
+            : [
+                'module_key' => 'messaging',
+                'has_access' => false,
+                'ui_state' => 'locked',
+                'reason' => 'tenant_not_mapped',
+            ];
+        $hasMessagingAccess = (bool) ($messagingModule['has_access'] ?? false);
+        $storeKey = $this->nullableString(data_get($store, 'key'));
+        $filters = $messageAnalyticsService->normalizeFilters($request->query());
+        $analyticsPayload = ($authorized && $tenantId !== null && $hasMessagingAccess)
+            ? $probe->time('page_payload', fn (): array => $messageAnalyticsService->index($tenantId, $storeKey, $filters))
+            : null;
+
+        $messageKey = trim((string) $request->query('message_key', ''));
+        $detail = (is_array($analyticsPayload) && $messageKey !== '')
+            ? $probe->time('page_payload', fn (): ?array => $messageAnalyticsService->detail($tenantId, $storeKey, $messageKey))
+            : null;
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'analytics', $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('analytics', $tenantId));
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+            response()->view('shopify.messaging-analytics', [
+                'authorized' => $authorized,
+                'status' => $status,
+                'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+                'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
+                'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
+                'storeLabel' => $authorized
+                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    : 'Shopify Admin',
+                'headline' => $this->headlineForStatus($status, 'Message Analytics'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Track opens, clicks, URLs, and attributed orders from message sends.'),
+                'appNavigation' => $appNavigation,
+                'pageSubnav' => $pageSubnav,
+                'pageActions' => [],
+                'messagingModuleState' => $messagingModule,
+                'messagingAccess' => [
+                    'enabled' => $hasMessagingAccess,
+                    'status' => $tenantId === null
+                        ? 'tenant_not_mapped'
+                        : ($hasMessagingAccess ? 'enabled' : 'messaging_module_locked'),
+                    'message' => $tenantId === null
+                        ? 'This Shopify store is not mapped to a tenant yet.'
+                        : ($hasMessagingAccess
+                            ? null
+                            : 'Messaging is not enabled for this tenant. Enable the Messaging module to use message analytics.'),
+                ],
+                'messageAnalyticsFilters' => [
+                    'date_from' => ($filters['date_from'] instanceof \DateTimeInterface)
+                        ? $filters['date_from']->format('Y-m-d')
+                        : null,
+                    'date_to' => ($filters['date_to'] instanceof \DateTimeInterface)
+                        ? $filters['date_to']->format('Y-m-d')
+                        : null,
+                    'channel' => $filters['channel'] ?? 'all',
+                    'opened' => $filters['opened'] ?? 'all',
+                    'clicked' => $filters['clicked'] ?? 'all',
+                    'has_orders' => (bool) ($filters['has_orders'] ?? false),
+                    'url_search' => $filters['url_search'] ?? null,
+                    'customer' => $filters['customer'] ?? null,
+                    'message' => $filters['message'] ?? null,
+                    'per_page' => (int) ($filters['per_page'] ?? 25),
+                ],
+                'messageAnalytics' => $analyticsPayload,
+                'messageAnalyticsDetail' => $detail,
+                'messageAnalyticsSelectedMessageKey' => $messageKey !== '' ? $messageKey : null,
+                'messageAnalyticsAttribution' => [
+                    'model' => 'last_click_within_window',
+                    'window_days' => max(1, (int) config('marketing.message_analytics.attribution_window_days', 7)),
                 ],
             ]),
             $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
@@ -424,6 +528,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 subject: isset($data['subject']) ? (string) $data['subject'] : null,
                 senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
                 actorId: auth()->id() !== null ? (int) auth()->id() : null,
+                storeKey: (string) data_get($access, 'context.store.key', ''),
                 emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
                 emailSections: $data['email_sections'] ?? null,
                 emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
@@ -508,8 +613,9 @@ class ShopifyEmbeddedMessagingController extends Controller
 
             $dispatchId = (string) Str::uuid();
             $actorId = auth()->id() !== null ? (int) auth()->id() : null;
+            $storeKey = (string) data_get($access, 'context.store.key', '');
 
-            app()->terminating(function () use ($workspaceService, $tenantId, $data, $actorId, $dispatchId, $resolvedSendableCount, $lockKey): void {
+            app()->terminating(function () use ($workspaceService, $tenantId, $data, $actorId, $dispatchId, $resolvedSendableCount, $lockKey, $storeKey): void {
                 try {
                     if (function_exists('set_time_limit')) {
                         @set_time_limit(0);
@@ -526,6 +632,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                         subject: isset($data['subject']) ? (string) $data['subject'] : null,
                         senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
                         actorId: $actorId,
+                        storeKey: $storeKey,
                         emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
                         emailSections: $data['email_sections'] ?? null,
                         emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
@@ -578,6 +685,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 subject: isset($data['subject']) ? (string) $data['subject'] : null,
                 senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
                 actorId: auth()->id() !== null ? (int) auth()->id() : null,
+                storeKey: (string) data_get($access, 'context.store.key', ''),
                 emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
                 emailSections: $data['email_sections'] ?? null,
                 emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
@@ -837,20 +945,27 @@ class ShopifyEmbeddedMessagingController extends Controller
         return $probe->forRequest($request);
     }
 
-    protected function headlineForStatus(string $status): string
+    protected function headlineForStatus(string $status, string $default = 'Messaging'): string
     {
         return match ($status) {
             'open_from_shopify' => 'Open this page from Shopify Admin',
-            default => 'Messaging',
+            default => $default,
         };
     }
 
-    protected function subheadlineForStatus(string $status): string
+    protected function subheadlineForStatus(string $status, string $default = 'Send operational SMS and email messages to individual customers or saved groups.'): string
     {
         return match ($status) {
             'open_from_shopify' => 'Open this page inside Shopify Admin so Messaging can verify your store context.',
             'missing_shop', 'unknown_shop', 'invalid_hmac' => 'Open the app again from Shopify Admin. If this keeps happening, check app configuration.',
-            default => 'Send operational SMS and email messages to individual customers or saved groups.',
+            default => $default,
         };
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

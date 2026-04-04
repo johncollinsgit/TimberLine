@@ -189,6 +189,11 @@ return [
             'description' => 'Direct 1:1 and group messaging workspace for SMS and email outreach.',
             'module_key' => 'messaging',
         ],
+        'messaging.analytics' => [
+            'display_name' => 'Message analytics',
+            'description' => 'Operational analytics for message opens, clicks, and attributed orders.',
+            'module_key' => 'messaging',
+        ],
     ],
 
     'modules' => [
@@ -654,7 +659,7 @@ return [
             'billing_mode' => 'add_on',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'add_module',
-            'capabilities' => ['messaging.workspace'],
+            'capabilities' => ['messaging.workspace', 'messaging.analytics'],
         ],
         'additional_channels' => [
             'display_name' => 'Additional Channels',

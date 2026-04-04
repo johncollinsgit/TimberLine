@@ -61,6 +61,7 @@ class MarketingDirectMessagingService
         $sourceLabel = trim((string) ($options['source_label'] ?? 'direct_message_wizard'));
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $storeKey = $this->nullableString($options['store_key'] ?? null);
         $subject = $this->nullableString($options['subject'] ?? null);
         $htmlBody = $this->nullableString($options['html_body'] ?? null);
         $emailTemplate = is_array($options['email_template'] ?? null)
@@ -127,6 +128,11 @@ class MarketingDirectMessagingService
                     'campaign_id' => null,
                     'campaign_recipient_id' => null,
                     'marketing_profile_id' => $profile->id,
+                    'tenant_id' => $tenantId ?? $this->positiveInt($profile->tenant_id),
+                    'store_key' => $storeKey,
+                    'batch_id' => $batchId,
+                    'source_label' => $sourceLabel,
+                    'message_subject' => Str::limit($message, 160),
                     'channel' => 'sms',
                     'provider' => 'twilio',
                     'to_phone' => $toPhone,
@@ -211,6 +217,10 @@ class MarketingDirectMessagingService
                 'marketing_campaign_recipient_id' => null,
                 'marketing_profile_id' => $profile->id,
                 'tenant_id' => $resolvedTenantId,
+                'store_key' => $storeKey,
+                'batch_id' => $batchId,
+                'source_label' => $sourceLabel,
+                'message_subject' => $subject,
                 'provider' => 'sendgrid',
                 'campaign_type' => 'direct_message',
                 'template_key' => 'direct_message',

@@ -6,6 +6,7 @@
     :headline="$headline"
     :subheadline="$subheadline"
     :app-navigation="$appNavigation"
+    :page-subnav="$pageSubnav ?? []"
     :page-actions="$pageActions"
 >
     @php

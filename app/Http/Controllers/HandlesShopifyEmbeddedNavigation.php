@@ -45,4 +45,15 @@ trait HandlesShopifyEmbeddedNavigation
 
         return $payloadBuilder->moduleStates($tenantId, request());
     }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function embeddedMessagingSubnav(string $activeKey, ?int $tenantId = null): array
+    {
+        /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
+        $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
+
+        return $payloadBuilder->messagingSubnav($activeKey, $tenantId, request());
+    }
 }

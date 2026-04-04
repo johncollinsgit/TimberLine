@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketingEmailDelivery extends Model
 {
@@ -14,6 +15,10 @@ class MarketingEmailDelivery extends Model
         'marketing_campaign_recipient_id',
         'marketing_profile_id',
         'tenant_id',
+        'store_key',
+        'batch_id',
+        'source_label',
+        'message_subject',
         'provider',
         'provider_message_id',
         'campaign_type',
@@ -54,5 +59,15 @@ class MarketingEmailDelivery extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function engagementEvents(): HasMany
+    {
+        return $this->hasMany(MarketingMessageEngagementEvent::class, 'marketing_email_delivery_id');
+    }
+
+    public function messageOrderAttributions(): HasMany
+    {
+        return $this->hasMany(MarketingMessageOrderAttribution::class, 'marketing_email_delivery_id');
     }
 }

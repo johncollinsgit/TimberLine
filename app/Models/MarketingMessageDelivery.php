@@ -2,16 +2,24 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketingMessageDelivery extends Model
 {
+    use HasTenantScope;
+
     protected $fillable = [
         'campaign_id',
         'campaign_recipient_id',
         'marketing_profile_id',
+        'tenant_id',
+        'store_key',
+        'batch_id',
+        'source_label',
+        'message_subject',
         'channel',
         'provider',
         'provider_message_id',
@@ -31,6 +39,7 @@ class MarketingMessageDelivery extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'attempt_number' => 'integer',
         'provider_payload' => 'array',
         'sent_at' => 'datetime',
@@ -66,5 +75,15 @@ class MarketingMessageDelivery extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function engagementEvents(): HasMany
+    {
+        return $this->hasMany(MarketingMessageEngagementEvent::class, 'marketing_message_delivery_id');
     }
 }

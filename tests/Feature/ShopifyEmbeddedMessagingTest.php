@@ -5,8 +5,11 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
+use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageGroup;
+use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
+use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
@@ -143,6 +146,208 @@ test('messaging nav and workspace load when entitlement is enabled', function ()
         ])
         ->assertJsonMissingPath('data.history')
         ->assertJsonMissingPath('data.all_subscribed_summary');
+});
+
+test('messaging analytics page is locked for non-enabled tenant mappings', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Analytics Locked Tenant',
+        'slug' => 'messaging-analytics-locked-tenant',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery()))
+        ->assertStatus(403)
+        ->assertSeeText('Message analytics is locked');
+});
+
+test('messaging analytics stays tenant and store scoped with attributed outcomes', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Messaging Analytics Tenant A',
+        'slug' => 'messaging-analytics-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Messaging Analytics Tenant B',
+        'slug' => 'messaging-analytics-tenant-b',
+    ]);
+    shopifyMessagingGrantEntitlement($tenantA);
+    shopifyMessagingGrantEntitlement($tenantB);
+    configureEmbeddedRetailStore($tenantA->id);
+
+    $profileA = shopifyMessagingProfile($tenantA->id, [
+        'first_name' => 'Alex',
+        'last_name' => 'Arbor',
+        'email' => 'alex.arbor@example.com',
+        'normalized_email' => 'alex.arbor@example.com',
+    ]);
+    $profileB = shopifyMessagingProfile($tenantB->id, [
+        'first_name' => 'Blair',
+        'last_name' => 'Birch',
+        'email' => 'blair.birch@example.com',
+        'normalized_email' => 'blair.birch@example.com',
+    ]);
+
+    $deliveryA = MarketingEmailDelivery::query()->create([
+        'marketing_campaign_recipient_id' => null,
+        'marketing_profile_id' => $profileA->id,
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'batch_id' => 'batch-a',
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => 'Spring VIP launch',
+        'provider' => 'sendgrid',
+        'provider_message_id' => 'provider-a',
+        'campaign_type' => 'direct_message',
+        'template_key' => 'direct_message',
+        'sendgrid_message_id' => 'sg-a',
+        'email' => 'alex.arbor@example.com',
+        'status' => 'delivered',
+        'sent_at' => now()->subDays(2),
+        'delivered_at' => now()->subDays(2),
+    ]);
+
+    $deliveryB = MarketingEmailDelivery::query()->create([
+        'marketing_campaign_recipient_id' => null,
+        'marketing_profile_id' => $profileB->id,
+        'tenant_id' => $tenantB->id,
+        'store_key' => 'retail',
+        'batch_id' => 'batch-b',
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => 'Other tenant campaign',
+        'provider' => 'sendgrid',
+        'provider_message_id' => 'provider-b',
+        'campaign_type' => 'direct_message',
+        'template_key' => 'direct_message',
+        'sendgrid_message_id' => 'sg-b',
+        'email' => 'blair.birch@example.com',
+        'status' => 'delivered',
+        'sent_at' => now()->subDays(2),
+        'delivered_at' => now()->subDays(2),
+    ]);
+
+    $clickEventA = MarketingMessageEngagementEvent::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'marketing_email_delivery_id' => $deliveryA->id,
+        'marketing_message_delivery_id' => null,
+        'marketing_profile_id' => $profileA->id,
+        'channel' => 'email',
+        'event_type' => 'click',
+        'event_hash' => hash('sha256', 'tenant-a-click-1'),
+        'provider' => 'sendgrid',
+        'provider_event_id' => 'evt-a',
+        'provider_message_id' => 'provider-a',
+        'link_label' => 'Shop now',
+        'url' => 'https://theforestrystudio.com/products/spring-vip?utm_source=email',
+        'normalized_url' => 'https://theforestrystudio.com/products/spring-vip',
+        'url_domain' => 'theforestrystudio.com',
+        'occurred_at' => now()->subDay(),
+        'payload' => ['event' => 'click'],
+    ]);
+
+    MarketingMessageEngagementEvent::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'marketing_email_delivery_id' => $deliveryA->id,
+        'marketing_message_delivery_id' => null,
+        'marketing_profile_id' => $profileA->id,
+        'channel' => 'email',
+        'event_type' => 'open',
+        'event_hash' => hash('sha256', 'tenant-a-open-1'),
+        'provider' => 'sendgrid',
+        'provider_event_id' => 'evt-a-open',
+        'provider_message_id' => 'provider-a',
+        'occurred_at' => now()->subDay(),
+        'payload' => ['event' => 'open'],
+    ]);
+
+    $clickEventB = MarketingMessageEngagementEvent::query()->create([
+        'tenant_id' => $tenantB->id,
+        'store_key' => 'retail',
+        'marketing_email_delivery_id' => $deliveryB->id,
+        'marketing_message_delivery_id' => null,
+        'marketing_profile_id' => $profileB->id,
+        'channel' => 'email',
+        'event_type' => 'click',
+        'event_hash' => hash('sha256', 'tenant-b-click-1'),
+        'provider' => 'sendgrid',
+        'provider_event_id' => 'evt-b',
+        'provider_message_id' => 'provider-b',
+        'link_label' => 'Other link',
+        'url' => 'https://example.com/other',
+        'normalized_url' => 'https://example.com/other',
+        'url_domain' => 'example.com',
+        'occurred_at' => now()->subDay(),
+        'payload' => ['event' => 'click'],
+    ]);
+
+    $orderA = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 'order-a',
+        'order_number' => '#A1001',
+        'customer_name' => 'Alex Arbor',
+        'status' => 'new',
+        'ordered_at' => now()->subHours(12),
+        'tenant_id' => $tenantA->id,
+        'total_price' => 54.99,
+    ]);
+
+    $orderB = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 'order-b',
+        'order_number' => '#B2002',
+        'customer_name' => 'Blair Birch',
+        'status' => 'new',
+        'ordered_at' => now()->subHours(12),
+        'tenant_id' => $tenantB->id,
+        'total_price' => 29.00,
+    ]);
+
+    MarketingMessageOrderAttribution::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'order_id' => $orderA->id,
+        'marketing_profile_id' => $profileA->id,
+        'marketing_email_delivery_id' => $deliveryA->id,
+        'marketing_message_engagement_event_id' => $clickEventA->id,
+        'channel' => 'email',
+        'attribution_model' => 'last_click',
+        'attribution_window_days' => 7,
+        'attributed_url' => 'https://theforestrystudio.com/products/spring-vip?utm_source=email',
+        'normalized_url' => 'https://theforestrystudio.com/products/spring-vip',
+        'click_occurred_at' => now()->subDay(),
+        'order_occurred_at' => now()->subHours(12),
+        'revenue_cents' => 5499,
+        'metadata' => ['attribution_rule' => 'last_click_within_window'],
+    ]);
+
+    MarketingMessageOrderAttribution::query()->create([
+        'tenant_id' => $tenantB->id,
+        'store_key' => 'retail',
+        'order_id' => $orderB->id,
+        'marketing_profile_id' => $profileB->id,
+        'marketing_email_delivery_id' => $deliveryB->id,
+        'marketing_message_engagement_event_id' => $clickEventB->id,
+        'channel' => 'email',
+        'attribution_model' => 'last_click',
+        'attribution_window_days' => 7,
+        'attributed_url' => 'https://example.com/other',
+        'normalized_url' => 'https://example.com/other',
+        'click_occurred_at' => now()->subDay(),
+        'order_occurred_at' => now()->subHours(12),
+        'revenue_cents' => 2900,
+        'metadata' => ['attribution_rule' => 'last_click_within_window'],
+    ]);
+
+    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSeeText('Message Analytics')
+        ->assertSeeText('Spring VIP launch')
+        ->assertDontSeeText('Other tenant campaign')
+        ->assertSeeText('$54.99')
+        ->assertDontSeeText('$29.00');
 });
 
 test('modern forestry default seed migration enables messaging entitlement', function () {

@@ -5,12 +5,20 @@ namespace App\Services\Marketing;
 use App\Models\BirthdayMessageEvent;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingMessageEngagementEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class MarketingEmailDeliveryTrackingService
 {
+    public function __construct(
+        protected MessageOrderAttributionService $messageOrderAttributionService
+    ) {
+    }
+
     /**
      * @param array<int,array<string,mixed>> $events
      * @return array{processed:int,matched:int,updated:int,duplicates:int,unmatched:int}
@@ -115,6 +123,12 @@ class MarketingEmailDeliveryTrackingService
                     'last_event_at' => $nextLastEventAt?->toIso8601String(),
                 ],
             ])->save();
+
+            $engagementEvent = $this->recordEngagementEvent($delivery, $event, $occurredAt);
+            if ($engagementEvent instanceof MarketingMessageEngagementEvent
+                && strtolower(trim((string) $engagementEvent->event_type)) === 'click') {
+                $this->messageOrderAttributionService->syncForClickEvent($engagementEvent);
+            }
 
             if ($delivery->recipient && $shouldApplyState) {
                 $this->updateRecipientFromDelivery($delivery->recipient, (string) ($mapped['recipient_status'] ?? ''));
@@ -384,6 +398,174 @@ class MarketingEmailDeliveryTrackingService
         return null;
     }
 
+    /**
+     * @param  array<string,mixed>  $event
+     */
+    protected function recordEngagementEvent(
+        MarketingEmailDelivery $delivery,
+        array $event,
+        CarbonImmutable $occurredAt
+    ): ?MarketingMessageEngagementEvent {
+        if (! Schema::hasTable('marketing_message_engagement_events')) {
+            return null;
+        }
+
+        $eventType = strtolower(trim((string) ($event['event'] ?? '')));
+        if (! in_array($eventType, ['open', 'click'], true)) {
+            return null;
+        }
+
+        $normalizedType = $eventType === 'open' ? 'open' : 'click';
+        $url = $this->nullableString($event['url'] ?? null);
+        $normalizedUrl = $this->normalizedUrl($url);
+        $urlDomain = $this->urlDomain($normalizedUrl ?? $url);
+        $storeKey = $this->nullableString(
+            $delivery->store_key
+            ?? data_get($delivery->metadata, 'shopify_store_key')
+            ?? data_get($delivery->raw_payload, 'shopify_store_key')
+        );
+        $tenantId = $this->positiveInt($delivery->tenant_id);
+        $profileId = $this->positiveInt($delivery->marketing_profile_id);
+        $providerEventId = $this->nullableString($event['sg_event_id'] ?? null);
+        $providerMessageId = $this->normalizedMessageId((string) ($event['sg_message_id'] ?? ''))
+            ?? $this->nullableString($event['sg_message_id'] ?? null)
+            ?? $this->nullableString($delivery->provider_message_id);
+
+        $eventHash = hash('sha256', implode('|', [
+            (string) ($delivery->id ?? 0),
+            $normalizedType,
+            (string) ($providerEventId ?? ''),
+            (string) ($providerMessageId ?? ''),
+            (string) ($event['timestamp'] ?? ''),
+            (string) ($url ?? ''),
+        ]));
+
+        return MarketingMessageEngagementEvent::query()->firstOrCreate(
+            ['event_hash' => $eventHash],
+            [
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'marketing_email_delivery_id' => (int) $delivery->id,
+                'marketing_message_delivery_id' => null,
+                'marketing_profile_id' => $profileId,
+                'channel' => 'email',
+                'event_type' => $normalizedType,
+                'provider' => $this->nullableString($delivery->provider) ?? 'sendgrid',
+                'provider_event_id' => $providerEventId,
+                'provider_message_id' => $providerMessageId,
+                'link_label' => $this->deriveLinkLabel($event, $url),
+                'url' => $url,
+                'normalized_url' => $normalizedUrl,
+                'url_domain' => $urlDomain,
+                'ip_address' => $this->nullableString($event['ip'] ?? null),
+                'user_agent' => $this->nullableString($event['useragent'] ?? null),
+                'payload' => $event,
+                'occurred_at' => $occurredAt,
+            ]
+        );
+    }
+
+    /**
+     * @param  array<string,mixed>  $event
+     */
+    protected function deriveLinkLabel(array $event, ?string $url): ?string
+    {
+        $provided = $this->nullableString($event['link_label'] ?? null)
+            ?? $this->nullableString($event['link_name'] ?? null);
+        if ($provided !== null) {
+            return Str::limit($provided, 180);
+        }
+
+        if ($url === null) {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return null;
+        }
+
+        $path = trim((string) ($parts['path'] ?? ''));
+        if ($path === '' || $path === '/') {
+            return $this->nullableString((string) ($parts['host'] ?? null));
+        }
+
+        $segment = trim((string) basename($path), '/');
+
+        return $segment !== '' ? Str::limit(urldecode($segment), 180) : null;
+    }
+
+    protected function normalizedUrl(?string $url): ?string
+    {
+        $url = $this->nullableString($url);
+        if ($url === null) {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return null;
+        }
+
+        $host = strtolower(trim((string) ($parts['host'] ?? '')));
+        if ($host === '') {
+            return null;
+        }
+
+        $scheme = strtolower(trim((string) ($parts['scheme'] ?? 'https')));
+        $path = trim((string) ($parts['path'] ?? ''));
+        $path = $path !== '' ? $path : '/';
+        $path = '/' . ltrim($path, '/');
+
+        $queryString = trim((string) ($parts['query'] ?? ''));
+        if ($queryString === '') {
+            return $scheme.'://'.$host.$path;
+        }
+
+        parse_str($queryString, $query);
+        if (! is_array($query)) {
+            return $scheme.'://'.$host.$path;
+        }
+
+        foreach ([
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'gclid',
+            'fbclid',
+            'msclkid',
+            '_hsenc',
+            '_hsmi',
+        ] as $trackedKey) {
+            unset($query[$trackedKey]);
+        }
+
+        if ($query === []) {
+            return $scheme.'://'.$host.$path;
+        }
+
+        ksort($query);
+        $normalizedQuery = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+        return $normalizedQuery !== ''
+            ? $scheme.'://'.$host.$path.'?'.$normalizedQuery
+            : $scheme.'://'.$host.$path;
+    }
+
+    protected function urlDomain(?string $url): ?string
+    {
+        $url = $this->nullableString($url);
+        if ($url === null) {
+            return null;
+        }
+
+        $host = strtolower(trim((string) (parse_url($url, PHP_URL_HOST) ?? '')));
+
+        return $host !== '' ? $host : null;
+    }
+
     protected function birthdayEventStatusFromDelivery(MarketingEmailDelivery $delivery): string
     {
         $status = strtolower(trim((string) ($delivery->status ?? '')));
@@ -475,5 +657,12 @@ class MarketingEmailDeliveryTrackingService
         $int = (int) $value;
 
         return $int > 0 ? $int : null;
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

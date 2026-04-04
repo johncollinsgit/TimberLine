@@ -78,6 +78,10 @@ return [
         ],
     ],
 
+    'message_analytics' => [
+        'attribution_window_days' => (int) env('MARKETING_MESSAGE_ATTRIBUTION_WINDOW_DAYS', 7),
+    ],
+
     'twilio' => [
         'enabled' => (bool) env('MARKETING_TWILIO_ENABLED', false),
         'account_sid' => env('TWILIO_ACCOUNT_SID'),

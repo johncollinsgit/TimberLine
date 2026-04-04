@@ -159,3 +159,44 @@ test('shopify embedded shell payload builder picks up future pages from registry
         ->and(collect($searchResults)->pluck('title')->all())->toContain('Labs')
         ->and(collect($commandDocuments)->pluck('title')->all())->toContain('Labs');
 });
+
+test('shopify embedded shell payload builder returns messaging subnav entries from registry', function () {
+    $request = Request::create('/shopify/app/messaging/analytics', 'GET');
+
+    $displayLabelResolver = \Mockery::mock(TenantDisplayLabelResolver::class);
+    $displayLabelResolver
+        ->shouldReceive('resolve')
+        ->once()
+        ->with(77)
+        ->andReturn(['labels' => []]);
+
+    $experienceProfileService = \Mockery::mock(TenantExperienceProfileService::class);
+    $experienceProfileService
+        ->shouldReceive('forTenant')
+        ->never();
+
+    $moduleAccessResolver = \Mockery::mock(TenantModuleAccessResolver::class);
+    $moduleAccessResolver
+        ->shouldReceive('resolveForTenant')
+        ->once()
+        ->with(77, \Mockery::on(fn (array $moduleKeys): bool => in_array('messaging', $moduleKeys, true)))
+        ->andReturn([
+            'modules' => [
+                'messaging' => ['reason' => 'ok', 'has_access' => true],
+            ],
+        ]);
+
+    $registry = new ShopifyEmbeddedPageRegistry();
+    $builder = new ShopifyEmbeddedShellPayloadBuilder(
+        $registry,
+        new ShopifyEmbeddedUrlGenerator($registry),
+        $displayLabelResolver,
+        $experienceProfileService,
+        $moduleAccessResolver
+    );
+
+    $subnav = $builder->messagingSubnav('analytics', 77, $request);
+
+    expect(collect($subnav)->pluck('key')->all())->toBe(['workspace', 'analytics'])
+        ->and(collect($subnav)->firstWhere('key', 'analytics')['active'] ?? false)->toBeTrue();
+});

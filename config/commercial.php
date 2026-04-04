@@ -163,7 +163,7 @@ return [
             'name' => (string) ($canonicalAddons['messaging']['name'] ?? 'Messaging'),
             'position' => 30,
             'currency' => 'USD',
-            'recurring_price_cents' => 11900,
+            'recurring_price_cents' => 1999,
             'setup_price_cents' => 0,
             'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging']),
         ],
