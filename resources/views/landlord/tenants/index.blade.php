@@ -1,118 +1,219 @@
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-xl font-semibold">Landlord Tenants</h1>
+        <h1 class="text-xl font-semibold text-zinc-900">Tenant Directory</h1>
     </x-slot>
 
+    @php
+        $totalTenants = $tenants->count();
+        $activeTenants = $tenants->filter(fn (array $row): bool => (string) ($row['tenant_status'] ?? '') === 'active')->count();
+        $attentionTenants = $tenants->filter(fn (array $row): bool => in_array((string) ($row['status'] ?? ''), ['attention_needed', 'shopify_connection_pending', 'users_pending', 'access_profile_missing'], true))->count();
+        $connectedShopifyTenants = $tenants->filter(fn (array $row): bool => (int) ($row['connected_shopify_stores_count'] ?? 0) > 0)->count();
+    @endphp
+
     <div class="space-y-6">
-        <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                    <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Landlord</div>
-                    <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">Tenant Directory</div>
-                    <p class="mt-2 text-sm text-emerald-50/70">
-                        Read-only tenant index. Status and readiness values are derived from existing access, user, Shopify, and health data.
-                    </p>
+        @if (session('status'))
+            <section class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                {{ session('status') }}
+            </section>
+        @endif
+
+        @if ($errors->any())
+            <section class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                <p class="font-semibold">We could not save one or more changes.</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-xs">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
+
+        <section class="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+            <article class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Landlord</p>
+                        <h2 class="mt-2 text-3xl font-semibold text-zinc-950">Tenant Workspace Directory</h2>
+                        <p class="mt-2 max-w-2xl text-sm text-zinc-600">
+                            Open any tenant to manage role, module access, applications, customers, activity, and performance from one clean workspace.
+                        </p>
+                    </div>
+                    <a href="{{ route('landlord.dashboard') }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                        Back to dashboard
+                    </a>
                 </div>
-                <a
-                    href="{{ route('landlord.dashboard') }}"
-                    class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90"
-                >
-                    Back to Dashboard
-                </a>
+
+                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Total tenants</p>
+                        <p class="mt-1 text-2xl font-semibold text-zinc-900">{{ number_format($totalTenants) }}</p>
+                    </article>
+                    <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Active</p>
+                        <p class="mt-1 text-2xl font-semibold text-zinc-900">{{ number_format($activeTenants) }}</p>
+                    </article>
+                    <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Connected Shopify</p>
+                        <p class="mt-1 text-2xl font-semibold text-zinc-900">{{ number_format($connectedShopifyTenants) }}</p>
+                    </article>
+                    <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Needs attention</p>
+                        <p class="mt-1 text-2xl font-semibold text-zinc-900">{{ number_format($attentionTenants) }}</p>
+                    </article>
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <h3 class="text-base font-semibold text-zinc-900">Create tenant</h3>
+                <p class="mt-1 text-sm text-zinc-600">Short flow with only essential fields. Advanced options stay collapsed.</p>
+
+                <form method="POST" action="{{ route('landlord.tenants.store') }}" class="mt-4 space-y-3">
+                    @csrf
+                    <label class="block text-sm text-zinc-700">
+                        Name
+                        <input type="text" name="name" value="{{ old('name') }}" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                    </label>
+                    <label class="block text-sm text-zinc-700">
+                        Primary contact email
+                        <input type="email" name="primary_contact_email" value="{{ old('primary_contact_email') }}" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                    </label>
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <label class="block text-sm text-zinc-700">
+                            Tenant type
+                            <select name="tenant_type" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                                @foreach ($tenantTypeOptions as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('tenant_type', $defaultTenantType) === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="block text-sm text-zinc-700">
+                            Role
+                            <select name="role" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                                @foreach ($tenantRoleOptions as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('role', $defaultTenantRole) === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="block text-sm text-zinc-700">
+                            Status
+                            <select name="status" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                                @foreach ($tenantStatusOptions as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('status', $defaultTenantStatus) === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </div>
+
+                    <details class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                        <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Advanced settings</summary>
+                        <label class="mt-3 block text-sm text-zinc-700">
+                            Slug (optional)
+                            <input type="text" name="slug" value="{{ old('slug') }}" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" placeholder="example-tenant">
+                        </label>
+                    </details>
+
+                    <div class="flex justify-end">
+                        <button type="submit" class="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Create tenant</button>
+                    </div>
+                </form>
+            </article>
+        </section>
+
+        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-base font-semibold text-zinc-900">Tenants</h3>
+                    <p class="mt-1 text-sm text-zinc-600">Open a tenant to manage modules, role, type, applications, customers, activity, and performance.</p>
+                </div>
             </div>
 
-            <div class="mt-4 rounded-2xl border border-emerald-200/10 bg-black/20 p-4">
-                <p class="text-xs uppercase tracking-[0.12em] text-emerald-100/60">Tenant Operations Selector</p>
-                <p class="mt-1 text-xs text-emerald-50/70">
-                    Select tenant context explicitly before opening guarded landlord operations.
-                </p>
-                <form method="POST" action="{{ route('landlord.tenants.select') }}" class="mt-3 flex flex-wrap items-center gap-2">
-                    @csrf
-                    <select
-                        name="tenant"
-                        class="min-w-[18rem] rounded-lg border border-emerald-200/20 bg-[#0b1411] px-3 py-2 text-sm text-emerald-50"
-                    >
-                        @foreach ($tenants as $row)
-                            <option value="{{ $row['id'] }}">
-                                {{ $row['name'] }} ({{ $row['slug'] }})
-                            </option>
-                        @endforeach
-                    </select>
-                    <button
-                        type="submit"
-                        class="inline-flex items-center rounded-lg border border-emerald-300/40 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-50"
-                    >
-                        Open Tenant Operations
-                    </button>
-                </form>
-                @error('tenant')
-                    <p class="mt-2 text-xs text-rose-300">{{ $message }}</p>
-                @enderror
+            <div class="mt-4 overflow-hidden rounded-2xl border border-zinc-200">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[980px] divide-y divide-zinc-200 text-sm">
+                        <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-500">
+                            <tr>
+                                <th class="px-4 py-3">Tenant</th>
+                                <th class="px-4 py-3">Type</th>
+                                <th class="px-4 py-3">Role</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Users</th>
+                                <th class="px-4 py-3 text-right">Connected stores</th>
+                                <th class="px-4 py-3">Health</th>
+                                <th class="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100 text-zinc-700">
+                            @forelse ($tenants as $row)
+                                @php
+                                    $tenantStatus = (string) ($row['tenant_status'] ?? 'inactive');
+                                    $tenantStatusClasses = match ($tenantStatus) {
+                                        'active' => 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                                        'suspended' => 'border-amber-300 bg-amber-50 text-amber-800',
+                                        default => 'border-zinc-300 bg-zinc-50 text-zinc-700',
+                                    };
+
+                                    $healthStatus = (string) ($row['status'] ?? 'healthy');
+                                    $healthLabel = (string) ($row['status_label'] ?? Str::headline($healthStatus));
+                                @endphp
+                                <tr>
+                                    <td class="px-4 py-3 align-top">
+                                        <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id']]) }}" class="font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">
+                                            {{ $row['name'] }}
+                                        </a>
+                                        <div class="mt-1 text-xs text-zinc-500">{{ $row['subdomain'] }}</div>
+                                        @if (! empty($row['primary_contact_email']))
+                                            <div class="mt-1 font-mono text-xs text-zinc-500">{{ $row['primary_contact_email'] }}</div>
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3 align-top">{{ $row['tenant_type_label'] }}</td>
+                                    <td class="px-4 py-3 align-top">{{ $row['tenant_role_label'] }}</td>
+                                    <td class="px-4 py-3 align-top">
+                                        <span class="rounded-full border px-2 py-1 text-[11px] font-semibold {{ $tenantStatusClasses }}">{{ $row['tenant_status_label'] }}</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right align-top font-semibold text-zinc-900">{{ number_format((int) $row['user_count']) }}</td>
+                                    <td class="px-4 py-3 text-right align-top font-semibold text-zinc-900">{{ number_format((int) $row['connected_shopify_stores_count']) }}</td>
+                                    <td class="px-4 py-3 align-top text-xs">
+                                        <div class="font-semibold text-zinc-900">{{ $healthLabel }}</div>
+                                        <div class="mt-1 text-zinc-500">Open issues: {{ number_format((int) $row['open_integration_health_events_count']) }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 align-top">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id'], 'tab' => 'overview']) }}" class="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100">Workspace</a>
+                                            <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id'], 'tab' => 'applications']) }}" class="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100">Applications</a>
+                                            <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id'], 'tab' => 'activity']) }}" class="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100">Activity</a>
+                                            <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id'], 'tab' => 'performance']) }}" class="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100">Performance</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-zinc-500">No tenants yet. Create the first tenant from the panel above.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
-        <section class="overflow-hidden rounded-3xl border border-emerald-200/10 bg-[#101513]/80">
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[1100px] divide-y divide-emerald-200/10 text-sm">
-                    <thead class="bg-white/5 text-left text-xs uppercase tracking-[0.12em] text-emerald-100/60">
-                        <tr>
-                            <th class="px-4 py-3">Tenant</th>
-                            <th class="px-4 py-3">Slug / Subdomain</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Created</th>
-                            <th class="px-4 py-3 text-right">Users</th>
-                            <th class="px-4 py-3 text-right">Connected Shopify Stores</th>
-                            <th class="px-4 py-3">Primary Store Domain</th>
-                            <th class="px-4 py-3">Health / Readiness</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-emerald-200/10">
-                        @forelse ($tenants as $row)
-                            <tr class="align-top text-emerald-50/85">
-                                <td class="px-4 py-3">
-                                    <a
-                                        href="{{ route('landlord.tenants.show', ['tenant' => $row['id']]) }}"
-                                        class="font-semibold text-white hover:text-emerald-200"
-                                    >
-                                        {{ $row['name'] }}
-                                    </a>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <div class="font-mono text-xs text-emerald-100/90">{{ $row['slug'] }}</div>
-                                    <div class="mt-1 text-xs text-emerald-50/60">{{ $row['subdomain'] }}</div>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <div class="font-semibold text-white">{{ $row['status_label'] }}</div>
-                                    <div class="mt-1 text-xs text-emerald-50/60">{{ $row['status'] }}</div>
-                                </td>
-                                <td class="px-4 py-3 text-emerald-50/70">{{ $row['created_at'] ?? 'n/a' }}</td>
-                                <td class="px-4 py-3 text-right font-semibold text-white">{{ number_format((int) $row['user_count']) }}</td>
-                                <td class="px-4 py-3 text-right font-semibold text-white">{{ number_format((int) $row['connected_shopify_stores_count']) }}</td>
-                                <td class="px-4 py-3">
-                                    @if ($row['primary_shopify_domain'])
-                                        <div class="font-mono text-xs text-emerald-100/90">{{ $row['primary_shopify_domain'] }}</div>
-                                        <div class="mt-1 text-xs text-emerald-50/60">key: {{ $row['primary_store_key'] ?? 'n/a' }}</div>
-                                    @else
-                                        <span class="text-emerald-50/60">n/a</span>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-xs text-emerald-50/70">
-                                    <div>Users: {{ $row['health']['has_users'] ? 'yes' : 'no' }}</div>
-                                    <div>Shopify connected: {{ $row['health']['has_connected_shopify_store'] ? 'yes' : 'no' }}</div>
-                                    <div>Access profile: {{ $row['health']['has_access_profile'] ? 'yes' : 'no' }}</div>
-                                    <div>Open integration issues: {{ (int) $row['health']['open_integration_health_events'] }}</div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="8" class="px-4 py-5 text-sm text-emerald-50/65">
-                                    No tenants found.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h3 class="text-base font-semibold text-zinc-900">Advanced</h3>
+            <p class="mt-1 text-sm text-zinc-600">Legacy operational tooling remains available, but is intentionally secondary.</p>
+
+            <details class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <summary class="cursor-pointer text-sm font-semibold text-zinc-900">Open legacy tenant operations context</summary>
+                <form method="POST" action="{{ route('landlord.tenants.select') }}" class="mt-4 flex flex-wrap items-center gap-2">
+                    @csrf
+                    <select name="tenant" class="min-w-[18rem] rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" @disabled($tenants->isEmpty())>
+                        @foreach ($tenants as $row)
+                            <option value="{{ $row['id'] }}">{{ $row['name'] }} ({{ $row['slug'] }})</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100" @disabled($tenants->isEmpty())>
+                        Open legacy operations
+                    </button>
+                </form>
+            </details>
         </section>
     </div>
 </x-app-layout>

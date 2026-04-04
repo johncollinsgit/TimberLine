@@ -138,8 +138,22 @@ if ($landlordHost !== '') {
                 ->name('commercial.templates.reorder');
             Route::get('/landlord/tenants', [LandlordTenantDirectoryController::class, 'index'])
                 ->name('tenants.index');
+            Route::post('/landlord/tenants', [LandlordTenantDirectoryController::class, 'store'])
+                ->name('tenants.store');
+            Route::match(['put', 'patch'], '/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'update'])
+                ->name('tenants.update');
+            Route::delete('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'destroy'])
+                ->name('tenants.destroy');
             Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
                 ->name('tenants.show');
+            Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])
+                ->name('tenants.role.update');
+            Route::post('/landlord/tenants/{tenant}/type', [LandlordTenantDirectoryController::class, 'updateType'])
+                ->name('tenants.type.update');
+            Route::post('/landlord/tenants/{tenant}/modules', [LandlordTenantDirectoryController::class, 'updateModules'])
+                ->name('tenants.modules.update');
+            Route::post('/landlord/tenants/{tenant}/users/remove', [LandlordTenantDirectoryController::class, 'removeUser'])
+                ->name('tenants.users.remove');
             Route::post('/landlord/tenants/select', [LandlordTenantOperationsController::class, 'selectTenant'])
                 ->name('tenants.select');
             Route::post('/landlord/tenants/{tenant}/operations/export', [LandlordTenantOperationsController::class, 'export'])
