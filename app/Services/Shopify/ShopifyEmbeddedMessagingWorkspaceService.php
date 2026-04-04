@@ -35,6 +35,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
         'yotpo_contacts_import',
         'square_marketing_import',
         'square_customer_sync',
+        'legacy_import_reconciliation',
+        'growave_marketing_reconciliation_sync',
     ];
 
     /**

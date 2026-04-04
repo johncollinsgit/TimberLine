@@ -584,6 +584,22 @@ test('modern forestry legacy auto group summaries count unique sendable imported
         'accepts_sms_marketing' => false,
         'accepts_email_marketing' => false,
     ]);
+    $legacySmsReconciled = shopifyMessagingProfile($tenant->id, [
+        'email' => null,
+        'normalized_email' => null,
+        'phone' => '5557771008',
+        'normalized_phone' => '5557771008',
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacyEmailReconciled = shopifyMessagingProfile($tenant->id, [
+        'email' => 'legacy-email-reconciled@example.com',
+        'normalized_email' => 'legacy-email-reconciled@example.com',
+        'phone' => null,
+        'normalized_phone' => null,
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
     shopifyMessagingProfile($tenant->id, [
         'email' => 'canonical-only@example.com',
         'normalized_email' => 'canonical-only@example.com',
@@ -667,6 +683,24 @@ test('modern forestry legacy auto group summaries count unique sendable imported
     ]);
     MarketingConsentEvent::query()->create([
         'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySmsReconciled->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'legacy_import_reconciliation',
+        'source_id' => 'legacy-reconciled-sms',
+        'occurred_at' => now()->subMonths(2),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyEmailReconciled->id,
+        'channel' => 'email',
+        'event_type' => 'imported',
+        'source_type' => 'growave_marketing_reconciliation_sync',
+        'source_id' => 'legacy-reconciled-email',
+        'occurred_at' => now()->subMonths(2),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
         'marketing_profile_id' => $legacySmsOptedOut->id,
         'channel' => 'sms',
         'event_type' => 'imported',
@@ -688,14 +722,14 @@ test('modern forestry legacy auto group summaries count unique sendable imported
         ->getJson(route('shopify.app.api.messaging.audience.summary'))
         ->assertOk()
         ->assertJsonPath('ok', true)
-        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.sms', 2)
+        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.sms', 3)
         ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.email', 0)
-        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.unique', 2)
+        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.unique', 3)
         ->assertJsonPath('data.group_summaries.legacy_email_subscribed.sms', 0)
-        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.email', 2)
-        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.unique', 2)
-        ->assertJsonPath('data.diagnostics.legacy_sms_subscribed.resolved_sendable_count', 2)
-        ->assertJsonPath('data.diagnostics.legacy_email_subscribed.resolved_sendable_count', 2);
+        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.email', 3)
+        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.unique', 3)
+        ->assertJsonPath('data.diagnostics.legacy_sms_subscribed.resolved_sendable_count', 3)
+        ->assertJsonPath('data.diagnostics.legacy_email_subscribed.resolved_sendable_count', 3);
 });
 
 test('individual sms send uses twilio path and records delivery metadata', function () {
