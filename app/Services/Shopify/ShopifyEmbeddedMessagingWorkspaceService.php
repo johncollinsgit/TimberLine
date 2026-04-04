@@ -8,6 +8,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
 use App\Models\MarketingProfile;
+use App\Models\Tenant;
 use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,6 +21,13 @@ use Illuminate\Validation\ValidationException;
 class ShopifyEmbeddedMessagingWorkspaceService
 {
     public const AUTO_GROUP_ALL_SUBSCRIBED = 'all_subscribed';
+    public const AUTO_GROUP_LEGACY_SMS_SUBSCRIBED = 'legacy_sms_subscribed';
+    public const AUTO_GROUP_LEGACY_EMAIL_SUBSCRIBED = 'legacy_email_subscribed';
+
+    protected const MODERN_FORESTRY_SLUG = 'modern-forestry';
+    protected const AUDIENCE_SCOPE_EFFECTIVE = 'effective';
+    protected const AUDIENCE_SCOPE_LEGACY_IMPORTED = 'legacy_imported';
+
     /**
      * @var array<int,string>
      */
@@ -33,6 +41,11 @@ class ShopifyEmbeddedMessagingWorkspaceService
      * @var array<string,array<string,mixed>>
      */
     protected array $channelAudienceCache = [];
+
+    /**
+     * @var array<int,bool>
+     */
+    protected array $modernForestryTenantCache = [];
 
     public function __construct(
         protected ShopifyEmbeddedCustomersGridService $customersGridService,
@@ -115,14 +128,31 @@ class ShopifyEmbeddedMessagingWorkspaceService
             ->values()
             ->all();
 
-        $summary = $includeAutoCounts ? $this->allSubscribedSummary($tenantId) : null;
-        $autoGroups = [[
-            'type' => 'auto',
-            'key' => self::AUTO_GROUP_ALL_SUBSCRIBED,
-            'name' => 'All Subscribed',
-            'description' => 'Customers with active consent and reachable contact info for SMS and/or email.',
-            'counts' => $summary,
-        ]];
+        $groupSummaries = $includeAutoCounts ? $this->autoGroupSummaries($tenantId) : [];
+        $autoGroups = $this->autoGroupDefinitions($tenantId)
+            ->map(function (array $definition) use ($includeAutoCounts, $groupSummaries): array {
+                $key = (string) ($definition['key'] ?? '');
+                $channels = array_values(array_filter(
+                    array_map(
+                        static fn ($channel): string => strtolower(trim((string) $channel)),
+                        (array) ($definition['channels'] ?? [])
+                    ),
+                    static fn (string $channel): bool => in_array($channel, ['sms', 'email'], true)
+                ));
+
+                return [
+                    'type' => 'auto',
+                    'key' => $key,
+                    'name' => (string) ($definition['name'] ?? 'Automatic Audience'),
+                    'description' => (string) ($definition['description'] ?? ''),
+                    'channels' => $channels,
+                    'counts' => $includeAutoCounts
+                        ? (array) ($groupSummaries[$key] ?? ['sms' => 0, 'email' => 0, 'overlap' => 0, 'unique' => 0])
+                        : null,
+                ];
+            })
+            ->values()
+            ->all();
 
         return [
             'saved' => $savedGroups,
@@ -133,48 +163,94 @@ class ShopifyEmbeddedMessagingWorkspaceService
     /**
      * @return array{
      *   summary:array{sms:int,email:int,overlap:int,unique:int},
+     *   group_summaries:array<string,array{sms:int,email:int,overlap:int,unique:int}>,
      *   diagnostics:array<string,mixed>
      * }
      */
     public function audienceSummary(?int $tenantId): array
     {
-        $sms = $this->resolvedChannelAudience($tenantId, 'sms', includeRecipients: false);
-        $email = $this->resolvedChannelAudience($tenantId, 'email', includeRecipients: false);
+        $sms = $this->resolvedChannelAudience(
+            $tenantId,
+            'sms',
+            includeRecipients: false,
+            scope: self::AUDIENCE_SCOPE_EFFECTIVE
+        );
+        $email = $this->resolvedChannelAudience(
+            $tenantId,
+            'email',
+            includeRecipients: false,
+            scope: self::AUDIENCE_SCOPE_EFFECTIVE
+        );
 
-        $smsIds = collect((array) ($sms['profile_ids'] ?? []))
-            ->map(fn ($id): int => (int) $id)
-            ->filter(fn (int $id): bool => $id > 0)
-            ->unique()
-            ->values();
-        $emailIds = collect((array) ($email['profile_ids'] ?? []))
-            ->map(fn ($id): int => (int) $id)
-            ->filter(fn (int $id): bool => $id > 0)
-            ->unique()
-            ->values();
+        $smsIds = $this->normalizedAudienceProfileIds($sms);
+        $emailIds = $this->normalizedAudienceProfileIds($email);
+        $summary = $this->audienceSummaryFromIds($smsIds, $emailIds);
+        $groupSummaries = [
+            self::AUTO_GROUP_ALL_SUBSCRIBED => $summary,
+        ];
+        $diagnostics = [
+            'sms' => [
+                'displayed_audience_count' => $smsIds->count(),
+                'query_candidate_count' => (int) ($sms['candidate_count'] ?? 0),
+                'effective_consent_count' => (int) ($sms['effective_consent_count'] ?? 0),
+                'resolved_sendable_count' => (int) ($sms['resolved_sendable_count'] ?? 0),
+            ],
+            'email' => [
+                'displayed_audience_count' => $emailIds->count(),
+                'query_candidate_count' => (int) ($email['candidate_count'] ?? 0),
+                'effective_consent_count' => (int) ($email['effective_consent_count'] ?? 0),
+                'resolved_sendable_count' => (int) ($email['resolved_sendable_count'] ?? 0),
+            ],
+        ];
 
-        $overlap = $smsIds->intersect($emailIds)->count();
+        if ($this->isModernForestryTenant($tenantId)) {
+            $legacySms = $this->resolvedChannelAudience(
+                $tenantId,
+                'sms',
+                includeRecipients: false,
+                scope: self::AUDIENCE_SCOPE_LEGACY_IMPORTED
+            );
+            $legacyEmail = $this->resolvedChannelAudience(
+                $tenantId,
+                'email',
+                includeRecipients: false,
+                scope: self::AUDIENCE_SCOPE_LEGACY_IMPORTED
+            );
+
+            $legacySmsIds = $this->normalizedAudienceProfileIds($legacySms);
+            $legacyEmailIds = $this->normalizedAudienceProfileIds($legacyEmail);
+
+            $groupSummaries[self::AUTO_GROUP_LEGACY_SMS_SUBSCRIBED] = [
+                'sms' => $legacySmsIds->count(),
+                'email' => 0,
+                'overlap' => 0,
+                'unique' => $legacySmsIds->count(),
+            ];
+            $groupSummaries[self::AUTO_GROUP_LEGACY_EMAIL_SUBSCRIBED] = [
+                'sms' => 0,
+                'email' => $legacyEmailIds->count(),
+                'overlap' => 0,
+                'unique' => $legacyEmailIds->count(),
+            ];
+
+            $diagnostics[self::AUTO_GROUP_LEGACY_SMS_SUBSCRIBED] = [
+                'displayed_audience_count' => $legacySmsIds->count(),
+                'query_candidate_count' => (int) ($legacySms['candidate_count'] ?? 0),
+                'effective_consent_count' => (int) ($legacySms['effective_consent_count'] ?? 0),
+                'resolved_sendable_count' => (int) ($legacySms['resolved_sendable_count'] ?? 0),
+            ];
+            $diagnostics[self::AUTO_GROUP_LEGACY_EMAIL_SUBSCRIBED] = [
+                'displayed_audience_count' => $legacyEmailIds->count(),
+                'query_candidate_count' => (int) ($legacyEmail['candidate_count'] ?? 0),
+                'effective_consent_count' => (int) ($legacyEmail['effective_consent_count'] ?? 0),
+                'resolved_sendable_count' => (int) ($legacyEmail['resolved_sendable_count'] ?? 0),
+            ];
+        }
 
         return [
-            'summary' => [
-                'sms' => $smsIds->count(),
-                'email' => $emailIds->count(),
-                'overlap' => $overlap,
-                'unique' => $smsIds->merge($emailIds)->unique()->count(),
-            ],
-            'diagnostics' => [
-                'sms' => [
-                    'displayed_audience_count' => $smsIds->count(),
-                    'query_candidate_count' => (int) ($sms['candidate_count'] ?? 0),
-                    'effective_consent_count' => (int) ($sms['effective_consent_count'] ?? 0),
-                    'resolved_sendable_count' => (int) ($sms['resolved_sendable_count'] ?? 0),
-                ],
-                'email' => [
-                    'displayed_audience_count' => $emailIds->count(),
-                    'query_candidate_count' => (int) ($email['candidate_count'] ?? 0),
-                    'effective_consent_count' => (int) ($email['effective_consent_count'] ?? 0),
-                    'resolved_sendable_count' => (int) ($email['resolved_sendable_count'] ?? 0),
-                ],
-            ],
+            'summary' => $summary,
+            'group_summaries' => $groupSummaries,
+            'diagnostics' => $diagnostics,
         ];
     }
 
@@ -453,6 +529,83 @@ class ShopifyEmbeddedMessagingWorkspaceService
     }
 
     /**
+     * @return array<string,array{sms:int,email:int,overlap:int,unique:int}>
+     */
+    protected function autoGroupSummaries(?int $tenantId): array
+    {
+        $summary = $this->audienceSummary($tenantId);
+        $groupSummaries = (array) ($summary['group_summaries'] ?? []);
+        $resolved = [];
+
+        foreach ($groupSummaries as $groupKey => $groupSummary) {
+            $resolved[(string) $groupKey] = [
+                'sms' => (int) data_get($groupSummary, 'sms', 0),
+                'email' => (int) data_get($groupSummary, 'email', 0),
+                'overlap' => (int) data_get($groupSummary, 'overlap', 0),
+                'unique' => (int) data_get($groupSummary, 'unique', 0),
+            ];
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @return Collection<int,array{
+     *   key:string,
+     *   name:string,
+     *   description:string,
+     *   channels:array<int,string>,
+     *   channel:?string,
+     *   audience_scope:string
+     * }>
+     */
+    protected function autoGroupDefinitions(?int $tenantId): Collection
+    {
+        $definitions = collect([
+            [
+                'key' => self::AUTO_GROUP_ALL_SUBSCRIBED,
+                'name' => 'All Subscribed',
+                'description' => 'Customers with active consent and reachable contact info for SMS and/or email.',
+                'channels' => ['sms', 'email'],
+                'channel' => null,
+                'audience_scope' => self::AUDIENCE_SCOPE_EFFECTIVE,
+            ],
+        ]);
+
+        if ($this->isModernForestryTenant($tenantId)) {
+            $definitions->push([
+                'key' => self::AUTO_GROUP_LEGACY_SMS_SUBSCRIBED,
+                'name' => 'Legacy SMS Subscribed',
+                'description' => 'Modern Forestry imported legacy records with SMS consent history and sendable SMS contact info.',
+                'channels' => ['sms'],
+                'channel' => 'sms',
+                'audience_scope' => self::AUDIENCE_SCOPE_LEGACY_IMPORTED,
+            ]);
+            $definitions->push([
+                'key' => self::AUTO_GROUP_LEGACY_EMAIL_SUBSCRIBED,
+                'name' => 'Legacy Email Subscribed',
+                'description' => 'Modern Forestry imported legacy records with email consent history and sendable email contact info.',
+                'channels' => ['email'],
+                'channel' => 'email',
+                'audience_scope' => self::AUDIENCE_SCOPE_LEGACY_IMPORTED,
+            ]);
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function autoGroupDefinitionByKey(?int $tenantId, string $groupKey): ?array
+    {
+        $normalizedKey = strtolower(trim($groupKey));
+
+        return $this->autoGroupDefinitions($tenantId)
+            ->first(fn (array $definition): bool => strtolower(trim((string) ($definition['key'] ?? ''))) === $normalizedKey);
+    }
+
+    /**
      * @return array<int,array{
      *   channel:string,
      *   status:string,
@@ -587,20 +740,39 @@ class ShopifyEmbeddedMessagingWorkspaceService
         }
 
         $normalizedGroupKey = strtolower(trim((string) $groupKey));
-        if ($normalizedGroupKey !== self::AUTO_GROUP_ALL_SUBSCRIBED) {
+        $groupDefinition = $this->autoGroupDefinitionByKey($tenantId, $normalizedGroupKey);
+        if (! is_array($groupDefinition)) {
             throw ValidationException::withMessages([
                 'group_key' => 'Unsupported automatic group selection.',
             ]);
         }
 
-        $audience = $this->resolvedChannelAudience($tenantId, $channel, includeRecipients: true);
+        $lockedChannel = $this->nullableString($groupDefinition['channel'] ?? null);
+        if ($lockedChannel !== null && $lockedChannel !== $channel) {
+            throw ValidationException::withMessages([
+                'channel' => sprintf(
+                    '%s can only be sent through %s.',
+                    (string) ($groupDefinition['name'] ?? 'This automatic audience'),
+                    strtoupper($lockedChannel)
+                ),
+            ]);
+        }
+
+        $audienceScope = $this->normalizedAudienceScope((string) ($groupDefinition['audience_scope'] ?? self::AUDIENCE_SCOPE_EFFECTIVE));
+        $audienceChannel = $lockedChannel ?? $channel;
+        $audience = $this->resolvedChannelAudience(
+            $tenantId,
+            $audienceChannel,
+            includeRecipients: true,
+            scope: $audienceScope
+        );
 
         return [
             'source_label' => 'shopify_embedded_messaging_auto_group',
             'target' => [
                 'type' => 'auto',
-                'key' => self::AUTO_GROUP_ALL_SUBSCRIBED,
-                'name' => 'All Subscribed',
+                'key' => (string) ($groupDefinition['key'] ?? $normalizedGroupKey),
+                'name' => (string) ($groupDefinition['name'] ?? 'Automatic audience'),
             ],
             'recipients' => (array) ($audience['recipients'] ?? []),
             'force_send_profile_ids' => (array) ($audience['force_send_profile_ids'] ?? []),
@@ -619,12 +791,19 @@ class ShopifyEmbeddedMessagingWorkspaceService
      *   resolved_sendable_count:int
      * }
      */
-    protected function resolvedChannelAudience(?int $tenantId, string $channel, bool $includeRecipients): array
+    protected function resolvedChannelAudience(
+        ?int $tenantId,
+        string $channel,
+        bool $includeRecipients,
+        string $scope = self::AUDIENCE_SCOPE_EFFECTIVE
+    ): array
     {
         $channel = $this->normalizedChannel($channel);
+        $scope = $this->normalizedAudienceScope($scope);
         $cacheKey = implode(':', [
             (string) ($tenantId ?? 'null'),
             $channel,
+            $scope,
             $includeRecipients ? 'with_recipients' : 'summary_only',
         ]);
 
@@ -658,23 +837,18 @@ class ShopifyEmbeddedMessagingWorkspaceService
                 'accepts_sms_marketing',
                 'accepts_email_marketing',
             ])
-            ->where(function (Builder $builder) use ($consentColumn, $channel, $tenantId): void {
+            ->where(function (Builder $builder) use ($consentColumn, $channel, $tenantId, $scope): void {
+                if ($scope === self::AUDIENCE_SCOPE_LEGACY_IMPORTED) {
+                    $builder->whereExists(function ($exists) use ($channel, $tenantId): void {
+                        $this->applyLegacyConsentExistsConstraint($exists, $channel, $tenantId);
+                    });
+
+                    return;
+                }
+
                 $builder->where($consentColumn, true)
                     ->orWhereExists(function ($exists) use ($channel, $tenantId): void {
-                        $exists->selectRaw('1')
-                            ->from('marketing_consent_events as legacy_events')
-                            ->whereColumn('legacy_events.marketing_profile_id', 'marketing_profiles.id')
-                            ->where('legacy_events.channel', $channel)
-                            ->where('legacy_events.event_type', 'imported')
-                            ->whereIn('legacy_events.source_type', self::LEGACY_CONSENT_SOURCE_TYPES);
-
-                        if (Schema::hasColumn('marketing_consent_events', 'tenant_id')) {
-                            if ($tenantId === null) {
-                                $exists->whereNull('legacy_events.tenant_id');
-                            } else {
-                                $exists->where('legacy_events.tenant_id', $tenantId);
-                            }
-                        }
+                        $this->applyLegacyConsentExistsConstraint($exists, $channel, $tenantId);
                     });
             })
             ->where(function (Builder $builder) use ($channel): void {
@@ -702,6 +876,7 @@ class ShopifyEmbeddedMessagingWorkspaceService
                 $channel,
                 $tenantId,
                 $includeRecipients,
+                $scope,
                 &$profileIds,
                 &$forceSendProfileIds,
                 &$recipients,
@@ -732,8 +907,9 @@ class ShopifyEmbeddedMessagingWorkspaceService
                     $hasLegacyImport = (bool) ($signal['has_legacy_import'] ?? false);
                     $latestEventType = strtolower(trim((string) ($signal['latest_event_type'] ?? '')));
 
-                    $effectiveConsent = $canonicalConsent
-                        || ($hasLegacyImport && ! in_array($latestEventType, ['opted_out', 'revoked'], true));
+                    $effectiveConsent = $scope === self::AUDIENCE_SCOPE_LEGACY_IMPORTED
+                        ? ($hasLegacyImport && ! in_array($latestEventType, ['opted_out', 'revoked'], true))
+                        : ($canonicalConsent || ($hasLegacyImport && ! in_array($latestEventType, ['opted_out', 'revoked'], true)));
                     if (! $effectiveConsent) {
                         continue;
                     }
@@ -968,6 +1144,86 @@ class ShopifyEmbeddedMessagingWorkspaceService
         }
 
         return trim((string) ($profile->email ?: ($profile->phone ?: ('Customer #' . $profile->id))));
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+     */
+    protected function applyLegacyConsentExistsConstraint($query, string $channel, ?int $tenantId): void
+    {
+        $query->selectRaw('1')
+            ->from('marketing_consent_events as legacy_events')
+            ->whereColumn('legacy_events.marketing_profile_id', 'marketing_profiles.id')
+            ->where('legacy_events.channel', $channel)
+            ->where('legacy_events.event_type', 'imported')
+            ->whereIn('legacy_events.source_type', self::LEGACY_CONSENT_SOURCE_TYPES);
+
+        if (! Schema::hasColumn('marketing_consent_events', 'tenant_id')) {
+            return;
+        }
+
+        if ($tenantId === null) {
+            $query->whereNull('legacy_events.tenant_id');
+
+            return;
+        }
+
+        $query->where('legacy_events.tenant_id', $tenantId);
+    }
+
+    protected function normalizedAudienceScope(string $scope): string
+    {
+        $normalized = strtolower(trim($scope));
+
+        return in_array($normalized, [self::AUDIENCE_SCOPE_EFFECTIVE, self::AUDIENCE_SCOPE_LEGACY_IMPORTED], true)
+            ? $normalized
+            : self::AUDIENCE_SCOPE_EFFECTIVE;
+    }
+
+    /**
+     * @param  array<string,mixed>  $audience
+     * @return Collection<int,int>
+     */
+    protected function normalizedAudienceProfileIds(array $audience): Collection
+    {
+        return collect((array) ($audience['profile_ids'] ?? []))
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int,int>  $smsIds
+     * @param  Collection<int,int>  $emailIds
+     * @return array{sms:int,email:int,overlap:int,unique:int}
+     */
+    protected function audienceSummaryFromIds(Collection $smsIds, Collection $emailIds): array
+    {
+        $overlap = $smsIds->intersect($emailIds)->count();
+
+        return [
+            'sms' => $smsIds->count(),
+            'email' => $emailIds->count(),
+            'overlap' => $overlap,
+            'unique' => $smsIds->merge($emailIds)->unique()->count(),
+        ];
+    }
+
+    protected function isModernForestryTenant(?int $tenantId): bool
+    {
+        if ($tenantId === null || $tenantId <= 0) {
+            return false;
+        }
+
+        if (array_key_exists($tenantId, $this->modernForestryTenantCache)) {
+            return (bool) $this->modernForestryTenantCache[$tenantId];
+        }
+
+        $slug = strtolower(trim((string) Tenant::query()->whereKey($tenantId)->value('slug')));
+        $this->modernForestryTenantCache[$tenantId] = $slug === self::MODERN_FORESTRY_SLUG;
+
+        return (bool) $this->modernForestryTenantCache[$tenantId];
     }
 
     protected function normalizedChannel(string $channel): string

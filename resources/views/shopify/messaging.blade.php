@@ -688,6 +688,7 @@
                         ? initialData.groups
                         : { saved: [], auto: [] },
                     audienceSummary: { sms: 0, email: 0, overlap: 0, unique: 0 },
+                    groupSummaries: {},
                     audienceDiagnostics: {},
                     history: [],
                     historyLoaded: false,
@@ -915,20 +916,22 @@
 
                     const rows = [];
                     auto.forEach((group) => {
-                        if (String(group?.key || "") !== "all_subscribed") {
+                        const key = String(group?.key || "").trim();
+                        if (key === "") {
                             return;
                         }
+                        const summary = autoGroupSummaryForKey(key, group?.counts);
+                        const channels = normalizedChannels(group?.channels);
+                        const count = Number(summary.unique || 0);
+
                         rows.push({
                             type: "auto",
-                            key: "all_subscribed",
-                            name: String(group?.name || "All Subscribed"),
-                            description: String(group?.description || "Subscribed SMS and/or email recipients."),
-                            count: Number(state.audienceSummary.unique || 0),
-                            counts: {
-                                sms: Number(state.audienceSummary.sms || 0),
-                                email: Number(state.audienceSummary.email || 0),
-                                unique: Number(state.audienceSummary.unique || 0),
-                            },
+                            key,
+                            name: String(group?.name || "Automatic audience"),
+                            description: String(group?.description || ""),
+                            channels,
+                            count,
+                            counts: summary,
                         });
                     });
 
@@ -945,6 +948,36 @@
                     return rows
                         .filter((row) => row.type === "auto" || (Number(row.id || 0) > 0))
                         .sort((a, b) => Number(b.count || 0) - Number(a.count || 0));
+                }
+
+                function normalizedChannels(channels) {
+                    const unique = Array.from(new Set(
+                        (Array.isArray(channels) ? channels : ["sms", "email"])
+                            .map((channel) => String(channel || "").trim().toLowerCase())
+                            .filter((channel) => channel === "sms" || channel === "email")
+                    ));
+
+                    return unique.length > 0 ? unique : ["sms", "email"];
+                }
+
+                function autoGroupSummaryForKey(groupKey, fallback) {
+                    const key = String(groupKey || "").trim();
+                    const fallbackSummary = typeof fallback === "object" && fallback !== null
+                        ? fallback
+                        : {};
+                    const groupSummary = typeof state.groupSummaries?.[key] === "object" && state.groupSummaries[key] !== null
+                        ? state.groupSummaries[key]
+                        : {};
+                    const allSubscribed = key === "all_subscribed"
+                        ? state.audienceSummary
+                        : {};
+
+                    return {
+                        sms: Number(groupSummary.sms ?? fallbackSummary.sms ?? allSubscribed.sms ?? 0),
+                        email: Number(groupSummary.email ?? fallbackSummary.email ?? allSubscribed.email ?? 0),
+                        unique: Number(groupSummary.unique ?? fallbackSummary.unique ?? allSubscribed.unique ?? 0),
+                        overlap: Number(groupSummary.overlap ?? fallbackSummary.overlap ?? allSubscribed.overlap ?? 0),
+                    };
                 }
 
                 function renderAudiencePills() {
@@ -1016,10 +1049,11 @@
                             <span class="messages-muted">${active ? "Selected" : "Select"}</span>
                         `;
 
-                        button.addEventListener("click", async () => {
+                        button.addEventListener("click", () => {
                             if (active) {
                                 state.selectedTarget = null;
                                 resetGroupPreviewState();
+                                updateGroupChannelUi();
                                 renderAudienceList();
                                 renderSelectedTargetSummary();
                                 renderGroupEstimate();
@@ -1027,10 +1061,11 @@
                             }
 
                             state.selectedTarget = row.type === "auto"
-                                ? { type: "auto", key: row.key, name: row.name }
+                                ? { type: "auto", key: row.key, name: row.name, channels: row.channels }
                                 : { type: "saved", id: row.id, name: row.name, members_count: row.count };
 
                             resetGroupPreviewState();
+                            updateGroupChannelUi();
                             renderAudienceList();
                             renderSelectedTargetSummary();
                             renderGroupEstimate();
@@ -1075,9 +1110,13 @@
                     }
 
                     if (state.selectedTarget.type === "auto") {
+                        const summary = autoGroupSummaryForKey(
+                            state.selectedTarget.key,
+                            state.selectedTarget?.counts
+                        );
                         const estimated = state.groupChannel === "email"
-                            ? Number(state.audienceSummary.email || 0)
-                            : Number(state.audienceSummary.sms || 0);
+                            ? Number(summary.email || 0)
+                            : Number(summary.sms || 0);
                         sendEstimate.textContent = `Estimated recipients (${state.groupChannel.toUpperCase()}): ${estimated.toLocaleString()} before final preview resolution.`;
                         return;
                     }
@@ -1086,10 +1125,28 @@
                     sendEstimate.textContent = `Estimated recipients: ${estimate.toLocaleString()} members before channel filtering.`;
                 }
 
+                function selectedTargetChannels() {
+                    if (state.selectedTarget?.type !== "auto") {
+                        return ["sms", "email"];
+                    }
+
+                    return normalizedChannels(state.selectedTarget?.channels);
+                }
+
                 function updateGroupChannelUi() {
                     const buttons = Array.from(groupChannelToggle?.querySelectorAll("button[data-group-channel]") || []);
+                    const allowedChannels = selectedTargetChannels();
+
+                    if (!allowedChannels.includes(state.groupChannel)) {
+                        state.groupChannel = allowedChannels[0] || "sms";
+                    }
+
                     buttons.forEach((button) => {
-                        const active = String(button.dataset.groupChannel || "") === state.groupChannel;
+                        const channel = String(button.dataset.groupChannel || "").trim().toLowerCase();
+                        const allowed = allowedChannels.includes(channel);
+                        const active = channel === state.groupChannel;
+                        button.disabled = !allowed;
+                        button.setAttribute("aria-disabled", allowed ? "false" : "true");
                         button.setAttribute("aria-pressed", active ? "true" : "false");
                     });
 
@@ -1324,6 +1381,9 @@
                     state.audienceSummary = typeof data.all_subscribed_summary === "object" && data.all_subscribed_summary !== null
                         ? data.all_subscribed_summary
                         : { sms: 0, email: 0, overlap: 0, unique: 0 };
+                    state.groupSummaries = typeof data.group_summaries === "object" && data.group_summaries !== null
+                        ? data.group_summaries
+                        : {};
                     state.audienceDiagnostics = typeof data.diagnostics === "object" && data.diagnostics !== null
                         ? data.diagnostics
                         : {};

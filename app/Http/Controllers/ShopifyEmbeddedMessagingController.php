@@ -150,6 +150,7 @@ class ShopifyEmbeddedMessagingController extends Controller
             'ok' => true,
             'data' => [
                 'all_subscribed_summary' => (array) ($summary['summary'] ?? []),
+                'group_summaries' => (array) ($summary['group_summaries'] ?? []),
                 'diagnostics' => (array) ($summary['diagnostics'] ?? []),
             ],
         ]);

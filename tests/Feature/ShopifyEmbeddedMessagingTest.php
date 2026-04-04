@@ -469,6 +469,235 @@ test('all subscribed summary follows consent plus channel eligibility rules', fu
         ]);
 });
 
+test('legacy subscribed auto groups are only exposed for modern forestry tenant', function () {
+    $modernTenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+    $otherTenant = Tenant::query()->create([
+        'name' => 'Legacy Groups Hidden Tenant',
+        'slug' => 'legacy-groups-hidden-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($modernTenant);
+    shopifyMessagingGrantEntitlement($otherTenant);
+
+    configureEmbeddedRetailStore($modernTenant->id);
+
+    $modernResponse = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.groups'));
+
+    $modernResponse->assertOk()->assertJsonPath('ok', true);
+
+    $modernAutoKeys = collect((array) $modernResponse->json('data.auto'))
+        ->pluck('key')
+        ->map(fn ($value): string => (string) $value)
+        ->all();
+
+    expect($modernAutoKeys)
+        ->toContain('all_subscribed')
+        ->toContain('legacy_sms_subscribed')
+        ->toContain('legacy_email_subscribed');
+
+    configureEmbeddedRetailStore($otherTenant->id);
+
+    $otherResponse = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.groups'));
+
+    $otherResponse->assertOk()->assertJsonPath('ok', true);
+
+    $otherAutoKeys = collect((array) $otherResponse->json('data.auto'))
+        ->pluck('key')
+        ->map(fn ($value): string => (string) $value)
+        ->all();
+
+    expect($otherAutoKeys)
+        ->toContain('all_subscribed')
+        ->not->toContain('legacy_sms_subscribed')
+        ->not->toContain('legacy_email_subscribed');
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.preview.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'legacy_sms_subscribed',
+            'channel' => 'sms',
+            'body' => 'Legacy preview should be tenant scoped.',
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Preview could not be generated.')
+        ->assertJsonValidationErrors(['group_key']);
+});
+
+test('modern forestry legacy auto group summaries count unique sendable imported recipients per channel', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $legacySmsOnly = shopifyMessagingProfile($tenant->id, [
+        'email' => null,
+        'normalized_email' => null,
+        'phone' => '5557771001',
+        'normalized_phone' => '5557771001',
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacyEmailOnly = shopifyMessagingProfile($tenant->id, [
+        'email' => 'legacy-email-only@example.com',
+        'normalized_email' => 'legacy-email-only@example.com',
+        'phone' => null,
+        'normalized_phone' => null,
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacyBoth = shopifyMessagingProfile($tenant->id, [
+        'email' => 'legacy-both@example.com',
+        'normalized_email' => 'legacy-both@example.com',
+        'phone' => '5557771003',
+        'normalized_phone' => '5557771003',
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacySmsUnsendable = shopifyMessagingProfile($tenant->id, [
+        'email' => 'legacy-unsendable-sms@example.com',
+        'normalized_email' => 'legacy-unsendable-sms@example.com',
+        'phone' => null,
+        'normalized_phone' => null,
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacyEmailUnsendable = shopifyMessagingProfile($tenant->id, [
+        'email' => null,
+        'normalized_email' => null,
+        'phone' => '5557771005',
+        'normalized_phone' => '5557771005',
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    $legacySmsOptedOut = shopifyMessagingProfile($tenant->id, [
+        'email' => null,
+        'normalized_email' => null,
+        'phone' => '5557771006',
+        'normalized_phone' => '5557771006',
+        'accepts_sms_marketing' => false,
+        'accepts_email_marketing' => false,
+    ]);
+    shopifyMessagingProfile($tenant->id, [
+        'email' => 'canonical-only@example.com',
+        'normalized_email' => 'canonical-only@example.com',
+        'phone' => '5557771007',
+        'normalized_phone' => '5557771007',
+        'accepts_sms_marketing' => true,
+        'accepts_email_marketing' => true,
+    ]);
+
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySmsOnly->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_marketing_import',
+        'source_id' => 'legacy-sms-only-a',
+        'occurred_at' => now()->subMonths(5),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySmsOnly->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_marketing_import',
+        'source_id' => 'legacy-sms-only-b',
+        'occurred_at' => now()->subMonths(4),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyEmailOnly->id,
+        'channel' => 'email',
+        'event_type' => 'imported',
+        'source_type' => 'yotpo_contacts_import',
+        'source_id' => 'legacy-email-only-a',
+        'occurred_at' => now()->subMonths(4),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyEmailOnly->id,
+        'channel' => 'email',
+        'event_type' => 'imported',
+        'source_type' => 'yotpo_contacts_import',
+        'source_id' => 'legacy-email-only-b',
+        'occurred_at' => now()->subMonths(3),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyBoth->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_customer_sync',
+        'source_id' => 'legacy-both-sms',
+        'occurred_at' => now()->subMonths(3),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyBoth->id,
+        'channel' => 'email',
+        'event_type' => 'imported',
+        'source_type' => 'square_customer_sync',
+        'source_id' => 'legacy-both-email',
+        'occurred_at' => now()->subMonths(3),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySmsUnsendable->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_marketing_import',
+        'source_id' => 'legacy-unsendable-sms',
+        'occurred_at' => now()->subMonths(2),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacyEmailUnsendable->id,
+        'channel' => 'email',
+        'event_type' => 'imported',
+        'source_type' => 'yotpo_contacts_import',
+        'source_id' => 'legacy-unsendable-email',
+        'occurred_at' => now()->subMonths(2),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySmsOptedOut->id,
+        'channel' => 'sms',
+        'event_type' => 'imported',
+        'source_type' => 'square_marketing_import',
+        'source_id' => 'legacy-optout-import',
+        'occurred_at' => now()->subMonths(3),
+    ]);
+    MarketingConsentEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $legacySmsOptedOut->id,
+        'channel' => 'sms',
+        'event_type' => 'opted_out',
+        'source_type' => 'shopify_widget_optin',
+        'source_id' => 'legacy-optout-latest',
+        'occurred_at' => now()->subWeek(),
+    ]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.audience.summary'))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.sms', 2)
+        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.email', 0)
+        ->assertJsonPath('data.group_summaries.legacy_sms_subscribed.unique', 2)
+        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.sms', 0)
+        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.email', 2)
+        ->assertJsonPath('data.group_summaries.legacy_email_subscribed.unique', 2)
+        ->assertJsonPath('data.diagnostics.legacy_sms_subscribed.resolved_sendable_count', 2)
+        ->assertJsonPath('data.diagnostics.legacy_email_subscribed.resolved_sendable_count', 2);
+});
+
 test('individual sms send uses twilio path and records delivery metadata', function () {
     $tenant = Tenant::query()->create([
         'name' => 'SMS Send Tenant',
