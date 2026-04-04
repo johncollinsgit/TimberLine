@@ -13,9 +13,9 @@ return new class extends Migration
                 $table->id();
                 $table->unsignedBigInteger('tenant_id')->nullable()->index();
                 $table->string('store_key', 80)->nullable()->index();
-                $table->foreignId('marketing_email_delivery_id')->nullable()->constrained('marketing_email_deliveries')->nullOnDelete();
-                $table->foreignId('marketing_message_delivery_id')->nullable()->constrained('marketing_message_deliveries')->nullOnDelete();
-                $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
+                $table->foreignId('marketing_email_delivery_id')->nullable();
+                $table->foreignId('marketing_message_delivery_id')->nullable();
+                $table->foreignId('marketing_profile_id')->nullable();
                 $table->string('channel', 20)->index();
                 $table->string('event_type', 20)->index();
                 $table->string('event_hash', 64)->unique();
@@ -35,6 +35,18 @@ return new class extends Migration
                 $table->index(['tenant_id', 'store_key', 'event_type', 'occurred_at'], 'mm_engagement_tenant_store_type_time_idx');
                 $table->index(['tenant_id', 'marketing_profile_id', 'event_type', 'occurred_at'], 'mm_engagement_tenant_profile_type_time_idx');
                 $table->index(['tenant_id', 'marketing_email_delivery_id', 'event_type'], 'mm_engagement_tenant_email_type_idx');
+                $table->foreign('marketing_email_delivery_id', 'mm_eng_evt_email_delivery_fk')
+                    ->references('id')
+                    ->on('marketing_email_deliveries')
+                    ->nullOnDelete();
+                $table->foreign('marketing_message_delivery_id', 'mm_eng_evt_msg_delivery_fk')
+                    ->references('id')
+                    ->on('marketing_message_deliveries')
+                    ->nullOnDelete();
+                $table->foreign('marketing_profile_id', 'mm_eng_evt_profile_fk')
+                    ->references('id')
+                    ->on('marketing_profiles')
+                    ->nullOnDelete();
             });
 
             try {
@@ -54,10 +66,10 @@ return new class extends Migration
                 $table->id();
                 $table->unsignedBigInteger('tenant_id')->nullable()->index();
                 $table->string('store_key', 80)->nullable()->index();
-                $table->foreignId('order_id')->nullable()->constrained('orders')->nullOnDelete();
-                $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
-                $table->foreignId('marketing_email_delivery_id')->nullable()->constrained('marketing_email_deliveries')->nullOnDelete();
-                $table->foreignId('marketing_message_engagement_event_id')->nullable()->constrained('marketing_message_engagement_events')->nullOnDelete();
+                $table->foreignId('order_id')->nullable();
+                $table->foreignId('marketing_profile_id')->nullable();
+                $table->foreignId('marketing_email_delivery_id')->nullable();
+                $table->foreignId('marketing_message_engagement_event_id')->nullable();
                 $table->string('channel', 20)->nullable()->index();
                 $table->string('attribution_model', 40)->default('last_click')->index();
                 $table->unsignedSmallInteger('attribution_window_days')->default(7);
@@ -72,6 +84,22 @@ return new class extends Migration
                 $table->unique(['tenant_id', 'store_key', 'order_id', 'attribution_model'], 'mm_order_attribution_order_unique');
                 $table->index(['tenant_id', 'store_key', 'marketing_email_delivery_id'], 'mm_order_attribution_tenant_store_delivery_idx');
                 $table->index(['tenant_id', 'marketing_message_engagement_event_id'], 'mm_order_attribution_tenant_event_idx');
+                $table->foreign('order_id', 'mm_ord_attr_order_fk')
+                    ->references('id')
+                    ->on('orders')
+                    ->nullOnDelete();
+                $table->foreign('marketing_profile_id', 'mm_ord_attr_profile_fk')
+                    ->references('id')
+                    ->on('marketing_profiles')
+                    ->nullOnDelete();
+                $table->foreign('marketing_email_delivery_id', 'mm_ord_attr_email_delivery_fk')
+                    ->references('id')
+                    ->on('marketing_email_deliveries')
+                    ->nullOnDelete();
+                $table->foreign('marketing_message_engagement_event_id', 'mm_ord_attr_engagement_event_fk')
+                    ->references('id')
+                    ->on('marketing_message_engagement_events')
+                    ->nullOnDelete();
             });
 
             try {
