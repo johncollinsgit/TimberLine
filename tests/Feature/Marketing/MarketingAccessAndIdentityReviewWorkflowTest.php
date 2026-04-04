@@ -60,6 +60,29 @@ test('admin and marketing manager can access customers and identity review pages
             ->assertOk()
             ->assertSeeText('Review Match');
     }
+
+    $manager = User::factory()->create([
+        'role' => 'manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($manager)
+        ->get(route('marketing.customers'))
+        ->assertOk()
+        ->assertSeeText('Customers');
+
+    $this->actingAs($manager)
+        ->get(route('marketing.customers.show', $profile))
+        ->assertOk()
+        ->assertSeeText('Customer');
+
+    $this->actingAs($manager)
+        ->get(route('marketing.identity-review'))
+        ->assertForbidden();
+
+    $this->actingAs($manager)
+        ->get(route('marketing.identity-review.show', $review))
+        ->assertForbidden();
 });
 
 test('unauthorized roles cannot access marketing customers and identity review pages', function () {
@@ -73,16 +96,12 @@ test('unauthorized roles cannot access marketing customers and identity review p
         'source_id' => '2002',
     ]);
 
-    $manager = User::factory()->create([
-        'role' => 'manager',
-        'email_verified_at' => now(),
-    ]);
     $pouring = User::factory()->create([
         'role' => 'pouring',
         'email_verified_at' => now(),
     ]);
 
-    foreach ([$manager, $pouring] as $user) {
+    foreach ([$pouring] as $user) {
         $this->actingAs($user)
             ->get(route('marketing.customers'))
             ->assertForbidden();

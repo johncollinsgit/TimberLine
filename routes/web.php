@@ -2,13 +2,12 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
-use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GlobalSearchController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
-use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
 use App\Http\Controllers\Marketing\MarketingCampaignsController;
@@ -27,6 +26,7 @@ use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
+use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\PlatformProductPagesController;
@@ -329,13 +329,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Marketing
-    Route::middleware(['role:admin,marketing_manager'])
+    Route::middleware(['role:admin,marketing_manager,manager'])
         ->prefix('marketing')
         ->name('marketing.')
         ->group(function () {
-            Route::get('/', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'overview')
-                ->name('overview');
             Route::middleware(['tenant.access'])->group(function (): void {
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
@@ -354,168 +351,173 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/cancel', [MarketingCustomersController::class, 'cancelCandleCashRedemption'])
                     ->name('customers.candle-cash.redemptions.cancel');
             });
-            Route::get('/messages', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'messages')
-                ->name('messages');
-            Route::get('/messages/send', [MarketingMessagesController::class, 'send'])->name('messages.send');
-            Route::get('/messages/deliveries', [MarketingMessagesController::class, 'deliveries'])->name('messages.deliveries');
-            Route::get('/messages/search-customers', [MarketingMessagesController::class, 'searchCustomers'])->name('messages.search-customers');
-            Route::post('/messages/save-audience', [MarketingMessagesController::class, 'saveAudience'])->name('messages.save-audience');
-            Route::post('/messages/save-message', [MarketingMessagesController::class, 'saveMessage'])->name('messages.save-message');
-            Route::post('/messages/set-step', [MarketingMessagesController::class, 'setStep'])->name('messages.set-step');
-            Route::post('/messages/send-test', [MarketingMessagesController::class, 'sendTest'])->name('messages.send-test');
-            Route::post('/messages/execute', [MarketingMessagesController::class, 'executeSend'])->name('messages.execute');
-            Route::post('/messages/reset', [MarketingMessagesController::class, 'resetWizard'])->name('messages.reset');
-            Route::get('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'show'])->name('send.all-opted-in');
-            Route::post('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'submit'])->name('send.all-opted-in.submit');
-            Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
-            Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
-            Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');
-            Route::post('/identity-review/{review}/resolve-new', [MarketingIdentityReviewController::class, 'resolveNew'])->name('identity-review.resolve-new');
-            Route::post('/identity-review/{review}/ignore', [MarketingIdentityReviewController::class, 'ignore'])->name('identity-review.ignore');
-            Route::get('/orders', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'orders')
-                ->name('orders');
-            Route::get('/groups', [MarketingGroupsController::class, 'index'])->name('groups');
-            Route::get('/groups/create', [MarketingGroupsController::class, 'create'])->name('groups.create');
-            Route::post('/groups', [MarketingGroupsController::class, 'store'])->name('groups.store');
-            Route::get('/groups/{group}', [MarketingGroupsController::class, 'show'])->name('groups.show');
-            Route::get('/groups/{group}/edit', [MarketingGroupsController::class, 'edit'])->name('groups.edit');
-            Route::patch('/groups/{group}', [MarketingGroupsController::class, 'update'])->name('groups.update');
-            Route::post('/groups/{group}/members', [MarketingGroupsController::class, 'addMember'])->name('groups.members.add');
-            Route::delete('/groups/{group}/members/{marketingProfile}', [MarketingGroupsController::class, 'removeMember'])->name('groups.members.remove');
-            Route::post('/groups/{group}/import-csv', [MarketingGroupsController::class, 'importCsv'])->name('groups.import-csv');
-            Route::get('/groups/{group}/send', [MarketingGroupsController::class, 'sendForm'])->name('groups.send');
-            Route::post('/groups/{group}/send', [MarketingGroupsController::class, 'send'])->name('groups.send.execute');
-            Route::get('/segments', [MarketingSegmentsController::class, 'index'])->name('segments');
-            Route::get('/segments/create', [MarketingSegmentsController::class, 'create'])->name('segments.create');
-            Route::post('/segments', [MarketingSegmentsController::class, 'store'])->name('segments.store');
-            Route::get('/segments/{segment}/edit', [MarketingSegmentsController::class, 'edit'])->name('segments.edit');
-            Route::patch('/segments/{segment}', [MarketingSegmentsController::class, 'update'])->name('segments.update');
-            Route::get('/segments/{segment}/preview', [MarketingSegmentsController::class, 'preview'])->name('segments.preview');
-            Route::post('/segments/{segment}/duplicate', [MarketingSegmentsController::class, 'duplicate'])->name('segments.duplicate');
-            Route::post('/segments/{segment}/archive', [MarketingSegmentsController::class, 'archive'])->name('segments.archive');
+            Route::middleware(['role:admin,marketing_manager'])->group(function (): void {
+                Route::get('/', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'overview')
+                    ->name('overview');
+                Route::get('/messages', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'messages')
+                    ->name('messages');
+                Route::get('/messages/send', [MarketingMessagesController::class, 'send'])->name('messages.send');
+                Route::get('/messages/deliveries', [MarketingMessagesController::class, 'deliveries'])->name('messages.deliveries');
+                Route::get('/messages/search-customers', [MarketingMessagesController::class, 'searchCustomers'])->name('messages.search-customers');
+                Route::post('/messages/save-audience', [MarketingMessagesController::class, 'saveAudience'])->name('messages.save-audience');
+                Route::post('/messages/save-message', [MarketingMessagesController::class, 'saveMessage'])->name('messages.save-message');
+                Route::post('/messages/set-step', [MarketingMessagesController::class, 'setStep'])->name('messages.set-step');
+                Route::post('/messages/send-test', [MarketingMessagesController::class, 'sendTest'])->name('messages.send-test');
+                Route::post('/messages/execute', [MarketingMessagesController::class, 'executeSend'])->name('messages.execute');
+                Route::post('/messages/reset', [MarketingMessagesController::class, 'resetWizard'])->name('messages.reset');
+                Route::get('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'show'])->name('send.all-opted-in');
+                Route::post('/send/all-opted-in', [MarketingAllOptedInSendController::class, 'submit'])->name('send.all-opted-in.submit');
+                Route::get('/identity-review', [MarketingIdentityReviewController::class, 'index'])->name('identity-review');
+                Route::get('/identity-review/{review}', [MarketingIdentityReviewController::class, 'show'])->name('identity-review.show');
+                Route::post('/identity-review/{review}/resolve-existing', [MarketingIdentityReviewController::class, 'resolveExisting'])->name('identity-review.resolve-existing');
+                Route::post('/identity-review/{review}/resolve-new', [MarketingIdentityReviewController::class, 'resolveNew'])->name('identity-review.resolve-new');
+                Route::post('/identity-review/{review}/ignore', [MarketingIdentityReviewController::class, 'ignore'])->name('identity-review.ignore');
+                Route::get('/orders', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'orders')
+                    ->name('orders');
+                Route::get('/groups', [MarketingGroupsController::class, 'index'])->name('groups');
+                Route::get('/groups/create', [MarketingGroupsController::class, 'create'])->name('groups.create');
+                Route::post('/groups', [MarketingGroupsController::class, 'store'])->name('groups.store');
+                Route::get('/groups/{group}', [MarketingGroupsController::class, 'show'])->name('groups.show');
+                Route::get('/groups/{group}/edit', [MarketingGroupsController::class, 'edit'])->name('groups.edit');
+                Route::patch('/groups/{group}', [MarketingGroupsController::class, 'update'])->name('groups.update');
+                Route::post('/groups/{group}/members', [MarketingGroupsController::class, 'addMember'])->name('groups.members.add');
+                Route::delete('/groups/{group}/members/{marketingProfile}', [MarketingGroupsController::class, 'removeMember'])->name('groups.members.remove');
+                Route::post('/groups/{group}/import-csv', [MarketingGroupsController::class, 'importCsv'])->name('groups.import-csv');
+                Route::get('/groups/{group}/send', [MarketingGroupsController::class, 'sendForm'])->name('groups.send');
+                Route::post('/groups/{group}/send', [MarketingGroupsController::class, 'send'])->name('groups.send.execute');
+                Route::get('/segments', [MarketingSegmentsController::class, 'index'])->name('segments');
+                Route::get('/segments/create', [MarketingSegmentsController::class, 'create'])->name('segments.create');
+                Route::post('/segments', [MarketingSegmentsController::class, 'store'])->name('segments.store');
+                Route::get('/segments/{segment}/edit', [MarketingSegmentsController::class, 'edit'])->name('segments.edit');
+                Route::patch('/segments/{segment}', [MarketingSegmentsController::class, 'update'])->name('segments.update');
+                Route::get('/segments/{segment}/preview', [MarketingSegmentsController::class, 'preview'])->name('segments.preview');
+                Route::post('/segments/{segment}/duplicate', [MarketingSegmentsController::class, 'duplicate'])->name('segments.duplicate');
+                Route::post('/segments/{segment}/archive', [MarketingSegmentsController::class, 'archive'])->name('segments.archive');
 
-            Route::get('/campaigns', [MarketingCampaignsController::class, 'index'])->name('campaigns');
-            Route::get('/campaigns/create', [MarketingCampaignsController::class, 'create'])->name('campaigns.create');
-            Route::post('/campaigns', [MarketingCampaignsController::class, 'store'])->name('campaigns.store');
-            Route::get('/campaigns/{campaign}', [MarketingCampaignsController::class, 'show'])->name('campaigns.show');
-            Route::get('/campaigns/{campaign}/edit', [MarketingCampaignsController::class, 'edit'])->name('campaigns.edit');
-            Route::patch('/campaigns/{campaign}', [MarketingCampaignsController::class, 'update'])->name('campaigns.update');
-            Route::post('/campaigns/{campaign}/prepare-recipients', [MarketingCampaignsController::class, 'prepareRecipients'])->name('campaigns.prepare-recipients');
-            Route::post('/campaigns/{campaign}/variants', [MarketingCampaignsController::class, 'addVariant'])->name('campaigns.variants.store');
-            Route::patch('/campaigns/{campaign}/variants/{variant}', [MarketingCampaignsController::class, 'updateVariant'])->name('campaigns.variants.update');
-            Route::post('/campaigns/{campaign}/recipients/{recipient}/approve', [MarketingCampaignsController::class, 'approveRecipient'])->name('campaigns.recipients.approve');
-            Route::post('/campaigns/{campaign}/recipients/{recipient}/reject', [MarketingCampaignsController::class, 'rejectRecipient'])->name('campaigns.recipients.reject');
-            Route::post('/campaigns/{campaign}/send-approved-sms', [MarketingCampaignsController::class, 'sendApprovedSms'])->name('campaigns.send-approved-sms');
-            Route::post('/campaigns/{campaign}/send-selected-sms', [MarketingCampaignsController::class, 'sendSelectedSms'])->name('campaigns.send-selected-sms');
-            Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-sms', [MarketingCampaignsController::class, 'retryRecipientSms'])->name('campaigns.recipients.retry-sms');
-            Route::post('/campaigns/{campaign}/send-approved-email', [MarketingCampaignsController::class, 'sendApprovedEmail'])->name('campaigns.send-approved-email');
-            Route::post('/campaigns/{campaign}/send-selected-email', [MarketingCampaignsController::class, 'sendSelectedEmail'])->name('campaigns.send-selected-email');
-            Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-email', [MarketingCampaignsController::class, 'retryRecipientEmail'])->name('campaigns.recipients.retry-email');
-            Route::post('/campaigns/{campaign}/send-smoke-test-email', [MarketingCampaignsController::class, 'sendSmokeTestEmail'])->name('campaigns.send-smoke-test-email');
-            Route::post('/campaigns/{campaign}/recommendations/generate', [MarketingCampaignsController::class, 'generateRecommendations'])->name('campaigns.recommendations.generate');
-            Route::post('/campaigns/{campaign}/add-profile', [MarketingCampaignsController::class, 'addProfileRecipient'])->name('campaigns.add-profile');
+                Route::get('/campaigns', [MarketingCampaignsController::class, 'index'])->name('campaigns');
+                Route::get('/campaigns/create', [MarketingCampaignsController::class, 'create'])->name('campaigns.create');
+                Route::post('/campaigns', [MarketingCampaignsController::class, 'store'])->name('campaigns.store');
+                Route::get('/campaigns/{campaign}', [MarketingCampaignsController::class, 'show'])->name('campaigns.show');
+                Route::get('/campaigns/{campaign}/edit', [MarketingCampaignsController::class, 'edit'])->name('campaigns.edit');
+                Route::patch('/campaigns/{campaign}', [MarketingCampaignsController::class, 'update'])->name('campaigns.update');
+                Route::post('/campaigns/{campaign}/prepare-recipients', [MarketingCampaignsController::class, 'prepareRecipients'])->name('campaigns.prepare-recipients');
+                Route::post('/campaigns/{campaign}/variants', [MarketingCampaignsController::class, 'addVariant'])->name('campaigns.variants.store');
+                Route::patch('/campaigns/{campaign}/variants/{variant}', [MarketingCampaignsController::class, 'updateVariant'])->name('campaigns.variants.update');
+                Route::post('/campaigns/{campaign}/recipients/{recipient}/approve', [MarketingCampaignsController::class, 'approveRecipient'])->name('campaigns.recipients.approve');
+                Route::post('/campaigns/{campaign}/recipients/{recipient}/reject', [MarketingCampaignsController::class, 'rejectRecipient'])->name('campaigns.recipients.reject');
+                Route::post('/campaigns/{campaign}/send-approved-sms', [MarketingCampaignsController::class, 'sendApprovedSms'])->name('campaigns.send-approved-sms');
+                Route::post('/campaigns/{campaign}/send-selected-sms', [MarketingCampaignsController::class, 'sendSelectedSms'])->name('campaigns.send-selected-sms');
+                Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-sms', [MarketingCampaignsController::class, 'retryRecipientSms'])->name('campaigns.recipients.retry-sms');
+                Route::post('/campaigns/{campaign}/send-approved-email', [MarketingCampaignsController::class, 'sendApprovedEmail'])->name('campaigns.send-approved-email');
+                Route::post('/campaigns/{campaign}/send-selected-email', [MarketingCampaignsController::class, 'sendSelectedEmail'])->name('campaigns.send-selected-email');
+                Route::post('/campaigns/{campaign}/recipients/{recipient}/retry-email', [MarketingCampaignsController::class, 'retryRecipientEmail'])->name('campaigns.recipients.retry-email');
+                Route::post('/campaigns/{campaign}/send-smoke-test-email', [MarketingCampaignsController::class, 'sendSmokeTestEmail'])->name('campaigns.send-smoke-test-email');
+                Route::post('/campaigns/{campaign}/recommendations/generate', [MarketingCampaignsController::class, 'generateRecommendations'])->name('campaigns.recommendations.generate');
+                Route::post('/campaigns/{campaign}/add-profile', [MarketingCampaignsController::class, 'addProfileRecipient'])->name('campaigns.add-profile');
 
-            Route::get('/automations', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'automations')
-                ->name('automations');
-            Route::get('/message-templates', [MarketingMessageTemplatesController::class, 'index'])->name('message-templates');
-            Route::get('/message-templates/create', [MarketingMessageTemplatesController::class, 'create'])->name('message-templates.create');
-            Route::post('/message-templates', [MarketingMessageTemplatesController::class, 'store'])->name('message-templates.store');
-            Route::get('/message-templates/{template}/edit', [MarketingMessageTemplatesController::class, 'edit'])->name('message-templates.edit');
-            Route::patch('/message-templates/{template}', [MarketingMessageTemplatesController::class, 'update'])->name('message-templates.update');
-            Route::get('/message-templates/{template}/preview', [MarketingMessageTemplatesController::class, 'preview'])->name('message-templates.preview');
+                Route::get('/automations', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'automations')
+                    ->name('automations');
+                Route::get('/message-templates', [MarketingMessageTemplatesController::class, 'index'])->name('message-templates');
+                Route::get('/message-templates/create', [MarketingMessageTemplatesController::class, 'create'])->name('message-templates.create');
+                Route::post('/message-templates', [MarketingMessageTemplatesController::class, 'store'])->name('message-templates.store');
+                Route::get('/message-templates/{template}/edit', [MarketingMessageTemplatesController::class, 'edit'])->name('message-templates.edit');
+                Route::patch('/message-templates/{template}', [MarketingMessageTemplatesController::class, 'update'])->name('message-templates.update');
+                Route::get('/message-templates/{template}/preview', [MarketingMessageTemplatesController::class, 'preview'])->name('message-templates.preview');
 
-            Route::get('/recommendations', [MarketingRecommendationsController::class, 'index'])->name('recommendations');
-            Route::post('/recommendations/generate-global', [MarketingRecommendationsController::class, 'generateGlobal'])->name('recommendations.generate-global');
-            Route::post('/recommendations/profile/{profile}', [MarketingRecommendationsController::class, 'createForProfile'])->name('recommendations.create-for-profile');
-            Route::post('/recommendations/{recommendation}/approve', [MarketingRecommendationsController::class, 'approve'])->name('recommendations.approve');
-            Route::post('/recommendations/{recommendation}/reject', [MarketingRecommendationsController::class, 'reject'])->name('recommendations.reject');
-            Route::post('/recommendations/{recommendation}/dismiss', [MarketingRecommendationsController::class, 'dismiss'])->name('recommendations.dismiss');
-            Route::get('/candle-cash', [CandleCashPagesController::class, 'dashboard'])->name('candle-cash');
-            Route::prefix('candle-cash')
-                ->name('candle-cash.')
-                ->group(function () {
-                    Route::get('/tasks', [CandleCashPagesController::class, 'tasks'])->name('tasks');
-                    Route::post('/tasks', [CandleCashPagesController::class, 'storeTask'])->name('tasks.store');
-                    Route::patch('/tasks/{task}', [CandleCashPagesController::class, 'updateTask'])->name('tasks.update');
-                    Route::post('/tasks/{task}/toggle', [CandleCashPagesController::class, 'toggleTask'])->name('tasks.toggle');
-                    Route::post('/tasks/{task}/archive', [CandleCashPagesController::class, 'archiveTask'])->name('tasks.archive');
-                    Route::get('/redeem', [CandleCashPagesController::class, 'redeem'])->name('redeem');
-                    Route::patch('/redeem/{reward}', [CandleCashPagesController::class, 'updateReward'])->name('redeem.update');
-                    Route::get('/queue', [CandleCashPagesController::class, 'queue'])->name('queue');
-                    Route::post('/queue/{completion}/approve', [CandleCashPagesController::class, 'approveCompletion'])->name('queue.approve');
-                    Route::post('/queue/{completion}/reject', [CandleCashPagesController::class, 'rejectCompletion'])->name('queue.reject');
-                    Route::get('/reviews', [CandleCashPagesController::class, 'reviews'])->name('reviews');
-                    Route::post('/reviews/{review}/approve', [CandleCashPagesController::class, 'approveReview'])->name('reviews.approve');
-                    Route::post('/reviews/{review}/reject', [CandleCashPagesController::class, 'rejectReview'])->name('reviews.reject');
-                    Route::post('/reviews/{review}/response', [CandleCashPagesController::class, 'respondToReview'])->name('reviews.response');
-                    Route::post('/reviews/{review}/update', [CandleCashPagesController::class, 'updateReview'])->name('reviews.update');
-                    Route::post('/reviews/{review}/delete', [CandleCashPagesController::class, 'deleteReview'])->name('reviews.delete');
-                    Route::post('/reviews/{review}/resend-notification', [CandleCashPagesController::class, 'resendReviewNotification'])->name('reviews.resend-notification');
-                    Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');
-                    Route::post('/customers/{marketingProfile}/adjust', [CandleCashPagesController::class, 'adjustCustomer'])->name('customers.adjust');
-                    Route::get('/gifts-report', [CandleCashPagesController::class, 'giftsReport'])->name('gifts-report');
-                    Route::get('/referrals', [CandleCashPagesController::class, 'referrals'])->name('referrals');
-                    Route::post('/referrals/{referral}/reprocess', [CandleCashPagesController::class, 'reprocessReferral'])->name('referrals.reprocess');
-                    Route::get('/settings', [CandleCashPagesController::class, 'settings'])->name('settings');
-                    Route::post('/settings', [CandleCashPagesController::class, 'saveSettings'])->name('settings.save');
-                    Route::get('/google-business/connect', [GoogleBusinessProfileController::class, 'connect'])->name('google-business.connect');
-                    Route::get('/google-business/status', [GoogleBusinessProfileController::class, 'status'])->name('google-business.status');
-                    Route::post('/google-business/disconnect', [GoogleBusinessProfileController::class, 'disconnect'])->name('google-business.disconnect');
-                    Route::post('/google-business/sync', [GoogleBusinessProfileController::class, 'sync'])->name('google-business.sync');
-                    Route::post('/google-business/select-location', [GoogleBusinessProfileController::class, 'selectLocation'])->name('google-business.select-location');
+                Route::get('/recommendations', [MarketingRecommendationsController::class, 'index'])->name('recommendations');
+                Route::post('/recommendations/generate-global', [MarketingRecommendationsController::class, 'generateGlobal'])->name('recommendations.generate-global');
+                Route::post('/recommendations/profile/{profile}', [MarketingRecommendationsController::class, 'createForProfile'])->name('recommendations.create-for-profile');
+                Route::post('/recommendations/{recommendation}/approve', [MarketingRecommendationsController::class, 'approve'])->name('recommendations.approve');
+                Route::post('/recommendations/{recommendation}/reject', [MarketingRecommendationsController::class, 'reject'])->name('recommendations.reject');
+                Route::post('/recommendations/{recommendation}/dismiss', [MarketingRecommendationsController::class, 'dismiss'])->name('recommendations.dismiss');
+                Route::get('/candle-cash', [CandleCashPagesController::class, 'dashboard'])->name('candle-cash');
+                Route::prefix('candle-cash')
+                    ->name('candle-cash.')
+                    ->group(function () {
+                        Route::get('/tasks', [CandleCashPagesController::class, 'tasks'])->name('tasks');
+                        Route::post('/tasks', [CandleCashPagesController::class, 'storeTask'])->name('tasks.store');
+                        Route::patch('/tasks/{task}', [CandleCashPagesController::class, 'updateTask'])->name('tasks.update');
+                        Route::post('/tasks/{task}/toggle', [CandleCashPagesController::class, 'toggleTask'])->name('tasks.toggle');
+                        Route::post('/tasks/{task}/archive', [CandleCashPagesController::class, 'archiveTask'])->name('tasks.archive');
+                        Route::get('/redeem', [CandleCashPagesController::class, 'redeem'])->name('redeem');
+                        Route::patch('/redeem/{reward}', [CandleCashPagesController::class, 'updateReward'])->name('redeem.update');
+                        Route::get('/queue', [CandleCashPagesController::class, 'queue'])->name('queue');
+                        Route::post('/queue/{completion}/approve', [CandleCashPagesController::class, 'approveCompletion'])->name('queue.approve');
+                        Route::post('/queue/{completion}/reject', [CandleCashPagesController::class, 'rejectCompletion'])->name('queue.reject');
+                        Route::get('/reviews', [CandleCashPagesController::class, 'reviews'])->name('reviews');
+                        Route::post('/reviews/{review}/approve', [CandleCashPagesController::class, 'approveReview'])->name('reviews.approve');
+                        Route::post('/reviews/{review}/reject', [CandleCashPagesController::class, 'rejectReview'])->name('reviews.reject');
+                        Route::post('/reviews/{review}/response', [CandleCashPagesController::class, 'respondToReview'])->name('reviews.response');
+                        Route::post('/reviews/{review}/update', [CandleCashPagesController::class, 'updateReview'])->name('reviews.update');
+                        Route::post('/reviews/{review}/delete', [CandleCashPagesController::class, 'deleteReview'])->name('reviews.delete');
+                        Route::post('/reviews/{review}/resend-notification', [CandleCashPagesController::class, 'resendReviewNotification'])->name('reviews.resend-notification');
+                        Route::get('/customers', [CandleCashPagesController::class, 'customers'])->name('customers');
+                        Route::post('/customers/{marketingProfile}/adjust', [CandleCashPagesController::class, 'adjustCustomer'])->name('customers.adjust');
+                        Route::get('/gifts-report', [CandleCashPagesController::class, 'giftsReport'])->name('gifts-report');
+                        Route::get('/referrals', [CandleCashPagesController::class, 'referrals'])->name('referrals');
+                        Route::post('/referrals/{referral}/reprocess', [CandleCashPagesController::class, 'reprocessReferral'])->name('referrals.reprocess');
+                        Route::get('/settings', [CandleCashPagesController::class, 'settings'])->name('settings');
+                        Route::post('/settings', [CandleCashPagesController::class, 'saveSettings'])->name('settings.save');
+                        Route::get('/google-business/connect', [GoogleBusinessProfileController::class, 'connect'])->name('google-business.connect');
+                        Route::get('/google-business/status', [GoogleBusinessProfileController::class, 'status'])->name('google-business.status');
+                        Route::post('/google-business/disconnect', [GoogleBusinessProfileController::class, 'disconnect'])->name('google-business.disconnect');
+                        Route::post('/google-business/sync', [GoogleBusinessProfileController::class, 'sync'])->name('google-business.sync');
+                        Route::post('/google-business/select-location', [GoogleBusinessProfileController::class, 'selectLocation'])->name('google-business.select-location');
+                    });
+                Route::middleware(['tenant.access'])->group(function (): void {
+                    Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
+                        ->name('operations.reconciliation');
+                    Route::post('/operations/reconciliation/issues/{event}/resolve', [MarketingOperationsController::class, 'resolveIssue'])
+                        ->name('operations.reconciliation.issues.resolve');
+                    Route::post('/operations/reconciliation/retry', [MarketingOperationsController::class, 'retryReconciliation'])
+                        ->name('operations.reconciliation.retry');
+                    Route::post('/operations/reconciliation/redemptions/{redemption}/mark-redeemed', [MarketingOperationsController::class, 'markRedemptionRedeemed'])
+                        ->name('operations.reconciliation.redemptions.mark-redeemed');
+                    Route::get('/operations/storefront/redemption-debug', [MarketingOperationsController::class, 'storefrontRedemptionDebug'])
+                        ->name('operations.storefront-redemption-debug');
                 });
-            Route::middleware(['tenant.access'])->group(function (): void {
-                Route::get('/operations/reconciliation', [MarketingOperationsController::class, 'reconciliation'])
-                    ->name('operations.reconciliation');
-                Route::post('/operations/reconciliation/issues/{event}/resolve', [MarketingOperationsController::class, 'resolveIssue'])
-                    ->name('operations.reconciliation.issues.resolve');
-                Route::post('/operations/reconciliation/retry', [MarketingOperationsController::class, 'retryReconciliation'])
-                    ->name('operations.reconciliation.retry');
-                Route::post('/operations/reconciliation/redemptions/{redemption}/mark-redeemed', [MarketingOperationsController::class, 'markRedemptionRedeemed'])
-                    ->name('operations.reconciliation.redemptions.mark-redeemed');
-                Route::get('/operations/storefront/redemption-debug', [MarketingOperationsController::class, 'storefrontRedemptionDebug'])
-                    ->name('operations.storefront-redemption-debug');
+                Route::get('/reviews', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'reviews')
+                    ->name('reviews');
+                Route::middleware(['tenant.access'])->group(function (): void {
+                    Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
+                    Route::post('/modules/{moduleKey}/activate', [MarketingModuleStoreController::class, 'activate'])->name('modules.activate');
+                    Route::post('/modules/{moduleKey}/request', [MarketingModuleStoreController::class, 'requestAccess'])->name('modules.request');
+                });
+                Route::get('/wishlist', [MarketingWishlistController::class, 'index'])->name('wishlist');
+                Route::post('/wishlist/items/{item}/prepare-outreach', [MarketingWishlistController::class, 'prepareOutreach'])->name('wishlist.prepare-outreach');
+                Route::post('/wishlist/queue/{queue}/send', [MarketingWishlistController::class, 'sendOutreach'])->name('wishlist.send-outreach');
+                Route::get('/settings', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'settings')
+                    ->name('settings');
+                Route::post('/settings', [MarketingPagesController::class, 'saveSettings'])
+                    ->name('settings.save');
+                Route::middleware(['tenant.access'])->group(function (): void {
+                    Route::get('/providers-integrations', [MarketingProvidersIntegrationsController::class, 'index'])
+                        ->name('providers-integrations');
+                    Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
+                        ->name('providers-integrations.shopify-customer-sync-health');
+                    Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
+                        ->name('providers-integrations.sync-square');
+                    Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
+                        ->name('providers-integrations.import-legacy');
+                    Route::get('/providers-integrations/event-mappings/create', [MarketingProvidersIntegrationsController::class, 'createMapping'])
+                        ->name('providers-integrations.mappings.create');
+                    Route::post('/providers-integrations/event-mappings', [MarketingProvidersIntegrationsController::class, 'storeMapping'])
+                        ->name('providers-integrations.mappings.store');
+                    Route::get('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'editMapping'])
+                        ->name('providers-integrations.mappings.edit');
+                    Route::patch('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'updateMapping'])
+                        ->name('providers-integrations.mappings.update');
+                });
+                Route::get('/suppression-consent', [MarketingPagesController::class, 'show'])
+                    ->defaults('section', 'suppression-consent')
+                    ->name('suppression-consent');
             });
-            Route::get('/reviews', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'reviews')
-                ->name('reviews');
-            Route::middleware(['tenant.access'])->group(function (): void {
-                Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
-                Route::post('/modules/{moduleKey}/activate', [MarketingModuleStoreController::class, 'activate'])->name('modules.activate');
-                Route::post('/modules/{moduleKey}/request', [MarketingModuleStoreController::class, 'requestAccess'])->name('modules.request');
-            });
-            Route::get('/wishlist', [MarketingWishlistController::class, 'index'])->name('wishlist');
-            Route::post('/wishlist/items/{item}/prepare-outreach', [MarketingWishlistController::class, 'prepareOutreach'])->name('wishlist.prepare-outreach');
-            Route::post('/wishlist/queue/{queue}/send', [MarketingWishlistController::class, 'sendOutreach'])->name('wishlist.send-outreach');
-            Route::get('/settings', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'settings')
-                ->name('settings');
-            Route::post('/settings', [MarketingPagesController::class, 'saveSettings'])
-                ->name('settings.save');
-            Route::middleware(['tenant.access'])->group(function (): void {
-                Route::get('/providers-integrations', [MarketingProvidersIntegrationsController::class, 'index'])
-                    ->name('providers-integrations');
-                Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
-                    ->name('providers-integrations.shopify-customer-sync-health');
-                Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
-                    ->name('providers-integrations.sync-square');
-                Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
-                    ->name('providers-integrations.import-legacy');
-                Route::get('/providers-integrations/event-mappings/create', [MarketingProvidersIntegrationsController::class, 'createMapping'])
-                    ->name('providers-integrations.mappings.create');
-                Route::post('/providers-integrations/event-mappings', [MarketingProvidersIntegrationsController::class, 'storeMapping'])
-                    ->name('providers-integrations.mappings.store');
-                Route::get('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'editMapping'])
-                    ->name('providers-integrations.mappings.edit');
-                Route::patch('/providers-integrations/event-mappings/{mapping}', [MarketingProvidersIntegrationsController::class, 'updateMapping'])
-                    ->name('providers-integrations.mappings.update');
-            });
-            Route::get('/suppression-consent', [MarketingPagesController::class, 'show'])
-                ->defaults('section', 'suppression-consent')
-                ->name('suppression-consent');
         });
 
     Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
