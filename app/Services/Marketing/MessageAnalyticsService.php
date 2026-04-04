@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingDeliveryEvent;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
@@ -18,8 +19,7 @@ class MessageAnalyticsService
 {
     public function __construct(
         protected MessageLinkAggregationService $messageLinkAggregationService
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string,mixed>  $input
@@ -89,6 +89,7 @@ class MessageAnalyticsService
                 'summary' => $this->emptySummary(),
                 'messages' => $emptyPaginator,
                 'chart' => $this->emptyChart((array) $filters),
+                'history_outcomes' => $this->emptyHistoryOutcomes(),
                 'diagnostics' => [
                     'reason' => 'tenant_or_store_missing',
                 ],
@@ -130,6 +131,7 @@ class MessageAnalyticsService
             'summary' => $this->summaryFromRows($sortedRows),
             'messages' => $paginator,
             'chart' => $this->chartFromDataset($dataset, $filters),
+            'history_outcomes' => $this->historyOutcomes($tenantId, $normalizedStoreKey, $dataset, $filters),
             'diagnostics' => [
                 'total_rows' => $rows->count(),
                 'filtered_rows' => $sortedRows->count(),
@@ -221,31 +223,20 @@ class MessageAnalyticsService
             'orders' => [],
         ];
 
-        if ($channel !== 'email') {
-            $detail['delivered'] = $deliveries->filter(function ($row): bool {
-                $status = strtolower(trim((string) ($row->send_status ?? '')));
-
-                return $row->delivered_at !== null || $status === 'delivered';
-            })->count();
-            $detail['opens'] = 0;
-            $detail['unique_opens'] = 0;
-            $detail['clicks'] = 0;
-            $detail['unique_clicks'] = 0;
-            $detail['attributed_orders'] = 0;
-            $detail['attributed_revenue_cents'] = 0;
-
-            return $detail;
-        }
-
         $engagementEvents = Schema::hasTable('marketing_message_engagement_events')
             ? MarketingMessageEngagementEvent::query()
                 ->forTenantId($tenantId)
                 ->where('store_key', $normalizedStoreKey)
-                ->whereIn('marketing_email_delivery_id', $deliveryIds->all())
                 ->whereIn('event_type', ['open', 'click'])
+                ->when($channel === 'email', function (Builder $query) use ($deliveryIds): void {
+                    $query->whereIn('marketing_email_delivery_id', $deliveryIds->all());
+                }, function (Builder $query) use ($deliveryIds): void {
+                    $query->whereIn('marketing_message_delivery_id', $deliveryIds->all());
+                })
                 ->get([
                     'id',
                     'marketing_email_delivery_id',
+                    'marketing_message_delivery_id',
                     'marketing_profile_id',
                     'event_type',
                     'link_label',
@@ -255,9 +246,26 @@ class MessageAnalyticsService
                 ])
             : collect();
 
-        $openEvents = $engagementEvents->where('event_type', 'open')->values();
-        $clickEvents = $engagementEvents->where('event_type', 'click')->values();
+        $openEvents = $engagementEvents
+            ->filter(function (MarketingMessageEngagementEvent $row): bool {
+                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'open') {
+                    return false;
+                }
 
+                return strtolower(trim((string) ($row->channel ?? ''))) === 'email'
+                    || (int) ($row->marketing_email_delivery_id ?? 0) > 0;
+            })
+            ->values();
+        $clickEvents = $engagementEvents
+            ->filter(function (MarketingMessageEngagementEvent $row): bool {
+                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'click') {
+                    return false;
+                }
+
+                return strtolower(trim((string) ($row->channel ?? ''))) === 'email'
+                    || (int) ($row->marketing_email_delivery_id ?? 0) > 0;
+            })
+            ->values();
         $openTimeline = $openEvents
             ->groupBy(fn ($row): string => optional($row->occurred_at)->format('Y-m-d') ?: 'unknown')
             ->map(fn (Collection $group, string $date): array => [
@@ -268,7 +276,7 @@ class MessageAnalyticsService
             ->values()
             ->all();
 
-        if ($openTimeline === []) {
+        if ($openTimeline === [] && $channel === 'email') {
             $openTimeline = $deliveries
                 ->filter(fn ($row): bool => $row->opened_at !== null)
                 ->groupBy(fn ($row): string => optional($row->opened_at)->format('Y-m-d') ?: 'unknown')
@@ -281,7 +289,7 @@ class MessageAnalyticsService
                 ->all();
         }
 
-        $orderAttributions = Schema::hasTable('marketing_message_order_attributions')
+        $orderAttributions = $channel === 'email' && Schema::hasTable('marketing_message_order_attributions')
             ? MarketingMessageOrderAttribution::query()
                 ->forTenantId($tenantId)
                 ->where('store_key', $normalizedStoreKey)
@@ -327,17 +335,25 @@ class MessageAnalyticsService
             ->values()
             ->all();
 
-        $detail['delivered'] = $deliveries->filter(function ($row): bool {
-            $status = strtolower(trim((string) ($row->status ?? '')));
+        $detail['delivered'] = $deliveries->filter(function ($row) use ($channel): bool {
+            if ($channel === 'email') {
+                $status = strtolower(trim((string) ($row->status ?? '')));
 
-            return $row->delivered_at !== null || in_array($status, ['delivered', 'opened', 'clicked'], true);
+                return $row->delivered_at !== null || in_array($status, ['delivered', 'opened', 'clicked'], true);
+            }
+
+            $status = strtolower(trim((string) ($row->send_status ?? '')));
+
+            return $row->delivered_at !== null || $status === 'delivered';
         })->count();
 
         $openCount = $openEvents->count();
         $clickCount = $clickEvents->count();
         $detail['opens'] = $openCount > 0
             ? $openCount
-            : $deliveries->filter(fn ($row): bool => $row->opened_at !== null)->count();
+            : ($channel === 'email'
+                ? $deliveries->filter(fn ($row): bool => $row->opened_at !== null)->count()
+                : 0);
         $detail['unique_opens'] = $openCount > 0
             ? $openEvents
                 ->pluck('marketing_profile_id')
@@ -345,16 +361,20 @@ class MessageAnalyticsService
                 ->filter(fn (int $value): bool => $value > 0)
                 ->unique()
                 ->count()
-            : $deliveries
-                ->filter(fn ($row): bool => $row->opened_at !== null)
-                ->pluck('marketing_profile_id')
-                ->map(fn ($value): int => (int) $value)
-                ->filter(fn (int $value): bool => $value > 0)
-                ->unique()
-                ->count();
+            : ($channel === 'email'
+                ? $deliveries
+                    ->filter(fn ($row): bool => $row->opened_at !== null)
+                    ->pluck('marketing_profile_id')
+                    ->map(fn ($value): int => (int) $value)
+                    ->filter(fn (int $value): bool => $value > 0)
+                    ->unique()
+                    ->count()
+                : 0);
         $detail['clicks'] = $clickCount > 0
             ? $clickCount
-            : $deliveries->filter(fn ($row): bool => $row->clicked_at !== null)->count();
+            : ($channel === 'email'
+                ? $deliveries->filter(fn ($row): bool => $row->clicked_at !== null)->count()
+                : 0);
         $detail['unique_clicks'] = $clickCount > 0
             ? $clickEvents
                 ->pluck('marketing_profile_id')
@@ -362,13 +382,15 @@ class MessageAnalyticsService
                 ->filter(fn (int $value): bool => $value > 0)
                 ->unique()
                 ->count()
-            : $deliveries
-                ->filter(fn ($row): bool => $row->clicked_at !== null)
-                ->pluck('marketing_profile_id')
-                ->map(fn ($value): int => (int) $value)
-                ->filter(fn (int $value): bool => $value > 0)
-                ->unique()
-                ->count();
+            : ($channel === 'email'
+                ? $deliveries
+                    ->filter(fn ($row): bool => $row->clicked_at !== null)
+                    ->pluck('marketing_profile_id')
+                    ->map(fn ($value): int => (int) $value)
+                    ->filter(fn (int $value): bool => $value > 0)
+                    ->unique()
+                    ->count()
+                : 0);
         $detail['attributed_orders'] = $orderAttributions
             ->pluck('order_id')
             ->map(fn ($value): int => (int) $value)
@@ -410,6 +432,7 @@ class MessageAnalyticsService
 
         $rows = [];
         $deliveryKeyByEmailDeliveryId = [];
+        $deliveryKeyBySmsDeliveryId = [];
 
         foreach ($emailDeliveries as $delivery) {
             $messageKey = $this->messageKey('email', $this->batchKey('email', $delivery->batch_id, (int) $delivery->id));
@@ -491,19 +514,35 @@ class MessageAnalyticsService
             if ($profileId > 0) {
                 $rows[$messageKey]['profile_ids'][$profileId] = true;
             }
+
+            $deliveryKeyBySmsDeliveryId[(int) $delivery->id] = $messageKey;
         }
 
         $emailDeliveryIds = array_values(array_map('intval', array_keys($deliveryKeyByEmailDeliveryId)));
+        $smsDeliveryIds = array_values(array_map('intval', array_keys($deliveryKeyBySmsDeliveryId)));
 
-        $engagementEvents = Schema::hasTable('marketing_message_engagement_events') && $emailDeliveryIds !== []
+        $engagementEvents = Schema::hasTable('marketing_message_engagement_events') && ($emailDeliveryIds !== [] || $smsDeliveryIds !== [])
             ? MarketingMessageEngagementEvent::query()
                 ->forTenantId($tenantId)
                 ->where('store_key', $storeKey)
-                ->whereIn('marketing_email_delivery_id', $emailDeliveryIds)
                 ->whereIn('event_type', ['open', 'click'])
+                ->where(function (Builder $query) use ($emailDeliveryIds, $smsDeliveryIds): void {
+                    if ($emailDeliveryIds !== []) {
+                        $query->whereIn('marketing_email_delivery_id', $emailDeliveryIds);
+                    }
+
+                    if ($smsDeliveryIds !== []) {
+                        if ($emailDeliveryIds !== []) {
+                            $query->orWhereIn('marketing_message_delivery_id', $smsDeliveryIds);
+                        } else {
+                            $query->whereIn('marketing_message_delivery_id', $smsDeliveryIds);
+                        }
+                    }
+                })
                 ->get([
                     'id',
                     'marketing_email_delivery_id',
+                    'marketing_message_delivery_id',
                     'marketing_profile_id',
                     'event_type',
                     'url',
@@ -514,8 +553,11 @@ class MessageAnalyticsService
             : collect();
 
         foreach ($engagementEvents as $event) {
-            $deliveryId = (int) ($event->marketing_email_delivery_id ?? 0);
-            $messageKey = $deliveryKeyByEmailDeliveryId[$deliveryId] ?? null;
+            $emailDeliveryId = (int) ($event->marketing_email_delivery_id ?? 0);
+            $smsDeliveryId = (int) ($event->marketing_message_delivery_id ?? 0);
+            $messageKey = $emailDeliveryId > 0
+                ? ($deliveryKeyByEmailDeliveryId[$emailDeliveryId] ?? null)
+                : ($deliveryKeyBySmsDeliveryId[$smsDeliveryId] ?? null);
             if (! is_string($messageKey) || ! isset($rows[$messageKey])) {
                 continue;
             }
@@ -530,6 +572,7 @@ class MessageAnalyticsService
                 if ($profileId > 0) {
                     $rows[$messageKey]['unique_open_profiles'][$profileId] = true;
                 }
+
                 continue;
             }
 
@@ -617,6 +660,8 @@ class MessageAnalyticsService
             'sms_deliveries' => $smsDeliveries,
             'engagement_events' => $engagementEvents,
             'order_attributions' => $orderAttributions,
+            'delivery_key_by_email_delivery_id' => $deliveryKeyByEmailDeliveryId,
+            'delivery_key_by_sms_delivery_id' => $deliveryKeyBySmsDeliveryId,
         ];
     }
 
@@ -860,6 +905,577 @@ class MessageAnalyticsService
      * @param  array<string,mixed>  $filters
      * @return array<string,mixed>
      */
+    protected function historyOutcomes(int $tenantId, string $storeKey, array $dataset, array $filters): array
+    {
+        /** @var Collection<int,MarketingEmailDelivery> $emailDeliveries */
+        $emailDeliveries = $dataset['email_deliveries'] ?? collect();
+        /** @var Collection<int,MarketingMessageDelivery> $smsDeliveries */
+        $smsDeliveries = $dataset['sms_deliveries'] ?? collect();
+        /** @var Collection<int,MarketingMessageEngagementEvent> $engagementEvents */
+        $engagementEvents = $dataset['engagement_events'] ?? collect();
+        /** @var Collection<int,MarketingMessageOrderAttribution> $orderAttributions */
+        $orderAttributions = $dataset['order_attributions'] ?? collect();
+
+        $deliveryKeyByEmailDeliveryId = [];
+        foreach ((array) ($dataset['delivery_key_by_email_delivery_id'] ?? []) as $deliveryId => $messageKey) {
+            $resolvedDeliveryId = (int) $deliveryId;
+            $resolvedMessageKey = trim((string) $messageKey);
+            if ($resolvedDeliveryId > 0 && $resolvedMessageKey !== '') {
+                $deliveryKeyByEmailDeliveryId[$resolvedDeliveryId] = $resolvedMessageKey;
+            }
+        }
+
+        $deliveryKeyBySmsDeliveryId = [];
+        foreach ((array) ($dataset['delivery_key_by_sms_delivery_id'] ?? []) as $deliveryId => $messageKey) {
+            $resolvedDeliveryId = (int) $deliveryId;
+            $resolvedMessageKey = trim((string) $messageKey);
+            if ($resolvedDeliveryId > 0 && $resolvedMessageKey !== '') {
+                $deliveryKeyBySmsDeliveryId[$resolvedDeliveryId] = $resolvedMessageKey;
+            }
+        }
+
+        $profileIds = $emailDeliveries
+            ->pluck('marketing_profile_id')
+            ->concat($smsDeliveries->pluck('marketing_profile_id'))
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+
+        $profileMap = MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->whereIn('id', $profileIds->all())
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone'])
+            ->keyBy('id');
+
+        $openCountByEmailDeliveryId = [];
+        $clickCountByEmailDeliveryId = [];
+        $openCountBySmsDeliveryId = [];
+        $clickCountBySmsDeliveryId = [];
+        $clickedUrlsByEmailDeliveryId = [];
+        $clickedUrlsBySmsDeliveryId = [];
+
+        foreach ($engagementEvents as $event) {
+            $eventType = strtolower(trim((string) ($event->event_type ?? '')));
+            if (! in_array($eventType, ['open', 'click'], true)) {
+                continue;
+            }
+
+            $emailDeliveryId = (int) ($event->marketing_email_delivery_id ?? 0);
+            $smsDeliveryId = (int) ($event->marketing_message_delivery_id ?? 0);
+            $url = $this->nullableString($event->normalized_url)
+                ?? $this->nullableString($event->url);
+
+            if ($eventType === 'open') {
+                if ($emailDeliveryId > 0) {
+                    $openCountByEmailDeliveryId[$emailDeliveryId] = (int) ($openCountByEmailDeliveryId[$emailDeliveryId] ?? 0) + 1;
+                }
+                if ($smsDeliveryId > 0) {
+                    $openCountBySmsDeliveryId[$smsDeliveryId] = (int) ($openCountBySmsDeliveryId[$smsDeliveryId] ?? 0) + 1;
+                }
+
+                continue;
+            }
+
+            if ($emailDeliveryId > 0) {
+                $clickCountByEmailDeliveryId[$emailDeliveryId] = (int) ($clickCountByEmailDeliveryId[$emailDeliveryId] ?? 0) + 1;
+                if ($url !== null) {
+                    $clickedUrlsByEmailDeliveryId[$emailDeliveryId][] = $url;
+                }
+            }
+
+            if ($smsDeliveryId > 0) {
+                $clickCountBySmsDeliveryId[$smsDeliveryId] = (int) ($clickCountBySmsDeliveryId[$smsDeliveryId] ?? 0) + 1;
+                if ($url !== null) {
+                    $clickedUrlsBySmsDeliveryId[$smsDeliveryId][] = $url;
+                }
+            }
+        }
+
+        $orderSummaryByEmailDeliveryId = [];
+        foreach ($orderAttributions as $attribution) {
+            $deliveryId = (int) ($attribution->marketing_email_delivery_id ?? 0);
+            if ($deliveryId <= 0) {
+                continue;
+            }
+
+            if (! isset($orderSummaryByEmailDeliveryId[$deliveryId])) {
+                $orderSummaryByEmailDeliveryId[$deliveryId] = [
+                    'order_ids' => [],
+                    'revenue_cents' => 0,
+                ];
+            }
+
+            $orderId = (int) ($attribution->order_id ?? 0);
+            if ($orderId > 0) {
+                $orderSummaryByEmailDeliveryId[$deliveryId]['order_ids'][$orderId] = true;
+            }
+            $orderSummaryByEmailDeliveryId[$deliveryId]['revenue_cents'] += (int) ($attribution->revenue_cents ?? 0);
+        }
+
+        $smsRepliesByDelivery = $this->smsRepliesByDelivery($smsDeliveries);
+
+        $rows = collect();
+
+        foreach ($emailDeliveries as $delivery) {
+            $sourceLabel = $this->resolvedSourceLabel($delivery);
+            if (! $this->isEmbeddedMessagingSource($sourceLabel)) {
+                continue;
+            }
+
+            $deliveryId = (int) ($delivery->id ?? 0);
+            if ($deliveryId <= 0) {
+                continue;
+            }
+
+            $profileId = (int) ($delivery->marketing_profile_id ?? 0);
+            $profile = $profileId > 0 ? $profileMap->get($profileId) : null;
+            $openCount = array_key_exists($deliveryId, $openCountByEmailDeliveryId)
+                ? (int) $openCountByEmailDeliveryId[$deliveryId]
+                : ($delivery->opened_at !== null ? 1 : 0);
+            $clickCount = array_key_exists($deliveryId, $clickCountByEmailDeliveryId)
+                ? (int) $clickCountByEmailDeliveryId[$deliveryId]
+                : ($delivery->clicked_at !== null ? 1 : 0);
+            $clickedUrls = array_values(array_unique(array_map(
+                'strval',
+                (array) ($clickedUrlsByEmailDeliveryId[$deliveryId] ?? [])
+            )));
+            $orderSummary = (array) ($orderSummaryByEmailDeliveryId[$deliveryId] ?? []);
+            $attributedOrders = count((array) ($orderSummary['order_ids'] ?? []));
+            $attributedRevenueCents = (int) ($orderSummary['revenue_cents'] ?? 0);
+            $status = strtolower(trim((string) ($delivery->status ?? 'sent')));
+            $sentAt = optional($delivery->sent_at ?? $delivery->created_at)->toIso8601String();
+
+            $rows->push([
+                'history_key' => 'email:'.$deliveryId,
+                'message_key' => $deliveryKeyByEmailDeliveryId[$deliveryId] ?? null,
+                'delivery_id' => $deliveryId,
+                'channel' => 'email',
+                'message_name' => $this->resolvedMessageNameFromDelivery($delivery, 'email'),
+                'source_label' => $sourceLabel,
+                'status' => $status !== '' ? $status : 'sent',
+                'recipient' => $this->nullableString($delivery->email) ?? $this->nullableString($profile?->email) ?? '—',
+                'profile_id' => $profileId > 0 ? $profileId : null,
+                'profile_name' => $this->profileDisplayName($profile),
+                'message_preview' => Str::limit((string) ($delivery->message_subject ?? ''), 120),
+                'sent_at' => $sentAt,
+                'opened' => $openCount > 0,
+                'opens' => $openCount,
+                'clicked' => $clickCount > 0,
+                'clicks' => $clickCount,
+                'clicked_urls' => $clickedUrls,
+                'attributed_orders' => $attributedOrders,
+                'attributed_revenue_cents' => $attributedRevenueCents,
+                'responded' => false,
+                'responded_at' => null,
+                'response_preview' => null,
+                'outcome' => $this->historyOutcome($attributedOrders, false, $clickCount, $openCount),
+            ]);
+        }
+
+        foreach ($smsDeliveries as $delivery) {
+            $sourceLabel = $this->resolvedSourceLabel($delivery);
+            if (! $this->isEmbeddedMessagingSource($sourceLabel)) {
+                continue;
+            }
+
+            $deliveryId = (int) ($delivery->id ?? 0);
+            if ($deliveryId <= 0) {
+                continue;
+            }
+
+            $profileId = (int) ($delivery->marketing_profile_id ?? 0);
+            $profile = $profileId > 0 ? $profileMap->get($profileId) : null;
+            $openCount = (int) ($openCountBySmsDeliveryId[$deliveryId] ?? 0);
+            $clickCount = (int) ($clickCountBySmsDeliveryId[$deliveryId] ?? 0);
+            $clickedUrls = array_values(array_unique(array_map(
+                'strval',
+                (array) ($clickedUrlsBySmsDeliveryId[$deliveryId] ?? [])
+            )));
+            $reply = (array) ($smsRepliesByDelivery[$deliveryId] ?? []);
+            $responded = (bool) ($reply['responded'] ?? false);
+            $status = strtolower(trim((string) ($delivery->send_status ?? 'sent')));
+            $sentAt = optional($delivery->sent_at ?? $delivery->created_at)->toIso8601String();
+
+            $rows->push([
+                'history_key' => 'sms:'.$deliveryId,
+                'message_key' => $deliveryKeyBySmsDeliveryId[$deliveryId] ?? null,
+                'delivery_id' => $deliveryId,
+                'channel' => 'sms',
+                'message_name' => $this->resolvedMessageNameFromDelivery($delivery, 'sms'),
+                'source_label' => $sourceLabel,
+                'status' => $status !== '' ? $status : 'sent',
+                'recipient' => $this->nullableString($delivery->to_phone) ?? $this->nullableString($profile?->phone) ?? '—',
+                'profile_id' => $profileId > 0 ? $profileId : null,
+                'profile_name' => $this->profileDisplayName($profile),
+                'message_preview' => Str::limit((string) ($delivery->rendered_message ?? ''), 120),
+                'sent_at' => $sentAt,
+                'opened' => $openCount > 0,
+                'opens' => $openCount,
+                'clicked' => $clickCount > 0,
+                'clicks' => $clickCount,
+                'clicked_urls' => $clickedUrls,
+                'attributed_orders' => 0,
+                'attributed_revenue_cents' => 0,
+                'responded' => $responded,
+                'responded_at' => $this->nullableString($reply['responded_at'] ?? null),
+                'response_preview' => $this->nullableString($reply['response_preview'] ?? null),
+                'outcome' => $this->historyOutcome(0, $responded, $clickCount, $openCount),
+            ]);
+        }
+
+        $filteredRows = $this->applyHistoryOutcomeFilters($rows, $filters)
+            ->sortByDesc(fn (array $row): string => (string) ($row['sent_at'] ?? ''))
+            ->values();
+
+        $maxRows = max(40, min(200, ((int) ($filters['per_page'] ?? 25)) * 3));
+        $limitedRows = $filteredRows->take($maxRows)->values();
+
+        return [
+            'rows' => $limitedRows->all(),
+            'summary' => [
+                'total_rows' => $filteredRows->count(),
+                'opened_rows' => $filteredRows->where('opened', true)->count(),
+                'clicked_rows' => $filteredRows->where('clicked', true)->count(),
+                'responded_rows' => $filteredRows->where('responded', true)->count(),
+                'attributed_orders' => (int) $filteredRows->sum('attributed_orders'),
+                'attributed_revenue_cents' => (int) $filteredRows->sum('attributed_revenue_cents'),
+            ],
+            'empty' => $filteredRows->isEmpty(),
+        ];
+    }
+
+    /**
+     * @param  Collection<int,array<string,mixed>>  $rows
+     * @param  array<string,mixed>  $filters
+     * @return Collection<int,array<string,mixed>>
+     */
+    protected function applyHistoryOutcomeFilters(Collection $rows, array $filters): Collection
+    {
+        $channelFilter = strtolower(trim((string) ($filters['channel'] ?? 'all')));
+        $openedFilter = strtolower(trim((string) ($filters['opened'] ?? 'all')));
+        $clickedFilter = strtolower(trim((string) ($filters['clicked'] ?? 'all')));
+        $hasOrders = (bool) ($filters['has_orders'] ?? false);
+        $messageSearch = strtolower(trim((string) ($filters['message'] ?? '')));
+        $urlSearch = strtolower(trim((string) ($filters['url_search'] ?? '')));
+        $customerSearch = strtolower(trim((string) ($filters['customer'] ?? '')));
+
+        return $rows
+            ->filter(function (array $row) use ($channelFilter): bool {
+                if (! in_array($channelFilter, ['email', 'sms'], true)) {
+                    return true;
+                }
+
+                return strtolower(trim((string) ($row['channel'] ?? ''))) === $channelFilter;
+            })
+            ->filter(function (array $row) use ($openedFilter): bool {
+                if ($openedFilter === 'opened') {
+                    return (bool) ($row['opened'] ?? false);
+                }
+
+                if ($openedFilter === 'not_opened') {
+                    return ! (bool) ($row['opened'] ?? false);
+                }
+
+                return true;
+            })
+            ->filter(function (array $row) use ($clickedFilter): bool {
+                if ($clickedFilter === 'clicked') {
+                    return (bool) ($row['clicked'] ?? false);
+                }
+
+                if ($clickedFilter === 'not_clicked') {
+                    return ! (bool) ($row['clicked'] ?? false);
+                }
+
+                return true;
+            })
+            ->filter(fn (array $row): bool => ! $hasOrders || (int) ($row['attributed_orders'] ?? 0) > 0)
+            ->filter(function (array $row) use ($messageSearch): bool {
+                if ($messageSearch === '') {
+                    return true;
+                }
+
+                $haystack = strtolower(trim(implode(' ', [
+                    (string) ($row['message_name'] ?? ''),
+                    (string) ($row['source_label'] ?? ''),
+                    (string) ($row['message_preview'] ?? ''),
+                ])));
+
+                return $haystack !== '' && str_contains($haystack, $messageSearch);
+            })
+            ->filter(function (array $row) use ($urlSearch): bool {
+                if ($urlSearch === '') {
+                    return true;
+                }
+
+                $urls = array_map(
+                    static fn ($url): string => strtolower(trim((string) $url)),
+                    (array) ($row['clicked_urls'] ?? [])
+                );
+
+                foreach ($urls as $url) {
+                    if ($url !== '' && str_contains($url, $urlSearch)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->filter(function (array $row) use ($customerSearch): bool {
+                if ($customerSearch === '') {
+                    return true;
+                }
+
+                $haystack = strtolower(trim(implode(' ', [
+                    (string) ($row['profile_name'] ?? ''),
+                    (string) ($row['recipient'] ?? ''),
+                ])));
+
+                return $haystack !== '' && str_contains($haystack, $customerSearch);
+            })
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int,MarketingMessageDelivery>  $smsDeliveries
+     * @return array<int,array{responded:bool,responded_at:?string,response_preview:?string}>
+     */
+    protected function smsRepliesByDelivery(Collection $smsDeliveries): array
+    {
+        if (! Schema::hasTable('marketing_delivery_events') || $smsDeliveries->isEmpty()) {
+            return [];
+        }
+
+        $deliverySnapshots = $smsDeliveries
+            ->map(function (MarketingMessageDelivery $delivery): ?array {
+                $deliveryId = (int) ($delivery->id ?? 0);
+                if ($deliveryId <= 0) {
+                    return null;
+                }
+
+                $recipient = $this->normalizedPhone($delivery->to_phone);
+                if ($recipient === null) {
+                    return null;
+                }
+
+                $sender = $this->normalizedPhone($delivery->from_identifier);
+                $sentAt = $this->dateOrNull($delivery->sent_at ?? $delivery->created_at);
+                if (! $sentAt instanceof CarbonImmutable) {
+                    return null;
+                }
+
+                return [
+                    'delivery_id' => $deliveryId,
+                    'recipient' => $recipient,
+                    'sender' => $sender,
+                    'sent_at' => $sentAt,
+                ];
+            })
+            ->filter(fn (?array $snapshot): bool => is_array($snapshot))
+            ->values();
+
+        if ($deliverySnapshots->isEmpty()) {
+            return [];
+        }
+
+        $replyWindowDays = max(1, (int) config('marketing.message_analytics.attribution_window_days', 7));
+        $startAt = $deliverySnapshots
+            ->map(fn (array $snapshot) => $snapshot['sent_at'] ?? null)
+            ->filter(fn ($date): bool => $date instanceof CarbonImmutable)
+            ->min();
+        $endAt = $deliverySnapshots
+            ->map(fn (array $snapshot) => $snapshot['sent_at'] ?? null)
+            ->filter(fn ($date): bool => $date instanceof CarbonImmutable)
+            ->max();
+
+        if (! $startAt instanceof CarbonImmutable || ! $endAt instanceof CarbonImmutable) {
+            return [];
+        }
+
+        $events = MarketingDeliveryEvent::query()
+            ->where('provider', 'twilio')
+            ->where('event_type', 'webhook_received')
+            ->whereNotNull('occurred_at')
+            ->whereBetween('occurred_at', [$startAt, $endAt->addDays($replyWindowDays)])
+            ->orderBy('occurred_at')
+            ->get([
+                'id',
+                'event_status',
+                'payload',
+                'occurred_at',
+            ]);
+
+        if ($events->isEmpty()) {
+            return [];
+        }
+
+        $deliveriesByRecipient = [];
+        $deliveriesByPair = [];
+
+        foreach ($deliverySnapshots as $snapshot) {
+            $recipient = (string) $snapshot['recipient'];
+            $sender = $snapshot['sender'] ?? null;
+            $deliveriesByRecipient[$recipient][] = $snapshot;
+            if (is_string($sender) && $sender !== '') {
+                $deliveriesByPair[$recipient.'|'.$sender][] = $snapshot;
+            }
+        }
+
+        foreach ($deliveriesByRecipient as $recipient => $entries) {
+            usort($entries, fn (array $left, array $right): int => ($right['sent_at']?->timestamp ?? 0) <=> ($left['sent_at']?->timestamp ?? 0));
+            $deliveriesByRecipient[$recipient] = $entries;
+        }
+
+        foreach ($deliveriesByPair as $pair => $entries) {
+            usort($entries, fn (array $left, array $right): int => ($right['sent_at']?->timestamp ?? 0) <=> ($left['sent_at']?->timestamp ?? 0));
+            $deliveriesByPair[$pair] = $entries;
+        }
+
+        $responses = [];
+
+        foreach ($events as $event) {
+            if (! $this->isInboundSmsWebhookEvent($event)) {
+                continue;
+            }
+
+            $payload = is_array($event->payload) ? $event->payload : [];
+            $fromPhone = $this->normalizedPhone($payload['From'] ?? $payload['from'] ?? null);
+            if ($fromPhone === null) {
+                continue;
+            }
+
+            $toPhone = $this->normalizedPhone($payload['To'] ?? $payload['to'] ?? null);
+            $occurredAt = $this->dateOrNull($event->occurred_at);
+            if (! $occurredAt instanceof CarbonImmutable) {
+                continue;
+            }
+
+            $candidateEntries = [];
+            if ($toPhone !== null) {
+                $candidateEntries = array_merge($candidateEntries, (array) ($deliveriesByPair[$fromPhone.'|'.$toPhone] ?? []));
+            }
+            $candidateEntries = array_merge($candidateEntries, (array) ($deliveriesByRecipient[$fromPhone] ?? []));
+
+            if ($candidateEntries === []) {
+                continue;
+            }
+
+            $dedupedCandidates = [];
+            foreach ($candidateEntries as $candidate) {
+                $candidateDeliveryId = (int) ($candidate['delivery_id'] ?? 0);
+                if ($candidateDeliveryId > 0) {
+                    $dedupedCandidates[$candidateDeliveryId] = $candidate;
+                }
+            }
+
+            $matched = null;
+            foreach ($dedupedCandidates as $candidate) {
+                $sentAt = $candidate['sent_at'] ?? null;
+                if (! $sentAt instanceof CarbonImmutable || $sentAt->greaterThan($occurredAt)) {
+                    continue;
+                }
+
+                $ageInDays = $sentAt->diffInDays($occurredAt);
+                if ($ageInDays > $replyWindowDays) {
+                    continue;
+                }
+
+                if ($matched === null || ($candidate['sent_at']?->timestamp ?? 0) > ($matched['sent_at']?->timestamp ?? 0)) {
+                    $matched = $candidate;
+                }
+            }
+
+            if (! is_array($matched)) {
+                continue;
+            }
+
+            $deliveryId = (int) ($matched['delivery_id'] ?? 0);
+            if ($deliveryId <= 0) {
+                continue;
+            }
+
+            $existing = (array) ($responses[$deliveryId] ?? []);
+            $existingAt = $this->dateOrNull($existing['responded_at'] ?? null);
+            if ($existingAt instanceof CarbonImmutable && $existingAt->greaterThanOrEqualTo($occurredAt)) {
+                continue;
+            }
+
+            $responsePreview = $this->nullableString($payload['Body'] ?? $payload['body'] ?? null);
+
+            $responses[$deliveryId] = [
+                'responded' => true,
+                'responded_at' => $occurredAt->toIso8601String(),
+                'response_preview' => $responsePreview !== null ? Str::limit($responsePreview, 140) : null,
+            ];
+        }
+
+        return $responses;
+    }
+
+    protected function isInboundSmsWebhookEvent(MarketingDeliveryEvent $event): bool
+    {
+        $payload = is_array($event->payload) ? $event->payload : [];
+        $body = $this->nullableString($payload['Body'] ?? $payload['body'] ?? null);
+        $status = strtolower(trim((string) (
+            $payload['MessageStatus']
+            ?? $payload['SmsStatus']
+            ?? $event->event_status
+            ?? ''
+        )));
+
+        if ($body !== null) {
+            return true;
+        }
+
+        return in_array($status, ['received', 'inbound', 'reply', 'replied'], true);
+    }
+
+    protected function historyOutcome(int $attributedOrders, bool $responded, int $clicks, int $opens): string
+    {
+        if ($attributedOrders > 0) {
+            return 'sale';
+        }
+
+        if ($responded) {
+            return 'responded';
+        }
+
+        if ($clicks > 0) {
+            return 'clicked';
+        }
+
+        if ($opens > 0) {
+            return 'opened';
+        }
+
+        return 'sent';
+    }
+
+    protected function profileDisplayName(?MarketingProfile $profile): string
+    {
+        if (! $profile instanceof MarketingProfile) {
+            return 'Customer';
+        }
+
+        $name = trim((string) $profile->first_name.' '.(string) $profile->last_name);
+
+        return $name !== '' ? $name : 'Customer';
+    }
+
+    protected function isEmbeddedMessagingSource(?string $sourceLabel): bool
+    {
+        $source = strtolower(trim((string) $sourceLabel));
+
+        return $source === 'shopify_embedded_messaging'
+            || str_starts_with($source, 'shopify_embedded_messaging_');
+    }
+
+    /**
+     * @param  array<string,mixed>  $dataset
+     * @param  array<string,mixed>  $filters
+     * @return array<string,mixed>
+     */
     protected function chartFromDataset(array $dataset, array $filters): array
     {
         /** @var Collection<int,MarketingEmailDelivery> $emailDeliveries */
@@ -926,8 +1542,36 @@ class MessageAnalyticsService
             fn (MarketingMessageDelivery $row): ?CarbonImmutable => $this->dateOrNull($row->delivered_at ?? $row->sent_at ?? $row->created_at)
         );
 
-        $openEvents = $engagementEvents->where('event_type', 'open')->values();
-        $clickEvents = $engagementEvents->where('event_type', 'click')->values();
+        $openEvents = $engagementEvents
+            ->filter(function (MarketingMessageEngagementEvent $row): bool {
+                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'open') {
+                    return false;
+                }
+
+                return strtolower(trim((string) ($row->channel ?? ''))) === 'email'
+                    || (int) ($row->marketing_email_delivery_id ?? 0) > 0;
+            })
+            ->values();
+        $clickEvents = $engagementEvents
+            ->filter(function (MarketingMessageEngagementEvent $row): bool {
+                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'click') {
+                    return false;
+                }
+
+                return strtolower(trim((string) ($row->channel ?? ''))) === 'email'
+                    || (int) ($row->marketing_email_delivery_id ?? 0) > 0;
+            })
+            ->values();
+        $smsClickEvents = $engagementEvents
+            ->filter(function (MarketingMessageEngagementEvent $row): bool {
+                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'click') {
+                    return false;
+                }
+
+                return strtolower(trim((string) ($row->channel ?? ''))) === 'sms'
+                    || (int) ($row->marketing_message_delivery_id ?? 0) > 0;
+            })
+            ->values();
 
         $emailOpenByDate = $this->countByDate(
             $openEvents,
@@ -935,6 +1579,10 @@ class MessageAnalyticsService
         );
         $emailClickByDate = $this->countByDate(
             $clickEvents,
+            fn (MarketingMessageEngagementEvent $row): ?CarbonImmutable => $this->dateOrNull($row->occurred_at)
+        );
+        $smsClickByDate = $this->countByDate(
+            $smsClickEvents,
             fn (MarketingMessageEngagementEvent $row): ?CarbonImmutable => $this->dateOrNull($row->occurred_at)
         );
 
@@ -956,6 +1604,16 @@ class MessageAnalyticsService
             $orderAttributions,
             fn (MarketingMessageOrderAttribution $row): ?CarbonImmutable => $this->dateOrNull($row->order_occurred_at)
         );
+        $smsResponseByDate = [];
+        foreach ($this->smsRepliesByDelivery($smsDeliveries) as $reply) {
+            $respondedAt = $this->dateOrNull($reply['responded_at'] ?? null);
+            if (! $respondedAt instanceof CarbonImmutable) {
+                continue;
+            }
+
+            $dateKey = $respondedAt->format('Y-m-d');
+            $smsResponseByDate[$dateKey] = (int) ($smsResponseByDate[$dateKey] ?? 0) + 1;
+        }
 
         $seriesOptions = [
             ['key' => 'email_sent', 'label' => 'Email sent', 'color' => '#0f766e', 'selected' => true],
@@ -963,6 +1621,8 @@ class MessageAnalyticsService
             ['key' => 'email_clicked', 'label' => 'Email clicked', 'color' => '#0369a1', 'selected' => true],
             ['key' => 'sms_sent', 'label' => 'Text sent', 'color' => '#9a3412', 'selected' => false],
             ['key' => 'sms_delivered', 'label' => 'Text delivered', 'color' => '#ea580c', 'selected' => false],
+            ['key' => 'sms_clicked', 'label' => 'Text clicked', 'color' => '#7c2d12', 'selected' => false],
+            ['key' => 'sms_responded', 'label' => 'Text responded', 'color' => '#b45309', 'selected' => true],
             ['key' => 'attributed_orders', 'label' => 'Attributed orders', 'color' => '#4f46e5', 'selected' => true],
         ];
 
@@ -974,6 +1634,8 @@ class MessageAnalyticsService
                 $emailClickByDate,
                 $smsSentByDate,
                 $smsDeliveredByDate,
+                $smsClickByDate,
+                $smsResponseByDate,
                 $attributedOrdersByDate
             ): array {
                 $key = (string) ($option['key'] ?? 'metric');
@@ -985,6 +1647,8 @@ class MessageAnalyticsService
                     $emailClickByDate,
                     $smsSentByDate,
                     $smsDeliveredByDate,
+                    $smsClickByDate,
+                    $smsResponseByDate,
                     $attributedOrdersByDate
                 ): int {
                     return match ($key) {
@@ -993,6 +1657,8 @@ class MessageAnalyticsService
                         'email_clicked' => (int) ($emailClickByDate[$dateKey] ?? 0),
                         'sms_sent' => (int) ($smsSentByDate[$dateKey] ?? 0),
                         'sms_delivered' => (int) ($smsDeliveredByDate[$dateKey] ?? 0),
+                        'sms_clicked' => (int) ($smsClickByDate[$dateKey] ?? 0),
+                        'sms_responded' => (int) ($smsResponseByDate[$dateKey] ?? 0),
                         'attributed_orders' => (int) ($attributedOrdersByDate[$dateKey] ?? 0),
                         default => 0,
                     };
@@ -1053,6 +1719,25 @@ class MessageAnalyticsService
             'attributed_orders' => 0,
             'attributed_revenue_cents' => 0,
             'click_to_order_conversion_rate' => 0.0,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function emptyHistoryOutcomes(): array
+    {
+        return [
+            'rows' => [],
+            'summary' => [
+                'total_rows' => 0,
+                'opened_rows' => 0,
+                'clicked_rows' => 0,
+                'responded_rows' => 0,
+                'attributed_orders' => 0,
+                'attributed_revenue_cents' => 0,
+            ],
+            'empty' => true,
         ];
     }
 
@@ -1398,6 +2083,25 @@ class MessageAnalyticsService
         $normalized = strtolower(trim((string) $value));
 
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    protected function normalizedPhone(mixed $value): ?string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $raw);
+        if (! is_string($digits) || $digits === '') {
+            return null;
+        }
+
+        if (strlen($digits) === 11 && str_starts_with($digits, '1')) {
+            $digits = substr($digits, 1);
+        }
+
+        return $digits !== '' ? $digits : null;
     }
 
     protected function nullableString(mixed $value): ?string

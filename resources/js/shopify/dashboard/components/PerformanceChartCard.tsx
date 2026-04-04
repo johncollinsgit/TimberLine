@@ -1,4 +1,5 @@
 import { BlockStack, Box, Card, InlineStack, Text } from "@shopify/polaris";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildAreaPath,
@@ -20,6 +21,19 @@ interface PerformanceChartCardProps {
 
 const CHART_PADDING = { top: 8, bottom: 14 };
 const GRIDLINE_RATIOS = [0.25, 0.5, 0.75];
+
+function colorFromHex(hex: string, alpha: number, fallback: string): string {
+  const normalized = String(hex || "").trim().replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return fallback;
+  }
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
 
 export function PerformanceChartCard({
   chart,
@@ -209,6 +223,25 @@ export function PerformanceChartCard({
           <div className="sf-dashboard-chart__series-picker">
             {seriesOptions.map((option) => {
               const active = selectedKeys.includes(option.key);
+              const buttonStyle = active
+                ? ({
+                    "--sf-dashboard-series-active-bg": colorFromHex(
+                      option.color,
+                      0.16,
+                      "rgba(15, 143, 97, 0.16)",
+                    ),
+                    "--sf-dashboard-series-active-border": colorFromHex(
+                      option.color,
+                      0.46,
+                      "rgba(15, 143, 97, 0.46)",
+                    ),
+                    "--sf-dashboard-series-active-text": colorFromHex(
+                      option.color,
+                      0.92,
+                      "rgba(15, 99, 63, 0.95)",
+                    ),
+                  } as CSSProperties)
+                : undefined;
 
               return (
                 <button
@@ -217,6 +250,8 @@ export function PerformanceChartCard({
                   onClick={() => toggleSeries(option.key)}
                   className={`sf-dashboard-chart__series-toggle${active ? " is-active" : ""}`}
                   aria-pressed={active}
+                  data-active={active ? "true" : "false"}
+                  style={buttonStyle}
                 >
                   <span
                     className="sf-dashboard-chart__series-swatch"

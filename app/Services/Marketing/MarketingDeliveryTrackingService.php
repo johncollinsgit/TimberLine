@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 class MarketingDeliveryTrackingService
 {
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array{matched:bool,delivery_id:?int,status:string,event_id:?int}
      */
     public function handleTwilioCallback(array $payload): array
@@ -114,7 +114,7 @@ class MarketingDeliveryTrackingService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     public function appendEvent(
         ?MarketingMessageDelivery $delivery,
@@ -159,6 +159,7 @@ class MarketingDeliveryTrackingService
             'sending' => 'sending',
             'sent' => 'sent',
             'delivered' => 'delivered',
+            'received', 'inbound', 'replied', 'reply' => 'received',
             'undelivered' => 'undelivered',
             'failed' => 'failed',
             'canceled', 'cancelled' => 'canceled',
@@ -201,7 +202,7 @@ class MarketingDeliveryTrackingService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     protected function eventHash(
         ?int $deliveryId,

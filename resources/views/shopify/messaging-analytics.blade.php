@@ -19,6 +19,11 @@
         $analytics = is_array($messageAnalytics ?? null) ? $messageAnalytics : [];
         $summary = is_array($analytics['summary'] ?? null) ? $analytics['summary'] : [];
         $chart = is_array($analytics['chart'] ?? null) ? $analytics['chart'] : [];
+        $historyOutcomes = is_array($analytics['history_outcomes'] ?? null) ? $analytics['history_outcomes'] : [];
+        $historySummary = is_array($historyOutcomes['summary'] ?? null) ? $historyOutcomes['summary'] : [];
+        $historyRows = collect((array) ($historyOutcomes['rows'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
         $messagesPaginator = $analytics['messages'] ?? null;
         $messages = $messagesPaginator instanceof \Illuminate\Pagination\LengthAwarePaginator
             ? $messagesPaginator
@@ -62,6 +67,15 @@
         $formatDate = static fn (?string $value): string => $value
             ? \Carbon\CarbonImmutable::parse($value)->setTimezone(config('app.timezone', 'UTC'))->format('M j, Y')
             : '—';
+        $historyOutcomeLabel = static function (string $value): string {
+            return match (strtolower(trim($value))) {
+                'sale' => 'Sale',
+                'responded' => 'Responded',
+                'clicked' => 'Clicked',
+                'opened' => 'Opened',
+                default => 'Sent',
+            };
+        };
     @endphp
 
     <style>
@@ -522,6 +536,60 @@
             </article>
 
             <article class="message-analytics-card">
+                <h3>Engagement Trend</h3>
+                <p class="message-analytics-muted">Toggle metrics on/off to compare email and text outcomes over time.</p>
+                @php
+                    $series = collect((array) ($chart['series'] ?? []))
+                        ->map(function (array $row): array {
+                            $values = array_map('intval', (array) ($row['data'] ?? []));
+                            return [
+                                'key' => (string) ($row['key'] ?? 'metric'),
+                                'name' => (string) ($row['name'] ?? 'Metric'),
+                                'color' => (string) ($row['color'] ?? '#0f766e'),
+                                'selected' => (bool) ($row['selected'] ?? false),
+                                'data' => $values,
+                                'total' => array_sum($values),
+                            ];
+                        })
+                        ->values();
+                @endphp
+
+                @if((bool) ($chart['empty'] ?? true) || $series->isEmpty())
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No tracked opens or clicks are available in this range yet.</p>
+                    </div>
+                @else
+                    <div class="message-analytics-series-picker" data-message-analytics-series-picker>
+                        @foreach($series as $row)
+                            @php
+                                $isActive = (bool) ($row['selected'] ?? false);
+                            @endphp
+                            <button
+                                type="button"
+                                class="message-analytics-series-toggle{{ $isActive ? ' is-active' : '' }}"
+                                data-series-key="{{ $row['key'] }}"
+                                aria-pressed="{{ $isActive ? 'true' : 'false' }}"
+                            >
+                                <span class="message-analytics-series-swatch" style="background-color: {{ $row['color'] }}"></span>
+                                <span class="message-analytics-series-copy">
+                                    <strong>{{ $row['name'] }}</strong>
+                                    <span>{{ number_format((int) ($row['total'] ?? 0)) }}</span>
+                                </span>
+                            </button>
+                        @endforeach
+                    </div>
+
+                    <div id="message-analytics-chart" class="message-analytics-chart" aria-label="Message analytics trend chart"></div>
+                    <script id="message-analytics-chart-data" type="application/json">
+                        {!! json_encode([
+                            'labels' => array_values((array) ($chart['labels'] ?? [])),
+                            'series' => $series->all(),
+                        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+                    </script>
+                @endif
+            </article>
+
+            <article class="message-analytics-card">
                 <h3>Filters</h3>
                 <form method="GET" action="{{ route('shopify.app.messaging.analytics', [], false) }}" class="message-analytics-filters">
                     @foreach($embeddedContextQuery as $key => $value)
@@ -646,59 +714,6 @@
             </article>
 
             <article class="message-analytics-card">
-                <h3>Engagement Trend</h3>
-                @php
-                    $series = collect((array) ($chart['series'] ?? []))
-                        ->map(function (array $row): array {
-                            $values = array_map('intval', (array) ($row['data'] ?? []));
-                            return [
-                                'key' => (string) ($row['key'] ?? 'metric'),
-                                'name' => (string) ($row['name'] ?? 'Metric'),
-                                'color' => (string) ($row['color'] ?? '#0f766e'),
-                                'selected' => (bool) ($row['selected'] ?? false),
-                                'data' => $values,
-                                'total' => array_sum($values),
-                            ];
-                        })
-                        ->values();
-                @endphp
-
-                @if((bool) ($chart['empty'] ?? true) || $series->isEmpty())
-                    <div class="message-analytics-empty">
-                        <p class="message-analytics-muted">No tracked opens or clicks are available in this range yet.</p>
-                    </div>
-                @else
-                    <div class="message-analytics-series-picker" data-message-analytics-series-picker>
-                        @foreach($series as $row)
-                            @php
-                                $isActive = (bool) ($row['selected'] ?? false);
-                            @endphp
-                            <button
-                                type="button"
-                                class="message-analytics-series-toggle{{ $isActive ? ' is-active' : '' }}"
-                                data-series-key="{{ $row['key'] }}"
-                                aria-pressed="{{ $isActive ? 'true' : 'false' }}"
-                            >
-                                <span class="message-analytics-series-swatch" style="background-color: {{ $row['color'] }}"></span>
-                                <span class="message-analytics-series-copy">
-                                    <strong>{{ $row['name'] }}</strong>
-                                    <span>{{ number_format((int) ($row['total'] ?? 0)) }}</span>
-                                </span>
-                            </button>
-                        @endforeach
-                    </div>
-
-                    <div id="message-analytics-chart" class="message-analytics-chart" aria-label="Message analytics trend chart"></div>
-                    <script id="message-analytics-chart-data" type="application/json">
-                        {!! json_encode([
-                            'labels' => array_values((array) ($chart['labels'] ?? [])),
-                            'series' => $series->all(),
-                        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
-                    </script>
-                @endif
-            </article>
-
-            <article class="message-analytics-card">
                 <h3>Message performance</h3>
                 <p class="message-analytics-muted">One row per message send batch. Use View to inspect exact clicked URLs and attributed orders.</p>
 
@@ -789,6 +804,84 @@
                                 <span class="message-analytics-button">Next</span>
                             @endif
                         </div>
+                    </div>
+                @endif
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>Recent Message History Outcomes</h3>
+                <p class="message-analytics-muted">
+                    Mirrors workspace History with operational outcomes.
+                    Rows: {{ number_format((int) ($historySummary['total_rows'] ?? 0)) }} ·
+                    Responded: {{ number_format((int) ($historySummary['responded_rows'] ?? 0)) }} ·
+                    Attributed orders: {{ number_format((int) ($historySummary['attributed_orders'] ?? 0)) }}
+                </p>
+                <p class="message-analytics-muted">“Responded” is based on inbound SMS webhook matching and is directional, not guaranteed causation.</p>
+
+                @if($historyRows->isEmpty())
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No history rows match the current filter set yet.</p>
+                    </div>
+                @else
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" aria-label="Recent message outcomes table">
+                            <thead>
+                                <tr>
+                                    <th>Sent</th>
+                                    <th>Message</th>
+                                    <th>Channel</th>
+                                    <th>Customer</th>
+                                    <th>Opened</th>
+                                    <th>Clicked</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                    <th>Outcome</th>
+                                    <th>Reply at</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($historyRows as $row)
+                                    @php
+                                        $profileId = (int) ($row['profile_id'] ?? 0);
+                                        $chatHref = $profileId > 0
+                                            ? route('shopify.app.customers.detail', array_merge(['marketingProfile' => $profileId], $embeddedContextQuery), false).'#message-customer'
+                                            : null;
+                                        $rowOutcome = $historyOutcomeLabel((string) ($row['outcome'] ?? 'sent'));
+                                    @endphp
+                                    <tr>
+                                        <td>{{ $formatDateTime((string) ($row['sent_at'] ?? null)) }}</td>
+                                        <td>
+                                            <strong>{{ (string) ($row['message_name'] ?? 'Message') }}</strong>
+                                            <div class="message-analytics-muted">{{ \Illuminate\Support\Str::limit((string) ($row['message_preview'] ?? ''), 72) }}</div>
+                                        </td>
+                                        <td>{{ strtoupper((string) ($row['channel'] ?? '')) }}</td>
+                                        <td>
+                                            <strong>{{ (string) ($row['profile_name'] ?? 'Customer') }}</strong>
+                                            <div class="message-analytics-muted">{{ (string) ($row['recipient'] ?? '—') }}</div>
+                                        </td>
+                                        <td>{{ (bool) ($row['opened'] ?? false) ? 'Yes' : 'No' }}</td>
+                                        <td>{{ (bool) ($row['clicked'] ?? false) ? 'Yes' : 'No' }}</td>
+                                        <td>{{ number_format((int) ($row['attributed_orders'] ?? 0)) }}</td>
+                                        <td>{{ $formatMoney((int) ($row['attributed_revenue_cents'] ?? 0)) }}</td>
+                                        <td>
+                                            <span class="message-analytics-status">{{ $rowOutcome }}</span>
+                                            @if(filled($row['response_preview'] ?? null))
+                                                <div class="message-analytics-muted">{{ \Illuminate\Support\Str::limit((string) $row['response_preview'], 52) }}</div>
+                                            @endif
+                                        </td>
+                                        <td>{{ $formatDateTime((string) ($row['responded_at'] ?? null)) }}</td>
+                                        <td>
+                                            @if($chatHref !== null)
+                                                <a href="{{ $chatHref }}">Open chat</a>
+                                            @else
+                                                —
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 @endif
             </article>

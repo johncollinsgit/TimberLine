@@ -1058,7 +1058,7 @@
                         </div>
 
                         <div class="customers-detail-flow">
-                            <div class="customers-detail-card is-compact">
+                            <div class="customers-detail-card is-compact" id="message-customer">
                                 <div class="customers-detail-card-header">
                                     <div>
                                         <h4 class="customers-detail-card-title">Consent</h4>

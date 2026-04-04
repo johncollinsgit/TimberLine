@@ -212,6 +212,8 @@ class ShopifyEmbeddedPageRegistry
                     'message opens',
                     'link clicks',
                     'attributed orders',
+                    'message history',
+                    'message responses',
                 ],
                 'prefetch_priority' => 'normal',
             ],

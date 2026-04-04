@@ -2,8 +2,9 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
-use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingConsentEvent;
+use App\Models\MarketingDeliveryEvent;
+use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageGroup;
@@ -384,12 +385,126 @@ test('messaging analytics stays tenant and store scoped with attributed outcomes
         'metadata' => ['attribution_rule' => 'last_click_within_window'],
     ]);
 
+    $smsDeliveryA = MarketingMessageDelivery::query()->create([
+        'campaign_id' => null,
+        'campaign_recipient_id' => null,
+        'marketing_profile_id' => $profileA->id,
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'batch_id' => 'sms-batch-a',
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => null,
+        'channel' => 'sms',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_A_001',
+        'to_phone' => '+15552223344',
+        'from_identifier' => '+15550001111',
+        'attempt_number' => 1,
+        'rendered_message' => 'SMS follow-up about your recent order.',
+        'send_status' => 'delivered',
+        'provider_payload' => ['source_label' => 'shopify_embedded_messaging_group'],
+        'sent_at' => now()->subHours(8),
+        'delivered_at' => now()->subHours(8),
+        'created_at' => now()->subHours(8),
+        'updated_at' => now()->subHours(8),
+    ]);
+
+    MarketingMessageDelivery::query()->create([
+        'campaign_id' => null,
+        'campaign_recipient_id' => null,
+        'marketing_profile_id' => $profileB->id,
+        'tenant_id' => $tenantB->id,
+        'store_key' => 'retail',
+        'batch_id' => 'sms-batch-b',
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => null,
+        'channel' => 'sms',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_B_001',
+        'to_phone' => '+15553334444',
+        'from_identifier' => '+15550001111',
+        'attempt_number' => 1,
+        'rendered_message' => 'Other tenant SMS should never render.',
+        'send_status' => 'delivered',
+        'provider_payload' => ['source_label' => 'shopify_embedded_messaging_group'],
+        'sent_at' => now()->subHours(8),
+        'delivered_at' => now()->subHours(8),
+        'created_at' => now()->subHours(8),
+        'updated_at' => now()->subHours(8),
+    ]);
+
+    MarketingMessageDelivery::query()->create([
+        'campaign_id' => null,
+        'campaign_recipient_id' => null,
+        'marketing_profile_id' => $profileA->id,
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'wholesale',
+        'batch_id' => 'sms-batch-wrong-store',
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => null,
+        'channel' => 'sms',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_A_002',
+        'to_phone' => '+15552223344',
+        'from_identifier' => '+15550001111',
+        'attempt_number' => 1,
+        'rendered_message' => 'Wrong store SMS should not appear.',
+        'send_status' => 'delivered',
+        'provider_payload' => ['source_label' => 'shopify_embedded_messaging_group'],
+        'sent_at' => now()->subHours(8),
+        'delivered_at' => now()->subHours(8),
+        'created_at' => now()->subHours(8),
+        'updated_at' => now()->subHours(8),
+    ]);
+
+    MarketingDeliveryEvent::query()->create([
+        'marketing_message_delivery_id' => null,
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_INBOUND_001',
+        'event_type' => 'webhook_received',
+        'event_status' => 'received',
+        'event_hash' => hash('sha256', 'tenant-a-inbound-response'),
+        'payload' => [
+            'From' => '+15552223344',
+            'To' => '+15550001111',
+            'Body' => 'Yes, can you text me options?',
+            'MessageStatus' => 'received',
+        ],
+        'occurred_at' => now()->subHours(4),
+    ]);
+
+    MarketingMessageEngagementEvent::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'marketing_email_delivery_id' => null,
+        'marketing_message_delivery_id' => $smsDeliveryA->id,
+        'marketing_profile_id' => $profileA->id,
+        'channel' => 'sms',
+        'event_type' => 'click',
+        'event_hash' => hash('sha256', 'tenant-a-sms-click-1'),
+        'provider' => 'short_link',
+        'provider_event_id' => 'sms-click-a',
+        'provider_message_id' => 'SM_A_001',
+        'link_label' => 'SMS product link',
+        'url' => 'https://theforestrystudio.com/products/sms-special',
+        'normalized_url' => 'https://theforestrystudio.com/products/sms-special',
+        'url_domain' => 'theforestrystudio.com',
+        'occurred_at' => now()->subHours(7),
+        'payload' => ['event' => 'click'],
+    ]);
+
     $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
         ->assertSeeText('Message Analytics')
+        ->assertSeeText('Recent Message History Outcomes')
         ->assertSeeText('Spring VIP launch')
+        ->assertSeeText('SMS follow-up about your recent order.')
+        ->assertSeeText('Open chat')
         ->assertDontSeeText('Other tenant campaign')
+        ->assertDontSeeText('Other tenant SMS should never render.')
+        ->assertDontSeeText('Wrong store SMS should not appear.')
+        ->assertSee('/shopify/app/customers/manage/'.$profileA->id, false)
         ->assertSeeText('$54.99')
         ->assertDontSeeText('$29.00');
 });
