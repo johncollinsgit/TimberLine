@@ -2564,8 +2564,12 @@
                             body: JSON.stringify(payload),
                         });
 
-                        setInlineStatus(groupSendStatus, response?.message || "Message sent.");
-                        setAlert("Group message sent.", "success");
+                        const queued = Boolean(response?.data?.queued);
+                        const successMessage = response?.message || (queued
+                            ? "Bulk send started."
+                            : "Message sent.");
+                        setInlineStatus(groupSendStatus, successMessage);
+                        setAlert(successMessage, "success");
 
                         if (groupBody) {
                             groupBody.value = "";
