@@ -9,6 +9,8 @@ use App\Http\Responses\FortifyPasswordResetResponse;
 use App\Http\Responses\FortifyRegisterResponse;
 use App\Http\Responses\FortifyTwoFactorLoginResponse;
 use App\Models\User;
+use App\Support\Auth\PasswordResetUrlFactory;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -37,6 +39,7 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureActions();
+        $this->configurePasswordResetLinks();
         $this->configureViews();
         $this->configureRateLimiting();
     }
@@ -84,6 +87,20 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::registerView(fn () => view('pages::auth.register'));
         Fortify::resetPasswordView(fn () => view('pages::auth.reset-password'));
         Fortify::requestPasswordResetLinkView(fn () => view('pages::auth.forgot-password'));
+    }
+
+    /**
+     * Ensure reset links use the active auth host (or flagship host fallback) instead of a stale APP_URL host.
+     */
+    private function configurePasswordResetLinks(): void
+    {
+        ResetPassword::createUrlUsing(function (object $notifiable, #[\SensitiveParameter] string $token): string {
+            $email = method_exists($notifiable, 'getEmailForPasswordReset')
+                ? (string) $notifiable->getEmailForPasswordReset()
+                : (string) ($notifiable->email ?? '');
+
+            return app(PasswordResetUrlFactory::class)->make($token, $email);
+        });
     }
 
     /**

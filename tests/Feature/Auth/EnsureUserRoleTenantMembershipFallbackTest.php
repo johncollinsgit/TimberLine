@@ -55,3 +55,14 @@ test('marketing customers route still forbids tenant members without allowed ten
         ->get(route('marketing.customers', ['tenant' => $tenant->id]))
         ->assertForbidden();
 });
+
+test('blank global role keeps legacy admin access on non-tenant role-gated routes', function (): void {
+    $user = User::factory()->create([
+        'role' => '',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk();
+});

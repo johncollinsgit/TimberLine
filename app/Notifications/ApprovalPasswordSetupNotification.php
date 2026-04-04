@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use App\Support\Auth\PasswordResetUrlFactory;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -24,10 +25,7 @@ class ApprovalPasswordSetupNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $token = Password::broker(config('fortify.passwords'))->createToken($this->user);
-        $resetUrl = route('password.reset', [
-            'token' => $token,
-            'email' => $this->user->email,
-        ]);
+        $resetUrl = app(PasswordResetUrlFactory::class)->make($token, (string) $this->user->email);
 
         return (new MailMessage)
             ->subject('Your Backstage account is approved')

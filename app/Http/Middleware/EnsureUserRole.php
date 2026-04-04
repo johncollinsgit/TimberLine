@@ -40,7 +40,12 @@ class EnsureUserRole
             return false;
         }
 
-        $userRole = $this->normalizeRole($user->role ?? null);
+        $userRole = $this->canonicalizeTenantRole($this->normalizeRole($user->role ?? null));
+        if ($userRole === null) {
+            // Preserve legacy behavior where blank/null roles were treated as admin.
+            $userRole = 'admin';
+        }
+
         if ($userRole !== null && in_array($userRole, $allowedRoles, true)) {
             return true;
         }
