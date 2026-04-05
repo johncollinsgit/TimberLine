@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -32,13 +33,27 @@ return new class extends Migration
             if ($this->hasColumns([
                 'tenant_id',
                 'channel',
+                'marketing_profile_id',
                 'event_type',
                 'source_type',
-                'marketing_profile_id',
             ])) {
+                $driver = Schema::getConnection()->getDriverName();
+
+                if ($driver === 'mysql') {
+                    try {
+                        DB::statement(
+                            'CREATE INDEX mce_tenant_channel_event_source_profile_idx'
+                            .' ON marketing_consent_events (tenant_id, channel(32), marketing_profile_id, event_type(32), source_type(64))'
+                        );
+                    } catch (\Throwable) {
+                    }
+
+                    return;
+                }
+
                 try {
                     $table->index(
-                        ['tenant_id', 'channel', 'event_type', 'source_type', 'marketing_profile_id'],
+                        ['tenant_id', 'channel', 'marketing_profile_id', 'event_type', 'source_type'],
                         'mce_tenant_channel_event_source_profile_idx'
                     );
                 } catch (\Throwable) {
