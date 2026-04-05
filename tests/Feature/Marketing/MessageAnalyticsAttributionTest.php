@@ -578,3 +578,155 @@ test('message analytics index and detail include sms attributed orders and reven
         ->and((int) data_get($detail, 'links.0.attributed_orders', 0))->toBe(1)
         ->and((int) data_get($detail, 'orders.0.revenue_cents', 0))->toBe(3250);
 });
+
+test('message analytics rolls batched sms deliveries into one logical run row', function () {
+    config()->set('marketing.message_analytics.sms_run_gap_minutes', 5);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Message Analytics SMS Run Tenant',
+        'slug' => 'message-analytics-sms-run-tenant',
+    ]);
+
+    $profiles = collect([
+        ['Avery', 'avery.batch@example.com', '+15550100001'],
+        ['Briar', 'briar.batch@example.com', '+15550100002'],
+        ['Cove', 'cove.batch@example.com', '+15550100003'],
+    ])->map(function (array $attributes) use ($tenant): MarketingProfile {
+        [$firstName, $email, $phone] = $attributes;
+
+        return MarketingProfile::query()->create([
+            'tenant_id' => $tenant->id,
+            'first_name' => $firstName,
+            'last_name' => 'Batch',
+            'email' => $email,
+            'normalized_email' => $email,
+            'phone' => $phone,
+            'normalized_phone' => $phone,
+            'accepts_sms_marketing' => true,
+            'accepts_email_marketing' => true,
+        ]);
+    });
+
+    $baseSentAt = now()->subHours(6)->startOfMinute();
+    $messageBody = 'Spring collection is live https://theforestrystudio.com/collections/spring-collection';
+
+    $deliveries = collect([
+        ['sms-batch-run-a', 'SM_RUN_A', $profiles[0], $baseSentAt],
+        ['sms-batch-run-b', 'SM_RUN_B', $profiles[1], $baseSentAt->addMinutes(2)],
+        ['sms-batch-run-c', 'SM_RUN_C', $profiles[2], $baseSentAt->addMinutes(4)],
+        ['sms-batch-run-later', 'SM_RUN_LATER', $profiles[0], $baseSentAt->addMinutes(20)],
+    ])->map(function (array $attributes) use ($messageBody): MarketingMessageDelivery {
+        [$batchId, $providerMessageId, $profile, $sentAt] = $attributes;
+
+        return MarketingMessageDelivery::query()->create([
+            'campaign_id' => null,
+            'campaign_recipient_id' => null,
+            'marketing_profile_id' => $profile->id,
+            'tenant_id' => $profile->tenant_id,
+            'store_key' => 'retail',
+            'batch_id' => $batchId,
+            'source_label' => 'shopify_embedded_messaging_auto_group_resume_v1',
+            'message_subject' => 'Spring collection alert',
+            'channel' => 'sms',
+            'provider' => 'twilio',
+            'provider_message_id' => $providerMessageId,
+            'to_phone' => $profile->phone,
+            'from_identifier' => '+15550001111',
+            'attempt_number' => 1,
+            'rendered_message' => $messageBody,
+            'send_status' => 'delivered',
+            'provider_payload' => [],
+            'sent_at' => $sentAt,
+            'delivered_at' => $sentAt,
+        ]);
+    });
+
+    $clickEvent = MarketingMessageEngagementEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'marketing_email_delivery_id' => null,
+        'marketing_message_delivery_id' => $deliveries[1]->id,
+        'marketing_profile_id' => $profiles[1]->id,
+        'channel' => 'sms',
+        'event_type' => 'click',
+        'event_hash' => hash('sha256', 'sms-run-click'),
+        'provider' => 'short_link',
+        'provider_event_id' => 'sms-run-click',
+        'provider_message_id' => 'SM_RUN_B',
+        'link_label' => 'Spring collection',
+        'url' => 'https://theforestrystudio.com/collections/spring-collection?utm_source=sms',
+        'normalized_url' => 'https://theforestrystudio.com/collections/spring-collection',
+        'url_domain' => 'theforestrystudio.com',
+        'occurred_at' => $baseSentAt->addMinutes(6),
+        'payload' => ['event' => 'click'],
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 'sms-run-order-1',
+        'order_number' => '#SMS-3005',
+        'customer_name' => 'Briar Batch',
+        'status' => 'new',
+        'ordered_at' => $baseSentAt->addMinutes(25),
+        'tenant_id' => $tenant->id,
+        'total_price' => 71.4,
+    ]);
+
+    MarketingMessageOrderAttribution::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'order_id' => $order->id,
+        'marketing_profile_id' => $profiles[1]->id,
+        'marketing_email_delivery_id' => null,
+        'marketing_message_delivery_id' => $deliveries[2]->id,
+        'marketing_message_engagement_event_id' => $clickEvent->id,
+        'channel' => 'sms',
+        'attribution_model' => 'last_click',
+        'attribution_window_days' => 7,
+        'attributed_url' => 'https://theforestrystudio.com/collections/spring-collection?utm_source=sms',
+        'normalized_url' => 'https://theforestrystudio.com/collections/spring-collection',
+        'click_occurred_at' => $baseSentAt->addMinutes(6),
+        'order_occurred_at' => $baseSentAt->addMinutes(25),
+        'revenue_cents' => 7140,
+        'metadata' => ['attribution_rule' => 'last_click_within_window'],
+    ]);
+
+    $service = app(MessageAnalyticsService::class);
+    $filters = $service->normalizeFilters([
+        'date_from' => $baseSentAt->subDay()->toDateString(),
+        'date_to' => $baseSentAt->addDay()->toDateString(),
+        'channel' => 'sms',
+    ]);
+
+    $payload = $service->index($tenant->id, 'retail', $filters);
+    $rows = collect($payload['messages']->items());
+
+    expect($rows)->toHaveCount(2);
+
+    $runRow = $rows->first(fn (array $row): bool => (int) ($row['recipients_count'] ?? 0) === 3);
+    $laterRow = $rows->first(fn (array $row): bool => (int) ($row['recipients_count'] ?? 0) === 1);
+
+    expect($runRow)->toBeArray()
+        ->and((string) ($runRow['aggregation_scope'] ?? ''))->toBe('logical_run')
+        ->and((int) ($runRow['batch_count'] ?? 0))->toBe(3)
+        ->and((int) ($runRow['clicks'] ?? 0))->toBe(1)
+        ->and((int) ($runRow['attributed_orders'] ?? 0))->toBe(1)
+        ->and((int) ($runRow['attributed_revenue_cents'] ?? 0))->toBe(7140)
+        ->and((string) ($runRow['top_clicked_link'] ?? ''))->toContain('/collections/spring-collection')
+        ->and((string) ($runRow['message_key'] ?? ''))->toContain('sms:run|');
+
+    expect($laterRow)->toBeArray()
+        ->and((int) ($laterRow['recipients_count'] ?? 0))->toBe(1)
+        ->and((int) ($laterRow['clicks'] ?? 0))->toBe(0)
+        ->and((int) ($laterRow['attributed_orders'] ?? 0))->toBe(0);
+
+    $detail = $service->detail($tenant->id, 'retail', (string) ($runRow['message_key'] ?? ''));
+
+    expect($detail)->toBeArray()
+        ->and((int) ($detail['recipients_count'] ?? 0))->toBe(3)
+        ->and((int) data_get($detail, 'metadata.batch_count', 0))->toBe(3)
+        ->and((string) data_get($detail, 'metadata.batch_scope', ''))->toBe('logical_run')
+        ->and((int) ($detail['clicks'] ?? 0))->toBe(1)
+        ->and((int) ($detail['attributed_orders'] ?? 0))->toBe(1);
+});

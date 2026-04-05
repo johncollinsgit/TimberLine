@@ -193,6 +193,13 @@ class MessageAnalyticsService
 
         $firstDelivery = $deliveries->sortBy('id')->first();
         $messageName = $this->resolvedMessageNameFromDelivery($firstDelivery, $channel);
+        $batchIds = $deliveries
+            ->pluck('batch_id')
+            ->map(fn ($value): ?string => $this->nullableString($value))
+            ->filter()
+            ->unique()
+            ->values();
+        $isLogicalSmsRun = $channel === 'sms' && $this->parseSmsRunBatchKey($batchKey) !== null;
 
         $statusCounts = $deliveries
             ->groupBy(fn ($row): string => $channel === 'email'
@@ -213,7 +220,10 @@ class MessageAnalyticsService
             'last_sent_at' => optional($sentAtValues->max())->toIso8601String(),
             'metadata' => [
                 'channel' => strtoupper($channel),
-                'batch_id' => $this->nullableString($firstDelivery?->batch_id),
+                'batch_id' => $isLogicalSmsRun ? null : $this->nullableString($firstDelivery?->batch_id),
+                'batch_scope' => $isLogicalSmsRun ? 'logical_run' : 'batch',
+                'batch_count' => $batchIds->count(),
+                'batch_ids' => $batchIds->take(12)->all(),
                 'store_key' => $normalizedStoreKey,
                 'subject' => $this->nullableString($firstDelivery?->message_subject),
                 'source_label' => $this->resolvedSourceLabel($firstDelivery),
@@ -436,6 +446,7 @@ class MessageAnalyticsService
             ? collect()
             : $this->smsDeliveriesQuery($tenantId, $storeKey, $from, $to, $query)
                 ->get();
+        $smsMessageKeyByDeliveryId = $this->smsMessageKeys($smsDeliveries);
 
         $rows = [];
         $deliveryKeyByEmailDeliveryId = [];
@@ -489,7 +500,8 @@ class MessageAnalyticsService
         }
 
         foreach ($smsDeliveries as $delivery) {
-            $messageKey = $this->messageKey('sms', $this->batchKey('sms', $delivery->batch_id, (int) $delivery->id));
+            $messageKey = $smsMessageKeyByDeliveryId[(int) $delivery->id]
+                ?? $this->messageKey('sms', $this->batchKey('sms', $delivery->batch_id, (int) $delivery->id));
             if (! isset($rows[$messageKey])) {
                 $rows[$messageKey] = $this->emptyMessageRow('sms', $messageKey);
             }
@@ -521,6 +533,8 @@ class MessageAnalyticsService
             if ($profileId > 0) {
                 $rows[$messageKey]['profile_ids'][$profileId] = true;
             }
+            $batchId = $this->nullableString($delivery->batch_id) ?? ('sms-'.(int) $delivery->id);
+            $rows[$messageKey]['batch_ids'][$batchId] = true;
 
             $deliveryKeyBySmsDeliveryId[(int) $delivery->id] = $messageKey;
         }
@@ -688,6 +702,11 @@ class MessageAnalyticsService
             $rows[$key]['profile_ids'] = array_map('intval', array_keys((array) ($row['profile_ids'] ?? [])));
             $rows[$key]['delivery_ids'] = array_values(array_unique(array_map('intval', (array) ($row['delivery_ids'] ?? []))));
             $rows[$key]['clicked_urls'] = array_values(array_unique(array_map('strval', (array) ($row['clicked_urls'] ?? []))));
+            $rows[$key]['batch_count'] = count((array) ($row['batch_ids'] ?? []));
+            $rows[$key]['aggregation_scope'] = $rows[$key]['channel'] === 'sms'
+                && $this->parseSmsRunBatchKey((string) Str::after((string) $rows[$key]['message_key'], 'sms:')) !== null
+                    ? 'logical_run'
+                    : 'batch';
             $rows[$key]['attributed_revenue_cents'] = (int) ($row['attributed_revenue_cents'] ?? 0);
         }
 
@@ -795,6 +814,8 @@ class MessageAnalyticsService
                 'created_at',
                 'marketing_profile_id',
                 'rendered_message',
+                'to_phone',
+                'from_identifier',
             ]);
     }
 
@@ -1854,6 +1875,35 @@ class MessageAnalyticsService
             ->where('channel', 'sms')
             ->whereNull('campaign_id');
 
+        $run = $this->parseSmsRunBatchKey($batchKey);
+        if (is_array($run)) {
+            $startAt = $run['start_at'];
+            $endAt = $run['end_at'];
+            $fingerprint = (string) ($run['fingerprint'] ?? '');
+
+            return $query
+                ->where(function (Builder $query) use ($startAt, $endAt): void {
+                    $query->whereBetween('sent_at', [$startAt, $endAt])
+                        ->orWhere(function (Builder $fallback) use ($startAt, $endAt): void {
+                            $fallback->whereNull('sent_at')
+                                ->whereBetween('created_at', [$startAt, $endAt]);
+                        });
+                })
+                ->get()
+                ->filter(function (MarketingMessageDelivery $delivery) use ($fingerprint, $startAt, $endAt): bool {
+                    $timestamp = $this->smsRunTimestamp($delivery);
+                    if (! $timestamp instanceof CarbonImmutable) {
+                        return false;
+                    }
+
+                    return $this->smsRunFingerprint($delivery) === $fingerprint
+                        && $timestamp->greaterThanOrEqualTo($startAt)
+                        && $timestamp->lessThanOrEqualTo($endAt);
+                })
+                ->sortBy(fn (MarketingMessageDelivery $delivery): string => $this->smsRunSortKey($delivery))
+                ->values();
+        }
+
         $legacyId = $this->legacyIdFromBatchKey('sms', $batchKey);
         if ($legacyId !== null) {
             return $query
@@ -1903,6 +1953,9 @@ class MessageAnalyticsService
             'fallback_unique_click_profiles' => [],
             'profile_ids' => [],
             'clicked_urls' => [],
+            'batch_ids' => [],
+            'batch_count' => 0,
+            'aggregation_scope' => 'batch',
             'top_click_counts' => [],
             'attributed_url_counts' => [],
             'status_counts' => [],
@@ -2012,9 +2065,183 @@ class MessageAnalyticsService
         return $batch ?? (strtolower($channel).'-'.$id);
     }
 
+    /**
+     * @param  Collection<int,MarketingMessageDelivery>  $smsDeliveries
+     * @return array<int,string>
+     */
+    protected function smsMessageKeys(Collection $smsDeliveries): array
+    {
+        if ($smsDeliveries->isEmpty()) {
+            return [];
+        }
+
+        $keys = [];
+        $gapSeconds = max(60, $this->smsRunGapMinutes() * 60);
+
+        $groups = $smsDeliveries
+            ->filter(fn (MarketingMessageDelivery $delivery): bool => (int) ($delivery->id ?? 0) > 0)
+            ->groupBy(fn (MarketingMessageDelivery $delivery): string => $this->smsRunFingerprint($delivery));
+
+        foreach ($groups as $fingerprint => $group) {
+            $sorted = $group
+                ->sortBy(fn (MarketingMessageDelivery $delivery): string => $this->smsRunSortKey($delivery))
+                ->values();
+
+            $currentDeliveryIds = [];
+            $currentStart = null;
+            $currentEnd = null;
+
+            $flush = function () use (&$keys, &$currentDeliveryIds, &$currentStart, &$currentEnd, $fingerprint): void {
+                if ($currentDeliveryIds === [] || ! $currentStart instanceof CarbonImmutable || ! $currentEnd instanceof CarbonImmutable) {
+                    $currentDeliveryIds = [];
+                    $currentStart = null;
+                    $currentEnd = null;
+
+                    return;
+                }
+
+                $messageKey = $this->messageKey('sms', $this->smsRunBatchKey((string) $fingerprint, $currentStart, $currentEnd));
+                foreach ($currentDeliveryIds as $deliveryId) {
+                    $keys[$deliveryId] = $messageKey;
+                }
+
+                $currentDeliveryIds = [];
+                $currentStart = null;
+                $currentEnd = null;
+            };
+
+            foreach ($sorted as $delivery) {
+                $deliveryId = (int) ($delivery->id ?? 0);
+                $timestamp = $this->smsRunTimestamp($delivery);
+
+                if ($deliveryId <= 0 || ! $timestamp instanceof CarbonImmutable) {
+                    continue;
+                }
+
+                if (! $currentStart instanceof CarbonImmutable || ! $currentEnd instanceof CarbonImmutable) {
+                    $currentDeliveryIds = [$deliveryId];
+                    $currentStart = $timestamp;
+                    $currentEnd = $timestamp;
+
+                    continue;
+                }
+
+                if ($currentEnd->diffInSeconds($timestamp) > $gapSeconds) {
+                    $flush();
+                    $currentDeliveryIds = [$deliveryId];
+                    $currentStart = $timestamp;
+                    $currentEnd = $timestamp;
+
+                    continue;
+                }
+
+                $currentDeliveryIds[] = $deliveryId;
+                if ($timestamp->lessThan($currentStart)) {
+                    $currentStart = $timestamp;
+                }
+                if ($timestamp->greaterThan($currentEnd)) {
+                    $currentEnd = $timestamp;
+                }
+            }
+
+            $flush();
+        }
+
+        foreach ($smsDeliveries as $delivery) {
+            $deliveryId = (int) ($delivery->id ?? 0);
+            if ($deliveryId <= 0 || isset($keys[$deliveryId])) {
+                continue;
+            }
+
+            $keys[$deliveryId] = $this->messageKey('sms', $this->batchKey('sms', $delivery->batch_id, $deliveryId));
+        }
+
+        return $keys;
+    }
+
+    protected function smsRunGapMinutes(): int
+    {
+        return max(1, (int) config('marketing.message_analytics.sms_run_gap_minutes', 5));
+    }
+
+    protected function smsRunFingerprint(MarketingMessageDelivery $delivery): string
+    {
+        return sha1(implode('|', [
+            $this->fingerprintValue($this->resolvedSourceLabel($delivery)),
+            $this->fingerprintValue($delivery->message_subject),
+            $this->fingerprintValue($delivery->rendered_message),
+            $this->fingerprintValue($delivery->from_identifier),
+        ]));
+    }
+
+    protected function smsRunTimestamp(MarketingMessageDelivery $delivery): ?CarbonImmutable
+    {
+        return $this->dateOrNull($delivery->sent_at ?? $delivery->created_at);
+    }
+
+    protected function smsRunSortKey(MarketingMessageDelivery $delivery): string
+    {
+        $timestamp = $this->smsRunTimestamp($delivery)?->utc()->timestamp ?? 0;
+
+        return sprintf('%012d:%010d', $timestamp, (int) ($delivery->id ?? 0));
+    }
+
+    protected function smsRunBatchKey(string $fingerprint, CarbonImmutable $startAt, CarbonImmutable $endAt): string
+    {
+        return sprintf('run|%s|%d|%d', $fingerprint, $startAt->utc()->timestamp, $endAt->utc()->timestamp);
+    }
+
+    /**
+     * @return array{fingerprint:string,start_at:CarbonImmutable,end_at:CarbonImmutable}|null
+     */
+    protected function parseSmsRunBatchKey(string $batchKey): ?array
+    {
+        $parts = explode('|', $batchKey);
+        if (count($parts) !== 4 || strtolower(trim((string) ($parts[0] ?? ''))) !== 'run') {
+            return null;
+        }
+
+        $fingerprint = strtolower(trim((string) ($parts[1] ?? '')));
+        $startTimestamp = trim((string) ($parts[2] ?? ''));
+        $endTimestamp = trim((string) ($parts[3] ?? ''));
+
+        if (! preg_match('/^[a-f0-9]{40}$/', $fingerprint)
+            || ! ctype_digit($startTimestamp)
+            || ! ctype_digit($endTimestamp)) {
+            return null;
+        }
+
+        $startAt = CarbonImmutable::createFromTimestampUTC((int) $startTimestamp);
+        $endAt = CarbonImmutable::createFromTimestampUTC((int) $endTimestamp);
+
+        if ($endAt->lessThan($startAt)) {
+            [$startAt, $endAt] = [$endAt, $startAt];
+        }
+
+        return [
+            'fingerprint' => $fingerprint,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+        ];
+    }
+
     protected function messageKey(string $channel, string $batchKey): string
     {
         return strtolower($channel).':'.$batchKey;
+    }
+
+    protected function fingerprintValue(mixed $value): string
+    {
+        $string = $this->nullableString($value);
+        if ($string === null) {
+            return '';
+        }
+
+        return Str::of($string)
+            ->lower()
+            ->replaceMatches('/\s+/u', ' ')
+            ->trim()
+            ->value();
     }
 
     /**

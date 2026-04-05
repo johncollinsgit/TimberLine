@@ -716,7 +716,7 @@
 
             <article class="message-analytics-card">
                 <h3>Message performance</h3>
-                <p class="message-analytics-muted">One row per message send batch. Use View to inspect exact clicked URLs and attributed orders.</p>
+                <p class="message-analytics-muted">One row per email batch or logical SMS send run. Use View to inspect exact clicked URLs and attributed orders.</p>
 
                 @if($messages->count() === 0)
                     <div class="message-analytics-empty">
@@ -760,7 +760,12 @@
                                     <tr>
                                         <td>
                                             <strong>{{ (string) ($row['message_name'] ?? 'Message') }}</strong>
-                                            <div class="message-analytics-muted">{{ (string) ($row['source_label'] ?? 'shopify_embedded_messaging') }}</div>
+                                            <div class="message-analytics-muted">
+                                                {{ (string) ($row['source_label'] ?? 'shopify_embedded_messaging') }}
+                                                @if((string) ($row['channel'] ?? '') === 'sms' && (int) ($row['batch_count'] ?? 0) > 1)
+                                                    · {{ number_format((int) ($row['batch_count'] ?? 0)) }} batches rolled up
+                                                @endif
+                                            </div>
                                         </td>
                                         <td>{{ strtoupper((string) ($row['channel'] ?? '')) }}</td>
                                         <td>{{ $formatDate((string) ($row['sent_at'] ?? null)) }}</td>
@@ -935,7 +940,21 @@
                                 <div class="message-analytics-table-wrap">
                                     <table class="message-analytics-table" style="min-width:560px;">
                                         <tbody>
-                                            <tr><th>Batch ID</th><td>{{ (string) data_get($detail, 'metadata.batch_id', '—') }}</td></tr>
+                                            @if((string) data_get($detail, 'metadata.batch_scope') === 'logical_run')
+                                                <tr>
+                                                    <th>Run batches</th>
+                                                    <td>
+                                                        {{ number_format((int) data_get($detail, 'metadata.batch_count', 0)) }}
+                                                        @if(count((array) data_get($detail, 'metadata.batch_ids', [])) > 0)
+                                                            <div class="message-analytics-muted">
+                                                                {{ \Illuminate\Support\Str::limit(implode(', ', (array) data_get($detail, 'metadata.batch_ids', [])), 120) }}
+                                                            </div>
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                                            @else
+                                                <tr><th>Batch ID</th><td>{{ (string) data_get($detail, 'metadata.batch_id', '—') }}</td></tr>
+                                            @endif
                                             <tr><th>Source label</th><td>{{ (string) data_get($detail, 'metadata.source_label', '—') }}</td></tr>
                                             <tr><th>Subject</th><td>{{ (string) data_get($detail, 'metadata.subject', '—') }}</td></tr>
                                             <tr><th>Sent at</th><td>{{ $formatDateTime((string) ($detail['sent_at'] ?? null)) }}</td></tr>

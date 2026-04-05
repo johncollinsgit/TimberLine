@@ -1,5 +1,20 @@
 # UI Changelog
 
+## 2026-04-04 — Messaging Analytics SMS Run Rollups
+
+### What changed
+- Updated the embedded Shopify `Message Analytics` table to roll batched SMS deliveries into one logical send run when the content/source match and the batches were dispatched close together.
+- Added lightweight operator-facing context in the table so SMS rows can show when multiple batches were rolled up into one analytics record.
+- Updated the detail metadata card to describe a logical SMS run in human terms (`Run batches`) instead of exposing the synthetic internal run key.
+
+### Why
+- Large text blasts were being split into many tiny rows because analytics grouped strictly by `batch_id`, which made attribution and recipient totals look incomplete even when the underlying deliveries were correct.
+- Operators needed the page to match how they think about a send: one blast, not dozens of queue chunks.
+
+### Scope boundary
+- Email analytics remain grouped by their existing batch model.
+- This pass changes presentation/grouping only; it does not claim retroactive click recovery for old untracked SMS sends.
+
 ## 2026-04-04 — Shopify Messaging Analytics + Chart Toggle Reliability
 
 ### What changed
