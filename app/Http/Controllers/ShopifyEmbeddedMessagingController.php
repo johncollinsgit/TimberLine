@@ -49,7 +49,7 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         $bootstrap = ($authorized && $tenantId !== null && $hasMessagingAccess)
             ? $probe->time('page_payload', fn (): array => [
-                'groups' => $workspaceService->groups($tenantId, includeAutoCounts: true),
+                'groups' => $workspaceService->groups($tenantId, includeAutoCounts: false),
                 'templates' => $workspaceService->emailTemplateDefinitions(),
             ])
             : null;
@@ -328,7 +328,7 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'data' => [
-                'groups' => $workspaceService->groups($tenantId, includeAutoCounts: true),
+                'groups' => $workspaceService->groups($tenantId, includeAutoCounts: false),
                 'templates' => $workspaceService->emailTemplateDefinitions(),
             ],
         ]);

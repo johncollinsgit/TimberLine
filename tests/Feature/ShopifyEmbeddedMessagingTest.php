@@ -156,6 +156,32 @@ test('messaging nav and workspace load when entitlement is enabled', function ()
         ->assertJsonMissingPath('data.all_subscribed_summary');
 });
 
+test('messaging page bootstrap defers auto audience counts to async summary loading', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Deferred Counts Tenant',
+        'slug' => 'messaging-deferred-counts-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->get(route('shopify.app.messaging', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertViewHas('messagingBootstrap', function (array $payload): bool {
+            $autoGroups = array_values((array) data_get($payload, 'data.groups.auto', []));
+            $firstAuto = (array) ($autoGroups[0] ?? []);
+
+            return ($firstAuto['key'] ?? null) === 'all_subscribed'
+                && array_key_exists('counts', $firstAuto)
+                && $firstAuto['counts'] === null;
+        });
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.bootstrap'))
+        ->assertOk()
+        ->assertJsonPath('data.groups.auto.0.key', 'all_subscribed')
+        ->assertJsonPath('data.groups.auto.0.counts', null);
+});
+
 test('messaging analytics page is locked for non-enabled tenant mappings', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Messaging Analytics Locked Tenant',

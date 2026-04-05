@@ -170,10 +170,9 @@ function normalizeTemplates(payload: MessagingBootstrap): EmailTemplateDefinitio
 export function MessagingApp({ bootstrap }: MessagingAppProps) {
   const [globalTone, setGlobalTone] = useState<"critical" | "success" | "info" | "warning">("info");
   const [globalMessage, setGlobalMessage] = useState<string | null>(null);
-  const [loadingPage, setLoadingPage] = useState(false);
 
-  const [groups, setGroups] = useState<MessagingGroupsPayload>(() => normalizeGroups(bootstrap));
-  const [templates, setTemplates] = useState<EmailTemplateDefinition[]>(() => normalizeTemplates(bootstrap));
+  const [groups] = useState<MessagingGroupsPayload>(() => normalizeGroups(bootstrap));
+  const [templates] = useState<EmailTemplateDefinition[]>(() => normalizeTemplates(bootstrap));
   const [groupSummaries, setGroupSummaries] = useState<Record<string, Record<string, number>>>({});
   const [audienceDiagnostics, setAudienceDiagnostics] = useState<Record<string, Record<string, number>>>({});
 
@@ -256,34 +255,6 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     setBanner("critical", error instanceof Error ? error.message : fallback);
   };
 
-  const loadBootstrapData = useCallback(async () => {
-    if (!endpoints.bootstrap) {
-      return;
-    }
-
-    setLoadingPage(true);
-
-    try {
-      const response = await requestMessagingJson<{
-        groups: MessagingGroupsPayload;
-        templates: EmailTemplateDefinition[];
-      }>(endpoints.bootstrap);
-
-      const payload = response.data;
-      if (payload) {
-        setGroups({
-          saved: Array.isArray(payload.groups?.saved) ? payload.groups.saved : [],
-          auto: Array.isArray(payload.groups?.auto) ? payload.groups.auto : [],
-        });
-        setTemplates(Array.isArray(payload.templates) ? payload.templates.slice(0, 5) : []);
-      }
-    } catch (error) {
-      handleApiError(error, "Failed to load messaging workspace.");
-    } finally {
-      setLoadingPage(false);
-    }
-  }, [endpoints.bootstrap]);
-
   const loadAudienceSummary = useCallback(async () => {
     if (!endpoints.audience_summary) {
       return;
@@ -323,9 +294,8 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   }, [endpoints.history]);
 
   useEffect(() => {
-    void loadBootstrapData();
     void loadAudienceSummary();
-  }, [loadBootstrapData, loadAudienceSummary]);
+  }, [loadAudienceSummary]);
 
   useEffect(() => {
     if (templates.length === 0) {
@@ -367,12 +337,14 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
 
     const auto = groups.auto.map((group) => {
       const summary = group.counts ?? groupSummaries[group.key] ?? {};
+      const hasSummary = (group.counts !== null && group.counts !== undefined)
+        || groupSummaries[group.key] !== undefined;
       const count = Number(summary[activeChannel] ?? 0);
 
       return {
         id: `auto:${group.key}`,
         name: group.name,
-        subtitle: `${formatCount(count)} sendable`,
+        subtitle: hasSummary ? `${formatCount(count)} sendable` : "Calculating sendable",
         count,
         kind: "auto" as const,
         group,
@@ -1158,17 +1130,6 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           </Banner>
         ) : null}
 
-        {loadingPage ? (
-          <Card>
-            <InlineStack blockAlign="center" gap="200">
-              <Spinner accessibilityLabel="Loading messaging" size="small" />
-              <Text as="p" tone="subdued">
-                Loading workspace
-              </Text>
-            </InlineStack>
-          </Card>
-        ) : null}
-
         <Card>
           <BlockStack gap="300">
             <Tabs
@@ -1232,11 +1193,17 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
         <Modal.Section>
           {detailsTarget?.type === "auto" ? (
             <BlockStack gap="200">
-              <InlineStack gap="200" wrap>
-                <Badge tone="info">SMS: {formatCount(Number((detailsTarget.counts ?? groupSummaries[detailsTarget.key] ?? {}).sms ?? 0))}</Badge>
-                <Badge tone="info">Email: {formatCount(Number((detailsTarget.counts ?? groupSummaries[detailsTarget.key] ?? {}).email ?? 0))}</Badge>
-                <Badge tone="info">Unique: {formatCount(Number((detailsTarget.counts ?? groupSummaries[detailsTarget.key] ?? {}).unique ?? 0))}</Badge>
-              </InlineStack>
+              {(detailsTarget.counts ?? groupSummaries[detailsTarget.key]) ? (
+                <InlineStack gap="200" wrap>
+                  <Badge tone="info">SMS: {formatCount(Number((detailsTarget.counts ?? groupSummaries[detailsTarget.key] ?? {}).sms ?? 0))}</Badge>
+                  <Badge tone="info">Email: {formatCount(Number((detailsTarget.counts ?? groupSummaries[detailsTarget.key] ?? {}).email ?? 0))}</Badge>
+                  <Badge tone="info">Unique: {formatCount(Number((detailsTarget.counts ?? groupSummaries[detailsTarget.key] ?? {}).unique ?? 0))}</Badge>
+                </InlineStack>
+              ) : (
+                <Text as="p" tone="subdued" variant="bodySm">
+                  Audience summary is loading.
+                </Text>
+              )}
               <Text as="p" tone="subdued" variant="bodySm">
                 {detailsTarget.description ?? "Automatic audience details."}
               </Text>
