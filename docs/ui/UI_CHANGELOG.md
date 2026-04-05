@@ -6,6 +6,7 @@
 - Updated the embedded Shopify `Message Analytics` table to roll batched SMS deliveries into one logical send run when the content/source match and the batches were dispatched close together.
 - Added lightweight operator-facing context in the table so SMS rows can show when multiple batches were rolled up into one analytics record.
 - Updated the detail metadata card to describe a logical SMS run in human terms (`Run batches`) instead of exposing the synthetic internal run key.
+- Added explicit explanatory copy when attributed orders exist without tracked clicks so operators can tell the difference between inferred attribution and true click-capture gaps.
 
 ### Why
 - Large text blasts were being split into many tiny rows because analytics grouped strictly by `batch_id`, which made attribution and recipient totals look incomplete even when the underlying deliveries were correct.

@@ -76,6 +76,8 @@
                 default => 'Sent',
             };
         };
+        $hasInferredOrdersWithoutClicks = (int) ($summary['attributed_orders'] ?? 0) > 0
+            && (int) ($summary['total_clicks'] ?? 0) === 0;
     @endphp
 
     <style>
@@ -712,6 +714,13 @@
                         <strong>{{ $formatPercent((float) ($summary['click_to_order_conversion_rate'] ?? 0)) }}</strong>
                     </article>
                 </div>
+                @if($hasInferredOrdersWithoutClicks)
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">
+                            This range includes attributed orders inferred from coupon or landing-page signals. Tracked click events were not available for at least one send in this range.
+                        </p>
+                    </div>
+                @endif
             </article>
 
             <article class="message-analytics-card">
@@ -907,6 +916,14 @@
                             <p class="message-analytics-muted">This message detail could not be loaded. It may no longer exist for this tenant/store scope.</p>
                         </div>
                     @else
+                        @if((int) ($detail['attributed_orders'] ?? 0) > 0 && (int) ($detail['clicks'] ?? 0) === 0)
+                            <div class="message-analytics-empty">
+                                <p class="message-analytics-muted">
+                                    This message has attributed orders inferred from coupon or landing-page signals. Raw click tracking was not available for this send.
+                                </p>
+                            </div>
+                        @endif
+
                         <section class="message-analytics-meta-grid" aria-label="Message detail summary">
                             <article class="message-analytics-meta-card">
                                 <span>Message</span>
