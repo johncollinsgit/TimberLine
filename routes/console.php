@@ -36,6 +36,12 @@ Schedule::command('marketing:sync-profiles', [
     ->withoutOverlapping(180)
     ->runInBackground();
 
+// Drain default queued profile/order jobs even if a daemon worker is not running.
+Schedule::command('queue:work database --queue=default --stop-when-empty --tries=1 --sleep=1 --timeout=120')
+    ->everyMinute()
+    ->withoutOverlapping(10)
+    ->runInBackground();
+
 // Shopify webhook subscription drift audit (non-destructive; repair is manual).
 Schedule::command('shopify:webhooks:verify')
     ->dailyAt('01:35')
