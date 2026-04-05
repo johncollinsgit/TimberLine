@@ -22,14 +22,26 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    public int $orderId;
+
+    /**
+     * @var array<string,mixed>
+     */
+    public array $identityContext = [];
+
+    public ?int $tenantId = null;
+
     /**
      * @param array<string,mixed> $identityContext
      */
     public function __construct(
-        public int $orderId,
-        public array $identityContext = [],
-        public ?int $tenantId = null
+        int $orderId,
+        array $identityContext = [],
+        ?int $tenantId = null
     ) {
+        $this->orderId = $orderId;
+        $this->identityContext = $identityContext;
+        $this->tenantId = $tenantId;
     }
 
     public function handle(

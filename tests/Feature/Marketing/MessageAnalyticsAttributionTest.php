@@ -270,6 +270,90 @@ test('message order attribution service uses latest qualifying sms click as last
         ->not->toBe($olderClick->id);
 });
 
+test('message order attribution can infer sms attribution from coupon signal when clicks are unavailable', function () {
+    config()->set('marketing.message_analytics.coupon_inference_enabled', true);
+    config()->set('marketing.message_analytics.coupon_inference_require_url_match', false);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Message Coupon Inference Tenant',
+        'slug' => 'message-coupon-inference-tenant',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Morgan',
+        'last_name' => 'Signal',
+        'email' => 'morgan.signal@example.com',
+        'normalized_email' => 'morgan.signal@example.com',
+        'phone' => '+15558887777',
+        'normalized_phone' => '+15558887777',
+        'accepts_sms_marketing' => true,
+        'accepts_email_marketing' => true,
+    ]);
+
+    $delivery = MarketingMessageDelivery::query()->create([
+        'campaign_id' => null,
+        'campaign_recipient_id' => null,
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'batch_id' => 'sms-batch-coupon-inference',
+        'source_label' => 'shopify_embedded_messaging_auto_group_resume_v1',
+        'message_subject' => 'Spring reminder',
+        'channel' => 'sms',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_COUPON_INF_1',
+        'to_phone' => '+15558887777',
+        'from_identifier' => '+15550001111',
+        'attempt_number' => 1,
+        'rendered_message' => "Use code NCAZ26 for free shipping\nhttps://theforestrystudio.com/collections/spring-collection",
+        'send_status' => 'delivered',
+        'provider_payload' => [],
+        'sent_at' => now()->subHours(6),
+        'delivered_at' => now()->subHours(6),
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 'sms-order-coupon-inferred-1',
+        'order_number' => '#SMS-3003',
+        'customer_name' => 'Morgan Signal',
+        'status' => 'new',
+        'ordered_at' => now()->subHours(2),
+        'tenant_id' => $tenant->id,
+        'total_price' => 56.25,
+        'attribution_meta' => [
+            'coupon_signals' => ['NCAZ26'],
+            'landing_site' => '/collections/spring-collection',
+            'referring_site' => 'https://theforestrystudio.com/',
+        ],
+    ]);
+
+    $summary = app(MessageOrderAttributionService::class)->syncForTenantStore(
+        tenantId: $tenant->id,
+        storeKey: 'retail',
+        dateFrom: now()->subDays(2),
+        dateTo: now(),
+        windowDays: 7
+    );
+
+    expect((int) ($summary['attributed'] ?? 0))->toBeGreaterThan(0);
+
+    $attribution = MarketingMessageOrderAttribution::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('store_key', 'retail')
+        ->where('order_id', $order->id)
+        ->first();
+
+    expect($attribution)->not->toBeNull()
+        ->and((int) ($attribution?->marketing_message_delivery_id ?? 0))->toBe($delivery->id)
+        ->and((int) ($attribution?->marketing_message_engagement_event_id ?? 0))->toBe(0)
+        ->and((string) ($attribution?->channel ?? ''))->toBe('sms')
+        ->and(data_get($attribution?->metadata, 'attribution_rule'))->toBe('coupon_signal_message_match_without_click')
+        ->and(data_get($attribution?->metadata, 'coupon_code'))->toBe('NCAZ26');
+});
+
 test('message analytics index and detail include sms attributed orders and revenue', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Message Analytics SMS Tenant',

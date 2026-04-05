@@ -11,6 +11,20 @@ $parseTwilioSenders = static function (): array {
     return is_array($decoded) ? $decoded : [];
 };
 
+$parseCsvStrings = static function (?string $value): array {
+    return array_values(array_filter(array_map(
+        static fn (string $entry): string => trim($entry),
+        explode(',', (string) $value)
+    )));
+};
+
+$parseCsvInts = static function (?string $value): array {
+    return array_values(array_filter(array_map(
+        static fn (string $entry): int => max(0, (int) trim($entry)),
+        explode(',', (string) $value)
+    ), static fn (int $entry): bool => $entry > 0));
+};
+
 return [
     'square' => [
         'enabled' => (bool) env('MARKETING_SQUARE_ENABLED', false),
@@ -80,6 +94,8 @@ return [
 
     'message_analytics' => [
         'attribution_window_days' => (int) env('MARKETING_MESSAGE_ATTRIBUTION_WINDOW_DAYS', 7),
+        'coupon_inference_enabled' => (bool) env('MARKETING_MESSAGE_COUPON_INFERENCE_ENABLED', true),
+        'coupon_inference_require_url_match' => (bool) env('MARKETING_MESSAGE_COUPON_INFERENCE_REQUIRE_URL_MATCH', false),
     ],
 
     'twilio' => [
@@ -92,6 +108,29 @@ return [
         'senders' => $parseTwilioSenders(),
         'status_callback_url' => env('TWILIO_STATUS_CALLBACK_URL'),
         'verify_signature' => (bool) env('MARKETING_TWILIO_VERIFY_SIGNATURE', false),
+    ],
+
+    'messaging' => [
+        'queue' => (string) env('MARKETING_MESSAGING_QUEUE', 'marketing-messaging'),
+        'dispatch_batch_size' => max(25, (int) env('MARKETING_MESSAGING_DISPATCH_BATCH_SIZE', 250)),
+        'dispatch_interval_seconds' => max(1, (int) env('MARKETING_MESSAGING_DISPATCH_INTERVAL_SECONDS', 2)),
+        'default_max_attempts' => max(1, (int) env('MARKETING_MESSAGING_DEFAULT_MAX_ATTEMPTS', 4)),
+        'sms' => [
+            'max_dispatch_per_second' => max(1, (int) env('MARKETING_MESSAGING_SMS_MAX_DISPATCH_PER_SECOND', 18)),
+            'retry_backoff_seconds' => $parseCsvInts((string) env('MARKETING_MESSAGING_SMS_RETRY_BACKOFF_SECONDS', '20,90,300')),
+            'retryable_error_codes' => $parseCsvStrings((string) env(
+                'MARKETING_MESSAGING_SMS_RETRYABLE_ERROR_CODES',
+                '20429,21611,30001,30002,30003,30005,30006,30007,30008,429,500,502,503,504,exception,timeout'
+            )),
+        ],
+        'email' => [
+            'max_dispatch_per_second' => max(1, (int) env('MARKETING_MESSAGING_EMAIL_MAX_DISPATCH_PER_SECOND', 40)),
+            'retry_backoff_seconds' => $parseCsvInts((string) env('MARKETING_MESSAGING_EMAIL_RETRY_BACKOFF_SECONDS', '30,120,420')),
+        ],
+        'link_shortening' => [
+            'provider' => strtolower(trim((string) env('MARKETING_SMS_LINK_SHORTENER_PROVIDER', 'twilio'))),
+            'twilio_native_enabled' => (bool) env('MARKETING_TWILIO_LINK_SHORTENING_ENABLED', false),
+        ],
     ],
 
     'shopify' => [

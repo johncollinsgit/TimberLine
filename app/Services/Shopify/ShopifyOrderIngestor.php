@@ -61,6 +61,10 @@ class ShopifyOrderIngestor
                 $orderData,
                 (string) ($store['key'] ?? '')
             );
+            $couponSignals = $this->extractCouponSignals($orderData);
+            if ($couponSignals !== []) {
+                $payloadAttributionMeta['coupon_signals'] = array_values($couponSignals);
+            }
             $financials = $this->extractOrderFinancials($orderData);
 
             $order->shopify_store_key = $store['key'];

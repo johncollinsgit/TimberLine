@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\Order;
@@ -195,7 +196,7 @@ class MessageOrderAttributionService
         Collection $profileIds
     ): array {
         $orderAt = $this->resolveDate($order->ordered_at) ?? $this->resolveDate($order->created_at);
-        if ($orderAt === null || $profileIds->isEmpty()) {
+        if ($orderAt === null) {
             return [
                 'attributed' => false,
                 'created' => 0,
@@ -205,15 +206,32 @@ class MessageOrderAttributionService
             ];
         }
 
-        $click = $this->resolveLastClickEvent(
-            tenantId: $tenantId,
-            storeKey: $storeKey,
-            profileIds: $profileIds,
-            orderAt: $orderAt,
-            windowDays: $windowDays
-        );
+        $payload = null;
+        $click = null;
 
-        if (! $click instanceof MarketingMessageEngagementEvent) {
+        if (! $profileIds->isEmpty()) {
+            $click = $this->resolveLastClickEvent(
+                tenantId: $tenantId,
+                storeKey: $storeKey,
+                profileIds: $profileIds,
+                orderAt: $orderAt,
+                windowDays: $windowDays
+            );
+        }
+
+        if ($click instanceof MarketingMessageEngagementEvent) {
+            $payload = $this->payloadForClickAttribution($click, $order, $orderAt, $windowDays);
+        } elseif ((bool) config('marketing.message_analytics.coupon_inference_enabled', true)) {
+            $payload = $this->payloadForCouponInferredAttribution(
+                order: $order,
+                tenantId: $tenantId,
+                storeKey: $storeKey,
+                orderAt: $orderAt,
+                windowDays: $windowDays
+            );
+        }
+
+        if (! is_array($payload)) {
             return [
                 'attributed' => false,
                 'created' => 0,
@@ -229,26 +247,6 @@ class MessageOrderAttributionService
             'order_id' => (int) $order->id,
             'attribution_model' => self::ATTRIBUTION_MODEL,
         ];
-
-        $payload = [
-            'marketing_profile_id' => $this->positiveInt($click->marketing_profile_id),
-            'marketing_email_delivery_id' => $this->positiveInt($click->marketing_email_delivery_id),
-            'marketing_message_engagement_event_id' => (int) $click->id,
-            'channel' => $this->resolvedChannel($click),
-            'attribution_window_days' => $windowDays,
-            'attributed_url' => $this->nullableString($click->url),
-            'normalized_url' => $this->nullableString($click->normalized_url),
-            'click_occurred_at' => $click->occurred_at,
-            'order_occurred_at' => $orderAt,
-            'revenue_cents' => $this->orderRevenueCents($order),
-            'metadata' => [
-                'attribution_rule' => 'last_click_within_window',
-                'order_number' => $this->nullableString((string) ($order->order_number ?? null)),
-            ],
-        ];
-        if (Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id')) {
-            $payload['marketing_message_delivery_id'] = $this->positiveInt($click->marketing_message_delivery_id);
-        }
 
         $record = MarketingMessageOrderAttribution::query()->where($keys)->first();
         if (! $record instanceof MarketingMessageOrderAttribution) {
@@ -306,6 +304,271 @@ class MessageOrderAttributionService
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->first();
+    }
+
+    protected function payloadForClickAttribution(
+        MarketingMessageEngagementEvent $click,
+        Order $order,
+        CarbonImmutable $orderAt,
+        int $windowDays
+    ): array {
+        $payload = [
+            'marketing_profile_id' => $this->positiveInt($click->marketing_profile_id),
+            'marketing_email_delivery_id' => $this->positiveInt($click->marketing_email_delivery_id),
+            'marketing_message_engagement_event_id' => (int) $click->id,
+            'channel' => $this->resolvedChannel($click),
+            'attribution_window_days' => $windowDays,
+            'attributed_url' => $this->nullableString($click->url),
+            'normalized_url' => $this->nullableString($click->normalized_url),
+            'click_occurred_at' => $click->occurred_at,
+            'order_occurred_at' => $orderAt,
+            'revenue_cents' => $this->orderRevenueCents($order),
+            'metadata' => [
+                'attribution_rule' => 'last_click_within_window',
+                'order_number' => $this->nullableString((string) ($order->order_number ?? null)),
+            ],
+        ];
+
+        if (Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id')) {
+            $payload['marketing_message_delivery_id'] = $this->positiveInt($click->marketing_message_delivery_id);
+        }
+
+        return $payload;
+    }
+
+    protected function payloadForCouponInferredAttribution(
+        Order $order,
+        int $tenantId,
+        ?string $storeKey,
+        CarbonImmutable $orderAt,
+        int $windowDays
+    ): ?array {
+        if (! Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id')) {
+            return null;
+        }
+
+        $inferred = $this->resolveCouponInferredSmsDelivery(
+            order: $order,
+            tenantId: $tenantId,
+            storeKey: $storeKey,
+            orderAt: $orderAt,
+            windowDays: $windowDays
+        );
+
+        if (! is_array($inferred)) {
+            return null;
+        }
+
+        return [
+            'marketing_profile_id' => null,
+            'marketing_email_delivery_id' => null,
+            'marketing_message_delivery_id' => (int) ($inferred['marketing_message_delivery_id'] ?? 0),
+            'marketing_message_engagement_event_id' => null,
+            'channel' => 'sms',
+            'attribution_window_days' => $windowDays,
+            'attributed_url' => $this->nullableString($inferred['attributed_url'] ?? null),
+            'normalized_url' => $this->nullableString($inferred['normalized_url'] ?? null),
+            'click_occurred_at' => $inferred['click_occurred_at'] ?? null,
+            'order_occurred_at' => $orderAt,
+            'revenue_cents' => $this->orderRevenueCents($order),
+            'metadata' => [
+                'attribution_rule' => 'coupon_signal_message_match_without_click',
+                'inferred' => true,
+                'coupon_code' => $this->nullableString($inferred['coupon_code'] ?? null),
+                'order_number' => $this->nullableString((string) ($order->order_number ?? null)),
+            ],
+        ];
+    }
+
+    /**
+     * @return array{marketing_message_delivery_id:int,click_occurred_at:CarbonImmutable,attributed_url:?string,normalized_url:?string,coupon_code:string}|null
+     */
+    protected function resolveCouponInferredSmsDelivery(
+        Order $order,
+        int $tenantId,
+        ?string $storeKey,
+        CarbonImmutable $orderAt,
+        int $windowDays
+    ): ?array {
+        $couponSignals = $this->orderCouponSignals($order);
+        if ($couponSignals->isEmpty()) {
+            return null;
+        }
+
+        $orderSignals = $this->orderLandingSignals($order);
+        $requireUrlMatch = (bool) config('marketing.message_analytics.coupon_inference_require_url_match', false);
+
+        $from = $orderAt->copy()->subDays($windowDays);
+
+        $deliveries = MarketingMessageDelivery::query()
+            ->forTenantId($tenantId)
+            ->where('channel', 'sms')
+            ->when(
+                $storeKey !== null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('store_key', $storeKey)
+            )
+            ->where(function (EloquentBuilder $query) use ($from, $orderAt): void {
+                $query->whereBetween('sent_at', [$from, $orderAt])
+                    ->orWhere(function (EloquentBuilder $fallback) use ($from, $orderAt): void {
+                        $fallback->whereNull('sent_at')
+                            ->whereBetween('created_at', [$from, $orderAt]);
+                    });
+            })
+            ->orderByDesc('sent_at')
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get([
+                'id',
+                'rendered_message',
+                'sent_at',
+                'created_at',
+            ]);
+
+        foreach ($deliveries as $delivery) {
+            $message = (string) ($delivery->rendered_message ?? '');
+            if (trim($message) === '') {
+                continue;
+            }
+
+            $messageLower = strtolower($message);
+            $matchedCode = $couponSignals
+                ->first(fn (string $code): bool => str_contains($messageLower, strtolower($code)));
+
+            if (! is_string($matchedCode) || trim($matchedCode) === '') {
+                continue;
+            }
+
+            $urls = $this->extractUrlsFromMessage($message);
+            [$urlMatched, $matchedUrl] = $this->messageUrlsMatchOrderSignals($urls, $orderSignals);
+            if ($requireUrlMatch && ! $urlMatched) {
+                continue;
+            }
+
+            $deliveryAt = $this->resolveDate($delivery->sent_at) ?? $this->resolveDate($delivery->created_at) ?? $orderAt;
+            $resolvedUrl = $matchedUrl ?? ($urls[0] ?? null);
+
+            return [
+                'marketing_message_delivery_id' => (int) $delivery->id,
+                'click_occurred_at' => $deliveryAt,
+                'attributed_url' => $this->nullableString($resolvedUrl),
+                'normalized_url' => $this->nullableString($resolvedUrl),
+                'coupon_code' => strtoupper(trim($matchedCode)),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return Collection<int,string>
+     */
+    protected function orderCouponSignals(Order $order): Collection
+    {
+        $meta = is_array($order->attribution_meta ?? null)
+            ? $order->attribution_meta
+            : (is_string($order->attribution_meta ?? null) ? json_decode((string) $order->attribution_meta, true) : []);
+        $meta = is_array($meta) ? $meta : [];
+
+        $signals = collect((array) ($meta['coupon_signals'] ?? []));
+
+        foreach ((array) ($meta['discount_codes'] ?? []) as $value) {
+            if (is_array($value)) {
+                $signals->push((string) ($value['code'] ?? ''));
+            } else {
+                $signals->push((string) $value);
+            }
+        }
+
+        return $signals
+            ->map(fn ($value): string => strtoupper(trim((string) $value)))
+            ->filter(function (string $value): bool {
+                if ($value === '' || strlen($value) < 4) {
+                    return false;
+                }
+
+                return (bool) preg_match('/^[A-Z0-9_-]+$/', $value)
+                    && (bool) preg_match('/[A-Z]/', $value)
+                    && (bool) preg_match('/[0-9]/', $value);
+            })
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function orderLandingSignals(Order $order): array
+    {
+        $meta = is_array($order->attribution_meta ?? null)
+            ? $order->attribution_meta
+            : (is_string($order->attribution_meta ?? null) ? json_decode((string) $order->attribution_meta, true) : []);
+        $meta = is_array($meta) ? $meta : [];
+
+        return collect([
+            (string) ($meta['landing_site'] ?? ''),
+            (string) ($meta['referring_site'] ?? ''),
+            (string) ($meta['referrer'] ?? ''),
+        ])
+            ->map(fn (string $value): string => strtolower(trim($value)))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function extractUrlsFromMessage(string $message): array
+    {
+        if (! preg_match_all('/https?:\/\/[^\s<>"\']+/i', $message, $matches)) {
+            return [];
+        }
+
+        return collect((array) ($matches[0] ?? []))
+            ->map(fn ($url): string => trim((string) $url, " \t\n\r\0\x0B.,!?;:()[]{}<>\"'"))
+            ->filter(fn (string $url): bool => $url !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int,string>  $urls
+     * @param  array<int,string>  $orderSignals
+     * @return array{0:bool,1:?string}
+     */
+    protected function messageUrlsMatchOrderSignals(array $urls, array $orderSignals): array
+    {
+        if ($urls === [] || $orderSignals === []) {
+            return [false, null];
+        }
+
+        foreach ($urls as $url) {
+            $urlLower = strtolower(trim($url));
+            $urlPath = strtolower(trim((string) parse_url($url, PHP_URL_PATH)));
+            $urlHost = strtolower(trim((string) parse_url($url, PHP_URL_HOST)));
+
+            foreach ($orderSignals as $signal) {
+                if ($signal === '') {
+                    continue;
+                }
+
+                if ($urlLower !== '' && str_contains($signal, $urlLower)) {
+                    return [true, $url];
+                }
+
+                if ($urlPath !== '' && str_contains($signal, $urlPath)) {
+                    return [true, $url];
+                }
+
+                if ($urlHost !== '' && str_contains($signal, $urlHost)) {
+                    return [true, $url];
+                }
+            }
+        }
+
+        return [false, null];
     }
 
     protected function clearAttribution(int $tenantId, ?string $storeKey, int $orderId): int
