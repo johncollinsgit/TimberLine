@@ -950,6 +950,12 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/send/group', [ShopifyEmbeddedMessagingController::class, 'sendGroup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.send.group');
+        Route::post('/messaging/smoke/sms', [ShopifyEmbeddedMessagingController::class, 'smokeSms'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.smoke.sms');
+        Route::post('/messaging/smoke/email', [ShopifyEmbeddedMessagingController::class, 'smokeEmail'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.smoke.email');
         Route::post('/messaging/setup/complete', [ShopifyEmbeddedMessagingController::class, 'completeSetup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.setup.complete');

@@ -1210,6 +1210,57 @@ test('individual email send uses existing email pipeline and records delivery me
         ->and((string) data_get($delivery?->metadata, 'subject'))->toBe('Operational Message');
 });
 
+test('sms smoke test sends to one or more numbers and returns statuses', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'SMS Smoke Tenant',
+        'slug' => 'sms-smoke-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.smoke.sms'), [
+            'test_numbers' => ['+15554440001', '+15554440002'],
+            'message' => 'Smoke test message',
+        ])
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary.processed', 2)
+        ->assertJsonPath('data.summary.sent', 2)
+        ->assertJsonCount(2, 'data.deliveries');
+});
+
+test('email smoke test blocks invalid link integrity payloads', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Email Smoke Tenant',
+        'slug' => 'email-smoke-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.smoke.email'), [
+            'test_emails' => ['smoke@example.com'],
+            'subject' => 'Smoke test',
+            'body' => 'Hello',
+            'email_template_mode' => 'legacy_html',
+            'email_advanced_html' => '<a href="/relative-link">Broken</a>',
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Email smoke test failed.')
+        ->assertJsonStructure([
+            'errors' => [
+                'email_sections',
+            ],
+        ]);
+});
+
 test('auto group send dispatches to all subscribed sms recipients only', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Auto Group Tenant',
@@ -1274,7 +1325,8 @@ test('auto group send dispatches to all subscribed sms recipients only', functio
         ->assertJsonPath('ok', true)
         ->assertJsonPath('message', 'Message sent.')
         ->assertJsonPath('data.summary.processed', 3)
-        ->assertJsonPath('data.summary.sent', 3)
+        ->assertJsonPath('data.summary.sent', 0)
+        ->assertJsonPath('data.summary.queued', 3)
         ->assertJsonPath('data.target.type', 'auto')
         ->assertJsonPath('data.target.key', 'all_subscribed');
 

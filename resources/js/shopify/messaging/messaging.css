@@ -1,0 +1,94 @@
+.sf-messaging-group-grid,
+.sf-messaging-template-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.sf-messaging-group-card,
+.sf-messaging-template-card {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  padding: 12px;
+}
+
+.sf-messaging-group-card:hover,
+.sf-messaging-template-card:hover {
+  border-color: rgba(15, 23, 42, 0.24);
+}
+
+.sf-messaging-group-card.is-selected,
+.sf-messaging-template-card.is-selected {
+  border-color: rgba(16, 99, 63, 0.45);
+  box-shadow: 0 0 0 2px rgba(16, 99, 63, 0.14);
+}
+
+.sf-messaging-template-thumb {
+  min-height: 90px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: linear-gradient(160deg, #f8fafc 0%, #eef7f2 100%);
+  padding: 10px;
+  margin-bottom: 10px;
+  display: grid;
+  align-content: center;
+}
+
+.sf-messaging-phone-shell {
+  width: 100%;
+  max-width: 360px;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 24px;
+  background: #f8fafc;
+  padding: 18px;
+}
+
+.sf-messaging-phone-bubble {
+  border-radius: 16px;
+  background: #e5f3ed;
+  border: 1px solid rgba(16, 99, 63, 0.24);
+  color: #0f172a;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 78px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sf-messaging-smoke-results,
+.sf-messaging-history-list,
+.sf-messaging-product-results {
+  display: grid;
+  gap: 8px;
+}
+
+.sf-messaging-email-preview-frame {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.sf-messaging-section-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+}
+
+.sf-messaging-section-list,
+.sf-messaging-section-editor {
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .sf-messaging-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

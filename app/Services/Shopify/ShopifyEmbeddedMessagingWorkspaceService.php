@@ -2,13 +2,18 @@
 
 namespace App\Services\Shopify;
 
+use App\Models\MarketingCampaign;
+use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
+use App\Models\MarketingMessageJob;
 use App\Models\MarketingProfile;
+use App\Models\MarketingTemplateDefinition;
 use App\Models\Tenant;
+use App\Services\Marketing\EmbeddedMessagingCampaignDispatchService;
 use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,6 +35,65 @@ class ShopifyEmbeddedMessagingWorkspaceService
     protected const AUDIENCE_SCOPE_EFFECTIVE = 'effective';
     protected const AUDIENCE_SCOPE_LEGACY_IMPORTED = 'legacy_imported';
     protected const AUDIENCE_SUMMARY_CACHE_MINUTES = 10;
+
+    /**
+     * @var array<int,array<string,mixed>>
+     */
+    protected const DEFAULT_EMAIL_TEMPLATES = [
+        [
+            'key' => 'announcement',
+            'name' => 'Announcement',
+            'description' => 'Clean launch/update announcement layout.',
+            'default_subject' => 'A quick update from Forestry Backstage',
+            'default_sections' => [
+                ['id' => 'heading_1', 'type' => 'heading', 'text' => 'Big news', 'align' => 'left'],
+                ['id' => 'body_1', 'type' => 'text', 'html' => 'Share your update in two or three concise paragraphs.'],
+                ['id' => 'button_1', 'type' => 'button', 'label' => 'Read more', 'href' => '', 'align' => 'left'],
+            ],
+        ],
+        [
+            'key' => 'product_spotlight',
+            'name' => 'Product spotlight',
+            'description' => 'Single product feature with focused CTA.',
+            'default_subject' => 'Product spotlight',
+            'default_sections' => [
+                ['id' => 'heading_1', 'type' => 'heading', 'text' => 'Featured right now', 'align' => 'left'],
+                ['id' => 'product_1', 'type' => 'product', 'productId' => '', 'title' => '', 'imageUrl' => '', 'price' => '', 'href' => '', 'buttonLabel' => 'Shop now'],
+                ['id' => 'body_1', 'type' => 'text', 'html' => 'Add one supporting paragraph with key details.'],
+            ],
+        ],
+        [
+            'key' => 'event_update',
+            'name' => 'Event/update',
+            'description' => 'Simple event or operations update.',
+            'default_subject' => 'Upcoming event update',
+            'default_sections' => [
+                ['id' => 'heading_1', 'type' => 'heading', 'text' => 'Upcoming event', 'align' => 'left'],
+                ['id' => 'body_1', 'type' => 'text', 'html' => 'Share the key details: when, where, and what to expect.'],
+                ['id' => 'button_1', 'type' => 'button', 'label' => 'View details', 'href' => '', 'align' => 'left'],
+            ],
+        ],
+        [
+            'key' => 'photo_cta',
+            'name' => 'Photo + CTA',
+            'description' => 'Image-first message with a focused next step.',
+            'default_subject' => 'See what is new',
+            'default_sections' => [
+                ['id' => 'image_1', 'type' => 'image', 'imageUrl' => '', 'alt' => 'Feature image', 'href' => '', 'padding' => '0 0 12px 0'],
+                ['id' => 'heading_1', 'type' => 'heading', 'text' => 'A quick look', 'align' => 'left'],
+                ['id' => 'button_1', 'type' => 'button', 'label' => 'Open', 'href' => '', 'align' => 'left'],
+            ],
+        ],
+        [
+            'key' => 'minimal_plain',
+            'name' => 'Minimal / plain',
+            'description' => 'Low-friction plain style note.',
+            'default_subject' => 'Quick note',
+            'default_sections' => [
+                ['id' => 'body_1', 'type' => 'text', 'html' => 'Keep this short and conversational.'],
+            ],
+        ],
+    ];
 
     /**
      * @var array<int,string>
@@ -56,7 +120,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
         protected ShopifyEmbeddedCustomersGridService $customersGridService,
         protected MarketingDirectMessagingService $directMessagingService,
         protected MarketingIdentityNormalizer $identityNormalizer,
-        protected ShopifyEmbeddedEmailComposerService $emailComposerService
+        protected ShopifyEmbeddedEmailComposerService $emailComposerService,
+        protected EmbeddedMessagingCampaignDispatchService $campaignDispatchService
     ) {
     }
 
@@ -261,6 +326,58 @@ GRAPHQL;
             'saved' => $savedGroups,
             'auto' => $autoGroups,
         ];
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    public function emailTemplateDefinitions(): array
+    {
+        $definitions = MarketingTemplateDefinition::query()
+            ->where('channel', 'email')
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get([
+                'id',
+                'template_key',
+                'name',
+                'description',
+                'default_subject',
+                'default_sections',
+                'thumbnail_svg',
+            ])
+            ->map(function (MarketingTemplateDefinition $template): array {
+                return [
+                    'id' => (int) $template->id,
+                    'key' => (string) $template->template_key,
+                    'name' => (string) $template->name,
+                    'description' => $this->nullableString($template->description),
+                    'default_subject' => $this->nullableString($template->default_subject),
+                    'default_sections' => is_array($template->default_sections) ? $template->default_sections : [],
+                    'thumbnail_svg' => $this->nullableString($template->thumbnail_svg),
+                ];
+            })
+            ->values()
+            ->all();
+
+        if ($definitions !== []) {
+            return $definitions;
+        }
+
+        return collect(self::DEFAULT_EMAIL_TEMPLATES)
+            ->map(function (array $template, int $index): array {
+                return [
+                    'id' => $index + 1,
+                    'key' => (string) ($template['key'] ?? ('template_' . ($index + 1))),
+                    'name' => (string) ($template['name'] ?? 'Email template'),
+                    'description' => $this->nullableString($template['description'] ?? null),
+                    'default_subject' => $this->nullableString($template['default_subject'] ?? null),
+                    'default_sections' => is_array($template['default_sections'] ?? null) ? $template['default_sections'] : [],
+                    'thumbnail_svg' => null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -590,8 +707,11 @@ GRAPHQL;
         ?int $actorId,
         ?string $storeKey = null,
         ?string $emailTemplateMode = null,
+        ?string $emailTemplateKey = null,
         mixed $emailSections = null,
-        ?string $emailAdvancedHtml = null
+        ?string $emailAdvancedHtml = null,
+        mixed $scheduleFor = null,
+        bool $shortenLinks = false
     ): array {
         $channel = $this->normalizedChannel($channel);
         $resolvedTarget = $this->resolveGroupTarget($tenantId, $targetType, $groupId, $groupKey, $channel);
@@ -618,36 +738,50 @@ GRAPHQL;
             );
             $emailTemplate = [
                 'mode' => (string) ($composed['mode'] ?? ShopifyEmbeddedEmailComposerService::MODE_SECTIONS),
+                'template_key' => $this->nullableString($emailTemplateKey),
                 'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : [],
                 'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
             ];
             $htmlBody = $this->nullableString($composed['html'] ?? null);
         }
 
-        $summary = $this->directMessagingService->send(
+        $queued = $this->campaignDispatchService->queueCampaign(
+            tenantId: $tenantId,
+            storeKey: $this->nullableString($storeKey),
             channel: $channel,
+            target: (array) ($resolvedTarget['target'] ?? []),
             recipients: $recipients,
-            message: trim($body),
-            options: [
-                'subject' => $subject,
-                'sender_key' => $senderKey,
-                'actor_id' => $actorId,
-                'tenant_id' => $tenantId,
-                'store_key' => $this->nullableString($storeKey),
-                'group_id' => $this->positiveInt(data_get($resolvedTarget, 'target.id')),
-                'source_label' => (string) ($resolvedTarget['source_label'] ?? 'shopify_embedded_messaging_group'),
-                'force_send_profile_ids' => array_values(array_unique(array_map(
-                    'intval',
-                    (array) ($resolvedTarget['force_send_profile_ids'] ?? [])
-                ))),
-                'html_body' => $htmlBody,
-                'email_template' => $emailTemplate,
-            ]
+            body: trim($body),
+            subject: $subject,
+            senderKey: $senderKey,
+            actorId: $actorId,
+            sourceLabel: (string) ($resolvedTarget['source_label'] ?? 'shopify_embedded_messaging_group'),
+            forceSendProfileIds: array_values(array_unique(array_map(
+                'intval',
+                (array) ($resolvedTarget['force_send_profile_ids'] ?? [])
+            ))),
+            emailTemplate: $emailTemplate,
+            htmlBody: $htmlBody,
+            scheduleFor: $scheduleFor,
+            shortenLinks: $shortenLinks
         );
+
+        $summary = (array) ($queued['summary'] ?? []);
+        $summary = [
+            'processed' => (int) ($summary['processed'] ?? count($recipients)),
+            'sent' => 0,
+            'failed' => 0,
+            'skipped' => (int) ($summary['skipped'] ?? 0),
+            'queued' => (int) ($summary['scheduled'] ?? 0),
+            'dry_run' => 0,
+            'campaign_id' => (int) ($summary['campaign_id'] ?? 0),
+            'schedule_for' => $summary['schedule_for'] ?? null,
+        ];
 
         return [
             'summary' => $summary,
             'target' => (array) ($resolvedTarget['target'] ?? []),
+            'campaign' => (array) ($queued['campaign'] ?? []),
             'diagnostics' => [
                 'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
                 'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
@@ -667,6 +801,7 @@ GRAPHQL;
         string $body,
         ?string $subject,
         ?string $emailTemplateMode = null,
+        ?string $emailTemplateKey = null,
         mixed $emailSections = null,
         ?string $emailAdvancedHtml = null
     ): array {
@@ -686,6 +821,7 @@ GRAPHQL;
             );
             $emailTemplate = [
                 'mode' => (string) ($composed['mode'] ?? ShopifyEmbeddedEmailComposerService::MODE_SECTIONS),
+                'template_key' => $this->nullableString($emailTemplateKey),
                 'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : [],
                 'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
             ];
@@ -704,6 +840,239 @@ GRAPHQL;
             'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
             'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
             'force_send_profile_ids_count' => count((array) ($resolvedTarget['force_send_profile_ids'] ?? [])),
+        ];
+    }
+
+    /**
+     * @param  array<int,string>  $testNumbers
+     * @return array{
+     *   summary:array<string,mixed>,
+     *   deliveries:array<int,array<string,mixed>>,
+     *   invalid_inputs:array<int,string>
+     * }
+     */
+    public function sendSmsSmokeTest(
+        ?int $tenantId,
+        array $testNumbers,
+        string $message,
+        ?string $senderKey,
+        ?int $actorId,
+        ?string $storeKey = null
+    ): array {
+        $rawNumbers = collect($testNumbers)
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->values();
+
+        $normalizedNumbers = $rawNumbers
+            ->map(fn (string $value): ?string => $this->identityNormalizer->toE164($value))
+            ->filter(fn (?string $value): bool => $value !== null)
+            ->unique()
+            ->values();
+
+        if ($normalizedNumbers->isEmpty()) {
+            throw ValidationException::withMessages([
+                'test_numbers' => 'Add at least one valid phone number for SMS smoke test.',
+            ]);
+        }
+
+        $invalidInputs = $rawNumbers
+            ->filter(function (string $value) use ($normalizedNumbers): bool {
+                $e164 = $this->identityNormalizer->toE164($value);
+
+                return $e164 === null || ! $normalizedNumbers->contains($e164);
+            })
+            ->values()
+            ->all();
+
+        $recipients = $normalizedNumbers
+            ->map(fn (string $phone): array => [
+                'profile_id' => null,
+                'name' => 'Smoke Test',
+                'email' => null,
+                'phone' => $phone,
+                'normalized_phone' => $phone,
+                'source_type' => 'smoke_test',
+            ])
+            ->all();
+
+        $summary = $this->directMessagingService->send(
+            channel: 'sms',
+            recipients: $recipients,
+            message: trim($message),
+            options: [
+                'sender_key' => $senderKey,
+                'actor_id' => $actorId,
+                'tenant_id' => $tenantId,
+                'store_key' => $this->nullableString($storeKey),
+                'source_label' => 'shopify_embedded_messaging_smoke_test',
+            ]
+        );
+
+        $batchId = trim((string) ($summary['batch_id'] ?? ''));
+        $deliveries = $batchId !== ''
+            ? MarketingMessageDelivery::query()
+                ->when($tenantId !== null, fn (Builder $query) => $query->where('tenant_id', $tenantId))
+                ->where('batch_id', $batchId)
+                ->where('channel', 'sms')
+                ->where('source_label', 'shopify_embedded_messaging_smoke_test')
+                ->latest('id')
+                ->get([
+                    'id',
+                    'to_phone',
+                    'send_status',
+                    'error_code',
+                    'error_message',
+                    'provider_message_id',
+                    'sent_at',
+                ])
+                ->map(fn (MarketingMessageDelivery $delivery): array => [
+                    'id' => (int) $delivery->id,
+                    'recipient' => $this->nullableString($delivery->to_phone),
+                    'status' => strtolower(trim((string) ($delivery->send_status ?? 'sent'))),
+                    'error_code' => $this->nullableString($delivery->error_code),
+                    'error_message' => $this->nullableString($delivery->error_message),
+                    'provider_message_id' => $this->nullableString($delivery->provider_message_id),
+                    'sent_at' => optional($delivery->sent_at)->toIso8601String(),
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        return [
+            'summary' => $summary,
+            'deliveries' => $deliveries,
+            'invalid_inputs' => $invalidInputs,
+        ];
+    }
+
+    /**
+     * @param  array<int,string>  $testEmails
+     * @return array{
+     *   summary:array<string,mixed>,
+     *   deliveries:array<int,array<string,mixed>>,
+     *   integrity:array<string,mixed>,
+     *   invalid_inputs:array<int,string>
+     * }
+     */
+    public function sendEmailSmokeTest(
+        ?int $tenantId,
+        array $testEmails,
+        string $subject,
+        string $body,
+        ?int $actorId,
+        ?string $storeKey = null,
+        ?string $emailTemplateMode = null,
+        ?string $emailTemplateKey = null,
+        mixed $emailSections = null,
+        ?string $emailAdvancedHtml = null
+    ): array {
+        $rawEmails = collect($testEmails)
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->values();
+
+        $normalizedEmails = $rawEmails
+            ->map(fn (string $value): ?string => $this->identityNormalizer->normalizeEmail($value))
+            ->filter(fn (?string $value): bool => $value !== null)
+            ->unique()
+            ->values();
+
+        if ($normalizedEmails->isEmpty()) {
+            throw ValidationException::withMessages([
+                'test_emails' => 'Add at least one valid email for email smoke test.',
+            ]);
+        }
+
+        $invalidInputs = $rawEmails
+            ->filter(function (string $value) use ($normalizedEmails): bool {
+                $normalized = $this->identityNormalizer->normalizeEmail($value);
+
+                return $normalized === null || ! $normalizedEmails->contains($normalized);
+            })
+            ->values()
+            ->all();
+
+        $composed = $this->emailComposerService->compose(
+            subject: trim($subject),
+            body: trim($body),
+            mode: $emailTemplateMode,
+            sections: $emailSections,
+            legacyHtml: $emailAdvancedHtml
+        );
+
+        $integrity = $this->validateEmailContentIntegrity((string) ($composed['html'] ?? ''));
+        if (! (bool) ($integrity['valid'] ?? false)) {
+            throw ValidationException::withMessages([
+                'email_sections' => [
+                    'Email content contains invalid links or image URLs.',
+                ],
+            ]);
+        }
+
+        $recipients = $normalizedEmails
+            ->map(fn (string $email): array => [
+                'profile_id' => null,
+                'name' => 'Smoke Test',
+                'email' => $email,
+                'phone' => null,
+                'normalized_phone' => null,
+                'source_type' => 'smoke_test',
+            ])
+            ->all();
+
+        $summary = $this->directMessagingService->send(
+            channel: 'email',
+            recipients: $recipients,
+            message: trim($body),
+            options: [
+                'subject' => trim($subject),
+                'actor_id' => $actorId,
+                'tenant_id' => $tenantId,
+                'store_key' => $this->nullableString($storeKey),
+                'source_label' => 'shopify_embedded_messaging_smoke_test',
+                'html_body' => $this->nullableString($composed['html'] ?? null),
+                'email_template' => [
+                    'mode' => (string) ($composed['mode'] ?? ShopifyEmbeddedEmailComposerService::MODE_SECTIONS),
+                    'template_key' => $this->nullableString($emailTemplateKey),
+                    'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : [],
+                    'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
+                ],
+            ]
+        );
+
+        $batchId = trim((string) ($summary['batch_id'] ?? ''));
+        $deliveries = $batchId !== ''
+            ? MarketingEmailDelivery::query()
+                ->when($tenantId !== null, fn (Builder $query) => $query->where('tenant_id', $tenantId))
+                ->where('batch_id', $batchId)
+                ->where('source_label', 'shopify_embedded_messaging_smoke_test')
+                ->latest('id')
+                ->get([
+                    'id',
+                    'email',
+                    'status',
+                    'provider_message_id',
+                    'failed_at',
+                    'sent_at',
+                ])
+                ->map(fn (MarketingEmailDelivery $delivery): array => [
+                    'id' => (int) $delivery->id,
+                    'recipient' => $this->nullableString($delivery->email),
+                    'status' => strtolower(trim((string) ($delivery->status ?? 'sent'))),
+                    'provider_message_id' => $this->nullableString($delivery->provider_message_id),
+                    'sent_at' => optional($delivery->sent_at)->toIso8601String(),
+                    'failed_at' => optional($delivery->failed_at)->toIso8601String(),
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        return [
+            'summary' => $summary,
+            'deliveries' => $deliveries,
+            'integrity' => $integrity,
+            'invalid_inputs' => $invalidInputs,
         ];
     }
 
@@ -800,14 +1169,17 @@ GRAPHQL;
     }
 
     /**
-     * @return array<int,array{
-     *   channel:string,
-     *   status:string,
-     *   recipient:string,
-     *   profile_name:string,
-     *   message_preview:string,
-     *   sent_at:?string
-     * }>
+     * @return array{
+     *   entries:array<int,array{
+     *     channel:string,
+     *     status:string,
+     *     recipient:string,
+     *     profile_name:string,
+     *     message_preview:string,
+     *     sent_at:?string
+     *   }>,
+     *   campaigns:array<int,array<string,mixed>>
+     * }
      */
     public function history(?int $tenantId, int $limit = 40): array
     {
@@ -874,12 +1246,171 @@ GRAPHQL;
                 ];
             });
 
-        return $smsRows
+        $entries = $smsRows
             ->concat($emailRows)
             ->sortByDesc(fn (array $row): string => (string) ($row['sent_at'] ?? ''))
             ->take($limit)
             ->values()
             ->all();
+
+        $campaigns = MarketingCampaign::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->where('tenant_id', $tenantId), fn (Builder $query) => $query->whereNull('tenant_id'))
+            ->whereNotNull('source_label')
+            ->where('source_label', 'like', 'shopify_embedded_messaging%')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get([
+                'id',
+                'name',
+                'status',
+                'channel',
+                'source_label',
+                'message_subject',
+                'target_snapshot',
+                'status_counts',
+                'scheduled_for',
+                'queued_at',
+                'launched_at',
+                'completed_at',
+                'created_at',
+            ])
+            ->map(function (MarketingCampaign $campaign): array {
+                $statusCounts = is_array($campaign->status_counts) ? $campaign->status_counts : [];
+                if ($statusCounts === []) {
+                    $statusCounts = MarketingCampaignRecipient::query()
+                        ->where('campaign_id', (int) $campaign->id)
+                        ->selectRaw('status, count(*) as aggregate_count')
+                        ->groupBy('status')
+                        ->pluck('aggregate_count', 'status')
+                        ->map(fn ($count): int => (int) $count)
+                        ->all();
+                }
+
+                $jobStatusCounts = MarketingMessageJob::query()
+                    ->where('campaign_id', (int) $campaign->id)
+                    ->selectRaw('status, count(*) as aggregate_count')
+                    ->groupBy('status')
+                    ->pluck('aggregate_count', 'status')
+                    ->map(fn ($count): int => (int) $count)
+                    ->all();
+
+                $failureCodes = MarketingMessageDelivery::query()
+                    ->where('campaign_id', (int) $campaign->id)
+                    ->whereNotNull('error_code')
+                    ->selectRaw('error_code, count(*) as aggregate_count')
+                    ->groupBy('error_code')
+                    ->orderByDesc('aggregate_count')
+                    ->orderBy('error_code')
+                    ->limit(8)
+                    ->get()
+                    ->map(fn (MarketingMessageDelivery $delivery): array => [
+                        'code' => (string) ($delivery->error_code ?? ''),
+                        'count' => (int) ($delivery->aggregate_count ?? 0),
+                    ])
+                    ->filter(fn (array $row): bool => $row['code'] !== '')
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => (int) $campaign->id,
+                    'name' => (string) $campaign->name,
+                    'status' => strtolower(trim((string) $campaign->status)),
+                    'channel' => strtolower(trim((string) $campaign->channel)),
+                    'source_label' => (string) ($campaign->source_label ?? 'shopify_embedded_messaging_group'),
+                    'subject' => $this->nullableString($campaign->message_subject),
+                    'target' => is_array($campaign->target_snapshot) ? $campaign->target_snapshot : [],
+                    'status_counts' => $statusCounts,
+                    'job_status_counts' => $jobStatusCounts,
+                    'failure_codes' => $failureCodes,
+                    'scheduled_for' => optional($campaign->scheduled_for)->toIso8601String(),
+                    'queued_at' => optional($campaign->queued_at)->toIso8601String(),
+                    'launched_at' => optional($campaign->launched_at)->toIso8601String(),
+                    'completed_at' => optional($campaign->completed_at)->toIso8601String(),
+                    'created_at' => optional($campaign->created_at)->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'entries' => $entries,
+            'campaigns' => $campaigns,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   valid:bool,
+     *   link_count:int,
+     *   image_count:int,
+     *   invalid_urls:array<int,string>
+     * }
+     */
+    protected function validateEmailContentIntegrity(string $html): array
+    {
+        $normalizedHtml = trim($html);
+        if ($normalizedHtml === '') {
+            return [
+                'valid' => true,
+                'link_count' => 0,
+                'image_count' => 0,
+                'invalid_urls' => [],
+            ];
+        }
+
+        preg_match_all('/<a\b[^>]*\bhref\s*=\s*[\'"]([^\'"]+)[\'"]/i', $normalizedHtml, $linkMatches);
+        preg_match_all('/<img\b[^>]*\bsrc\s*=\s*[\'"]([^\'"]+)[\'"]/i', $normalizedHtml, $imageMatches);
+
+        $links = collect((array) ($linkMatches[1] ?? []))
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->values();
+        $images = collect((array) ($imageMatches[1] ?? []))
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->values();
+
+        $invalidUrls = $links
+            ->concat($images)
+            ->filter(fn (string $url): bool => ! $this->isSafeEmailUrl($url))
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'valid' => $invalidUrls === [],
+            'link_count' => $links->count(),
+            'image_count' => $images->count(),
+            'invalid_urls' => $invalidUrls,
+        ];
+    }
+
+    protected function isSafeEmailUrl(string $value): bool
+    {
+        $url = trim($value);
+        if ($url === '') {
+            return false;
+        }
+
+        if (str_starts_with($url, '#')) {
+            return false;
+        }
+
+        $parts = parse_url($url);
+        $scheme = strtolower(trim((string) ($parts['scheme'] ?? '')));
+        if ($scheme === '') {
+            return false;
+        }
+
+        if (in_array($scheme, ['http', 'https'], true)) {
+            return filter_var($url, FILTER_VALIDATE_URL) !== false;
+        }
+
+        if ($scheme === 'mailto') {
+            return str_contains($url, '@');
+        }
+
+        return in_array($scheme, ['tel', 'cid', 'data'], true);
     }
 
     /**

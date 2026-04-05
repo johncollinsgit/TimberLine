@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
+use App\Models\MarketingMessageDelivery;
+use App\Services\Marketing\EmbeddedMessagingCampaignDispatchService;
 use App\Services\Marketing\MarketingDeliveryTrackingService;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Http\JsonResponse;
@@ -11,8 +13,12 @@ use Illuminate\Support\Facades\Log;
 
 class TwilioWebhookController extends Controller
 {
-    public function status(Request $request, TwilioSmsService $twilioSmsService, MarketingDeliveryTrackingService $trackingService): JsonResponse
-    {
+    public function status(
+        Request $request,
+        TwilioSmsService $twilioSmsService,
+        MarketingDeliveryTrackingService $trackingService,
+        EmbeddedMessagingCampaignDispatchService $dispatchService
+    ): JsonResponse {
         $payload = $request->all();
 
         $signature = (string) $request->header('X-Twilio-Signature', '');
@@ -27,6 +33,19 @@ class TwilioWebhookController extends Controller
         }
 
         $result = $trackingService->handleTwilioCallback($payload);
+
+        $deliveryId = (int) ($result['delivery_id'] ?? 0);
+        if ($deliveryId > 0) {
+            $delivery = MarketingMessageDelivery::query()->find($deliveryId);
+            if ($delivery instanceof MarketingMessageDelivery) {
+                $dispatchService->handleTwilioDeliveryCallback(
+                    delivery: $delivery,
+                    providerStatus: (string) ($result['status'] ?? ''),
+                    errorCode: trim((string) ($payload['ErrorCode'] ?? '')) ?: null,
+                    errorMessage: trim((string) ($payload['ErrorMessage'] ?? '')) ?: null
+                );
+            }
+        }
 
         return response()->json([
             'ok' => true,

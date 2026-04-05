@@ -14,11 +14,22 @@ class MarketingCampaign extends Model
 
     protected $fillable = [
         'tenant_id',
+        'store_key',
         'name',
         'slug',
         'description',
         'status',
         'channel',
+        'source_label',
+        'message_subject',
+        'message_body',
+        'message_html',
+        'target_snapshot',
+        'status_counts',
+        'queued_at',
+        'scheduled_for',
+        'test_sent_at',
+        'template_instance_id',
         'segment_id',
         'objective',
         'attribution_window_days',
@@ -33,8 +44,14 @@ class MarketingCampaign extends Model
 
     protected $casts = [
         'tenant_id' => 'integer',
+        'template_instance_id' => 'integer',
         'send_window_json' => 'array',
         'quiet_hours_override_json' => 'array',
+        'target_snapshot' => 'array',
+        'status_counts' => 'array',
+        'queued_at' => 'datetime',
+        'scheduled_for' => 'datetime',
+        'test_sent_at' => 'datetime',
         'launched_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
@@ -72,6 +89,16 @@ class MarketingCampaign extends Model
     public function deliveries(): HasMany
     {
         return $this->hasMany(MarketingMessageDelivery::class, 'campaign_id');
+    }
+
+    public function messageJobs(): HasMany
+    {
+        return $this->hasMany(MarketingMessageJob::class, 'campaign_id');
+    }
+
+    public function templateInstance(): BelongsTo
+    {
+        return $this->belongsTo(MarketingTemplateInstance::class, 'template_instance_id');
     }
 
     public function groups(): BelongsToMany

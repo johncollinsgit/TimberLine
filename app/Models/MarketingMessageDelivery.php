@@ -86,4 +86,9 @@ class MarketingMessageDelivery extends Model
     {
         return $this->hasMany(MarketingMessageEngagementEvent::class, 'marketing_message_delivery_id');
     }
+
+    public function messageJobs(): HasMany
+    {
+        return $this->hasMany(MarketingMessageJob::class, 'delivery_id');
+    }
 }

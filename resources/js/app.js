@@ -6,5 +6,8 @@ import "./shopify/command-menu";
 import "./bootstrap";
 import "./public-premium-motion";
 
+if (document.getElementById("shopify-messaging-root")) {
+  import("./shopify/messaging");
+}
 
 console.log('✅ app.js loaded');

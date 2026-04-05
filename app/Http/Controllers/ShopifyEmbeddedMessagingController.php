@@ -13,17 +13,12 @@ use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedMessagingController extends Controller
 {
     use HandlesShopifyEmbeddedNavigation;
-    protected const GROUP_SEND_ASYNC_THRESHOLD = 250;
-    protected const GROUP_SEND_LOCK_SECONDS = 900;
 
     public function show(
         Request $request,
@@ -54,7 +49,8 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         $bootstrap = ($authorized && $tenantId !== null && $hasMessagingAccess)
             ? $probe->time('page_payload', fn (): array => [
-                'groups' => $workspaceService->groups($tenantId),
+                'groups' => $workspaceService->groups($tenantId, includeAutoCounts: true),
+                'templates' => $workspaceService->emailTemplateDefinitions(),
             ])
             : null;
 
@@ -107,6 +103,8 @@ class ShopifyEmbeddedMessagingController extends Controller
                         'preview_group' => route('shopify.app.api.messaging.preview.group', [], false),
                         'send_individual' => route('shopify.app.api.messaging.send.individual', [], false),
                         'send_group' => route('shopify.app.api.messaging.send.group', [], false),
+                        'smoke_sms' => route('shopify.app.api.messaging.smoke.sms', [], false),
+                        'smoke_email' => route('shopify.app.api.messaging.smoke.email', [], false),
                         'history' => route('shopify.app.api.messaging.history', [], false),
                     ],
                 ],
@@ -330,7 +328,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'data' => [
-                'groups' => $workspaceService->groups($tenantId),
+                'groups' => $workspaceService->groups($tenantId, includeAutoCounts: true),
+                'templates' => $workspaceService->emailTemplateDefinitions(),
             ],
         ]);
     }
@@ -660,8 +659,11 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'body' => ['nullable', 'string', 'max:5000', 'required_if:channel,sms'],
                 'sender_key' => ['nullable', 'string', 'max:80'],
                 'email_template_mode' => ['nullable', 'in:sections,legacy_html'],
+                'email_template_key' => ['nullable', 'string', 'max:80'],
                 'email_sections' => ['nullable', 'array', 'max:60'],
                 'email_advanced_html' => ['nullable', 'string', 'max:200000'],
+                'schedule_for' => ['nullable', 'date'],
+                'shorten_links' => ['nullable', 'boolean'],
             ])->validate();
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
@@ -679,96 +681,6 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         $tenantId = (int) $access['tenant_id'];
         try {
-            $preview = $workspaceService->previewGroupSend(
-                tenantId: $tenantId,
-                targetType: (string) $data['target_type'],
-                groupId: isset($data['group_id']) ? (int) $data['group_id'] : null,
-                groupKey: isset($data['group_key']) ? (string) $data['group_key'] : null,
-                channel: (string) $data['channel'],
-                body: (string) ($data['body'] ?? ''),
-                subject: isset($data['subject']) ? (string) $data['subject'] : null,
-                emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
-                emailSections: $data['email_sections'] ?? null,
-                emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
-            );
-        } catch (ValidationException $exception) {
-            return $this->validationFailureResponse('Message could not be sent.', $exception);
-        }
-
-        $resolvedSendableCount = (int) ($preview['resolved_sendable_count'] ?? $preview['estimated_recipients'] ?? 0);
-        if ($resolvedSendableCount > self::GROUP_SEND_ASYNC_THRESHOLD) {
-            $lockKey = $this->groupSendLockKey($tenantId, $data);
-            if (! Cache::add($lockKey, now()->toIso8601String(), self::GROUP_SEND_LOCK_SECONDS)) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'A similar bulk send is already in progress. Wait a few minutes before retrying.',
-                ], 409);
-            }
-
-            $dispatchId = (string) Str::uuid();
-            $actorId = auth()->id() !== null ? (int) auth()->id() : null;
-            $storeKey = (string) data_get($access, 'context.store.key', '');
-
-            app()->terminating(function () use ($workspaceService, $tenantId, $data, $actorId, $dispatchId, $resolvedSendableCount, $lockKey, $storeKey): void {
-                try {
-                    if (function_exists('set_time_limit')) {
-                        @set_time_limit(0);
-                    }
-                    @ignore_user_abort(true);
-
-                    $result = $workspaceService->sendGroup(
-                        tenantId: $tenantId,
-                        targetType: (string) $data['target_type'],
-                        groupId: isset($data['group_id']) ? (int) $data['group_id'] : null,
-                        groupKey: isset($data['group_key']) ? (string) $data['group_key'] : null,
-                        channel: (string) $data['channel'],
-                        body: (string) ($data['body'] ?? ''),
-                        subject: isset($data['subject']) ? (string) $data['subject'] : null,
-                        senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
-                        actorId: $actorId,
-                        storeKey: $storeKey,
-                        emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
-                        emailSections: $data['email_sections'] ?? null,
-                        emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
-                    );
-
-                    Log::info('shopify.embedded.messaging.group_send.async.completed', [
-                        'dispatch_id' => $dispatchId,
-                        'tenant_id' => $tenantId,
-                        'channel' => (string) ($data['channel'] ?? 'sms'),
-                        'expected_recipients' => $resolvedSendableCount,
-                        'summary' => (array) ($result['summary'] ?? []),
-                    ]);
-                } catch (\Throwable $exception) {
-                    Log::error('shopify.embedded.messaging.group_send.async.failed', [
-                        'dispatch_id' => $dispatchId,
-                        'tenant_id' => $tenantId,
-                        'channel' => (string) ($data['channel'] ?? 'sms'),
-                        'expected_recipients' => $resolvedSendableCount,
-                        'error' => $exception->getMessage(),
-                    ]);
-                    report($exception);
-                } finally {
-                    Cache::forget($lockKey);
-                }
-            });
-
-            return response()->json([
-                'ok' => true,
-                'message' => sprintf(
-                    'Bulk send started for %d recipients. It will continue in the background.',
-                    $resolvedSendableCount
-                ),
-                'data' => [
-                    'queued' => true,
-                    'dispatch_id' => $dispatchId,
-                    'estimated_recipients' => $resolvedSendableCount,
-                    'target' => (array) ($preview['target'] ?? []),
-                ],
-            ], 202);
-        }
-
-        try {
             $payload = $workspaceService->sendGroup(
                 tenantId: $tenantId,
                 targetType: (string) $data['target_type'],
@@ -781,8 +693,11 @@ class ShopifyEmbeddedMessagingController extends Controller
                 actorId: auth()->id() !== null ? (int) auth()->id() : null,
                 storeKey: (string) data_get($access, 'context.store.key', ''),
                 emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
+                emailTemplateKey: isset($data['email_template_key']) ? (string) $data['email_template_key'] : null,
                 emailSections: $data['email_sections'] ?? null,
                 emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
+                scheduleFor: $data['schedule_for'] ?? null,
+                shortenLinks: (bool) ($data['shorten_links'] ?? false),
             );
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
@@ -793,25 +708,6 @@ class ShopifyEmbeddedMessagingController extends Controller
             'message' => 'Message sent.',
             'data' => $payload,
         ]);
-    }
-
-    /**
-     * @param  array<string,mixed>  $data
-     */
-    protected function groupSendLockKey(int $tenantId, array $data): string
-    {
-        $fingerprint = hash('sha256', json_encode([
-            'tenant_id' => $tenantId,
-            'target_type' => (string) ($data['target_type'] ?? ''),
-            'group_id' => isset($data['group_id']) ? (int) $data['group_id'] : null,
-            'group_key' => isset($data['group_key']) ? (string) $data['group_key'] : null,
-            'channel' => (string) ($data['channel'] ?? 'sms'),
-            'subject' => isset($data['subject']) ? trim((string) $data['subject']) : null,
-            'body' => trim((string) ($data['body'] ?? '')),
-            'sender_key' => isset($data['sender_key']) ? trim((string) $data['sender_key']) : null,
-        ], JSON_UNESCAPED_SLASHES) ?: (string) Str::uuid());
-
-        return 'shopify_embedded:messaging:group_send:' . $fingerprint;
     }
 
     public function previewGroup(
@@ -835,6 +731,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'subject' => ['nullable', 'string', 'max:200', 'required_if:channel,email'],
                 'body' => ['nullable', 'string', 'max:5000', 'required_if:channel,sms'],
                 'email_template_mode' => ['nullable', 'in:sections,legacy_html'],
+                'email_template_key' => ['nullable', 'string', 'max:80'],
                 'email_sections' => ['nullable', 'array', 'max:60'],
                 'email_advanced_html' => ['nullable', 'string', 'max:200000'],
             ])->validate();
@@ -862,6 +759,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 body: (string) ($data['body'] ?? ''),
                 subject: isset($data['subject']) ? (string) $data['subject'] : null,
                 emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
+                emailTemplateKey: isset($data['email_template_key']) ? (string) $data['email_template_key'] : null,
                 emailSections: $data['email_sections'] ?? null,
                 emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
             );
@@ -900,6 +798,110 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'data' => $workspaceService->history((int) $access['tenant_id'], $limit),
+        ]);
+    }
+
+    public function smokeSms(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $data = validator($request->all(), [
+                'test_numbers' => ['required', 'array', 'min:1', 'max:20'],
+                'test_numbers.*' => ['required', 'string', 'max:40'],
+                'message' => ['required', 'string', 'max:5000'],
+                'sender_key' => ['nullable', 'string', 'max:80'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('SMS smoke test failed.', $exception);
+        }
+
+        try {
+            $payload = $workspaceService->sendSmsSmokeTest(
+                tenantId: (int) $access['tenant_id'],
+                testNumbers: array_values((array) ($data['test_numbers'] ?? [])),
+                message: (string) $data['message'],
+                senderKey: isset($data['sender_key']) ? (string) $data['sender_key'] : null,
+                actorId: auth()->id() !== null ? (int) auth()->id() : null,
+                storeKey: (string) data_get($access, 'context.store.key', '')
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('SMS smoke test failed.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'SMS smoke test sent.',
+            'data' => $payload,
+        ]);
+    }
+
+    public function smokeEmail(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $data = validator($request->all(), [
+                'test_emails' => ['required', 'array', 'min:1', 'max:20'],
+                'test_emails.*' => ['required', 'string', 'max:190'],
+                'subject' => ['required', 'string', 'max:200'],
+                'body' => ['nullable', 'string', 'max:5000'],
+                'email_template_mode' => ['nullable', 'in:sections,legacy_html'],
+                'email_template_key' => ['nullable', 'string', 'max:80'],
+                'email_sections' => ['nullable', 'array', 'max:60'],
+                'email_advanced_html' => ['nullable', 'string', 'max:200000'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Email smoke test failed.', $exception);
+        }
+
+        if (! $this->emailPayloadHasContent($data)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Email smoke test failed.',
+                'errors' => [
+                    'body' => ['Add message text, email sections, or advanced HTML before sending a smoke test.'],
+                ],
+            ], 422);
+        }
+
+        try {
+            $payload = $workspaceService->sendEmailSmokeTest(
+                tenantId: (int) $access['tenant_id'],
+                testEmails: array_values((array) ($data['test_emails'] ?? [])),
+                subject: (string) $data['subject'],
+                body: (string) ($data['body'] ?? ''),
+                actorId: auth()->id() !== null ? (int) auth()->id() : null,
+                storeKey: (string) data_get($access, 'context.store.key', ''),
+                emailTemplateMode: isset($data['email_template_mode']) ? (string) $data['email_template_mode'] : null,
+                emailTemplateKey: isset($data['email_template_key']) ? (string) $data['email_template_key'] : null,
+                emailSections: $data['email_sections'] ?? null,
+                emailAdvancedHtml: isset($data['email_advanced_html']) ? (string) $data['email_advanced_html'] : null,
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Email smoke test failed.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Email smoke test sent.',
+            'data' => $payload,
         ]);
     }
 

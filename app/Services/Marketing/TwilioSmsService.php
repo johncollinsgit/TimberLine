@@ -44,6 +44,7 @@ class TwilioSmsService
         $dryRun = (bool) ($options['dry_run'] ?? false) || (bool) config('marketing.sms.dry_run');
         $enabled = (bool) config('marketing.sms.enabled');
         $twilioEnabled = (bool) config('marketing.twilio.enabled');
+        $shortenUrls = (bool) ($options['shorten_urls'] ?? false);
 
         $toPhone = trim($toPhone);
         $message = trim($message);
@@ -156,6 +157,7 @@ class TwilioSmsService
             'Body' => $message,
             'MessagingServiceSid' => $sender['messaging_service_sid'] ?? null,
             'From' => ! empty($sender['messaging_service_sid']) ? null : ($sender['from_number'] ?? null),
+            'ShortenUrls' => (! empty($sender['messaging_service_sid']) && $shortenUrls) ? 'true' : null,
             'StatusCallback' => $this->nullableString((string) ($options['status_callback_url'] ?? '')) ?: $this->statusCallbackUrl,
         ], fn ($value) => $value !== null && $value !== '');
 
