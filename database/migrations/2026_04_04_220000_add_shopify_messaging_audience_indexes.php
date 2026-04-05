@@ -20,12 +20,10 @@ return new class extends Migration
             'occurred_at',
             'id',
         ]) && ! $this->indexExists('marketing_consent_events', 'mce_tenant_channel_profile_occurred_id_idx')) {
-            Schema::table('marketing_consent_events', function (Blueprint $table): void {
-                $table->index(
-                    ['tenant_id', 'channel', 'marketing_profile_id', 'occurred_at', 'id'],
-                    'mce_tenant_channel_profile_occurred_id_idx'
-                );
-            });
+            DB::statement(
+                'CREATE INDEX mce_tenant_channel_profile_occurred_id_idx'
+                .' ON marketing_consent_events (tenant_id, channel, marketing_profile_id, occurred_at, id)'
+            );
         }
 
         if (! $this->hasColumns([
@@ -48,12 +46,10 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('marketing_consent_events', function (Blueprint $table): void {
-            $table->index(
-                ['tenant_id', 'channel', 'marketing_profile_id', 'event_type', 'source_type'],
-                'mce_tenant_channel_event_source_profile_idx'
-            );
-        });
+        DB::statement(
+            'CREATE INDEX mce_tenant_channel_event_source_profile_idx'
+            .' ON marketing_consent_events (tenant_id, channel, marketing_profile_id, event_type, source_type)'
+        );
     }
 
     public function down(): void
@@ -96,7 +92,18 @@ return new class extends Migration
                 ->contains(fn ($row) => ($row->name ?? null) === $index);
         }
 
-        return collect(DB::select('SHOW INDEX FROM `' . $table . '` WHERE Key_name = ?', [$index]))->isNotEmpty();
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            return DB::table('information_schema.statistics')
+                ->where('table_schema', Schema::getConnection()->getDatabaseName())
+                ->where('table_name', $table)
+                ->where('index_name', $index)
+                ->exists();
+        }
+
+        return collect(DB::select(
+            'SELECT 1 FROM pg_indexes WHERE tablename = ? AND indexname = ? LIMIT 1',
+            [$table, $index]
+        ))->isNotEmpty();
     }
 
     protected function isSqlite(): bool
