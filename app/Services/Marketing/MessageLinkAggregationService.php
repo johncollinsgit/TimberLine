@@ -14,15 +14,28 @@ class MessageLinkAggregationService
      */
     public function aggregate(Collection $clickEvents, Collection $attributions): array
     {
-        if ($clickEvents->isEmpty()) {
+        if ($clickEvents->isEmpty() && $attributions->isEmpty()) {
             return [];
         }
 
         $attributionByEvent = $attributions
             ->filter(fn ($row): bool => (int) ($row->marketing_message_engagement_event_id ?? 0) > 0)
             ->groupBy(fn ($row): int => (int) $row->marketing_message_engagement_event_id);
+        $attributionsByUrl = $attributions
+            ->filter(function ($row): bool {
+                return trim((string) ($row->normalized_url ?? $row->attributed_url ?? '')) !== '';
+            })
+            ->groupBy(function ($row): string {
+                $normalized = trim((string) ($row->normalized_url ?? ''));
+                if ($normalized !== '') {
+                    return $normalized;
+                }
 
-        return $clickEvents
+                $url = trim((string) ($row->attributed_url ?? ''));
+
+                return $url !== '' ? $url : ('attribution:'.$row->id);
+            });
+        $eventGroups = $clickEvents
             ->groupBy(function ($event): string {
                 $normalized = trim((string) ($event->normalized_url ?? ''));
                 if ($normalized !== '') {
@@ -32,8 +45,15 @@ class MessageLinkAggregationService
                 $url = trim((string) ($event->url ?? ''));
 
                 return $url !== '' ? $url : ('event:'.$event->id);
-            })
-            ->map(function (Collection $events, string $urlKey) use ($attributionByEvent): array {
+            });
+        $groupKeys = $eventGroups->keys()
+            ->concat($attributionsByUrl->keys())
+            ->unique()
+            ->values();
+
+        return $groupKeys
+            ->map(function (string $urlKey) use ($eventGroups, $attributionByEvent, $attributionsByUrl): array {
+                $events = $eventGroups->get($urlKey, collect());
                 $first = $events->sortBy('occurred_at')->first();
                 $last = $events->sortByDesc('occurred_at')->first();
                 $clickCount = $events->count();
@@ -49,22 +69,32 @@ class MessageLinkAggregationService
                         return $attributionByEvent->get((int) $event->id, collect());
                     })
                     ->flatten(1);
+                $urlAttributions = $attributionsByUrl->get($urlKey, collect());
+                $allAttributions = $eventAttributions
+                    ->concat($urlAttributions)
+                    ->unique(fn ($row): int => (int) ($row->id ?? 0))
+                    ->values();
 
-                $orderCount = $eventAttributions
+                $orderCount = $allAttributions
                     ->pluck('order_id')
                     ->map(fn ($value): int => (int) $value)
                     ->filter(fn (int $value): bool => $value > 0)
                     ->unique()
                     ->count();
-                $revenueCents = (int) $eventAttributions->sum('revenue_cents');
+                $revenueCents = (int) $allAttributions->sum('revenue_cents');
 
                 $rawUrl = trim((string) ($first?->url ?? ''));
                 $normalizedUrl = trim((string) ($first?->normalized_url ?? ''));
-                $resolvedRawUrl = $rawUrl !== '' ? $rawUrl : ($normalizedUrl !== '' ? $normalizedUrl : null);
-                $resolvedNormalizedUrl = $normalizedUrl !== '' ? $normalizedUrl : ($rawUrl !== '' ? $rawUrl : null);
+                $firstAttribution = $urlAttributions->first();
+                $resolvedRawUrl = $rawUrl !== ''
+                    ? $rawUrl
+                    : (trim((string) ($firstAttribution?->attributed_url ?? '')) ?: ($normalizedUrl !== '' ? $normalizedUrl : null));
+                $resolvedNormalizedUrl = $normalizedUrl !== ''
+                    ? $normalizedUrl
+                    : (trim((string) ($firstAttribution?->normalized_url ?? '')) ?: ($rawUrl !== '' ? $rawUrl : null));
 
                 return [
-                    'link_label' => $this->resolvedLabel($events),
+                    'link_label' => $this->resolvedLabel($events, $resolvedNormalizedUrl ?? $resolvedRawUrl),
                     'url' => $resolvedRawUrl,
                     'normalized_url' => $resolvedNormalizedUrl,
                     'click_count' => $clickCount,
@@ -87,7 +117,7 @@ class MessageLinkAggregationService
     /**
      * @param  Collection<int,\App\Models\MarketingMessageEngagementEvent>  $events
      */
-    protected function resolvedLabel(Collection $events): string
+    protected function resolvedLabel(Collection $events, ?string $fallbackUrl = null): string
     {
         $provided = $events
             ->pluck('link_label')
@@ -104,7 +134,8 @@ class MessageLinkAggregationService
             ?? $events
                 ->pluck('normalized_url')
                 ->map(fn ($value): string => trim((string) $value))
-                ->first(fn (string $value): bool => $value !== '');
+                ->first(fn (string $value): bool => $value !== '')
+            ?? trim((string) $fallbackUrl);
 
         if (! is_string($url) || $url === '') {
             return 'Link';

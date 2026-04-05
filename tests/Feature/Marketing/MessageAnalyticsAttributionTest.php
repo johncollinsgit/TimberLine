@@ -354,6 +354,109 @@ test('message order attribution can infer sms attribution from coupon signal whe
         ->and(data_get($attribution?->metadata, 'coupon_code'))->toBe('NCAZ26');
 });
 
+test('message order attribution can infer sms attribution from landing signals when clicks and coupon are unavailable', function () {
+    config()->set('marketing.message_analytics.coupon_inference_enabled', true);
+    config()->set('marketing.message_analytics.url_signal_inference_enabled', true);
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Message URL Signal Inference Tenant',
+        'slug' => 'message-url-signal-inference-tenant',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Jamie',
+        'last_name' => 'Pathway',
+        'email' => 'jamie.pathway@example.com',
+        'normalized_email' => 'jamie.pathway@example.com',
+        'phone' => '+15557776666',
+        'normalized_phone' => '+15557776666',
+        'accepts_sms_marketing' => true,
+        'accepts_email_marketing' => true,
+    ]);
+
+    $delivery = MarketingMessageDelivery::query()->create([
+        'campaign_id' => null,
+        'campaign_recipient_id' => null,
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'batch_id' => 'sms-batch-url-inference',
+        'source_label' => 'shopify_embedded_messaging_auto_group_resume_v1',
+        'message_subject' => 'Spring collection alert',
+        'channel' => 'sms',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_URL_INF_1',
+        'to_phone' => '+15557776666',
+        'from_identifier' => '+15550001111',
+        'attempt_number' => 1,
+        'rendered_message' => "Fresh spring picks are live\nhttps://theforestrystudio.com/collections/spring-collection",
+        'send_status' => 'delivered',
+        'provider_payload' => [],
+        'sent_at' => now()->subHours(4),
+        'delivered_at' => now()->subHours(4),
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 'sms-order-url-inferred-1',
+        'order_number' => '#SMS-3004',
+        'customer_name' => 'Jamie Pathway',
+        'status' => 'new',
+        'ordered_at' => now()->subHours(1),
+        'tenant_id' => $tenant->id,
+        'total_price' => 61.75,
+        'attribution_meta' => [
+            'landing_site' => '/cart/add',
+            'referring_site' => 'https://theforestrystudio.com/collections/spring-collection',
+        ],
+    ]);
+
+    $summary = app(MessageOrderAttributionService::class)->syncForTenantStore(
+        tenantId: $tenant->id,
+        storeKey: 'retail',
+        dateFrom: now()->subDays(2),
+        dateTo: now(),
+        windowDays: 7
+    );
+
+    expect((int) ($summary['attributed'] ?? 0))->toBeGreaterThan(0);
+
+    $attribution = MarketingMessageOrderAttribution::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('store_key', 'retail')
+        ->where('order_id', $order->id)
+        ->first();
+
+    expect($attribution)->not->toBeNull()
+        ->and((int) ($attribution?->marketing_message_delivery_id ?? 0))->toBe($delivery->id)
+        ->and((int) ($attribution?->marketing_message_engagement_event_id ?? 0))->toBe(0)
+        ->and((string) ($attribution?->channel ?? ''))->toBe('sms')
+        ->and((string) ($attribution?->normalized_url ?? ''))->toContain('/collections/spring-collection')
+        ->and(data_get($attribution?->metadata, 'attribution_rule'))->toBe('landing_signal_message_url_match_without_click');
+
+    $service = app(MessageAnalyticsService::class);
+    $filters = $service->normalizeFilters([
+        'date_from' => now()->subDays(2)->toDateString(),
+        'date_to' => now()->toDateString(),
+        'channel' => 'sms',
+    ]);
+    $payload = $service->index($tenant->id, 'retail', $filters);
+    $row = collect($payload['messages']->items())->first();
+
+    expect($row)->toBeArray()
+        ->and((string) ($row['top_clicked_link'] ?? ''))->toContain('/collections/spring-collection')
+        ->and((int) ($row['clicks'] ?? 0))->toBe(0)
+        ->and((int) ($row['attributed_orders'] ?? 0))->toBe(1);
+
+    $detail = $service->detail($tenant->id, 'retail', (string) ($row['message_key'] ?? ''));
+    expect($detail)->toBeArray()
+        ->and((int) data_get($detail, 'links.0.click_count', -1))->toBe(0)
+        ->and((int) data_get($detail, 'links.0.attributed_orders', 0))->toBe(1)
+        ->and((string) data_get($detail, 'links.0.normalized_url', ''))->toContain('/collections/spring-collection');
+});
+
 test('message analytics index and detail include sms attributed orders and revenue', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Message Analytics SMS Tenant',

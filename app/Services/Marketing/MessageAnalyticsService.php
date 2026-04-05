@@ -647,6 +647,12 @@ class MessageAnalyticsService
             if ($orderId > 0) {
                 $rows[$messageKey]['attributed_order_ids'][$orderId] = true;
             }
+            $url = $this->nullableString($attribution->normalized_url)
+                ?? $this->nullableString($attribution->attributed_url);
+            if ($url !== null) {
+                $rows[$messageKey]['clicked_urls'][] = $url;
+                $rows[$messageKey]['attributed_url_counts'][$url] = ((int) ($rows[$messageKey]['attributed_url_counts'][$url] ?? 0)) + 1;
+            }
             $rows[$messageKey]['attributed_revenue_cents'] += (int) ($attribution->revenue_cents ?? 0);
         }
 
@@ -667,7 +673,8 @@ class MessageAnalyticsService
                 ? count((array) ($row['unique_click_profiles'] ?? []))
                 : count((array) ($row['fallback_unique_click_profiles'] ?? []));
             $rows[$key]['attributed_orders'] = count((array) ($row['attributed_order_ids'] ?? []));
-            $rows[$key]['top_clicked_link'] = $this->topClickedLink((array) ($row['top_click_counts'] ?? []));
+            $rows[$key]['top_clicked_link'] = $this->topClickedLink((array) ($row['top_click_counts'] ?? []))
+                ?? $this->topClickedLink((array) ($row['attributed_url_counts'] ?? []));
             $rows[$key]['open_rate'] = $rows[$key]['recipients_count'] > 0
                 ? round(($rows[$key]['opens'] / max(1, (int) $rows[$key]['recipients_count'])) * 100, 2)
                 : 0.0;
@@ -1897,6 +1904,7 @@ class MessageAnalyticsService
             'profile_ids' => [],
             'clicked_urls' => [],
             'top_click_counts' => [],
+            'attributed_url_counts' => [],
             'status_counts' => [],
             'delivery_ids' => [],
             'attributed_order_ids' => [],

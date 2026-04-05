@@ -96,6 +96,7 @@ return [
         'attribution_window_days' => (int) env('MARKETING_MESSAGE_ATTRIBUTION_WINDOW_DAYS', 7),
         'coupon_inference_enabled' => (bool) env('MARKETING_MESSAGE_COUPON_INFERENCE_ENABLED', true),
         'coupon_inference_require_url_match' => (bool) env('MARKETING_MESSAGE_COUPON_INFERENCE_REQUIRE_URL_MATCH', false),
+        'url_signal_inference_enabled' => (bool) env('MARKETING_MESSAGE_URL_SIGNAL_INFERENCE_ENABLED', true),
     ],
 
     'twilio' => [

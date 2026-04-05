@@ -231,6 +231,16 @@ class MessageOrderAttributionService
             );
         }
 
+        if (! is_array($payload) && (bool) config('marketing.message_analytics.url_signal_inference_enabled', true)) {
+            $payload = $this->payloadForUrlSignalInferredAttribution(
+                order: $order,
+                tenantId: $tenantId,
+                storeKey: $storeKey,
+                orderAt: $orderAt,
+                windowDays: $windowDays
+            );
+        }
+
         if (! is_array($payload)) {
             return [
                 'attributed' => false,
@@ -380,6 +390,50 @@ class MessageOrderAttributionService
         ];
     }
 
+    protected function payloadForUrlSignalInferredAttribution(
+        Order $order,
+        int $tenantId,
+        ?string $storeKey,
+        CarbonImmutable $orderAt,
+        int $windowDays
+    ): ?array {
+        if (! Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id')) {
+            return null;
+        }
+
+        $inferred = $this->resolveUrlSignalInferredSmsDelivery(
+            order: $order,
+            tenantId: $tenantId,
+            storeKey: $storeKey,
+            orderAt: $orderAt,
+            windowDays: $windowDays
+        );
+
+        if (! is_array($inferred)) {
+            return null;
+        }
+
+        return [
+            'marketing_profile_id' => null,
+            'marketing_email_delivery_id' => null,
+            'marketing_message_delivery_id' => (int) ($inferred['marketing_message_delivery_id'] ?? 0),
+            'marketing_message_engagement_event_id' => null,
+            'channel' => 'sms',
+            'attribution_window_days' => $windowDays,
+            'attributed_url' => $this->nullableString($inferred['attributed_url'] ?? null),
+            'normalized_url' => $this->nullableString($inferred['normalized_url'] ?? null),
+            'click_occurred_at' => $inferred['click_occurred_at'] ?? null,
+            'order_occurred_at' => $orderAt,
+            'revenue_cents' => $this->orderRevenueCents($order),
+            'metadata' => [
+                'attribution_rule' => 'landing_signal_message_url_match_without_click',
+                'inferred' => true,
+                'matched_signal' => $this->nullableString($inferred['matched_signal'] ?? null),
+                'order_number' => $this->nullableString((string) ($order->order_number ?? null)),
+            ],
+        ];
+    }
+
     /**
      * @return array{marketing_message_delivery_id:int,click_occurred_at:CarbonImmutable,attributed_url:?string,normalized_url:?string,coupon_code:string}|null
      */
@@ -398,31 +452,7 @@ class MessageOrderAttributionService
         $orderSignals = $this->orderLandingSignals($order);
         $requireUrlMatch = (bool) config('marketing.message_analytics.coupon_inference_require_url_match', false);
 
-        $from = $orderAt->copy()->subDays($windowDays);
-
-        $deliveries = MarketingMessageDelivery::query()
-            ->forTenantId($tenantId)
-            ->where('channel', 'sms')
-            ->when(
-                $storeKey !== null,
-                fn (EloquentBuilder $query): EloquentBuilder => $query->where('store_key', $storeKey)
-            )
-            ->where(function (EloquentBuilder $query) use ($from, $orderAt): void {
-                $query->whereBetween('sent_at', [$from, $orderAt])
-                    ->orWhere(function (EloquentBuilder $fallback) use ($from, $orderAt): void {
-                        $fallback->whereNull('sent_at')
-                            ->whereBetween('created_at', [$from, $orderAt]);
-                    });
-            })
-            ->orderByDesc('sent_at')
-            ->orderByDesc('id')
-            ->limit(300)
-            ->get([
-                'id',
-                'rendered_message',
-                'sent_at',
-                'created_at',
-            ]);
+        $deliveries = $this->recentSmsDeliveriesWithinWindow($tenantId, $storeKey, $orderAt, $windowDays);
 
         foreach ($deliveries as $delivery) {
             $message = (string) ($delivery->rendered_message ?? '');
@@ -453,6 +483,52 @@ class MessageOrderAttributionService
                 'attributed_url' => $this->nullableString($resolvedUrl),
                 'normalized_url' => $this->nullableString($resolvedUrl),
                 'coupon_code' => strtoupper(trim($matchedCode)),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{marketing_message_delivery_id:int,click_occurred_at:CarbonImmutable,attributed_url:?string,normalized_url:?string,matched_signal:string}|null
+     */
+    protected function resolveUrlSignalInferredSmsDelivery(
+        Order $order,
+        int $tenantId,
+        ?string $storeKey,
+        CarbonImmutable $orderAt,
+        int $windowDays
+    ): ?array {
+        $orderSignals = $this->orderLandingSignals($order);
+        if ($orderSignals === []) {
+            return null;
+        }
+
+        $deliveries = $this->recentSmsDeliveriesWithinWindow($tenantId, $storeKey, $orderAt, $windowDays);
+
+        foreach ($deliveries as $delivery) {
+            $message = (string) ($delivery->rendered_message ?? '');
+            if (trim($message) === '') {
+                continue;
+            }
+
+            [$matched, $matchedUrl, $matchedSignal] = $this->messageUrlsStronglyMatchOrderSignals(
+                $this->extractUrlsFromMessage($message),
+                $orderSignals
+            );
+
+            if (! $matched || ! is_string($matchedUrl) || trim($matchedUrl) === '') {
+                continue;
+            }
+
+            $deliveryAt = $this->resolveDate($delivery->sent_at) ?? $this->resolveDate($delivery->created_at) ?? $orderAt;
+
+            return [
+                'marketing_message_delivery_id' => (int) $delivery->id,
+                'click_occurred_at' => $deliveryAt,
+                'attributed_url' => $this->nullableString($matchedUrl),
+                'normalized_url' => $this->nullableString($matchedUrl),
+                'matched_signal' => $this->nullableString($matchedSignal) ?? $matchedUrl,
             ];
         }
 
@@ -517,6 +593,42 @@ class MessageOrderAttributionService
     }
 
     /**
+     * @return Collection<int,MarketingMessageDelivery>
+     */
+    protected function recentSmsDeliveriesWithinWindow(
+        int $tenantId,
+        ?string $storeKey,
+        CarbonImmutable $orderAt,
+        int $windowDays
+    ): Collection {
+        $from = $orderAt->copy()->subDays($windowDays);
+
+        return MarketingMessageDelivery::query()
+            ->forTenantId($tenantId)
+            ->where('channel', 'sms')
+            ->when(
+                $storeKey !== null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('store_key', $storeKey)
+            )
+            ->where(function (EloquentBuilder $query) use ($from, $orderAt): void {
+                $query->whereBetween('sent_at', [$from, $orderAt])
+                    ->orWhere(function (EloquentBuilder $fallback) use ($from, $orderAt): void {
+                        $fallback->whereNull('sent_at')
+                            ->whereBetween('created_at', [$from, $orderAt]);
+                    });
+            })
+            ->orderByDesc('sent_at')
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get([
+                'id',
+                'rendered_message',
+                'sent_at',
+                'created_at',
+            ]);
+    }
+
+    /**
      * @return array<int,string>
      */
     protected function extractUrlsFromMessage(string $message): array
@@ -569,6 +681,44 @@ class MessageOrderAttributionService
         }
 
         return [false, null];
+    }
+
+    /**
+     * @param  array<int,string>  $urls
+     * @param  array<int,string>  $orderSignals
+     * @return array{0:bool,1:?string,2:?string}
+     */
+    protected function messageUrlsStronglyMatchOrderSignals(array $urls, array $orderSignals): array
+    {
+        if ($urls === [] || $orderSignals === []) {
+            return [false, null, null];
+        }
+
+        foreach ($urls as $url) {
+            $urlLower = strtolower(trim($url));
+            $urlPath = strtolower(trim((string) parse_url($url, PHP_URL_PATH)));
+
+            if ($urlLower === '') {
+                continue;
+            }
+
+            foreach ($orderSignals as $signal) {
+                $signalLower = strtolower(trim($signal));
+                if ($signalLower === '') {
+                    continue;
+                }
+
+                if (str_contains($signalLower, $urlLower)) {
+                    return [true, $url, $signal];
+                }
+
+                if ($urlPath !== '' && $urlPath !== '/' && str_contains($signalLower, $urlPath)) {
+                    return [true, $url, $signal];
+                }
+            }
+        }
+
+        return [false, null, null];
     }
 
     protected function clearAttribution(int $tenantId, ?string $storeKey, int $orderId): int

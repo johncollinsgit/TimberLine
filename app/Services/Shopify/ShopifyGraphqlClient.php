@@ -28,9 +28,11 @@ class ShopifyGraphqlClient
      */
     public function query(string $query, array $variables = []): array
     {
+        $normalizedVariables = $variables === [] ? (object) [] : $variables;
+
         $response = $this->requestWithRetry($this->baseUrl(), [
             'query' => $query,
-            'variables' => $variables,
+            'variables' => $normalizedVariables,
         ]);
 
         $payload = $response->json();
