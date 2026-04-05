@@ -17,7 +17,8 @@ class MarketingSmsExecutionService
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
         protected MarketingIdentityNormalizer $normalizer,
-        protected MarketingTenantOwnershipService $ownershipService
+        protected MarketingTenantOwnershipService $ownershipService,
+        protected MessageClickTrackingService $messageClickTrackingService
     ) {
     }
 
@@ -266,7 +267,25 @@ class MarketingSmsExecutionService
             ]);
         });
 
-        $sendResult = $this->twilioSmsService->sendSms($toPhone, $renderedMessage, [
+        $trackedMessage = $this->messageClickTrackingService->decorateSmsMessageForDelivery(
+            delivery: $delivery,
+            message: $renderedMessage,
+            createdBy: $actorId
+        );
+        $resolvedMessage = trim((string) ($trackedMessage['message'] ?? $renderedMessage));
+        if ($resolvedMessage === '') {
+            $resolvedMessage = $renderedMessage;
+        }
+
+        $delivery->forceFill([
+            'rendered_message' => $resolvedMessage,
+            'provider_payload' => [
+                ...((array) $delivery->provider_payload),
+                'tracked_links' => (array) ($trackedMessage['links'] ?? []),
+            ],
+        ])->save();
+
+        $sendResult = $this->twilioSmsService->sendSms($toPhone, $resolvedMessage, [
             'dry_run' => $dryRun,
             'sender_key' => $senderKey ?: $this->senderKeyFromRecipient($recipient),
             'status_callback_url' => $this->statusCallbackUrl(),
@@ -281,17 +300,14 @@ class MarketingSmsExecutionService
             'send_status' => $success ? $providerStatus : 'failed',
             'error_code' => $sendResult['error_code'] ?? null,
             'error_message' => $sendResult['error_message'] ?? null,
-            'provider_payload' => is_array($sendResult['payload'] ?? null)
-                ? [
-                    ...$sendResult['payload'],
-                    'sender_key' => $sendResult['sender_key'] ?? ($senderKey ?: $this->senderKeyFromRecipient($recipient)),
-                    'sender_label' => $sendResult['sender_label'] ?? null,
-                ]
-                : [
-                    'raw' => $sendResult['payload'] ?? null,
-                    'sender_key' => $sendResult['sender_key'] ?? ($senderKey ?: $this->senderKeyFromRecipient($recipient)),
-                    'sender_label' => $sendResult['sender_label'] ?? null,
-                ],
+            'provider_payload' => [
+                ...((array) $delivery->provider_payload),
+                ...(is_array($sendResult['payload'] ?? null)
+                    ? $sendResult['payload']
+                    : ['raw' => $sendResult['payload'] ?? null]),
+                'sender_key' => $sendResult['sender_key'] ?? ($senderKey ?: $this->senderKeyFromRecipient($recipient)),
+                'sender_label' => $sendResult['sender_label'] ?? null,
+            ],
             'sent_at' => $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)
                 ? now()
                 : null,

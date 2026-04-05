@@ -19,7 +19,8 @@ class MarketingDirectMessagingService
         protected TwilioSmsService $twilioSmsService,
         protected SendGridEmailService $sendGridEmailService,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
-        protected MarketingIdentityNormalizer $identityNormalizer
+        protected MarketingIdentityNormalizer $identityNormalizer,
+        protected MessageClickTrackingService $messageClickTrackingService
     ) {
     }
 
@@ -150,7 +151,26 @@ class MarketingDirectMessagingService
                     ],
                 ]);
 
-                $sendResult = $this->twilioSmsService->sendSms($toPhone, $message, [
+                $trackedMessage = $this->messageClickTrackingService->decorateSmsMessageForDelivery(
+                    delivery: $delivery,
+                    message: $message,
+                    createdBy: $actorId
+                );
+                $resolvedMessage = trim((string) ($trackedMessage['message'] ?? $message));
+                if ($resolvedMessage === '') {
+                    $resolvedMessage = $message;
+                }
+
+                $delivery->forceFill([
+                    'message_subject' => Str::limit($resolvedMessage, 160),
+                    'rendered_message' => $resolvedMessage,
+                    'provider_payload' => [
+                        ...((array) $delivery->provider_payload),
+                        'tracked_links' => (array) ($trackedMessage['links'] ?? []),
+                    ],
+                ])->save();
+
+                $sendResult = $this->twilioSmsService->sendSms($toPhone, $resolvedMessage, [
                     'dry_run' => $dryRun,
                     'sender_key' => $senderKey,
                     'status_callback_url' => $this->statusCallbackUrl(),

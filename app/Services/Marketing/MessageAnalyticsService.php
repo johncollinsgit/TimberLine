@@ -248,22 +248,12 @@ class MessageAnalyticsService
 
         $openEvents = $engagementEvents
             ->filter(function (MarketingMessageEngagementEvent $row): bool {
-                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'open') {
-                    return false;
-                }
-
-                return strtolower(trim((string) ($row->channel ?? ''))) === 'email'
-                    || (int) ($row->marketing_email_delivery_id ?? 0) > 0;
+                return strtolower(trim((string) ($row->event_type ?? ''))) === 'open';
             })
             ->values();
         $clickEvents = $engagementEvents
             ->filter(function (MarketingMessageEngagementEvent $row): bool {
-                if (strtolower(trim((string) ($row->event_type ?? ''))) !== 'click') {
-                    return false;
-                }
-
-                return strtolower(trim((string) ($row->channel ?? ''))) === 'email'
-                    || (int) ($row->marketing_email_delivery_id ?? 0) > 0;
+                return strtolower(trim((string) ($row->event_type ?? ''))) === 'click';
             })
             ->values();
         $openTimeline = $openEvents
@@ -289,11 +279,28 @@ class MessageAnalyticsService
                 ->all();
         }
 
-        $orderAttributions = $channel === 'email' && Schema::hasTable('marketing_message_order_attributions')
+        $hasOrderAttributionTable = Schema::hasTable('marketing_message_order_attributions');
+        $hasSmsDeliveryAttributionColumn = $hasOrderAttributionTable
+            && Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id');
+        $orderAttributions = $hasOrderAttributionTable
             ? MarketingMessageOrderAttribution::query()
                 ->forTenantId($tenantId)
                 ->where('store_key', $normalizedStoreKey)
-                ->whereIn('marketing_email_delivery_id', $deliveryIds->all())
+                ->where(function (Builder $query) use ($channel, $deliveryIds, $hasSmsDeliveryAttributionColumn): void {
+                    if ($channel === 'email') {
+                        $query->whereIn('marketing_email_delivery_id', $deliveryIds->all());
+
+                        return;
+                    }
+
+                    if (! $hasSmsDeliveryAttributionColumn) {
+                        $query->whereRaw('1 = 0');
+
+                        return;
+                    }
+
+                    $query->whereIn('marketing_message_delivery_id', $deliveryIds->all());
+                })
                 ->with([
                     'order:id,tenant_id,order_number,order_label,customer_name,total_price,ordered_at,created_at',
                     'profile:id,tenant_id,first_name,last_name,email,phone',
@@ -590,25 +597,48 @@ class MessageAnalyticsService
             }
         }
 
-        $orderAttributions = Schema::hasTable('marketing_message_order_attributions') && $emailDeliveryIds !== []
+        $hasOrderAttributionTable = Schema::hasTable('marketing_message_order_attributions');
+        $hasSmsDeliveryAttributionColumn = $hasOrderAttributionTable
+            && Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id');
+        $orderAttributionColumns = [
+            'id',
+            'order_id',
+            'marketing_email_delivery_id',
+            'revenue_cents',
+            'attributed_url',
+            'normalized_url',
+            'order_occurred_at',
+        ];
+        if ($hasSmsDeliveryAttributionColumn) {
+            $orderAttributionColumns[] = 'marketing_message_delivery_id';
+        }
+        $orderAttributions = $hasOrderAttributionTable
+            && ($emailDeliveryIds !== [] || ($smsDeliveryIds !== [] && $hasSmsDeliveryAttributionColumn))
             ? MarketingMessageOrderAttribution::query()
                 ->forTenantId($tenantId)
                 ->where('store_key', $storeKey)
-                ->whereIn('marketing_email_delivery_id', $emailDeliveryIds)
-                ->get([
-                    'id',
-                    'order_id',
-                    'marketing_email_delivery_id',
-                    'revenue_cents',
-                    'attributed_url',
-                    'normalized_url',
-                    'order_occurred_at',
-                ])
+                ->where(function (Builder $query) use ($emailDeliveryIds, $smsDeliveryIds, $hasSmsDeliveryAttributionColumn): void {
+                    if ($emailDeliveryIds !== []) {
+                        $query->whereIn('marketing_email_delivery_id', $emailDeliveryIds);
+                    }
+
+                    if ($smsDeliveryIds !== [] && $hasSmsDeliveryAttributionColumn) {
+                        if ($emailDeliveryIds !== []) {
+                            $query->orWhereIn('marketing_message_delivery_id', $smsDeliveryIds);
+                        } else {
+                            $query->whereIn('marketing_message_delivery_id', $smsDeliveryIds);
+                        }
+                    }
+                })
+                ->get($orderAttributionColumns)
             : collect();
 
         foreach ($orderAttributions as $attribution) {
-            $deliveryId = (int) ($attribution->marketing_email_delivery_id ?? 0);
-            $messageKey = $deliveryKeyByEmailDeliveryId[$deliveryId] ?? null;
+            $emailDeliveryId = (int) ($attribution->marketing_email_delivery_id ?? 0);
+            $smsDeliveryId = (int) ($attribution->marketing_message_delivery_id ?? 0);
+            $messageKey = $emailDeliveryId > 0
+                ? ($deliveryKeyByEmailDeliveryId[$emailDeliveryId] ?? null)
+                : ($deliveryKeyBySmsDeliveryId[$smsDeliveryId] ?? null);
             if (! is_string($messageKey) || ! isset($rows[$messageKey])) {
                 continue;
             }
@@ -993,24 +1023,40 @@ class MessageAnalyticsService
         }
 
         $orderSummaryByEmailDeliveryId = [];
+        $orderSummaryBySmsDeliveryId = [];
         foreach ($orderAttributions as $attribution) {
-            $deliveryId = (int) ($attribution->marketing_email_delivery_id ?? 0);
-            if ($deliveryId <= 0) {
-                continue;
-            }
-
-            if (! isset($orderSummaryByEmailDeliveryId[$deliveryId])) {
-                $orderSummaryByEmailDeliveryId[$deliveryId] = [
-                    'order_ids' => [],
-                    'revenue_cents' => 0,
-                ];
-            }
-
             $orderId = (int) ($attribution->order_id ?? 0);
-            if ($orderId > 0) {
-                $orderSummaryByEmailDeliveryId[$deliveryId]['order_ids'][$orderId] = true;
+            $revenueCents = (int) ($attribution->revenue_cents ?? 0);
+            $emailDeliveryId = (int) ($attribution->marketing_email_delivery_id ?? 0);
+            $smsDeliveryId = (int) ($attribution->marketing_message_delivery_id ?? 0);
+
+            if ($emailDeliveryId > 0) {
+                if (! isset($orderSummaryByEmailDeliveryId[$emailDeliveryId])) {
+                    $orderSummaryByEmailDeliveryId[$emailDeliveryId] = [
+                        'order_ids' => [],
+                        'revenue_cents' => 0,
+                    ];
+                }
+
+                if ($orderId > 0) {
+                    $orderSummaryByEmailDeliveryId[$emailDeliveryId]['order_ids'][$orderId] = true;
+                }
+                $orderSummaryByEmailDeliveryId[$emailDeliveryId]['revenue_cents'] += $revenueCents;
             }
-            $orderSummaryByEmailDeliveryId[$deliveryId]['revenue_cents'] += (int) ($attribution->revenue_cents ?? 0);
+
+            if ($smsDeliveryId > 0) {
+                if (! isset($orderSummaryBySmsDeliveryId[$smsDeliveryId])) {
+                    $orderSummaryBySmsDeliveryId[$smsDeliveryId] = [
+                        'order_ids' => [],
+                        'revenue_cents' => 0,
+                    ];
+                }
+
+                if ($orderId > 0) {
+                    $orderSummaryBySmsDeliveryId[$smsDeliveryId]['order_ids'][$orderId] = true;
+                }
+                $orderSummaryBySmsDeliveryId[$smsDeliveryId]['revenue_cents'] += $revenueCents;
+            }
         }
 
         $smsRepliesByDelivery = $this->smsRepliesByDelivery($smsDeliveries);
@@ -1092,6 +1138,9 @@ class MessageAnalyticsService
                 'strval',
                 (array) ($clickedUrlsBySmsDeliveryId[$deliveryId] ?? [])
             )));
+            $orderSummary = (array) ($orderSummaryBySmsDeliveryId[$deliveryId] ?? []);
+            $attributedOrders = count((array) ($orderSummary['order_ids'] ?? []));
+            $attributedRevenueCents = (int) ($orderSummary['revenue_cents'] ?? 0);
             $reply = (array) ($smsRepliesByDelivery[$deliveryId] ?? []);
             $responded = (bool) ($reply['responded'] ?? false);
             $status = strtolower(trim((string) ($delivery->send_status ?? 'sent')));
@@ -1115,12 +1164,12 @@ class MessageAnalyticsService
                 'clicked' => $clickCount > 0,
                 'clicks' => $clickCount,
                 'clicked_urls' => $clickedUrls,
-                'attributed_orders' => 0,
-                'attributed_revenue_cents' => 0,
+                'attributed_orders' => $attributedOrders,
+                'attributed_revenue_cents' => $attributedRevenueCents,
                 'responded' => $responded,
                 'responded_at' => $this->nullableString($reply['responded_at'] ?? null),
                 'response_preview' => $this->nullableString($reply['response_preview'] ?? null),
-                'outcome' => $this->historyOutcome(0, $responded, $clickCount, $openCount),
+                'outcome' => $this->historyOutcome($attributedOrders, $responded, $clickCount, $openCount),
             ]);
         }
 

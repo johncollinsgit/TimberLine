@@ -234,7 +234,7 @@ class MessageOrderAttributionService
             'marketing_profile_id' => $this->positiveInt($click->marketing_profile_id),
             'marketing_email_delivery_id' => $this->positiveInt($click->marketing_email_delivery_id),
             'marketing_message_engagement_event_id' => (int) $click->id,
-            'channel' => $this->nullableString($click->channel) ?? 'email',
+            'channel' => $this->resolvedChannel($click),
             'attribution_window_days' => $windowDays,
             'attributed_url' => $this->nullableString($click->url),
             'normalized_url' => $this->nullableString($click->normalized_url),
@@ -246,6 +246,9 @@ class MessageOrderAttributionService
                 'order_number' => $this->nullableString((string) ($order->order_number ?? null)),
             ],
         ];
+        if (Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id')) {
+            $payload['marketing_message_delivery_id'] = $this->positiveInt($click->marketing_message_delivery_id);
+        }
 
         $record = MarketingMessageOrderAttribution::query()->where($keys)->first();
         if (! $record instanceof MarketingMessageOrderAttribution) {
@@ -287,7 +290,10 @@ class MessageOrderAttributionService
         $query = MarketingMessageEngagementEvent::query()
             ->forTenantId($tenantId)
             ->where('event_type', 'click')
-            ->whereNotNull('marketing_email_delivery_id')
+            ->where(function (EloquentBuilder $query): void {
+                $query->whereNotNull('marketing_email_delivery_id')
+                    ->orWhereNotNull('marketing_message_delivery_id');
+            })
             ->whereIn('marketing_profile_id', $profileIds->all())
             ->whereNotNull('occurred_at')
             ->whereBetween('occurred_at', [$orderAt->copy()->subDays($windowDays), $orderAt]);
@@ -369,6 +375,20 @@ class MessageOrderAttributionService
         $total = (float) ($order->total_price ?? 0);
 
         return (int) round($total * 100);
+    }
+
+    protected function resolvedChannel(MarketingMessageEngagementEvent $event): string
+    {
+        $channel = strtolower(trim((string) ($event->channel ?? '')));
+        if (in_array($channel, ['email', 'sms'], true)) {
+            return $channel;
+        }
+
+        if ($this->positiveInt($event->marketing_message_delivery_id) !== null) {
+            return 'sms';
+        }
+
+        return 'email';
     }
 
     protected function positiveInt(mixed $value): ?int

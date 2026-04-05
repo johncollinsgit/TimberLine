@@ -557,6 +557,7 @@
                 @if((bool) ($chart['empty'] ?? true) || $series->isEmpty())
                     <div class="message-analytics-empty">
                         <p class="message-analytics-muted">No tracked opens or clicks are available in this range yet.</p>
+                        <p class="message-analytics-muted">Older SMS sends without tracked links cannot backfill click events. New sends are tracked automatically.</p>
                     </div>
                 @else
                     <div class="message-analytics-series-picker" data-message-analytics-series-picker>

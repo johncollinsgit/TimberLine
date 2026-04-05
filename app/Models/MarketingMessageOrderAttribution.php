@@ -16,6 +16,7 @@ class MarketingMessageOrderAttribution extends Model
         'order_id',
         'marketing_profile_id',
         'marketing_email_delivery_id',
+        'marketing_message_delivery_id',
         'marketing_message_engagement_event_id',
         'channel',
         'attribution_model',
@@ -33,6 +34,7 @@ class MarketingMessageOrderAttribution extends Model
         'order_id' => 'integer',
         'marketing_profile_id' => 'integer',
         'marketing_email_delivery_id' => 'integer',
+        'marketing_message_delivery_id' => 'integer',
         'marketing_message_engagement_event_id' => 'integer',
         'attribution_window_days' => 'integer',
         'revenue_cents' => 'integer',
@@ -59,6 +61,11 @@ class MarketingMessageOrderAttribution extends Model
     public function emailDelivery(): BelongsTo
     {
         return $this->belongsTo(MarketingEmailDelivery::class, 'marketing_email_delivery_id');
+    }
+
+    public function messageDelivery(): BelongsTo
+    {
+        return $this->belongsTo(MarketingMessageDelivery::class, 'marketing_message_delivery_id');
     }
 
     public function engagementEvent(): BelongsTo

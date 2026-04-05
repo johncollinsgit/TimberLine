@@ -42,6 +42,24 @@ Schedule::command('shopify:webhooks:verify')
     ->withoutOverlapping(60)
     ->runInBackground();
 
+// Keep Shopify order snapshots fresh so message-attributed sales stay current.
+Schedule::command('shopify:import-orders', [
+    '--days' => 14,
+    '--status' => 'any',
+    '--limit' => 250,
+])
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
+// Reconcile click->order attributions after order imports and webhook drift.
+Schedule::command('marketing:sync-message-order-attributions', [
+    '--days' => 14,
+])
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
 // Bound integration-health event volume by pruning old resolved records.
 Schedule::command('integration-health:prune')
     ->dailyAt('02:20')
