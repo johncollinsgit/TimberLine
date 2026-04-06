@@ -10,12 +10,32 @@ return new class extends Migration
     {
         Schema::create('messaging_conversation_messages', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('conversation_id')->constrained('messaging_conversations')->cascadeOnDelete();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
+            $table->foreignId('conversation_id');
+            $table->foreign('conversation_id', 'mcm_conversation_fk')
+                ->references('id')
+                ->on('messaging_conversations')
+                ->cascadeOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreign('tenant_id', 'mcm_tenant_fk')
+                ->references('id')
+                ->on('tenants')
+                ->cascadeOnDelete();
             $table->string('store_key', 80)->nullable()->index();
-            $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
-            $table->foreignId('marketing_message_delivery_id')->nullable()->constrained('marketing_message_deliveries')->nullOnDelete();
-            $table->foreignId('marketing_email_delivery_id')->nullable()->constrained('marketing_email_deliveries')->nullOnDelete();
+            $table->foreignId('marketing_profile_id')->nullable();
+            $table->foreign('marketing_profile_id', 'mcm_profile_fk')
+                ->references('id')
+                ->on('marketing_profiles')
+                ->nullOnDelete();
+            $table->foreignId('marketing_message_delivery_id')->nullable();
+            $table->foreign('marketing_message_delivery_id', 'mcm_sms_delivery_fk')
+                ->references('id')
+                ->on('marketing_message_deliveries')
+                ->nullOnDelete();
+            $table->foreignId('marketing_email_delivery_id')->nullable();
+            $table->foreign('marketing_email_delivery_id', 'mcm_email_delivery_fk')
+                ->references('id')
+                ->on('marketing_email_deliveries')
+                ->nullOnDelete();
             $table->string('channel', 20)->index();
             $table->string('direction', 20)->index();
             $table->string('provider', 60)->default('unknown')->index();
@@ -31,7 +51,11 @@ return new class extends Migration
             $table->string('delivery_status', 60)->nullable()->index();
             $table->string('message_type', 40)->default('normal')->index();
             $table->timestamp('operator_read_at')->nullable()->index();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('created_by')->nullable();
+            $table->foreign('created_by', 'mcm_created_by_fk')
+                ->references('id')
+                ->on('users')
+                ->nullOnDelete();
             $table->json('raw_payload')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
@@ -43,8 +67,16 @@ return new class extends Migration
 
         Schema::create('messaging_contact_channel_states', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreign('tenant_id', 'mccs_tenant_fk')
+                ->references('id')
+                ->on('tenants')
+                ->cascadeOnDelete();
+            $table->foreignId('marketing_profile_id')->nullable();
+            $table->foreign('marketing_profile_id', 'mccs_profile_fk')
+                ->references('id')
+                ->on('marketing_profiles')
+                ->nullOnDelete();
             $table->string('phone', 40)->nullable();
             $table->string('email')->nullable();
             $table->string('sms_status', 40)->default('unknown')->index();
