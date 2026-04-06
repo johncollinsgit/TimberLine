@@ -931,6 +931,11 @@ Route::prefix('shopify')->middleware('web')->group(function () {
             ->name('messaging.customers.search');
         Route::get('/messaging/products/search', [ShopifyEmbeddedMessagingController::class, 'searchProducts'])
             ->name('messaging.products.search');
+        Route::get('/messaging/media', [ShopifyEmbeddedMessagingController::class, 'mediaIndex'])
+            ->name('messaging.media.index');
+        Route::post('/messaging/media', [ShopifyEmbeddedMessagingController::class, 'mediaStore'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.media.store');
         Route::get('/messaging/groups', [ShopifyEmbeddedMessagingController::class, 'groups'])
             ->name('messaging.groups');
         Route::get('/messaging/groups/{group}', [ShopifyEmbeddedMessagingController::class, 'groupDetail'])

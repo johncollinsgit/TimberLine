@@ -109,6 +109,137 @@
 
     <script>
         (function () {
+            const app = window.ForestryEmbeddedApp = window.ForestryEmbeddedApp || {};
+
+            if (typeof app.showToast !== "function") {
+                app.showToast = function showToast(message, tone) {
+                    const normalizedMessage = typeof message === "string" ? message.trim() : "";
+                    if (normalizedMessage === "") {
+                        return;
+                    }
+
+                    window.dispatchEvent(new CustomEvent("toast", {
+                        detail: {
+                            message: normalizedMessage,
+                            tone: typeof tone === "string" ? tone : "info",
+                        },
+                    }));
+                };
+            }
+
+            if (typeof app.resolveEmbeddedAuthHeaders === "function") {
+                return;
+            }
+
+            const AUTH_WAIT_TIMEOUT_MS = 6000;
+            const TOKEN_REQUEST_TIMEOUT_MS = 6000;
+            const TOKEN_CACHE_TTL_MS = 20000;
+            const POLL_INTERVAL_MS = 120;
+
+            let cachedToken = null;
+            let cachedTokenExpiresAt = 0;
+            let pendingTokenPromise = null;
+
+            function wait(ms) {
+                return new Promise((resolve) => window.setTimeout(resolve, ms));
+            }
+
+            function makeAuthError(code, fallbackMessage) {
+                const error = new Error(typeof fallbackMessage === "string" && fallbackMessage.trim() !== ""
+                    ? fallbackMessage
+                    : "Shopify Admin verification is unavailable. Reload from Shopify Admin and try again.");
+                error.code = code;
+
+                return error;
+            }
+
+            async function waitForShopifyIdToken(timeoutMs) {
+                const startedAt = Date.now();
+
+                while ((Date.now() - startedAt) < timeoutMs) {
+                    if (window.shopify && typeof window.shopify.idToken === "function") {
+                        return window.shopify.idToken.bind(window.shopify);
+                    }
+
+                    await wait(POLL_INTERVAL_MS);
+                }
+
+                return null;
+            }
+
+            app.getShopifySessionToken = async function getShopifySessionToken(options = {}) {
+                const minTtlMs = Number.isFinite(options.minTtlMs) ? Number(options.minTtlMs) : TOKEN_CACHE_TTL_MS;
+                const timeoutMs = Number.isFinite(options.timeoutMs) ? Number(options.timeoutMs) : AUTH_WAIT_TIMEOUT_MS;
+                const requestTimeoutMs = Number.isFinite(options.requestTimeoutMs)
+                    ? Number(options.requestTimeoutMs)
+                    : TOKEN_REQUEST_TIMEOUT_MS;
+
+                if (typeof cachedToken === "string" && cachedToken !== "" && Date.now() < cachedTokenExpiresAt) {
+                    return cachedToken;
+                }
+
+                if (pendingTokenPromise) {
+                    return pendingTokenPromise;
+                }
+
+                pendingTokenPromise = (async () => {
+                    const idTokenResolver = await waitForShopifyIdToken(timeoutMs);
+                    if (typeof idTokenResolver !== "function") {
+                        throw makeAuthError("missing_api_auth");
+                    }
+
+                    let lastError = null;
+
+                    for (let attempt = 0; attempt < 2; attempt += 1) {
+                        try {
+                            const token = await Promise.race([
+                                Promise.resolve(idTokenResolver()),
+                                new Promise((resolve) => window.setTimeout(() => resolve(null), requestTimeoutMs)),
+                            ]);
+
+                            if (typeof token === "string" && token.trim() !== "") {
+                                cachedToken = token.trim();
+                                cachedTokenExpiresAt = Date.now() + Math.max(1000, minTtlMs);
+
+                                return cachedToken;
+                            }
+                        } catch (error) {
+                            lastError = error;
+                        }
+
+                        await wait(180);
+                    }
+
+                    if (lastError) {
+                        throw makeAuthError("invalid_session_token");
+                    }
+
+                    throw makeAuthError("missing_api_auth");
+                })().finally(() => {
+                    pendingTokenPromise = null;
+                });
+
+                return pendingTokenPromise;
+            };
+
+            app.resolveEmbeddedAuthHeaders = async function resolveEmbeddedAuthHeaders(options = {}) {
+                const token = await app.getShopifySessionToken(options);
+                const headers = {
+                    Accept: "application/json",
+                    Authorization: `Bearer ${token}`,
+                };
+
+                if (options.includeJsonContentType !== false) {
+                    headers["Content-Type"] = "application/json";
+                }
+
+                return headers;
+            };
+        })();
+    </script>
+
+    <script>
+        (function () {
             if (window.__fbEmbeddedLinkPrefetchBound) {
                 return;
             }

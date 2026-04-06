@@ -16,12 +16,15 @@ use App\Services\Marketing\TenantRewardsReminderDispatchService;
 use App\Services\Marketing\TenantRewardsReminderLogService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedRewardsService
 {
+    protected const EMBEDDED_CACHE_TTL_SECONDS = 90;
+
     public function __construct(
         protected CandleCashService $candleCashService,
         protected TenantRewardsPolicyService $tenantRewardsPolicyService,
@@ -41,36 +44,42 @@ class ShopifyEmbeddedRewardsService
      */
     public function payload(?int $tenantId = null): array
     {
-        $programConfig = $this->programConfig($tenantId);
-        $policy = $this->tenantRewardsPolicyService->resolve($tenantId);
-        $redeemIncrement = round((float) data_get($programConfig, 'redeem_increment_dollars', $this->candleCashService->fixedRedemptionAmount()), 2);
-        $maxRedeemable = round((float) data_get($programConfig, 'max_redeemable_per_order_dollars', $this->candleCashService->maxRedeemablePerOrderAmount()), 2);
-        $maxOpenCodes = max(1, (int) data_get($programConfig, 'max_open_codes', $this->candleCashService->maxOpenStorefrontCodes()));
-        $earn = $this->sectionPayload(fn (): array => $this->earnSection($tenantId));
-        $redeem = $this->sectionPayload(fn (): array => $this->redeemSection($tenantId));
+        return Cache::remember(
+            $this->embeddedCacheKey('payload', $tenantId),
+            now()->addSeconds(self::EMBEDDED_CACHE_TTL_SECONDS),
+            function () use ($tenantId): array {
+                $programConfig = $this->programConfig($tenantId);
+                $policy = $this->policy($tenantId);
+                $redeemIncrement = round((float) data_get($programConfig, 'redeem_increment_dollars', $this->candleCashService->fixedRedemptionAmount()), 2);
+                $maxRedeemable = round((float) data_get($programConfig, 'max_redeemable_per_order_dollars', $this->candleCashService->maxRedeemablePerOrderAmount()), 2);
+                $maxOpenCodes = max(1, (int) data_get($programConfig, 'max_open_codes', $this->candleCashService->maxOpenStorefrontCodes()));
+                $earn = $this->sectionPayload(fn (): array => $this->earnSection($tenantId));
+                $redeem = $this->sectionPayload(fn (): array => $this->redeemSection($tenantId));
 
-        return [
-            'meta' => [
-                'program' => [
-                    'measurement_label' => '1 reward credit = 1 reward credit',
-                    'redeem_increment_dollars' => $redeemIncrement,
-                    'redeem_increment_formatted' => $this->candleCashService->formatRewardCurrency($redeemIncrement),
-                    'max_redeemable_per_order_dollars' => $maxRedeemable,
-                    'max_redeemable_per_order_formatted' => $this->candleCashService->formatRewardCurrency($maxRedeemable),
-                    'max_open_codes' => $maxOpenCodes,
-                    'program_name' => (string) data_get($policy, 'program_identity.program_name', 'Rewards'),
-                ],
-                'policy' => $policy,
-                'limitations' => [
-                    [
-                        'scope' => 'redeem',
-                        'message' => 'Minimum order requirements are not stored on current reward rows, so that field remains unavailable in this embedded page.',
+                return [
+                    'meta' => [
+                        'program' => [
+                            'measurement_label' => '1 reward credit = 1 reward credit',
+                            'redeem_increment_dollars' => $redeemIncrement,
+                            'redeem_increment_formatted' => $this->candleCashService->formatRewardCurrency($redeemIncrement),
+                            'max_redeemable_per_order_dollars' => $maxRedeemable,
+                            'max_redeemable_per_order_formatted' => $this->candleCashService->formatRewardCurrency($maxRedeemable),
+                            'max_open_codes' => $maxOpenCodes,
+                            'program_name' => (string) data_get($policy, 'program_identity.program_name', 'Rewards'),
+                        ],
+                        'policy' => $policy,
+                        'limitations' => [
+                            [
+                                'scope' => 'redeem',
+                                'message' => 'Minimum order requirements are not stored on current reward rows, so that field remains unavailable in this embedded page.',
+                            ],
+                        ],
                     ],
-                ],
-            ],
-            'earn' => $earn,
-            'redeem' => $redeem,
-        ];
+                    'earn' => $earn,
+                    'redeem' => $redeem,
+                ];
+            }
+        );
     }
 
     /**
@@ -79,7 +88,11 @@ class ShopifyEmbeddedRewardsService
      */
     public function policy(?int $tenantId = null, array $context = []): array
     {
-        return $this->tenantRewardsPolicyService->resolve($tenantId, $context);
+        return Cache::remember(
+            $this->embeddedCacheKey('policy', $tenantId, $context),
+            now()->addSeconds(self::EMBEDDED_CACHE_TTL_SECONDS),
+            fn (): array => $this->tenantRewardsPolicyService->resolve($tenantId, $context)
+        );
     }
 
     /**
@@ -89,7 +102,10 @@ class ShopifyEmbeddedRewardsService
      */
     public function updatePolicy(int $tenantId, array $payload, array $context = []): array
     {
-        return $this->tenantRewardsPolicyService->update($tenantId, $payload, $context);
+        $updated = $this->tenantRewardsPolicyService->update($tenantId, $payload, $context);
+        $this->bumpEmbeddedCacheVersion($tenantId);
+
+        return $updated;
     }
 
     /**
@@ -99,7 +115,10 @@ class ShopifyEmbeddedRewardsService
      */
     public function reviewPolicy(int $tenantId, array $payload, array $context = []): array
     {
-        return $this->tenantRewardsPolicyService->review($tenantId, $payload, $context);
+        $review = $this->tenantRewardsPolicyService->review($tenantId, $payload, $context);
+        $this->bumpEmbeddedCacheVersion($tenantId);
+
+        return $review;
     }
 
     /**
@@ -108,7 +127,10 @@ class ShopifyEmbeddedRewardsService
      */
     public function applyAlphaDefaults(int $tenantId, array $context = []): array
     {
-        return $this->tenantRewardsPolicyService->applyAlphaDefaults($tenantId, $context);
+        $defaults = $this->tenantRewardsPolicyService->applyAlphaDefaults($tenantId, $context);
+        $this->bumpEmbeddedCacheVersion($tenantId);
+
+        return $defaults;
     }
 
     /**
@@ -291,47 +313,53 @@ class ShopifyEmbeddedRewardsService
      */
     public function overview(?int $tenantId = null): array
     {
-        $payload = $this->payload($tenantId);
-        $earnItems = collect((array) data_get($payload, 'earn.items', []));
-        $redeemItems = collect((array) data_get($payload, 'redeem.items', []));
-        $activeEarnItems = $earnItems->where('enabled', true)->values();
-        $activeRedeemItems = $redeemItems->where('enabled', true)->values();
-        $primaryReward = $activeRedeemItems->first();
-        $programSummary = $primaryReward
-            ? 'Customers earn reward credit through live tasks, then redeem it for rewards like '.(string) data_get($primaryReward, 'title', 'configured rewards').'.'
-            : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Backstage.';
+        return Cache::remember(
+            $this->embeddedCacheKey('overview', $tenantId),
+            now()->addSeconds(self::EMBEDDED_CACHE_TTL_SECONDS),
+            function () use ($tenantId): array {
+                $payload = $this->payload($tenantId);
+                $earnItems = collect((array) data_get($payload, 'earn.items', []));
+                $redeemItems = collect((array) data_get($payload, 'redeem.items', []));
+                $activeEarnItems = $earnItems->where('enabled', true)->values();
+                $activeRedeemItems = $redeemItems->where('enabled', true)->values();
+                $primaryReward = $activeRedeemItems->first();
+                $programSummary = $primaryReward
+                    ? 'Customers earn reward credit through live tasks, then redeem it for rewards like '.(string) data_get($primaryReward, 'title', 'configured rewards').'.'
+                    : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Backstage.';
 
-        return [
-            'program_name' => 'Rewards',
-            'measurement_label' => (string) data_get($payload, 'meta.program.measurement_label', '1 reward credit = $1.00'),
-            'earning_rules_active' => $activeEarnItems->isNotEmpty(),
-            'earning_rule_count' => $activeEarnItems->count(),
-            'redeem_rules_active' => $activeRedeemItems->isNotEmpty(),
-            'redeem_rule_count' => $activeRedeemItems->count(),
-            'program_summary' => $programSummary,
-            'earning_modes' => $activeEarnItems
-                ->pluck('action_type_label')
-                ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
-                ->values()
-                ->unique()
-                ->all(),
-            'earn_preview' => $activeEarnItems
-                ->take(3)
-                ->map(fn (array $item): array => [
-                    'title' => (string) ($item['title'] ?? 'Earn rule'),
-                    'detail' => (string) ($item['candle_cash_value_formatted'] ?? '$0 reward credit'),
-                ])
-                ->values()
-                ->all(),
-            'redeem_preview' => $activeRedeemItems
-                ->take(3)
-                ->map(fn (array $item): array => [
-                    'title' => (string) ($item['title'] ?? 'Redeem rule'),
-                    'detail' => (string) ($item['candle_cash_cost_formatted'] ?? '$0 reward credit'),
-                ])
-                ->values()
-                ->all(),
-        ];
+                return [
+                    'program_name' => 'Rewards',
+                    'measurement_label' => (string) data_get($payload, 'meta.program.measurement_label', '1 reward credit = $1.00'),
+                    'earning_rules_active' => $activeEarnItems->isNotEmpty(),
+                    'earning_rule_count' => $activeEarnItems->count(),
+                    'redeem_rules_active' => $activeRedeemItems->isNotEmpty(),
+                    'redeem_rule_count' => $activeRedeemItems->count(),
+                    'program_summary' => $programSummary,
+                    'earning_modes' => $activeEarnItems
+                        ->pluck('action_type_label')
+                        ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                        ->values()
+                        ->unique()
+                        ->all(),
+                    'earn_preview' => $activeEarnItems
+                        ->take(3)
+                        ->map(fn (array $item): array => [
+                            'title' => (string) ($item['title'] ?? 'Earn rule'),
+                            'detail' => (string) ($item['candle_cash_value_formatted'] ?? '$0 reward credit'),
+                        ])
+                        ->values()
+                        ->all(),
+                    'redeem_preview' => $activeRedeemItems
+                        ->take(3)
+                        ->map(fn (array $item): array => [
+                            'title' => (string) ($item['title'] ?? 'Redeem rule'),
+                            'detail' => (string) ($item['candle_cash_cost_formatted'] ?? '$0 reward credit'),
+                        ])
+                        ->values()
+                        ->all(),
+                ];
+            }
+        );
     }
 
     public function resolveEarnRule(int $taskId, ?int $tenantId = null): CandleCashTask
@@ -403,6 +431,7 @@ class ShopifyEmbeddedRewardsService
         }
 
         $this->syncTaskConfigAmount((string) $task->handle, $rewardAmount, $tenantId);
+        $this->bumpEmbeddedCacheVersion($tenantId);
 
         return $this->earnActionRow($task, $override);
     }
@@ -471,6 +500,8 @@ class ShopifyEmbeddedRewardsService
                 enabled: $enabled
             );
         }
+
+        $this->bumpEmbeddedCacheVersion($tenantId);
 
         return $this->redeemRewardRow($reward, $override, $tenantId);
     }
@@ -757,6 +788,8 @@ class ShopifyEmbeddedRewardsService
                 ]
             );
 
+            $this->bumpEmbeddedCacheVersion($tenantId);
+
             return;
         }
 
@@ -767,6 +800,8 @@ class ShopifyEmbeddedRewardsService
                 'description' => $description,
             ]
         );
+
+        $this->bumpEmbeddedCacheVersion($tenantId);
     }
 
     /**
@@ -1036,5 +1071,40 @@ class ShopifyEmbeddedRewardsService
         }
 
         return round((float) $matches[0], 2);
+    }
+
+    protected function embeddedCacheKey(string $segment, ?int $tenantId = null, array $context = []): string
+    {
+        return implode(':', [
+            'shopify_embedded_rewards',
+            $segment,
+            (string) ($tenantId ?? 'none'),
+            (string) $this->embeddedCacheVersion($tenantId),
+            sha1(json_encode($context)),
+        ]);
+    }
+
+    protected function embeddedCacheVersion(?int $tenantId = null): int
+    {
+        return (int) Cache::rememberForever(
+            $this->embeddedCacheVersionKey($tenantId),
+            static fn (): int => 1
+        );
+    }
+
+    protected function bumpEmbeddedCacheVersion(?int $tenantId = null): void
+    {
+        $key = $this->embeddedCacheVersionKey($tenantId);
+
+        if (! Cache::has($key)) {
+            Cache::forever($key, 1);
+        }
+
+        Cache::increment($key);
+    }
+
+    protected function embeddedCacheVersionKey(?int $tenantId = null): string
+    {
+        return 'shopify_embedded_rewards:version:'.(string) ($tenantId ?? 'none');
     }
 }

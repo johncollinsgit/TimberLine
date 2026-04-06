@@ -9,6 +9,11 @@ export interface MessagingBootstrap {
   data?: {
     groups?: MessagingGroupsPayload;
     templates?: EmailTemplateDefinition[];
+    audience_summary?: {
+      summary?: Record<string, number>;
+      group_summaries?: Record<string, Record<string, number>>;
+      diagnostics?: Record<string, Record<string, number>>;
+    };
   };
   endpoints?: MessagingEndpoints;
 }
@@ -16,12 +21,33 @@ export interface MessagingBootstrap {
 export interface MessagingEndpoints {
   bootstrap?: string;
   audience_summary?: string;
+  search_customers?: string;
   search_products?: string;
+  media_list?: string;
+  media_upload?: string;
+  groups?: string;
+  group_detail_base?: string;
+  create_group?: string;
+  update_group_base?: string;
   preview_group?: string;
+  send_individual?: string;
   send_group?: string;
   smoke_sms?: string;
   smoke_email?: string;
   history?: string;
+}
+
+export interface MessagingMediaAsset {
+  id: number;
+  channel: "email" | "sms";
+  url: string;
+  original_name: string;
+  alt_text?: string | null;
+  mime_type: string;
+  size_bytes: number;
+  width?: number | null;
+  height?: number | null;
+  created_at?: string | null;
 }
 
 export interface MessagingGroupsPayload {

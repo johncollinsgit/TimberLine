@@ -11,8 +11,8 @@ import {
   Text,
   TextField,
 } from "@shopify/polaris";
-import { useEffect, useMemo, useState } from "react";
-import type { EmailSection, EmailSectionType } from "./types";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import type { EmailSection, EmailSectionType, MessagingMediaAsset } from "./types";
 
 interface ProductResult {
   id: string;
@@ -33,6 +33,8 @@ interface EmailContentStepProps {
   advancedHtml: string;
   onAdvancedHtmlChange: (value: string) => void;
   searchProducts: (query: string) => Promise<ProductResult[]>;
+  listMediaAssets: () => Promise<MessagingMediaAsset[]>;
+  uploadMediaAsset: (file: File, altText?: string) => Promise<MessagingMediaAsset>;
 }
 
 const SECTION_TYPES: Array<{ type: EmailSectionType; label: string }> = [
@@ -192,6 +194,109 @@ function previewHtml(subject: string, sections: EmailSection[], mode: "sections"
   )}</table></td></tr></table></body></html>`;
 }
 
+interface MediaLibraryPickerProps {
+  assets: MessagingMediaAsset[];
+  selectedUrl?: string;
+  loading: boolean;
+  uploading: boolean;
+  error: string | null;
+  altText: string;
+  label: string;
+  onRefresh: () => void;
+  onUpload: (file: File) => Promise<void>;
+  onSelect: (asset: MessagingMediaAsset) => void;
+}
+
+function MediaLibraryPicker({
+  assets,
+  selectedUrl,
+  loading,
+  uploading,
+  error,
+  altText,
+  label,
+  onRefresh,
+  onUpload,
+  onSelect,
+}: MediaLibraryPickerProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    await onUpload(file);
+    event.target.value = "";
+  };
+
+  return (
+    <BlockStack gap="200">
+      <InlineStack align="space-between" blockAlign="center" wrap>
+        <Text as="p" variant="bodyMd" fontWeight="semibold">
+          {label}
+        </Text>
+        <InlineStack gap="200" wrap>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+            hidden
+            onChange={(event) => void handleUpload(event)}
+          />
+          <Button onClick={() => inputRef.current?.click()} loading={uploading}>
+            Upload photo
+          </Button>
+          <Button onClick={onRefresh} loading={loading}>
+            Refresh
+          </Button>
+        </InlineStack>
+      </InlineStack>
+
+      <Text as="p" tone="subdued" variant="bodySm">
+        Upload once, then reuse saved photos across future email sections for this store.
+      </Text>
+
+      {error ? <Banner tone="critical">{error}</Banner> : null}
+
+      {assets.length > 0 ? (
+        <Box className="sf-messaging-media-grid">
+          {assets.map((asset) => {
+            const isSelected = selectedUrl === asset.url;
+            const dimensions = asset.width && asset.height ? `${asset.width} x ${asset.height}` : null;
+
+            return (
+              <Card key={asset.id}>
+                <BlockStack gap="200">
+                  <Box className="sf-messaging-media-thumb">
+                    <img src={asset.url} alt={asset.alt_text ?? (altText || "Saved media")} />
+                  </Box>
+                  <BlockStack gap="050">
+                    <Text as="p" variant="bodySm" fontWeight="semibold">
+                      {asset.original_name}
+                    </Text>
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      {[dimensions, asset.mime_type].filter(Boolean).join(" · ")}
+                    </Text>
+                  </BlockStack>
+                  <Button variant={isSelected ? "primary" : "secondary"} onClick={() => onSelect(asset)}>
+                    {isSelected ? "Selected" : "Use photo"}
+                  </Button>
+                </BlockStack>
+              </Card>
+            );
+          })}
+        </Box>
+      ) : (
+        <Banner tone="info">
+          No saved photos yet. Upload one here and it will be available next time.
+        </Banner>
+      )}
+    </BlockStack>
+  );
+}
+
 export function EmailContentStep({
   subject,
   onSubjectChange,
@@ -202,12 +307,18 @@ export function EmailContentStep({
   advancedHtml,
   onAdvancedHtmlChange,
   searchProducts,
+  listMediaAssets,
+  uploadMediaAsset,
 }: EmailContentStepProps) {
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(sections[0]?.id ?? null);
   const [productQuery, setProductQuery] = useState("");
   const [productLoading, setProductLoading] = useState(false);
   const [productResults, setProductResults] = useState<ProductResult[]>([]);
   const [productError, setProductError] = useState<string | null>(null);
+  const [mediaAssets, setMediaAssets] = useState<MessagingMediaAsset[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedSectionId && sections.length > 0) {
@@ -219,6 +330,14 @@ export function EmailContentStep({
     () => sections.find((section) => section.id === selectedSectionId) ?? null,
     [sections, selectedSectionId],
   );
+
+  useEffect(() => {
+    if (!selectedSection || !["image", "product"].includes(selectedSection.type) || mediaAssets.length > 0 || mediaLoading) {
+      return;
+    }
+
+    void loadMediaLibrary();
+  }, [selectedSection, mediaAssets.length, mediaLoading]);
 
   const composedPreview = useMemo(
     () => previewHtml(subject, sections, mode, advancedHtml),
@@ -280,6 +399,38 @@ export function EmailContentStep({
       setProductError(error instanceof Error ? error.message : "Product search failed.");
     } finally {
       setProductLoading(false);
+    }
+  };
+
+  const loadMediaLibrary = async () => {
+    setMediaError(null);
+    setMediaLoading(true);
+
+    try {
+      const assets = await listMediaAssets();
+      setMediaAssets(assets);
+    } catch (error) {
+      setMediaError(error instanceof Error ? error.message : "Photo library failed to load.");
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+
+  const handleMediaUpload = async (sectionId: string, file: File, fallbackAlt: string) => {
+    setMediaError(null);
+    setMediaUploading(true);
+
+    try {
+      const asset = await uploadMediaAsset(file, fallbackAlt);
+      setMediaAssets((previous) => [asset, ...previous.filter((entry) => entry.id !== asset.id)]);
+      updateSection(sectionId, {
+        imageUrl: asset.url,
+        alt: asset.alt_text ?? fallbackAlt,
+      });
+    } catch (error) {
+      setMediaError(error instanceof Error ? error.message : "Photo upload failed.");
+    } finally {
+      setMediaUploading(false);
     }
   };
 
@@ -427,6 +578,24 @@ export function EmailContentStep({
 
                     {selectedSection.type === "image" ? (
                       <BlockStack gap="200">
+                        <MediaLibraryPicker
+                          assets={mediaAssets}
+                          selectedUrl={selectedSection.imageUrl ?? ""}
+                          loading={mediaLoading}
+                          uploading={mediaUploading}
+                          error={mediaError}
+                          altText={selectedSection.alt ?? "Photo"}
+                          label="Saved photos"
+                          onRefresh={() => void loadMediaLibrary()}
+                          onUpload={(file) => handleMediaUpload(selectedSection.id, file, selectedSection.alt ?? "Photo")}
+                          onSelect={(asset) =>
+                            updateSection(selectedSection.id, {
+                              imageUrl: asset.url,
+                              alt: asset.alt_text ?? selectedSection.alt ?? "Photo",
+                            })
+                          }
+                        />
+                        <Divider />
                         <TextField
                           label="Image URL"
                           value={selectedSection.imageUrl ?? ""}
@@ -496,6 +665,25 @@ export function EmailContentStep({
                             ))}
                           </Box>
                         ) : null}
+
+                        <Divider />
+
+                        <MediaLibraryPicker
+                          assets={mediaAssets}
+                          selectedUrl={selectedSection.imageUrl ?? ""}
+                          loading={mediaLoading}
+                          uploading={mediaUploading}
+                          error={mediaError}
+                          altText={selectedSection.title ?? "Product"}
+                          label="Product photo"
+                          onRefresh={() => void loadMediaLibrary()}
+                          onUpload={(file) => handleMediaUpload(selectedSection.id, file, selectedSection.title ?? "Product")}
+                          onSelect={(asset) =>
+                            updateSection(selectedSection.id, {
+                              imageUrl: asset.url,
+                            })
+                          }
+                        />
 
                         <Divider />
 

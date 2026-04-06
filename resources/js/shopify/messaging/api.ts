@@ -1,5 +1,14 @@
 import type { MessagingEnvelope } from "./types";
 
+interface EmbeddedAppHelpers {
+  resolveEmbeddedAuthHeaders?: (options?: {
+    includeJsonContentType?: boolean;
+    timeoutMs?: number;
+    requestTimeoutMs?: number;
+    minTtlMs?: number;
+  }) => Promise<Record<string, string>>;
+}
+
 export class MessagingApiError extends Error {
   payload?: MessagingEnvelope<unknown>;
 
@@ -24,6 +33,18 @@ function authFailureMessage(status?: string | null, fallback?: string | null): s
 }
 
 export async function resolveEmbeddedAuthHeaders(): Promise<Record<string, string>> {
+  const helper = (
+    window as Window & {
+      ForestryEmbeddedApp?: EmbeddedAppHelpers;
+    }
+  ).ForestryEmbeddedApp;
+
+  if (helper && typeof helper.resolveEmbeddedAuthHeaders === "function") {
+    return helper.resolveEmbeddedAuthHeaders({
+      includeJsonContentType: false,
+    });
+  }
+
   const bridge = (
     window as Window & {
       shopify?: {
@@ -41,7 +62,7 @@ export async function resolveEmbeddedAuthHeaders(): Promise<Record<string, strin
   try {
     token = await Promise.race([
       Promise.resolve(bridge.idToken()),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 1600)),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
     ]);
   } catch {
     throw new MessagingApiError(authFailureMessage("invalid_session_token"));
@@ -73,6 +94,38 @@ export async function requestMessagingJson<TData>(
     credentials: "same-origin",
     ...options,
     headers,
+  });
+
+  const payload = (await response.json().catch(() => ({
+    ok: false,
+    message: "Unexpected response from Backstage.",
+  }))) as MessagingEnvelope<TData>;
+
+  if (!response.ok || !payload.ok) {
+    throw new MessagingApiError(
+      authFailureMessage(payload.status, payload.message ?? "Request failed."),
+      payload,
+    );
+  }
+
+  return payload;
+}
+
+export async function requestMessagingFormData<TData>(
+  url: string,
+  body: FormData,
+  options: RequestInit = {},
+): Promise<MessagingEnvelope<TData>> {
+  const authHeaders = await resolveEmbeddedAuthHeaders();
+
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+    body,
+    headers: {
+      ...authHeaders,
+      ...(options.headers ?? {}),
+    },
   });
 
   const payload = (await response.json().catch(() => ({

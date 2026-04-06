@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MarketingMessageMediaAsset;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\MessageAnalyticsService;
@@ -14,6 +15,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedMessagingController extends Controller
@@ -51,6 +54,7 @@ class ShopifyEmbeddedMessagingController extends Controller
             ? $probe->time('page_payload', fn (): array => [
                 'groups' => $workspaceService->groups($tenantId, includeAutoCounts: false),
                 'templates' => $workspaceService->emailTemplateDefinitions(),
+                'audience_summary' => $workspaceService->audienceSummary($tenantId),
             ])
             : null;
 
@@ -94,11 +98,13 @@ class ShopifyEmbeddedMessagingController extends Controller
                     'endpoints' => [
                         'bootstrap' => route('shopify.app.api.messaging.bootstrap', [], false),
                         'audience_summary' => route('shopify.app.api.messaging.audience.summary', [], false),
-                        'search_customers' => route('shopify.app.api.messaging.customers.search', [], false),
-                        'search_products' => route('shopify.app.api.messaging.products.search', [], false),
-                        'groups' => route('shopify.app.api.messaging.groups', [], false),
-                        'group_detail_base' => route('shopify.app.api.messaging.groups.detail', ['group' => '__GROUP__'], false),
-                        'create_group' => route('shopify.app.api.messaging.groups.create', [], false),
+                    'search_customers' => route('shopify.app.api.messaging.customers.search', [], false),
+                    'search_products' => route('shopify.app.api.messaging.products.search', [], false),
+                    'media_list' => route('shopify.app.api.messaging.media.index', [], false),
+                    'media_upload' => route('shopify.app.api.messaging.media.store', [], false),
+                    'groups' => route('shopify.app.api.messaging.groups', [], false),
+                    'group_detail_base' => route('shopify.app.api.messaging.groups.detail', ['group' => '__GROUP__'], false),
+                    'create_group' => route('shopify.app.api.messaging.groups.create', [], false),
                         'update_group_base' => route('shopify.app.api.messaging.groups.update', ['group' => '__GROUP__'], false),
                         'preview_group' => route('shopify.app.api.messaging.preview.group', [], false),
                         'send_individual' => route('shopify.app.api.messaging.send.individual', [], false),
@@ -426,6 +432,151 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'data' => $results,
+        ]);
+    }
+
+    public function mediaIndex(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        if (! Schema::hasTable('marketing_message_media_assets')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Messaging media library is not available on this environment yet.',
+            ], 503);
+        }
+
+        try {
+            $data = validator($request->query(), [
+                'channel' => ['nullable', 'in:email,sms'],
+                'limit' => ['nullable', 'integer', 'min:1', 'max:48'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Media library query is invalid.', $exception);
+        }
+
+        $tenantId = (int) $access['tenant_id'];
+        $storeKey = $this->normalizedStoreKeyFromAccess($access);
+        $channel = (string) ($data['channel'] ?? 'email');
+        $limit = isset($data['limit']) ? (int) $data['limit'] : 18;
+
+        $assets = MarketingMessageMediaAsset::query()
+            ->forTenantId($tenantId)
+            ->when(
+                $storeKey !== null,
+                fn ($query) => $query->where('store_key', $storeKey),
+                fn ($query) => $query->whereNull('store_key')
+            )
+            ->where('channel', $channel)
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (MarketingMessageMediaAsset $asset): array => $this->serializeMediaAsset($asset))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $assets,
+        ]);
+    }
+
+    public function mediaStore(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        if (! Schema::hasTable('marketing_message_media_assets')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Messaging media library is not available on this environment yet.',
+            ], 503);
+        }
+
+        try {
+            $data = validator(
+                [
+                    'image' => $request->file('image'),
+                    'channel' => $request->input('channel'),
+                    'alt_text' => $request->input('alt_text'),
+                ],
+                [
+                    'image' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:8192'],
+                    'channel' => ['nullable', 'in:email,sms'],
+                    'alt_text' => ['nullable', 'string', 'max:255'],
+                ]
+            )->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Image upload failed.', $exception);
+        }
+
+        $file = $request->file('image');
+        if (! $file?->isValid()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Image upload failed.',
+                'errors' => [
+                    'image' => ['Choose a valid image file before uploading.'],
+                ],
+            ], 422);
+        }
+
+        $tenantId = (int) $access['tenant_id'];
+        $storeKey = $this->normalizedStoreKeyFromAccess($access);
+        $channel = (string) ($data['channel'] ?? 'email');
+        $disk = 'public';
+        $directory = sprintf(
+            'messaging-media/tenant-%d/%s/%s',
+            $tenantId,
+            $storeKey ?? 'shared',
+            $channel
+        );
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $filename = sprintf(
+            '%s-%s%s',
+            now()->format('YmdHis'),
+            Str::random(12),
+            $extension !== '' ? '.'.$extension : ''
+        );
+        $path = $file->storeAs($directory, $filename, $disk);
+        $dimensions = @getimagesize($file->getRealPath() ?: '');
+
+        $asset = MarketingMessageMediaAsset::query()->create([
+            'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'channel' => $channel,
+            'disk' => $disk,
+            'path' => $path,
+            'public_url' => Storage::disk($disk)->url($path),
+            'original_name' => (string) $file->getClientOriginalName(),
+            'mime_type' => (string) ($file->getMimeType() ?: 'application/octet-stream'),
+            'size_bytes' => (int) $file->getSize(),
+            'width' => is_array($dimensions) ? (int) ($dimensions[0] ?? 0) ?: null : null,
+            'height' => is_array($dimensions) ? (int) ($dimensions[1] ?? 0) ?: null : null,
+            'alt_text' => $this->nullableString($data['alt_text'] ?? null),
+            'uploaded_by' => auth()->id() !== null ? (int) auth()->id() : null,
+            'metadata' => [
+                'source' => 'shopify_embedded_messaging',
+            ],
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Image uploaded.',
+            'data' => $this->serializeMediaAsset($asset),
         ]);
     }
 
@@ -1063,5 +1214,29 @@ class ShopifyEmbeddedMessagingController extends Controller
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function serializeMediaAsset(MarketingMessageMediaAsset $asset): array
+    {
+        return [
+            'id' => (int) $asset->id,
+            'channel' => (string) $asset->channel,
+            'url' => (string) $asset->public_url,
+            'original_name' => (string) $asset->original_name,
+            'alt_text' => $this->nullableString($asset->alt_text),
+            'mime_type' => (string) $asset->mime_type,
+            'size_bytes' => (int) $asset->size_bytes,
+            'width' => $asset->width !== null ? (int) $asset->width : null,
+            'height' => $asset->height !== null ? (int) $asset->height : null,
+            'created_at' => optional($asset->created_at)->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $access
+     */
+    protected function normalizedStoreKeyFromAccess(array $access): ?string
+    {
+        return $this->nullableString(data_get($access, 'context.store.key'));
     }
 }

@@ -8,6 +8,7 @@ use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageGroup;
+use App\Models\MarketingMessageMediaAsset;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
 use App\Models\Order;
@@ -17,7 +18,9 @@ use App\Models\TenantModuleState;
 use App\Models\User;
 use App\Services\Marketing\SendGridEmailService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 beforeEach(function (): void {
@@ -180,6 +183,103 @@ test('messaging page bootstrap defers auto audience counts to async summary load
         ->assertOk()
         ->assertJsonPath('data.groups.auto.0.key', 'all_subscribed')
         ->assertJsonPath('data.groups.auto.0.counts', null);
+});
+
+test('messaging media upload stores image on public disk and returns tenant scoped asset', function () {
+    Storage::fake('public');
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Media Tenant',
+        'slug' => 'messaging-media-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $response = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->post(route('shopify.app.api.messaging.media.store'), [
+            'channel' => 'email',
+            'alt_text' => 'Spring hero',
+            'image' => UploadedFile::fake()->image('spring-hero.png', 1200, 900),
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.channel', 'email')
+        ->assertJsonPath('data.alt_text', 'Spring hero')
+        ->assertJsonPath('data.original_name', 'spring-hero.png');
+
+    $asset = MarketingMessageMediaAsset::query()->first();
+
+    expect($asset)->not->toBeNull()
+        ->and((int) $asset->tenant_id)->toBe((int) $tenant->id)
+        ->and((string) $asset->store_key)->toBe('retail');
+
+    Storage::disk('public')->assertExists((string) $asset->path);
+});
+
+test('messaging media index only returns assets for the active tenant and store', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Messaging Media Tenant A',
+        'slug' => 'messaging-media-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Messaging Media Tenant B',
+        'slug' => 'messaging-media-tenant-b',
+    ]);
+    shopifyMessagingGrantEntitlement($tenantA);
+    shopifyMessagingGrantEntitlement($tenantB);
+    configureEmbeddedRetailStore($tenantA->id);
+
+    $visible = MarketingMessageMediaAsset::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'retail',
+        'channel' => 'email',
+        'disk' => 'public',
+        'path' => 'messaging-media/tenant-a/visible.png',
+        'public_url' => 'https://example.test/storage/visible.png',
+        'original_name' => 'visible.png',
+        'mime_type' => 'image/png',
+        'size_bytes' => 1024,
+        'width' => 1200,
+        'height' => 900,
+        'alt_text' => 'Visible asset',
+    ]);
+
+    MarketingMessageMediaAsset::query()->create([
+        'tenant_id' => $tenantA->id,
+        'store_key' => 'wholesale',
+        'channel' => 'email',
+        'disk' => 'public',
+        'path' => 'messaging-media/tenant-a/hidden-store.png',
+        'public_url' => 'https://example.test/storage/hidden-store.png',
+        'original_name' => 'hidden-store.png',
+        'mime_type' => 'image/png',
+        'size_bytes' => 1024,
+        'width' => 1200,
+        'height' => 900,
+    ]);
+
+    MarketingMessageMediaAsset::query()->create([
+        'tenant_id' => $tenantB->id,
+        'store_key' => 'retail',
+        'channel' => 'email',
+        'disk' => 'public',
+        'path' => 'messaging-media/tenant-b/hidden-tenant.png',
+        'public_url' => 'https://example.test/storage/hidden-tenant.png',
+        'original_name' => 'hidden-tenant.png',
+        'mime_type' => 'image/png',
+        'size_bytes' => 1024,
+        'width' => 1200,
+        'height' => 900,
+    ]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.media.index'))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', (int) $visible->id)
+        ->assertJsonPath('data.0.original_name', 'visible.png');
 });
 
 test('messaging analytics page is locked for non-enabled tenant mappings', function () {

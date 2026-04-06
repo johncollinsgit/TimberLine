@@ -18,7 +18,7 @@ import {
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { MessagingApiError, requestMessagingJson } from "./api";
+import { MessagingApiError, requestMessagingFormData, requestMessagingJson } from "./api";
 import type {
   AutoAudienceGroup,
   EmailSection,
@@ -27,6 +27,7 @@ import type {
   MessagingChannel,
   MessagingGroupsPayload,
   MessagingHistoryPayload,
+  MessagingMediaAsset,
   SavedAudienceGroup,
 } from "./types";
 import "./messaging.css";
@@ -167,14 +168,30 @@ function normalizeTemplates(payload: MessagingBootstrap): EmailTemplateDefinitio
   return Array.isArray(templates) ? templates.slice(0, 5) : [];
 }
 
+function normalizeBootstrapAudienceSummary(payload: MessagingBootstrap): {
+  groupSummaries: Record<string, Record<string, number>>;
+  diagnostics: Record<string, Record<string, number>>;
+} {
+  const audienceSummary = payload.data?.audience_summary;
+
+  return {
+    groupSummaries: audienceSummary?.group_summaries ?? {},
+    diagnostics: audienceSummary?.diagnostics ?? {},
+  };
+}
+
 export function MessagingApp({ bootstrap }: MessagingAppProps) {
   const [globalTone, setGlobalTone] = useState<"critical" | "success" | "info" | "warning">("info");
   const [globalMessage, setGlobalMessage] = useState<string | null>(null);
 
   const [groups] = useState<MessagingGroupsPayload>(() => normalizeGroups(bootstrap));
   const [templates] = useState<EmailTemplateDefinition[]>(() => normalizeTemplates(bootstrap));
-  const [groupSummaries, setGroupSummaries] = useState<Record<string, Record<string, number>>>({});
-  const [audienceDiagnostics, setAudienceDiagnostics] = useState<Record<string, Record<string, number>>>({});
+  const [groupSummaries, setGroupSummaries] = useState<Record<string, Record<string, number>>>(
+    () => normalizeBootstrapAudienceSummary(bootstrap).groupSummaries,
+  );
+  const [audienceDiagnostics, setAudienceDiagnostics] = useState<Record<string, Record<string, number>>>(
+    () => normalizeBootstrapAudienceSummary(bootstrap).diagnostics,
+  );
 
   const [activeChannel, setActiveChannel] = useState<MessagingChannel>("sms");
   const [smsStep, setSmsStep] = useState(0);
@@ -256,6 +273,10 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   };
 
   const loadAudienceSummary = useCallback(async () => {
+    if (Object.keys(groupSummaries).length > 0 || Object.keys(audienceDiagnostics).length > 0) {
+      return;
+    }
+
     if (!endpoints.audience_summary) {
       return;
     }
@@ -272,7 +293,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     } catch (error) {
       handleApiError(error, "Failed to load audience summary.");
     }
-  }, [endpoints.audience_summary]);
+  }, [audienceDiagnostics, endpoints.audience_summary, groupSummaries]);
 
   const loadHistory = useCallback(async () => {
     if (!endpoints.history) {
@@ -405,6 +426,41 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
 
     return Array.isArray(response.data) ? response.data : [];
   };
+
+  const listMediaAssets = useCallback(async () => {
+    if (!endpoints.media_list) {
+      return [];
+    }
+
+    const response = await requestMessagingJson<MessagingMediaAsset[]>(
+      `${endpoints.media_list}?channel=email&limit=18`,
+    );
+
+    return Array.isArray(response.data) ? response.data : [];
+  }, [endpoints.media_list]);
+
+  const uploadMediaAsset = useCallback(async (file: File, altText?: string) => {
+    if (!endpoints.media_upload) {
+      throw new Error("Photo uploads are not available for this workspace yet.");
+    }
+
+    const form = new FormData();
+    form.append("image", file);
+    form.append("channel", "email");
+    if ((altText ?? "").trim() !== "") {
+      form.append("alt_text", altText?.trim() ?? "");
+    }
+
+    const response = await requestMessagingFormData<MessagingMediaAsset>(endpoints.media_upload, form, {
+      method: "POST",
+    });
+
+    if (!response.data) {
+      throw new Error("Photo upload completed without a usable asset.");
+    }
+
+    return response.data;
+  }, [endpoints.media_upload]);
 
   const loadSmsPreview = useCallback(async () => {
     const selected = selectedTargets.sms;
@@ -989,6 +1045,8 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           advancedHtml={emailAdvancedHtml}
           onAdvancedHtmlChange={setEmailAdvancedHtml}
           searchProducts={searchProducts}
+          listMediaAssets={listMediaAssets}
+          uploadMediaAsset={uploadMediaAsset}
         />
       </Suspense>
     );

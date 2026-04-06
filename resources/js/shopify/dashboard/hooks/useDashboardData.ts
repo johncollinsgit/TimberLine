@@ -41,6 +41,15 @@ interface DashboardRequestError extends Error {
   status?: string;
 }
 
+interface EmbeddedAppHelpers {
+  resolveEmbeddedAuthHeaders?: (options?: {
+    includeJsonContentType?: boolean;
+    timeoutMs?: number;
+    requestTimeoutMs?: number;
+    minTtlMs?: number;
+  }) => Promise<Record<string, string>>;
+}
+
 const DASHBOARD_DEBUG_KEY = "sf-dashboard-debug";
 const DASHBOARD_AUTO_REFRESH_KEY = "sf-dashboard-auto-refresh";
 const AUTO_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -86,6 +95,18 @@ function authFailureMessage(status?: string | null, fallbackMessage?: string | n
 }
 
 async function resolveEmbeddedAuthHeaders(): Promise<Record<string, string>> {
+  const helper = (
+    window as Window & {
+      ForestryEmbeddedApp?: EmbeddedAppHelpers;
+    }
+  ).ForestryEmbeddedApp;
+
+  if (helper && typeof helper.resolveEmbeddedAuthHeaders === "function") {
+    return helper.resolveEmbeddedAuthHeaders({
+      includeJsonContentType: false,
+    });
+  }
+
   const shopifyBridge = (
     window as Window & {
       shopify?: {
@@ -103,7 +124,7 @@ async function resolveEmbeddedAuthHeaders(): Promise<Record<string, string>> {
   try {
     sessionToken = await Promise.race([
       Promise.resolve(shopifyBridge.idToken()),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 1500)),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
     ]);
   } catch {
     throw new Error(authFailureMessage("invalid_session_token"));
