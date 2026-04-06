@@ -88,6 +88,23 @@
   display: block;
 }
 
+.sf-messaging-cost-card {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.sf-messaging-cost-card.is-blocked {
+  border-color: rgba(153, 27, 27, 0.28);
+  background: #fff7f7;
+}
+
+.sf-messaging-cost-warning {
+  border-top: 1px solid rgba(153, 27, 27, 0.14);
+  padding-top: 10px;
+}
+
 .sf-messaging-email-preview-frame {
   width: 100%;
   min-height: 420px;

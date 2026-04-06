@@ -153,6 +153,29 @@ export interface MessagingHistoryPayload {
   }>;
 }
 
+export interface SmsPlanPayload {
+  normalized_body?: string;
+  normalization_applied?: boolean;
+  normalization_replacements?: string[];
+  encoding?: "gsm7" | "unicode";
+  character_count?: number;
+  sms_segments?: number;
+  recommended_channel?: "sms" | "mms" | "mixed";
+  sms_recipient_count?: number;
+  mms_recipient_count?: number;
+  recipient_count?: number;
+  estimated_cost_per_recipient?: number;
+  estimated_cost_per_recipient_formatted?: string;
+  estimated_total_cost?: number;
+  estimated_total_cost_formatted?: string;
+  estimated_sms_cost_per_recipient_formatted?: string;
+  estimated_mms_cost_per_recipient_formatted?: string;
+  bulk_spend_limit_formatted?: string | null;
+  blocked?: boolean;
+  blocking_reasons?: string[];
+  notes?: string[];
+}
+
 export interface MessagingEnvelope<TData> {
   ok: boolean;
   message?: string;

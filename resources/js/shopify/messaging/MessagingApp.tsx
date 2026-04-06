@@ -19,6 +19,7 @@ import {
 import enTranslations from "@shopify/polaris/locales/en.json";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MessagingApiError, requestMessagingFormData, requestMessagingJson } from "./api";
+import { analyzeLocalSms, formatCurrency } from "./smsSafety";
 import type {
   AutoAudienceGroup,
   EmailSection,
@@ -28,6 +29,7 @@ import type {
   MessagingGroupsPayload,
   MessagingHistoryPayload,
   MessagingMediaAsset,
+  SmsPlanPayload,
   SavedAudienceGroup,
 } from "./types";
 import "./messaging.css";
@@ -53,6 +55,7 @@ interface SelectedTarget {
 
 interface SmokeResult {
   summary?: Record<string, unknown>;
+  sms_plan?: SmsPlanPayload;
   deliveries?: Array<{
     recipient?: string | null;
     status?: string;
@@ -76,6 +79,7 @@ interface PreviewPayload {
   query_candidate_count?: number;
   force_send_profile_ids_count?: number;
   target?: Record<string, unknown>;
+  sms_plan?: SmsPlanPayload;
 }
 
 function formatCount(value: number | undefined): string {
@@ -245,8 +249,9 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   const activeSteps = activeChannel === "sms" ? SMS_STEPS : EMAIL_STEPS;
   const activeStepIndex = activeChannel === "sms" ? smsStep : emailStep;
 
-  const smsChars = smsMessage.length;
-  const smsSegments = Math.max(1, Math.ceil(Math.max(smsChars, 1) / 160));
+  const smsSafety = useMemo(() => analyzeLocalSms(smsMessage), [smsMessage]);
+  const smsChars = smsSafety.characterCount;
+  const smsSegments = smsSafety.smsSegments;
 
   const emailBody = useMemo(() => composeBodyFromSections(emailSections), [emailSections]);
 
@@ -889,11 +894,37 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
             />
             <InlineStack gap="200" blockAlign="center" wrap>
               <Badge tone="info">{formatCount(smsChars)} chars</Badge>
-              <Badge tone="info">{smsSegments} segments</Badge>
+              <Badge tone={smsSafety.encoding === "gsm7" ? "success" : "warning"}>
+                {smsSafety.encoding === "gsm7" ? "GSM-7" : "Unicode"}
+              </Badge>
+              <Badge tone={smsSegments > 2 ? "warning" : "info"}>{smsSegments} SMS segments</Badge>
+              <Badge tone="info">SMS {formatCurrency(smsSafety.smsCostPerRecipient)}/recipient</Badge>
+              <Badge tone={smsSafety.mmsCouldBeCheaper ? "success" : "info"}>
+                MMS {formatCurrency(smsSafety.mmsCostPerRecipient)}/recipient
+              </Badge>
               <Button variant="plain" onClick={() => setSmsShowAdvanced((value) => !value)}>
                 {smsShowAdvanced ? "Hide advanced" : "Advanced sender"}
               </Button>
             </InlineStack>
+            {(smsSafety.normalizationApplied || smsSafety.encoding === "unicode" || smsSafety.mmsCouldBeCheaper) ? (
+              <BlockStack gap="100">
+                {smsSafety.normalizationApplied ? (
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    Smart punctuation will be normalized before send.
+                  </Text>
+                ) : null}
+                {smsSafety.encoding === "unicode" ? (
+                  <Text as="p" tone="critical" variant="bodySm">
+                    Unicode characters increase SMS segment cost: {smsSafety.unsupportedCharacters.join(" ")}
+                  </Text>
+                ) : null}
+                {smsSafety.mmsCouldBeCheaper ? (
+                  <Text as="p" tone="success" variant="bodySm">
+                    MMS can be cheaper than segmented SMS for eligible US and Canada recipients.
+                  </Text>
+                ) : null}
+              </BlockStack>
+            ) : null}
             {smsShowAdvanced ? (
               <TextField
                 label="Sender key"
@@ -913,7 +944,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
             </Text>
             <Box className="sf-messaging-phone-shell">
               <Box className="sf-messaging-phone-bubble">
-                {isNonEmpty(smsMessage) ? smsMessage : "Your SMS preview appears here."}
+                {isNonEmpty(smsSafety.normalizedMessage) ? smsSafety.normalizedMessage : "Your SMS preview appears here."}
               </Box>
             </Box>
           </BlockStack>
@@ -943,6 +974,24 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
             </Button>
           </InlineStack>
 
+          {smsSmokeResult?.sms_plan ? (
+            <Card>
+              <BlockStack gap="150">
+                <Text as="p" variant="bodySm" fontWeight="semibold">
+                  Estimated delivery
+                </Text>
+                <InlineStack gap="200" wrap>
+                  <Badge tone="info">
+                    {smsSmokeResult.sms_plan.recommended_channel === "mms" ? "MMS" : "SMS"}
+                  </Badge>
+                  <Badge tone="info">
+                    {smsSmokeResult.sms_plan.estimated_cost_per_recipient_formatted ?? "n/a"}/recipient
+                  </Badge>
+                </InlineStack>
+              </BlockStack>
+            </Card>
+          ) : null}
+
           {smsSmokeResult ? (
             <Box className="sf-messaging-smoke-results">
               {(smsSmokeResult.deliveries ?? []).map((delivery, index) => (
@@ -969,6 +1018,9 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
 
   const renderSmsSendStep = () => {
     const selected = selectedTargets.sms;
+    const smsPlan = smsPreview?.sms_plan ?? null;
+    const smsBlocked = Boolean(smsPlan?.blocked);
+    const exactSendable = Number(smsPreview?.resolved_sendable_count ?? selected?.sendableCount ?? 0);
 
     return (
       <BlockStack gap="300">
@@ -980,9 +1032,74 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
             <InlineStack gap="200" wrap>
               <Badge tone="info">Audience: {selected?.name ?? "None"}</Badge>
               <Badge tone="info">
-                Sendable: {formatCount(Number(smsPreview?.resolved_sendable_count ?? selected?.sendableCount ?? 0))}
+                Sendable: {formatCount(exactSendable)}
               </Badge>
+              {smsPlan ? (
+                <Badge tone={smsPlan.recommended_channel === "mms" ? "success" : "info"}>
+                  {smsPlan.recommended_channel === "mixed"
+                    ? `Mixed delivery`
+                    : `Send as ${String(smsPlan.recommended_channel ?? "sms").toUpperCase()}`}
+                </Badge>
+              ) : null}
             </InlineStack>
+            {smsPlan ? (
+              <Box className={`sf-messaging-cost-card${smsBlocked ? " is-blocked" : ""}`}>
+                <BlockStack gap="150">
+                  <InlineStack align="space-between" blockAlign="center" wrap>
+                    <Text as="p" variant="bodyMd" fontWeight="semibold">
+                      Estimated cost
+                    </Text>
+                    <Text as="p" variant="bodyMd" fontWeight="semibold">
+                      {smsPlan.estimated_total_cost_formatted ?? "n/a"}
+                    </Text>
+                  </InlineStack>
+                  <InlineStack gap="200" wrap>
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      Avg: {smsPlan.estimated_cost_per_recipient_formatted ?? "n/a"}/recipient
+                    </Text>
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      SMS path: {smsPlan.estimated_sms_cost_per_recipient_formatted ?? "n/a"}
+                    </Text>
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      MMS path: {smsPlan.estimated_mms_cost_per_recipient_formatted ?? "n/a"}
+                    </Text>
+                    {smsPlan.bulk_spend_limit_formatted ? (
+                      <Text as="p" tone="subdued" variant="bodySm">
+                        Safety ceiling: {smsPlan.bulk_spend_limit_formatted}
+                      </Text>
+                    ) : null}
+                  </InlineStack>
+                  {smsPlan.recommended_channel === "mixed" ? (
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      MMS recipients: {formatCount(Number(smsPlan.mms_recipient_count ?? 0))} · SMS recipients: {formatCount(Number(smsPlan.sms_recipient_count ?? 0))}
+                    </Text>
+                  ) : null}
+                  {!smsBlocked && smsPlan.bulk_spend_limit_formatted ? (
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      Sends above {smsPlan.bulk_spend_limit_formatted} are blocked automatically before dispatch.
+                    </Text>
+                  ) : null}
+                  {(smsPlan.notes ?? []).map((note) => (
+                    <Text key={note} as="p" tone="subdued" variant="bodySm">
+                      {note}
+                    </Text>
+                  ))}
+                  {smsBlocked ? (
+                    <Box className="sf-messaging-cost-warning">
+                      {(smsPlan.blocking_reasons ?? []).map((reason) => (
+                        <Text key={reason} as="p" tone="critical" variant="bodySm">
+                          {reason}
+                        </Text>
+                      ))}
+                    </Box>
+                  ) : null}
+                </BlockStack>
+              </Box>
+            ) : (
+              <Text as="p" tone="subdued" variant="bodySm">
+                Refresh summary to calculate the exact audience cost and delivery mode.
+              </Text>
+            )}
             <TextField
               label="Schedule later (optional)"
               type="datetime-local"
@@ -994,8 +1111,8 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
               <Button loading={smsPreviewLoading} onClick={loadSmsPreview}>
                 Refresh summary
               </Button>
-              <Button variant="primary" loading={smsSendLoading} onClick={sendSmsCampaign}>
-                Send now
+              <Button variant="primary" loading={smsSendLoading} onClick={sendSmsCampaign} disabled={smsBlocked}>
+                {smsPlan?.recommended_channel === "mms" ? "Send as MMS" : "Send now"}
               </Button>
             </InlineStack>
           </BlockStack>

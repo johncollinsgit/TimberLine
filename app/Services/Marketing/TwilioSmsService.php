@@ -35,6 +35,8 @@ class TwilioSmsService
      *   sender_key:?string,
      *   sender_label:?string,
      *   from_identifier:?string,
+     *   delivery_mode:string,
+     *   requested_delivery_mode:string,
      *   payload:array<string,mixed>,
      *   dry_run:bool
      * }
@@ -45,6 +47,11 @@ class TwilioSmsService
         $enabled = (bool) config('marketing.sms.enabled');
         $twilioEnabled = (bool) config('marketing.twilio.enabled');
         $shortenUrls = (bool) ($options['shorten_urls'] ?? false);
+        $sendAsMms = (bool) ($options['send_as_mms'] ?? false);
+        $smartEncoded = array_key_exists('smart_encoded', $options)
+            ? (bool) $options['smart_encoded']
+            : (bool) config('marketing.twilio.smart_encoding', true);
+        $requestedDeliveryMode = $sendAsMms ? 'mms' : 'sms';
 
         $toPhone = trim($toPhone);
         $message = trim($message);
@@ -61,6 +68,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [],
                 'dry_run' => $dryRun,
             ];
@@ -77,6 +86,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [],
                 'dry_run' => $dryRun,
             ];
@@ -93,11 +104,15 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [
                     'dry_run' => true,
                     'to' => $toPhone,
                     'body' => $message,
                     'sender_key' => $sender['key'] ?? null,
+                    'smart_encoded' => $smartEncoded,
+                    'send_as_mms' => $sendAsMms,
                 ],
                 'dry_run' => true,
             ];
@@ -114,6 +129,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -130,6 +147,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -147,6 +166,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -158,12 +179,30 @@ class TwilioSmsService
             'MessagingServiceSid' => $sender['messaging_service_sid'] ?? null,
             'From' => ! empty($sender['messaging_service_sid']) ? null : ($sender['from_number'] ?? null),
             'ShortenUrls' => (! empty($sender['messaging_service_sid']) && $shortenUrls) ? 'true' : null,
+            'SmartEncoded' => $smartEncoded ? 'true' : null,
+            'SendAsMms' => $sendAsMms ? 'true' : null,
             'StatusCallback' => $this->nullableString((string) ($options['status_callback_url'] ?? '')) ?: $this->statusCallbackUrl,
         ], fn ($value) => $value !== null && $value !== '');
 
         try {
             $response = $this->request()->post($this->messagesUrl(), $payload);
             $json = is_array($response->json()) ? $response->json() : [];
+
+            if ($sendAsMms && $response->failed() && $this->shouldFallbackToSms($json, $options)) {
+                $fallbackOptions = $options;
+                $fallbackOptions['send_as_mms'] = false;
+                $fallbackOptions['fallback_to_sms_on_mms_failure'] = false;
+                $fallbackResult = $this->sendSms($toPhone, $message, $fallbackOptions);
+                $fallbackPayload = is_array($fallbackResult['payload'] ?? null) ? $fallbackResult['payload'] : [];
+                $fallbackPayload['mms_fallback'] = [
+                    'code' => $this->nullableString($json['code'] ?? null),
+                    'message' => $this->sanitizeTwilioErrorMessage($json['message'] ?? null, $sender),
+                ];
+                $fallbackResult['payload'] = $fallbackPayload;
+                $fallbackResult['requested_delivery_mode'] = 'mms';
+
+                return $fallbackResult;
+            }
 
             if ($response->failed()) {
                 return [
@@ -176,6 +215,8 @@ class TwilioSmsService
                     'sender_key' => $sender['key'] ?? null,
                     'sender_label' => $sender['label'] ?? null,
                     'from_identifier' => $this->fromIdentifier($sender),
+                    'delivery_mode' => $requestedDeliveryMode,
+                    'requested_delivery_mode' => $requestedDeliveryMode,
                     'payload' => $json,
                     'dry_run' => false,
                 ];
@@ -191,6 +232,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => $json,
                 'dry_run' => false,
             ];
@@ -205,6 +248,8 @@ class TwilioSmsService
                 'sender_key' => $sender['key'] ?? null,
                 'sender_label' => $sender['label'] ?? null,
                 'from_identifier' => $this->fromIdentifier($sender),
+                'delivery_mode' => $requestedDeliveryMode,
+                'requested_delivery_mode' => $requestedDeliveryMode,
                 'payload' => [],
                 'dry_run' => false,
             ];
@@ -281,6 +326,24 @@ class TwilioSmsService
             'canceled', 'cancelled' => 'canceled',
             default => 'sent',
         };
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @param  array<string,mixed>  $options
+     */
+    protected function shouldFallbackToSms(array $payload, array $options): bool
+    {
+        if (! (bool) ($options['fallback_to_sms_on_mms_failure'] ?? true)) {
+            return false;
+        }
+
+        $code = trim((string) ($payload['code'] ?? ''));
+        $message = strtolower(trim((string) ($payload['message'] ?? '')));
+
+        return $code === '21612'
+            || str_contains($message, 'mms')
+            || str_contains($message, 'media');
     }
 
     protected function nullableString(mixed $value): ?string

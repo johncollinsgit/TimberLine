@@ -1270,6 +1270,46 @@ test('individual sms send uses twilio path and records delivery metadata', funct
         ->and((string) data_get($delivery?->provider_payload, 'batch_id'))->not->toBe('');
 });
 
+test('individual sms send switches to mms when it is cheaper than segmented sms', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'SMS MMS Tenant',
+        'slug' => 'sms-mms-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    config()->set('marketing.sms.enabled', true);
+    config()->set('marketing.twilio.enabled', true);
+    config()->set('marketing.sms.dry_run', true);
+    config()->set('marketing.twilio.messaging_service_sid', 'MG_TEST');
+
+    $profile = shopifyMessagingProfile($tenant->id, [
+        'phone' => '555-333-5468',
+        'normalized_phone' => '5553335468',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $response = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.individual'), [
+            'profile_id' => $profile->id,
+            'channel' => 'sms',
+            'body' => str_repeat('Long text body ', 40),
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary.sent', 1);
+
+    $delivery = MarketingMessageDelivery::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    expect(data_get($delivery?->provider_payload, 'delivery_mode'))->toBe('mms')
+        ->and(data_get($delivery?->provider_payload, 'requested_delivery_mode'))->toBe('mms')
+        ->and((bool) data_get($delivery?->provider_payload, 'twilio_response.send_as_mms'))->toBeTrue();
+});
+
 test('individual email send uses existing email pipeline and records delivery metadata', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Email Send Tenant',
@@ -1451,6 +1491,7 @@ test('sms smoke test sends to one or more numbers and returns statuses', functio
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.summary.processed', 2)
         ->assertJsonPath('data.summary.sent', 2)
+        ->assertJsonPath('data.sms_plan.recipient_count', 2)
         ->assertJsonCount(2, 'data.deliveries');
 });
 
@@ -1588,10 +1629,82 @@ test('group preview returns resolved recipient estimate before send and does not
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.target.key', 'all_subscribed')
         ->assertJsonPath('data.channel', 'sms')
-        ->assertJsonPath('data.estimated_recipients', 2);
+        ->assertJsonPath('data.estimated_recipients', 2)
+        ->assertJsonPath('data.sms_plan.recipient_count', 2)
+        ->assertJsonPath('data.sms_plan.blocked', false);
 
     expect(MarketingMessageDelivery::query()->count())->toBe(0)
         ->and(MarketingEmailDelivery::query()->count())->toBe(0);
+});
+
+test('group preview recommends mms when long text is cheaper than segmented sms', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Preview MMS Tenant',
+        'slug' => 'preview-mms-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    shopifyMessagingProfile($tenant->id, [
+        'phone' => '5556100001',
+        'normalized_phone' => '5556100001',
+        'accepts_sms_marketing' => true,
+    ]);
+    shopifyMessagingProfile($tenant->id, [
+        'phone' => '5556100002',
+        'normalized_phone' => '5556100002',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $message = str_repeat('Long text body ', 40);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.preview.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'sms',
+            'body' => $message,
+        ])
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.sms_plan.recommended_channel', 'mms')
+        ->assertJsonPath('data.sms_plan.mms_recipient_count', 2)
+        ->assertJsonPath('data.sms_plan.sms_segments', 4)
+        ->assertJsonPath('data.sms_plan.estimated_total_cost_formatted', '$0.06');
+});
+
+test('group send is blocked when estimated text cost exceeds safety limit', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Blocked Cost Tenant',
+        'slug' => 'blocked-cost-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    config()->set('marketing.messaging.cost_guardrails.bulk_max_total_estimated_cost', 0.05);
+
+    shopifyMessagingProfile($tenant->id, [
+        'phone' => '5556200001',
+        'normalized_phone' => '5556200001',
+        'accepts_sms_marketing' => true,
+    ]);
+    shopifyMessagingProfile($tenant->id, [
+        'phone' => '5556200002',
+        'normalized_phone' => '5556200002',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'sms',
+            'body' => str_repeat('Long text body ', 40),
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', 'Message could not be sent.')
+        ->assertJsonValidationErrors(['body']);
 });
 
 test('pending embedded email campaign can be canceled before dispatch', function () {

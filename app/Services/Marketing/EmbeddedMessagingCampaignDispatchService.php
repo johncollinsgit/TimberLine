@@ -36,7 +36,8 @@ class EmbeddedMessagingCampaignDispatchService
         protected MessagingRetryPolicy $retryPolicy,
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected SmsLinkShorteningService $smsLinkShorteningService,
-        protected ShopifyEmbeddedEmailComposerService $emailComposerService
+        protected ShopifyEmbeddedEmailComposerService $emailComposerService,
+        protected SmsMessageSafetyService $smsMessageSafetyService
     ) {
     }
 
@@ -748,6 +749,10 @@ class EmbeddedMessagingCampaignDispatchService
             return ['status' => 'failed', 'reason' => 'missing_message'];
         }
 
+        $smsPlan = $this->smsMessageSafetyService->analyzeRecipient($message, $toPhone);
+        $message = (string) ($smsPlan['normalized_body'] ?? $message);
+        $deliveryMode = (string) ($smsPlan['recommended_channel'] ?? 'sms');
+
         $delivery = MarketingMessageDelivery::query()->create([
             'campaign_id' => (int) $campaign->id,
             'campaign_recipient_id' => (int) $recipient->id,
@@ -771,6 +776,7 @@ class EmbeddedMessagingCampaignDispatchService
                 'message_job_id' => (int) $job->id,
                 'campaign_id' => (int) $campaign->id,
                 'campaign_recipient_id' => (int) $recipient->id,
+                'sms_plan' => $smsPlan,
             ],
         ]);
 
@@ -820,6 +826,7 @@ class EmbeddedMessagingCampaignDispatchService
             'sender_key' => $senderKey,
             'status_callback_url' => $this->statusCallbackUrl(),
             'shorten_urls' => (bool) ($linkPrepared['twilio_shorten_urls'] ?? false),
+            'send_as_mms' => $deliveryMode === 'mms',
         ]);
 
         $providerStatus = $this->deliveryTrackingService->mapProviderStatus($sendResult['status'] ?? null);
@@ -835,6 +842,8 @@ class EmbeddedMessagingCampaignDispatchService
                 ...((array) $delivery->provider_payload),
                 'sender_key' => $sendResult['sender_key'] ?? $senderKey,
                 'sender_label' => $sendResult['sender_label'] ?? null,
+                'delivery_mode' => $sendResult['delivery_mode'] ?? $deliveryMode,
+                'requested_delivery_mode' => $sendResult['requested_delivery_mode'] ?? $deliveryMode,
                 'twilio_response' => (array) ($sendResult['payload'] ?? []),
             ],
             'sent_at' => $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)

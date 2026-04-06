@@ -23,7 +23,8 @@ class MarketingDirectMessagingService
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected MessageClickTrackingService $messageClickTrackingService,
         protected EmailLinkAttributionService $emailLinkAttributionService,
-        protected ShopifyEmbeddedEmailComposerService $emailComposerService
+        protected ShopifyEmbeddedEmailComposerService $emailComposerService,
+        protected SmsMessageSafetyService $smsMessageSafetyService
     ) {
     }
 
@@ -128,6 +129,9 @@ class MarketingDirectMessagingService
 
             if ($channel === 'sms') {
                 $toPhone = (string) ($resolved['to_phone'] ?? '');
+                $smsPlan = $this->smsMessageSafetyService->analyzeRecipient($message, $toPhone);
+                $resolvedMessageBody = trim((string) ($smsPlan['normalized_body'] ?? $message));
+                $deliveryMode = (string) ($smsPlan['recommended_channel'] ?? 'sms');
                 $delivery = MarketingMessageDelivery::query()->create([
                     'campaign_id' => null,
                     'campaign_recipient_id' => null,
@@ -136,13 +140,13 @@ class MarketingDirectMessagingService
                     'store_key' => $storeKey,
                     'batch_id' => $batchId,
                     'source_label' => $sourceLabel,
-                    'message_subject' => Str::limit($message, 160),
+                    'message_subject' => Str::limit($resolvedMessageBody, 160),
                     'channel' => 'sms',
                     'provider' => 'twilio',
                     'to_phone' => $toPhone,
                     'variant_id' => null,
                     'attempt_number' => 1,
-                    'rendered_message' => $message,
+                    'rendered_message' => $resolvedMessageBody,
                     'send_status' => 'sending',
                     'created_by' => $actorId,
                     'provider_payload' => [
@@ -151,17 +155,18 @@ class MarketingDirectMessagingService
                         'group_id' => $groupId,
                         'sender_key' => $senderKey,
                         'source_type' => (string) ($recipient['source_type'] ?? 'profile'),
+                        'sms_plan' => $smsPlan,
                     ],
                 ]);
 
                 $trackedMessage = $this->messageClickTrackingService->decorateSmsMessageForDelivery(
                     delivery: $delivery,
-                    message: $message,
+                    message: $resolvedMessageBody,
                     createdBy: $actorId
                 );
-                $resolvedMessage = trim((string) ($trackedMessage['message'] ?? $message));
+                $resolvedMessage = trim((string) ($trackedMessage['message'] ?? $resolvedMessageBody));
                 if ($resolvedMessage === '') {
-                    $resolvedMessage = $message;
+                    $resolvedMessage = $resolvedMessageBody;
                 }
 
                 $delivery->forceFill([
@@ -177,6 +182,7 @@ class MarketingDirectMessagingService
                     'dry_run' => $dryRun,
                     'sender_key' => $senderKey,
                     'status_callback_url' => $this->statusCallbackUrl(),
+                    'send_as_mms' => $deliveryMode === 'mms',
                 ]);
 
                 $success = (bool) ($sendResult['success'] ?? false);
@@ -192,6 +198,8 @@ class MarketingDirectMessagingService
                         ...((array) $delivery->provider_payload),
                         'sender_key' => $sendResult['sender_key'] ?? $senderKey,
                         'sender_label' => $sendResult['sender_label'] ?? null,
+                        'delivery_mode' => $sendResult['delivery_mode'] ?? $deliveryMode,
+                        'requested_delivery_mode' => $sendResult['requested_delivery_mode'] ?? $deliveryMode,
                         'twilio_response' => $sendResult['payload'] ?? [],
                     ],
                     'sent_at' => $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)

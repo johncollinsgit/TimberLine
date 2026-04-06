@@ -109,6 +109,7 @@ return [
         'default_sender_key' => env('MARKETING_TWILIO_DEFAULT_SENDER'),
         'senders' => $parseTwilioSenders(),
         'status_callback_url' => env('TWILIO_STATUS_CALLBACK_URL'),
+        'smart_encoding' => (bool) env('MARKETING_TWILIO_SMART_ENCODING', true),
         'verify_signature' => (bool) env('MARKETING_TWILIO_VERIFY_SIGNATURE', false),
     ],
 
@@ -117,6 +118,15 @@ return [
         'dispatch_batch_size' => max(25, (int) env('MARKETING_MESSAGING_DISPATCH_BATCH_SIZE', 250)),
         'dispatch_interval_seconds' => max(1, (int) env('MARKETING_MESSAGING_DISPATCH_INTERVAL_SECONDS', 2)),
         'default_max_attempts' => max(1, (int) env('MARKETING_MESSAGING_DEFAULT_MAX_ATTEMPTS', 4)),
+        'cost_guardrails' => [
+            'bulk_max_total_estimated_cost' => (float) env('MARKETING_MESSAGING_BULK_MAX_ESTIMATED_COST', 250),
+            'sms_outbound_per_segment' => (float) env('MARKETING_MESSAGING_SMS_OUTBOUND_PER_SEGMENT', 0.0083),
+            'sms_carrier_fee_per_segment' => (float) env('MARKETING_MESSAGING_SMS_CARRIER_FEE_PER_SEGMENT', 0.00395),
+            'mms_outbound_per_message' => (float) env('MARKETING_MESSAGING_MMS_OUTBOUND_PER_MESSAGE', 0.022),
+            'mms_carrier_fee_per_message' => (float) env('MARKETING_MESSAGING_MMS_CARRIER_FEE_PER_MESSAGE', 0.009),
+            'mms_max_body_length' => max(1, (int) env('MARKETING_MESSAGING_MMS_MAX_BODY_LENGTH', 1600)),
+            'prefer_mms_when_cheaper' => (bool) env('MARKETING_MESSAGING_PREFER_MMS_WHEN_CHEAPER', true),
+        ],
         'sms' => [
             'max_dispatch_per_second' => max(1, (int) env('MARKETING_MESSAGING_SMS_MAX_DISPATCH_PER_SECOND', 18)),
             'retry_backoff_seconds' => $parseCsvInts((string) env('MARKETING_MESSAGING_SMS_RETRY_BACKOFF_SECONDS', '20,90,300')),

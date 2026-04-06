@@ -1,5 +1,36 @@
 # UI Changelog
 
+## 2026-04-06 — Embedded Messaging Cost Guardrails + MMS Cost Routing
+
+### What changed
+- Added live SMS cost awareness to the embedded Shopify messaging composer:
+  - GSM-7 vs Unicode indicator,
+  - SMS segment count,
+  - estimated SMS cost per recipient,
+  - estimated MMS cost per recipient,
+  - exact review-step total cost for the selected audience.
+- Added a review-step cost card that shows the predicted delivery path (`SMS`, `MMS`, or `mixed`), average per-recipient cost, total estimated cost, and any blocking safety message.
+- Added the configured bulk spend ceiling directly into the review-step cost card so operators can see the auto-block threshold before send.
+- Updated the preview/smoke/send pipeline so the backend normalizes smart punctuation before send, uses the same cost math as the UI, and blocks oversized bulk sends when the projected total exceeds the configured safety ceiling.
+- Added MMS-aware cost routing for embedded text sends:
+  - when long text to eligible `+1` recipients is cheaper as MMS than segmented SMS, the send pipeline now requests Twilio `sendAsMms`,
+  - if the provider rejects that MMS path, the sender can fall back to SMS.
+
+### Why
+- Merchants needed to see cost before sending, not after Twilio billing landed.
+- Long texts were especially risky because segmented SMS could quietly multiply both outbound message cost and carrier fees.
+- Twilio’s current docs allow long text to be delivered as a single MMS in the US/Canada, which can be cheaper than multi-segment SMS for longer bodies.
+
+### Pricing assumptions used for UI estimates
+- SMS outbound per segment uses the current Twilio US list price (`$0.0083`).
+- MMS outbound per message uses the current Twilio US list price (`$0.022`).
+- Carrier-fee estimates are based on current observed account billing behavior from April 2026 and are intentionally configurable in environment/config.
+
+### Scope boundary
+- This pass updates the embedded Shopify messaging workspace only.
+- Estimates are guardrail math, not invoice guarantees; real carrier outcomes and provider responses still win.
+- MMS cost routing currently targets recipients eligible for North America MMS delivery based on the resolved phone number format.
+
 ## 2026-04-04 — Messaging Analytics SMS Run Rollups
 
 ### What changed

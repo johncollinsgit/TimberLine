@@ -16,6 +16,7 @@ use App\Models\Tenant;
 use App\Services\Marketing\EmbeddedMessagingCampaignDispatchService;
 use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Services\Marketing\MessagingCampaignProgressService;
+use App\Services\Marketing\SmsMessageSafetyService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -135,7 +136,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected ShopifyEmbeddedEmailComposerService $emailComposerService,
         protected EmbeddedMessagingCampaignDispatchService $campaignDispatchService,
-        protected MessagingCampaignProgressService $campaignProgressService
+        protected MessagingCampaignProgressService $campaignProgressService,
+        protected SmsMessageSafetyService $smsMessageSafetyService
     ) {
     }
 
@@ -684,6 +686,7 @@ GRAPHQL;
 
         $emailTemplate = null;
         $htmlBody = null;
+        $smsPlan = null;
         if ($channel === 'email') {
             $composed = $this->emailComposerService->compose(
                 subject: (string) ($subject ?? ''),
@@ -762,6 +765,7 @@ GRAPHQL;
 
         $emailTemplate = null;
         $htmlBody = null;
+        $smsPlan = null;
         if ($channel === 'email') {
             $composed = $this->emailComposerService->compose(
                 subject: (string) ($subject ?? ''),
@@ -777,6 +781,23 @@ GRAPHQL;
                 'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
             ];
             $htmlBody = $this->nullableString($composed['html'] ?? null);
+        } else {
+            $smsPlan = $this->smsMessageSafetyService->analyze(
+                message: trim($body),
+                phoneNumbers: array_values(array_filter(array_map(
+                    fn (array $recipient): ?string => $this->identityNormalizer->toE164((string) ($recipient['normalized_phone'] ?? $recipient['phone'] ?? '')),
+                    $recipients
+                ))),
+                enforceSpendLimit: true
+            );
+
+            if ((bool) ($smsPlan['blocked'] ?? false)) {
+                throw ValidationException::withMessages([
+                    'body' => (array) ($smsPlan['blocking_reasons'] ?? ['SMS send is blocked by the configured safety rules.']),
+                ]);
+            }
+
+            $body = (string) ($smsPlan['normalized_body'] ?? trim($body));
         }
 
         $queued = $this->campaignDispatchService->queueCampaign(
@@ -820,6 +841,7 @@ GRAPHQL;
                 'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
                 'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
             ],
+            'sms_plan' => $smsPlan,
         ];
     }
 
@@ -852,6 +874,7 @@ GRAPHQL;
         $recipients = (array) ($resolvedTarget['recipients'] ?? []);
         $emailTemplate = null;
         $emailHtml = null;
+        $smsPlan = null;
 
         if ($channel === 'email') {
             $composed = $this->emailComposerService->compose(
@@ -868,6 +891,16 @@ GRAPHQL;
                 'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null),
             ];
             $emailHtml = $this->nullableString($composed['html'] ?? null);
+        } else {
+            $smsPlan = $this->smsMessageSafetyService->analyze(
+                message: trim($body),
+                phoneNumbers: array_values(array_filter(array_map(
+                    fn (array $recipient): ?string => $this->identityNormalizer->toE164((string) ($recipient['normalized_phone'] ?? $recipient['phone'] ?? '')),
+                    $recipients
+                ))),
+                enforceSpendLimit: true
+            );
+            $body = (string) ($smsPlan['normalized_body'] ?? trim($body));
         }
 
         return [
@@ -882,6 +915,7 @@ GRAPHQL;
             'query_candidate_count' => (int) ($resolvedTarget['query_candidate_count'] ?? 0),
             'resolved_sendable_count' => (int) ($resolvedTarget['resolved_sendable_count'] ?? count($recipients)),
             'force_send_profile_ids_count' => count((array) ($resolvedTarget['force_send_profile_ids'] ?? [])),
+            'sms_plan' => $smsPlan,
         ];
     }
 
@@ -917,6 +951,13 @@ GRAPHQL;
                 'test_numbers' => 'Add at least one valid phone number for SMS smoke test.',
             ]);
         }
+
+        $smsPlan = $this->smsMessageSafetyService->analyze(
+            message: trim($message),
+            phoneNumbers: $normalizedNumbers->all(),
+            enforceSpendLimit: false
+        );
+        $message = (string) ($smsPlan['normalized_body'] ?? trim($message));
 
         $invalidInputs = $rawNumbers
             ->filter(function (string $value) use ($normalizedNumbers): bool {
@@ -985,6 +1026,7 @@ GRAPHQL;
             'summary' => $summary,
             'deliveries' => $deliveries,
             'invalid_inputs' => $invalidInputs,
+            'sms_plan' => $smsPlan,
         ];
     }
 
