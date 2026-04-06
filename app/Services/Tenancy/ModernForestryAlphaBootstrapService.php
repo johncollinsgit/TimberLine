@@ -94,14 +94,17 @@ class ModernForestryAlphaBootstrapService
 
         return Tenant::query()
             ->where('slug', 'modern-forestry')
-            ->orWhere('id', 1)
             ->first();
     }
 
     protected function isModernForestryTenant(Tenant $tenant): bool
     {
-        return (int) $tenant->id === 1
-            || strtolower(trim((string) $tenant->slug)) === 'modern-forestry';
+        $slug = strtolower(trim((string) $tenant->slug));
+        $name = strtolower(trim((string) $tenant->name));
+
+        return $slug === 'modern-forestry'
+            || $name === 'modern forestry'
+            || ((int) $tenant->id === 1 && ($slug === 'modern-forestry' || $name === 'modern forestry'));
     }
 
     protected function ensureStoreOwnership(int $tenantId, ?string $storeKey): void
