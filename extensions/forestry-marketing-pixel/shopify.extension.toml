@@ -2,3 +2,18 @@ name = "Forestry Marketing Pixel"
 uid = "e92e36de-9e4d-2b33-04fd-3f4597052f7e4e63125d"
 type = "web_pixel_extension"
 runtime_context = "strict"
+
+[customer_privacy]
+analytics = true
+marketing = true
+preferences = false
+sale_of_data = "enabled"
+
+[settings]
+type = "object"
+
+[settings.fields.appProxyBase]
+name = "App proxy base"
+description = "Storefront app proxy base path"
+type = "single_line_text_field"
+validations = [{ name = "min", value = "1" }]
