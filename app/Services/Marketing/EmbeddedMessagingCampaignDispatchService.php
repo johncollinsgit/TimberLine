@@ -13,6 +13,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingTemplateDefinition;
 use App\Models\MarketingTemplateInstance;
 use App\Services\Marketing\Sms\SmsLinkShorteningService;
+use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
@@ -29,10 +30,12 @@ class EmbeddedMessagingCampaignDispatchService
         protected SendGridEmailService $sendGridEmailService,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
         protected MessageClickTrackingService $messageClickTrackingService,
+        protected EmailLinkAttributionService $emailLinkAttributionService,
         protected MessagingCampaignProgressService $progressService,
         protected MessagingRetryPolicy $retryPolicy,
         protected MarketingIdentityNormalizer $identityNormalizer,
-        protected SmsLinkShorteningService $smsLinkShorteningService
+        protected SmsLinkShorteningService $smsLinkShorteningService,
+        protected ShopifyEmbeddedEmailComposerService $emailComposerService
     ) {
     }
 
@@ -837,8 +840,50 @@ class EmbeddedMessagingCampaignDispatchService
                 'template_definition_id' => $templateInstance?->template_definition_id,
             ],
         ]);
+        $emailTemplate = is_array($payload['email_template'] ?? null) ? $payload['email_template'] : [];
+        $attributionContext = [
+            'subject' => $subject,
+            'source_label' => $sourceLabel,
+            'template_key' => $this->nullableString(data_get($emailTemplate, 'template_key')) ?? 'embedded_messaging',
+            'campaign_id' => (int) $campaign->id,
+            'delivery_id' => (int) $delivery->id,
+            'profile_id' => (int) $profile->id,
+            'campaign_recipient_id' => (int) $recipient->id,
+        ];
 
-        $sendResult = $this->sendGridEmailService->sendEmail($toEmail, $subject, $body, [
+        $resolvedBody = $this->emailLinkAttributionService->decorateText($body, $attributionContext);
+        $resolvedHtmlBody = $htmlBody !== null
+            ? $this->emailLinkAttributionService->decorateHtml($htmlBody, [
+                ...$attributionContext,
+                'module_type' => 'legacy_html',
+                'module_position' => 1,
+            ])
+            : null;
+        $resolvedTemplate = $emailTemplate;
+
+        if ($emailTemplate !== []) {
+            $decoratedSections = $this->emailLinkAttributionService->decorateSections(
+                is_array($emailTemplate['sections'] ?? null) ? $emailTemplate['sections'] : [],
+                $attributionContext
+            );
+
+            $composed = $this->emailComposerService->compose(
+                subject: $subject,
+                body: $resolvedBody,
+                mode: $this->nullableString($emailTemplate['mode'] ?? null),
+                sections: $decoratedSections,
+                legacyHtml: $this->nullableString($emailTemplate['legacy_html'] ?? null) ?? $resolvedHtmlBody
+            );
+
+            $resolvedHtmlBody = $this->nullableString($composed['html'] ?? null) ?? $resolvedHtmlBody;
+            $resolvedTemplate = [
+                ...$emailTemplate,
+                'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : $decoratedSections,
+                'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null) ?? $this->nullableString($emailTemplate['legacy_html'] ?? null),
+            ];
+        }
+
+        $sendResult = $this->sendGridEmailService->sendEmail($toEmail, $subject, $resolvedBody, [
             'tenant_id' => $campaign->tenant_id,
             'campaign_type' => 'direct_message',
             'template_key' => 'embedded_messaging',
@@ -849,7 +894,7 @@ class EmbeddedMessagingCampaignDispatchService
                 'message_job_id' => (int) $job->id,
                 'campaign_id' => (int) $campaign->id,
             ],
-            'html_body' => $htmlBody,
+            'html_body' => $resolvedHtmlBody,
             'categories' => [
                 'embedded-messaging',
                 'shopify',
@@ -857,6 +902,9 @@ class EmbeddedMessagingCampaignDispatchService
             'custom_args' => [
                 'marketing_email_delivery_id' => (string) $delivery->id,
                 'marketing_profile_id' => (string) $profile->id,
+                'campaign_id' => (string) $campaign->id,
+                'campaign_recipient_id' => (string) $recipient->id,
+                'template_key' => (string) ($this->nullableString(data_get($resolvedTemplate, 'template_key')) ?? 'embedded_messaging'),
             ],
         ]);
 
@@ -872,6 +920,12 @@ class EmbeddedMessagingCampaignDispatchService
             'raw_payload' => [
                 ...((array) $delivery->raw_payload),
                 'provider_result' => $sendResult,
+            ],
+            'metadata' => [
+                ...((array) ($delivery->metadata ?? [])),
+                'template_sections' => is_array(data_get($resolvedTemplate, 'sections'))
+                    ? data_get($resolvedTemplate, 'sections')
+                    : [],
             ],
             'sent_at' => $success ? now() : null,
             'failed_at' => $success ? null : now(),

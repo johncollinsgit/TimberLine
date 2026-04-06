@@ -88,7 +88,23 @@ export interface EmailTemplateDefinition {
   thumbnail_svg?: string | null;
 }
 
-export type EmailSectionType = "heading" | "text" | "button" | "product" | "image";
+export type EmailSectionType =
+  | "heading"
+  | "text"
+  | "button"
+  | "product"
+  | "product_grid_4"
+  | "image"
+  | "fading_divider";
+
+export interface EmailProductTile {
+  productId?: string;
+  title?: string;
+  imageUrl?: string;
+  price?: string;
+  href?: string;
+  buttonLabel?: string;
+}
 
 export interface EmailSection {
   id: string;
@@ -105,6 +121,10 @@ export interface EmailSection {
   buttonLabel?: string;
   alt?: string;
   padding?: string;
+  heading?: string;
+  products?: EmailProductTile[];
+  spacingTop?: number;
+  spacingBottom?: number;
 }
 
 export interface MessagingHistoryPayload {

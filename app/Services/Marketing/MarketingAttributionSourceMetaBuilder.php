@@ -25,6 +25,13 @@ class MarketingAttributionSourceMetaBuilder
         'source_name',
         'source_type',
         'source_identifier',
+        'email_module_type',
+        'email_module_position',
+        'email_product_id',
+        'email_tile_position',
+        'email_template_key',
+        'email_source_label',
+        'email_link_label',
     ];
 
     /**
@@ -65,6 +72,9 @@ class MarketingAttributionSourceMetaBuilder
         foreach ([$candidate['landing_site'] ?? null, $candidate['landing_page'] ?? null, $candidate['source_url'] ?? null] as $url) {
             foreach ($this->extractUtmQuerySignals($url) as $key => $value) {
                 $this->setField($candidate, $fieldConfidence, $key, $value, 'high');
+            }
+            foreach ($this->extractEmailQuerySignals($url) as $key => $value) {
+                $this->setField($candidate, $fieldConfidence, $key, $value, 'medium');
             }
         }
 
@@ -255,6 +265,13 @@ class MarketingAttributionSourceMetaBuilder
                 str_contains($normalizedName, 'source_name') => 'source_name',
                 str_contains($normalizedName, 'source_type') => 'source_type',
                 str_contains($normalizedName, 'source_identifier') => 'source_identifier',
+                str_contains($normalizedName, 'email_module_type') || str_contains($normalizedName, 'mf_module_type') => 'email_module_type',
+                str_contains($normalizedName, 'email_module_position') || str_contains($normalizedName, 'mf_module_position') => 'email_module_position',
+                str_contains($normalizedName, 'email_product_id') || str_contains($normalizedName, 'mf_product_id') => 'email_product_id',
+                str_contains($normalizedName, 'email_tile_position') || str_contains($normalizedName, 'mf_tile_position') => 'email_tile_position',
+                str_contains($normalizedName, 'email_template_key') || str_contains($normalizedName, 'mf_template_key') => 'email_template_key',
+                str_contains($normalizedName, 'email_source_label') || str_contains($normalizedName, 'mf_source_label') => 'email_source_label',
+                str_contains($normalizedName, 'email_link_label') || str_contains($normalizedName, 'mf_link_label') => 'email_link_label',
                 default => null,
             };
 
@@ -288,6 +305,47 @@ class MarketingAttributionSourceMetaBuilder
             $value = $this->nullableString($query[$field] ?? null);
             if ($value !== null) {
                 $signals[$field] = $value;
+            }
+        }
+
+        return $signals;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function extractEmailQuerySignals(mixed $url): array
+    {
+        $url = $this->nullableString($url);
+        if (! $url) {
+            return [];
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts) || empty($parts['query'])) {
+            return [];
+        }
+
+        parse_str((string) $parts['query'], $query);
+        if (! is_array($query)) {
+            return [];
+        }
+
+        $map = [
+            'mf_module_type' => 'email_module_type',
+            'mf_module_position' => 'email_module_position',
+            'mf_product_id' => 'email_product_id',
+            'mf_tile_position' => 'email_tile_position',
+            'mf_template_key' => 'email_template_key',
+            'mf_source_label' => 'email_source_label',
+            'mf_link_label' => 'email_link_label',
+        ];
+
+        $signals = [];
+        foreach ($map as $queryKey => $metaKey) {
+            $value = $this->nullableString($query[$queryKey] ?? null);
+            if ($value !== null) {
+                $signals[$metaKey] = $value;
             }
         }
 

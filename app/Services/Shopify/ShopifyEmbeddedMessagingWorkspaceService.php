@@ -85,6 +85,18 @@ class ShopifyEmbeddedMessagingWorkspaceService
             ],
         ],
         [
+            'key' => 'merch_grid_4',
+            'name' => '4-product merch grid',
+            'description' => 'Premium merchandising layout with a 4-up product block.',
+            'default_subject' => 'Shop what is new',
+            'default_sections' => [
+                ['id' => 'heading_1', 'type' => 'heading', 'text' => 'Fresh picks for you', 'align' => 'left'],
+                ['id' => 'divider_1', 'type' => 'fading_divider', 'spacingTop' => 8, 'spacingBottom' => 16],
+                ['id' => 'grid_1', 'type' => 'product_grid_4', 'heading' => 'Featured now', 'products' => []],
+                ['id' => 'button_1', 'type' => 'button', 'label' => 'Shop all', 'href' => '', 'align' => 'left'],
+            ],
+        ],
+        [
             'key' => 'minimal_plain',
             'name' => 'Minimal / plain',
             'description' => 'Low-friction plain style note.',
@@ -361,7 +373,27 @@ GRAPHQL;
             ->all();
 
         if ($definitions !== []) {
-            return $definitions;
+            $fallbackByKey = collect(self::DEFAULT_EMAIL_TEMPLATES)
+                ->keyBy(fn (array $template): string => (string) ($template['key'] ?? ''));
+            $existingKeys = collect($definitions)->pluck('key')->filter()->all();
+
+            $missingDefaults = $fallbackByKey
+                ->reject(fn (array $template, string $key): bool => in_array($key, $existingKeys, true))
+                ->values()
+                ->map(function (array $template, int $index): array {
+                    return [
+                        'id' => 10000 + $index,
+                        'key' => (string) ($template['key'] ?? ('template_' . ($index + 1))),
+                        'name' => (string) ($template['name'] ?? 'Email template'),
+                        'description' => $this->nullableString($template['description'] ?? null),
+                        'default_subject' => $this->nullableString($template['default_subject'] ?? null),
+                        'default_sections' => is_array($template['default_sections'] ?? null) ? $template['default_sections'] : [],
+                        'thumbnail_svg' => null,
+                    ];
+                })
+                ->all();
+
+            return [...$definitions, ...$missingDefaults];
         }
 
         return collect(self::DEFAULT_EMAIL_TEMPLATES)

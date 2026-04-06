@@ -7,6 +7,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
 use App\Models\MarketingProfile;
+use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -20,7 +21,9 @@ class MarketingDirectMessagingService
         protected SendGridEmailService $sendGridEmailService,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
         protected MarketingIdentityNormalizer $identityNormalizer,
-        protected MessageClickTrackingService $messageClickTrackingService
+        protected MessageClickTrackingService $messageClickTrackingService,
+        protected EmailLinkAttributionService $emailLinkAttributionService,
+        protected ShopifyEmbeddedEmailComposerService $emailComposerService
     ) {
     }
 
@@ -265,7 +268,56 @@ class MarketingDirectMessagingService
                 ],
             ]);
 
-            $sendResult = $this->sendGridEmailService->sendEmail($toEmail, (string) $subject, $message, [
+            $resolvedMessage = $this->emailLinkAttributionService->decorateText($message, [
+                'subject' => $subject,
+                'source_label' => $sourceLabel,
+                'template_key' => $this->nullableString(data_get($emailTemplate, 'template_key')) ?? 'direct_message',
+                'delivery_id' => (int) $delivery->id,
+                'profile_id' => (int) $profile->id,
+            ]);
+
+            $resolvedHtmlBody = $htmlBody !== null
+                ? $this->emailLinkAttributionService->decorateHtml($htmlBody, [
+                    'subject' => $subject,
+                    'source_label' => $sourceLabel,
+                    'template_key' => $this->nullableString(data_get($emailTemplate, 'template_key')) ?? 'direct_message',
+                    'delivery_id' => (int) $delivery->id,
+                    'profile_id' => (int) $profile->id,
+                    'module_type' => 'legacy_html',
+                    'module_position' => 1,
+                ])
+                : null;
+
+            $resolvedTemplate = $emailTemplate;
+            if (is_array($emailTemplate)) {
+                $decoratedSections = $this->emailLinkAttributionService->decorateSections(
+                    is_array(data_get($emailTemplate, 'sections')) ? data_get($emailTemplate, 'sections') : [],
+                    [
+                        'subject' => $subject,
+                        'source_label' => $sourceLabel,
+                        'template_key' => $this->nullableString(data_get($emailTemplate, 'template_key')) ?? 'direct_message',
+                        'delivery_id' => (int) $delivery->id,
+                        'profile_id' => (int) $profile->id,
+                    ]
+                );
+
+                $composed = $this->emailComposerService->compose(
+                    subject: (string) $subject,
+                    body: $resolvedMessage,
+                    mode: $this->nullableString(data_get($emailTemplate, 'mode')),
+                    sections: $decoratedSections,
+                    legacyHtml: $this->nullableString(data_get($emailTemplate, 'legacy_html')) ?? $resolvedHtmlBody
+                );
+
+                $resolvedHtmlBody = $this->nullableString($composed['html'] ?? null) ?? $resolvedHtmlBody;
+                $resolvedTemplate = [
+                    ...$emailTemplate,
+                    'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : $decoratedSections,
+                    'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null) ?? $this->nullableString(data_get($emailTemplate, 'legacy_html')),
+                ];
+            }
+
+            $sendResult = $this->sendGridEmailService->sendEmail($toEmail, (string) $subject, $resolvedMessage, [
                 'dry_run' => $dryRun,
                 'tenant_id' => $resolvedTenantId,
                 'campaign_type' => 'direct_message',
@@ -277,12 +329,12 @@ class MarketingDirectMessagingService
                     'group_id' => $groupId,
                     'source_type' => (string) ($recipient['source_type'] ?? 'profile'),
                     'subject' => $subject,
-                    'template_mode' => $this->nullableString(data_get($emailTemplate, 'mode')),
-                    'template_sections' => is_array(data_get($emailTemplate, 'sections'))
-                        ? data_get($emailTemplate, 'sections')
+                    'template_mode' => $this->nullableString(data_get($resolvedTemplate, 'mode')),
+                    'template_sections' => is_array(data_get($resolvedTemplate, 'sections'))
+                        ? data_get($resolvedTemplate, 'sections')
                         : [],
                 ],
-                'html_body' => $htmlBody,
+                'html_body' => $resolvedHtmlBody,
                 'categories' => [
                     'direct-message',
                     'shopify-embedded',
@@ -290,6 +342,7 @@ class MarketingDirectMessagingService
                 'custom_args' => [
                     'marketing_email_delivery_id' => (string) $delivery->id,
                     'marketing_profile_id' => (string) $profile->id,
+                    'template_key' => (string) ($this->nullableString(data_get($resolvedTemplate, 'template_key')) ?? 'direct_message'),
                 ],
             ]);
 
@@ -309,9 +362,9 @@ class MarketingDirectMessagingService
                 'metadata' => [
                     ...((array) ($delivery->metadata ?? [])),
                     'subject' => $subject,
-                    'template_mode' => $this->nullableString(data_get($emailTemplate, 'mode')),
-                    'template_sections' => is_array(data_get($emailTemplate, 'sections'))
-                        ? data_get($emailTemplate, 'sections')
+                    'template_mode' => $this->nullableString(data_get($resolvedTemplate, 'mode')),
+                    'template_sections' => is_array(data_get($resolvedTemplate, 'sections'))
+                        ? data_get($resolvedTemplate, 'sections')
                         : [],
                 ],
                 'sent_at' => $success ? now() : null,

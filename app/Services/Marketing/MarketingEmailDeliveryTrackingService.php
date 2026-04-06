@@ -485,6 +485,13 @@ class MarketingEmailDeliveryTrackingService
             return null;
         }
 
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        $trackedLabel = $this->nullableString($query['mf_link_label'] ?? null);
+        if ($trackedLabel !== null) {
+            return Str::limit(urldecode($trackedLabel), 180);
+        }
+
         $path = trim((string) ($parts['path'] ?? ''));
         if ($path === '' || $path === '/') {
             return $this->nullableString((string) ($parts['host'] ?? null));

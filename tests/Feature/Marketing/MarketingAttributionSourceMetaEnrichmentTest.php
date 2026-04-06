@@ -44,6 +44,20 @@ test('attribution source meta builder captures shopify payload source fields and
     Carbon::setTestNow();
 });
 
+test('attribution source meta builder captures email module query signals from landing URLs', function () {
+    $meta = app(MarketingAttributionSourceMetaBuilder::class)->fromShopifyOrderPayload([
+        'landing_site' => 'https://theforestrystudio.com/products/spring-favorite?utm_source=backstage&utm_medium=email&utm_campaign=backstage-email-42&mf_module_type=product-grid-4&mf_module_position=2&mf_product_id=spring-favorite&mf_tile_position=3&mf_template_key=merch-grid-4&mf_source_label=shopify-embedded-messaging-group&mf_link_label=Spring+Favorite',
+    ], 'retail');
+
+    expect($meta['email_module_type'])->toBe('product-grid-4')
+        ->and($meta['email_module_position'])->toBe('2')
+        ->and($meta['email_product_id'])->toBe('spring-favorite')
+        ->and($meta['email_tile_position'])->toBe('3')
+        ->and($meta['email_template_key'])->toBe('merch-grid-4')
+        ->and($meta['email_source_label'])->toBe('shopify-embedded-messaging-group')
+        ->and($meta['email_link_label'])->toBe('Spring Favorite');
+});
+
 test('source meta merge preserves stronger values and is idempotent', function () {
     Carbon::setTestNow('2026-03-17 09:00:00');
 

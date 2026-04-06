@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Collapsible,
   Divider,
   InlineStack,
@@ -12,7 +13,7 @@ import {
   TextField,
 } from "@shopify/polaris";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import type { EmailSection, EmailSectionType, MessagingMediaAsset } from "./types";
+import type { EmailProductTile, EmailSection, EmailSectionType, MessagingMediaAsset } from "./types";
 
 interface ProductResult {
   id: string;
@@ -42,7 +43,9 @@ const SECTION_TYPES: Array<{ type: EmailSectionType; label: string }> = [
   { type: "text", label: "Body" },
   { type: "button", label: "Button" },
   { type: "product", label: "Product" },
+  { type: "product_grid_4", label: "4 Products" },
   { type: "image", label: "Photo" },
+  { type: "fading_divider", label: "Divider" },
 ];
 
 function createSection(type: EmailSectionType): EmailSection {
@@ -64,6 +67,13 @@ function createSection(type: EmailSectionType): EmailSection {
         href: "",
         buttonLabel: "Shop now",
       };
+    case "product_grid_4":
+      return {
+        id,
+        type,
+        heading: "Shop the collection",
+        products: [],
+      };
     case "image":
       return {
         id,
@@ -72,6 +82,13 @@ function createSection(type: EmailSectionType): EmailSection {
         alt: "Photo",
         href: "",
         padding: "0 0 12px 0",
+      };
+    case "fading_divider":
+      return {
+        id,
+        type,
+        spacingTop: 12,
+        spacingBottom: 12,
       };
     case "text":
     default:
@@ -90,6 +107,14 @@ export function composeBodyFromSections(sections: EmailSection[]): string {
       }
       if (section.type === "product") {
         return [section.title ?? "", section.price ?? ""].join(" ").trim();
+      }
+      if (section.type === "product_grid_4") {
+        return [
+          section.heading ?? "",
+          ...(section.products ?? []).map((product) => [product.title ?? "", product.price ?? ""].join(" ").trim()),
+        ]
+          .join(" ")
+          .trim();
       }
       if (section.type === "button") {
         return [section.label ?? "", section.href ?? ""].join(" ").trim();
@@ -179,6 +204,49 @@ function previewHtml(subject: string, sections: EmailSection[], mode: "sections"
         )}</td></tr><tr><td style="font-family:Arial,sans-serif;font-size:14px;color:#334155;padding:0 0 8px 0;">${sanitizeText(
           section.price ?? "",
         )}</td></tr></table></td></tr>`,
+      );
+      return;
+    }
+
+    if (section.type === "product_grid_4") {
+      const tiles = Array.isArray(section.products) ? section.products.slice(0, 4) : [];
+      if (tiles.length === 0) {
+        return;
+      }
+
+      const heading = (section.heading ?? "").trim() !== ""
+        ? `<tr><td colspan="2" style="padding:0 0 12px 0;font-family:Arial,sans-serif;font-size:18px;font-weight:700;color:#0f172a;">${sanitizeText(
+            section.heading ?? "",
+          )}</td></tr>`
+        : "";
+
+      const rowsHtml: string[] = [];
+      for (let index = 0; index < tiles.length; index += 2) {
+        const pair = tiles.slice(index, index + 2);
+        const cells = pair.map((product) => `
+          <td valign="top" width="50%" style="width:50%;padding:0 8px 16px 8px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dbe2ea;border-radius:12px;padding:12px;">
+              <tr><td style="font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#0f172a;padding:0 0 6px 0;">${sanitizeText(product.title ?? "Product")}</td></tr>
+              <tr><td style="font-family:Arial,sans-serif;font-size:14px;color:#334155;padding:0 0 8px 0;">${sanitizeText(product.price ?? "")}</td></tr>
+            </table>
+          </td>`);
+
+        while (cells.length < 2) {
+          cells.push(`<td valign="top" width="50%" style="width:50%;padding:0 8px 16px 8px;">&nbsp;</td>`);
+        }
+
+        rowsHtml.push(`<tr>${cells.join("")}</tr>`);
+      }
+
+      rows.push(`<tr><td style="padding:8px 0 12px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${heading}${rowsHtml.join(
+        "",
+      )}</table></td></tr>`);
+      return;
+    }
+
+    if (section.type === "fading_divider") {
+      rows.push(
+        `<tr><td style="padding:${section.spacingTop ?? 12}px 0 ${section.spacingBottom ?? 12}px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td width="20%" style="width:20%;border-top:1px solid #eef2f7;font-size:0;line-height:0;">&nbsp;</td><td width="60%" style="width:60%;border-top:1px solid #dbe2ea;font-size:0;line-height:0;">&nbsp;</td><td width="20%" style="width:20%;border-top:1px solid #eef2f7;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`,
       );
     }
   });
@@ -297,6 +365,28 @@ function MediaLibraryPicker({
   );
 }
 
+function sectionDisplayName(section: EmailSection): string {
+  switch (section.type) {
+    case "product_grid_4":
+      return "4 products";
+    case "fading_divider":
+      return "premium divider";
+    default:
+      return section.type;
+  }
+}
+
+function productTileFromResult(product: ProductResult): EmailProductTile {
+  return {
+    productId: product.id,
+    title: product.title,
+    imageUrl: product.image_url ?? "",
+    price: product.price ?? "",
+    href: product.url ?? "",
+    buttonLabel: "Shop now",
+  };
+}
+
 export function EmailContentStep({
   subject,
   onSubjectChange,
@@ -348,6 +438,10 @@ export function EmailContentStep({
     onSectionsChange(
       sections.map((section) => (section.id === id ? { ...section, ...patch } : section)),
     );
+  };
+
+  const updateGridProducts = (sectionId: string, products: EmailProductTile[]) => {
+    updateSection(sectionId, { products: products.slice(0, 4) });
   };
 
   const addSection = (type: EmailSectionType) => {
@@ -491,7 +585,7 @@ export function EmailContentStep({
                             variant="plain"
                             onClick={() => setSelectedSectionId(section.id)}
                           >
-                            {index + 1}. {section.type}
+                            {index + 1}. {sectionDisplayName(section)}
                           </Button>
                           <InlineStack gap="100">
                             <Button size="slim" onClick={() => moveSection(section.id, "up")}>Up</Button>
@@ -717,6 +811,190 @@ export function EmailContentStep({
                           onChange={(value) => updateSection(selectedSection.id, { buttonLabel: value })}
                           autoComplete="off"
                         />
+                      </BlockStack>
+                    ) : null}
+
+                    {selectedSection.type === "product_grid_4" ? (
+                      <BlockStack gap="300">
+                        <TextField
+                          label="Module heading"
+                          value={selectedSection.heading ?? ""}
+                          onChange={(value) => updateSection(selectedSection.id, { heading: value })}
+                          autoComplete="off"
+                        />
+
+                        <InlineStack gap="200" wrap>
+                          <TextField
+                            label="Search products"
+                            autoComplete="off"
+                            value={productQuery}
+                            onChange={setProductQuery}
+                          />
+                          <Button loading={productLoading} onClick={runProductSearch}>
+                            Search
+                          </Button>
+                        </InlineStack>
+
+                        <Text as="p" tone="subdued" variant="bodySm">
+                          Select up to 4 Shopify products. Each product tile keeps its own tracked link.
+                        </Text>
+
+                        {productError ? <Text as="p" tone="critical">{productError}</Text> : null}
+
+                        {productResults.length > 0 ? (
+                          <Box className="sf-messaging-product-results">
+                            {productResults.map((product) => {
+                              const selectedProducts = selectedSection.products ?? [];
+                              const checked = selectedProducts.some((entry) => entry.productId === product.id);
+                              const atLimit = selectedProducts.length >= 4;
+
+                              return (
+                                <Card key={product.gid}>
+                                  <BlockStack gap="200">
+                                    <InlineStack align="space-between" blockAlign="start" wrap>
+                                      <BlockStack gap="050">
+                                        <Text as="p" variant="bodyMd" fontWeight="semibold">
+                                          {product.title}
+                                        </Text>
+                                        <Text as="p" tone="subdued" variant="bodySm">
+                                          {product.price ?? ""}
+                                        </Text>
+                                      </BlockStack>
+                                      <Checkbox
+                                        label="Select"
+                                        labelHidden
+                                        checked={checked}
+                                        disabled={!checked && atLimit}
+                                        onChange={(value) => {
+                                          const current = selectedSection.products ?? [];
+                                          if (value) {
+                                            updateGridProducts(selectedSection.id, [...current, productTileFromResult(product)]);
+                                            return;
+                                          }
+
+                                          updateGridProducts(
+                                            selectedSection.id,
+                                            current.filter((entry) => entry.productId !== product.id),
+                                          );
+                                        }}
+                                      />
+                                    </InlineStack>
+                                  </BlockStack>
+                                </Card>
+                              );
+                            })}
+                          </Box>
+                        ) : null}
+
+                        <Divider />
+
+                        <Text as="h5" variant="headingSm">
+                          Selected products ({(selectedSection.products ?? []).length}/4)
+                        </Text>
+
+                        {(selectedSection.products ?? []).length > 0 ? (
+                          <BlockStack gap="200">
+                            {(selectedSection.products ?? []).map((product, index, items) => (
+                              <Card key={`${product.productId ?? "product"}_${index}`}>
+                                <BlockStack gap="200">
+                                  <InlineStack align="space-between" blockAlign="start" wrap>
+                                    <BlockStack gap="050">
+                                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                                        {product.title ?? `Product ${index + 1}`}
+                                      </Text>
+                                      <Text as="p" tone="subdued" variant="bodySm">
+                                        {product.price ?? ""}
+                                      </Text>
+                                    </BlockStack>
+                                    <InlineStack gap="100">
+                                      <Button
+                                        size="slim"
+                                        disabled={index === 0}
+                                        onClick={() => {
+                                          const next = [...items];
+                                          const [row] = next.splice(index, 1);
+                                          next.splice(index - 1, 0, row);
+                                          updateGridProducts(selectedSection.id, next);
+                                        }}
+                                      >
+                                        Up
+                                      </Button>
+                                      <Button
+                                        size="slim"
+                                        disabled={index === items.length - 1}
+                                        onClick={() => {
+                                          const next = [...items];
+                                          const [row] = next.splice(index, 1);
+                                          next.splice(index + 1, 0, row);
+                                          updateGridProducts(selectedSection.id, next);
+                                        }}
+                                      >
+                                        Down
+                                      </Button>
+                                      <Button
+                                        size="slim"
+                                        tone="critical"
+                                        onClick={() =>
+                                          updateGridProducts(
+                                            selectedSection.id,
+                                            items.filter((_, itemIndex) => itemIndex !== index),
+                                          )
+                                        }
+                                      >
+                                        Remove
+                                      </Button>
+                                    </InlineStack>
+                                  </InlineStack>
+
+                                  <TextField
+                                    label="Button label"
+                                    value={product.buttonLabel ?? ""}
+                                    onChange={(value) => {
+                                      const next = [...(selectedSection.products ?? [])];
+                                      next[index] = { ...next[index], buttonLabel: value };
+                                      updateGridProducts(selectedSection.id, next);
+                                    }}
+                                    autoComplete="off"
+                                  />
+                                </BlockStack>
+                              </Card>
+                            ))}
+                          </BlockStack>
+                        ) : (
+                          <Banner tone="info">Search and select up to 4 products for this module.</Banner>
+                        )}
+                      </BlockStack>
+                    ) : null}
+
+                    {selectedSection.type === "fading_divider" ? (
+                      <BlockStack gap="200">
+                        <Select
+                          label="Space above"
+                          options={[
+                            { label: "None", value: "0" },
+                            { label: "Small", value: "8" },
+                            { label: "Medium", value: "12" },
+                            { label: "Large", value: "20" },
+                            { label: "XL", value: "28" },
+                          ]}
+                          value={String(selectedSection.spacingTop ?? 12)}
+                          onChange={(value) => updateSection(selectedSection.id, { spacingTop: Number(value) })}
+                        />
+                        <Select
+                          label="Space below"
+                          options={[
+                            { label: "None", value: "0" },
+                            { label: "Small", value: "8" },
+                            { label: "Medium", value: "12" },
+                            { label: "Large", value: "20" },
+                            { label: "XL", value: "28" },
+                          ]}
+                          value={String(selectedSection.spacingBottom ?? 12)}
+                          onChange={(value) => updateSection(selectedSection.id, { spacingBottom: Number(value) })}
+                        />
+                        <Text as="p" tone="subdued" variant="bodySm">
+                          This uses an email-safe tapered divider fallback rather than a fragile CSS gradient.
+                        </Text>
                       </BlockStack>
                     ) : null}
                   </BlockStack>

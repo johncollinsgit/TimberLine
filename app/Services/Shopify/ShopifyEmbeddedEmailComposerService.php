@@ -83,7 +83,7 @@ class ShopifyEmbeddedEmailComposerService
     protected function normalizeSection(array $section, int $index): ?array
     {
         $type = strtolower(trim((string) ($section['type'] ?? '')));
-        if (! in_array($type, ['image', 'product', 'button', 'text', 'divider', 'heading', 'spacer'], true)) {
+        if (! in_array($type, ['image', 'product', 'product_grid_4', 'button', 'text', 'divider', 'fading_divider', 'heading', 'spacer'], true)) {
             return null;
         }
 
@@ -107,6 +107,30 @@ class ShopifyEmbeddedEmailComposerService
                 'price' => $this->nullableString($section['price'] ?? null),
                 'href' => $this->nullableString($section['href'] ?? null),
                 'buttonLabel' => $this->nullableString($section['buttonLabel'] ?? null) ?? 'View product',
+            ],
+            'product_grid_4' => [
+                'id' => $id,
+                'type' => 'product_grid_4',
+                'heading' => $this->nullableString($section['heading'] ?? null),
+                'products' => collect((array) ($section['products'] ?? []))
+                    ->map(function (mixed $product): ?array {
+                        if (! is_array($product)) {
+                            return null;
+                        }
+
+                        return [
+                            'productId' => $this->nullableString($product['productId'] ?? null),
+                            'title' => $this->nullableString($product['title'] ?? null),
+                            'imageUrl' => $this->nullableString($product['imageUrl'] ?? null),
+                            'price' => $this->nullableString($product['price'] ?? null),
+                            'href' => $this->nullableString($product['href'] ?? null),
+                            'buttonLabel' => $this->nullableString($product['buttonLabel'] ?? null) ?? 'Shop now',
+                        ];
+                    })
+                    ->filter()
+                    ->take(4)
+                    ->values()
+                    ->all(),
             ],
             'button' => [
                 'id' => $id,
@@ -138,6 +162,12 @@ class ShopifyEmbeddedEmailComposerService
             'divider' => [
                 'id' => $id,
                 'type' => 'divider',
+            ],
+            'fading_divider' => [
+                'id' => $id,
+                'type' => 'fading_divider',
+                'spacingTop' => max(0, min(48, (int) ($section['spacingTop'] ?? 12))),
+                'spacingBottom' => max(0, min(48, (int) ($section['spacingBottom'] ?? 12))),
             ],
             default => null,
         };
@@ -201,31 +231,46 @@ class ShopifyEmbeddedEmailComposerService
         }
 
         if ($type === 'product') {
-            $title = $this->escapeHtml((string) ($section['title'] ?? 'Product'));
-            $price = $this->escapeHtml((string) ($section['price'] ?? ''));
-            $href = $this->safeUrl($section['href'] ?? null);
-            $buttonLabel = $this->escapeHtml((string) ($section['buttonLabel'] ?? 'View product'));
-            $imageUrl = $this->safeUrl($section['imageUrl'] ?? null, ['http', 'https']);
+            return '<tr><td style="padding:12px 0;">' . $this->renderProductCard($section) . '</td></tr>';
+        }
 
-            $parts = [];
-            if ($imageUrl !== null) {
-                $imageTag = '<img src="' . $this->escapeHtml($imageUrl) . '" alt="' . $title . '" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:10px;" />';
-                if ($href !== null) {
-                    $imageTag = '<a href="' . $this->escapeHtml($href) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">' . $imageTag . '</a>';
+        if ($type === 'product_grid_4') {
+            $products = collect((array) ($section['products'] ?? []))
+                ->filter(fn (mixed $product): bool => is_array($product))
+                ->take(4)
+                ->values();
+
+            if ($products->isEmpty()) {
+                return null;
+            }
+
+            $rows = [];
+            $heading = $this->nullableString($section['heading'] ?? null);
+            if ($heading !== null) {
+                $rows[] = '<tr><td colspan="2" style="padding:0 0 14px 0;font-family:Arial,sans-serif;font-size:18px;font-weight:700;line-height:1.3;color:#0f172a;">'
+                    . $this->escapeHtml($heading)
+                    . '</td></tr>';
+            }
+
+            foreach ($products->chunk(2) as $pair) {
+                $cells = [];
+
+                foreach ($pair as $product) {
+                    $cells[] = '<td valign="top" width="50%" style="width:50%;padding:0 8px 16px 8px;">'
+                        . $this->renderProductCard((array) $product, compactMode: true)
+                        . '</td>';
                 }
-                $parts[] = '<tr><td style="padding:0 0 10px 0;">' . $imageTag . '</td></tr>';
+
+                while (count($cells) < 2) {
+                    $cells[] = '<td valign="top" width="50%" style="width:50%;padding:0 8px 16px 8px;">&nbsp;</td>';
+                }
+
+                $rows[] = '<tr>' . implode('', $cells) . '</tr>';
             }
 
-            $parts[] = '<tr><td style="padding:0 0 4px 0;font-family:Arial,sans-serif;font-size:18px;font-weight:700;line-height:1.3;color:#0f172a;">' . $title . '</td></tr>';
-            if ($price !== '') {
-                $parts[] = '<tr><td style="padding:0 0 10px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.4;color:#334155;">' . $price . '</td></tr>';
-            }
-
-            if ($href !== null) {
-                $parts[] = '<tr><td style="padding:0;"><a href="' . $this->escapeHtml($href) . '" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#10633f;color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:999px;">' . $buttonLabel . '</a></td></tr>';
-            }
-
-            return '<tr><td style="padding:12px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;">' . implode('', $parts) . '</table></td></tr>';
+            return '<tr><td style="padding:8px 0 12px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">'
+                . implode('', $rows)
+                . '</table></td></tr>';
         }
 
         if ($type === 'button') {
@@ -277,7 +322,54 @@ class ShopifyEmbeddedEmailComposerService
             return '<tr><td style="padding:10px 0;"><hr style="margin:0;border:0;border-top:1px solid #dbe2ea;" /></td></tr>';
         }
 
+        if ($type === 'fading_divider') {
+            $spacingTop = max(0, min(48, (int) ($section['spacingTop'] ?? 12)));
+            $spacingBottom = max(0, min(48, (int) ($section['spacingBottom'] ?? 12)));
+
+            return '<tr><td style="padding:' . $spacingTop . 'px 0 ' . $spacingBottom . 'px 0;">'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>'
+                . '<td width="20%" style="width:20%;border-top:1px solid #eef2f7;font-size:0;line-height:0;">&nbsp;</td>'
+                . '<td width="60%" style="width:60%;border-top:1px solid #dbe2ea;font-size:0;line-height:0;">&nbsp;</td>'
+                . '<td width="20%" style="width:20%;border-top:1px solid #eef2f7;font-size:0;line-height:0;">&nbsp;</td>'
+                . '</tr></table>'
+                . '</td></tr>';
+        }
+
         return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $section
+     */
+    protected function renderProductCard(array $section, bool $compactMode = false): string
+    {
+        $title = $this->escapeHtml((string) ($section['title'] ?? 'Product'));
+        $price = $this->escapeHtml((string) ($section['price'] ?? ''));
+        $href = $this->safeUrl($section['href'] ?? null);
+        $buttonLabel = $this->escapeHtml((string) ($section['buttonLabel'] ?? 'View product'));
+        $imageUrl = $this->safeUrl($section['imageUrl'] ?? null, ['http', 'https']);
+
+        $parts = [];
+        if ($imageUrl !== null) {
+            $imageTag = '<img src="' . $this->escapeHtml($imageUrl) . '" alt="' . $title . '" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:10px;" />';
+            if ($href !== null) {
+                $imageTag = '<a href="' . $this->escapeHtml($href) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">' . $imageTag . '</a>';
+            }
+            $parts[] = '<tr><td style="padding:0 0 10px 0;">' . $imageTag . '</td></tr>';
+        }
+
+        $parts[] = '<tr><td style="padding:0 0 4px 0;font-family:Arial,sans-serif;font-size:' . ($compactMode ? '16px' : '18px') . ';font-weight:700;line-height:1.3;color:#0f172a;">' . $title . '</td></tr>';
+        if ($price !== '') {
+            $parts[] = '<tr><td style="padding:0 0 10px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.4;color:#334155;">' . $price . '</td></tr>';
+        }
+
+        if ($href !== null) {
+            $parts[] = '<tr><td style="padding:0;"><a href="' . $this->escapeHtml($href) . '" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#10633f;color:#ffffff;font-family:Arial,sans-serif;font-size:13px;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:999px;">' . $buttonLabel . '</a></td></tr>';
+        }
+
+        return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;">'
+            . implode('', $parts)
+            . '</table>';
     }
 
     protected function renderLegacyHtml(string $templateHtml, string $subject, string $body): string

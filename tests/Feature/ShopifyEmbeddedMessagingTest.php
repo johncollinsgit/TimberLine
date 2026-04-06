@@ -1336,6 +1336,97 @@ test('individual email send uses existing email pipeline and records delivery me
         ->and((string) data_get($delivery?->metadata, 'subject'))->toBe('Operational Message');
 });
 
+test('individual email send decorates product grid links with campaign and product attribution', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Email Attribution Tenant',
+        'slug' => 'email-attribution-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $profile = shopifyMessagingProfile($tenant->id, [
+        'first_name' => 'Ava',
+        'last_name' => 'Buyer',
+        'email' => 'ava.buyer@example.com',
+        'normalized_email' => 'ava.buyer@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $sendGrid = \Mockery::mock(SendGridEmailService::class);
+    $sendGrid->shouldReceive('sendEmail')
+        ->once()
+        ->withArgs(function (string $toEmail, string $subject, string $body, array $options) use ($profile): bool {
+            $html = (string) ($options['html_body'] ?? '');
+
+            return $toEmail === 'ava.buyer@example.com'
+                && $subject === 'Spring picks'
+                && str_contains($html, 'utm_source=backstage')
+                && str_contains($html, 'utm_medium=email')
+                && str_contains($html, 'utm_campaign=shopify-embedded-messaging-individual')
+                && str_contains($html, 'mf_module_type=product-grid-4')
+                && str_contains($html, 'mf_module_position=1')
+                && str_contains($html, 'mf_product_id=spring-candle')
+                && str_contains($html, 'mf_tile_position=1')
+                && str_contains($html, 'mf_link_label=Spring%20Favorite')
+                && (int) ($options['customer_id'] ?? 0) === $profile->id;
+        })
+        ->andReturn([
+            'success' => true,
+            'provider' => 'sendgrid',
+            'message_id' => 'sg-msg-attribution-1',
+            'status' => 'sent',
+            'error_code' => null,
+            'error_message' => null,
+            'payload' => ['id' => 'sg-msg-attribution-1'],
+            'dry_run' => false,
+            'retryable' => false,
+        ]);
+    app()->instance(SendGridEmailService::class, $sendGrid);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.individual'), [
+            'profile_id' => $profile->id,
+            'channel' => 'email',
+            'subject' => 'Spring picks',
+            'body' => 'Browse our latest collection.',
+            'email_template_mode' => 'sections',
+            'email_sections' => [
+                [
+                    'id' => 'grid_1',
+                    'type' => 'product_grid_4',
+                    'heading' => 'Shop the edit',
+                    'products' => [
+                        [
+                            'productId' => 'spring-candle',
+                            'title' => 'Spring Favorite',
+                            'imageUrl' => 'https://cdn.example.com/spring.jpg',
+                            'price' => '$22.00',
+                            'href' => 'https://theforestrystudio.com/products/spring-favorite',
+                            'buttonLabel' => 'Shop now',
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'divider_1',
+                    'type' => 'fading_divider',
+                    'spacingTop' => 8,
+                    'spacingBottom' => 16,
+                ],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('ok', true);
+
+    $delivery = MarketingEmailDelivery::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->first();
+
+    expect(data_get($delivery?->metadata, 'template_sections.0.products.0.href'))
+        ->toContain('mf_product_id=spring-candle')
+        ->toContain('mf_module_type=product-grid-4');
+});
+
 test('sms smoke test sends to one or more numbers and returns statuses', function () {
     $tenant = Tenant::query()->create([
         'name' => 'SMS Smoke Tenant',
