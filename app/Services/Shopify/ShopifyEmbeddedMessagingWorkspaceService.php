@@ -824,6 +824,14 @@ GRAPHQL;
     /**
      * @return array<string,mixed>
      */
+    public function cancelCampaign(?int $tenantId, int $campaignId, ?int $actorId = null): array
+    {
+        return $this->campaignDispatchService->cancelCampaign($tenantId, $campaignId, $actorId);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
     public function previewGroupSend(
         ?int $tenantId,
         string $targetType,
@@ -1343,6 +1351,8 @@ GRAPHQL;
                     ->values()
                     ->all();
 
+                $cancelability = $this->campaignDispatchService->cancelabilityForCampaign($campaign);
+
                 return [
                     'id' => (int) $campaign->id,
                     'name' => (string) $campaign->name,
@@ -1359,6 +1369,7 @@ GRAPHQL;
                     'launched_at' => optional($campaign->launched_at)->toIso8601String(),
                     'completed_at' => optional($campaign->completed_at)->toIso8601String(),
                     'created_at' => optional($campaign->created_at)->toIso8601String(),
+                    'cancelable' => (bool) ($cancelability['cancelable'] ?? false),
                 ];
             })
             ->values()

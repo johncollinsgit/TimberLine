@@ -2,12 +2,14 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
+use App\Models\MarketingCampaign;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingDeliveryEvent;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageGroup;
+use App\Models\MarketingMessageJob;
 use App\Models\MarketingMessageMediaAsset;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
@@ -1590,6 +1592,229 @@ test('group preview returns resolved recipient estimate before send and does not
 
     expect(MarketingMessageDelivery::query()->count())->toBe(0)
         ->and(MarketingEmailDelivery::query()->count())->toBe(0);
+});
+
+test('pending embedded email campaign can be canceled before dispatch', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Cancelable Email Tenant',
+        'slug' => 'cancelable-email-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    shopifyMessagingProfile($tenant->id, [
+        'email' => 'cancelable.one@example.com',
+        'normalized_email' => 'cancelable.one@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+    shopifyMessagingProfile($tenant->id, [
+        'email' => 'cancelable.two@example.com',
+        'normalized_email' => 'cancelable.two@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $scheduleFor = now()->addHour()->toIso8601String();
+
+    $sendResponse = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'email',
+            'subject' => 'Not ready yet',
+            'body' => 'Hold this email group for now.',
+            'schedule_for' => $scheduleFor,
+        ]);
+
+    $sendResponse->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.campaign.status', 'sending');
+
+    $campaignId = (int) $sendResponse->json('data.campaign.id');
+    expect($campaignId)->toBeGreaterThan(0);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.history'))
+        ->assertOk()
+        ->assertJsonPath('data.campaigns.0.id', $campaignId)
+        ->assertJsonPath('data.campaigns.0.cancelable', true);
+
+    $cancelResponse = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.campaigns.cancel', ['campaign' => $campaignId]));
+
+    $cancelResponse->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'Pending campaign canceled.')
+        ->assertJsonPath('data.campaign.id', $campaignId)
+        ->assertJsonPath('data.campaign.status', 'canceled');
+
+    $campaign = MarketingCampaign::query()->find($campaignId);
+    expect($campaign)->not->toBeNull()
+        ->and((string) $campaign?->status)->toBe('canceled')
+        ->and((int) DB::table('marketing_campaign_recipients')->where('campaign_id', $campaignId)->where('status', 'canceled')->count())->toBe(2)
+        ->and((int) MarketingMessageJob::query()->where('campaign_id', $campaignId)->where('status', 'canceled')->count())->toBe(2)
+        ->and(MarketingEmailDelivery::query()->count())->toBe(0)
+        ->and(MarketingMessageDelivery::query()->count())->toBe(0);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.history'))
+        ->assertOk()
+        ->assertJsonPath('data.campaigns.0.id', $campaignId)
+        ->assertJsonPath('data.campaigns.0.status', 'canceled')
+        ->assertJsonPath('data.campaigns.0.cancelable', false);
+});
+
+test('in-progress campaign can still be canceled to stop remaining sends', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Cancelable In Progress Tenant',
+        'slug' => 'cancelable-in-progress-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $firstProfile = shopifyMessagingProfile($tenant->id, [
+        'email' => 'inprogress.one@example.com',
+        'normalized_email' => 'inprogress.one@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+    $secondProfile = shopifyMessagingProfile($tenant->id, [
+        'email' => 'inprogress.two@example.com',
+        'normalized_email' => 'inprogress.two@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $sendResponse = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'email',
+            'subject' => 'Already started',
+            'body' => 'Stop the rest of this email send.',
+            'schedule_for' => now()->addHour()->toIso8601String(),
+        ]);
+
+    $campaignId = (int) $sendResponse->json('data.campaign.id');
+    expect($campaignId)->toBeGreaterThan(0);
+
+    $campaign = MarketingCampaign::query()->find($campaignId);
+    expect($campaign)->not->toBeNull();
+
+    $firstRecipient = DB::table('marketing_campaign_recipients')
+        ->where('campaign_id', $campaignId)
+        ->where('marketing_profile_id', $firstProfile->id)
+        ->first();
+    $secondRecipient = DB::table('marketing_campaign_recipients')
+        ->where('campaign_id', $campaignId)
+        ->where('marketing_profile_id', $secondProfile->id)
+        ->first();
+
+    expect($firstRecipient)->not->toBeNull()
+        ->and($secondRecipient)->not->toBeNull();
+
+    $firstRecipientId = (int) $firstRecipient->id;
+    $secondRecipientId = (int) $secondRecipient->id;
+
+    $firstJob = MarketingMessageJob::query()->where('campaign_recipient_id', $firstRecipientId)->first();
+    $secondJob = MarketingMessageJob::query()->where('campaign_recipient_id', $secondRecipientId)->first();
+
+    expect($firstJob)->not->toBeNull()
+        ->and($secondJob)->not->toBeNull();
+
+    MarketingEmailDelivery::query()->create([
+        'marketing_campaign_recipient_id' => $firstRecipientId,
+        'marketing_profile_id' => $firstProfile->id,
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'batch_id' => (string) Str::uuid(),
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => 'Already started',
+        'provider' => 'sendgrid',
+        'provider_message_id' => 'sg-inprogress-1',
+        'campaign_type' => 'direct_message',
+        'template_key' => 'embedded_messaging',
+        'sendgrid_message_id' => 'sg-inprogress-1',
+        'email' => 'inprogress.one@example.com',
+        'status' => 'sent',
+        'sent_at' => now(),
+        'metadata' => ['subject' => 'Already started', 'source_label' => 'shopify_embedded_messaging_group'],
+    ]);
+
+    DB::table('marketing_campaign_recipients')->where('id', $firstRecipientId)->update([
+        'status' => 'sent',
+        'sent_at' => now(),
+    ]);
+    DB::table('marketing_campaign_recipients')->where('id', $secondRecipientId)->update([
+        'status' => 'sending',
+    ]);
+
+    MarketingMessageJob::query()->whereKey($firstJob?->id)->update([
+        'status' => 'completed',
+        'completed_at' => now(),
+    ]);
+    MarketingMessageJob::query()->whereKey($secondJob?->id)->update([
+        'status' => 'sending',
+        'started_at' => now(),
+    ]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->getJson(route('shopify.app.api.messaging.history'))
+        ->assertOk()
+        ->assertJsonPath('data.campaigns.0.id', $campaignId)
+        ->assertJsonPath('data.campaigns.0.cancelable', true);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.campaigns.cancel', ['campaign' => $campaignId]))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.campaign.id', $campaignId)
+        ->assertJsonPath('data.campaign.status', 'canceled');
+
+    expect((string) MarketingMessageJob::query()->find($secondJob?->id)?->status)->toBe('canceled')
+        ->and((string) DB::table('marketing_campaign_recipients')->where('id', $secondRecipientId)->value('status'))->toBe('canceled')
+        ->and((string) DB::table('marketing_campaign_recipients')->where('id', $firstRecipientId)->value('status'))->toBe('sent')
+        ->and(MarketingEmailDelivery::query()->where('marketing_campaign_recipient_id', $firstRecipientId)->count())->toBe(1);
+});
+
+test('pending campaign cancellation enforces tenant ownership', function () {
+    $tenantA = Tenant::query()->create([
+        'name' => 'Campaign Cancel Tenant A',
+        'slug' => 'campaign-cancel-tenant-a',
+    ]);
+    $tenantB = Tenant::query()->create([
+        'name' => 'Campaign Cancel Tenant B',
+        'slug' => 'campaign-cancel-tenant-b',
+    ]);
+    shopifyMessagingGrantEntitlement($tenantA);
+    shopifyMessagingGrantEntitlement($tenantB);
+
+    configureEmbeddedRetailStore($tenantB->id);
+    shopifyMessagingProfile($tenantB->id, [
+        'email' => 'tenantb.cancel@example.com',
+        'normalized_email' => 'tenantb.cancel@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $sendResponse = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'email',
+            'subject' => 'Tenant B pending',
+            'body' => 'Queued for Tenant B only.',
+            'schedule_for' => now()->addHour()->toIso8601String(),
+        ]);
+
+    $campaignId = (int) $sendResponse->json('data.campaign.id');
+    expect($campaignId)->toBeGreaterThan(0);
+
+    configureEmbeddedRetailStore($tenantA->id);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.campaigns.cancel', ['campaign' => $campaignId]))
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Campaign could not be canceled.')
+        ->assertJsonValidationErrors(['campaign_id']);
+
+    expect((string) MarketingCampaign::query()->find($campaignId)?->status)->toBe('sending');
 });
 
 test('groups list excludes system and cross-tenant groups', function () {

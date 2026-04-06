@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class EmbeddedMessagingCampaignDispatchService
 {
@@ -289,6 +290,150 @@ class EmbeddedMessagingCampaignDispatchService
     /**
      * @return array<string,mixed>
      */
+    public function cancelCampaign(?int $tenantId, int $campaignId, ?int $actorId = null): array
+    {
+        $campaign = MarketingCampaign::query()
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId), fn ($query) => $query->whereNull('tenant_id'))
+            ->whereKey($campaignId)
+            ->first();
+
+        if (! $campaign instanceof MarketingCampaign) {
+            throw ValidationException::withMessages([
+                'campaign_id' => 'Campaign not found for this tenant.',
+            ]);
+        }
+
+        $cancelability = $this->cancelabilityForCampaign($campaign);
+        if (! (bool) ($cancelability['cancelable'] ?? false)) {
+            throw ValidationException::withMessages([
+                'campaign_id' => (string) ($cancelability['message'] ?? 'This campaign can no longer be canceled.'),
+            ]);
+        }
+
+        $timestamp = now();
+
+        DB::transaction(function () use ($campaign, $actorId, $timestamp): void {
+            MarketingMessageJob::query()
+                ->where('campaign_id', (int) $campaign->id)
+                ->whereIn('status', ['queued', 'retryable', 'dispatching', 'sending'])
+                ->update([
+                    'status' => 'canceled',
+                    'completed_at' => $timestamp,
+                    'last_error_code' => 'campaign_canceled',
+                    'last_error_message' => 'Campaign canceled before send.',
+                ]);
+
+            MarketingCampaignRecipient::query()
+                ->where('campaign_id', (int) $campaign->id)
+                ->whereIn('status', ['pending', 'scheduled', 'approved', 'queued_for_approval', 'sending'])
+                ->update([
+                    'status' => 'canceled',
+                    'last_status_note' => 'Canceled before send.',
+                ]);
+
+            $campaign->forceFill([
+                'status' => 'canceled',
+                'completed_at' => $timestamp,
+                'updated_by' => $actorId,
+            ])->save();
+        });
+
+        $campaign = $campaign->fresh() ?? $campaign;
+        $progress = $this->progressService->refreshCampaign($campaign);
+
+        return [
+            'campaign' => [
+                'id' => (int) $campaign->id,
+                'status' => (string) ($progress['status'] ?? $campaign->status),
+                'channel' => (string) $campaign->channel,
+                'name' => (string) $campaign->name,
+                'scheduled_for' => optional($campaign->scheduled_for)->toIso8601String(),
+            ],
+            'status_counts' => (array) ($progress['status_counts'] ?? []),
+        ];
+    }
+
+    /**
+     * @return array{cancelable:bool,message:?string,pending_job_count:int,has_deliveries:bool}
+     */
+    public function cancelabilityForCampaign(MarketingCampaign|int $campaign): array
+    {
+        $resolvedCampaign = $campaign instanceof MarketingCampaign
+            ? $campaign
+            : MarketingCampaign::query()->find((int) $campaign);
+
+        if (! $resolvedCampaign instanceof MarketingCampaign) {
+            return [
+                'cancelable' => false,
+                'message' => 'Campaign not found.',
+                'pending_job_count' => 0,
+                'has_deliveries' => false,
+            ];
+        }
+
+        $sourceLabel = strtolower(trim((string) ($resolvedCampaign->source_label ?? '')));
+        if (! str_starts_with($sourceLabel, 'shopify_embedded_messaging')) {
+            return [
+                'cancelable' => false,
+                'message' => 'Only embedded messaging campaigns can be canceled here.',
+                'pending_job_count' => 0,
+                'has_deliveries' => false,
+            ];
+        }
+
+        $jobStatusCounts = MarketingMessageJob::query()
+            ->where('campaign_id', (int) $resolvedCampaign->id)
+            ->selectRaw('status, count(*) as aggregate_count')
+            ->groupBy('status')
+            ->pluck('aggregate_count', 'status')
+            ->map(fn ($count): int => (int) $count)
+            ->all();
+
+        $activeJobCount = 0;
+        foreach ($jobStatusCounts as $status => $count) {
+            $normalized = strtolower(trim((string) $status));
+            if ($normalized === '') {
+                continue;
+            }
+
+            if (in_array($normalized, ['queued', 'retryable', 'dispatching', 'sending'], true)) {
+                $activeJobCount += (int) $count;
+                continue;
+            }
+        }
+
+        $hasDeliveries = $this->campaignHasDeliveries($resolvedCampaign);
+        $campaignStatus = strtolower(trim((string) $resolvedCampaign->status));
+
+        if ($campaignStatus === 'canceled') {
+            return [
+                'cancelable' => false,
+                'message' => 'This campaign is already canceled.',
+                'pending_job_count' => $activeJobCount,
+                'has_deliveries' => $hasDeliveries,
+            ];
+        }
+
+        if ($activeJobCount <= 0) {
+            return [
+                'cancelable' => false,
+                'message' => 'There are no remaining sends left to cancel.',
+                'pending_job_count' => 0,
+                'has_deliveries' => $hasDeliveries,
+            ];
+        }
+
+        return [
+            'cancelable' => true,
+            'message' => null,
+            'pending_job_count' => $activeJobCount,
+            'has_deliveries' => $hasDeliveries,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
     public function dispatchPendingJobs(int $campaignId): array
     {
         $lockKey = 'embedded_messaging:campaign_dispatch:' . $campaignId;
@@ -300,6 +445,10 @@ class EmbeddedMessagingCampaignDispatchService
             $campaign = MarketingCampaign::query()->find($campaignId);
             if (! $campaign instanceof MarketingCampaign) {
                 return ['dispatched' => 0, 'status' => 'missing_campaign'];
+            }
+
+            if (strtolower(trim((string) $campaign->status)) === 'canceled') {
+                return ['dispatched' => 0, 'status' => 'canceled'];
             }
 
             $now = CarbonImmutable::now();
@@ -431,6 +580,10 @@ class EmbeddedMessagingCampaignDispatchService
             return ['status' => 'failed', 'reason' => 'missing_campaign'];
         }
 
+        if ($this->abortCanceledJob($job, $campaign)) {
+            return ['status' => 'canceled'];
+        }
+
         /** @var MarketingCampaignRecipient|null $recipient */
         $recipient = $job->recipient;
         $profile = $recipient?->profile;
@@ -452,6 +605,10 @@ class EmbeddedMessagingCampaignDispatchService
             'started_at' => now(),
             'attempt_count' => ((int) $job->attempt_count) + 1,
         ])->save();
+
+        if ($this->abortCanceledJob($job, $campaign)) {
+            return ['status' => 'canceled'];
+        }
 
         $result = strtolower(trim((string) $job->channel)) === 'email'
             ? $this->processEmailJob($job, $campaign, $recipient, $profile)
@@ -529,6 +686,10 @@ class EmbeddedMessagingCampaignDispatchService
         MarketingCampaignRecipient $recipient,
         MarketingProfile $profile
     ): array {
+        if ($this->abortCanceledJob($job, $campaign, $recipient)) {
+            return ['status' => 'canceled'];
+        }
+
         $payload = (array) ($job->payload ?? []);
         $sourceLabel = $this->nullableString($payload['source_label'] ?? null) ?: 'shopify_embedded_messaging_group';
         $senderKey = $this->nullableString($payload['sender_key'] ?? null);
@@ -643,6 +804,17 @@ class EmbeddedMessagingCampaignDispatchService
                 'link_shortening_provider' => (string) ($linkPrepared['provider'] ?? 'none'),
             ],
         ])->save();
+
+        if ($this->abortCanceledJob($job, $campaign, $recipient)) {
+            $delivery->forceFill([
+                'send_status' => 'canceled',
+                'error_code' => 'campaign_canceled',
+                'error_message' => 'Campaign canceled before send.',
+                'failed_at' => now(),
+            ])->save();
+
+            return ['status' => 'canceled'];
+        }
 
         $sendResult = $this->twilioSmsService->sendSms($toPhone, $resolvedMessage, [
             'sender_key' => $senderKey,
@@ -768,6 +940,10 @@ class EmbeddedMessagingCampaignDispatchService
         MarketingCampaignRecipient $recipient,
         MarketingProfile $profile
     ): array {
+        if ($this->abortCanceledJob($job, $campaign, $recipient)) {
+            return ['status' => 'canceled'];
+        }
+
         $payload = (array) ($job->payload ?? []);
         $sourceLabel = $this->nullableString($payload['source_label'] ?? null) ?: 'shopify_embedded_messaging_group';
         $subject = $this->nullableString($payload['subject'] ?? $campaign->message_subject ?? null) ?: 'Message from Backstage';
@@ -881,6 +1057,19 @@ class EmbeddedMessagingCampaignDispatchService
                 'sections' => is_array($composed['sections'] ?? null) ? $composed['sections'] : $decoratedSections,
                 'legacy_html' => $this->nullableString($composed['legacy_html'] ?? null) ?? $this->nullableString($emailTemplate['legacy_html'] ?? null),
             ];
+        }
+
+        if ($this->abortCanceledJob($job, $campaign, $recipient)) {
+            $delivery->forceFill([
+                'status' => 'failed',
+                'failed_at' => now(),
+                'raw_payload' => [
+                    ...((array) $delivery->raw_payload),
+                    'canceled_before_send' => true,
+                ],
+            ])->save();
+
+            return ['status' => 'canceled'];
         }
 
         $sendResult = $this->sendGridEmailService->sendEmail($toEmail, $subject, $resolvedBody, [
@@ -1127,6 +1316,55 @@ class EmbeddedMessagingCampaignDispatchService
             ],
             'created_by' => $actorId,
         ]);
+    }
+
+    protected function abortCanceledJob(
+        MarketingMessageJob $job,
+        MarketingCampaign $campaign,
+        ?MarketingCampaignRecipient $recipient = null
+    ): bool {
+        $campaignStatus = strtolower(trim((string) ($campaign->fresh()?->status ?? $campaign->status ?? '')));
+        $jobStatus = strtolower(trim((string) (MarketingMessageJob::query()->whereKey($job->id)->value('status') ?? $job->status ?? '')));
+
+        if ($campaignStatus !== 'canceled' && $jobStatus !== 'canceled') {
+            return false;
+        }
+
+        $job->forceFill([
+            'status' => 'canceled',
+            'completed_at' => now(),
+            'failed_at' => null,
+            'last_error_code' => 'campaign_canceled',
+            'last_error_message' => 'Campaign canceled before send.',
+        ])->save();
+
+        if ($recipient instanceof MarketingCampaignRecipient) {
+            $recipient->forceFill([
+                'status' => 'canceled',
+                'last_status_note' => 'Canceled before send.',
+            ])->save();
+        }
+
+        return true;
+    }
+
+    protected function campaignHasDeliveries(MarketingCampaign $campaign): bool
+    {
+        $messageDeliveriesExist = MarketingMessageDelivery::query()
+            ->where('campaign_id', (int) $campaign->id)
+            ->exists();
+
+        if ($messageDeliveriesExist) {
+            return true;
+        }
+
+        return MarketingEmailDelivery::query()
+            ->whereIn('marketing_campaign_recipient_id', function ($query) use ($campaign): void {
+                $query->select('id')
+                    ->from('marketing_campaign_recipients')
+                    ->where('campaign_id', (int) $campaign->id);
+            })
+            ->exists();
     }
 
     protected function maxDispatchPerSecond(string $channel): int

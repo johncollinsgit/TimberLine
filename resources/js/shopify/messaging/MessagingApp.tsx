@@ -143,6 +143,9 @@ function badgeToneForStatus(status: string):
   if (["sending", "queued", "scheduled", "test_sent"].includes(normalized)) {
     return "attention";
   }
+  if (["canceled"].includes(normalized)) {
+    return "warning";
+  }
   if (["partially_failed", "undelivered"].includes(normalized)) {
     return "warning";
   }
@@ -235,6 +238,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
 
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<MessagingHistoryPayload>({ entries: [], campaigns: [] });
+  const [cancelingCampaignId, setCancelingCampaignId] = useState<number | null>(null);
 
   const endpoints = bootstrap.endpoints ?? {};
 
@@ -313,6 +317,30 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
       setHistoryLoading(false);
     }
   }, [endpoints.history]);
+
+  const cancelCampaign = useCallback(async (campaignId: number) => {
+    const endpoint = endpoints.cancel_campaign_base?.replace("__CAMPAIGN__", String(campaignId));
+    if (!endpoint) {
+      return;
+    }
+
+    setCancelingCampaignId(campaignId);
+
+    try {
+      await requestMessagingJson<{
+        campaign?: { id?: number; status?: string };
+      }>(endpoint, {
+        method: "POST",
+      });
+
+      setBanner("success", `Campaign canceled. Remaining sends stopped (#${campaignId}).`);
+      await loadHistory();
+    } catch (error) {
+      handleApiError(error, "Campaign cancel failed.");
+    } finally {
+      setCancelingCampaignId(null);
+    }
+  }, [endpoints.cancel_campaign_base, loadHistory]);
 
   useEffect(() => {
     void loadAudienceSummary();
@@ -910,8 +938,8 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
             placeholder="+15551234567, +15557654321"
           />
           <InlineStack gap="200">
-            <Button variant="primary" loading={smsSmokeSending} onClick={sendSmsSmokeTest}>
-              Send smoke test
+            <Button variant="primary" tone="success" size="large" loading={smsSmokeSending} onClick={sendSmsSmokeTest}>
+              Run smoke test
             </Button>
           </InlineStack>
 
@@ -973,7 +1001,12 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           </BlockStack>
         </Card>
 
-        <CampaignHistoryCard history={history} loading={historyLoading} />
+        <CampaignHistoryCard
+          history={history}
+          loading={historyLoading}
+          onCancel={cancelCampaign}
+          cancelingCampaignId={cancelingCampaignId}
+        />
       </BlockStack>
     );
   };
@@ -1068,8 +1101,8 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
             placeholder="owner@example.com, test@example.com"
           />
           <InlineStack gap="200">
-            <Button variant="primary" loading={emailSmokeSending} onClick={sendEmailSmokeTest}>
-              Send smoke test
+            <Button variant="primary" tone="success" size="large" loading={emailSmokeSending} onClick={sendEmailSmokeTest}>
+              Run smoke test
             </Button>
           </InlineStack>
 
@@ -1145,7 +1178,12 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           </BlockStack>
         </Card>
 
-        <CampaignHistoryCard history={history} loading={historyLoading} />
+        <CampaignHistoryCard
+          history={history}
+          loading={historyLoading}
+          onCancel={cancelCampaign}
+          cancelingCampaignId={cancelingCampaignId}
+        />
       </BlockStack>
     );
   };
@@ -1293,9 +1331,13 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
 function CampaignHistoryCard({
   history,
   loading,
+  onCancel,
+  cancelingCampaignId,
 }: {
   history: MessagingHistoryPayload;
   loading: boolean;
+  onCancel?: (campaignId: number) => Promise<void>;
+  cancelingCampaignId?: number | null;
 }) {
   const campaigns = Array.isArray(history.campaigns) ? history.campaigns : [];
 
@@ -1337,7 +1379,21 @@ function CampaignHistoryCard({
                           {campaign.channel.toUpperCase()} · {campaign.subject ?? "No subject"}
                         </Text>
                       </BlockStack>
-                      <Badge tone={badgeToneForStatus(campaign.status)}>{campaign.status}</Badge>
+                      <InlineStack gap="200" blockAlign="center" wrap>
+                        <Badge tone={badgeToneForStatus(campaign.status)}>{campaign.status}</Badge>
+                        {campaign.cancelable && onCancel ? (
+                          <Button
+                            size="slim"
+                            loading={cancelingCampaignId === campaign.id}
+                            disabled={cancelingCampaignId !== null && cancelingCampaignId !== campaign.id}
+                            onClick={() => {
+                              void onCancel(campaign.id);
+                            }}
+                          >
+                            Cancel send
+                          </Button>
+                        ) : null}
+                      </InlineStack>
                     </InlineStack>
 
                     <InlineStack gap="200" wrap>

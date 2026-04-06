@@ -32,6 +32,7 @@ export interface MessagingEndpoints {
   preview_group?: string;
   send_individual?: string;
   send_group?: string;
+  cancel_campaign_base?: string;
   smoke_sms?: string;
   smoke_email?: string;
   history?: string;
@@ -144,9 +145,11 @@ export interface MessagingHistoryPayload {
     subject?: string | null;
     status_counts?: Record<string, number>;
     failure_codes?: Array<{ code: string; count: number }>;
+    scheduled_for?: string | null;
     queued_at?: string | null;
     completed_at?: string | null;
     created_at?: string | null;
+    cancelable?: boolean;
   }>;
 }
 

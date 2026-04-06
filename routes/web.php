@@ -774,6 +774,9 @@ Route::prefix('shopify/marketing')
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
+        Route::post('/funnel/event', [MarketingShopifyIntegrationController::class, 'logFunnelEvent'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('funnel.event');
         Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
         Route::get('/product-reviews/sitewide', [MarketingShopifyIntegrationController::class, 'sitewideReviewStatus'])->name('product-reviews.sitewide');
         Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
@@ -830,6 +833,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
+        Route::post('/funnel/event', [MarketingShopifyIntegrationController::class, 'logFunnelEvent'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('funnel.event');
         Route::get('/product-reviews/status', [MarketingShopifyIntegrationController::class, 'productReviewStatus'])->name('product-reviews.status');
         Route::get('/product-reviews/sitewide', [MarketingShopifyIntegrationController::class, 'sitewideReviewStatus'])->name('product-reviews.sitewide');
         Route::post('/product-reviews/submit', [MarketingShopifyIntegrationController::class, 'submitProductReview'])
@@ -955,6 +961,9 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/send/group', [ShopifyEmbeddedMessagingController::class, 'sendGroup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.send.group');
+        Route::post('/messaging/campaigns/{campaign}/cancel', [ShopifyEmbeddedMessagingController::class, 'cancelCampaign'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.campaigns.cancel');
         Route::post('/messaging/smoke/sms', [ShopifyEmbeddedMessagingController::class, 'smokeSms'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.smoke.sms');

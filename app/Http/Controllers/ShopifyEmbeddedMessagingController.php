@@ -109,6 +109,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                         'preview_group' => route('shopify.app.api.messaging.preview.group', [], false),
                         'send_individual' => route('shopify.app.api.messaging.send.individual', [], false),
                         'send_group' => route('shopify.app.api.messaging.send.group', [], false),
+                        'cancel_campaign_base' => route('shopify.app.api.messaging.campaigns.cancel', ['campaign' => '__CAMPAIGN__'], false),
                         'smoke_sms' => route('shopify.app.api.messaging.smoke.sms', [], false),
                         'smoke_email' => route('shopify.app.api.messaging.smoke.email', [], false),
                         'history' => route('shopify.app.api.messaging.history', [], false),
@@ -920,6 +921,47 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         return response()->json([
             'ok' => true,
+            'data' => $payload,
+        ]);
+    }
+
+    public function cancelCampaign(
+        Request $request,
+        string $campaign,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $campaignId = (int) $campaign;
+        if ($campaignId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Campaign could not be canceled.',
+                'errors' => [
+                    'campaign_id' => ['Campaign not found for this tenant.'],
+                ],
+            ], 422);
+        }
+
+        try {
+            $payload = $workspaceService->cancelCampaign(
+                tenantId: (int) $access['tenant_id'],
+                campaignId: $campaignId,
+                actorId: auth()->id() !== null ? (int) auth()->id() : null
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Campaign could not be canceled.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Pending campaign canceled.',
             'data' => $payload,
         ]);
     }

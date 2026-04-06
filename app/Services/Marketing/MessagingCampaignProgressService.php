@@ -48,7 +48,7 @@ class MessagingCampaignProgressService
         $resolvedCampaign->forceFill([
             'status' => $resolvedStatus,
             'status_counts' => $statusCounts,
-            'completed_at' => in_array($resolvedStatus, ['completed', 'partially_failed'], true)
+            'completed_at' => in_array($resolvedStatus, ['completed', 'partially_failed', 'canceled'], true)
                 ? ($resolvedCampaign->completed_at ?: now())
                 : null,
         ])->save();
@@ -88,6 +88,10 @@ class MessagingCampaignProgressService
 
         if ($existingStatus === 'test_sent' && $total === 0) {
             return 'test_sent';
+        }
+
+        if ($existingStatus === 'canceled' && ($total === 0 || (int) ($statusCounts['canceled'] ?? 0) > 0)) {
+            return 'canceled';
         }
 
         if ($total === 0) {
