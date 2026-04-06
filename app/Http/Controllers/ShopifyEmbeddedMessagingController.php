@@ -9,6 +9,7 @@ use App\Services\Marketing\MessageAnalyticsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
+use App\Services\Shopify\ShopifyStorefrontTrackingSetupService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
@@ -132,7 +133,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
         MessageAnalyticsService $messageAnalyticsService,
-        TenantEmailSettingsService $tenantEmailSettingsService
+        TenantEmailSettingsService $tenantEmailSettingsService,
+        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -166,6 +168,9 @@ class ShopifyEmbeddedMessagingController extends Controller
         $emailSettingsReady = (bool) data_get($emailSettings, 'email_enabled', false)
             && (bool) data_get($emailSettings, 'analytics_enabled', false)
             && trim((string) data_get($emailSettings, 'from_email', '')) !== '';
+        $storefrontTracking = $authorized
+            ? $probe->time('page_payload', fn (): array => $storefrontTrackingSetupService->build($store, $context['host'] ?? null))
+            : [];
         $setupGuide = [
             'status' => $setupStatus,
             'is_configured' => $setupStatus === 'configured',
@@ -193,13 +198,17 @@ class ShopifyEmbeddedMessagingController extends Controller
                         ? sprintf('%s tracked sends detected.', number_format($messagesSent))
                         : 'Send a message from Messaging workspace to seed analytics.',
                 ],
+                ...((array) ($storefrontTracking['steps'] ?? [])),
             ],
             'actions' => [
                 'settings_href' => route('shopify.app.settings', [], false),
                 'workspace_href' => route('shopify.app.messaging', [], false),
                 'complete_endpoint' => route('shopify.app.api.messaging.setup.complete', [], false),
+                'theme_editor_href' => data_get($storefrontTracking, 'actions.theme_editor_href'),
+                'customer_events_href' => data_get($storefrontTracking, 'actions.customer_events_href'),
             ],
             'can_mark_complete' => $hasMessagingAccess,
+            'tracking' => $storefrontTracking,
         ];
 
         $messageKey = trim((string) $request->query('message_key', ''));

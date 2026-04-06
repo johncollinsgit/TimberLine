@@ -39,6 +39,9 @@
         $setupSteps = collect((array) ($setupGuide['steps'] ?? []))
             ->filter(fn ($step) => is_array($step) && trim((string) ($step['label'] ?? '')) !== '')
             ->values();
+        $trackingSetup = is_array($setupGuide['tracking'] ?? null) ? $setupGuide['tracking'] : [];
+        $trackingCommands = is_array($trackingSetup['commands'] ?? null) ? $trackingSetup['commands'] : [];
+        $trackingProxy = is_array($trackingSetup['app_proxy'] ?? null) ? $trackingSetup['app_proxy'] : [];
 
         $filterKeys = [
             'date_from',
@@ -501,6 +504,12 @@
                     <div class="message-analytics-setup-actions">
                         <a class="message-analytics-button" href="{{ route('shopify.app.settings', $embeddedContextQuery, false) }}">Open Settings</a>
                         <a class="message-analytics-button" href="{{ route('shopify.app.messaging', $embeddedContextQuery, false) }}">Open Messaging</a>
+                        @if(filled(data_get($setupGuide, 'actions.theme_editor_href')))
+                            <a class="message-analytics-button" href="{{ (string) data_get($setupGuide, 'actions.theme_editor_href') }}" target="_top" rel="noreferrer">Open Theme Editor</a>
+                        @endif
+                        @if(filled(data_get($setupGuide, 'actions.customer_events_href')))
+                            <a class="message-analytics-button" href="{{ (string) data_get($setupGuide, 'actions.customer_events_href') }}" target="_top" rel="noreferrer">Open Customer Events</a>
+                        @endif
                         @if(! $setupConfigured && (bool) ($setupGuide['can_mark_complete'] ?? false))
                             <button
                                 type="button"
@@ -512,6 +521,27 @@
                             </button>
                         @endif
                     </div>
+
+                    @if($trackingSetup !== [])
+                        <div class="message-analytics-empty" aria-label="Storefront tracking deployment">
+                            <p class="message-analytics-muted">
+                                Storefront tracking now ships from this repo as a Shopify theme app embed plus a Shopify web pixel. Deploy the extensions, enable the Forestry embed in Theme Editor, then verify tagged storefront visits against <code>{{ (string) ($trackingProxy['health_path'] ?? '/apps/forestry/health') }}</code>.
+                            </p>
+                            @if($trackingCommands !== [])
+                                <div class="message-analytics-links">
+                                    @if(filled($trackingCommands['info'] ?? null))
+                                        <span class="message-analytics-status">{{ (string) $trackingCommands['info'] }}</span>
+                                    @endif
+                                    @if(filled($trackingCommands['dev'] ?? null))
+                                        <span class="message-analytics-status">{{ (string) $trackingCommands['dev'] }}</span>
+                                    @endif
+                                    @if(filled($trackingCommands['deploy'] ?? null))
+                                        <span class="message-analytics-status">{{ (string) $trackingCommands['deploy'] }}</span>
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+                    @endif
 
                     <p class="message-analytics-setup-inline-status" id="message-analytics-setup-status" hidden></p>
                 </div>
@@ -1077,7 +1107,7 @@
                             @php($funnelEvents = (array) ($funnel['events'] ?? []))
 
                             @if(array_sum(array_map(fn ($value) => (int) $value, $funnelSummary)) === 0)
-                                <p class="message-analytics-muted">No storefront funnel events have been captured for this message yet. Once the storefront tracker starts posting session/product/cart/checkout events, they will appear here.</p>
+                                <p class="message-analytics-muted">No storefront funnel events have been captured for this message yet. Once the Forestry storefront tracking embed and pixel are deployed and enabled, session, product, cart, and checkout events will appear here.</p>
                             @else
                                 <section class="message-analytics-meta-grid" aria-label="Storefront funnel summary">
                                     <article class="message-analytics-meta-card">

@@ -1,0 +1,53 @@
+<?php
+
+require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
+
+use App\Models\Tenant;
+use App\Models\TenantModuleEntitlement;
+
+beforeEach(function (): void {
+    $this->withoutVite();
+    config()->set('entitlements.default_plan', 'growth');
+});
+
+function grantMessagingModule(Tenant $tenant): void
+{
+    TenantModuleEntitlement::query()->updateOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'module_key' => 'messaging',
+        ],
+        [
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
+            'billing_status' => 'add_on_comped',
+            'price_override_cents' => 0,
+            'currency' => 'USD',
+            'entitlement_source' => 'test',
+            'price_source' => 'test',
+        ]
+    );
+}
+
+test('message analytics setup guide includes storefront tracking deployment guidance', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Tracking Tenant',
+        'slug' => 'storefront-tracking-tenant',
+    ]);
+    grantMessagingModule($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
+    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+        'host' => $host,
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Storefront app proxy runtime is ready')
+        ->assertSeeText('Theme app embed bundle is present in this repo')
+        ->assertSeeText('Web pixel bundle is present in this repo')
+        ->assertSeeText('Enable Forestry storefront tracking embed in Theme Editor')
+        ->assertSee('https://admin.shopify.com/store/theforestrystudio/themes/current/editor?context=apps', false)
+        ->assertSee('https://admin.shopify.com/store/theforestrystudio/settings/customer_events', false)
+        ->assertSeeText('npm run shopify:app:deploy');
+});

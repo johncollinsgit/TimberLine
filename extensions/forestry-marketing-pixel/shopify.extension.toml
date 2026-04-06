@@ -1,0 +1,3 @@
+name = "Forestry Marketing Pixel"
+type = "web_pixel_extension"
+runtime_context = "strict"

@@ -9,20 +9,19 @@
 ## Extension structure
 
 ```text
-extensions/forestry-marketing/
+extensions/forestry-marketing-embed/
   assets/
-    marketing-widgets.css
-    marketing-widgets.js
+    marketing-storefront-tracker.css
+    marketing-storefront-tracker.js
   blocks/
     marketing-app-embed.liquid
-    rewards-balance-block.liquid
-    available-rewards-block.liquid
-    reward-history-block.liquid
-    redeem-reward-block.liquid
-    sms-consent-block.liquid
-    compact-rewards-promo-block.liquid
   locales/
     en.default.json
+  shopify.extension.toml
+
+extensions/forestry-marketing-pixel/
+  src/
+    index.js
   shopify.extension.toml
 ```
 
@@ -52,7 +51,7 @@ Expected Shopify app proxy target:
 
 Current app proxy target in this repo:
 
-- `forestry-marketing-app/shopify.app.toml` -> `https://backstage.theforestrystudio.com/shopify/marketing/v1`
+- `shopify.app.toml` -> `https://backstage.theforestrystudio.com/shopify/marketing/v1`
 
 ## Backend route compatibility (minimal Stage 10 gap fixes)
 
@@ -275,10 +274,10 @@ Recommended placements:
 
 1. Ensure app proxy is configured in Shopify app admin with subpath `apps/forestry`.
 2. Start extension preview from app repo root:
-   - `shopify app dev --store modern-forestry-dev.myshopify.com`
-3. In Theme Editor, enable `Forestry marketing embed`.
-4. Add desired app blocks to account/cart/home/product templates.
-5. Validate state transitions against QA checklist below.
+   - `npm run shopify:app:dev -- --store modernforestry.myshopify.com`
+3. In Theme Editor, enable `Forestry storefront tracking`.
+4. In Shopify Customer Events, verify the Forestry marketing pixel is active after deploy.
+5. Open a tagged email-style landing URL and confirm Message Analytics starts showing storefront funnel events.
 
 ## QA checklist
 

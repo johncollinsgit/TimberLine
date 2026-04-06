@@ -1,0 +1,61 @@
+{% liquid
+  assign tracking_proxy_base = '/apps/forestry'
+  assign tracking_storage_key = block.settings.storage_key | default: 'forestry:marketing:attribution'
+  assign tracking_window_days = block.settings.attribution_window_days | default: 7
+  assign tracking_debug = block.settings.debug | default: false
+%}
+
+{{ 'marketing-storefront-tracker.css' | asset_url | stylesheet_tag }}
+
+<script id="forestry-storefront-tracking-config" type="application/json">
+  {
+    "proxyBase": {{ tracking_proxy_base | json }},
+    "healthEndpoint": {{ '/apps/forestry/health' | json }},
+    "funnelEndpoint": {{ '/apps/forestry/funnel/event' | json }},
+    "storageKey": {{ tracking_storage_key | json }},
+    "attributionWindowDays": {{ tracking_window_days | json }},
+    "debug": {{ tracking_debug | json }},
+    "shop": {{ shop.permanent_domain | default: shop.domain | json }},
+    "pageType": {{ request.page_type | json }},
+    "pageTitle": {{ page_title | strip | json }},
+    "customer": {% if customer %}{"id": {{ customer.id | json }}}{% else %}null{% endif %},
+    "product": {% if product %}{
+      "id": {{ product.id | json }},
+      "handle": {{ product.handle | json }},
+      "title": {{ product.title | json }},
+      "variantId": {% if product.selected_or_first_available_variant %}{{ product.selected_or_first_available_variant.id | json }}{% else %}null{% endif %}
+    }{% else %}null{% endif %},
+    "cart": {% if cart %}{"token": {{ cart.token | json }}}{% else %}null{% endif %}
+  }
+</script>
+<script src="{{ 'marketing-storefront-tracker.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Forestry storefront tracking",
+  "target": "body",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "debug",
+      "label": "Debug tracking in browser console",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "storage_key",
+      "label": "Attribution storage key",
+      "default": "forestry:marketing:attribution"
+    },
+    {
+      "type": "range",
+      "id": "attribution_window_days",
+      "label": "Attribution window (days)",
+      "min": 1,
+      "max": 30,
+      "step": 1,
+      "default": 7
+    }
+  ]
+}
+{% endschema %}

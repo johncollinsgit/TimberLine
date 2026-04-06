@@ -1,5 +1,23 @@
 # Modern Forestry Backstage
 
+## Shopify Storefront Tracking Bootstrap (2026-04-06)
+
+This repo now contains the Shopify CLI app container files needed for storefront tracking:
+- `shopify.app.toml`
+- `extensions/forestry-marketing-embed/` theme app extension
+- `extensions/forestry-marketing-pixel/` web pixel extension
+
+Operational flow:
+- deploy the Shopify extensions from this repo
+- enable `Forestry storefront tracking` in Shopify Theme Editor under `App embeds`
+- verify `/apps/forestry/health` on the storefront
+- open Message Analytics detail and confirm tagged visits create funnel events
+
+Useful commands:
+- `npm run shopify:app:info`
+- `npm run shopify:app:dev -- --store modernforestry.myshopify.com`
+- `npm run shopify:app:deploy`
+
 ## MT-4C Hardening Status (2026-03-30)
 
 MT-4C is now complete.
