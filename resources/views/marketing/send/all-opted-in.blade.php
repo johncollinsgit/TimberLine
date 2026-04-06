@@ -181,7 +181,7 @@
                         <div>
                             <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Optional Link</label>
                             <input type="url" name="cta_link" value="{{ old('cta_link') }}" class="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-950" placeholder="https://...">
-                            <div class="mt-2 text-xs text-zinc-500">If you add a link, it will be appended to the message body. No short-link helper exists in this repo today, so the full URL is used.</div>
+                            <div class="mt-2 text-xs text-zinc-500">If you add a link, it will be appended to the message body and routed through the normal tracking flow for supported sends.</div>
                             @error('cta_link')<div class="mt-2 text-sm text-rose-200">{{ $message }}</div>@enderror
                         </div>
                     </div>

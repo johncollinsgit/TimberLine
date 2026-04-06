@@ -1077,6 +1077,9 @@
                                                 <th>Order</th>
                                                 <th>Customer</th>
                                                 <th>Email</th>
+                                                <th>Evidence</th>
+                                                <th>Landing page</th>
+                                                <th>Referrer / source</th>
                                                 <th>URL</th>
                                                 <th>Clicked at</th>
                                                 <th>Ordered at</th>
@@ -1089,6 +1092,24 @@
                                                     <td>{{ (string) ($order['order_number'] ?? '#'.(int) ($order['order_id'] ?? 0)) }}</td>
                                                     <td>{{ (string) ($order['customer'] ?? 'Customer') }}</td>
                                                     <td>{{ (string) ($order['customer_email'] ?? '—') }}</td>
+                                                    <td>{{ (string) ($order['attribution_method'] ?? 'Attributed order') }}</td>
+                                                    <td>
+                                                        @if(filled($order['landing_page'] ?? null))
+                                                            <span title="{{ (string) $order['landing_page'] }}">{{ \Illuminate\Support\Str::limit((string) $order['landing_page'], 48) }}</span>
+                                                        @else
+                                                            —
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @php($sourceDetail = (string) ($order['referrer'] ?? $order['source_summary'] ?? ''))
+                                                        @if($sourceDetail !== '')
+                                                            <span title="{{ $sourceDetail }}">{{ \Illuminate\Support\Str::limit($sourceDetail, 44) }}</span>
+                                                        @elseif(filled($order['source_summary'] ?? null))
+                                                            <span title="{{ (string) $order['source_summary'] }}">{{ \Illuminate\Support\Str::limit((string) $order['source_summary'], 44) }}</span>
+                                                        @else
+                                                            —
+                                                        @endif
+                                                    </td>
                                                     <td>
                                                         @if(filled($order['url'] ?? null))
                                                             <span title="{{ (string) $order['url'] }}">{{ \Illuminate\Support\Str::limit((string) $order['url'], 52) }}</span>

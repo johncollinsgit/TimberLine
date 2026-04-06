@@ -7,7 +7,11 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingShortLink;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\User;
+use App\Services\Marketing\MarketingAllOptedInSendService;
+use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Services\Marketing\MessageAnalyticsService;
+use App\Services\Marketing\MessageAnalyticsShopifyOrderSignalService;
 use App\Services\Marketing\MessageClickTrackingService;
 use App\Services\Marketing\MessageOrderAttributionService;
 use Illuminate\Support\Facades\DB;
@@ -729,4 +733,165 @@ test('message analytics rolls batched sms deliveries into one logical run row', 
         ->and((string) data_get($detail, 'metadata.batch_scope', ''))->toBe('logical_run')
         ->and((int) ($detail['clicks'] ?? 0))->toBe(1)
         ->and((int) ($detail['attributed_orders'] ?? 0))->toBe(1);
+});
+
+test('all opted-in test sends route through tracked direct messaging flow', function () {
+    $actor = User::factory()->create([
+        'name' => 'Jamie Tester',
+        'email' => 'jamie.tester@example.com',
+    ]);
+
+    $capturedCalls = [];
+
+    $mock = \Mockery::mock(MarketingDirectMessagingService::class);
+    $mock->shouldReceive('send')
+        ->twice()
+        ->andReturnUsing(function (string $channel, array $recipients, string $message, array $options) use (&$capturedCalls): array {
+            $capturedCalls[] = [
+                'channel' => $channel,
+                'recipients' => $recipients,
+                'message' => $message,
+                'options' => $options,
+            ];
+
+            return [
+                'processed' => 1,
+                'sent' => 1,
+                'failed' => 0,
+                'skipped' => 0,
+                'dry_run' => 0,
+                'batch_id' => 'test-'.$channel.'-batch',
+                'first_error_code' => null,
+                'first_error_message' => null,
+            ];
+        });
+
+    app()->instance(MarketingDirectMessagingService::class, $mock);
+
+    $service = app(MarketingAllOptedInSendService::class);
+    $result = $service->sendTest($actor, [
+        'channel' => 'both',
+        'tenant_id' => null,
+        'sms_body' => 'Spring drop live now',
+        'email_subject' => 'Spring drop',
+        'email_body' => 'See the spring drop',
+        'cta_link' => 'https://theforestrystudio.com/collections/spring-collection',
+        'sender_key' => 'default',
+        'test_phone' => '+15555550123',
+        'test_email' => 'jamie.tester@example.com',
+    ]);
+
+    expect($capturedCalls)->toHaveCount(2)
+        ->and($capturedCalls[0]['options']['source_label'] ?? null)->toBe('all_opted_in_test')
+        ->and($capturedCalls[1]['options']['source_label'] ?? null)->toBe('all_opted_in_test')
+        ->and((string) data_get($capturedCalls[0], 'recipients.0.source_type', ''))->toBe('all_opted_in_test')
+        ->and((string) data_get($capturedCalls[1], 'recipients.0.source_type', ''))->toBe('all_opted_in_test')
+        ->and((bool) data_get($result, 'results.sms.success'))->toBeTrue()
+        ->and((bool) data_get($result, 'results.email.success'))->toBeTrue()
+        ->and((string) data_get($result, 'results.sms.status'))->toBe('sent')
+        ->and((string) data_get($result, 'results.email.status'))->toBe('sent');
+});
+
+test('message analytics detail surfaces refreshed shopify order signals for attributed orders', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Message Analytics Shopify Signal Tenant',
+        'slug' => 'message-analytics-shopify-signal-tenant',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Morgan',
+        'last_name' => 'Signal',
+        'email' => 'morgan.signal@example.com',
+        'normalized_email' => 'morgan.signal@example.com',
+        'phone' => '+15558889999',
+        'normalized_phone' => '+15558889999',
+        'accepts_sms_marketing' => true,
+        'accepts_email_marketing' => true,
+    ]);
+
+    $delivery = MarketingMessageDelivery::query()->create([
+        'campaign_id' => null,
+        'campaign_recipient_id' => null,
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'batch_id' => 'sms-signal-batch-1',
+        'source_label' => 'shopify_embedded_messaging_group',
+        'message_subject' => 'Spring collection signal',
+        'channel' => 'sms',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_SIGNAL_1',
+        'to_phone' => '+15558889999',
+        'from_identifier' => '+15550001111',
+        'attempt_number' => 1,
+        'rendered_message' => 'Spring signal text',
+        'send_status' => 'delivered',
+        'provider_payload' => [],
+        'sent_at' => now()->subHours(8),
+        'delivered_at' => now()->subHours(8),
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 987654321,
+        'order_number' => '#SMS-4004',
+        'customer_name' => 'Morgan Signal',
+        'status' => 'new',
+        'ordered_at' => now()->subHours(5),
+        'tenant_id' => $tenant->id,
+        'total_price' => 64.25,
+    ]);
+
+    MarketingMessageOrderAttribution::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'order_id' => $order->id,
+        'marketing_profile_id' => $profile->id,
+        'marketing_email_delivery_id' => null,
+        'marketing_message_delivery_id' => $delivery->id,
+        'marketing_message_engagement_event_id' => null,
+        'channel' => 'sms',
+        'attribution_model' => 'last_click',
+        'attribution_window_days' => 7,
+        'attributed_url' => 'https://theforestrystudio.com/collections/spring-collection',
+        'normalized_url' => 'https://theforestrystudio.com/collections/spring-collection',
+        'click_occurred_at' => now()->subHours(7),
+        'order_occurred_at' => now()->subHours(5),
+        'revenue_cents' => 6425,
+        'metadata' => ['attribution_rule' => 'landing_signal_message_url_match_without_click'],
+    ]);
+
+    $signalMock = \Mockery::mock(MessageAnalyticsShopifyOrderSignalService::class);
+    $signalMock->shouldReceive('refreshForOrders')
+        ->once()
+        ->andReturn([
+            (int) $order->id => [
+                'landing_site' => 'https://theforestrystudio.com/collections/spring-collection',
+                'referring_site' => 'https://m.theforestrystudio.com/go/abc123',
+                'source_name' => 'shopify',
+                'utm_source' => 'sms',
+                'utm_medium' => 'text',
+            ],
+        ]);
+
+    app()->instance(MessageAnalyticsShopifyOrderSignalService::class, $signalMock);
+
+    $service = app(MessageAnalyticsService::class);
+    $filters = $service->normalizeFilters([
+        'date_from' => now()->subDays(3)->toDateString(),
+        'date_to' => now()->toDateString(),
+        'channel' => 'sms',
+    ]);
+    $payload = $service->index($tenant->id, 'retail', $filters);
+    $row = collect($payload['messages']->items())->first();
+
+    $detail = $service->detail($tenant->id, 'retail', (string) ($row['message_key'] ?? ''));
+
+    expect($detail)->toBeArray()
+        ->and((string) data_get($detail, 'orders.0.landing_page', ''))->toContain('/collections/spring-collection')
+        ->and((string) data_get($detail, 'orders.0.referrer', ''))->toContain('/go/abc123')
+        ->and((string) data_get($detail, 'orders.0.source_summary', ''))->toContain('shopify')
+        ->and((string) data_get($detail, 'orders.0.attribution_method', ''))->toBe('Landing-page signal');
 });

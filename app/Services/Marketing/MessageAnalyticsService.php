@@ -8,6 +8,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
+use App\Models\Order;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -18,7 +19,8 @@ use Illuminate\Support\Str;
 class MessageAnalyticsService
 {
     public function __construct(
-        protected MessageLinkAggregationService $messageLinkAggregationService
+        protected MessageLinkAggregationService $messageLinkAggregationService,
+        protected MessageAnalyticsShopifyOrderSignalService $messageAnalyticsShopifyOrderSignalService
     ) {}
 
     /**
@@ -312,7 +314,7 @@ class MessageAnalyticsService
                     $query->whereIn('marketing_message_delivery_id', $deliveryIds->all());
                 })
                 ->with([
-                    'order:id,tenant_id,order_number,order_label,customer_name,total_price,ordered_at,created_at',
+                    'order:id,tenant_id,order_number,order_label,customer_name,total_price,ordered_at,created_at,attribution_meta,shopify_store_key,shopify_store,shopify_order_id',
                     'profile:id,tenant_id,first_name,last_name,email,phone',
                 ])
                 ->orderByDesc('order_occurred_at')
@@ -321,9 +323,16 @@ class MessageAnalyticsService
             : collect();
 
         $links = $this->messageLinkAggregationService->aggregate($clickEvents, $orderAttributions);
+        $orderSignalMetaByOrderId = $this->messageAnalyticsShopifyOrderSignalService->refreshForOrders(
+            $orderAttributions
+                ->pluck('order')
+                ->filter(fn ($order): bool => $order instanceof Order)
+                ->values()
+                ->all()
+        );
 
         $orderRows = $orderAttributions
-            ->map(function (MarketingMessageOrderAttribution $attribution) use ($profileMap): array {
+            ->map(function (MarketingMessageOrderAttribution $attribution) use ($profileMap, $orderSignalMetaByOrderId): array {
                 $profile = $attribution->profile;
                 $profileId = (int) ($attribution->marketing_profile_id ?? 0);
                 if (! $profile instanceof MarketingProfile && $profileId > 0) {
@@ -331,12 +340,16 @@ class MessageAnalyticsService
                 }
 
                 $order = $attribution->order;
+                $orderId = (int) ($attribution->order_id ?? 0);
+                $sourceMeta = $order instanceof Order
+                    ? ($orderSignalMetaByOrderId[$orderId] ?? (is_array($order->attribution_meta ?? null) ? $order->attribution_meta : []))
+                    : [];
                 $profileName = $profile instanceof MarketingProfile
                     ? trim((string) $profile->first_name.' '.(string) $profile->last_name)
                     : '';
 
                 return [
-                    'order_id' => (int) ($attribution->order_id ?? 0),
+                    'order_id' => $orderId,
                     'order_number' => $this->nullableString($order?->order_number) ?? $this->nullableString($order?->order_label),
                     'customer' => $profileName !== ''
                         ? $profileName
@@ -346,6 +359,12 @@ class MessageAnalyticsService
                     'click_at' => optional($attribution->click_occurred_at)->toIso8601String(),
                     'ordered_at' => optional($attribution->order_occurred_at)->toIso8601String(),
                     'revenue_cents' => (int) ($attribution->revenue_cents ?? 0),
+                    'landing_page' => $this->orderLandingPage($sourceMeta),
+                    'referrer' => $this->orderReferrer($sourceMeta),
+                    'source_summary' => $this->orderSourceSummary($sourceMeta),
+                    'attribution_method' => $this->attributionRuleLabel(
+                        $this->nullableString(data_get($attribution->metadata, 'attribution_rule'))
+                    ),
                 ];
             })
             ->take(120)
@@ -2386,6 +2405,73 @@ class MessageAnalyticsService
         }
 
         return $digits !== '' ? $digits : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $sourceMeta
+     */
+    protected function orderLandingPage(array $sourceMeta): ?string
+    {
+        return $this->nullableString($sourceMeta['landing_page'] ?? null)
+            ?? $this->nullableString($sourceMeta['landing_site'] ?? null)
+            ?? $this->nullableString($sourceMeta['source_url'] ?? null);
+    }
+
+    /**
+     * @param  array<string,mixed>  $sourceMeta
+     */
+    protected function orderReferrer(array $sourceMeta): ?string
+    {
+        return $this->nullableString($sourceMeta['referrer'] ?? null)
+            ?? $this->nullableString($sourceMeta['referring_site'] ?? null);
+    }
+
+    /**
+     * @param  array<string,mixed>  $sourceMeta
+     */
+    protected function orderSourceSummary(array $sourceMeta): ?string
+    {
+        $parts = collect([
+            $this->nullableString($sourceMeta['source_name'] ?? null),
+            $this->utmSummary($sourceMeta),
+        ])
+            ->filter(fn (?string $value): bool => $value !== null)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * @param  array<string,mixed>  $sourceMeta
+     */
+    protected function utmSummary(array $sourceMeta): ?string
+    {
+        $source = $this->nullableString($sourceMeta['utm_source'] ?? null);
+        $medium = $this->nullableString($sourceMeta['utm_medium'] ?? null);
+
+        if ($source === null && $medium === null) {
+            return null;
+        }
+
+        return trim(implode(' / ', array_filter([$source, $medium], fn (?string $value): bool => $value !== null)));
+    }
+
+    protected function attributionRuleLabel(?string $rule): string
+    {
+        return match ($rule) {
+            'last_click_within_window' => 'Tracked click',
+            'coupon_signal_message_match_without_click' => 'Coupon signal',
+            'landing_signal_message_url_match_without_click' => 'Landing-page signal',
+            default => $rule !== null
+                ? Str::of($rule)->replace('_', ' ')->title()->value()
+                : 'Attributed order',
+        };
     }
 
     protected function nullableString(mixed $value): ?string

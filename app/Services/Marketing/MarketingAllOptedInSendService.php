@@ -19,9 +19,8 @@ class MarketingAllOptedInSendService
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingSmsExecutionService $smsExecutionService,
         protected MarketingEmailExecutionService $emailExecutionService,
-        protected TwilioSmsService $twilioSmsService,
-        protected SendGridEmailService $sendGridEmailService,
         protected MarketingTenantOwnershipService $ownershipService,
+        protected MarketingDirectMessagingService $directMessagingService,
     ) {
     }
 
@@ -122,14 +121,27 @@ class MarketingAllOptedInSendService
                 ]);
             }
 
-            $results['sms'] = $this->twilioSmsService->sendSms(
-                $toPhone,
+            $summary = $this->directMessagingService->send(
+                'sms',
+                [[
+                    'profile_id' => null,
+                    'name' => $this->nullableString($actor->name ?? null),
+                    'email' => $this->nullableString($actor->email ?? null),
+                    'phone' => $toPhone,
+                    'normalized_phone' => $toPhone,
+                    'source_type' => 'all_opted_in_test',
+                ]],
                 $this->renderPreviewText((string) ($payload['sms_body'] ?? ''), $previewProfile, (string) ($payload['cta_link'] ?? ''), 'sms'),
                 [
                     'dry_run' => false,
+                    'actor_id' => (int) $actor->id,
                     'sender_key' => $this->nullableString($payload['sender_key'] ?? null),
+                    'tenant_id' => $tenantId,
+                    'source_label' => 'all_opted_in_test',
                 ]
             );
+
+            $results['sms'] = $this->directSendTestResult('sms', $summary);
         }
 
         if (in_array('email', $channels, true)) {
@@ -147,23 +159,59 @@ class MarketingAllOptedInSendService
                 ]);
             }
 
-            $results['email'] = $this->sendGridEmailService->sendEmail(
-                $toEmail,
-                $subject,
+            $summary = $this->directMessagingService->send(
+                'email',
+                [[
+                    'profile_id' => null,
+                    'name' => $this->nullableString($actor->name ?? null),
+                    'email' => $toEmail,
+                    'phone' => null,
+                    'normalized_phone' => null,
+                    'source_type' => 'all_opted_in_test',
+                ]],
                 $this->renderPreviewText((string) ($payload['email_body'] ?? ''), $previewProfile, (string) ($payload['cta_link'] ?? ''), 'email'),
                 [
                     'dry_run' => false,
+                    'actor_id' => (int) $actor->id,
                     'tenant_id' => $tenantId,
-                    'campaign_type' => 'all_opted_in_test',
-                    'template_key' => 'all_opted_in_preview',
-                    'categories' => ['all-opted-in-test'],
+                    'subject' => $subject,
+                    'source_label' => 'all_opted_in_test',
                 ]
             );
+
+            $results['email'] = $this->directSendTestResult('email', $summary);
         }
 
         return [
             'selection' => $selection,
             'results' => $results,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $summary
+     * @return array<string,mixed>
+     */
+    protected function directSendTestResult(string $channel, array $summary): array
+    {
+        $sent = (int) ($summary['sent'] ?? 0);
+        $failed = (int) ($summary['failed'] ?? 0);
+        $skipped = (int) ($summary['skipped'] ?? 0);
+        $success = $sent > 0 && $failed === 0;
+
+        return [
+            'success' => $success,
+            'status' => $success
+                ? 'sent'
+                : ($failed > 0 ? 'failed' : ($skipped > 0 ? 'skipped' : 'unknown')),
+            'error_code' => $summary['first_error_code'] ?? null,
+            'error_message' => $summary['first_error_message'] ?? null,
+            'batch_id' => $summary['batch_id'] ?? null,
+            'processed' => (int) ($summary['processed'] ?? 0),
+            'sent' => $sent,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'channel' => $channel,
         ];
     }
 
