@@ -43,7 +43,7 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
     ShopifyStore::query()
         ->where('store_key', 'retail')
         ->update([
-            'scopes' => 'read_products,read_pixels,write_pixels,read_customer_events',
+            'scopes' => 'read_products',
         ]);
 
     $graphqlCalls = [];
@@ -55,6 +55,20 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
 
         $graphqlCalls[] = $request->data();
         $query = (string) data_get($request->data(), 'query', '');
+
+        if (str_contains($query, 'query BackstageGrantedScopes')) {
+            return Http::response([
+                'data' => [
+                    'currentAppInstallation' => [
+                        'accessScopes' => [
+                            ['handle' => 'read_pixels'],
+                            ['handle' => 'write_pixels'],
+                            ['handle' => 'read_customer_events'],
+                        ],
+                    ],
+                ],
+            ]);
+        }
 
         if (str_contains($query, 'query BackstageWebPixelStatus')) {
             return Http::response([
@@ -102,5 +116,5 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
         ->assertJsonPath('tracking.web_pixel.status', 'connected')
         ->assertJsonPath('tracking.web_pixel.settings.appProxyBase', '/apps/forestry');
 
-    expect($graphqlCalls)->toHaveCount(2);
+    expect($graphqlCalls)->toHaveCount(3);
 });

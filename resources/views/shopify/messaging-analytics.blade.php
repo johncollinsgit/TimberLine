@@ -529,6 +529,9 @@
                             <p class="message-analytics-muted">
                                 Storefront tracking now ships from this repo as a Shopify theme app embed plus a Shopify web pixel. Deploy the extensions, enable the Forestry embed in Theme Editor, then verify tagged storefront visits against <code>{{ (string) ($trackingProxy['health_path'] ?? '/apps/forestry/health') }}</code>.
                             </p>
+                            <p class="message-analytics-muted">
+                                If Shopify shows a legacy <strong>forestry-marketing-app</strong> embed alongside <strong>Modern Forestry Backstage</strong>, leave the legacy one off. The current tracking path is <strong>Forestry tracking</strong> under Modern Forestry Backstage.
+                            </p>
                             @if($trackingWebPixel !== [])
                                 <div class="message-analytics-links">
                                     <span class="message-analytics-status">

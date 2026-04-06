@@ -170,7 +170,7 @@ class ShopifyWebPixelConnectionService
      */
     protected function scopeStatus(array $store): array
     {
-        $grantedScopes = $this->normalizeScopes($store['scopes'] ?? []);
+        $grantedScopes = $this->resolveGrantedScopes($store);
         $missingScopes = array_values(array_diff($this->requiredScopes, $grantedScopes));
 
         if ($missingScopes !== []) {
@@ -179,6 +179,7 @@ class ShopifyWebPixelConnectionService
                 'status' => 'missing_scopes',
                 'connected' => false,
                 'label' => 'Scope update needed',
+                'granted_scopes' => $grantedScopes,
                 'missing_scopes' => $missingScopes,
                 'message' => 'This shop must reauthorize Backstage with: '.implode(', ', $missingScopes).'.',
             ];
@@ -188,6 +189,7 @@ class ShopifyWebPixelConnectionService
             'ok' => true,
             'status' => 'scopes_ready',
             'connected' => false,
+            'granted_scopes' => $grantedScopes,
             'message' => 'Pixel scopes are ready.',
         ];
     }
@@ -357,6 +359,59 @@ GRAPHQL, [
             static fn ($scope): string => strtolower(trim((string) $scope)),
             $values
         ))));
+    }
+
+    /**
+     * @param  array<string,mixed>  $store
+     * @return array<int,string>
+     */
+    protected function resolveGrantedScopes(array $store): array
+    {
+        try {
+            $liveScopes = $this->queryGrantedScopes($this->client($store));
+            if ($liveScopes !== []) {
+                return $liveScopes;
+            }
+        } catch (Throwable) {
+            // Fall back to the last stored scope snapshot when Shopify scope lookup fails.
+        }
+
+        return $this->normalizeScopes($store['scopes'] ?? []);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function queryGrantedScopes(ShopifyGraphqlClient $client): array
+    {
+        $data = $client->query(<<<'GRAPHQL'
+query BackstageGrantedScopes {
+  currentAppInstallation {
+    accessScopes {
+      handle
+    }
+  }
+}
+GRAPHQL);
+
+        $rows = $data['currentAppInstallation']['accessScopes'] ?? null;
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $handles = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $handle = trim(strtolower((string) ($row['handle'] ?? '')));
+            if ($handle !== '') {
+                $handles[] = $handle;
+            }
+        }
+
+        return array_values(array_unique($handles));
     }
 
     /**
