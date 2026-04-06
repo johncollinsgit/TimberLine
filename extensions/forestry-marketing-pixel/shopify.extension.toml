@@ -1,3 +1,4 @@
 name = "Forestry Marketing Pixel"
+uid = "e92e36de-9e4d-2b33-04fd-3f4597052f7e4e63125d"
 type = "web_pixel_extension"
 runtime_context = "strict"
