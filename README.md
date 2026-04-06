@@ -547,6 +547,13 @@ Optional test prerequisites:
 
 These are only needed for CI test/build when private Flux packages are required.
 
+What Flux is doing in this project:
+- The app depends on the private `livewire/flux` UI package from Composer.
+- Flux provides the Blade UI components used throughout the Laravel/Livewire shell, including login/auth screens, settings pages, headers, sidebars, nav, modals, badges, buttons, inputs, and other shared interface pieces.
+- In this repo you can see that dependency in `composer.json`, the CSS import in `resources/css/app.css`, and many `<flux:...>` components under `resources/views/`.
+- Practically, buying Flux is paying for the UI component library and private package access that this app already uses, plus the ability for GitHub Actions and fresh environments to run `composer install` without failing on that private dependency.
+- If you do not want to buy Flux, the alternative is to remove/replace those Flux components and styles across the app with another UI system.
+
 Server prerequisites:
 - Git with the app already cloned at `DEPLOY_PATH`
 - PHP 8.2+ and required extensions
