@@ -8,6 +8,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -233,6 +234,7 @@ class MessageAnalyticsService
             'opens_timeline' => [],
             'links' => [],
             'orders' => [],
+            'funnel' => $this->emptyFunnelDetail(),
         ];
 
         $engagementEvents = Schema::hasTable('marketing_message_engagement_events')
@@ -437,6 +439,14 @@ class MessageAnalyticsService
         $detail['opens_timeline'] = $openTimeline;
         $detail['links'] = $links;
         $detail['orders'] = $orderRows;
+        $detail['funnel'] = $this->storefrontFunnelDetail(
+            tenantId: $tenantId,
+            storeKey: $normalizedStoreKey,
+            channel: $channel,
+            deliveries: $deliveries,
+            detail: $detail,
+            orderRows: $orderRows
+        );
 
         return $detail;
     }
@@ -2285,6 +2295,248 @@ class MessageAnalyticsService
         return $counts;
     }
 
+    protected function emptyFunnelDetail(): array
+    {
+        return [
+            'summary' => [
+                'sessions_started' => 0,
+                'landing_page_views' => 0,
+                'product_views' => 0,
+                'wishlist_adds' => 0,
+                'add_to_cart' => 0,
+                'checkout_started' => 0,
+                'checkout_completed' => 0,
+                'checkout_abandoned_candidates' => 0,
+            ],
+            'products' => [],
+            'events' => [],
+        ];
+    }
+
+    /**
+     * @param  Collection<int,mixed>  $deliveries
+     * @param  array<string,mixed>  $detail
+     * @param  array<int,array<string,mixed>>  $orderRows
+     * @return array<string,mixed>
+     */
+    protected function storefrontFunnelDetail(
+        int $tenantId,
+        string $storeKey,
+        string $channel,
+        Collection $deliveries,
+        array $detail,
+        array $orderRows
+    ): array {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return $this->emptyFunnelDetail();
+        }
+
+        $deliveryIds = $deliveries
+            ->pluck('id')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->values()
+            ->all();
+        $campaignIds = $deliveries
+            ->map(fn ($row): int => (int) data_get($row, 'raw_payload.campaign_id', 0))
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
+        $profileIds = $deliveries
+            ->pluck('marketing_profile_id')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($deliveryIds === [] && $campaignIds === []) {
+            return $this->emptyFunnelDetail();
+        }
+
+        $sentAt = $this->dateOrNull($detail['sent_at'] ?? null) ?? now()->toImmutable()->subDay();
+        $lastSentAt = $this->dateOrNull($detail['last_sent_at'] ?? null) ?? $sentAt;
+        $windowDays = max(1, (int) config('marketing.messaging.attribution_window_days', 7));
+
+        $events = MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
+            ->whereIn('event_type', [
+                'session_started',
+                'landing_page_viewed',
+                'product_viewed',
+                'wishlist_added',
+                'add_to_cart',
+                'checkout_started',
+                'checkout_completed',
+            ])
+            ->whereBetween('occurred_at', [$sentAt->subHour(), $lastSentAt->addDays($windowDays)])
+            ->orderByDesc('occurred_at')
+            ->get([
+                'id',
+                'event_type',
+                'marketing_profile_id',
+                'source_surface',
+                'meta',
+                'occurred_at',
+            ])
+            ->filter(function (MarketingStorefrontEvent $event) use ($storeKey, $deliveryIds, $campaignIds, $profileIds, $channel): bool {
+                return $this->storefrontEventMatchesMessage($event, $storeKey, $deliveryIds, $campaignIds, $profileIds, $channel);
+            })
+            ->values();
+
+        if ($events->isEmpty()) {
+            return $this->emptyFunnelDetail();
+        }
+
+        $summary = [
+            'sessions_started' => (int) $events->where('event_type', 'session_started')->count(),
+            'landing_page_views' => (int) $events->where('event_type', 'landing_page_viewed')->count(),
+            'product_views' => (int) $events->where('event_type', 'product_viewed')->count(),
+            'wishlist_adds' => (int) $events->where('event_type', 'wishlist_added')->count(),
+            'add_to_cart' => (int) $events->where('event_type', 'add_to_cart')->count(),
+            'checkout_started' => (int) $events->where('event_type', 'checkout_started')->count(),
+            'checkout_completed' => (int) $events->where('event_type', 'checkout_completed')->count(),
+            'checkout_abandoned_candidates' => 0,
+        ];
+
+        $checkoutStartedKeys = $events
+            ->where('event_type', 'checkout_started')
+            ->map(fn (MarketingStorefrontEvent $event): ?string => $this->storefrontJourneyKey((array) ($event->meta ?? [])))
+            ->filter()
+            ->unique()
+            ->values();
+        $checkoutCompletedKeys = $events
+            ->where('event_type', 'checkout_completed')
+            ->map(fn (MarketingStorefrontEvent $event): ?string => $this->storefrontJourneyKey((array) ($event->meta ?? [])))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $summary['checkout_abandoned_candidates'] = max(
+            0,
+            $checkoutStartedKeys->diff($checkoutCompletedKeys)->count()
+        );
+
+        $products = $events
+            ->filter(function (MarketingStorefrontEvent $event): bool {
+                $meta = is_array($event->meta ?? null) ? $event->meta : [];
+
+                return $this->nullableString($meta['product_id'] ?? null) !== null
+                    || $this->nullableString($meta['product_title'] ?? null) !== null
+                    || $this->nullableString($meta['mf_product_id'] ?? null) !== null;
+            })
+            ->groupBy(function (MarketingStorefrontEvent $event): string {
+                $meta = is_array($event->meta ?? null) ? $event->meta : [];
+
+                return $this->nullableString($meta['product_id'] ?? null)
+                    ?? $this->nullableString($meta['mf_product_id'] ?? null)
+                    ?? $this->nullableString($meta['product_title'] ?? null)
+                    ?? 'product';
+            })
+            ->map(function (Collection $group, string $productKey): array {
+                /** @var MarketingStorefrontEvent|null $sample */
+                $sample = $group->first();
+                $meta = is_array($sample?->meta ?? null) ? $sample->meta : [];
+                $views = (int) $group->where('event_type', 'product_viewed')->count();
+                $wishlistAdds = (int) $group->where('event_type', 'wishlist_added')->count();
+                $addToCart = (int) $group->where('event_type', 'add_to_cart')->count();
+
+                return [
+                    'product_key' => $productKey,
+                    'product_id' => $this->nullableString($meta['product_id'] ?? null) ?? $this->nullableString($meta['mf_product_id'] ?? null),
+                    'product_title' => $this->nullableString($meta['product_title'] ?? null) ?? 'Product',
+                    'product_handle' => $this->nullableString($meta['product_handle'] ?? null),
+                    'product_views' => $views,
+                    'wishlist_adds' => $wishlistAdds,
+                    'add_to_cart' => $addToCart,
+                    'score' => ($addToCart * 100) + ($wishlistAdds * 10) + $views,
+                ];
+            })
+            ->sortByDesc('score')
+            ->take(8)
+            ->map(function (array $row): array {
+                unset($row['score']);
+
+                return $row;
+            })
+            ->values()
+            ->all();
+
+        $recentEvents = $events
+            ->take(20)
+            ->map(function (MarketingStorefrontEvent $event): array {
+                $meta = is_array($event->meta ?? null) ? $event->meta : [];
+
+                return [
+                    'event_type' => (string) $event->event_type,
+                    'occurred_at' => optional($event->occurred_at)->toIso8601String(),
+                    'product_title' => $this->nullableString($meta['product_title'] ?? null),
+                    'product_id' => $this->nullableString($meta['product_id'] ?? null) ?? $this->nullableString($meta['mf_product_id'] ?? null),
+                    'page_path' => $this->nullableString($meta['page_path'] ?? null) ?? $this->nullableString($meta['landing_path'] ?? null),
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'summary' => $summary,
+            'products' => $products,
+            'events' => $recentEvents,
+            'orders_count' => count($orderRows),
+        ];
+    }
+
+    /**
+     * @param  array<int,int>  $deliveryIds
+     * @param  array<int,int>  $campaignIds
+     * @param  array<int,int>  $profileIds
+     */
+    protected function storefrontEventMatchesMessage(
+        MarketingStorefrontEvent $event,
+        string $storeKey,
+        array $deliveryIds,
+        array $campaignIds,
+        array $profileIds,
+        string $channel
+    ): bool {
+        $meta = is_array($event->meta ?? null) ? $event->meta : [];
+        $eventStoreKey = $this->nullableString($meta['store_key'] ?? null);
+        if ($eventStoreKey !== null && $eventStoreKey !== $storeKey) {
+            return false;
+        }
+
+        $eventChannel = strtolower(trim((string) ($meta['mf_channel'] ?? '')));
+        if ($eventChannel !== '' && $eventChannel !== strtolower($channel)) {
+            return false;
+        }
+
+        $deliveryId = $this->positiveInt($meta['mf_delivery_id'] ?? null);
+        if ($deliveryId !== null && in_array($deliveryId, $deliveryIds, true)) {
+            return true;
+        }
+
+        $campaignId = $this->positiveInt($meta['mf_campaign_id'] ?? null);
+        $profileId = $this->positiveInt($meta['mf_profile_id'] ?? null) ?? $this->positiveInt($event->marketing_profile_id ?? null);
+        if ($campaignId !== null && in_array($campaignId, $campaignIds, true)) {
+            return $profileId === null || in_array($profileId, $profileIds, true);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function storefrontJourneyKey(array $meta): ?string
+    {
+        return $this->nullableString($meta['checkout_token'] ?? null)
+            ?? $this->nullableString($meta['session_key'] ?? null)
+            ?? ($this->positiveInt($meta['mf_delivery_id'] ?? null) !== null
+                ? 'delivery:' . (string) $this->positiveInt($meta['mf_delivery_id'] ?? null)
+                : null);
+    }
+
     protected function dateOrNull(mixed $value): ?CarbonImmutable
     {
         if ($value instanceof CarbonImmutable) {
@@ -2479,5 +2731,12 @@ class MessageAnalyticsService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 }

@@ -1066,6 +1066,120 @@
                         </article>
 
                         <article class="message-analytics-card">
+                            <div>
+                                <h4>Storefront funnel</h4>
+                                <p class="message-analytics-muted">Future tracked email sessions can show what happened after the click: landing, product interest, cart activity, and checkout progression.</p>
+                            </div>
+
+                            @php($funnel = is_array($detail['funnel'] ?? null) ? $detail['funnel'] : ['summary' => [], 'products' => [], 'events' => []])
+                            @php($funnelSummary = is_array($funnel['summary'] ?? null) ? $funnel['summary'] : [])
+                            @php($funnelProducts = (array) ($funnel['products'] ?? []))
+                            @php($funnelEvents = (array) ($funnel['events'] ?? []))
+
+                            @if(array_sum(array_map(fn ($value) => (int) $value, $funnelSummary)) === 0)
+                                <p class="message-analytics-muted">No storefront funnel events have been captured for this message yet. Once the storefront tracker starts posting session/product/cart/checkout events, they will appear here.</p>
+                            @else
+                                <section class="message-analytics-meta-grid" aria-label="Storefront funnel summary">
+                                    <article class="message-analytics-meta-card">
+                                        <span>Sessions started</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['sessions_started'] ?? 0)) }}</strong>
+                                    </article>
+                                    <article class="message-analytics-meta-card">
+                                        <span>Landing page views</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['landing_page_views'] ?? 0)) }}</strong>
+                                    </article>
+                                    <article class="message-analytics-meta-card">
+                                        <span>Product views</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['product_views'] ?? 0)) }}</strong>
+                                    </article>
+                                    <article class="message-analytics-meta-card">
+                                        <span>Wishlist adds</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['wishlist_adds'] ?? 0)) }}</strong>
+                                    </article>
+                                    <article class="message-analytics-meta-card">
+                                        <span>Add to cart</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['add_to_cart'] ?? 0)) }}</strong>
+                                    </article>
+                                    <article class="message-analytics-meta-card">
+                                        <span>Checkout started</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['checkout_started'] ?? 0)) }}</strong>
+                                    </article>
+                                </section>
+
+                                <div class="message-analytics-empty">
+                                    <p class="message-analytics-muted">
+                                        Candidate checkout abandonments: {{ number_format((int) ($funnelSummary['checkout_abandoned_candidates'] ?? 0)) }}.
+                                        This is directional until storefront completion events are fully wired for every path.
+                                    </p>
+                                </div>
+
+                                <section class="message-analytics-detail-grid">
+                                    <article class="message-analytics-card">
+                                        <h4>Top products</h4>
+                                        @if(count($funnelProducts) === 0)
+                                            <p class="message-analytics-muted">No product-specific storefront events have been recorded for this message yet.</p>
+                                        @else
+                                            <div class="message-analytics-table-wrap">
+                                                <table class="message-analytics-table" style="min-width:640px;" aria-label="Storefront funnel top products">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Product</th>
+                                                            <th>ID</th>
+                                                            <th>Views</th>
+                                                            <th>Wishlist adds</th>
+                                                            <th>Add to cart</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach($funnelProducts as $product)
+                                                            <tr>
+                                                                <td>{{ (string) ($product['product_title'] ?? 'Product') }}</td>
+                                                                <td>{{ (string) ($product['product_id'] ?? $product['product_handle'] ?? '—') }}</td>
+                                                                <td>{{ number_format((int) ($product['product_views'] ?? 0)) }}</td>
+                                                                <td>{{ number_format((int) ($product['wishlist_adds'] ?? 0)) }}</td>
+                                                                <td>{{ number_format((int) ($product['add_to_cart'] ?? 0)) }}</td>
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        @endif
+                                    </article>
+
+                                    <article class="message-analytics-card">
+                                        <h4>Recent funnel events</h4>
+                                        @if(count($funnelEvents) === 0)
+                                            <p class="message-analytics-muted">No recent storefront funnel events were matched to this message.</p>
+                                        @else
+                                            <div class="message-analytics-table-wrap">
+                                                <table class="message-analytics-table" style="min-width:640px;" aria-label="Storefront funnel events">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Event</th>
+                                                            <th>Product</th>
+                                                            <th>Page</th>
+                                                            <th>Occurred</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach($funnelEvents as $event)
+                                                            <tr>
+                                                                <td>{{ \Illuminate\Support\Str::of((string) ($event['event_type'] ?? 'event'))->replace('_', ' ')->title() }}</td>
+                                                                <td>{{ (string) ($event['product_title'] ?? $event['product_id'] ?? '—') }}</td>
+                                                                <td>{{ (string) ($event['page_path'] ?? '—') }}</td>
+                                                                <td>{{ $formatDateTime((string) ($event['occurred_at'] ?? null)) }}</td>
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        @endif
+                                    </article>
+                                </section>
+                            @endif
+                        </article>
+
+                        <article class="message-analytics-card">
                             <h4>Attributed orders</h4>
                             @if(count((array) ($detail['orders'] ?? [])) === 0)
                                 <p class="message-analytics-muted">No orders were attributed to this message within the configured window.</p>

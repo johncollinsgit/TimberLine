@@ -1,10 +1,12 @@
 <?php
 
+use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
 use App\Models\MarketingShortLink;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\User;
@@ -733,6 +735,147 @@ test('message analytics rolls batched sms deliveries into one logical run row', 
         ->and((string) data_get($detail, 'metadata.batch_scope', ''))->toBe('logical_run')
         ->and((int) ($detail['clicks'] ?? 0))->toBe(1)
         ->and((int) ($detail['attributed_orders'] ?? 0))->toBe(1);
+});
+
+test('message analytics detail includes storefront funnel counts for tracked email sessions', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Message Analytics Email Funnel Tenant',
+        'slug' => 'message-analytics-email-funnel-tenant',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Riley',
+        'last_name' => 'Journey',
+        'email' => 'riley.journey@example.com',
+        'normalized_email' => 'riley.journey@example.com',
+        'phone' => '+15553334444',
+        'normalized_phone' => '+15553334444',
+        'accepts_sms_marketing' => true,
+        'accepts_email_marketing' => true,
+    ]);
+
+    $delivery = MarketingEmailDelivery::query()->create([
+        'marketing_campaign_id' => null,
+        'marketing_campaign_recipient_id' => null,
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'batch_id' => 'email-funnel-batch-1',
+        'source_label' => 'shopify_embedded_email_campaign',
+        'message_subject' => 'Spring collection email',
+        'provider' => 'sendgrid',
+        'campaign_type' => 'direct_message',
+        'template_key' => 'embedded_messaging',
+        'email' => $profile->email,
+        'status' => 'clicked',
+        'raw_payload' => [],
+        'metadata' => [],
+        'sent_at' => now()->subHours(6),
+        'delivered_at' => now()->subHours(6),
+        'opened_at' => now()->subHours(5),
+        'clicked_at' => now()->subHours(4),
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'session_started',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'session:spring-email-1',
+        'meta' => [
+            'store_key' => 'retail',
+            'session_key' => 'spring-email-session-1',
+            'page_path' => '/collections/spring-collection',
+            'mf_channel' => 'email',
+            'mf_delivery_id' => $delivery->id,
+        ],
+        'occurred_at' => now()->subHours(4),
+        'resolution_status' => 'resolved',
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'product_viewed',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'product:spring-candle',
+        'meta' => [
+            'store_key' => 'retail',
+            'session_key' => 'spring-email-session-1',
+            'page_path' => '/products/spring-candle',
+            'product_id' => 'spring-candle',
+            'product_title' => 'Spring Candle',
+            'mf_channel' => 'email',
+            'mf_delivery_id' => $delivery->id,
+        ],
+        'occurred_at' => now()->subHours(4)->addMinutes(2),
+        'resolution_status' => 'resolved',
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'add_to_cart',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'cart:spring-candle',
+        'meta' => [
+            'store_key' => 'retail',
+            'session_key' => 'spring-email-session-1',
+            'page_path' => '/cart',
+            'product_id' => 'spring-candle',
+            'product_title' => 'Spring Candle',
+            'mf_channel' => 'email',
+            'mf_delivery_id' => $delivery->id,
+        ],
+        'occurred_at' => now()->subHours(4)->addMinutes(4),
+        'resolution_status' => 'resolved',
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'checkout_started',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'checkout:email-chk-1',
+        'meta' => [
+            'store_key' => 'retail',
+            'session_key' => 'spring-email-session-1',
+            'checkout_token' => 'email-chk-1',
+            'page_path' => '/checkouts/email-chk-1',
+            'mf_channel' => 'email',
+            'mf_delivery_id' => $delivery->id,
+        ],
+        'occurred_at' => now()->subHours(4)->addMinutes(6),
+        'resolution_status' => 'resolved',
+    ]);
+
+    $service = app(MessageAnalyticsService::class);
+    $filters = $service->normalizeFilters([
+        'date_from' => now()->subDays(2)->toDateString(),
+        'date_to' => now()->toDateString(),
+        'channel' => 'email',
+    ]);
+
+    $payload = $service->index($tenant->id, 'retail', $filters);
+    $row = collect($payload['messages']->items())->first();
+    $detail = $service->detail($tenant->id, 'retail', (string) ($row['message_key'] ?? ''));
+
+    expect($detail)->toBeArray()
+        ->and((int) data_get($detail, 'funnel.summary.sessions_started', 0))->toBe(1)
+        ->and((int) data_get($detail, 'funnel.summary.product_views', 0))->toBe(1)
+        ->and((int) data_get($detail, 'funnel.summary.add_to_cart', 0))->toBe(1)
+        ->and((int) data_get($detail, 'funnel.summary.checkout_started', 0))->toBe(1)
+        ->and((int) data_get($detail, 'funnel.summary.checkout_abandoned_candidates', 0))->toBe(1)
+        ->and((string) data_get($detail, 'funnel.products.0.product_title', ''))->toBe('Spring Candle');
 });
 
 test('all opted-in test sends route through tracked direct messaging flow', function () {

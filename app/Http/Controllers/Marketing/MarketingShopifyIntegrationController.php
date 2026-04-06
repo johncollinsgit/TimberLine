@@ -29,6 +29,7 @@ use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
+use App\Services\Marketing\MarketingStorefrontFunnelService;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MarketingStorefrontWidgetService;
 use App\Services\Shopify\ShopifyStores;
@@ -2492,6 +2493,76 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), $identityStates);
     }
 
+    public function logFunnelEvent(
+        Request $request,
+        MarketingStorefrontFunnelService $marketingStorefrontFunnelService
+    ): JsonResponse {
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('funnel_event');
+        }
+
+        $data = $request->validate([
+            'event_type' => ['required', 'string', 'max:80'],
+            'request_key' => ['nullable', 'string', 'max:190'],
+            'occurred_at' => ['nullable', 'date'],
+            'page_url' => ['nullable', 'string', 'max:2048'],
+            'landing_page' => ['nullable', 'string', 'max:2048'],
+            'referrer' => ['nullable', 'string', 'max:2048'],
+            'page_type' => ['nullable', 'string', 'max:80'],
+            'session_key' => ['nullable', 'string', 'max:180'],
+            'session_id' => ['nullable', 'string', 'max:180'],
+            'client_id' => ['nullable', 'string', 'max:180'],
+            'guest_token' => ['nullable', 'string', 'max:180'],
+            'product_id' => ['nullable', 'string', 'max:180'],
+            'product_handle' => ['nullable', 'string', 'max:180'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'variant_id' => ['nullable', 'string', 'max:180'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'cart_token' => ['nullable', 'string', 'max:180'],
+            'checkout_token' => ['nullable', 'string', 'max:180'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'value_cents' => ['nullable', 'integer', 'min:0'],
+            'module_type' => ['nullable', 'string', 'max:80'],
+            'module_position' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'tile_position' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'link_label' => ['nullable', 'string', 'max:180'],
+            'email' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:80'],
+            'first_name' => ['nullable', 'string', 'max:80'],
+            'last_name' => ['nullable', 'string', 'max:80'],
+            'marketing_profile_id' => ['nullable', 'integer', 'min:1'],
+            'meta' => ['nullable', 'array'],
+            'properties' => ['nullable', 'array'],
+        ]);
+
+        $resolved = $this->resolveProfile($request, scope: 'funnel_event', allowCreate: false, allowBody: true);
+
+        try {
+            $result = $marketingStorefrontFunnelService->record($request, $data, $storeContext, $resolved['profile'] ?? null);
+        } catch (\InvalidArgumentException $exception) {
+            return MarketingStorefrontContract::error(
+                code: 'invalid_funnel_event',
+                message: $exception->getMessage(),
+                status: 422,
+                details: ['event_type' => (string) ($data['event_type'] ?? '')],
+                states: ['invalid_funnel_event'],
+                recoveryStates: ['retry_with_valid_payload']
+            );
+        }
+
+        $event = $result['event'];
+
+        return MarketingStorefrontContract::success([
+            'event_id' => (int) $event->id,
+            'profile_id' => $event->marketing_profile_id ? (int) $event->marketing_profile_id : null,
+            'state' => (string) ($result['state'] ?? 'funnel_event_recorded'),
+            'event_type' => (string) ($result['event_type'] ?? $event->event_type),
+            'identity_status' => (string) ($result['identity_status'] ?? ($resolved['status'] ?? 'anonymous')),
+            'occurred_at' => optional($event->occurred_at)->toIso8601String(),
+        ], $this->contractMeta($request), [(string) ($result['state'] ?? 'funnel_event_recorded')]);
+    }
+
     /**
      * @return array{status:string,profile:?MarketingProfile,sync:array<string,mixed>}
      */
@@ -3210,7 +3281,7 @@ class MarketingShopifyIntegrationController extends Controller
         $this->eventLogger->log($eventType, [
             'status' => (string) ($context['status'] ?? 'ok'),
             'issue_type' => $context['issue_type'] ?? null,
-            'source_surface' => 'shopify_widget',
+            'source_surface' => (string) ($context['source_surface'] ?? 'shopify_widget'),
             'endpoint' => $endpoint,
             'request_key' => (string) ($context['request_key'] ?? substr(hash('sha1', $request->fullUrl() . '|' . $request->ip() . '|' . $eventType), 0, 48)),
             'signature_mode' => $authMode,
