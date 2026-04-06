@@ -4,6 +4,7 @@ namespace App\Services\Shopify;
 
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Client\RequestException;
 use RuntimeException;
 use Throwable;
 
@@ -86,14 +87,7 @@ class ShopifyWebPixelConnectionService
 
             return $status;
         } catch (Throwable $error) {
-            return [
-                'ok' => false,
-                'status' => 'shopify_error',
-                'connected' => false,
-                'message' => $error->getMessage() !== ''
-                    ? $error->getMessage()
-                    : 'Shopify rejected the pixel connection request.',
-            ];
+            return $this->buildErrorStatus($error, 'Shopify rejected the pixel connection request.');
         }
     }
 
@@ -111,14 +105,7 @@ class ShopifyWebPixelConnectionService
         try {
             $pixel = $this->queryWebPixel($this->client($store));
         } catch (Throwable $error) {
-            return [
-                'ok' => false,
-                'status' => 'shopify_error',
-                'connected' => false,
-                'message' => $error->getMessage() !== ''
-                    ? $error->getMessage()
-                    : 'Could not verify Shopify Customer Events pixel status.',
-            ];
+            return $this->buildErrorStatus($error, 'Could not verify Shopify Customer Events pixel status.');
         }
 
         if ($pixel === null) {
@@ -495,5 +482,54 @@ GRAPHQL);
         $normalized = trim((string) $value);
 
         return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function buildErrorStatus(Throwable $error, string $fallbackMessage): array
+    {
+        $message = $error->getMessage() !== '' ? $error->getMessage() : $fallbackMessage;
+
+        if ($this->isInvalidTokenError($error)) {
+            return [
+                'ok' => false,
+                'status' => 'reauthorize_required',
+                'connected' => false,
+                'label' => 'Reconnect Shopify required',
+                'can_connect' => false,
+                'message' => 'Backstage is still using an old Shopify Admin token for this store. Reconnect Shopify so the new token and scopes are stored, then connect the pixel again.',
+                'debug_message' => $message,
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'status' => 'shopify_error',
+            'connected' => false,
+            'label' => 'Unknown',
+            'can_connect' => true,
+            'message' => $message,
+        ];
+    }
+
+    protected function isInvalidTokenError(Throwable $error): bool
+    {
+        if ($error instanceof RequestException) {
+            $response = $error->response;
+            if ($response !== null && $response->status() === 401) {
+                $body = strtolower((string) $response->body());
+
+                return str_contains($body, 'invalid api key')
+                    || str_contains($body, 'access token')
+                    || str_contains($body, 'unrecognized login')
+                    || str_contains($body, 'wrong password');
+            }
+        }
+
+        $message = strtolower($error->getMessage());
+
+        return str_contains($message, 'http request returned status code 401')
+            || str_contains($message, 'invalid api key')
+            || str_contains($message, 'access token')
+            || str_contains($message, 'unrecognized login')
+            || str_contains($message, 'wrong password');
     }
 }

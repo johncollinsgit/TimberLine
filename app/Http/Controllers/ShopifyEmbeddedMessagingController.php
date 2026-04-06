@@ -300,6 +300,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'complete_endpoint' => route('shopify.app.api.messaging.setup.complete', [], false),
                 'theme_editor_href' => data_get($storefrontTracking, 'actions.theme_editor_href'),
                 'customer_events_href' => data_get($storefrontTracking, 'actions.customer_events_href'),
+                'reconnect_href' => data_get($storefrontTracking, 'actions.reconnect_href'),
                 'connect_pixel_endpoint' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
             ],
             'can_mark_complete' => $hasMessagingAccess,

@@ -101,3 +101,34 @@ test('message analytics setup guide still exposes pixel connection when scope sn
         ->assertSeeText('Connect Shopify Pixel')
         ->assertSeeText('Pixel status: Disconnected');
 });
+
+test('message analytics setup guide prompts for reconnect when shopify token is invalid', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Tracking Invalid Token Tenant',
+        'slug' => 'storefront-tracking-invalid-token-tenant',
+    ]);
+    grantMessagingModule($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    Http::fake(function (HttpRequest $request) {
+        if ($request->url() !== 'https://modernforestry.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response([], 404);
+        }
+
+        return Http::response([
+            'errors' => [
+                ['message' => '[API] Invalid API key or access token (unrecognized login or wrong password)'],
+            ],
+        ], 401);
+    });
+
+    $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
+    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+        'host' => $host,
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Reconnect Shopify required')
+        ->assertSeeText('Reconnect Shopify')
+        ->assertDontSeeText('Connect Shopify Pixel');
+});

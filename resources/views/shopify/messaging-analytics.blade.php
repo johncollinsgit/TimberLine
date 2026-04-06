@@ -547,6 +547,9 @@
                                 @if(filled($trackingWebPixel['message'] ?? null))
                                     <p class="message-analytics-muted">{{ (string) $trackingWebPixel['message'] }}</p>
                                 @endif
+                                @if(filled($trackingWebPixel['debug_message'] ?? null) && app()->environment('local', 'testing'))
+                                    <p class="message-analytics-muted">{{ (string) $trackingWebPixel['debug_message'] }}</p>
+                                @endif
                             @endif
                             @if($trackingCommands !== [])
                                 <div class="message-analytics-links">
@@ -561,7 +564,18 @@
                                     @endif
                                 </div>
                             @endif
-                            @if((bool) ($trackingWebPixel['can_connect'] ?? false))
+                            @if((string) ($trackingWebPixel['status'] ?? '') === 'reauthorize_required' && filled(data_get($setupGuide, 'actions.reconnect_href')))
+                                <div class="message-analytics-setup-actions">
+                                    <a
+                                        class="message-analytics-button message-analytics-button--primary"
+                                        href="{{ (string) data_get($setupGuide, 'actions.reconnect_href') }}"
+                                        target="_top"
+                                        rel="noreferrer"
+                                    >
+                                        Reconnect Shopify
+                                    </a>
+                                </div>
+                            @elseif((bool) ($trackingWebPixel['can_connect'] ?? false))
                                 <div class="message-analytics-setup-actions">
                                     <button
                                         type="button"

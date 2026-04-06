@@ -49,6 +49,9 @@ class ShopifyStorefrontTrackingSetupService
         $extensionsDocsHref = $adminBaseUrl !== null
             ? $adminBaseUrl.'/apps'
             : null;
+        $reconnectHref = filled($store['key'] ?? null)
+            ? route('shopify.reinstall', ['store' => (string) $store['key']], false)
+            : null;
 
         return [
             'app_config_present' => $appConfigPresent,
@@ -92,6 +95,7 @@ class ShopifyStorefrontTrackingSetupService
                 'theme_editor_href' => $themeEditorHref,
                 'customer_events_href' => $customerEventsHref,
                 'extensions_href' => $extensionsDocsHref,
+                'reconnect_href' => $reconnectHref,
             ],
             'steps' => [
                 [

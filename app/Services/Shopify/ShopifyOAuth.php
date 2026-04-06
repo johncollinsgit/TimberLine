@@ -4,6 +4,15 @@ namespace App\Services\Shopify;
 
 class ShopifyOAuth
 {
+    /**
+     * @var array<int,string>
+     */
+    protected array $requiredScopes = [
+        'read_pixels',
+        'write_pixels',
+        'read_customer_events',
+    ];
+
     public function buildAuthUrl(array $store, string $redirectUri, string $state): string
     {
         $scopes = implode(',', $this->requestedScopes());
@@ -34,6 +43,12 @@ class ShopifyOAuth
             $scopes[] = 'read_customers';
         }
 
-        return $scopes;
+        foreach ($this->requiredScopes as $requiredScope) {
+            if (! in_array($requiredScope, $scopes, true)) {
+                $scopes[] = $requiredScope;
+            }
+        }
+
+        return array_values(array_unique($scopes));
     }
 }
