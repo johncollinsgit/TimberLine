@@ -125,3 +125,40 @@ test('merchant journey payload cache expires after ttl', function () {
 
     expect(true)->toBeTrue();
 });
+
+test('merchant journey payload cache can be invalidated for a tenant', function () {
+    config()->set('cache.default', 'array');
+    config()->set('shopify_embedded.journey_cache_ttl_seconds', 60);
+
+    $accessResolver = \Mockery::mock(TenantModuleAccessResolver::class);
+    $accessResolver->shouldReceive('resolveForTenant')
+        ->twice()
+        ->with(42, \Mockery::type('array'))
+        ->andReturn([
+            'plan_key' => 'starter',
+            'operating_mode' => 'shopify',
+            'modules' => [],
+        ]);
+
+    $labelResolver = \Mockery::mock(TenantDisplayLabelResolver::class);
+    $labelResolver->shouldReceive('moduleLabels')->zeroOrMoreTimes()->andReturn([]);
+    $labelResolver->shouldReceive('resolve')->twice()->with(42)->andReturn([
+        'labels' => [],
+        'source' => 'global_fallback',
+        'template_missing' => false,
+    ]);
+
+    $service = new TenantCommercialExperienceService(
+        $accessResolver,
+        \Mockery::mock(LandlordCommercialConfigService::class),
+        $labelResolver,
+        \Mockery::mock(TenantEmailSettingsService::class),
+        \Mockery::mock(TwilioSenderConfigService::class)
+    );
+
+    $first = $service->merchantJourneyPayload(42);
+    $service->forgetTenantCache(42);
+    $second = $service->merchantJourneyPayload(42);
+
+    expect($second)->toBe($first);
+});

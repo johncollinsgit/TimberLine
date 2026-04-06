@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use App\Services\Tenancy\TenantCommercialExperienceService;
+use App\Services\Tenancy\TenantDisplayLabelResolver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -32,6 +34,20 @@ class TenantCommercialOverride extends Model
         'billing_mapping' => 'array',
         'metadata' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        $refreshCaches = static function (self $override): void {
+            $tenantId = (int) ($override->tenant_id ?? 0);
+            $tenantId = $tenantId > 0 ? $tenantId : null;
+
+            app(TenantDisplayLabelResolver::class)->forgetTenant($tenantId);
+            app(TenantCommercialExperienceService::class)->forgetTenantCache($tenantId);
+        };
+
+        static::saved($refreshCaches);
+        static::deleted($refreshCaches);
+    }
 
     public function tenant(): BelongsTo
     {

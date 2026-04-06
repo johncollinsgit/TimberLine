@@ -17,6 +17,13 @@ use Illuminate\Support\Str;
 
 class TenantCommercialExperienceService
 {
+    protected const JOURNEY_PAYLOAD_TYPES = [
+        'onboarding',
+        'merchant_journey',
+        'plans',
+        'integrations',
+    ];
+
     /**
      * @var array<string,bool>
      */
@@ -451,6 +458,20 @@ class TenantCommercialExperienceService
         } catch (\Throwable) {
             return $resolver();
         }
+    }
+
+    public function forgetTenantCache(?int $tenantId): void
+    {
+        foreach (self::JOURNEY_PAYLOAD_TYPES as $payloadType) {
+            try {
+                Cache::forget($this->journeyCacheKey($tenantId, $payloadType));
+            } catch (\Throwable) {
+                // Best effort cache invalidation for label/commercial updates.
+            }
+        }
+
+        $summaryCacheKey = $tenantId === null ? 'tenant:none' : 'tenant:'.$tenantId;
+        unset($this->journeySummaryCache[$summaryCacheKey]);
     }
 
     protected function journeyCacheKey(?int $tenantId, string $payloadType): string

@@ -132,7 +132,11 @@ test('test send reuses provider plumbing without creating campaigns', function (
             return false;
         }
 
-        return str_contains((string) $request['Body'], 'https://example.com/offers/spring');
+        $payload = $request->data();
+
+        return data_get($payload, 'To') === '+15552229999'
+            && data_get($payload, 'MessagingServiceSid') === 'MG_TEST'
+            && str_contains((string) data_get($payload, 'Body', ''), 'Hi Operator, this is a preview.');
     });
     Http::assertSent(function ($request) {
         if (! str_contains($request->url(), 'sendgrid.com')) {

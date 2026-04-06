@@ -123,6 +123,13 @@ class TenantDisplayLabelResolver
         return $fallback !== null && trim($fallback) !== '' ? $fallback : ucfirst(str_replace('_', ' ', $normalized));
     }
 
+    public function forgetTenant(?int $tenantId): void
+    {
+        $cacheKey = $tenantId === null ? 'tenant:null' : 'tenant:'.$tenantId;
+
+        unset($this->resolvedCache[$cacheKey]);
+    }
+
     /**
      * @param  array<string,string>  $labels
      * @return array{

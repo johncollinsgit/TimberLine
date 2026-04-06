@@ -389,6 +389,7 @@ test('commercialization pages ignore malformed label overrides and keep determin
 
     TenantCommercialOverride::query()
         ->where('tenant_id', $tenant->id)
+        ->firstOrFail()
         ->update([
             'template_key' => null,
             'display_labels' => ['Forest Credits'],
@@ -498,7 +499,7 @@ test('embedded integrations page derives locked and coming soon states from enti
 test('dashboard now exposes overview start-here and plans subnav links', function () {
     configureEmbeddedRetailStore();
 
-    $response = $this->get(route('home', retailEmbeddedSignedQuery()));
+    $response = $this->get(route('shopify.app.start', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
         ->assertSeeText('Start Here')
