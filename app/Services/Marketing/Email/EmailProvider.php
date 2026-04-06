@@ -17,6 +17,7 @@ interface EmailProvider
      *   from_email:?string,
      *   from_name:?string,
      *   reply_to_email:?string,
+     *   headers:array<string,string>,
      *   metadata:array<string,mixed>,
      *   custom_args:array<string,mixed>,
      *   categories:array<int,string>,

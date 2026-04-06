@@ -301,6 +301,7 @@ class TenantEmailDispatchService
      *   from_email:?string,
      *   from_name:?string,
      *   reply_to_email:?string,
+     *   headers:array<string,string>,
      *   metadata:array<string,mixed>,
      *   custom_args:array<string,mixed>,
      *   categories:array<int,string>,
@@ -339,6 +340,7 @@ class TenantEmailDispatchService
                 ?? $this->nullableString($settings['from_name'] ?? null),
             'reply_to_email' => $this->nullableString($options['reply_to_email'] ?? null)
                 ?? $this->nullableString($settings['reply_to_email'] ?? null),
+            'headers' => is_array($options['headers'] ?? null) ? $options['headers'] : [],
             'metadata' => $metadata,
             'custom_args' => is_array($options['custom_args'] ?? null) ? $options['custom_args'] : [],
             'categories' => is_array($options['categories'] ?? null) ? $options['categories'] : [],

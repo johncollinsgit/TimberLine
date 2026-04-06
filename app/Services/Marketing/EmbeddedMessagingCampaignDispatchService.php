@@ -37,7 +37,8 @@ class EmbeddedMessagingCampaignDispatchService
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected SmsLinkShorteningService $smsLinkShorteningService,
         protected ShopifyEmbeddedEmailComposerService $emailComposerService,
-        protected SmsMessageSafetyService $smsMessageSafetyService
+        protected SmsMessageSafetyService $smsMessageSafetyService,
+        protected MessagingEmailReplyAddressService $emailReplyAddressService
     ) {
     }
 
@@ -1086,6 +1087,7 @@ class EmbeddedMessagingCampaignDispatchService
             'campaign_type' => 'direct_message',
             'template_key' => 'embedded_messaging',
             'customer_id' => (int) $profile->id,
+            'reply_to_email' => $this->emailReplyAddressService->replyAddressForDelivery((int) $campaign->tenant_id, (int) $delivery->id),
             'metadata' => [
                 'subject' => $subject,
                 'source_label' => $sourceLabel,

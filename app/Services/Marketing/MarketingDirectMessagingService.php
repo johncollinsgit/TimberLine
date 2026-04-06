@@ -7,6 +7,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
 use App\Models\MarketingProfile;
+use App\Services\Marketing\MessagingEmailReplyAddressService;
 use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,7 +25,8 @@ class MarketingDirectMessagingService
         protected MessageClickTrackingService $messageClickTrackingService,
         protected EmailLinkAttributionService $emailLinkAttributionService,
         protected ShopifyEmbeddedEmailComposerService $emailComposerService,
-        protected SmsMessageSafetyService $smsMessageSafetyService
+        protected SmsMessageSafetyService $smsMessageSafetyService,
+        protected MessagingEmailReplyAddressService $emailReplyAddressService
     ) {
     }
 
@@ -343,6 +345,7 @@ class MarketingDirectMessagingService
                         : [],
                 ],
                 'html_body' => $resolvedHtmlBody,
+                'reply_to_email' => $this->emailReplyAddressService->replyAddressForDelivery($resolvedTenantId ?? 0, (int) $delivery->id),
                 'categories' => [
                     'direct-message',
                     'shopify-embedded',

@@ -143,6 +143,11 @@ return [
             'provider' => strtolower(trim((string) env('MARKETING_SMS_LINK_SHORTENER_PROVIDER', 'twilio'))),
             'twilio_native_enabled' => (bool) env('MARKETING_TWILIO_LINK_SHORTENING_ENABLED', false),
         ],
+        'responses' => [
+            'allow_start_resubscribe' => (bool) env('MARKETING_MESSAGING_RESPONSES_ALLOW_START_RESUBSCRIBE', false),
+            'email_inbound_domain' => env('MARKETING_MESSAGING_RESPONSES_EMAIL_INBOUND_DOMAIN'),
+            'sendgrid_inbound_token' => env('MARKETING_MESSAGING_RESPONSES_SENDGRID_INBOUND_TOKEN'),
+        ],
     ],
 
     'shopify' => [

@@ -51,6 +51,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'customers' => ['shopify.app.customers', 'customers', null],
     'messaging workspace' => ['shopify.app.messaging', 'messaging', 'workspace'],
     'messaging analytics' => ['shopify.app.messaging.analytics', 'messaging', 'analytics'],
+    'messaging responses' => ['shopify.app.messaging.responses', 'messaging', 'responses'],
     'settings' => ['shopify.app.settings', 'settings', null],
 ]);
 
@@ -106,6 +107,7 @@ test('messaging routes expose messaging subnav with expected active tab', functi
 })->with([
     'messaging workspace tab' => ['shopify.app.messaging', 'workspace', 'Messages Workspace'],
     'messaging analytics tab' => ['shopify.app.messaging.analytics', 'analytics', 'Message Analytics'],
+    'messaging responses tab' => ['shopify.app.messaging.responses', 'responses', 'Responses'],
 ]);
 
 test('legacy customers route redirects to all customers', function () {

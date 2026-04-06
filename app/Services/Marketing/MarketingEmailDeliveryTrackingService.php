@@ -15,7 +15,8 @@ use Illuminate\Support\Str;
 class MarketingEmailDeliveryTrackingService
 {
     public function __construct(
-        protected MessageOrderAttributionService $messageOrderAttributionService
+        protected MessageOrderAttributionService $messageOrderAttributionService,
+        protected MessagingContactChannelStateService $channelStateService
     ) {
     }
 
@@ -133,6 +134,8 @@ class MarketingEmailDeliveryTrackingService
             if ($delivery->recipient && $shouldApplyState) {
                 $this->updateRecipientFromDelivery($delivery->recipient, (string) ($mapped['recipient_status'] ?? ''));
             }
+
+            $this->syncChannelStateFromEvent($delivery, (string) ($event['event'] ?? ''), $occurredAt, $event);
 
             $this->syncBirthdayMessageEvent($delivery, $event, $occurredAt);
 
@@ -266,6 +269,16 @@ class MarketingEmailDeliveryTrackingService
                 'set_failed_at' => true,
                 'apply_state' => true,
             ],
+            'unsubscribe', 'group_unsubscribe' => [
+                'delivery_status' => 'failed',
+                'recipient_status' => 'failed',
+                'set_sent_at' => false,
+                'set_delivered_at' => false,
+                'set_opened_at' => false,
+                'set_clicked_at' => false,
+                'set_failed_at' => false,
+                'apply_state' => false,
+            ],
             'deferred' => [
                 'delivery_status' => 'sent',
                 'recipient_status' => 'sent',
@@ -287,6 +300,43 @@ class MarketingEmailDeliveryTrackingService
                 'apply_state' => false,
             ],
         };
+    }
+
+    /**
+     * @param array<string,mixed> $event
+     */
+    protected function syncChannelStateFromEvent(
+        MarketingEmailDelivery $delivery,
+        string $eventType,
+        CarbonImmutable $occurredAt,
+        array $event
+    ): void {
+        $normalized = strtolower(trim($eventType));
+        $status = match ($normalized) {
+            'bounce', 'bounced' => 'bounced',
+            'dropped', 'drop', 'blocked', 'spamreport', 'spam_report' => 'suppressed',
+            'unsubscribe', 'group_unsubscribe' => 'unsubscribed',
+            default => null,
+        };
+
+        if ($status === null) {
+            return;
+        }
+
+        $this->channelStateService->markEmailStatus(
+            tenantId: (int) $delivery->tenant_id,
+            profile: $delivery->profile,
+            email: $delivery->email,
+            status: $status,
+            reason: $normalized,
+            providerSource: 'sendgrid_events',
+            metadata: [
+                'marketing_email_delivery_id' => (int) $delivery->id,
+                'provider_message_id' => $delivery->provider_message_id,
+                'event' => $event,
+            ],
+            occurredAt: $occurredAt
+        );
     }
 
     protected function updateRecipientFromDelivery(MarketingCampaignRecipient $recipient, string $nextStatus): void

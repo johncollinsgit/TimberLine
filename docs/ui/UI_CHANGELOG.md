@@ -1,5 +1,28 @@
 # UI Changelog
 
+## 2026-04-06 — Embedded Messaging Responses Inbox
+
+### What changed
+- Added a new embedded Shopify Messaging subnav tab: `Responses`
+  - route: `/shopify/app/messaging/responses`
+  - placement: adjacent to `Message Analytics`
+- Added a compact operator inbox UI with:
+  - channel toggle for `Text` and `Email`,
+  - left-side conversation list,
+  - thread/history pane,
+  - reply composer,
+  - conversation actions for read/unread, assign-to-me, close, and archive.
+- Added response summary cards for unread text, unread email, open conversations, and opted-out-today counts.
+- Surfaced subscription/opt-out state directly in the thread header so operators can see when SMS replies are blocked.
+
+### Why
+- Messaging Analytics answers how a blast performed, but operators also needed a native place to work the human replies that came back.
+- Reply handling had to feel like part of Backstage rather than a separate provider console or webhook-log screen.
+
+### Scope boundary
+- This pass is focused on the embedded Shopify Messaging surface and the new Responses workspace.
+- It does not attempt a multi-user support queue system with SLA/routing rules; the current workflow is intentionally lightweight and operator-first.
+
 ## 2026-04-06 — Embedded Messaging Cost Guardrails + MMS Cost Routing
 
 ### What changed

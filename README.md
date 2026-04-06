@@ -1,5 +1,22 @@
 # Modern Forestry Backstage
 
+## Responses Inbox (2026-04-06)
+
+Backstage now includes a unified `Responses` inbox in the embedded Shopify Messaging area:
+- route: `/shopify/app/messaging/responses`
+- channels: `Text` and `Email`
+- purpose: operator workflow for inbound replies, opt-out handling, and thread-based replies back out from Backstage
+
+Key implementation notes:
+- SMS inbound replies persist through `POST /webhooks/twilio/inbound`
+- SendGrid event tracking remains on `POST /webhooks/sendgrid/events`
+- provider-agnostic inbound email seam is now exposed via `POST /webhooks/sendgrid/inbound?token=...`
+- STOP/unsubscribe state is stored in Backstage and blocks inbox SMS replies
+- email reply threading now uses generated reply aliases when an inbound reply domain is configured
+
+Setup and testing details live in:
+- `docs/architecture/messaging-responses-inbox.md`
+
 ## Shopify Storefront Tracking Bootstrap (2026-04-06)
 
 This repo now contains the Shopify CLI app container files needed for storefront tracking:

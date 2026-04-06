@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MarketingMessageMediaAsset;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
+use App\Services\Marketing\MessagingResponseInboxService;
 use App\Services\Marketing\MessageAnalyticsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
@@ -115,6 +116,85 @@ class ShopifyEmbeddedMessagingController extends Controller
                         'smoke_sms' => route('shopify.app.api.messaging.smoke.sms', [], false),
                         'smoke_email' => route('shopify.app.api.messaging.smoke.email', [], false),
                         'history' => route('shopify.app.api.messaging.history', [], false),
+                    ],
+                ],
+            ]),
+            $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+            'messaging_enabled' => $hasMessagingAccess,
+        ])->finish($response);
+    }
+
+    public function responses(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): Response {
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        $probe->forTenant($tenantId);
+
+        $messagingModule = $tenantId !== null
+            ? $probe->time('module_access', fn (): array => $moduleAccessResolver->module($tenantId, 'messaging'))
+            : [
+                'module_key' => 'messaging',
+                'has_access' => false,
+                'ui_state' => 'locked',
+                'reason' => 'tenant_not_mapped',
+            ];
+        $hasMessagingAccess = (bool) ($messagingModule['has_access'] ?? false);
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'responses', $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('responses', $tenantId));
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+            response()->view('shopify.messaging-responses', [
+                'authorized' => $authorized,
+                'status' => $status,
+                'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+                'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
+                'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
+                'storeLabel' => $authorized
+                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    : 'Shopify Admin',
+                'headline' => $this->headlineForStatus($status, 'Responses'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Review inbound SMS and email replies in one Backstage inbox.'),
+                'appNavigation' => $appNavigation,
+                'pageSubnav' => $pageSubnav,
+                'pageActions' => [],
+                'messagingModuleState' => $messagingModule,
+                'messagingAccess' => [
+                    'enabled' => $hasMessagingAccess,
+                    'status' => $tenantId === null
+                        ? 'tenant_not_mapped'
+                        : ($hasMessagingAccess ? 'enabled' : 'messaging_module_locked'),
+                    'message' => $tenantId === null
+                        ? 'This Shopify store is not mapped to a tenant yet.'
+                        : ($hasMessagingAccess
+                            ? null
+                            : 'Messaging is not enabled for this tenant. Enable the Messaging module to use Responses.'),
+                ],
+                'messagingResponsesBootstrap' => [
+                    'authorized' => $authorized,
+                    'tenant_id' => $tenantId,
+                    'status' => $status,
+                    'module_access' => $hasMessagingAccess,
+                    'endpoints' => [
+                        'index' => route('shopify.app.api.messaging.responses.index', [], false),
+                        'detail_base' => route('shopify.app.api.messaging.responses.show', ['conversation' => '__CONVERSATION__'], false),
+                        'update_base' => route('shopify.app.api.messaging.responses.update', ['conversation' => '__CONVERSATION__'], false),
+                        'reply_base' => route('shopify.app.api.messaging.responses.reply', ['conversation' => '__CONVERSATION__'], false),
                     ],
                 ],
             ]),
@@ -1176,6 +1256,150 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'message' => 'Email smoke test sent.',
+            'data' => $payload,
+        ]);
+    }
+
+    public function responsesIndex(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        MessagingResponseInboxService $inboxService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $filters = validator($request->query(), [
+                'channel' => ['nullable', 'in:sms,email'],
+                'filter' => ['nullable', 'in:open,unread,opted_out,assigned_to_me,all'],
+                'search' => ['nullable', 'string', 'max:120'],
+                'per_page' => ['nullable', 'integer', 'min:10', 'max:50'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Responses query is invalid.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $inboxService->index(
+                tenantId: (int) $access['tenant_id'],
+                storeKey: $this->normalizedStoreKeyFromAccess($access),
+                filters: $filters
+            ),
+        ]);
+    }
+
+    public function responsesShow(
+        Request $request,
+        string $conversation,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        MessagingResponseInboxService $inboxService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $conversationId = (int) $conversation;
+        if ($conversationId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Conversation not found for this tenant.',
+            ], 404);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $inboxService->show(
+                tenantId: (int) $access['tenant_id'],
+                storeKey: $this->normalizedStoreKeyFromAccess($access),
+                conversationId: $conversationId
+            ),
+        ]);
+    }
+
+    public function responsesUpdate(
+        Request $request,
+        string $conversation,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        MessagingResponseInboxService $inboxService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $conversationId = (int) $conversation;
+        if ($conversationId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Conversation not found for this tenant.',
+            ], 404);
+        }
+
+        try {
+            $payload = $inboxService->updateConversation(
+                tenantId: (int) $access['tenant_id'],
+                storeKey: $this->normalizedStoreKeyFromAccess($access),
+                conversationId: $conversationId,
+                payload: $request->all(),
+                actor: auth()->user()
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Conversation could not be updated.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Conversation updated.',
+            'data' => $payload,
+        ]);
+    }
+
+    public function responsesReply(
+        Request $request,
+        string $conversation,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        MessagingResponseInboxService $inboxService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $conversationId = (int) $conversation;
+        if ($conversationId <= 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Conversation not found for this tenant.',
+            ], 404);
+        }
+
+        try {
+            $payload = $inboxService->reply(
+                tenantId: (int) $access['tenant_id'],
+                storeKey: $this->normalizedStoreKeyFromAccess($access),
+                conversationId: $conversationId,
+                payload: $request->all(),
+                actor: auth()->user()
+            );
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Reply could not be sent.', $exception);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Reply sent.',
             'data' => $payload,
         ]);
     }

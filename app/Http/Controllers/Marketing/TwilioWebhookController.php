@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\MarketingMessageDelivery;
 use App\Services\Marketing\EmbeddedMessagingCampaignDispatchService;
 use App\Services\Marketing\MarketingDeliveryTrackingService;
+use App\Services\Marketing\TwilioIncomingMessageService;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 
 class TwilioWebhookController extends Controller
@@ -52,6 +54,33 @@ class TwilioWebhookController extends Controller
             'matched' => (bool) $result['matched'],
             'delivery_id' => $result['delivery_id'],
             'status' => $result['status'],
+        ]);
+    }
+
+    public function inbound(
+        Request $request,
+        TwilioSmsService $twilioSmsService,
+        TwilioIncomingMessageService $incomingMessageService
+    ): Response {
+        $payload = $request->all();
+
+        $signature = (string) $request->header('X-Twilio-Signature', '');
+        $requestUrl = (string) $request->fullUrl();
+        if (! $twilioSmsService->validateSignature($requestUrl, $payload, $signature)) {
+            Log::warning('marketing twilio inbound signature validation failed', [
+                'url' => $requestUrl,
+                'payload' => $payload,
+            ]);
+
+            return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 403, [
+                'Content-Type' => 'application/xml',
+            ]);
+        }
+
+        $incomingMessageService->handleInbound($payload);
+
+        return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, [
+            'Content-Type' => 'application/xml',
         ]);
     }
 }

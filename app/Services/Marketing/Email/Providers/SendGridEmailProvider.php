@@ -34,6 +34,16 @@ class SendGridEmailProvider implements EmailProvider
             ?? 'Timberline';
         $replyTo = $this->nullableString($message['reply_to_email'] ?? null)
             ?? $this->nullableString($config['reply_to_email'] ?? null);
+        $headers = collect(is_array($message['headers'] ?? null) ? $message['headers'] : [])
+            ->mapWithKeys(function ($value, $key): array {
+                $headerName = trim((string) $key);
+                $headerValue = trim((string) $value);
+
+                return $headerName !== '' && $headerValue !== ''
+                    ? [$headerName => $headerValue]
+                    : [];
+            })
+            ->all();
         $apiKey = trim((string) ($config['api_key'] ?? ''));
         $dryRun = (bool) ($message['dry_run'] ?? false);
         $trackingEnabled = array_key_exists('tracking_enabled', $config)
@@ -125,6 +135,10 @@ class SendGridEmailProvider implements EmailProvider
                 'email' => $replyTo,
                 'name' => $fromName,
             ];
+        }
+
+        if ($headers !== []) {
+            $payload['headers'] = $headers;
         }
 
         try {

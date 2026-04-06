@@ -27,6 +27,7 @@ use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\MarketingWishlistController;
+use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\PlatformProductPagesController;
@@ -219,6 +220,9 @@ Route::get('/messaging', function (Request $request, ShopifyEmbeddedUrlGenerator
 Route::get('/messaging/analytics', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
     return redirect()->to($urlGenerator->route('shopify.app.messaging.analytics', [], false, $request));
 })->name('shopify.embedded.messaging.analytics');
+Route::get('/messaging/responses', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.messaging.responses', [], false, $request));
+})->name('shopify.embedded.messaging.responses');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
@@ -692,12 +696,18 @@ Route::prefix('webhooks/twilio')->group(function () {
     Route::post('/status', [TwilioWebhookController::class, 'status'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('marketing.webhooks.twilio-status');
+    Route::post('/inbound', [TwilioWebhookController::class, 'inbound'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('marketing.webhooks.twilio-inbound');
 });
 
 Route::prefix('webhooks/sendgrid')->group(function () {
     Route::post('/events', [SendGridWebhookController::class, 'events'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('marketing.webhooks.sendgrid-events');
+    Route::post('/inbound', [SendGridInboundWebhookController::class, 'handle'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('marketing.webhooks.sendgrid-inbound');
 });
 
 Route::prefix('marketing/consent')->name('marketing.consent.')->middleware('throttle:30,1')->group(function () {
@@ -870,6 +880,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
     Route::get('/app/messaging', [ShopifyEmbeddedMessagingController::class, 'show'])->name('shopify.app.messaging');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
+    Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
@@ -961,6 +972,16 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/send/group', [ShopifyEmbeddedMessagingController::class, 'sendGroup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.send.group');
+        Route::get('/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responsesIndex'])
+            ->name('messaging.responses.index');
+        Route::get('/messaging/responses/{conversation}', [ShopifyEmbeddedMessagingController::class, 'responsesShow'])
+            ->name('messaging.responses.show');
+        Route::post('/messaging/responses/{conversation}/actions', [ShopifyEmbeddedMessagingController::class, 'responsesUpdate'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.responses.update');
+        Route::post('/messaging/responses/{conversation}/reply', [ShopifyEmbeddedMessagingController::class, 'responsesReply'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.responses.reply');
         Route::post('/messaging/campaigns/{campaign}/cancel', [ShopifyEmbeddedMessagingController::class, 'cancelCampaign'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.campaigns.cancel');
