@@ -10,6 +10,7 @@ use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
@@ -35,7 +36,8 @@ class ShopifyEmbeddedAppController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
         TenantDisplayLabelResolver $displayLabelResolver,
-        TenantCommercialExperienceService $experienceService
+        TenantCommercialExperienceService $experienceService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -118,6 +120,9 @@ class ShopifyEmbeddedAppController extends Controller
         /** @var array<string,mixed> $store */
         $store = $context['store'];
         $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
+        if ($tenantId !== null) {
+            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+        }
         $probe->forTenant($tenantId);
 
         $tenantRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel));

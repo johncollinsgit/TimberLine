@@ -18,6 +18,8 @@ class ShopifyWebPixelConnectionService
         'read_customer_events',
     ];
 
+    protected const STATUS_SCOPE_VERIFICATION_PENDING = 'scope_verification_pending';
+
     /**
      * @param  array<string,mixed>  $storeContext
      * @return array<string,mixed>
@@ -170,18 +172,42 @@ class ShopifyWebPixelConnectionService
      */
     protected function scopeStatus(array $store): array
     {
-        $grantedScopes = $this->resolveGrantedScopes($store);
+        $scopeSnapshot = $this->resolveGrantedScopes($store);
+        $grantedScopes = (array) ($scopeSnapshot['scopes'] ?? []);
         $missingScopes = array_values(array_diff($this->requiredScopes, $grantedScopes));
+        $verified = (bool) ($scopeSnapshot['verified'] ?? false);
+        $source = (string) ($scopeSnapshot['source'] ?? 'stored');
+        $lookupError = $this->nullableString($scopeSnapshot['lookup_error'] ?? null);
 
         if ($missingScopes !== []) {
+            if (! $verified) {
+                return [
+                    'ok' => true,
+                    'status' => self::STATUS_SCOPE_VERIFICATION_PENDING,
+                    'connected' => false,
+                    'label' => 'Verification pending',
+                    'can_connect' => true,
+                    'granted_scopes' => $grantedScopes,
+                    'missing_scopes' => $missingScopes,
+                    'scope_source' => $source,
+                    'scope_verified' => false,
+                    'scope_lookup_error' => $lookupError,
+                    'message' => 'Backstage could not confirm the newly granted Shopify pixel scopes yet. If you already reauthorized, try Connect Shopify Pixel now.',
+                ];
+            }
+
             return [
-                'ok' => false,
+                'ok' => true,
                 'status' => 'missing_scopes',
                 'connected' => false,
-                'label' => 'Scope update needed',
+                'label' => 'Verification pending',
+                'can_connect' => true,
                 'granted_scopes' => $grantedScopes,
                 'missing_scopes' => $missingScopes,
-                'message' => 'This shop must reauthorize Backstage with: '.implode(', ', $missingScopes).'.',
+                'scope_source' => $source,
+                'scope_verified' => true,
+                'scope_lookup_error' => $lookupError,
+                'message' => 'Shopify still reports these pixel scopes as missing on the installed token: '.implode(', ', $missingScopes).'. If you already reauthorized, try Connect Shopify Pixel now and Backstage will verify it live.',
             ];
         }
 
@@ -190,6 +216,9 @@ class ShopifyWebPixelConnectionService
             'status' => 'scopes_ready',
             'connected' => false,
             'granted_scopes' => $grantedScopes,
+            'scope_source' => $source,
+            'scope_verified' => $verified,
+            'scope_lookup_error' => $lookupError,
             'message' => 'Pixel scopes are ready.',
         ];
     }
@@ -363,20 +392,35 @@ GRAPHQL, [
 
     /**
      * @param  array<string,mixed>  $store
-     * @return array<int,string>
+     * @return array{scopes:array<int,string>,source:string,verified:bool,lookup_error:?string}
      */
     protected function resolveGrantedScopes(array $store): array
     {
         try {
             $liveScopes = $this->queryGrantedScopes($this->client($store));
             if ($liveScopes !== []) {
-                return $liveScopes;
+                return [
+                    'scopes' => $liveScopes,
+                    'source' => 'live',
+                    'verified' => true,
+                    'lookup_error' => null,
+                ];
             }
-        } catch (Throwable) {
-            // Fall back to the last stored scope snapshot when Shopify scope lookup fails.
+        } catch (Throwable $error) {
+            return [
+                'scopes' => $this->normalizeScopes($store['scopes'] ?? []),
+                'source' => 'stored_fallback',
+                'verified' => false,
+                'lookup_error' => $error->getMessage(),
+            ];
         }
 
-        return $this->normalizeScopes($store['scopes'] ?? []);
+        return [
+            'scopes' => $this->normalizeScopes($store['scopes'] ?? []),
+            'source' => 'stored_snapshot',
+            'verified' => false,
+            'lookup_error' => null,
+        ];
     }
 
     /**
@@ -431,5 +475,25 @@ GRAPHQL);
     protected function cacheKey(string $storeKey): string
     {
         return 'shopify:web-pixel-status:'.strtolower(trim($storeKey));
+    }
+
+    /**
+     * @param  array<string,mixed>  $storeContext
+     */
+    public function flushStatusCache(array $storeContext): void
+    {
+        $storeKey = strtolower(trim((string) ($storeContext['key'] ?? '')));
+        if ($storeKey === '') {
+            return;
+        }
+
+        Cache::forget($this->cacheKey($storeKey));
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
     }
 }

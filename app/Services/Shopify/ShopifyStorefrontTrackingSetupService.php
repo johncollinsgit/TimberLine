@@ -2,7 +2,9 @@
 
 namespace App\Services\Shopify;
 
+use App\Models\MarketingStorefrontEvent;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 
 class ShopifyStorefrontTrackingSetupService
 {
@@ -32,6 +34,10 @@ class ShopifyStorefrontTrackingSetupService
             'connected' => false,
             'label' => 'Store not resolved',
             'message' => 'Open this page from Shopify Admin to check the app pixel status.',
+        ];
+        $recentSignal = $store !== [] ? $this->recentStorefrontSignal($store) : [
+            'has_events' => false,
+            'count' => 0,
         ];
 
         $themeEditorHref = $adminBaseUrl !== null
@@ -71,11 +77,12 @@ class ShopifyStorefrontTrackingSetupService
                 'connected' => (bool) Arr::get($pixelStatus, 'connected', false),
                 'label' => (string) Arr::get($pixelStatus, 'label', 'Unknown'),
                 'message' => (string) Arr::get($pixelStatus, 'message', ''),
-                'can_connect' => (bool) Arr::get($pixelStatus, 'can_connect', false),
+                'can_connect' => $pixelPresent && ! (bool) Arr::get($pixelStatus, 'connected', false),
                 'missing_scopes' => array_values((array) Arr::get($pixelStatus, 'missing_scopes', [])),
                 'pixel_id' => Arr::get($pixelStatus, 'pixel_id'),
                 'settings' => (array) Arr::get($pixelStatus, 'settings', []),
             ],
+            'recent_events' => $recentSignal,
             'commands' => [
                 'dev' => 'npm run shopify:app:dev -- --store modernforestry.myshopify.com',
                 'deploy' => 'npm run shopify:app:deploy',
@@ -122,18 +129,49 @@ class ShopifyStorefrontTrackingSetupService
                 [
                     'key' => 'theme_editor_enable',
                     'label' => 'Enable Forestry storefront tracking embed in Theme Editor',
-                    'done' => false,
-                    'hint' => $themeEditorHref !== null
+                    'done' => (bool) ($recentSignal['has_events'] ?? false),
+                    'hint' => (bool) ($recentSignal['has_events'] ?? false)
+                        ? sprintf('Verified by %d recent storefront tracking event(s) for this shop.', (int) ($recentSignal['count'] ?? 0))
+                        : ($themeEditorHref !== null
                         ? 'Use the Theme Editor button below, turn the embed on under App embeds, and save the theme.'
-                        : 'Open Shopify Theme Editor, go to Theme settings -> App embeds, and enable Forestry storefront tracking.',
+                        : 'Open Shopify Theme Editor, go to Theme settings -> App embeds, and enable Forestry storefront tracking.'),
                 ],
                 [
                     'key' => 'verify_storefront_events',
                     'label' => 'Verify a tagged storefront visit creates funnel events',
-                    'done' => false,
-                    'hint' => 'Open a tracked email-style URL, then confirm Message Analytics detail shows sessions, product views, cart activity, and checkout progression.',
+                    'done' => (bool) ($recentSignal['has_events'] ?? false),
+                    'hint' => (bool) ($recentSignal['has_events'] ?? false)
+                        ? sprintf('Backstage has already recorded %d recent storefront funnel event(s) for this shop.', (int) ($recentSignal['count'] ?? 0))
+                        : 'Open a tracked email-style URL, then confirm Message Analytics detail shows sessions, product views, cart activity, and checkout progression.',
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $store
+     * @return array{has_events:bool,count:int}
+     */
+    protected function recentStorefrontSignal(array $store): array
+    {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return ['has_events' => false, 'count' => 0];
+        }
+
+        $storeKey = strtolower(trim((string) ($store['key'] ?? '')));
+        if ($storeKey === '') {
+            return ['has_events' => false, 'count' => 0];
+        }
+
+        $count = MarketingStorefrontEvent::query()
+            ->where('source_type', 'shopify_storefront_funnel')
+            ->where('occurred_at', '>=', now()->subDays(7))
+            ->where('meta->store_key', $storeKey)
+            ->count();
+
+        return [
+            'has_events' => $count > 0,
+            'count' => (int) $count,
         ];
     }
 

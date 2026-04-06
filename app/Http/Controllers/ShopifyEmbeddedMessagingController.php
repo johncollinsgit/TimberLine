@@ -12,6 +12,7 @@ use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyStorefrontTrackingSetupService;
 use App\Services\Shopify\ShopifyWebPixelConnectionService;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +32,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
-        ShopifyEmbeddedMessagingWorkspaceService $workspaceService
+        ShopifyEmbeddedMessagingWorkspaceService $workspaceService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -41,6 +43,9 @@ class ShopifyEmbeddedMessagingController extends Controller
         $tenantId = $authorized
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
+        if ($authorized && $tenantId !== null) {
+            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+        }
         $probe->forTenant($tenantId);
 
         $messagingModule = $tenantId !== null
@@ -133,7 +138,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
-        TenantModuleAccessResolver $moduleAccessResolver
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -143,6 +149,9 @@ class ShopifyEmbeddedMessagingController extends Controller
         $tenantId = $authorized
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
+        if ($authorized && $tenantId !== null) {
+            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+        }
         $probe->forTenant($tenantId);
 
         $messagingModule = $tenantId !== null
@@ -215,7 +224,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantModuleAccessResolver $moduleAccessResolver,
         MessageAnalyticsService $messageAnalyticsService,
         TenantEmailSettingsService $tenantEmailSettingsService,
-        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService
+        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -225,6 +235,9 @@ class ShopifyEmbeddedMessagingController extends Controller
         $tenantId = $authorized
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
+        if ($authorized && $tenantId !== null) {
+            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+        }
         $probe->forTenant($tenantId);
 
         $messagingModule = $tenantId !== null

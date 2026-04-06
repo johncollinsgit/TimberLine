@@ -7,6 +7,7 @@ use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Models\ShopifyStore;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +25,8 @@ class ShopifyEmbeddedSettingsController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TwilioSenderConfigService $senderConfigService,
         TenantResolver $tenantResolver,
-        TenantEmailSettingsService $emailSettingsService
+        TenantEmailSettingsService $emailSettingsService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
@@ -35,6 +37,9 @@ class ShopifyEmbeddedSettingsController extends Controller
         $tenantId = $authorized
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
+        if ($authorized && $tenantId !== null) {
+            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+        }
         $probe->forTenant($tenantId);
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('settings', null, $tenantId));
         $emailSettings = ($authorized && $tenantId !== null)

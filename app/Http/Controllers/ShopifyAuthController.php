@@ -6,7 +6,9 @@ use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyHmacVerifier;
 use App\Services\Shopify\ShopifyOAuth;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Shopify\ShopifyWebhookSubscriptionService;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -52,7 +54,9 @@ class ShopifyAuthController extends Controller
         Request $request,
         ShopifyOAuth $oauth,
         ShopifyHmacVerifier $hmacVerifier,
-        ShopifyWebhookSubscriptionService $webhookSubscriptionService
+        ShopifyWebhookSubscriptionService $webhookSubscriptionService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService,
+        ShopifyWebPixelConnectionService $webPixelConnectionService
     )
     {
         $config = ShopifyStores::find($store, true);
@@ -116,7 +120,7 @@ class ShopifyAuthController extends Controller
         $requestedScopes = $oauth->requestedScopes();
         $missingRequestedScopes = array_values(array_diff($requestedScopes, $grantedScopes !== [] ? $grantedScopes : $payloadScopes));
 
-        ShopifyStore::updateOrCreate(
+        $shopifyStore = ShopifyStore::updateOrCreate(
             ['store_key' => $config['key']],
             [
                 'shop_domain' => $shopDomain,
@@ -132,6 +136,15 @@ class ShopifyAuthController extends Controller
             'requested_scopes' => implode(',', $requestedScopes),
             'granted_scopes' => $grantedScopeString,
             'missing_requested_scopes' => $missingRequestedScopes,
+        ]);
+
+        $alphaBootstrapService->ensureForTenant(
+            $shopifyStore->tenant_id ? (int) $shopifyStore->tenant_id : null,
+            (string) $config['key'],
+            force: true
+        );
+        $webPixelConnectionService->flushStatusCache([
+            'key' => (string) $config['key'],
         ]);
 
         $statusMessage = 'Shopify connected.';
