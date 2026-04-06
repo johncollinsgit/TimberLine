@@ -1362,8 +1362,16 @@ function CampaignHistoryCard({
                 + Number(campaign.status_counts?.delivered ?? 0);
               const failedCount = Number(campaign.status_counts?.failed ?? 0)
                 + Number(campaign.status_counts?.undelivered ?? 0);
-              const pendingCount = Number(campaign.status_counts?.scheduled ?? 0)
+              const recipientPendingCount = Number(campaign.status_counts?.pending ?? 0)
+                + Number(campaign.status_counts?.queued_for_approval ?? 0)
+                + Number(campaign.status_counts?.approved ?? 0)
+                + Number(campaign.status_counts?.scheduled ?? 0)
                 + Number(campaign.status_counts?.sending ?? 0);
+              const activeJobCount = Number(campaign.job_status_counts?.queued ?? 0)
+                + Number(campaign.job_status_counts?.retryable ?? 0)
+                + Number(campaign.job_status_counts?.dispatching ?? 0)
+                + Number(campaign.job_status_counts?.sending ?? 0);
+              const pendingCount = Math.max(recipientPendingCount, activeJobCount);
               const progressTotal = sentCount + failedCount + pendingCount;
               const progressValue = progressTotal > 0 ? sentCount / progressTotal : 0;
 

@@ -1636,7 +1636,8 @@ test('pending embedded email campaign can be canceled before dispatch', function
         ->getJson(route('shopify.app.api.messaging.history'))
         ->assertOk()
         ->assertJsonPath('data.campaigns.0.id', $campaignId)
-        ->assertJsonPath('data.campaigns.0.cancelable', true);
+        ->assertJsonPath('data.campaigns.0.cancelable', true)
+        ->assertJsonPath('data.campaigns.0.status_counts.scheduled', 2);
 
     $cancelResponse = $this->withHeaders(shopifyMessagingApiHeaders())
         ->postJson(route('shopify.app.api.messaging.campaigns.cancel', ['campaign' => $campaignId]));
@@ -1759,7 +1760,9 @@ test('in-progress campaign can still be canceled to stop remaining sends', funct
         ->getJson(route('shopify.app.api.messaging.history'))
         ->assertOk()
         ->assertJsonPath('data.campaigns.0.id', $campaignId)
-        ->assertJsonPath('data.campaigns.0.cancelable', true);
+        ->assertJsonPath('data.campaigns.0.cancelable', true)
+        ->assertJsonPath('data.campaigns.0.status_counts.sent', 1)
+        ->assertJsonPath('data.campaigns.0.status_counts.sending', 1);
 
     $this->withHeaders(shopifyMessagingApiHeaders())
         ->postJson(route('shopify.app.api.messaging.campaigns.cancel', ['campaign' => $campaignId]))

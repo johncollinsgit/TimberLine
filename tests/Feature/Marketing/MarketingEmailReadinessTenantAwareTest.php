@@ -205,7 +205,7 @@ test('dispatch uses global fallback sendgrid api key at runtime', function () {
 test('dispatch uses tenant from email with global api key when tenant api key is absent', function () {
     config()->set('marketing.email.enabled', true);
     config()->set('marketing.email.from_email', 'fallback@example.test');
-    config()->set('marketing.email.from_name', 'Fallback Sender');
+    config()->set('marketing.email.from_name', 'TimberLine Marketing');
     config()->set('marketing.email.reply_to_email', 'reply@example.test');
     config()->set('services.sendgrid.api_key', 'SG.global-fallback-key');
 
@@ -248,7 +248,7 @@ test('dispatch uses tenant from email with global api key when tenant api key is
         return $request->url() === 'https://api.sendgrid.com/v3/mail/send'
             && $request->hasHeader('Authorization', 'Bearer SG.global-fallback-key')
             && (string) data_get($payload, 'from.email') === 'brand@tenant.test'
-            && (string) data_get($payload, 'from.name') === 'Fallback Sender'
+            && (string) data_get($payload, 'from.name') === 'Tenant Sender Override'
             && (string) data_get($payload, 'reply_to.email') === 'reply@example.test';
     });
 });

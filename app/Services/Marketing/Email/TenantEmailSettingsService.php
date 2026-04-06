@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Email;
 
+use App\Models\Tenant;
 use App\Models\TenantEmailSetting;
 use Illuminate\Support\Facades\Schema;
 
@@ -269,7 +270,7 @@ class TenantEmailSettingsService
     {
         $apiKey = trim((string) (config('services.sendgrid.api_key') ?? config('services.sendgrid_api_key') ?? ''));
         $fromEmail = $this->nullableString(config('marketing.email.from_email'));
-        $fromName = $this->nullableString(config('marketing.email.from_name'));
+        $fromName = $this->resolveFallbackFromName($tenantId);
         $replyToEmail = $this->nullableString(config('marketing.email.reply_to_email'));
 
         return [
@@ -297,6 +298,21 @@ class TenantEmailSettingsService
             'last_error' => null,
             'source' => 'config_fallback',
         ];
+    }
+
+    protected function resolveFallbackFromName(?int $tenantId): ?string
+    {
+        if ($tenantId !== null) {
+            $tenantName = $this->nullableString(
+                Tenant::query()->whereKey($tenantId)->value('name')
+            );
+
+            if ($tenantName !== null) {
+                return $tenantName;
+            }
+        }
+
+        return $this->nullableString(config('marketing.email.from_name'));
     }
 
     /**

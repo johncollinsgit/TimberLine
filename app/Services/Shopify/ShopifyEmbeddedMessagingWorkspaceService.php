@@ -15,6 +15,7 @@ use App\Models\MarketingTemplateDefinition;
 use App\Models\Tenant;
 use App\Services\Marketing\EmbeddedMessagingCampaignDispatchService;
 use App\Services\Marketing\MarketingDirectMessagingService;
+use App\Services\Marketing\MessagingCampaignProgressService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -133,7 +134,8 @@ class ShopifyEmbeddedMessagingWorkspaceService
         protected MarketingDirectMessagingService $directMessagingService,
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected ShopifyEmbeddedEmailComposerService $emailComposerService,
-        protected EmbeddedMessagingCampaignDispatchService $campaignDispatchService
+        protected EmbeddedMessagingCampaignDispatchService $campaignDispatchService,
+        protected MessagingCampaignProgressService $campaignProgressService
     ) {
     }
 
@@ -1315,16 +1317,10 @@ GRAPHQL;
                 'created_at',
             ])
             ->map(function (MarketingCampaign $campaign): array {
-                $statusCounts = is_array($campaign->status_counts) ? $campaign->status_counts : [];
-                if ($statusCounts === []) {
-                    $statusCounts = MarketingCampaignRecipient::query()
-                        ->where('campaign_id', (int) $campaign->id)
-                        ->selectRaw('status, count(*) as aggregate_count')
-                        ->groupBy('status')
-                        ->pluck('aggregate_count', 'status')
-                        ->map(fn ($count): int => (int) $count)
-                        ->all();
-                }
+                $progress = $this->campaignProgressService->refreshCampaign($campaign);
+                $statusCounts = is_array($progress['status_counts'] ?? null)
+                    ? $progress['status_counts']
+                    : [];
 
                 $jobStatusCounts = MarketingMessageJob::query()
                     ->where('campaign_id', (int) $campaign->id)
@@ -1356,7 +1352,7 @@ GRAPHQL;
                 return [
                     'id' => (int) $campaign->id,
                     'name' => (string) $campaign->name,
-                    'status' => strtolower(trim((string) $campaign->status)),
+                    'status' => strtolower(trim((string) ($progress['status'] ?? $campaign->status))),
                     'channel' => strtolower(trim((string) $campaign->channel)),
                     'source_label' => (string) ($campaign->source_label ?? 'shopify_embedded_messaging_group'),
                     'subject' => $this->nullableString($campaign->message_subject),
