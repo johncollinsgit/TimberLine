@@ -973,6 +973,11 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/setup/complete', [ShopifyEmbeddedMessagingController::class, 'completeSetup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.setup.complete');
+        Route::get('/messaging/storefront-tracking/status', [ShopifyEmbeddedMessagingController::class, 'storefrontTrackingStatus'])
+            ->name('messaging.storefront-tracking.status');
+        Route::post('/messaging/storefront-tracking/connect-pixel', [ShopifyEmbeddedMessagingController::class, 'connectStorefrontPixel'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.storefront-tracking.connect-pixel');
         Route::get('/messaging/history', [ShopifyEmbeddedMessagingController::class, 'history'])
             ->name('messaging.history');
         Route::get('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'widgetSettings'])

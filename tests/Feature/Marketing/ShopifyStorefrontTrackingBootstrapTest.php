@@ -23,13 +23,14 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
 
     expect($appConfig)->toContain('embedded = true')
         ->toContain('application_url = "https://backstage.theforestrystudio.com/shopify/app"')
+        ->toContain('read_customer_events')
         ->toContain('subpath = "forestry"')
         ->toContain('prefix = "apps"')
         ->toContain('url = "https://backstage.theforestrystudio.com/shopify/marketing/v1"');
 
     expect($embedConfig)->toContain('type = "theme"')
         ->and($embedLiquid)->toContain('/apps/forestry/funnel/event')
-        ->and($embedLiquid)->toContain('Forestry storefront tracking')
+        ->and($embedLiquid)->toContain('"name": "Forestry tracking"')
         ->and($pixelConfig)->toContain('type = "web_pixel_extension"')
         ->and($pixelCode)->toContain("analytics.subscribe('product_viewed'")
         ->and($pixelCode)->toContain("analytics.subscribe('checkout_started'");

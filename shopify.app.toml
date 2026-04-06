@@ -12,7 +12,7 @@ dev_store_url = "modernforestry.myshopify.com"
 api_version = "2026-01"
 
 [access_scopes]
-scopes = "read_products,read_orders,read_all_orders,read_reports,read_analytics,read_pixels,write_pixels"
+scopes = "read_products,read_orders,read_all_orders,read_reports,read_analytics,read_pixels,write_pixels,read_customer_events"
 
 [auth]
 redirect_urls = [

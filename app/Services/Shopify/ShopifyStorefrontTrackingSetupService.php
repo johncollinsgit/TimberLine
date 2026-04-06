@@ -2,8 +2,14 @@
 
 namespace App\Services\Shopify;
 
+use Illuminate\Support\Arr;
+
 class ShopifyStorefrontTrackingSetupService
 {
+    public function __construct(
+        protected ShopifyWebPixelConnectionService $webPixelConnectionService
+    ) {}
+
     public function build(array $store = [], ?string $host = null): array
     {
         $appConfigPath = base_path('shopify.app.toml');
@@ -20,6 +26,13 @@ class ShopifyStorefrontTrackingSetupService
         $proxySecretPresent = trim((string) (config('marketing.shopify.app_proxy_secret') ?: config('marketing.shopify.signing_secret') ?: '')) !== '';
         $signingSecretPresent = trim((string) config('marketing.shopify.signing_secret', '')) !== '';
         $adminBaseUrl = $this->adminBaseUrl($host);
+        $pixelStatus = $store !== [] ? $this->webPixelConnectionService->status($store) : [
+            'ok' => false,
+            'status' => 'store_missing',
+            'connected' => false,
+            'label' => 'Store not resolved',
+            'message' => 'Open this page from Shopify Admin to check the app pixel status.',
+        ];
 
         $themeEditorHref = $adminBaseUrl !== null
             ? $adminBaseUrl.'/themes/current/editor?context=apps'
@@ -54,6 +67,14 @@ class ShopifyStorefrontTrackingSetupService
                 'manifest_path' => $pixelManifestPath,
                 'source_path' => $pixelSourcePath,
                 'customer_events_href' => $customerEventsHref,
+                'status' => Arr::get($pixelStatus, 'status', 'unknown'),
+                'connected' => (bool) Arr::get($pixelStatus, 'connected', false),
+                'label' => (string) Arr::get($pixelStatus, 'label', 'Unknown'),
+                'message' => (string) Arr::get($pixelStatus, 'message', ''),
+                'can_connect' => (bool) Arr::get($pixelStatus, 'can_connect', false),
+                'missing_scopes' => array_values((array) Arr::get($pixelStatus, 'missing_scopes', [])),
+                'pixel_id' => Arr::get($pixelStatus, 'pixel_id'),
+                'settings' => (array) Arr::get($pixelStatus, 'settings', []),
             ],
             'commands' => [
                 'dev' => 'npm run shopify:app:dev -- --store modernforestry.myshopify.com',
@@ -87,8 +108,16 @@ class ShopifyStorefrontTrackingSetupService
                     'label' => 'Web pixel bundle is present in this repo',
                     'done' => $pixelPresent,
                     'hint' => $pixelPresent
-                        ? 'After deploy, verify the Forestry storefront pixel in Shopify Customer Events.'
+                        ? 'After deploy, connect the Forestry storefront pixel in Shopify Customer Events so Shopify-side events begin flowing.'
                         : 'Web pixel extension files are missing from the repo.',
+                ],
+                [
+                    'key' => 'web_pixel_connected',
+                    'label' => 'Shopify Customer Events pixel is connected',
+                    'done' => $pixelPresent && (bool) Arr::get($pixelStatus, 'connected', false),
+                    'hint' => $pixelPresent
+                        ? (string) Arr::get($pixelStatus, 'message', 'Connect the app pixel in Shopify Customer Events.')
+                        : 'Deploy the web pixel extension first.',
                 ],
                 [
                     'key' => 'theme_editor_enable',

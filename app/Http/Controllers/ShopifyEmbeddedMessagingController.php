@@ -10,6 +10,7 @@ use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyStorefrontTrackingSetupService;
+use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
@@ -206,6 +207,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'complete_endpoint' => route('shopify.app.api.messaging.setup.complete', [], false),
                 'theme_editor_href' => data_get($storefrontTracking, 'actions.theme_editor_href'),
                 'customer_events_href' => data_get($storefrontTracking, 'actions.customer_events_href'),
+                'connect_pixel_endpoint' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
             ],
             'can_mark_complete' => $hasMessagingAccess,
             'tracking' => $storefrontTracking,
@@ -265,6 +267,10 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'messageAnalytics' => $analyticsPayload,
                 'messageAnalyticsDetail' => $detail,
                 'messageAnalyticsSelectedMessageKey' => $messageKey !== '' ? $messageKey : null,
+                'messageAnalyticsTrackingEndpoints' => [
+                    'status' => route('shopify.app.api.messaging.storefront-tracking.status', [], false),
+                    'connect_pixel' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
+                ],
                 'messageAnalyticsAttribution' => [
                     'model' => 'last_click_within_window',
                     'window_days' => max(1, (int) config('marketing.message_analytics.attribution_window_days', 7)),
@@ -324,6 +330,73 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'setup_status' => (string) $state->setup_status,
                 'setup_completed_at' => optional($state->setup_completed_at)->toIso8601String(),
             ],
+        ]);
+    }
+
+    public function storefrontTrackingStatus(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $context = (array) ($access['context'] ?? []);
+        $tracking = $storefrontTrackingSetupService->build(
+            (array) ($context['store'] ?? []),
+            $this->nullableString($context['host'] ?? null)
+        );
+
+        return response()->json([
+            'ok' => true,
+            'tracking' => $tracking,
+        ]);
+    }
+
+    public function connectStorefrontPixel(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyWebPixelConnectionService $webPixelConnectionService,
+        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $context = (array) ($access['context'] ?? []);
+        $store = (array) ($context['store'] ?? []);
+        $result = $webPixelConnectionService->connect($store);
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            $status = (string) ($result['status'] ?? 'shopify_error');
+            $httpStatus = match ($status) {
+                'missing_scopes', 'store_not_installed' => 422,
+                default => 500,
+            };
+
+            return response()->json([
+                'ok' => false,
+                'status' => $status,
+                'message' => (string) ($result['message'] ?? 'Could not connect the Shopify web pixel.'),
+                'details' => $result,
+            ], $httpStatus);
+        }
+
+        $tracking = $storefrontTrackingSetupService->build($store, $this->nullableString($context['host'] ?? null));
+
+        return response()->json([
+            'ok' => true,
+            'status' => (string) ($result['status'] ?? 'connected'),
+            'message' => (string) ($result['message'] ?? 'Shopify web pixel connected.'),
+            'pixel' => $result,
+            'tracking' => $tracking,
         ]);
     }
 

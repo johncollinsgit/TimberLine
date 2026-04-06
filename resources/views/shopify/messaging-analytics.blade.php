@@ -42,6 +42,8 @@
         $trackingSetup = is_array($setupGuide['tracking'] ?? null) ? $setupGuide['tracking'] : [];
         $trackingCommands = is_array($trackingSetup['commands'] ?? null) ? $trackingSetup['commands'] : [];
         $trackingProxy = is_array($trackingSetup['app_proxy'] ?? null) ? $trackingSetup['app_proxy'] : [];
+        $trackingEndpoints = is_array($messageAnalyticsTrackingEndpoints ?? null) ? $messageAnalyticsTrackingEndpoints : [];
+        $trackingWebPixel = is_array($trackingSetup['web_pixel'] ?? null) ? $trackingSetup['web_pixel'] : [];
 
         $filterKeys = [
             'date_from',
@@ -527,6 +529,22 @@
                             <p class="message-analytics-muted">
                                 Storefront tracking now ships from this repo as a Shopify theme app embed plus a Shopify web pixel. Deploy the extensions, enable the Forestry embed in Theme Editor, then verify tagged storefront visits against <code>{{ (string) ($trackingProxy['health_path'] ?? '/apps/forestry/health') }}</code>.
                             </p>
+                            @if($trackingWebPixel !== [])
+                                <div class="message-analytics-links">
+                                    <span class="message-analytics-status">
+                                        Pixel status: {{ (string) ($trackingWebPixel['label'] ?? 'Unknown') }}
+                                    </span>
+                                    @if(filled($trackingWebPixel['pixel_id'] ?? null))
+                                        <span class="message-analytics-status">Pixel ID: {{ (string) $trackingWebPixel['pixel_id'] }}</span>
+                                    @endif
+                                    @if(! empty($trackingWebPixel['missing_scopes'] ?? []))
+                                        <span class="message-analytics-status">Missing scopes: {{ implode(', ', (array) $trackingWebPixel['missing_scopes']) }}</span>
+                                    @endif
+                                </div>
+                                @if(filled($trackingWebPixel['message'] ?? null))
+                                    <p class="message-analytics-muted">{{ (string) $trackingWebPixel['message'] }}</p>
+                                @endif
+                            @endif
                             @if($trackingCommands !== [])
                                 <div class="message-analytics-links">
                                     @if(filled($trackingCommands['info'] ?? null))
@@ -538,6 +556,18 @@
                                     @if(filled($trackingCommands['deploy'] ?? null))
                                         <span class="message-analytics-status">{{ (string) $trackingCommands['deploy'] }}</span>
                                     @endif
+                                </div>
+                            @endif
+                            @if((bool) ($trackingWebPixel['can_connect'] ?? false))
+                                <div class="message-analytics-setup-actions">
+                                    <button
+                                        type="button"
+                                        class="message-analytics-button message-analytics-button--primary"
+                                        data-connect-storefront-pixel
+                                        data-endpoint="{{ (string) data_get($setupGuide, 'actions.connect_pixel_endpoint', $trackingEndpoints['connect_pixel'] ?? '') }}"
+                                    >
+                                        Connect Shopify Pixel
+                                    </button>
                                 </div>
                             @endif
                         </div>
@@ -1282,6 +1312,7 @@
         <script>
             (function () {
                 const setupCompleteButton = document.querySelector('[data-mark-setup-complete]');
+                const connectPixelButton = document.querySelector('[data-connect-storefront-pixel]');
                 const setupStatusNode = document.getElementById('message-analytics-setup-status');
 
                 function setSetupStatus(message, tone = 'neutral') {
@@ -1388,6 +1419,29 @@
                             const message = error instanceof Error ? error.message : 'Could not mark setup complete.';
                             setSetupStatus(message, 'error');
                             setupCompleteButton.disabled = false;
+                        }
+                    });
+                }
+
+                if (connectPixelButton) {
+                    connectPixelButton.addEventListener('click', async () => {
+                        const endpoint = String(connectPixelButton.getAttribute('data-endpoint') || '').trim();
+                        if (endpoint === '') {
+                            return;
+                        }
+
+                        connectPixelButton.disabled = true;
+                        setSetupStatus('Connecting Shopify pixel…');
+
+                        try {
+                            const payload = await postJson(endpoint);
+                            const message = payload?.message || 'Shopify pixel connected. Reloading…';
+                            setSetupStatus(message, 'success');
+                            window.setTimeout(() => window.location.reload(), 700);
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : 'Could not connect the Shopify pixel.';
+                            setSetupStatus(message, 'error');
+                            connectPixelButton.disabled = false;
                         }
                     });
                 }
