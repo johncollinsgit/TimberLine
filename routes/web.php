@@ -86,6 +86,7 @@ use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
 use App\Support\Wiki\WikiRepository;
@@ -101,10 +102,11 @@ Route::get('/', function (
     TenantResolver $tenantResolver,
     TenantDisplayLabelResolver $displayLabelResolver,
     PlatformProductPagesController $platformPagesController,
-    TenantCommercialExperienceService $experienceService
+    TenantCommercialExperienceService $experienceService,
+    ModernForestryAlphaBootstrapService $alphaBootstrapService
 ) {
     if ($contextService->hasPageContext($request)) {
-        return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService);
+        return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService, $alphaBootstrapService);
     }
 
     if (auth()->check()) {
