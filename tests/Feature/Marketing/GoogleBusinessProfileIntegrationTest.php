@@ -121,6 +121,61 @@ test('google business callback exchanges code stores encrypted tokens and auto l
     ]);
 });
 
+test('legacy google business callback aliases exchange code successfully', function (string $path) {
+    $user = candleCashMarketingUser();
+
+    $connect = $this->actingAs($user)
+        ->get(route('marketing.candle-cash.google-business.connect'));
+
+    parse_str(parse_url((string) $connect->headers->get('Location'), PHP_URL_QUERY), $params);
+
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'google-access-token',
+            'refresh_token' => 'google-refresh-token',
+            'expires_in' => 3600,
+            'token_type' => 'Bearer',
+            'scope' => 'https://www.googleapis.com/auth/business.manage',
+        ], 200),
+        'https://mybusinessaccountmanagement.googleapis.com/v1/accounts*' => Http::response([
+            'accounts' => [
+                [
+                    'name' => 'accounts/123',
+                    'accountName' => 'Modern Forestry',
+                ],
+            ],
+        ], 200),
+        'https://mybusinessbusinessinformation.googleapis.com/v1/accounts/123/locations*' => Http::response([
+            'locations' => [
+                [
+                    'name' => 'locations/456',
+                    'title' => 'Forestry HQ',
+                    'metadata' => [
+                        'placeId' => 'place-123',
+                        'mapsUri' => 'https://maps.google.com/?cid=123',
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $response = $this->get($path . '?' . http_build_query([
+        'code' => 'oauth-code',
+        'state' => $params['state'] ?? '',
+    ]));
+
+    $response->assertRedirect(route('marketing.candle-cash.settings'));
+
+    $connection = GoogleBusinessProfileConnection::query()->firstOrFail();
+    expect($connection->connection_status)->toBe('connected')
+        ->and($connection->linked_location_id)->toBe('456')
+        ->and($connection->linked_location_title)->toBe('Forestry HQ');
+})->with([
+    '/apps/forestry/google/oauth',
+    '/apps/forestry/google/oauth,',
+    '/apps/forestry/google/oauth/callback',
+]);
+
 test('google business status route returns linked location details', function () {
     $user = candleCashMarketingUser();
     $connection = seedGoogleBusinessConnection();

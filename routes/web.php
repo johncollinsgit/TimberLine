@@ -549,6 +549,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
         ->name('marketing.candle-cash.google-business.callback');
 
+    // Keep accepting the older callback paths already registered in Google Cloud
+    // so production OAuth can recover without waiting on a console-side change.
+    Route::get('/apps/forestry/google/oauth', [GoogleBusinessProfileController::class, 'callback'])
+        ->name('marketing.candle-cash.google-business.callback.legacy');
+    Route::get('/apps/forestry/google/oauth,', [GoogleBusinessProfileController::class, 'callback'])
+        ->name('marketing.candle-cash.google-business.callback.legacy-comma');
+    Route::get('/apps/forestry/google/oauth/callback', [GoogleBusinessProfileController::class, 'callback'])
+        ->name('marketing.candle-cash.google-business.callback.legacy-callback');
+
     Route::middleware(['role:admin,marketing_manager'])
         ->prefix('birthdays')
         ->name('birthdays.')
