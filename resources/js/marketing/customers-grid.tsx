@@ -783,13 +783,30 @@ function MarketingCustomersGridApp(props: RootDataset) {
     );
 }
 
+function scheduleIdleTask(callback: () => void): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(callback, { timeout: 600 });
+        return;
+    }
+
+    window.setTimeout(callback, 200);
+}
+
 function mountMarketingCustomersGrid() {
     const root = document.getElementById("marketing-customers-grid");
     if (!root) {
         return;
     }
 
-    createRoot(root).render(<MarketingCustomersGridApp {...parseRootDataset(root)} />);
+    const mount = () => {
+        createRoot(root).render(<MarketingCustomersGridApp {...parseRootDataset(root)} />);
+    };
+
+    scheduleIdleTask(mount);
 }
 
 if (document.readyState === "loading") {

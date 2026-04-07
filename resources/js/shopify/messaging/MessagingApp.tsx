@@ -17,7 +17,7 @@ import {
   TextField,
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessagingApiError, requestMessagingFormData, requestMessagingJson } from "./api";
 import { analyzeLocalSms, formatCurrency } from "./smsSafety";
 import type {
@@ -298,6 +298,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<MessagingHistoryPayload>({ entries: [], campaigns: [] });
   const [cancelingCampaignId, setCancelingCampaignId] = useState<number | null>(null);
+  const historyFetchRef = useRef<Promise<void> | null>(null);
 
   const endpoints = bootstrap.endpoints ?? {};
 
@@ -364,17 +365,32 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
       return;
     }
 
-    setHistoryLoading(true);
+    if (historyFetchRef.current) {
+      await historyFetchRef.current;
+      return;
+    }
+
+    const fetchPromise = (async () => {
+      setHistoryLoading(true);
+
+      try {
+        const response = await requestMessagingJson<MessagingHistoryPayload>(
+          `${endpoints.history}?limit=16`,
+        );
+        setHistory(response.data ?? { entries: [], campaigns: [] });
+      } catch (error) {
+        handleApiError(error, "Failed to load campaign history.");
+      } finally {
+        setHistoryLoading(false);
+      }
+    })();
+
+    historyFetchRef.current = fetchPromise;
 
     try {
-      const response = await requestMessagingJson<MessagingHistoryPayload>(
-        `${endpoints.history}?limit=16`,
-      );
-      setHistory(response.data ?? { entries: [], campaigns: [] });
-    } catch (error) {
-      handleApiError(error, "Failed to load campaign history.");
+      await fetchPromise;
     } finally {
-      setHistoryLoading(false);
+      historyFetchRef.current = null;
     }
   }, [endpoints.history]);
 

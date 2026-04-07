@@ -1161,46 +1161,34 @@
                 return messages[status] || fallbackMessage || null;
             }
 
-            async function resolveEmbeddedAuthHeaders() {
-                if (window.ForestryEmbeddedApp?.resolveEmbeddedAuthHeaders) {
-                    try {
-                        return await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders();
-                    } catch (error) {
-                        throw new Error(
-                            authFailureMessage(error?.code, error?.message || "Shopify Admin verification is unavailable."),
-                        );
-                    }
+            function scheduleIdleTask(callback) {
+                if (typeof window === "undefined") {
+                    return;
                 }
 
-                if (!window.shopify || typeof window.shopify.idToken !== "function") {
+                if (typeof window.requestIdleCallback === "function") {
+                    window.requestIdleCallback(callback, { timeout: 800 });
+                    return;
+                }
+
+                window.setTimeout(callback, 200);
+            }
+
+            async function resolveEmbeddedAuthHeaders() {
+                const resolver = window.ForestryEmbeddedApp?.resolveEmbeddedAuthHeaders;
+                if (typeof resolver !== "function") {
                     throw new Error(
-                        authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
+                        authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable. Reload settings from Shopify Admin and try again."),
                     );
                 }
 
-                const headers = {
-                    Accept: "application/json",
-                    "Content-Type": "application/json",
-                };
-
-                let sessionToken = null;
-
                 try {
-                    sessionToken = await Promise.race([
-                        Promise.resolve(window.shopify.idToken()),
-                        new Promise((resolve) => window.setTimeout(() => resolve(null), 6000)),
-                    ]);
+                    return await resolver();
                 } catch (error) {
-                    throw new Error(authFailureMessage("invalid_session_token", "Shopify Admin verification failed."));
+                    throw new Error(
+                        authFailureMessage(error?.code, error?.message || "Shopify Admin verification is unavailable."),
+                    );
                 }
-
-                if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
-                    throw new Error(authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."));
-                }
-
-                headers.Authorization = `Bearer ${sessionToken.trim()}`;
-
-                return headers;
             }
 
             async function fetchJson(url, options = {}) {
@@ -1513,7 +1501,7 @@
 
             populateWidgetSettings();
             if (!widgetBootstrap?.settings) {
-                loadWidgetSettings();
+                scheduleIdleTask(loadWidgetSettings);
             }
 
             syncProviderDraftFromSettings();
