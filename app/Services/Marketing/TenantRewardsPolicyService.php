@@ -195,6 +195,9 @@ class TenantRewardsPolicyService
                 'first_order_reward_amount' => $this->nullablePositiveFloat($policyEarning['first_order_reward_amount'] ?? null),
                 'second_order_reward_amount' => round(max(0, (float) ($program['second_order_reward_amount'] ?? 5)), 2),
                 'third_order_reward_amount' => $this->nullablePositiveFloat($policyEarning['third_order_reward_amount'] ?? null),
+                'candle_club_multiplier_enabled' => (bool) ($policyEarning['candle_club_multiplier_enabled'] ?? $program['candle_club_multiplier_enabled'] ?? true),
+                'candle_club_multiplier_value' => round(max(1, (float) ($policyEarning['candle_club_multiplier_value'] ?? $program['candle_club_multiplier_value'] ?? 2)), 2),
+                'candle_club_free_shipping_enabled' => (bool) ($policyEarning['candle_club_free_shipping_enabled'] ?? $program['candle_club_free_shipping_enabled'] ?? false),
                 'spend_threshold_rewards' => $this->normalizedThresholdRewards($policyEarning['spend_threshold_rewards'] ?? []),
                 'event_rewards_enabled' => (bool) ($policyEarning['event_rewards_enabled'] ?? false),
                 'manual_grants_enabled' => (bool) ($policyEarning['manual_grants_enabled'] ?? true),
@@ -215,7 +218,7 @@ class TenantRewardsPolicyService
             ],
             'expiration_and_reminders' => [
                 'expiration_mode' => $this->enumOrDefault($notifications['expiration_mode'] ?? null, ['days_from_issue', 'end_of_season', 'none'], 'days_from_issue'),
-                'expiration_days' => max(1, (int) ($notifications['expiration_days'] ?? config('marketing.candle_cash.code_expiry_days', 30))),
+                'expiration_days' => max(1, (int) ($notifications['expiration_days'] ?? config('marketing.candle_cash.code_expiry_days', 90))),
                 'email_enabled' => (bool) ($notifications['email_enabled'] ?? true),
                 'sms_enabled' => (bool) ($notifications['sms_enabled'] ?? false),
                 'reminder_offsets_days' => $legacyReminderOffsets,
@@ -279,6 +282,7 @@ class TenantRewardsPolicyService
         $errors = [];
 
         $value = (array) ($policy['value_model'] ?? []);
+        $earning = (array) ($policy['earning_rules'] ?? []);
         $redemption = (array) ($policy['redemption_rules'] ?? []);
         $expiration = (array) ($policy['expiration_and_reminders'] ?? []);
         $access = (array) ($policy['access_state'] ?? []);
@@ -303,6 +307,10 @@ class TenantRewardsPolicyService
             $errors['value_model.max_redeemable_per_order_dollars'][] = 'Maximum redeemable per order must be greater than or equal to the redemption increment.';
         }
 
+        if (round((float) ($earning['candle_club_multiplier_value'] ?? 1), 2) < 1) {
+            $errors['earning_rules.candle_club_multiplier_value'][] = 'Candle Club multiplier must be at least 1x.';
+        }
+
         $maxCodesPerOrder = max(1, (int) ($redemption['max_codes_per_order'] ?? 1));
         $platformSupportsMultiCode = (bool) ($redemption['platform_supports_multi_code'] ?? false);
         if ($maxCodesPerOrder > 1 && ! $platformSupportsMultiCode) {
@@ -319,7 +327,7 @@ class TenantRewardsPolicyService
         }
 
         $expirationMode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
-        $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 30));
+        $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 90));
         $offsetGroups = [
             'expiration_and_reminders.reminder_offsets_days' => (array) ($expiration['reminder_offsets_days'] ?? []),
             'expiration_and_reminders.email_reminder_offsets_days' => (array) ($expiration['email_reminder_offsets_days'] ?? []),
@@ -476,6 +484,9 @@ class TenantRewardsPolicyService
                 'first_order_reward_amount' => $this->nullablePositiveFloat($earning['first_order_reward_amount'] ?? null),
                 'second_order_reward_amount' => round(max(0, (float) ($earning['second_order_reward_amount'] ?? 5)), 2),
                 'third_order_reward_amount' => $this->nullablePositiveFloat($earning['third_order_reward_amount'] ?? null),
+                'candle_club_multiplier_enabled' => (bool) ($earning['candle_club_multiplier_enabled'] ?? true),
+                'candle_club_multiplier_value' => round(max(1, (float) ($earning['candle_club_multiplier_value'] ?? 2)), 2),
+                'candle_club_free_shipping_enabled' => (bool) ($earning['candle_club_free_shipping_enabled'] ?? false),
                 'spend_threshold_rewards' => $this->normalizedThresholdRewards($earning['spend_threshold_rewards'] ?? []),
                 'event_rewards_enabled' => (bool) ($earning['event_rewards_enabled'] ?? false),
                 'manual_grants_enabled' => (bool) ($earning['manual_grants_enabled'] ?? true),
@@ -492,7 +503,7 @@ class TenantRewardsPolicyService
             ],
             'expiration_and_reminders' => [
                 'expiration_mode' => $this->enumOrDefault($expiration['expiration_mode'] ?? null, ['days_from_issue', 'end_of_season', 'none'], 'days_from_issue'),
-                'expiration_days' => max(1, (int) ($expiration['expiration_days'] ?? 30)),
+                'expiration_days' => max(1, (int) ($expiration['expiration_days'] ?? 90)),
                 'email_enabled' => (bool) ($expiration['email_enabled'] ?? true),
                 'sms_enabled' => (bool) ($expiration['sms_enabled'] ?? false),
                 'reminder_offsets_days' => $emailReminderOffsets,
@@ -616,6 +627,9 @@ class TenantRewardsPolicyService
                 'max_wallet_balance_dollars' => $this->nullablePositiveFloat($value['max_wallet_balance_dollars'] ?? null),
                 'max_open_codes' => max(1, (int) ($financePolicy['max_open_codes'] ?? 1)),
                 'second_order_reward_amount' => round(max(0, (float) ($earning['second_order_reward_amount'] ?? 5)), 2),
+                'candle_club_multiplier_enabled' => (bool) ($earning['candle_club_multiplier_enabled'] ?? true),
+                'candle_club_multiplier_value' => round(max(1, (float) ($earning['candle_club_multiplier_value'] ?? 2)), 2),
+                'candle_club_free_shipping_enabled' => (bool) ($earning['candle_club_free_shipping_enabled'] ?? false),
                 'rewardable_channels' => $this->enumOrDefault($earning['rewardable_channels'] ?? null, ['online_only', 'show_issued_online_redeemed', 'exclude_shows'], 'online_only'),
                 'exclusions' => $this->normalizedExclusions($redemption['exclusions'] ?? []),
             ]);
@@ -633,7 +647,7 @@ class TenantRewardsPolicyService
 
             $notifications = array_merge($notifications, [
                 'expiration_mode' => $this->enumOrDefault($expiration['expiration_mode'] ?? null, ['days_from_issue', 'end_of_season', 'none'], 'days_from_issue'),
-                'expiration_days' => max(1, (int) ($expiration['expiration_days'] ?? 30)),
+                'expiration_days' => max(1, (int) ($expiration['expiration_days'] ?? 90)),
                 'email_enabled' => (bool) ($expiration['email_enabled'] ?? true),
                 'sms_enabled' => (bool) ($expiration['sms_enabled'] ?? false),
                 'reminder_offsets_days' => $this->normalizedReminderOffsets(
@@ -1621,6 +1635,9 @@ class TenantRewardsPolicyService
             ],
             'earning_rules' => [
                 'second_order_reward_amount' => 10,
+                'candle_club_multiplier_enabled' => true,
+                'candle_club_multiplier_value' => 2,
+                'candle_club_free_shipping_enabled' => false,
                 'rewardable_channels' => 'show_issued_online_redeemed',
             ],
             'redemption_rules' => [

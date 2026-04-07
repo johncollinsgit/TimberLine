@@ -6,6 +6,7 @@ use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
 use App\Models\CandleCashTransaction;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingStorefrontEvent;
@@ -16,6 +17,7 @@ use App\Services\Marketing\CandleCashOrderEventService;
 use App\Services\Marketing\CandleCashReferralService;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\CandleCashVerificationService;
+use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 test('marketing manager can load candle cash dashboard via stable base route name', function () {
@@ -359,6 +361,31 @@ test('candle club membership is recognized from the live subscription product or
         ->count())->toBe(1);
 });
 
+test('candle club membership is recognized from synced external vip tier signals', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Ivy',
+        'email' => 'ivy@example.com',
+        'normalized_email' => 'ivy@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify',
+        'store_key' => 'retail',
+        'external_customer_id' => 'shopify-ivy-1',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'vip_tier' => 'Candle Club',
+        'source_channels' => ['shopify', 'candle_club'],
+        'synced_at' => now(),
+    ]);
+
+    $eligibilityService = app(\App\Services\Marketing\CandleCashTaskEligibilityService::class);
+
+    expect($eligibilityService->membershipStatusForProfile($profile))->toBe('active_candle_club_member');
+});
+
 test('email signup reward is awarded automatically on verified opt in without revoking sms consent', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
@@ -483,4 +510,92 @@ test('duplicate google review events cannot award twice', function () {
         ->where('candle_cash_task_id', $task->id)
         ->where('source_event_key', 'google-review:google-review-123')
         ->value('duplicate_hits'))->toBe(1);
+});
+
+test('google review rewards only the first verified review in a seven day window', function () {
+    Carbon::setTestNow('2026-04-01 09:00:00');
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Greta',
+        'email' => 'greta-weekly@example.com',
+        'normalized_email' => 'greta-weekly@example.com',
+    ]);
+
+    $service = app(CandleCashVerificationService::class);
+
+    $first = $service->awardGoogleReview($profile, 'google-review-window-1', ['rating' => 5]);
+    $second = $service->awardGoogleReview($profile, 'google-review-window-2', ['rating' => 5]);
+
+    expect($first['ok'])->toBeTrue()
+        ->and($first['state'])->toBe('awarded')
+        ->and($second['ok'])->toBeFalse()
+        ->and($second['state'])->toBe('completed')
+        ->and($second['error'])->toBe('max_completions_reached');
+
+    $task = CandleCashTask::query()->where('handle', 'google-review')->firstOrFail();
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(1);
+
+    Carbon::setTestNow('2026-04-09 09:00:01');
+
+    $third = $service->awardGoogleReview($profile, 'google-review-window-3', ['rating' => 5]);
+
+    expect($third['ok'])->toBeTrue()
+        ->and($third['state'])->toBe('awarded');
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(2);
+
+    Carbon::setTestNow();
+});
+
+test('product review rewards only the first verified review in a seven day window', function () {
+    Carbon::setTestNow('2026-04-01 12:00:00');
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Mila',
+        'email' => 'mila-weekly@example.com',
+        'normalized_email' => 'mila-weekly@example.com',
+    ]);
+
+    $service = app(CandleCashVerificationService::class);
+
+    $first = $service->awardProductReview($profile, 'product-review-window-1', ['rating' => 5]);
+    $second = $service->awardProductReview($profile, 'product-review-window-2', ['rating' => 4]);
+
+    expect($first['ok'])->toBeTrue()
+        ->and($first['state'])->toBe('awarded')
+        ->and($second['ok'])->toBeFalse()
+        ->and($second['state'])->toBe('completed')
+        ->and($second['error'])->toBe('max_completions_reached');
+
+    $task = CandleCashTask::query()->where('handle', 'product-review')->firstOrFail();
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(1);
+
+    Carbon::setTestNow('2026-04-09 12:00:01');
+
+    $third = $service->awardProductReview($profile, 'product-review-window-3', ['rating' => 5]);
+
+    expect($third['ok'])->toBeTrue()
+        ->and($third['state'])->toBe('awarded');
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $task->id)
+        ->where('status', 'awarded')
+        ->count())->toBe(2);
+
+    Carbon::setTestNow();
 });

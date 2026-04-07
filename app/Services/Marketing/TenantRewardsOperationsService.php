@@ -496,7 +496,7 @@ class TenantRewardsOperationsService
     {
         $now = $this->asDate($options['now'] ?? null) ?? now()->toImmutable();
         $currentRewardValue = round((float) data_get($policy, 'earning_rules.second_order_reward_amount', 0), 2);
-        $currentExpirationDays = max(1, (int) data_get($policy, 'expiration_and_reminders.expiration_days', 30));
+        $currentExpirationDays = max(1, (int) data_get($policy, 'expiration_and_reminders.expiration_days', 90));
         $scenarioRewardValue = round(max(0, (float) ($options['scenario_reward_value'] ?? ($currentRewardValue + 5))), 2);
         $scenarioExpirationDays = max(1, (int) ($options['scenario_expiration_days'] ?? max(14, $currentExpirationDays - 30)));
 

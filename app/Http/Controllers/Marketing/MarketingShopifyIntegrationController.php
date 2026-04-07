@@ -18,6 +18,7 @@ use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\CandleCashAccessGate;
+use App\Services\Marketing\CandleClubMembershipService;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Services\Marketing\GoogleBusinessProfileException;
@@ -32,6 +33,7 @@ use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontFunnelService;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MarketingStorefrontWidgetService;
+use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
@@ -49,6 +51,8 @@ class MarketingShopifyIntegrationController extends Controller
         protected MarketingStorefrontWidgetService $widgetService,
         protected MarketingStorefrontEventLogger $eventLogger,
         protected CandleCashAccessGate $candleCashAccessGate,
+        protected CandleClubMembershipService $candleClubMembershipService,
+        protected TenantRewardsPolicyService $tenantRewardsPolicyService,
         protected TenantResolver $tenantResolver,
         protected TenantDisplayLabelResolver $displayLabelResolver
     ) {
@@ -80,6 +84,7 @@ class MarketingShopifyIntegrationController extends Controller
         $states = $this->widgetService->rewardWidgetStates($profile, $balance, $rewards, $redemptions);
         $balancePayload = $this->storefrontBalancePayload($candleCashService, $balance);
         $storefrontReward = $candleCashService->storefrontRewardPayload($candleCashService->storefrontReward($tenantId), $balance, $tenantId);
+        $programPayload = $this->storefrontProgramPayload($candleCashService, $profile, $tenantId, $storeContext);
 
         $this->logStorefrontEvent($request, 'widget_balance_lookup', [
             'status' => 'ok',
@@ -99,6 +104,7 @@ class MarketingShopifyIntegrationController extends Controller
             'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
             'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
             'balance' => $balancePayload,
+            'program' => $programPayload,
             'redemption_rules' => $candleCashService->redemptionRulesPayload($tenantId),
             'redemption_access' => $this->storefrontRedemptionAccessPayload($profile),
             'storefront_reward' => $storefrontReward,
@@ -139,6 +145,7 @@ class MarketingShopifyIntegrationController extends Controller
         $states = $this->widgetService->rewardWidgetStates($profile, $balance, $rewards, $redemptions);
         $rewardRows = $this->storefrontRewardRows($candleCashService, $profile ? $balance : null, $tenantId);
         $balancePayload = $profile ? $this->storefrontBalancePayload($candleCashService, $balance) : null;
+        $programPayload = $this->storefrontProgramPayload($candleCashService, $profile, $tenantId, $storeContext);
 
         $this->logStorefrontEvent($request, 'widget_rewards_lookup', [
             'status' => $profile ? 'ok' : 'pending',
@@ -158,6 +165,7 @@ class MarketingShopifyIntegrationController extends Controller
             'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
             'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
             'balance' => $balancePayload,
+            'program' => $programPayload,
             'state' => $states[0] ?? ($profile ? 'linked_customer' : 'unknown_customer'),
             'redemption_rules' => $candleCashService->redemptionRulesPayload($tenantId),
             'redemption_access' => $this->storefrontRedemptionAccessPayload($profile),
@@ -196,6 +204,7 @@ class MarketingShopifyIntegrationController extends Controller
         $balancePayload = $this->storefrontBalancePayload($candleCashService, $balance);
         $redemptionAccess = $this->storefrontRedemptionAccessPayload($profile);
         $revealRedemptionCodes = (bool) ($redemptionAccess['redeem_enabled'] ?? false);
+        $programPayload = $this->storefrontProgramPayload($candleCashService, $profile, $tenantId, $storeContext);
         $rewardsLabel = $this->displayLabelForStoreContext($storeContext, 'rewards_label', 'Rewards');
         $rewardCreditLabel = $this->displayLabelForStoreContext($storeContext, 'reward_credit_label', 'reward credit');
 
@@ -218,6 +227,7 @@ class MarketingShopifyIntegrationController extends Controller
             'candle_cash_amount' => data_get($balancePayload, 'candle_cash_amount'),
             'candle_cash_amount_formatted' => data_get($balancePayload, 'candle_cash_amount_formatted'),
             'balance' => $balancePayload,
+            'program' => $programPayload,
             'redemption_rules' => $candleCashService->redemptionRulesPayload($tenantId),
             'redemption_access' => $redemptionAccess,
             'state' => $states[0] ?? 'linked_customer',
@@ -1379,6 +1389,7 @@ class MarketingShopifyIntegrationController extends Controller
         $balancePayload = $this->storefrontBalancePayload($candleCashService, $currentBalance, [
             'expires_at' => null,
         ]);
+        $programPayload = $this->storefrontProgramPayload($candleCashService, $profile, $tenantId, $storeContext);
         $states = $profile ? ['linked_customer'] : ['unknown_customer', 'verification_required'];
         if ($profile && $currentBalance > 0.0001) {
             $states[] = 'known_customer_has_balance';
@@ -1418,12 +1429,16 @@ class MarketingShopifyIntegrationController extends Controller
                 'rewards_label' => $rewardsLabel,
                 'wallet_label' => (string) data_get($frontendConfig, 'wallet_label', $rewardsLabel . ' Wallet'),
                 'reward_credit_label' => $rewardCreditLabel,
+                'expiration_copy' => (string) data_get($programPayload, 'expiration.message', ''),
+                'redemption_copy' => (string) data_get($programPayload, 'redemption.message', ''),
+                'membership_copy' => (string) data_get($programPayload, 'membership.message', ''),
                 'faq_approval_copy' => (string) data_get($frontendConfig, 'faq_approval_copy', ''),
                 'faq_stack_copy' => (string) data_get($frontendConfig, 'faq_stack_copy', ''),
                 'faq_pending_copy' => (string) data_get($frontendConfig, 'faq_pending_copy', ''),
                 'faq_verification_copy' => (string) data_get($frontendConfig, 'faq_verification_copy', ''),
             ],
             'summary' => $summary,
+            'program' => $programPayload,
             'redemption_rules' => $candleCashService->redemptionRulesPayload($tenantId),
             'redemption_access' => $redemptionAccess,
             'balance' => $balancePayload,
@@ -3169,6 +3184,64 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
+     * @return array<string,mixed>
+     */
+    protected function storefrontProgramPayload(
+        CandleCashService $candleCashService,
+        ?MarketingProfile $profile,
+        ?int $tenantId,
+        array $storeContext
+    ): array {
+        $policy = $tenantId !== null && $tenantId > 0
+            ? $this->tenantRewardsPolicyService->resolve($tenantId)
+            : [];
+        $expiration = (array) data_get($policy, 'expiration_and_reminders', []);
+        $customer = (array) data_get($policy, 'customer_experience', []);
+        $membershipStatus = $this->candleClubMembershipService->statusForProfile($profile);
+        $rewardsLabel = $this->displayLabelForStoreContext($storeContext, 'rewards_label', 'Rewards');
+        $rewardCreditLabel = $this->displayLabelForStoreContext($storeContext, 'reward_credit_label', 'reward credit');
+        $programName = (string) data_get($policy, 'program_identity.program_name', $rewardsLabel);
+        $walletLabel = (string) data_get($customer, 'wallet_label', $rewardsLabel . ' Wallet');
+        $expirationMode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
+        $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 90));
+        $redeemIncrement = $candleCashService->fixedRedemptionAmount($tenantId);
+        $maxRedeemable = $candleCashService->maxRedeemablePerOrderAmount($tenantId);
+        $multiplierEnabled = $candleCashService->candleClubMultiplierEnabled($tenantId);
+        $multiplierValue = $candleCashService->candleClubMultiplierValue($tenantId);
+        $freeShippingEnabled = $candleCashService->candleClubFreeShippingEnabled($tenantId);
+        $isActiveMember = $membershipStatus === 'active_candle_club_member';
+
+        return [
+            'program_name' => $programName,
+            'wallet_label' => $walletLabel,
+            'rewards_label' => $rewardsLabel,
+            'reward_credit_label' => $rewardCreditLabel,
+            'expiration' => [
+                'mode' => $expirationMode,
+                'days' => $expirationMode === 'days_from_issue' ? $expirationDays : null,
+                'enabled' => $expirationMode !== 'none',
+                'message' => trim((string) ($customer['expiration_message'] ?? '')) !== ''
+                    ? (string) $customer['expiration_message']
+                    : $this->defaultStorefrontExpirationMessage($programName, $expirationMode, $expirationDays),
+            ],
+            'redemption' => [
+                'redeem_increment_dollars' => $redeemIncrement,
+                'max_redeemable_per_order_dollars' => $maxRedeemable,
+                'message' => $this->defaultStorefrontRedemptionMessage($programName, $redeemIncrement, $maxRedeemable),
+            ],
+            'membership' => [
+                'status' => $membershipStatus,
+                'is_active' => $isActiveMember,
+                'multiplier_enabled' => $multiplierEnabled,
+                'multiplier_value' => $multiplierValue,
+                'free_shipping_enabled' => $freeShippingEnabled,
+                'message' => $this->defaultStorefrontMembershipMessage($multiplierEnabled, $multiplierValue, $freeShippingEnabled, $isActiveMember),
+            ],
+        ];
+    }
+
+    /**
      * @return array{redeem_enabled:bool,cta_label:string,message:string,mode:string}
      */
     protected function storefrontRedemptionAccessPayload(?MarketingProfile $profile): array
@@ -3271,6 +3344,60 @@ class MarketingShopifyIntegrationController extends Controller
         $tenantId = is_numeric($storeContext['tenant_id'] ?? null) ? (int) $storeContext['tenant_id'] : null;
 
         return $this->displayLabelResolver->label($tenantId, $key, $fallback);
+    }
+
+    protected function defaultStorefrontExpirationMessage(string $programName, string $expirationMode, int $expirationDays): string
+    {
+        $verb = Str::endsWith(Str::lower($programName), 's') ? 'expire' : 'expires';
+
+        return match ($expirationMode) {
+            'none' => $programName . ' does not currently expire.',
+            'end_of_season' => sprintf('%s %s at the end of the active season.', $programName, $verb),
+            default => sprintf('%s %s %d days after it is earned.', $programName, $verb, $expirationDays),
+        };
+    }
+
+    protected function defaultStorefrontRedemptionMessage(string $programName, float $redeemIncrement, float $maxRedeemable): string
+    {
+        return sprintf(
+            '%s can be redeemed %s at a time, with a maximum of %s per order.',
+            $programName,
+            $this->formatStorefrontRewardAmount($redeemIncrement),
+            $this->formatStorefrontRewardAmount($maxRedeemable)
+        );
+    }
+
+    protected function defaultStorefrontMembershipMessage(
+        bool $multiplierEnabled,
+        float $multiplierValue,
+        bool $freeShippingEnabled,
+        bool $isActiveMember
+    ): string {
+        $parts = [];
+
+        if ($multiplierEnabled) {
+            $parts[] = sprintf(
+                'Active Candle Club members earn %sx Candle Cash on eligible rewards.',
+                rtrim(rtrim(number_format($multiplierValue, 2, '.', ''), '0'), '.')
+            );
+        }
+
+        if ($freeShippingEnabled) {
+            $parts[] = 'Active Candle Club members also receive free shipping.';
+        }
+
+        if ($parts === []) {
+            return $isActiveMember
+                ? 'Your Candle Club member benefits are active.'
+                : 'Candle Club member benefits are not currently enabled.';
+        }
+
+        return implode(' ', $parts);
+    }
+
+    protected function formatStorefrontRewardAmount(float $amount): string
+    {
+        return '$' . number_format($amount, fmod(abs($amount), 1.0) === 0.0 ? 0 : 2);
     }
 
     /**

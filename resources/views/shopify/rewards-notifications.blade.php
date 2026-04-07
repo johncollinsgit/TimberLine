@@ -490,6 +490,17 @@
                         </select>
                         <p class="policy-field-help">Online + show hybrid redemption is unavailable until the storefront flow is confirmed safe.</p>
                     </div>
+                    <div class="policy-check-field" data-policy-field="earning_rules.candle_club_multiplier_enabled">
+                        <label class="policy-check"><input id="candle_club_multiplier_enabled" type="checkbox" /> Candle Club multiplier enabled</label>
+                    </div>
+                    <div class="policy-field" data-policy-field="earning_rules.candle_club_multiplier_value">
+                        <label for="candle_club_multiplier_value">Candle Club multiplier</label>
+                        <input id="candle_club_multiplier_value" name="candle_club_multiplier_value" type="number" min="1" step="0.1" />
+                        <p class="policy-field-help">Set to 2 for double Candle Cash while membership is active.</p>
+                    </div>
+                    <div class="policy-check-field" data-policy-field="earning_rules.candle_club_free_shipping_enabled">
+                        <label class="policy-check"><input id="candle_club_free_shipping_enabled" type="checkbox" /> Free shipping for active Candle Club members</label>
+                    </div>
                     <div class="policy-preview-box policy-field--full" id="policy-channel-summary">Channel strategy summary loading...</div>
                 </div>
             </section>
@@ -1168,6 +1179,9 @@
                 setField("minimum_purchase_dollars", policy?.value_model?.minimum_purchase_dollars);
                 setField("max_open_codes", policy?.finance_and_safety?.max_open_codes);
                 setField("rewardable_channels", policy?.earning_rules?.rewardable_channels);
+                setField("candle_club_multiplier_enabled", policy?.earning_rules?.candle_club_multiplier_enabled);
+                setField("candle_club_multiplier_value", policy?.earning_rules?.candle_club_multiplier_value);
+                setField("candle_club_free_shipping_enabled", policy?.earning_rules?.candle_club_free_shipping_enabled);
 
                 setField("code_strategy", policy?.redemption_rules?.code_strategy);
                 setField("stacking_mode", policy?.redemption_rules?.stacking_mode);
@@ -1665,6 +1679,9 @@
                     },
                     earning_rules: {
                         rewardable_channels: document.getElementById("rewardable_channels")?.value || "online_only",
+                        candle_club_multiplier_enabled: !!document.getElementById("candle_club_multiplier_enabled")?.checked,
+                        candle_club_multiplier_value: Number.parseFloat(document.getElementById("candle_club_multiplier_value")?.value || "2"),
+                        candle_club_free_shipping_enabled: !!document.getElementById("candle_club_free_shipping_enabled")?.checked,
                     },
                     redemption_rules: {
                         code_strategy: document.getElementById("code_strategy")?.value || "unique_per_customer",
@@ -1684,7 +1701,7 @@
                     },
                     expiration_and_reminders: {
                         expiration_mode: document.getElementById("expiration_mode")?.value || "days_from_issue",
-                        expiration_days: Number.parseInt(document.getElementById("expiration_days")?.value || "30", 10),
+                        expiration_days: Number.parseInt(document.getElementById("expiration_days")?.value || "90", 10),
                         reminder_offsets_days: parseOffsets(document.getElementById("email_reminder_offsets_days")?.value || ""),
                         email_reminder_offsets_days: parseOffsets(document.getElementById("email_reminder_offsets_days")?.value || ""),
                         sms_reminder_offsets_days: parseOffsets(document.getElementById("sms_reminder_offsets_days")?.value || ""),

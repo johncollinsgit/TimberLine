@@ -88,6 +88,18 @@ class CandleCashService
             ? (string) data_get($fallback, 'storefront_reward_value', '10USD')
             : (string) data_get($configured, 'storefront_reward_value', data_get($fallback, 'storefront_reward_value', '10USD'));
 
+        $candleClubMultiplierEnabled = $usesLegacyStorefrontConfig
+            ? (bool) data_get($fallback, 'candle_club_multiplier_enabled', true)
+            : (bool) data_get($configured, 'candle_club_multiplier_enabled', data_get($fallback, 'candle_club_multiplier_enabled', true));
+
+        $candleClubMultiplierValue = $usesLegacyStorefrontConfig
+            ? (float) data_get($fallback, 'candle_club_multiplier_value', 2)
+            : (float) data_get($configured, 'candle_club_multiplier_value', data_get($fallback, 'candle_club_multiplier_value', 2));
+
+        $candleClubFreeShippingEnabled = $usesLegacyStorefrontConfig
+            ? (bool) data_get($fallback, 'candle_club_free_shipping_enabled', false)
+            : (bool) data_get($configured, 'candle_club_free_shipping_enabled', data_get($fallback, 'candle_club_free_shipping_enabled', false));
+
         return $this->programConfigCache[$cacheKey] = [
             'candle_cash_units_per_dollar' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'legacy_points_per_candle_cash' => max(1, $legacyPointsPerCandleCash),
@@ -97,6 +109,9 @@ class CandleCashService
             'max_open_codes' => max(1, $maxOpenCodes),
             'storefront_reward_type' => strtolower(trim($storefrontRewardType)) ?: 'coupon',
             'storefront_reward_value' => trim($storefrontRewardValue) ?: '10USD',
+            'candle_club_multiplier_enabled' => $candleClubMultiplierEnabled,
+            'candle_club_multiplier_value' => round(max(1, $candleClubMultiplierValue), 2),
+            'candle_club_free_shipping_enabled' => $candleClubFreeShippingEnabled,
         ];
     }
 
@@ -163,6 +178,21 @@ class CandleCashService
     public function maxOpenStorefrontCodes(?int $tenantId = null): int
     {
         return (int) data_get($this->programConfig($tenantId), 'max_open_codes', 1);
+    }
+
+    public function candleClubMultiplierEnabled(?int $tenantId = null): bool
+    {
+        return (bool) data_get($this->programConfig($tenantId), 'candle_club_multiplier_enabled', true);
+    }
+
+    public function candleClubMultiplierValue(?int $tenantId = null): float
+    {
+        return round(max(1, (float) data_get($this->programConfig($tenantId), 'candle_club_multiplier_value', 2)), 2);
+    }
+
+    public function candleClubFreeShippingEnabled(?int $tenantId = null): bool
+    {
+        return (bool) data_get($this->programConfig($tenantId), 'candle_club_free_shipping_enabled', false);
     }
 
     public function formatCurrency(float|int|string $amount): string

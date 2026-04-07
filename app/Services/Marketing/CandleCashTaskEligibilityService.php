@@ -4,13 +4,16 @@ namespace App\Services\Marketing;
 
 use App\Models\CandleCashTask;
 use App\Models\MarketingProfile;
-use App\Models\Order;
-use App\Models\OrderLine;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class CandleCashTaskEligibilityService
 {
+    public function __construct(
+        protected CandleClubMembershipService $membershipService
+    ) {
+    }
+
     /**
      * @return array{
      *   visible:bool,
@@ -56,16 +59,17 @@ class CandleCashTaskEligibilityService
             return $this->result(true, false, $task->visible_to_noneligible_customers, 'login_required', 'login_required', $task, 0, 0, 0, null);
         }
 
-        $summary = $task->completions()
-            ->where('marketing_profile_id', $profile->id)
-            ->selectRaw('count(*) as aggregate')
-            ->selectRaw("sum(case when status in ('pending','submitted','started') then 1 else 0 end) as pending_count")
-            ->selectRaw("sum(case when status in ('awarded','approved') then 1 else 0 end) as completed_count")
-            ->first();
+        $completionQuery = $task->completions()
+            ->where('marketing_profile_id', $profile->id);
 
-        $completionCount = (int) ($summary?->aggregate ?? 0);
-        $pendingCount = (int) ($summary?->pending_count ?? 0);
-        $completedCount = (int) ($summary?->completed_count ?? 0);
+        $completionCount = (int) (clone $completionQuery)->count();
+        $windowedCompletionQuery = $this->windowedCompletionQuery($completionQuery, $task, $now);
+        $pendingCount = (int) (clone $windowedCompletionQuery)
+            ->whereIn('status', ['pending', 'submitted', 'started'])
+            ->count();
+        $completedCount = (int) (clone $windowedCompletionQuery)
+            ->whereIn('status', ['awarded', 'approved'])
+            ->count();
         $membershipStatus = $this->membershipStatusForProfile($profile);
 
         if ($this->isMembershipBlocked($task, $profile, $membershipStatus)) {
@@ -108,79 +112,7 @@ class CandleCashTaskEligibilityService
 
     public function membershipStatusForProfile(?MarketingProfile $profile): ?string
     {
-        if (! $profile) {
-            return null;
-        }
-
-        $channels = collect((array) $profile->source_channels)
-            ->map(fn ($value): string => Str::lower(trim((string) $value)));
-        if ($channels->contains('candle_club')) {
-            return 'active_candle_club_member';
-        }
-
-        $hasGroup = $profile->groups()
-            ->whereRaw('lower(name) like ?', ['%candle club%'])
-            ->exists();
-        if ($hasGroup) {
-            return 'active_candle_club_member';
-        }
-
-        $orderIds = $profile->links()
-            ->where('source_type', 'order')
-            ->pluck('source_id')
-            ->map(fn ($value): int => (int) $value)
-            ->filter(fn (int $value): bool => $value > 0)
-            ->values();
-
-        if ($orderIds->isNotEmpty()) {
-            $hasClubLine = OrderLine::query()
-                ->whereIn('order_id', $orderIds)
-                ->where(function ($query): void {
-                    $query->whereRaw("lower(coalesce(raw_title, '')) like ?", ['%candle club%'])
-                        ->orWhereRaw("lower(coalesce(raw_variant, '')) like ?", ['%candle club%']);
-                })
-                ->exists();
-            if ($hasClubLine) {
-                return 'active_candle_club_member';
-            }
-        }
-
-        $shopifyCustomerIds = $profile->links()
-            ->where('source_type', 'shopify_customer')
-            ->pluck('source_id')
-            ->map(function ($value): ?string {
-                $sourceId = trim((string) $value);
-                if ($sourceId === '') {
-                    return null;
-                }
-                if (str_contains($sourceId, ':')) {
-                    [, $sourceId] = explode(':', $sourceId, 2);
-                }
-
-                return trim($sourceId) !== '' ? trim($sourceId) : null;
-            })
-            ->filter()
-            ->values();
-
-        if ($shopifyCustomerIds->isNotEmpty()) {
-            $orderIds = Order::query()
-                ->whereIn('shopify_customer_id', $shopifyCustomerIds)
-                ->pluck('id');
-            if ($orderIds->isNotEmpty()) {
-                $hasClubLine = OrderLine::query()
-                    ->whereIn('order_id', $orderIds)
-                    ->where(function ($query): void {
-                        $query->whereRaw("lower(coalesce(raw_title, '')) like ?", ['%candle club%'])
-                            ->orWhereRaw("lower(coalesce(raw_variant, '')) like ?", ['%candle club%']);
-                    })
-                    ->exists();
-                if ($hasClubLine) {
-                    return 'active_candle_club_member';
-                }
-            }
-        }
-
-        return null;
+        return $this->membershipService->statusForProfile($profile);
     }
 
     protected function isMembershipBlocked(CandleCashTask $task, MarketingProfile $profile, ?string $membershipStatus): bool
@@ -212,6 +144,38 @@ class CandleCashTaskEligibilityService
         }
 
         return false;
+    }
+
+    protected function windowedCompletionQuery(mixed $query, CandleCashTask $task, mixed $now): mixed
+    {
+        $windowDays = $this->rewardWindowDays($task);
+        if ($windowDays <= 0) {
+            return clone $query;
+        }
+
+        $cutoff = $now instanceof \DateTimeInterface
+            ? \Illuminate\Support\Carbon::instance($now)->copy()->subDays($windowDays)
+            : now()->subDays($windowDays);
+
+        return (clone $query)->where(function ($builder) use ($cutoff): void {
+            $builder->where('awarded_at', '>=', $cutoff)
+                ->orWhere('reviewed_at', '>=', $cutoff)
+                ->orWhere('submitted_at', '>=', $cutoff)
+                ->orWhere('started_at', '>=', $cutoff)
+                ->orWhere('created_at', '>=', $cutoff);
+        });
+    }
+
+    protected function rewardWindowDays(CandleCashTask $task): int
+    {
+        $completionRule = is_array($task->completion_rule) ? $task->completion_rule : [];
+        $metadata = is_array($task->metadata) ? $task->metadata : [];
+
+        return max(
+            0,
+            (int) ($completionRule['reward_window_days'] ?? 0),
+            (int) ($metadata['reward_window_days'] ?? 0)
+        );
     }
 
     /**

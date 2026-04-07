@@ -19,7 +19,7 @@ class TenantRewardsPolicyMessagePreviewService
             'expires_at' => match ((string) ($expiration['expiration_mode'] ?? 'days_from_issue')) {
                 'none' => null,
                 'end_of_season' => now()->endOfQuarter()->toIso8601String(),
-                default => now()->addDays(max(1, (int) ($expiration['expiration_days'] ?? 30)))->toIso8601String(),
+                default => now()->addDays(max(1, (int) ($expiration['expiration_days'] ?? 90)))->toIso8601String(),
             },
         ];
 
@@ -113,7 +113,7 @@ class TenantRewardsPolicyMessagePreviewService
     protected function expirationPhrase(array $expiration): string
     {
         $mode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
-        $days = max(1, (int) ($expiration['expiration_days'] ?? 30));
+        $days = max(1, (int) ($expiration['expiration_days'] ?? 90));
 
         return match ($mode) {
             'end_of_season' => 'the end of the season',

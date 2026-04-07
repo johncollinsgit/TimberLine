@@ -13,7 +13,7 @@ class CandleCashOrderEventService
         protected CandleCashTaskService $taskService,
         protected CandleCashReferralService $referralService,
         protected MarketingStorefrontEventLogger $eventLogger,
-        protected CandleCashTaskEligibilityService $eligibilityService
+        protected CandleClubMembershipService $membershipService
     ) {
     }
 
@@ -133,7 +133,7 @@ class CandleCashOrderEventService
 
     protected function awardCandleClubJoinTask(MarketingProfile $profile, Order $order): void
     {
-        if ($this->eligibilityService->membershipStatusForProfile($profile) !== 'active_candle_club_member') {
+        if (! $this->membershipService->isActiveMember($profile)) {
             return;
         }
 

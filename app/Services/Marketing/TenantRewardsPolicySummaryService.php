@@ -38,7 +38,7 @@ class TenantRewardsPolicySummaryService
         };
 
         $expirationMode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
-        $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 30));
+        $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 90));
         $expirationSentence = match ($expirationMode) {
             'end_of_season' => 'Rewards expire at the end of the selected season.',
             'none' => 'Rewards do not expire.',

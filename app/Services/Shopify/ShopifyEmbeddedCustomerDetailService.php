@@ -11,6 +11,7 @@ use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\User;
+use App\Services\Marketing\CandleClubMembershipService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\CandleCashService;
 use Carbon\CarbonImmutable;
@@ -26,7 +27,8 @@ class ShopifyEmbeddedCustomerDetailService
 
     public function __construct(
         protected TwilioSenderConfigService $senderConfigService,
-        protected CandleCashService $candleCashService
+        protected CandleCashService $candleCashService,
+        protected CandleClubMembershipService $membershipService
     ) {
     }
 
@@ -166,18 +168,12 @@ class ShopifyEmbeddedCustomerDetailService
 
     protected function hasCandleClub(int $profileId): bool
     {
-        $taskCompletion = $this->hasTaskCompletion($profileId, ['candle-club-join']);
-        $groupMember = false;
+        /** @var MarketingProfile|null $profile */
+        $profile = MarketingProfile::query()
+            ->with('externalProfiles:id,marketing_profile_id,vip_tier,source_channels')
+            ->find($profileId);
 
-        if (Schema::hasTable('marketing_group_members') && Schema::hasTable('marketing_groups')) {
-            $groupMember = DB::table('marketing_group_members as members')
-                ->join('marketing_groups as groups', 'groups.id', '=', 'members.marketing_group_id')
-                ->where('members.marketing_profile_id', $profileId)
-                ->whereRaw("lower(coalesce(groups.name, '')) like '%candle club%'")
-                ->exists();
-        }
-
-        return $taskCompletion || $groupMember;
+        return $this->membershipService->isActiveMember($profile);
     }
 
     protected function hasReferralCompletion(int $profileId): bool

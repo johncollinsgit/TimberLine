@@ -452,7 +452,7 @@ class TenantRewardsReminderScheduleService
             return $earnedAt->endOfQuarter();
         }
 
-        $days = max(1, (int) ($expiration['expiration_days'] ?? 30));
+        $days = max(1, (int) ($expiration['expiration_days'] ?? 90));
 
         return $earnedAt->addDays($days);
     }

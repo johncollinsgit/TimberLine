@@ -492,6 +492,53 @@ test('shopify v1 customer reward reads preserve fractional candle cash balances 
         ->assertJsonPath('data.balance.candle_cash_amount', 0.3);
 });
 
+test('shopify v1 reward balance returns policy messaging and candle club benefit state', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Member',
+        'last_name' => 'Balance',
+        'email' => 'member.balance@example.com',
+        'normalized_email' => 'member.balance@example.com',
+        'phone' => '5557773535',
+        'normalized_phone' => '+15557773535',
+        'source_channels' => ['shopify', 'candle_club'],
+    ]);
+
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 12,
+    ]);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+    ], 'stage10-proxy-secret');
+
+    $response = $this->getJson(route('marketing.shopify.v1.rewards.balance', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.program.membership.is_active', true)
+        ->assertJsonPath('data.program.membership.multiplier_enabled', true)
+        ->assertJsonPath('data.program.membership.multiplier_value', 2)
+        ->assertJsonPath('data.program.membership.free_shipping_enabled', false)
+        ->assertJsonPath('data.program.expiration.mode', 'days_from_issue')
+        ->assertJsonPath('data.program.expiration.days', 90)
+        ->assertJsonPath('data.program.redemption.redeem_increment_dollars', 10)
+        ->assertJsonPath('data.program.redemption.max_redeemable_per_order_dollars', 10);
+
+    expect((string) data_get($response->json(), 'data.program.expiration.message'))->toContain('90 days')
+        ->and((string) data_get($response->json(), 'data.program.redemption.message'))->toContain('$10')
+        ->and((string) data_get($response->json(), 'data.program.membership.message'))->toContain('2x');
+});
+
 test('shopify v1 candle cash status keeps candle club vote locked for guests', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
