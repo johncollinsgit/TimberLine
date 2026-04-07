@@ -255,7 +255,7 @@ function seedOrderForEmail(string $email): void
     DB::table('orders')->insert($payload);
 }
 
-test('/customers/manage renders real customer rows from local data', function () {
+test('/customers/manage stays search-first until a query is entered', function () {
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
@@ -264,8 +264,9 @@ test('/customers/manage renders real customer rows from local data', function ()
 
     $response->assertOk()
         ->assertSeeText('All customers')
-        ->assertSeeText($fixtures['alice']->email)
-        ->assertSeeText($fixtures['bob']->email)
+        ->assertSeeText('Search customers to load results')
+        ->assertDontSeeText($fixtures['alice']->email)
+        ->assertDontSeeText($fixtures['bob']->email)
         ->assertSeeText('Rewards Balance')
         ->assertDontSeeText('Tier Name');
 });
@@ -288,7 +289,8 @@ test('/shopify/app/customers and /shopify/app/customers/manage match manage page
     $this->get(route($routeName, retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('All customers')
-        ->assertSeeText($fixtures['alice']->email);
+        ->assertSeeText('Search customers to load results')
+        ->assertDontSeeText($fixtures['alice']->email);
 })->with([
     'alias /shopify/app/customers' => ['shopify.app.customers'],
     'alias /shopify/app/customers/manage' => ['shopify.app.customers.manage'],
@@ -367,7 +369,8 @@ test('segment filters show zero-result state when no customers match', function 
     $response = $this->get(shopifyAppCustomersManageUrl(['segment' => 'needs_contact']));
 
     $response->assertOk()
-        ->assertSeeText('No customers matched your search or filters.');
+        ->assertSeeText('Search customers to load results')
+        ->assertDontSeeText('No customers matched your search or filters.');
 });
 
 test('sorting by last activity works', function () {
@@ -375,7 +378,11 @@ test('sorting by last activity works', function () {
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get(shopifyAppCustomersManageUrl(['sort' => 'last_activity', 'direction' => 'desc']));
+    $response = $this->get(shopifyAppCustomersManageUrl([
+        'search' => 'example.com',
+        'sort' => 'last_activity',
+        'direction' => 'desc',
+    ]));
 
     $response->assertOk()
         ->assertSeeTextInOrder(['bob@example.com', 'clara@example.com', 'alice@example.com']);
@@ -386,7 +393,11 @@ test('sorting by candle cash works', function () {
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get(shopifyAppCustomersManageUrl(['sort' => 'candle_cash', 'direction' => 'desc']));
+    $response = $this->get(shopifyAppCustomersManageUrl([
+        'search' => 'example.com',
+        'sort' => 'candle_cash',
+        'direction' => 'desc',
+    ]));
 
     $response->assertOk()
         ->assertSeeTextInOrder(['alice@example.com', 'clara@example.com', 'bob@example.com']);
@@ -484,7 +495,10 @@ test('status filters work for candle club, referral, review, birthday, and whole
     seedEmbeddedCustomersGridFixtures();
     startEmbeddedCustomersSession($this);
 
-    $response = $this->get(shopifyAppCustomersManageUrl([$filter => 'yes']));
+    $response = $this->get(shopifyAppCustomersManageUrl([
+        'search' => 'example.com',
+        $filter => 'yes',
+    ]));
 
     $response->assertOk()
         ->assertSeeText($expectedEmail)
@@ -526,7 +540,7 @@ test('row view action links to customer detail and detail route resolves', funct
     $detailUrl = route('shopify.app.customers.detail', ['marketingProfile' => $fixtures['alice']->id], false);
     $detailSectionsUrl = route('shopify.app.api.customers.detail-sections', ['marketingProfile' => $fixtures['alice']->id], false);
 
-    $this->get(shopifyAppCustomersManageUrl())
+    $this->get(shopifyAppCustomersManageUrl(['search' => 'alice@example.com']))
         ->assertOk()
         ->assertSee($detailUrl, false)
         ->assertSee($detailSectionsUrl, false);
@@ -540,19 +554,24 @@ test('embedded manage page preserves full Shopify context on customer detail lin
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
 
-    $response = $this->get(route('shopify.app.customers.manage', retailEmbeddedExtendedSignedQuery()));
+    $response = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(route('shopify.app.customers.manage', retailEmbeddedExtendedSignedQuery([
+            'search' => 'alice@example.com',
+        ])));
 
-    $response->assertOk();
+    $response->assertOk()->assertJsonPath('ok', true);
 
-    $content = $response->getContent();
+    $content = (string) data_get($response->json(), 'data.results_html', '');
     $detailBase = route('shopify.app.customers.detail', ['marketingProfile' => $fixtures['alice']->id], false);
 
     expect($content)->toContain($detailBase)
         ->and($content)->toContain('shop=modernforestry.myshopify.com')
         ->and($content)->toContain('host=admin-host-token')
-        ->and($content)->toContain('hmac=')
-        ->and($content)->toContain('timestamp=')
-        ->and($content)->toContain('embedded=1')
         ->and($content)->toContain('id_token=')
         ->and($content)->toContain('locale=en')
         ->and($content)->toContain('session=embedded-session-token');
@@ -575,13 +594,33 @@ test('embedded manage filters and sort controls preserve full Shopify context', 
         ->and($content)->toContain('name="locale" value="en"')
         ->and($content)->toContain('name="session" value="embedded-session-token"')
         ->and($content)->toContain('/shopify/app/customers/manage?shop=modernforestry.myshopify.com')
-        ->and($content)->toContain('sort=name')
-        ->and($content)->toContain('sort=orders')
-        ->and($content)->toContain('sort=candle_cash')
-        ->and($content)->toContain('sort=last_activity')
+        ->and($content)->toContain('data-results-deferred="true"')
+        ->and($content)->toContain('Search customers to load results')
         ->and($content)->toContain('id_token=')
         ->and($content)->toContain('locale=en')
         ->and($content)->toContain('session=embedded-session-token');
+
+    $jsonResponse = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(route('shopify.app.customers.manage', retailEmbeddedExtendedSignedQuery([
+            'search' => 'example.com',
+        ])));
+
+    $jsonResponse->assertOk()->assertJsonPath('ok', true);
+
+    $resultsHtml = (string) data_get($jsonResponse->json(), 'data.results_html', '');
+
+    expect($resultsHtml)->toContain('sort=name')
+        ->and($resultsHtml)->toContain('sort=orders')
+        ->and($resultsHtml)->toContain('sort=candle_cash')
+        ->and($resultsHtml)->toContain('sort=last_activity')
+        ->and($resultsHtml)->toContain('id_token=')
+        ->and($resultsHtml)->toContain('locale=en')
+        ->and($resultsHtml)->toContain('session=embedded-session-token');
 });
 
 test('embedded manage returns json results for authenticated live search requests', function () {
@@ -605,6 +644,30 @@ test('embedded manage returns json results for authenticated live search request
     expect($resultsHtml)->toContain('alice@example.com')
         ->and($resultsHtml)->not->toContain('bob@example.com')
         ->and($summaryLabel)->toContain('customer');
+});
+
+test('embedded manage json stays deferred until a search query is present', function () {
+    configureEmbeddedRetailStore();
+    seedEmbeddedCustomersGridFixtures();
+
+    $response = $this
+        ->withHeaders([
+            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])
+        ->get(shopifyAppCustomersManageUrl());
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.summary_label', 'Search to load customers')
+        ->assertJsonPath('data.page_label', 'Search to view matching records');
+
+    $resultsHtml = (string) data_get($response->json(), 'data.results_html', '');
+
+    expect($resultsHtml)
+        ->toContain('Search customers to load results')
+        ->not->toContain('alice@example.com');
 });
 
 test('embedded manage json search requires an authenticated shopify session token', function () {
@@ -654,7 +717,7 @@ test('embedded manage page and json search are tenant scoped by store tenant', f
 
     startEmbeddedCustomersSession($this);
 
-    $pageResponse = $this->get(shopifyAppCustomersManageUrl());
+    $pageResponse = $this->get(shopifyAppCustomersManageUrl(['search' => 'tenant']));
 
     $pageResponse->assertOk()
         ->assertSeeText('tenant.one@example.com')
@@ -701,7 +764,7 @@ test('embedded manage tenant scoping keeps empty state when no customers belong 
 
     startEmbeddedCustomersSession($this);
 
-    $pageResponse = $this->get(shopifyAppCustomersManageUrl());
+    $pageResponse = $this->get(shopifyAppCustomersManageUrl(['search' => 'outscope']));
 
     $pageResponse->assertOk()
         ->assertSeeText('No customers matched your search or filters.')

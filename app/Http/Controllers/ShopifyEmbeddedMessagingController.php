@@ -65,7 +65,6 @@ class ShopifyEmbeddedMessagingController extends Controller
             ? $probe->time('page_payload', fn (): array => [
                 'groups' => $workspaceService->groups($tenantId, includeAutoCounts: false),
                 'templates' => $workspaceService->emailTemplateDefinitions(),
-                'audience_summary' => $workspaceService->audienceSummary($tenantId),
             ])
             : null;
 

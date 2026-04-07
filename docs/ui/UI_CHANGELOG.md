@@ -1,5 +1,29 @@
 # UI Changelog
 
+## 2026-04-07 — Embedded Dashboard Label + Search-First Customers + Deferred Messaging Loads
+
+### What changed
+- Renamed the first embedded primary nav item from `Home` to `Dashboard` so the top-level shell matches the product language used elsewhere.
+- Reworked embedded `Customers` into a search-first surface:
+  - the summary strip and controls still render immediately,
+  - the results grid stays empty until a search term is entered,
+  - blank-state copy now explains that only matching records are loaded to keep the page fast,
+  - sort/row controls stay disabled until search results exist.
+- Restored the embedded `Messages` workspace to a lightweight initial bootstrap:
+  - the initial page payload now ships groups + templates only,
+  - auto-audience counts hydrate asynchronously after first paint,
+  - campaign history is no longer fetched on mount and only loads when the completed-runs view or final send step is opened.
+- Added a dedicated embedded performance benchmark test that uses `Server-Timing` to measure Dashboard, Customers, Messages, Rewards, and Settings over repeated runs.
+
+### Why
+- Merchants expected to see `Dashboard` in the main embedded nav, and the `Home` label felt like a regression.
+- `Customers` and `Messages` were doing too much work before the operator actually asked for data, which made the UI feel slower than it needed to.
+- The benchmark coverage gives us a repeatable way to catch route-level latency regressions before they reach production.
+
+### Scope boundary
+- This pass keeps the existing embedded routes, shell, and reporting endpoints intact.
+- It does not introduce a parallel customer grid or a new messaging history API contract.
+
 ## 2026-04-06 — Embedded Messaging Responses Inbox
 
 ### What changed

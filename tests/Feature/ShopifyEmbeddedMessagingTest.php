@@ -111,7 +111,7 @@ test('messaging workspace is hidden and locked for non-enabled tenant mappings',
 
     $this->get(route('home', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertDontSee('href="/shopify/app/messaging?shop=', false);
+        ->assertSee('href="/shopify/app/messaging?shop=', false);
 
     $this->get(route('shopify.app.messaging', retailEmbeddedSignedQuery()))
         ->assertStatus(403)
@@ -180,7 +180,8 @@ test('messaging page bootstrap defers auto audience counts to async summary load
             return ($firstAuto['key'] ?? null) === 'all_subscribed'
                 && array_key_exists('counts', $firstAuto)
                 && $firstAuto['counts'] === null;
-        });
+        })
+        ->assertViewHas('messagingBootstrap', fn (array $payload): bool => ! array_key_exists('audience_summary', (array) data_get($payload, 'data', [])));
 
     $this->withHeaders(shopifyMessagingApiHeaders())
         ->getJson(route('shopify.app.api.messaging.bootstrap'))

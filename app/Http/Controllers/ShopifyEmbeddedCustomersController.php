@@ -70,14 +70,17 @@ class ShopifyEmbeddedCustomersController extends Controller
             }
 
             $tenantId = $this->resolveEmbeddedTenantId($context, app(TenantResolver::class));
-            $grid = $gridService->resolve($request, $tenantId);
+            $resultsDeferred = $this->customersResultsDeferred($request);
+            $grid = $resultsDeferred
+                ? $gridService->emptyResult($request)
+                : $gridService->resolve($request, $tenantId);
             /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
             $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
             $displayLabels = $payloadBuilder->displayLabels($tenantId, $request);
 
             return response()->json([
                 'ok' => true,
-                'data' => $this->customersManagePayload($grid, $displayLabels),
+                'data' => $this->customersManagePayload($grid, $displayLabels, $resultsDeferred),
             ]);
         }
 
@@ -88,8 +91,11 @@ class ShopifyEmbeddedCustomersController extends Controller
             ? $probe->time('tenant_resolve', fn (): ?int => $this->resolveEmbeddedTenantId($context, app(TenantResolver::class)))
             : null;
         $probe->forTenant($tenantId);
+        $resultsDeferred = $this->customersResultsDeferred($request);
         $grid = $authorized
-            ? $probe->time('page_payload', fn (): array => $gridService->resolve($request, $tenantId))
+            ? ($resultsDeferred
+                ? $gridService->emptyResult($request)
+                : $probe->time('page_payload', fn (): array => $gridService->resolve($request, $tenantId)))
             : $gridService->emptyResult($request);
 
         Log::info('shopify.embedded.manage.render', [
@@ -110,6 +116,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'gridSortOptions' => $grid['sort_options'],
                 'activeFilterCount' => $grid['active_filter_count'],
                 'customersManageEndpoint' => $request->url(),
+                'customersResultsDeferred' => $resultsDeferred,
             ],
             resolvedContext: $context,
             resolvedTenantId: $tenantId,
@@ -1263,7 +1270,7 @@ class ShopifyEmbeddedCustomersController extends Controller
      * @param  array<string,string>  $displayLabels
      * @return array{results_html:string,summary_label:string,page_label:string}
      */
-    protected function customersManagePayload(array $grid, array $displayLabels = []): array
+    protected function customersManagePayload(array $grid, array $displayLabels = [], bool $resultsDeferred = false): array
     {
         $customers = $grid['paginator'];
         $filters = $grid['filters'];
@@ -1275,14 +1282,19 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'sort' => (string) ($filters['sort'] ?? 'last_activity'),
                 'direction' => (string) ($filters['direction'] ?? 'desc'),
                 'displayLabels' => $displayLabels,
+                'resultsDeferred' => $resultsDeferred,
             ])->render(),
-            'summary_label' => $this->customersSummaryLabel($customers),
-            'page_label' => $this->customersPageLabel($customers),
+            'summary_label' => $this->customersSummaryLabel($customers, $resultsDeferred),
+            'page_label' => $this->customersPageLabel($customers, $resultsDeferred),
         ];
     }
 
-    protected function customersSummaryLabel(mixed $customers): string
+    protected function customersSummaryLabel(mixed $customers, bool $resultsDeferred = false): string
     {
+        if ($resultsDeferred) {
+            return 'Search to load customers';
+        }
+
         $count = method_exists($customers, 'count') ? (int) $customers->count() : 0;
         $page = method_exists($customers, 'currentPage') ? (int) $customers->currentPage() : 1;
 
@@ -1294,8 +1306,12 @@ class ShopifyEmbeddedCustomersController extends Controller
         );
     }
 
-    protected function customersPageLabel(mixed $customers): string
+    protected function customersPageLabel(mixed $customers, bool $resultsDeferred = false): string
     {
+        if ($resultsDeferred) {
+            return 'Search to view matching records';
+        }
+
         if (! method_exists($customers, 'currentPage')) {
             return 'Page 1';
         }
@@ -1306,6 +1322,11 @@ class ShopifyEmbeddedCustomersController extends Controller
         return $more
             ? sprintf('Page %s · More results available', number_format($page))
             : sprintf('Page %s', number_format($page));
+    }
+
+    protected function customersResultsDeferred(Request $request): bool
+    {
+        return trim((string) $request->query('search', '')) === '';
     }
 
     protected function withServerTiming(Response|JsonResponse $response, array $metrics): Response|JsonResponse

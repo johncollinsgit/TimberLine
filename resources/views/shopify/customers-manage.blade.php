@@ -30,14 +30,22 @@
         $direction = (string) ($filters['direction'] ?? 'desc');
         $perPage = (int) ($filters['per_page'] ?? 25);
         $sortOptions = collect($gridSortOptions ?? [])->pluck('label', 'value')->all();
+        $resultsDeferred = (bool) ($customersResultsDeferred ?? false);
         $currentCount = method_exists($customers, 'count') ? (int) $customers->count() : 0;
         $currentPage = method_exists($customers, 'currentPage') ? (int) $customers->currentPage() : 1;
-        $summaryLabel = sprintf(
-            '%s customer%s loaded · Page %s',
-            number_format($currentCount),
-            $currentCount === 1 ? '' : 's',
-            number_format($currentPage)
-        );
+        $summaryLabel = $resultsDeferred
+            ? 'Search to load customers'
+            : sprintf(
+                '%s customer%s loaded · Page %s',
+                number_format($currentCount),
+                $currentCount === 1 ? '' : 's',
+                number_format($currentPage)
+            );
+        $pageLabel = $resultsDeferred
+            ? 'Search to view matching records'
+            : (method_exists($customers, 'hasMorePages') && $customers->hasMorePages()
+                ? 'Page ' . number_format($currentPage) . ' · More results available'
+                : 'Page ' . number_format($currentPage));
         $defaultGridFilters = [
             'search' => '',
             'segment' => 'all',
@@ -728,13 +736,54 @@
                 flex: 1 1 auto;
             }
 
-            .customers-pagination {
-                justify-content: stretch;
-            }
+        .customers-pagination {
+            justify-content: stretch;
+        }
 
-            .customers-summary-strip {
-                grid-template-columns: 1fr;
-            }
+        .customers-control select:disabled,
+        .customers-filter-toggle:disabled {
+            cursor: not-allowed;
+            background: rgba(248, 250, 252, 0.96);
+            color: rgba(15, 23, 42, 0.42);
+        }
+
+        .customers-empty-state {
+            display: grid;
+            gap: 8px;
+            border-radius: 18px;
+            border: 1px dashed rgba(15, 23, 42, 0.14);
+            background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+            padding: 24px;
+        }
+
+        .customers-empty-state__eyebrow {
+            margin: 0;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.46);
+        }
+
+        .customers-empty-state h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #0f172a;
+        }
+
+        .customers-empty-state p {
+            margin: 0;
+            max-width: 44rem;
+            font-size: 13px;
+            line-height: 1.6;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .customers-summary-strip {
+            grid-template-columns: 1fr;
+        }
         }
     </style>
 
@@ -744,6 +793,7 @@
         data-endpoint="{{ $customersManageEndpoint ?? request()->url() }}"
         data-default-filters='@json($defaultGridFilters)'
         data-filter-count="{{ (int) ($activeFilterCount ?? 0) }}"
+        data-results-deferred="{{ $resultsDeferred ? 'true' : 'false' }}"
     >
         <div class="customers-summary-strip" aria-label="Customer summary">
             <article class="customers-summary-card">
@@ -788,7 +838,7 @@
             <div class="customers-toolbar-head">
                 <div class="customers-toolbar-copy">
                     <h2>All customers</h2>
-                    <p>Search customers and use filters to narrow the list.</p>
+                    <p>Search customers first, then use filters to narrow the matching list.</p>
                 </div>
                 <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
             </div>
@@ -838,7 +888,7 @@
 
                 <div class="customers-control">
                     <label for="customers-sort">Sort</label>
-                    <select id="customers-sort" name="sort" data-customers-live="change">
+                    <select id="customers-sort" name="sort" data-customers-live="change" @disabled($resultsDeferred)>
                         @foreach($sortOptions as $value => $label)
                             <option value="{{ $value }}" @selected($sort === $value)>{{ $label }}</option>
                         @endforeach
@@ -847,7 +897,7 @@
 
                 <div class="customers-control">
                     <label for="customers-per-page">Rows</label>
-                    <select id="customers-per-page" name="per_page" data-customers-live="change">
+                    <select id="customers-per-page" name="per_page" data-customers-live="change" @disabled($resultsDeferred)>
                         @foreach([25, 50, 100] as $count)
                             <option value="{{ $count }}" @selected($perPage === $count)>{{ $count }}</option>
                         @endforeach
@@ -857,7 +907,7 @@
 
             <div class="customers-toolbar-meta">
                 <div class="customers-page-note" data-customers-page-note>
-                    {{ method_exists($customers, 'hasMorePages') && $customers->hasMorePages() ? 'Page ' . number_format($currentPage) . ' · More results available' : 'Page ' . number_format($currentPage) }}
+                    {{ $pageLabel }}
                 </div>
                 <div class="customers-live-note" data-customers-live-note aria-live="polite"></div>
             </div>
@@ -923,7 +973,7 @@
 
                 <div class="customers-filter-actions">
                     <div class="customers-filter-actions-copy">
-                        Filters update the table immediately.
+                        {{ $resultsDeferred ? 'Filters are saved and apply as soon as you start searching.' : 'Filters update the table immediately.' }}
                     </div>
                     <div class="customers-filter-actions-buttons">
                         <button type="button" class="customers-button is-link" data-customers-clear-filters @if((int) ($activeFilterCount ?? 0) === 0) hidden @endif>
@@ -945,9 +995,20 @@
                     'filters' => $filters,
                     'sort' => $sort,
                     'direction' => $direction,
+                    'resultsDeferred' => $resultsDeferred,
                 ])
             </div>
         </section>
+
+        <template data-customers-deferred-template>
+            @include('shopify.partials.customers-manage-results', [
+                'customers' => $customers,
+                'filters' => $filters,
+                'sort' => $sort,
+                'direction' => $direction,
+                'resultsDeferred' => true,
+            ])
+        </template>
     </section>
 
     <script>
@@ -972,6 +1033,7 @@
             const clearFiltersButton = root.querySelector('[data-customers-clear-filters]');
             const activeFiltersNode = root.querySelector('[data-customers-active-filters]');
             const searchInput = root.querySelector('[data-customers-search]');
+            const deferredTemplate = root.querySelector('[data-customers-deferred-template]');
 
             if (!form || !resultsShell || !resultsNode || !toggleFiltersButton) {
                 return;
@@ -993,9 +1055,15 @@
             let lastRequestedUrl = null;
             let authHeadersPromise = null;
             const detailPrefetches = new Map();
+            const deferredSummaryLabel = 'Search to load customers';
+            const deferredPageLabel = 'Search to view matching records';
 
             function cleanValue(value) {
                 return value == null ? '' : String(value).trim();
+            }
+
+            function hasSearchQuery() {
+                return cleanValue(searchInput && searchInput.value).length > 0;
             }
 
             function filterFieldKeys() {
@@ -1062,6 +1130,32 @@
                 activeFiltersNode.innerHTML = entries.map((entry) => (
                     `<span class="customers-filter-chip"><span class="customers-filter-chip__label">${entry.label}</span>${entry.value}</span>`
                 )).join('');
+            }
+
+            function syncDeferredControls() {
+                const deferred = !hasSearchQuery();
+                root.dataset.resultsDeferred = deferred ? 'true' : 'false';
+                form.querySelectorAll('[name="sort"], [name="per_page"]').forEach((field) => {
+                    field.disabled = deferred;
+                });
+            }
+
+            function renderDeferredState(statusMessage = 'Enter a search to load customers.') {
+                if (deferredTemplate) {
+                    resultsNode.innerHTML = deferredTemplate.innerHTML;
+                }
+                if (summaryNode) {
+                    summaryNode.textContent = deferredSummaryLabel;
+                }
+                if (pageNoteNode) {
+                    pageNoteNode.textContent = deferredPageLabel;
+                }
+
+                window.history.replaceState({}, '', buildUrl({}, true).toString());
+                syncDeferredControls();
+                setPendingState(false);
+                releaseResultsHeight();
+                setStatusMessage(statusMessage, 'neutral', false);
             }
 
             function setStatusMessage(message = '', tone = 'neutral', retryable = false) {
@@ -1313,6 +1407,7 @@
 
                     window.history.replaceState({}, '', url.toString());
                     syncFormFromUrl(url);
+                    syncDeferredControls();
                     setStatusMessage('');
                     releaseResultsHeight();
                 } catch (error) {
@@ -1339,12 +1434,18 @@
             function queueRequest(delay = 240, pendingMessage = 'Updating customers…') {
                 window.clearTimeout(debounceTimer);
                 debounceTimer = window.setTimeout(() => {
+                    if (!hasSearchQuery()) {
+                        renderDeferredState();
+                        return;
+                    }
+
                     const url = buildUrl({}, true);
                     void requestRows(url, pendingMessage);
                 }, delay);
             }
 
             syncFilterSummary();
+            syncDeferredControls();
 
             toggleFiltersButton.addEventListener('click', () => {
                 const expanded = toggleFiltersButton.getAttribute('aria-expanded') === 'true';
@@ -1369,6 +1470,11 @@
                 });
 
                 syncFilterSummary();
+                if (!hasSearchQuery()) {
+                    renderDeferredState('Filters cleared. Enter a search to load customers.');
+                    return;
+                }
+
                 const url = buildUrl({}, true);
                 void requestRows(url, 'Clearing filters…');
             });
@@ -1376,11 +1482,16 @@
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
                 window.clearTimeout(debounceTimer);
+                if (!hasSearchQuery()) {
+                    renderDeferredState();
+                    return;
+                }
                 const url = buildUrl({}, true);
                 void requestRows(url, 'Searching customers…');
             });
 
             searchInput?.addEventListener('input', () => {
+                syncDeferredControls();
                 queueRequest(260, 'Searching customers…');
             });
 
@@ -1398,6 +1509,11 @@
             form.querySelectorAll('[data-customers-live="change"]').forEach((field) => {
                 field.addEventListener('change', () => {
                     syncFilterSummary();
+                    syncDeferredControls();
+                    if (!hasSearchQuery()) {
+                        renderDeferredState('Enter a search to load customers.');
+                        return;
+                    }
                     const url = buildUrl({}, true);
                     void requestRows(url, 'Updating customers…');
                 });

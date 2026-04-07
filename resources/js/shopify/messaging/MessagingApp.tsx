@@ -296,6 +296,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   const [emailSendLoading, setEmailSendLoading] = useState(false);
 
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [history, setHistory] = useState<MessagingHistoryPayload>({ entries: [], campaigns: [] });
   const [cancelingCampaignId, setCancelingCampaignId] = useState<number | null>(null);
   const historyFetchRef = useRef<Promise<void> | null>(null);
@@ -304,6 +305,8 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
 
   const activeSteps = activeChannel === "sms" ? SMS_STEPS : EMAIL_STEPS;
   const activeStepIndex = activeChannel === "sms" ? smsStep : emailStep;
+  const activeSendStepIndex = activeChannel === "sms" ? 3 : 4;
+  const historyVisible = workspaceTab === "completed" || activeStepIndex === activeSendStepIndex;
 
   const smsSafety = useMemo(() => analyzeLocalSms(smsMessage), [smsMessage]);
   const smsChars = smsSafety.characterCount;
@@ -360,8 +363,12 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     }
   }, [audienceDiagnostics, endpoints.audience_summary, groupSummaries]);
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (force = false) => {
     if (!endpoints.history) {
+      return;
+    }
+
+    if (historyLoaded && !force) {
       return;
     }
 
@@ -378,6 +385,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           `${endpoints.history}?limit=16`,
         );
         setHistory(response.data ?? { entries: [], campaigns: [] });
+        setHistoryLoaded(true);
       } catch (error) {
         handleApiError(error, "Failed to load campaign history.");
       } finally {
@@ -392,7 +400,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     } finally {
       historyFetchRef.current = null;
     }
-  }, [endpoints.history]);
+  }, [endpoints.history, historyLoaded]);
 
   const cancelCampaign = useCallback(async (campaignId: number) => {
     const endpoint = endpoints.cancel_campaign_base?.replace("__CAMPAIGN__", String(campaignId));
@@ -410,7 +418,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
       });
 
       setBanner("success", `Campaign canceled. Remaining sends stopped (#${campaignId}).`);
-      await loadHistory();
+      await loadHistory(true);
     } catch (error) {
       handleApiError(error, "Campaign cancel failed.");
     } finally {
@@ -440,30 +448,25 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   }, [templates, emailTemplateKey]);
 
   useEffect(() => {
-    const sendStepIndex = activeChannel === "sms" ? 3 : 4;
-    if (activeStepIndex === sendStepIndex) {
+    if (historyVisible) {
       void loadHistory();
     }
-  }, [activeChannel, activeStepIndex, loadHistory]);
-
-  useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+  }, [historyVisible, loadHistory]);
 
   useEffect(() => {
     const campaigns = Array.isArray(history.campaigns) ? history.campaigns : [];
-    if (!campaigns.some(hasActiveCampaignWork)) {
+    if (!historyLoaded || !historyVisible || !campaigns.some(hasActiveCampaignWork)) {
       return;
     }
 
     const timer = window.setInterval(() => {
-      void loadHistory();
+      void loadHistory(true);
     }, 4000);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [history.campaigns, loadHistory]);
+  }, [history.campaigns, historyLoaded, historyVisible, loadHistory]);
 
   const groupCards = useMemo(() => {
     const saved = groups.saved.map((group) => {
@@ -777,7 +780,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           ? `SMS campaign queued (#${campaignId}).`
           : "SMS campaign queued.",
       );
-      await loadHistory();
+      await loadHistory(true);
       await loadSmsPreview();
     } catch (error) {
       handleApiError(error, "SMS campaign send failed.");
@@ -821,7 +824,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
           ? `Email campaign queued (#${campaignId}).`
           : "Email campaign queued.",
       );
-      await loadHistory();
+      await loadHistory(true);
       await loadEmailPreview();
     } catch (error) {
       handleApiError(error, "Email campaign send failed.");

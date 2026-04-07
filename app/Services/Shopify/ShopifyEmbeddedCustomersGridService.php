@@ -220,7 +220,7 @@ class ShopifyEmbeddedCustomersGridService
             ->leftJoinSub($this->externalProfileStatsSubquery($tenantId, $scopedProfileIds), 'external_stats', function ($join): void {
                 $join->on('external_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->ordersStatsSubquery($tenantId), 'order_stats', function ($join): void {
+            ->leftJoinSub($this->ordersStatsSubquery($tenantId, $scopedProfileIds), 'order_stats', function ($join): void {
                 $join->on('order_stats.normalized_email', '=', 'mp.normalized_email');
             })
             ->leftJoinSub($this->wholesaleLinkStatsSubquery($tenantId, $scopedProfileIds), 'wholesale_link_stats', function ($join): void {
@@ -580,7 +580,7 @@ class ShopifyEmbeddedCustomersGridService
             $mode = 'phone';
         }
 
-        return [
+        $context = [
             'raw' => $search,
             'mode' => $mode,
             'search_like' => $searchLike,
@@ -590,32 +590,21 @@ class ShopifyEmbeddedCustomersGridService
             'normalized_phone_with_country_code' => $normalizedPhoneWithCountryCode,
             'numeric_id' => $numericId,
             'terms' => $terms,
-            'scoped_profile_ids' => $this->searchScopedProfileIds(
-                mode: $mode,
-                search: $search,
-                prefixLike: $prefixLike,
-                searchLike: $searchLike,
-                phonePrefixLike: $phonePrefixLike,
-                normalizedPhoneWithCountryCode: $normalizedPhoneWithCountryCode,
-                numericId: $numericId,
-                tenantId: $tenantId,
-            ),
         ];
+
+        $context['scoped_profile_ids'] = $this->searchScopedProfileIds($context, $tenantId);
+
+        return $context;
     }
 
     /**
      * @return array<int,int>|null
      */
-    protected function searchScopedProfileIds(
-        string $mode,
-        string $search,
-        ?string $prefixLike,
-        ?string $searchLike,
-        ?string $phonePrefixLike,
-        ?string $normalizedPhoneWithCountryCode,
-        ?int $numericId,
-        ?int $tenantId = null,
-    ): ?array {
+    protected function searchScopedProfileIds(array $searchContext, ?int $tenantId = null): ?array
+    {
+        $mode = (string) ($searchContext['mode'] ?? 'text');
+        $numericId = isset($searchContext['numeric_id']) ? (int) $searchContext['numeric_id'] : null;
+
         if ($mode === 'none') {
             return null;
         }
@@ -624,34 +613,11 @@ class ShopifyEmbeddedCustomersGridService
             return $numericId !== null ? [$numericId] : [0];
         }
 
-        if (! in_array($mode, ['email', 'phone'], true)) {
-            return null;
-        }
-
         $candidateQuery = DB::table('marketing_profiles as mp')
             ->select('mp.id')
             ->limit(251);
         $candidateQuery = $this->applyTenantScope($candidateQuery, 'marketing_profiles', 'mp', $tenantId);
-
-        if ($mode === 'email' && $prefixLike !== null && $searchLike !== null) {
-            $candidateQuery->where(function ($nested) use ($prefixLike, $searchLike): void {
-                $nested
-                    ->where('mp.normalized_email', 'like', strtolower($prefixLike))
-                    ->orWhere('mp.email', 'like', $searchLike);
-            });
-        }
-
-        if ($mode === 'phone' && $phonePrefixLike !== null && $searchLike !== null) {
-            $candidateQuery->where(function ($nested) use ($phonePrefixLike, $normalizedPhoneWithCountryCode, $searchLike): void {
-                $nested->where('mp.normalized_phone', 'like', $phonePrefixLike);
-
-                if ($normalizedPhoneWithCountryCode !== null) {
-                    $nested->orWhere('mp.normalized_phone', 'like', $normalizedPhoneWithCountryCode . '%');
-                }
-
-                $nested->orWhere('mp.phone', 'like', $searchLike);
-            });
-        }
+        $this->applySearch($candidateQuery, $searchContext);
 
         $ids = $candidateQuery->pluck('mp.id')
             ->map(fn (mixed $id): int => (int) $id)
@@ -996,7 +962,7 @@ class ShopifyEmbeddedCustomersGridService
         );
     }
 
-    protected function ordersStatsSubquery(?int $tenantId = null): Builder
+    protected function ordersStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
         if (! Schema::hasTable('orders')) {
             return $this->emptySubquery([
@@ -1031,6 +997,29 @@ class ShopifyEmbeddedCustomersGridService
             ->whereRaw($emailExpression . ' is not null')
             ->groupByRaw($normalizedEmailExpression);
         $query = $this->applyTenantScope($query, 'orders', 'orders', $tenantId);
+
+        if ($profileIds !== null) {
+            $scopedEmails = DB::table('marketing_profiles as mp')
+                ->select('mp.normalized_email')
+                ->whereIn('mp.id', $profileIds ?: [0])
+                ->whereNotNull('mp.normalized_email')
+                ->where('mp.normalized_email', '!=', '')
+                ->pluck('mp.normalized_email')
+                ->map(fn (mixed $email): string => strtolower(trim((string) $email)))
+                ->filter(fn (string $email): bool => $email !== '')
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($scopedEmails === []) {
+                return $this->emptySubquery([
+                    "'' as normalized_email",
+                    '0 as orders_count',
+                ]);
+            }
+
+            $query->whereIn(DB::raw($normalizedEmailExpression), $scopedEmails);
+        }
 
         return $query;
     }

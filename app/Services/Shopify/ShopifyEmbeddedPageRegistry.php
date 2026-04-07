@@ -14,7 +14,7 @@ class ShopifyEmbeddedPageRegistry
                 'key' => 'home',
                 'route_name' => 'shopify.app',
                 'legacy_route_names' => ['home'],
-                'label' => 'Home',
+                'label' => 'Dashboard',
                 'section' => 'home',
                 'group' => 'primary',
                 'icon_key' => 'home',

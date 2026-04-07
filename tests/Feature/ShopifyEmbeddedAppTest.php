@@ -15,7 +15,7 @@ beforeEach(function () {
 test('shopify embedded app route shows helpful launch message when opened outside shopify admin', function () {
     $this->get(route('shopify.app'))
         ->assertOk()
-        ->assertSeeText('Home')
+        ->assertSeeText('Dashboard')
         ->assertSeeText('Open this app from Shopify Admin to load store data.')
         ->assertDontSeeText('Install on Shopify')
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
@@ -43,7 +43,7 @@ test('shopify embedded app route renders verified admin shell for configured sto
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Home')
+        ->assertSeeText('Dashboard')
         ->assertSeeText('Revenue and setup at a glance.')
         ->assertSee('id="embedded-home-chart"', false)
         ->assertSee('<s-app-nav>', false)
@@ -107,7 +107,7 @@ test('shopify embedded session lets root-style home route resolve after signed a
 
     $this->get('/')
         ->assertOk()
-        ->assertSeeText('Home')
+        ->assertSeeText('Dashboard')
         ->assertSeeText('Revenue and setup at a glance.');
 });
 

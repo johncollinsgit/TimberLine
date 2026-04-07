@@ -1348,7 +1348,10 @@ test('cross-tenant regression wall keeps customers detail/manage and dashboard m
         'updated_at' => now()->subDay(),
     ]);
 
-    $manageResponse = $this->get(route('shopify.app.customers.manage', retailEmbeddedSignedQuery()));
+    $manageResponse = $this->get(route('shopify.app.customers.manage', array_merge(
+        retailEmbeddedSignedQuery(),
+        ['search' => 'isolation.tenant.one']
+    )));
 
     $manageResponse->assertOk()
         ->assertSeeText('isolation.tenant.one@example.com')

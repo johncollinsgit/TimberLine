@@ -49,7 +49,7 @@
 - Routes:
   - page: `GET /shopify/app/messaging`
   - bootstrap: `GET /shopify/app/api/messaging/bootstrap`
-    - lightweight startup payload (groups only; heavy audience/history loading is deferred)
+    - lightweight startup payload (`groups` + `templates` only; heavy audience/history loading is deferred)
   - audience summary: `GET /shopify/app/api/messaging/audience-summary`
   - customer search: `GET /shopify/app/api/messaging/customers/search`
   - group preview: `POST /shopify/app/api/messaging/preview/group`
@@ -64,6 +64,8 @@
 - Group editor is hidden by default and only shown when explicitly opened.
 - Send controls live in a full-width bottom card.
 - Clicking send first opens preview/confirmation; only confirmation dispatches.
+- Auto-audience counts load after first paint through the async summary endpoint; they are not part of the initial HTML response.
+- Campaign history loads on demand when the operator opens `Completed runs` or reaches the final send step, and polling only starts after history is visible.
 - Email-only tools:
   - conditional email template editor
   - live preview pane
