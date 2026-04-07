@@ -31,7 +31,7 @@ function grantMessagingModule(Tenant $tenant): void
     );
 }
 
-test('message analytics setup guide includes storefront tracking deployment guidance', function () {
+test('messaging setup guide includes storefront tracking deployment guidance', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Storefront Tracking Tenant',
         'slug' => 'storefront-tracking-tenant',
@@ -40,7 +40,7 @@ test('message analytics setup guide includes storefront tracking deployment guid
     configureEmbeddedRetailStore($tenant->id);
 
     $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
-    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+    $response = $this->get(route('shopify.app.messaging.setup', retailEmbeddedSignedQuery([
         'host' => $host,
     ])));
 
@@ -54,7 +54,7 @@ test('message analytics setup guide includes storefront tracking deployment guid
         ->assertSeeText('npm run shopify:app:deploy');
 });
 
-test('message analytics setup guide still exposes pixel connection when scope snapshot is stale', function () {
+test('messaging setup guide still exposes pixel connection when scope snapshot is stale', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Storefront Tracking Pending Scope Tenant',
         'slug' => 'storefront-tracking-pending-scope-tenant',
@@ -93,7 +93,7 @@ test('message analytics setup guide still exposes pixel connection when scope sn
     });
 
     $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
-    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+    $response = $this->get(route('shopify.app.messaging.setup', retailEmbeddedSignedQuery([
         'host' => $host,
     ])));
 
@@ -102,7 +102,7 @@ test('message analytics setup guide still exposes pixel connection when scope sn
         ->assertSeeText('Pixel status: Disconnected');
 });
 
-test('message analytics setup guide prompts for reconnect when shopify token is invalid', function () {
+test('messaging setup guide prompts for reconnect when shopify token is invalid', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Storefront Tracking Invalid Token Tenant',
         'slug' => 'storefront-tracking-invalid-token-tenant',
@@ -123,7 +123,7 @@ test('message analytics setup guide prompts for reconnect when shopify token is 
     });
 
     $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
-    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+    $response = $this->get(route('shopify.app.messaging.setup', retailEmbeddedSignedQuery([
         'host' => $host,
     ])));
 
@@ -133,7 +133,7 @@ test('message analytics setup guide prompts for reconnect when shopify token is 
         ->assertDontSeeText('Connect Shopify Pixel');
 });
 
-test('message analytics setup guide treats missing shopify web pixel as disconnected', function () {
+test('messaging setup guide treats missing shopify web pixel as disconnected', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Storefront Tracking Missing Pixel Tenant',
         'slug' => 'storefront-tracking-missing-pixel-tenant',
@@ -177,7 +177,7 @@ test('message analytics setup guide treats missing shopify web pixel as disconne
     });
 
     $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
-    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+    $response = $this->get(route('shopify.app.messaging.setup', retailEmbeddedSignedQuery([
         'host' => $host,
     ])));
 
