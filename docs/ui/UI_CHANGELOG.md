@@ -1,5 +1,23 @@
 # UI Changelog
 
+## 2026-04-07 — Storefront Review Entry Points + Weekly Reward Launcher Copy
+
+### What changed
+- Added a clearer storefront review-launch path so the product reviews section can show an explicit `Write a review` CTA instead of relying only on the smaller summary control.
+- Updated the floating reviews drawer to surface a direct review CTA when it has current-product context and a `Browse products to review` fallback when it is opened away from a product page.
+- Kept the rewards-side `product-review` task visible even after the shopper has already claimed the weekly Candle Cash award so the drawer still acts as a launcher for additional reviews.
+- Updated rewards task messaging to match the actual rule: the first eligible review in a seven-day window can earn Candle Cash, while later reviews in that window remain allowed but do not promise another immediate reward.
+- Aligned storefront reward telemetry with the backend reward-event contract by logging a dedicated task-open event for the product-review launcher.
+
+### Why
+- Shoppers were getting stuck because the rewards drawer could open without a visible path to actually start a review.
+- The rewards UI was implying a reward on every review even though the underlying award logic is intentionally once per seven-day window.
+- We needed storefront telemetry that reflects a real rewards-task launcher action without introducing duplicate reward business logic.
+
+### Scope boundary
+- This pass reuses the existing native review submit flow and existing weekly reward-award verification path.
+- It does not introduce a new review submit endpoint, a new reward-award flow, or a new duplicate-review policy.
+
 ## 2026-04-07 — Embedded Dashboard Label + Search-First Customers + Deferred Messaging Loads
 
 ### What changed

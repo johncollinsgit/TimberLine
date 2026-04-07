@@ -497,7 +497,7 @@ class MarketingShopifyIntegrationController extends Controller
     public function logRewardEvent(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'event_type' => ['required', 'string', 'in:reward_view,reward_activate_click,reward_activation_success,reward_activation_failure,reward_apply_click,reward_apply_success,reward_apply_failure,reward_confetti_shown'],
+            'event_type' => ['required', 'string', 'in:reward_view,reward_activate_click,reward_activation_success,reward_activation_failure,reward_apply_click,reward_apply_success,reward_apply_failure,reward_confetti_shown,reward_task_open_click'],
             'request_key' => ['nullable', 'string', 'max:120'],
             'marketing_profile_id' => ['nullable', 'integer'],
             'email' => ['nullable', 'email', 'max:255'],

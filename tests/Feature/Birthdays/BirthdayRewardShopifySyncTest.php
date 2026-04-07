@@ -222,6 +222,46 @@ test('storefront reward event endpoint logs idempotent interaction telemetry', f
         ->count())->toBe(1);
 });
 
+test('storefront reward event endpoint accepts reward task open telemetry idempotently', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'birthday-signing-secret');
+
+    [$profile] = birthdayRewardFixture();
+
+    $query = birthdayAppProxySignedQuery([
+        'shop' => 'retail.example.myshopify.com',
+        'timestamp' => (string) time(),
+    ], 'birthday-proxy-secret');
+
+    $payload = [
+        'event_type' => 'reward_task_open_click',
+        'request_key' => 'product-review-task-open-' . $profile->id,
+        'marketing_profile_id' => $profile->id,
+        'reward_kind' => 'product_review',
+        'surface' => 'rewards_page',
+        'meta' => [
+            'task_handle' => 'product-review',
+            'destination' => 'product_reviews_drawer',
+        ],
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.rewards.event', $query), $payload)
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.profile_id', $profile->id)
+        ->assertJsonPath('data.event_type', 'reward_task_open_click')
+        ->assertJsonPath('meta.states.0', 'reward_event_logged');
+
+    $this->postJson(route('marketing.shopify.v1.rewards.event', $query), $payload)
+        ->assertOk();
+
+    expect(MarketingStorefrontEvent::query()
+        ->where('event_type', 'reward_task_open_click')
+        ->where('request_key', 'product-review-task-open-' . $profile->id)
+        ->count())->toBe(1);
+});
+
 test('storefront birthday status fails closed when tenant mapping is missing', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
