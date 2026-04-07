@@ -55,7 +55,7 @@ test('marketing touch shopify page cache command updates page via graphql', func
         if (str_contains($query, 'mutation TouchPage')) {
             $updateCalls++;
 
-            expect(data_get($payload, 'variables.page.id'))->toBe('gid://shopify/OnlineStorePage/123');
+            expect(data_get($payload, 'variables.id'))->toBe('gid://shopify/OnlineStorePage/123');
             expect(data_get($payload, 'variables.page.title'))->toBe('Rewards');
 
             return Http::response([

@@ -122,8 +122,8 @@ GQL;
         string $body
     ): string {
         $mutation = <<<'GQL'
-mutation TouchPage($page: PageUpdateInput!) {
-  pageUpdate(page: $page) {
+mutation TouchPage($id: ID!, $page: PageUpdateInput!) {
+  pageUpdate(id: $id, page: $page) {
     page {
       id
       updatedAt
@@ -137,8 +137,8 @@ mutation TouchPage($page: PageUpdateInput!) {
 GQL;
 
         $payload = $client->query($mutation, [
+            'id' => $pageId,
             'page' => [
-                'id' => $pageId,
                 'title' => $title,
                 'body' => $body,
             ],
