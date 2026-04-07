@@ -52,6 +52,29 @@ class TenantRewardsPolicyService
     }
 
     /**
+     * Lightweight storefront policy snapshot.
+     *
+     * Storefront widgets only need customer-facing messaging and program identity
+     * and should avoid the heavier readiness/reporting payload used in Backstage.
+     *
+     * @return array<string,mixed>
+     */
+    public function storefrontSnapshot(?int $tenantId): array
+    {
+        if ($tenantId === null || $tenantId <= 0) {
+            return [];
+        }
+
+        $core = $this->corePolicy($tenantId);
+
+        return [
+            'program_identity' => (array) ($core['program_identity'] ?? []),
+            'customer_experience' => (array) ($core['customer_experience'] ?? []),
+            'expiration_and_reminders' => (array) ($core['expiration_and_reminders'] ?? []),
+        ];
+    }
+
+    /**
      * @param  array<string,mixed>  $patch
      * @param  array<string,mixed>  $context
      * @return array<string,mixed>

@@ -7,7 +7,10 @@ use App\Models\GoogleBusinessProfileConnection;
 use App\Models\GoogleBusinessProfileSyncRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\TenantRewardsPolicyService;
 use Illuminate\Support\Str;
 
 function configureStage10RewardsStorefront(): void
@@ -525,6 +528,66 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
+});
+
+test('shopify v1 candle cash status uses lightweight storefront policy snapshot instead of full policy resolve', function () {
+    configureStage10RewardsStorefront();
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Snapshot Tenant',
+        'slug' => 'snapshot-tenant',
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'timberline.example.myshopify.com',
+        'access_token' => 'stage10-oauth-token',
+        'scopes' => 'read_customers,write_customers',
+        'installed_at' => now(),
+    ]);
+
+    $policyService = \Mockery::mock(TenantRewardsPolicyService::class);
+    $policyService->shouldReceive('storefrontSnapshot')
+        ->once()
+        ->with($tenant->id)
+        ->andReturn([
+            'program_identity' => [
+                'program_name' => 'Candle Cash Snapshot',
+            ],
+            'customer_experience' => [
+                'wallet_label' => 'Snapshot Wallet',
+                'expiration_message' => 'Snapshot expiration copy',
+            ],
+            'expiration_and_reminders' => [
+                'expiration_mode' => 'days_from_issue',
+                'expiration_days' => 45,
+            ],
+        ]);
+    $policyService->shouldNotReceive('resolve');
+    $this->app->instance(TenantRewardsPolicyService::class, $policyService);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Snapshot',
+        'email' => 'snapshot.policy@example.com',
+        'normalized_email' => 'snapshot.policy@example.com',
+        'phone' => '5550008899',
+        'normalized_phone' => '+15550008899',
+        'tenant_id' => $tenant->id,
+    ]);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.program.program_name', 'Candle Cash Snapshot')
+        ->assertJsonPath('data.program.wallet_label', 'Snapshot Wallet')
+        ->assertJsonPath('data.program.expiration.days', 45)
+        ->assertJsonPath('data.copy.expiration_copy', 'Snapshot expiration copy');
 });
 
 test('shopify v1 candle cash status returns google review in manual fallback mode until the first successful sync makes it live', function () {

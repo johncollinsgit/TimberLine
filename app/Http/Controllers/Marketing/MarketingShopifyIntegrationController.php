@@ -118,13 +118,16 @@ class MarketingShopifyIntegrationController extends Controller
 
     public function availableRewards(Request $request, CandleCashService $candleCashService): JsonResponse
     {
+        $startedAt = microtime(true);
         $storeContext = $this->resolveStoreContext($request);
         if ($this->requiresVerifiedStoreContext($request) && ! $this->hasStoreContext($storeContext)) {
+            $this->warnIfSlowStorefrontRequest($request, 'available_rewards', $startedAt, $storeContext);
             return $this->missingStoreContextResponse('available_rewards');
         }
         if (! $this->requiresVerifiedStoreContext($request)
             && $this->hasStoreContext($storeContext)
             && ! $this->hasTenantScopedStoreContext($storeContext)) {
+            $this->warnIfSlowStorefrontRequest($request, 'available_rewards', $startedAt, $storeContext);
             return $this->missingTenantContextResponse('available_rewards');
         }
 
@@ -158,7 +161,7 @@ class MarketingShopifyIntegrationController extends Controller
             'resolution_status' => $profile ? 'resolved' : 'open',
         ]);
 
-        return MarketingStorefrontContract::success([
+        $response = MarketingStorefrontContract::success([
             'profile_id' => $profile ? (int) $profile->id : null,
             'candle_cash_balance' => $profile ? data_get($balancePayload, 'candle_cash_amount') : null,
             'candle_cash_balance_formatted' => $profile ? data_get($balancePayload, 'candle_cash_amount_formatted') : null,
@@ -172,6 +175,13 @@ class MarketingShopifyIntegrationController extends Controller
             'rewards' => $rewardRows,
             'storefront_reward' => $rewardRows[0] ?? null,
         ], $this->contractMeta($request), $states);
+
+        $this->warnIfSlowStorefrontRequest($request, 'available_rewards', $startedAt, array_merge($storeContext, [
+            'profile_id' => $profile ? (int) $profile->id : null,
+            'reward_count' => count($rewardRows),
+        ]));
+
+        return $response;
     }
 
     public function rewardHistory(Request $request, CandleCashService $candleCashService): JsonResponse
@@ -1251,8 +1261,10 @@ class MarketingShopifyIntegrationController extends Controller
         CandleCashShopifyDiscountService $discountSyncService,
         GoogleBusinessProfileConnectionService $googleBusinessConnectionService
     ): JsonResponse {
+        $startedAt = microtime(true);
         $storeContext = $this->resolveStoreContext($request);
         if (! $this->hasStoreContext($storeContext)) {
+            $this->warnIfSlowStorefrontRequest($request, 'candle_cash_status', $startedAt, $storeContext);
             return $this->missingStoreContextResponse('candle_cash_status');
         }
 
@@ -1425,7 +1437,7 @@ class MarketingShopifyIntegrationController extends Controller
             'resolution_status' => $profile ? 'resolved' : 'open',
         ]);
 
-        return MarketingStorefrontContract::success([
+        $response = MarketingStorefrontContract::success([
             'profile_id' => $profile ? (int) $profile->id : null,
             'state' => $states[0] ?? 'unknown_customer',
             'copy' => [
@@ -1568,6 +1580,14 @@ class MarketingShopifyIntegrationController extends Controller
                 'issuance' => $this->birthdayIssuancePayload($birthdayStatus['issuance'] ?? null),
             ],
         ], $this->contractMeta($request), $states);
+
+        $this->warnIfSlowStorefrontRequest($request, 'candle_cash_status', $startedAt, array_merge($storeContext, [
+            'profile_id' => $profile ? (int) $profile->id : null,
+            'task_count' => $taskRows->count(),
+            'reward_code_count' => count($rewardCodeRows),
+        ]));
+
+        return $response;
     }
 
     public function submitCandleCashTask(
@@ -3260,7 +3280,7 @@ class MarketingShopifyIntegrationController extends Controller
         array $storeContext
     ): array {
         $policy = $tenantId !== null && $tenantId > 0
-            ? $this->tenantRewardsPolicyService->resolve($tenantId)
+            ? $this->tenantRewardsPolicyService->storefrontSnapshot($tenantId)
             : [];
         $expiration = (array) data_get($policy, 'expiration_and_reminders', []);
         $customer = (array) data_get($policy, 'customer_experience', []);
@@ -3313,6 +3333,37 @@ class MarketingShopifyIntegrationController extends Controller
     protected function storefrontRedemptionAccessPayload(?MarketingProfile $profile): array
     {
         return $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile);
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     */
+    protected function warnIfSlowStorefrontRequest(
+        Request $request,
+        string $scope,
+        float $startedAt,
+        array $context = []
+    ): void {
+        $thresholdMs = max(250, (int) config('marketing.shopify.storefront_slow_request_ms', 1500));
+        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+        if ($durationMs < $thresholdMs) {
+            return;
+        }
+
+        Log::warning('shopify storefront request slow', [
+            'scope' => $scope,
+            'duration_ms' => $durationMs,
+            'threshold_ms' => $thresholdMs,
+            'route' => $request->route()?->getName(),
+            'path' => $request->path(),
+            'store_key' => $context['store_key'] ?? null,
+            'tenant_id' => $context['tenant_id'] ?? null,
+            'profile_id' => $context['profile_id'] ?? null,
+            'reward_count' => $context['reward_count'] ?? null,
+            'task_count' => $context['task_count'] ?? null,
+            'reward_code_count' => $context['reward_code_count'] ?? null,
+        ]);
     }
 
     /**
