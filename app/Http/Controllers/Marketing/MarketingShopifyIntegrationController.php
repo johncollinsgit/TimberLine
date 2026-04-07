@@ -1415,6 +1415,9 @@ class MarketingShopifyIntegrationController extends Controller
             'copy' => [
                 'title' => (string) data_get($frontendConfig, 'central_title', $rewardsLabel . ' Central'),
                 'subtitle' => (string) data_get($frontendConfig, 'central_subtitle', 'Earn ' . $rewardsLabelLc . ' through verified actions like signups, reviews, referrals, and member-only perks.'),
+                'rewards_label' => $rewardsLabel,
+                'wallet_label' => (string) data_get($frontendConfig, 'wallet_label', $rewardsLabel . ' Wallet'),
+                'reward_credit_label' => $rewardCreditLabel,
                 'faq_approval_copy' => (string) data_get($frontendConfig, 'faq_approval_copy', ''),
                 'faq_stack_copy' => (string) data_get($frontendConfig, 'faq_stack_copy', ''),
                 'faq_pending_copy' => (string) data_get($frontendConfig, 'faq_pending_copy', ''),
