@@ -424,11 +424,10 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   }, [activeChannel, activeStepIndex, loadHistory]);
 
   useEffect(() => {
-    const sendStepIndex = activeChannel === "sms" ? 3 : 4;
-    if (activeStepIndex !== sendStepIndex) {
-      return;
-    }
+    void loadHistory();
+  }, [loadHistory]);
 
+  useEffect(() => {
     const campaigns = Array.isArray(history.campaigns) ? history.campaigns : [];
     if (!campaigns.some(hasActiveCampaignWork)) {
       return;
@@ -441,7 +440,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     return () => {
       window.clearInterval(timer);
     };
-  }, [activeChannel, activeStepIndex, history.campaigns, loadHistory]);
+  }, [history.campaigns, loadHistory]);
 
   const groupCards = useMemo(() => {
     const saved = groups.saved.map((group) => {

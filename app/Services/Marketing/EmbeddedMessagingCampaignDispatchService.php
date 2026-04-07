@@ -126,7 +126,7 @@ class EmbeddedMessagingCampaignDispatchService
                 'name' => Str::limit($campaignName, 120),
                 'slug' => null,
                 'description' => null,
-                'status' => $scheduleAt->greaterThan($now) ? 'draft' : 'sending',
+                'status' => $scheduleAt->greaterThan($now) ? 'draft' : 'preparing',
                 'channel' => $resolvedChannel,
                 'source_label' => $resolvedSourceLabel,
                 'message_subject' => $resolvedSubject,

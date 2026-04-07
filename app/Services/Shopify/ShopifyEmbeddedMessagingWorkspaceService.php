@@ -1424,7 +1424,7 @@ GRAPHQL;
 
     protected function assistDispatchForActiveCampaigns(?int $tenantId): void
     {
-        if (! app()->environment('production')) {
+        if (app()->runningUnitTests()) {
             return;
         }
 

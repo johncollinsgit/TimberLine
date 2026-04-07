@@ -114,7 +114,7 @@ return [
     ],
 
     'messaging' => [
-        'queue' => (string) env('MARKETING_MESSAGING_QUEUE', 'marketing-messaging'),
+        'queue' => (string) env('MARKETING_MESSAGING_QUEUE', (string) env('DB_QUEUE', (string) env('REDIS_QUEUE', 'default'))),
         'dispatch_batch_size' => max(25, (int) env('MARKETING_MESSAGING_DISPATCH_BATCH_SIZE', 250)),
         'dispatch_interval_seconds' => max(1, (int) env('MARKETING_MESSAGING_DISPATCH_INTERVAL_SECONDS', 2)),
         'default_max_attempts' => max(1, (int) env('MARKETING_MESSAGING_DEFAULT_MAX_ATTEMPTS', 4)),
