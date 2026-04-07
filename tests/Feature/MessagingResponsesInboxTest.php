@@ -491,6 +491,6 @@ test('responses tab renders next to analytics with text and email toggle labels'
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $subnav);
 
-            return $keys === ['workspace', 'analytics', 'responses'];
+            return $keys === ['setup', 'workspace', 'analytics', 'responses'];
         });
 });

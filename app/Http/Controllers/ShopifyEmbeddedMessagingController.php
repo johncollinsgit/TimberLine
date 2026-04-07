@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MarketingMessageMediaAsset;
+use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingMessageDelivery;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\MessagingResponseInboxService;
@@ -224,8 +226,6 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
         MessageAnalyticsService $messageAnalyticsService,
-        TenantEmailSettingsService $tenantEmailSettingsService,
-        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -281,58 +281,6 @@ class ShopifyEmbeddedMessagingController extends Controller
         $analyticsPayload = ($authorized && $tenantId !== null && $hasMessagingAccess)
             ? $probe->time('page_payload', fn (): array => $messageAnalyticsService->index($tenantId, $storeKey, $filters, $analyticsLoadOptions))
             : null;
-        $emailSettings = ($authorized && $tenantId !== null && $hasMessagingAccess)
-            ? $probe->time('page_payload', fn (): array => $tenantEmailSettingsService->forAdmin($tenantId))
-            : [];
-        $messagesSent = (int) data_get($analyticsPayload, 'summary.messages_sent', 0);
-        $setupStatus = strtolower(trim((string) ($messagingModule['setup_status'] ?? 'not_started')));
-        $emailSettingsReady = (bool) data_get($emailSettings, 'email_enabled', false)
-            && (bool) data_get($emailSettings, 'analytics_enabled', false)
-            && trim((string) data_get($emailSettings, 'from_email', '')) !== '';
-        $storefrontTracking = $authorized
-            ? $probe->time('page_payload', fn (): array => $storefrontTrackingSetupService->build($store, $context['host'] ?? null))
-            : [];
-        $setupGuide = [
-            'status' => $setupStatus,
-            'is_configured' => $setupStatus === 'configured',
-            'steps' => [
-                [
-                    'key' => 'module_access',
-                    'label' => 'Messaging module access is enabled',
-                    'done' => $hasMessagingAccess,
-                ],
-                [
-                    'key' => 'email_tracking',
-                    'label' => 'Email sending + analytics are enabled in Settings',
-                    'done' => $emailSettingsReady,
-                    'hint' => sprintf(
-                        'Provider: %s · Status: %s',
-                        strtoupper((string) data_get($emailSettings, 'email_provider', 'sendgrid')),
-                        strtolower(trim((string) data_get($emailSettings, 'provider_status', 'unknown')))
-                    ),
-                ],
-                [
-                    'key' => 'first_tracked_send',
-                    'label' => 'At least one tracked message has been sent',
-                    'done' => $messagesSent > 0,
-                    'hint' => $messagesSent > 0
-                        ? sprintf('%s tracked sends detected.', number_format($messagesSent))
-                        : 'Send a message from Messaging workspace to seed analytics.',
-                ],
-                ...((array) ($storefrontTracking['steps'] ?? [])),
-            ],
-            'actions' => [
-                'settings_href' => route('shopify.app.settings', [], false),
-                'workspace_href' => route('shopify.app.messaging', [], false),
-                'complete_endpoint' => route('shopify.app.api.messaging.setup.complete', [], false),
-                'theme_editor_href' => data_get($storefrontTracking, 'actions.theme_editor_href'),
-                'customer_events_href' => data_get($storefrontTracking, 'actions.customer_events_href'),
-                'reconnect_href' => data_get($storefrontTracking, 'actions.reconnect_href'),
-                'connect_pixel_endpoint' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
-            ],
-            'can_mark_complete' => $hasMessagingAccess,
-            'tracking' => $storefrontTracking,
-        ];
 
         $messageKey = trim((string) $request->query('message_key', ''));
         $detail = (is_array($analyticsPayload) && $messageKey !== '' && $analyticsTab === 'performance')
@@ -358,17 +306,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'pageSubnav' => $pageSubnav,
                 'pageActions' => [],
                 'messagingModuleState' => $messagingModule,
-                'messagingAccess' => [
-                    'enabled' => $hasMessagingAccess,
-                    'status' => $tenantId === null
-                        ? 'tenant_not_mapped'
-                        : ($hasMessagingAccess ? 'enabled' : 'messaging_module_locked'),
-                    'message' => $tenantId === null
-                        ? 'This Shopify store is not mapped to a tenant yet.'
-                        : ($hasMessagingAccess
-                            ? null
-                            : 'Messaging is not enabled for this tenant. Enable the Messaging module to use message analytics.'),
-                ],
+                'messagingAccess' => $this->messagingAccessPayload($tenantId, $hasMessagingAccess, 'analytics'),
                 'messageAnalyticsFilters' => [
                     'date_from' => ($filters['date_from'] instanceof \DateTimeInterface)
                         ? $filters['date_from']->format('Y-m-d')
@@ -389,15 +327,95 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'messageAnalyticsTab' => $analyticsTab,
                 'messageAnalyticsDetail' => $detail,
                 'messageAnalyticsSelectedMessageKey' => $messageKey !== '' ? $messageKey : null,
-                'messageAnalyticsTrackingEndpoints' => [
-                    'status' => route('shopify.app.api.messaging.storefront-tracking.status', [], false),
-                    'connect_pixel' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
-                ],
                 'messageAnalyticsAttribution' => [
                     'model' => 'last_click_within_window',
                     'window_days' => max(1, (int) config('marketing.message_analytics.attribution_window_days', 7)),
                 ],
+            ]),
+            $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+            'messaging_enabled' => $hasMessagingAccess,
+        ])->finish($response);
+    }
+
+    public function setup(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantEmailSettingsService $tenantEmailSettingsService,
+        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
+    ): Response {
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+        if ($authorized && $tenantId !== null) {
+            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+        }
+        $probe->forTenant($tenantId);
+
+        $messagingModule = $tenantId !== null
+            ? $probe->time('module_access', fn (): array => $moduleAccessResolver->module($tenantId, 'messaging'))
+            : [
+                'module_key' => 'messaging',
+                'has_access' => false,
+                'ui_state' => 'locked',
+                'reason' => 'tenant_not_mapped',
+            ];
+        $hasMessagingAccess = (bool) ($messagingModule['has_access'] ?? false);
+        $storeKey = $this->nullableString(data_get($store, 'key'));
+        $emailSettings = ($authorized && $tenantId !== null && $hasMessagingAccess)
+            ? $probe->time('page_payload', fn (): array => $tenantEmailSettingsService->forAdmin($tenantId))
+            : [];
+        $messagesSent = ($authorized && $tenantId !== null && $hasMessagingAccess)
+            ? $probe->time('page_payload', fn (): int => $this->trackedMessageSendCount($tenantId, $storeKey))
+            : 0;
+        $storefrontTracking = $authorized
+            ? $probe->time('page_payload', fn (): array => $storefrontTrackingSetupService->build($store, $context['host'] ?? null))
+            : [];
+        $setupGuide = $this->buildMessagingSetupGuide(
+            module: $messagingModule,
+            hasMessagingAccess: $hasMessagingAccess,
+            emailSettings: $emailSettings,
+            messagesSent: $messagesSent,
+            storefrontTracking: $storefrontTracking
+        );
+
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'setup', $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('setup', $tenantId));
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+            response()->view('shopify.messaging-setup', [
+                'authorized' => $authorized,
+                'status' => $status,
+                'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+                'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
+                'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
+                'storeLabel' => $authorized
+                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    : 'Shopify Admin',
+                'headline' => $this->headlineForStatus($status, 'Messaging Setup'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Finish module setup and storefront tracking before running campaigns.'),
+                'appNavigation' => $appNavigation,
+                'pageSubnav' => $pageSubnav,
+                'pageActions' => [],
+                'messagingModuleState' => $messagingModule,
+                'messagingAccess' => $this->messagingAccessPayload($tenantId, $hasMessagingAccess, 'setup'),
                 'messagingSetupGuide' => $setupGuide,
+                'messageAnalyticsTrackingEndpoints' => [
+                    'status' => route('shopify.app.api.messaging.storefront-tracking.status', [], false),
+                    'connect_pixel' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
+                ],
             ]),
             $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
         ));
@@ -1485,6 +1503,116 @@ class ShopifyEmbeddedMessagingController extends Controller
         }
 
         return 200;
+    }
+
+    protected function messagingAccessPayload(?int $tenantId, bool $hasMessagingAccess, string $surface): array
+    {
+        $surfaceLabel = match ($surface) {
+            'workspace' => 'this workspace',
+            'responses' => 'Responses',
+            'setup' => 'Setup',
+            default => 'message analytics',
+        };
+
+        return [
+            'enabled' => $hasMessagingAccess,
+            'status' => $tenantId === null
+                ? 'tenant_not_mapped'
+                : ($hasMessagingAccess ? 'enabled' : 'messaging_module_locked'),
+            'message' => $tenantId === null
+                ? 'This Shopify store is not mapped to a tenant yet.'
+                : ($hasMessagingAccess
+                    ? null
+                    : sprintf('Messaging is not enabled for this tenant. Enable the Messaging module to use %s.', $surfaceLabel)),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $module
+     * @param  array<string,mixed>  $emailSettings
+     * @param  array<string,mixed>  $storefrontTracking
+     * @return array<string,mixed>
+     */
+    protected function buildMessagingSetupGuide(
+        array $module,
+        bool $hasMessagingAccess,
+        array $emailSettings,
+        int $messagesSent,
+        array $storefrontTracking
+    ): array {
+        $setupStatus = strtolower(trim((string) ($module['setup_status'] ?? 'not_started')));
+        $emailSettingsReady = (bool) data_get($emailSettings, 'email_enabled', false)
+            && (bool) data_get($emailSettings, 'analytics_enabled', false)
+            && trim((string) data_get($emailSettings, 'from_email', '')) !== '';
+
+        return [
+            'status' => $setupStatus,
+            'is_configured' => $setupStatus === 'configured',
+            'steps' => [
+                [
+                    'key' => 'module_access',
+                    'label' => 'Messaging module access is enabled',
+                    'done' => $hasMessagingAccess,
+                ],
+                [
+                    'key' => 'email_tracking',
+                    'label' => 'Email sending + analytics are enabled in Settings',
+                    'done' => $emailSettingsReady,
+                    'hint' => sprintf(
+                        'Provider: %s · Status: %s',
+                        strtoupper((string) data_get($emailSettings, 'email_provider', 'sendgrid')),
+                        strtolower(trim((string) data_get($emailSettings, 'provider_status', 'unknown')))
+                    ),
+                ],
+                [
+                    'key' => 'first_tracked_send',
+                    'label' => 'At least one tracked message has been sent',
+                    'done' => $messagesSent > 0,
+                    'hint' => $messagesSent > 0
+                        ? sprintf('%s tracked sends detected.', number_format($messagesSent))
+                        : 'Send a message from Messaging workspace to seed analytics.',
+                ],
+                ...((array) ($storefrontTracking['steps'] ?? [])),
+            ],
+            'actions' => [
+                'settings_href' => route('shopify.app.settings', [], false),
+                'workspace_href' => route('shopify.app.messaging', [], false),
+                'complete_endpoint' => route('shopify.app.api.messaging.setup.complete', [], false),
+                'theme_editor_href' => data_get($storefrontTracking, 'actions.theme_editor_href'),
+                'customer_events_href' => data_get($storefrontTracking, 'actions.customer_events_href'),
+                'reconnect_href' => data_get($storefrontTracking, 'actions.reconnect_href'),
+                'connect_pixel_endpoint' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
+            ],
+            'can_mark_complete' => $hasMessagingAccess,
+            'tracking' => $storefrontTracking,
+        ];
+    }
+
+    protected function trackedMessageSendCount(?int $tenantId, ?string $storeKey): int
+    {
+        if ($tenantId === null || $storeKey === null) {
+            return 0;
+        }
+
+        $smsCount = Schema::hasTable('marketing_message_deliveries')
+            ? MarketingMessageDelivery::query()
+                ->forTenantId($tenantId)
+                ->where('store_key', $storeKey)
+                ->whereNotNull('source_label')
+                ->where('source_label', 'like', 'shopify_embedded_messaging%')
+                ->count()
+            : 0;
+
+        $emailCount = Schema::hasTable('marketing_email_deliveries')
+            ? MarketingEmailDelivery::query()
+                ->forTenantId($tenantId)
+                ->where('store_key', $storeKey)
+                ->whereNotNull('source_label')
+                ->where('source_label', 'like', 'shopify_embedded_messaging%')
+                ->count()
+            : 0;
+
+        return (int) $smsCount + (int) $emailCount;
     }
 
     protected function resolveMessagingApiAccess(

@@ -153,6 +153,9 @@ export interface MessagingHistoryPayload {
     completed_at?: string | null;
     created_at?: string | null;
     cancelable?: boolean;
+    expense_cents?: number;
+    attributed_orders?: number;
+    attributed_revenue_cents?: number;
   }>;
 }
 

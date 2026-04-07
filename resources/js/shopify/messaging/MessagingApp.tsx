@@ -45,6 +45,8 @@ interface MessagingAppProps {
   bootstrap: MessagingBootstrap;
 }
 
+type WorkspaceTab = MessagingChannel | "completed";
+
 interface SelectedTarget {
   targetType: "saved" | "auto";
   groupId?: number;
@@ -84,6 +86,10 @@ interface PreviewPayload {
 
 function formatCount(value: number | undefined): string {
   return new Intl.NumberFormat("en-US").format(value ?? 0);
+}
+
+function formatCurrencyFromCents(value: number | undefined): string {
+  return formatCurrency((Number(value ?? 0) || 0) / 100);
 }
 
 function parseDelimitedInput(value: string): string[] {
@@ -248,6 +254,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     () => normalizeBootstrapAudienceSummary(bootstrap).diagnostics,
   );
 
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("sms");
   const [activeChannel, setActiveChannel] = useState<MessagingChannel>("sms");
   const [smsStep, setSmsStep] = useState(0);
   const [emailStep, setEmailStep] = useState(0);
@@ -1416,47 +1423,68 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
               tabs={[
                 { id: "sms", content: "SMS" },
                 { id: "email", content: "Email" },
+                { id: "completed", content: "Completed runs" },
               ]}
-              selected={activeChannel === "sms" ? 0 : 1}
-              onSelect={(index) => setActiveChannel(index === 0 ? "sms" : "email")}
+              selected={workspaceTab === "sms" ? 0 : workspaceTab === "email" ? 1 : 2}
+              onSelect={(index) => {
+                if (index === 0) {
+                  setWorkspaceTab("sms");
+                  setActiveChannel("sms");
+                  return;
+                }
+                if (index === 1) {
+                  setWorkspaceTab("email");
+                  setActiveChannel("email");
+                  return;
+                }
+                setWorkspaceTab("completed");
+              }}
             />
 
-            <InlineStack gap="200" wrap>
-              {activeSteps.map((step, index) => {
-                const selected = index === activeStepIndex;
-                return (
-                  <Button
-                    key={`${activeChannel}-${step}`}
-                    onClick={() => setStep(index)}
-                    pressed={selected}
-                    size="slim"
-                  >
-                    {index + 1}. {step}
+            <Divider />
+
+            {workspaceTab === "completed" ? (
+              <CompletedRunsCard history={history} loading={historyLoading} />
+            ) : (
+              <>
+                <InlineStack gap="200" wrap>
+                  {activeSteps.map((step, index) => {
+                    const selected = index === activeStepIndex;
+                    return (
+                      <Button
+                        key={`${activeChannel}-${step}`}
+                        onClick={() => setStep(index)}
+                        pressed={selected}
+                        size="slim"
+                      >
+                        {index + 1}. {step}
+                      </Button>
+                    );
+                  })}
+                </InlineStack>
+
+                <Divider />
+
+                {renderActiveStep()}
+
+                <Divider />
+
+                <InlineStack align="space-between" wrap>
+                  <Button disabled={activeStepIndex === 0} onClick={moveBack}>
+                    Back
                   </Button>
-                );
-              })}
-            </InlineStack>
-
-            <Divider />
-
-            {renderActiveStep()}
-
-            <Divider />
-
-            <InlineStack align="space-between" wrap>
-              <Button disabled={activeStepIndex === 0} onClick={moveBack}>
-                Back
-              </Button>
-              {activeStepIndex < activeSteps.length - 1 ? (
-                <Button variant="primary" onClick={moveForward} disabled={!canContinue}>
-                  Continue
-                </Button>
-              ) : (
-                <Text as="p" tone="subdued" variant="bodySm">
-                  Review complete. Send when ready.
-                </Text>
-              )}
-            </InlineStack>
+                  {activeStepIndex < activeSteps.length - 1 ? (
+                    <Button variant="primary" onClick={moveForward} disabled={!canContinue}>
+                      Continue
+                    </Button>
+                  ) : (
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      Review complete. Send when ready.
+                    </Text>
+                  )}
+                </InlineStack>
+              </>
+            )}
           </BlockStack>
         </Card>
       </BlockStack>
@@ -1509,6 +1537,83 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
         </Modal.Section>
       </Modal>
     </AppProvider>
+  );
+}
+
+function CompletedRunsCard({
+  history,
+  loading,
+}: {
+  history: MessagingHistoryPayload;
+  loading: boolean;
+}) {
+  const campaigns = Array.isArray(history.campaigns) ? history.campaigns : [];
+  const completedCampaigns = campaigns.filter((campaign) => !hasActiveCampaignWork(campaign));
+
+  return (
+    <Card>
+      <BlockStack gap="300">
+        <InlineStack align="space-between" blockAlign="center" wrap>
+          <Text as="h3" variant="headingMd">
+            Completed runs
+          </Text>
+          {loading ? <Spinner accessibilityLabel="Loading completed runs" size="small" /> : null}
+        </InlineStack>
+        <Text as="p" tone="subdued" variant="bodySm">
+          Email and SMS runs with final status, provider spend, and attributed order revenue.
+        </Text>
+
+        {completedCampaigns.length === 0 ? (
+          <Text as="p" tone="subdued" variant="bodySm">
+            No completed runs yet.
+          </Text>
+        ) : (
+          <Box className="sf-messaging-history-list">
+            {completedCampaigns.map((campaign) => {
+              const sentCount = Number(campaign.status_counts?.sent ?? 0)
+                + Number(campaign.status_counts?.delivered ?? 0);
+              const failedCount = Number(campaign.status_counts?.failed ?? 0)
+                + Number(campaign.status_counts?.undelivered ?? 0);
+              const expenseCents = Number(campaign.expense_cents ?? 0);
+              const attributedOrders = Number(campaign.attributed_orders ?? 0);
+              const attributedRevenueCents = Number(campaign.attributed_revenue_cents ?? 0);
+
+              return (
+                <Card key={`completed-${campaign.id}`}>
+                  <BlockStack gap="200">
+                    <InlineStack align="space-between" blockAlign="start" wrap>
+                      <BlockStack gap="050">
+                        <Text as="p" variant="bodyMd" fontWeight="semibold">
+                          {campaignHeaderText(campaign)}
+                        </Text>
+                        <Text as="p" tone="subdued" variant="bodySm">
+                          {campaign.channel.toUpperCase()} · {campaign.subject ?? "No subject"}
+                        </Text>
+                      </BlockStack>
+                      <Badge tone={badgeToneForStatus(campaign.status)}>{campaign.status}</Badge>
+                    </InlineStack>
+
+                    <InlineStack gap="200" wrap>
+                      <Badge tone="success">Sent {formatCount(sentCount)}</Badge>
+                      <Badge tone={failedCount > 0 ? "critical" : "info"}>
+                        Failed {formatCount(failedCount)}
+                      </Badge>
+                      <Badge tone={expenseCents > 0 ? "warning" : "info"}>
+                        Expense {formatCurrencyFromCents(expenseCents)}
+                      </Badge>
+                      <Badge tone={attributedRevenueCents > 0 ? "success" : "info"}>
+                        Revenue {formatCurrencyFromCents(attributedRevenueCents)}
+                      </Badge>
+                      <Badge tone="info">Orders {formatCount(attributedOrders)}</Badge>
+                    </InlineStack>
+                  </BlockStack>
+                </Card>
+              );
+            })}
+          </Box>
+        )}
+      </BlockStack>
+    </Card>
   );
 }
 

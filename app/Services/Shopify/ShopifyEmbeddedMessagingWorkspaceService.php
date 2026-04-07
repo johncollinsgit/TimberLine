@@ -1340,7 +1340,7 @@ GRAPHQL;
             ->values()
             ->all();
 
-        $campaigns = MarketingCampaign::query()
+        $campaignRows = MarketingCampaign::query()
             ->when($tenantId !== null, fn (Builder $query) => $query->where('tenant_id', $tenantId), fn (Builder $query) => $query->whereNull('tenant_id'))
             ->whereNotNull('source_label')
             ->where('source_label', 'like', 'shopify_embedded_messaging%')
@@ -1360,7 +1360,9 @@ GRAPHQL;
                 'launched_at',
                 'completed_at',
                 'created_at',
-            ])
+            ]);
+
+        $campaigns = $campaignRows
             ->map(function (MarketingCampaign $campaign): array {
                 $progress = $this->campaignProgressService->refreshCampaign($campaign);
                 $statusCounts = is_array($progress['status_counts'] ?? null)
@@ -1416,10 +1418,217 @@ GRAPHQL;
             ->values()
             ->all();
 
+        $completedCampaignIds = collect($campaigns)
+            ->filter(function (array $campaign): bool {
+                $status = strtolower(trim((string) ($campaign['status'] ?? '')));
+                if (in_array($status, ['sending', 'preparing'], true)) {
+                    return false;
+                }
+
+                $statusCounts = is_array($campaign['status_counts'] ?? null) ? $campaign['status_counts'] : [];
+                $jobStatusCounts = is_array($campaign['job_status_counts'] ?? null) ? $campaign['job_status_counts'] : [];
+                $pendingRecipients = (int) ($statusCounts['pending'] ?? 0)
+                    + (int) ($statusCounts['queued_for_approval'] ?? 0)
+                    + (int) ($statusCounts['approved'] ?? 0)
+                    + (int) ($statusCounts['scheduled'] ?? 0)
+                    + (int) ($statusCounts['sending'] ?? 0);
+                $pendingJobs = (int) ($jobStatusCounts['queued'] ?? 0)
+                    + (int) ($jobStatusCounts['retryable'] ?? 0)
+                    + (int) ($jobStatusCounts['dispatching'] ?? 0)
+                    + (int) ($jobStatusCounts['sending'] ?? 0);
+
+                return $pendingRecipients + $pendingJobs === 0;
+            })
+            ->map(fn (array $campaign): int => (int) ($campaign['id'] ?? 0))
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        $financialsByCampaignId = $this->campaignFinancialSummaryByCampaignId($completedCampaignIds);
+        $campaigns = array_map(function (array $campaign) use ($financialsByCampaignId): array {
+            $campaignId = (int) ($campaign['id'] ?? 0);
+            $financial = is_array($financialsByCampaignId[$campaignId] ?? null)
+                ? $financialsByCampaignId[$campaignId]
+                : [];
+
+            $campaign['expense_cents'] = (int) ($financial['expense_cents'] ?? 0);
+            $campaign['attributed_orders'] = (int) ($financial['attributed_orders'] ?? 0);
+            $campaign['attributed_revenue_cents'] = (int) ($financial['attributed_revenue_cents'] ?? 0);
+
+            return $campaign;
+        }, $campaigns);
+
         return [
             'entries' => $entries,
             'campaigns' => $campaigns,
         ];
+    }
+
+    /**
+     * @param  array<int,int>  $campaignIds
+     * @return array<int,array{expense_cents:int,attributed_orders:int,attributed_revenue_cents:int}>
+     */
+    protected function campaignFinancialSummaryByCampaignId(array $campaignIds): array
+    {
+        $campaignIds = array_values(array_unique(array_filter(array_map(
+            static fn ($id): int => (int) $id,
+            $campaignIds
+        ), static fn (int $id): bool => $id > 0)));
+
+        if ($campaignIds === []) {
+            return [];
+        }
+
+        sort($campaignIds);
+        $cacheKey = 'shopify:embedded:messaging:campaign-financials:'.sha1(json_encode($campaignIds));
+
+        /** @var array<int,array{expense_cents:int,attributed_orders:int,attributed_revenue_cents:int}> $cached */
+        $cached = Cache::remember($cacheKey, now()->addSeconds(45), function () use ($campaignIds): array {
+            $spendByCampaignId = $this->smsCampaignSpendByCampaignId($campaignIds);
+            $attributionByCampaignId = $this->campaignAttributionSummaryByCampaignId($campaignIds);
+
+            $summary = [];
+            foreach ($campaignIds as $campaignId) {
+                $attribution = is_array($attributionByCampaignId[$campaignId] ?? null)
+                    ? $attributionByCampaignId[$campaignId]
+                    : [];
+                $summary[$campaignId] = [
+                    'expense_cents' => (int) ($spendByCampaignId[$campaignId] ?? 0),
+                    'attributed_orders' => (int) ($attribution['attributed_orders'] ?? 0),
+                    'attributed_revenue_cents' => (int) ($attribution['attributed_revenue_cents'] ?? 0),
+                ];
+            }
+
+            return $summary;
+        });
+
+        return $cached;
+    }
+
+    /**
+     * @param  array<int,int>  $campaignIds
+     * @return array<int,int>
+     */
+    protected function smsCampaignSpendByCampaignId(array $campaignIds): array
+    {
+        if ($campaignIds === []) {
+            return [];
+        }
+
+        $spendByCampaignId = [];
+        foreach ($campaignIds as $campaignId) {
+            $spendByCampaignId[(int) $campaignId] = 0;
+        }
+
+        MarketingMessageDelivery::query()
+            ->whereIn('campaign_id', $campaignIds)
+            ->where('channel', 'sms')
+            ->orderBy('id')
+            ->select(['id', 'campaign_id', 'provider_payload'])
+            ->chunkById(1000, function (Collection $rows) use (&$spendByCampaignId): void {
+                foreach ($rows as $delivery) {
+                    if (! $delivery instanceof MarketingMessageDelivery) {
+                        continue;
+                    }
+
+                    $campaignId = (int) ($delivery->campaign_id ?? 0);
+                    if ($campaignId <= 0) {
+                        continue;
+                    }
+
+                    $providerPayload = is_array($delivery->provider_payload) ? $delivery->provider_payload : [];
+                    $priceRaw = data_get($providerPayload, 'twilio_response.price');
+                    if (! is_numeric($priceRaw)) {
+                        $priceRaw = data_get($providerPayload, 'price');
+                    }
+                    if (! is_numeric($priceRaw)) {
+                        continue;
+                    }
+
+                    $spendByCampaignId[$campaignId] = (int) ($spendByCampaignId[$campaignId] ?? 0)
+                        + (int) round(abs((float) $priceRaw) * 100);
+                }
+            });
+
+        return $spendByCampaignId;
+    }
+
+    /**
+     * @param  array<int,int>  $campaignIds
+     * @return array<int,array{attributed_orders:int,attributed_revenue_cents:int}>
+     */
+    protected function campaignAttributionSummaryByCampaignId(array $campaignIds): array
+    {
+        if (
+            $campaignIds === []
+            || ! Schema::hasTable('marketing_message_order_attributions')
+            || ! Schema::hasColumn('marketing_message_order_attributions', 'revenue_cents')
+        ) {
+            return [];
+        }
+
+        $summary = [];
+        foreach ($campaignIds as $campaignId) {
+            $summary[(int) $campaignId] = [
+                'attributed_orders' => 0,
+                'attributed_revenue_cents' => 0,
+            ];
+        }
+
+        if (
+            Schema::hasColumn('marketing_message_order_attributions', 'marketing_message_delivery_id')
+            && Schema::hasTable('marketing_message_deliveries')
+            && Schema::hasColumn('marketing_message_deliveries', 'campaign_id')
+        ) {
+            DB::table('marketing_message_order_attributions as attributions')
+                ->join('marketing_message_deliveries as deliveries', 'deliveries.id', '=', 'attributions.marketing_message_delivery_id')
+                ->whereIn('deliveries.campaign_id', $campaignIds)
+                ->whereNotNull('deliveries.campaign_id')
+                ->selectRaw('deliveries.campaign_id as campaign_id, COUNT(*) as attributed_orders, SUM(COALESCE(attributions.revenue_cents, 0)) as attributed_revenue_cents')
+                ->groupBy('deliveries.campaign_id')
+                ->get()
+                ->each(function (object $row) use (&$summary): void {
+                    $campaignId = (int) ($row->campaign_id ?? 0);
+                    if ($campaignId <= 0) {
+                        return;
+                    }
+
+                    $summary[$campaignId]['attributed_orders'] = (int) ($summary[$campaignId]['attributed_orders'] ?? 0)
+                        + (int) ($row->attributed_orders ?? 0);
+                    $summary[$campaignId]['attributed_revenue_cents'] = (int) ($summary[$campaignId]['attributed_revenue_cents'] ?? 0)
+                        + (int) ($row->attributed_revenue_cents ?? 0);
+                });
+        }
+
+        if (
+            Schema::hasColumn('marketing_message_order_attributions', 'marketing_email_delivery_id')
+            && Schema::hasTable('marketing_email_deliveries')
+            && Schema::hasColumn('marketing_email_deliveries', 'marketing_campaign_recipient_id')
+            && Schema::hasTable('marketing_campaign_recipients')
+            && Schema::hasColumn('marketing_campaign_recipients', 'campaign_id')
+        ) {
+            DB::table('marketing_message_order_attributions as attributions')
+                ->join('marketing_email_deliveries as deliveries', 'deliveries.id', '=', 'attributions.marketing_email_delivery_id')
+                ->join('marketing_campaign_recipients as recipients', 'recipients.id', '=', 'deliveries.marketing_campaign_recipient_id')
+                ->whereIn('recipients.campaign_id', $campaignIds)
+                ->whereNotNull('recipients.campaign_id')
+                ->selectRaw('recipients.campaign_id as campaign_id, COUNT(*) as attributed_orders, SUM(COALESCE(attributions.revenue_cents, 0)) as attributed_revenue_cents')
+                ->groupBy('recipients.campaign_id')
+                ->get()
+                ->each(function (object $row) use (&$summary): void {
+                    $campaignId = (int) ($row->campaign_id ?? 0);
+                    if ($campaignId <= 0) {
+                        return;
+                    }
+
+                    $summary[$campaignId]['attributed_orders'] = (int) ($summary[$campaignId]['attributed_orders'] ?? 0)
+                        + (int) ($row->attributed_orders ?? 0);
+                    $summary[$campaignId]['attributed_revenue_cents'] = (int) ($summary[$campaignId]['attributed_revenue_cents'] ?? 0)
+                        + (int) ($row->attributed_revenue_cents ?? 0);
+                });
+        }
+
+        return $summary;
     }
 
     protected function assistDispatchForActiveCampaigns(?int $tenantId): void

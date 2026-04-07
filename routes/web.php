@@ -222,6 +222,9 @@ Route::get('/messaging', function (Request $request, ShopifyEmbeddedUrlGenerator
 Route::get('/messaging/analytics', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
     return redirect()->to($urlGenerator->route('shopify.app.messaging.analytics', [], false, $request));
 })->name('shopify.embedded.messaging.analytics');
+Route::get('/messaging/setup', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.messaging.setup', [], false, $request));
+})->name('shopify.embedded.messaging.setup');
 Route::get('/messaging/responses', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
     return redirect()->to($urlGenerator->route('shopify.app.messaging.responses', [], false, $request));
 })->name('shopify.embedded.messaging.responses');
@@ -881,6 +884,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
     Route::get('/app/messaging', [ShopifyEmbeddedMessagingController::class, 'show'])->name('shopify.app.messaging');
+    Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
