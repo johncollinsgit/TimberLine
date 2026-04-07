@@ -10,8 +10,10 @@ use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\MessagingResponseInboxService;
 use App\Services\Marketing\MessageAnalyticsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
+use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Shopify\ShopifyStorefrontTrackingSetupService;
 use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
@@ -36,6 +38,8 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
         ShopifyEmbeddedMessagingWorkspaceService $workspaceService,
+        ShopifyEmbeddedRewardsService $rewardsService,
+        ShopifyEmbeddedDashboardDataService $dashboardDataService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -67,6 +71,19 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'templates' => $workspaceService->emailTemplateDefinitions(),
             ])
             : null;
+
+        if ($authorized && $tenantId !== null && $hasMessagingAccess) {
+            app()->terminating(function () use ($tenantId, $rewardsService, $dashboardDataService): void {
+                try {
+                    $rewardsService->overview($tenantId);
+                    $dashboardDataService->payload([
+                        'tenant_id' => $tenantId,
+                    ]);
+                } catch (Throwable) {
+                    // Cache warming stays best-effort so Messaging never fails because Rewards is cold.
+                }
+            });
+        }
 
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'workspace', $tenantId));
         $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('workspace', $tenantId));

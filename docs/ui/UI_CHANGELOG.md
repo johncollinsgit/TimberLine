@@ -4,6 +4,10 @@
 
 ### What changed
 - Renamed the first embedded primary nav item from `Home` to `Dashboard` so the top-level shell matches the product language used elsewhere.
+- Made the first `Messages -> Rewards` transition feel faster:
+  - Rewards now renders its page shell immediately and loads ApexCharts asynchronously instead of blocking on the CDN script before first paint,
+  - the embedded shell now preconnects to jsDelivr because Rewards and analytics pages reuse that chart asset,
+  - the Messages workspace warms the Rewards overview caches after the response finishes so the first cross-tab visit is less likely to hit a cold analytics build.
 - Reworked embedded `Customers` into a search-first surface:
   - the summary strip and controls still render immediately,
   - the results grid stays empty until a search term is entered,

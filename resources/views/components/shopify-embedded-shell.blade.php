@@ -46,6 +46,8 @@
 <html lang="en">
 <head>
     @include('partials.head', ['title' => $title])
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     @if($authorized && filled($shopifyApiKey))
         <meta name="shopify-api-key" content="{{ $shopifyApiKey }}">
     @endif

@@ -603,7 +603,6 @@
         </div>
     </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script id="rewards-engagement-chart-data" type="application/json">
         {!! $chartSeriesJson !!}
     </script>
@@ -637,12 +636,39 @@
         })();
 
         (() => {
+            const apexChartsSrc = 'https://cdn.jsdelivr.net/npm/apexcharts';
+            const globalLoaderKey = '__forestryApexChartsLoader';
+
+            if (window.ApexCharts || window[globalLoaderKey]) {
+                return;
+            }
+
+            window[globalLoaderKey] = new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[data-apexcharts-loader="1"]');
+                if (existing instanceof HTMLScriptElement) {
+                    existing.addEventListener('load', () => resolve(window.ApexCharts), { once: true });
+                    existing.addEventListener('error', () => reject(new Error('ApexCharts failed to load.')), { once: true });
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = apexChartsSrc;
+                script.async = true;
+                script.dataset.apexchartsLoader = '1';
+                script.addEventListener('load', () => resolve(window.ApexCharts), { once: true });
+                script.addEventListener('error', () => reject(new Error('ApexCharts failed to load.')), { once: true });
+                document.head.appendChild(script);
+            });
+        })();
+
+        (() => {
             const chartNode = document.getElementById('rewards-engagement-chart');
             const dataNode = document.getElementById('rewards-engagement-chart-data');
             const picker = document.querySelector('[data-rewards-series-picker]');
             const emptyNode = document.querySelector('[data-rewards-chart-empty]');
+            const apexChartsLoader = window.__forestryApexChartsLoader;
 
-            if (!chartNode || !dataNode || !picker || typeof window.ApexCharts === 'undefined') {
+            if (!chartNode || !dataNode || !picker || !emptyNode) {
                 return;
             }
 
@@ -688,6 +714,10 @@
             };
 
             const renderChart = (keys) => {
+                if (typeof window.ApexCharts === 'undefined') {
+                    return;
+                }
+
                 const activeSeries = getActiveSeries(keys);
 
                 if (chart) {
@@ -763,8 +793,29 @@
                 renderChart(activeKeys);
             });
 
-            renderPicker();
-            renderChart(activeKeys);
+            const loadChart = () => {
+                renderPicker();
+                renderChart(activeKeys);
+            };
+
+            if (typeof window.ApexCharts !== 'undefined') {
+                loadChart();
+                return;
+            }
+
+            emptyNode.textContent = 'Loading rewards trend...';
+            emptyNode.classList.add('is-visible');
+            chartNode.style.display = 'none';
+
+            Promise.resolve(apexChartsLoader)
+                .then(() => {
+                    loadChart();
+                })
+                .catch(() => {
+                    emptyNode.textContent = 'Rewards trend is temporarily unavailable.';
+                    emptyNode.classList.add('is-visible');
+                    chartNode.style.display = 'none';
+                });
         })();
 
         (() => {

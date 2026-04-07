@@ -139,8 +139,11 @@ test('shopify embedded rewards route renders verified rewards admin page for map
         ->assertSeeText('Rewards Explanation')
         ->assertSeeText('Configuration')
         ->assertSeeText('Performance trend')
+        ->assertSee('Loading rewards trend...', false)
+        ->assertSee('__forestryApexChartsLoader', false)
         ->assertSeeText('Ways to Earn')
         ->assertSeeText('Ways to Redeem')
+        ->assertDontSee('<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>', false)
         ->assertDontSeeText('This embedded program editor is unavailable for tenant-scoped stores until earn rows, redeem rows, and program settings are isolated per tenant.')
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 });
