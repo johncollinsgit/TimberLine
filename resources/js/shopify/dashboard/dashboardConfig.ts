@@ -37,7 +37,7 @@ export const dashboardConfig: DashboardConfig = {
   ],
   widgetRegistry: {
     metricCards: { title: "Top metrics" },
-    candleCashEngagement: { title: "Candle Cash earn activity" },
+    candleCashEngagement: { title: "Program-earned Candle Cash activity" },
     performanceChart: { title: "Performance chart" },
     locationOrigins: { title: "Location origins" },
     attribution: { title: "Attribution" },

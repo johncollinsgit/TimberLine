@@ -49,8 +49,19 @@ class CandleCashLedgerNormalizationService
         return $this->isEarnedLimitExempt($transaction);
     }
 
+    public function isLegacyNonExpiringCredit(CandleCashTransaction $transaction): bool
+    {
+        $delta = CandleCashMeasurement::normalizeStoredAmount($transaction->candle_cash_delta ?? 0);
+
+        return $delta > 0 && (bool) ($transaction->legacy_points_origin ?? false);
+    }
+
     public function isEarnedLimitExempt(CandleCashTransaction $transaction): bool
     {
+        if ($this->isLegacyNonExpiringCredit($transaction)) {
+            return true;
+        }
+
         $type = strtolower(trim((string) $transaction->type));
         $source = strtolower(trim((string) $transaction->source));
         $sourceId = strtolower(trim((string) $transaction->source_id));

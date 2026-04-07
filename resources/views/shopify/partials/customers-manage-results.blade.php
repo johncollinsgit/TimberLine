@@ -47,7 +47,6 @@
     <section class="customers-empty-state" aria-label="Search customers to load results">
         <p class="customers-empty-state__eyebrow">Search-first loading</p>
         <h3>Search customers to load results</h3>
-        <p>We only fetch matching customer records after you start searching, so this page stays fast even on large lists.</p>
     </section>
 @else
     <section class="customers-table-wrap" aria-label="Manage customers table">

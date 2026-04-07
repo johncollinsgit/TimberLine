@@ -3,6 +3,7 @@
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\BirthdayRewardIssuance;
+use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\CatalogItemCost;
@@ -330,6 +331,15 @@ test('embedded dashboard api returns a stable payload contract for an authorized
                 'attribution' => ['title', 'subtitle', 'sources', 'empty'],
                 'locationOrigins' => ['title', 'subtitle', 'grouping', 'items', 'empty'],
                 'financialSummary' => ['title', 'subtitle', 'items', 'netProfit'],
+                'balanceLiability' => [
+                    'title',
+                    'subtitle',
+                    'totalCurrentBalance',
+                    'legacyMigrated',
+                    'programExpiring',
+                    'manualNonExpiring',
+                    'reconciled',
+                ],
                 'candleCashEngagement' => [
                     'title',
                     'subtitle',
@@ -347,8 +357,12 @@ test('embedded dashboard api returns a stable payload contract for an authorized
     expect($response->json('data.topMetrics'))->toHaveCount(8);
     expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'])
         ->toEqual(app(CandleCashService::class)->amountFromPoints(300));
-    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_earned'))->not->toBeNull();
-    expect($response->json('data.candleCashEngagement.outstanding.helperText'))->toContain('excludes imported');
+    expect(collect($response->json('data.topMetrics'))->firstWhere('key', 'candle_cash_earned')['label'] ?? null)
+        ->toBe('Program Earned (Selected Period)')
+        ->and(collect($response->json('data.topMetrics'))->firstWhere('key', 'earned_candle_cash_outstanding')['label'] ?? null)
+        ->toBe('Outstanding Expiring Rewards');
+    expect($response->json('data.candleCashEngagement.outstanding.helperText'))->toContain('Legacy Growave-migrated')
+        ->and($response->json('data.balanceLiability.reconciled'))->toBeTrue();
     expect($response->json('data.chart.series'))->not->toBeEmpty();
     expect($response->json('data.financialSummary.netProfit.detail'))->toContain('confidence');
 });
@@ -941,6 +955,11 @@ test('candle cash earned analytics exclude imported opening balances and report 
         'updated_at' => $redeemedAt,
     ])->saveQuietly();
 
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 670,
+    ]);
+
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
 
     $response = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
@@ -967,6 +986,12 @@ test('candle cash earned analytics exclude imported opening balances and report 
 
     expect((float) $response->json('data.candleCashEngagement.outstanding.excludedGrandfatheredAmount'))
         ->toEqual($expectedExcludedAmount);
+
+    expect((float) $response->json('data.balanceLiability.totalCurrentBalance.amount'))
+        ->toEqual($expectedOutstandingAmount + $expectedExcludedAmount)
+        ->and((float) $response->json('data.balanceLiability.programExpiring.amount'))->toEqual($expectedOutstandingAmount)
+        ->and((float) $response->json('data.balanceLiability.legacyMigrated.amount'))->toEqual($expectedExcludedAmount)
+        ->and($response->json('data.balanceLiability.reconciled'))->toBeTrue();
 
     $averageDays = (float) $response->json('data.candleCashEngagement.timeToFirstRedemption.averageDays');
 

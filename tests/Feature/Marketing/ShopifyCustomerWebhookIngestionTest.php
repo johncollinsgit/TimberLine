@@ -137,6 +137,88 @@ test('customers create webhook creates canonical profile when no tenant-scoped m
             ->exists())->toBeTrue();
 });
 
+test('customers create webhook promotes matching legacy source-linked profile into tenant scope instead of duplicating it', function (): void {
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => null,
+        'first_name' => 'Legacy',
+        'last_name' => 'Linked',
+        'email' => 'legacy.linked@example.com',
+        'normalized_email' => 'legacy.linked@example.com',
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => null,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:9007',
+        'source_meta' => ['shopify_store_key' => 'retail'],
+        'match_method' => 'legacy_seed',
+        'confidence' => 1.00,
+    ]);
+
+    postShopifyCustomerWebhook($this, '/webhooks/shopify/customers/create', shopifyCustomerPayload([
+        'id' => 9007,
+        'email' => 'legacy.linked@example.com',
+        'first_name' => 'Legacy',
+        'last_name' => 'Linked',
+    ]))->assertOk();
+
+    $profile->refresh();
+
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and((int) $profile->tenant_id)->toBe((int) $this->tenantId)
+        ->and(MarketingProfileLink::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('tenant_id', $this->tenantId)
+            ->where('source_type', 'shopify_customer')
+            ->where('source_id', 'retail:9007')
+            ->count())->toBe(1)
+        ->and(MarketingProfileLink::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->whereNull('tenant_id')
+            ->where('source_type', 'shopify_customer')
+            ->where('source_id', 'retail:9007')
+            ->count())->toBe(0)
+        ->and(CustomerExternalProfile::query()
+            ->forTenantId($this->tenantId)
+            ->where('store_key', 'retail')
+            ->where('external_customer_id', '9007')
+            ->value('marketing_profile_id'))->toBe((int) $profile->id);
+});
+
+test('customers create webhook promotes matching legacy exact-email profile into tenant scope instead of creating a duplicate', function (): void {
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => null,
+        'first_name' => 'Legacy',
+        'last_name' => 'Email',
+        'email' => 'legacy.email@example.com',
+        'normalized_email' => 'legacy.email@example.com',
+    ]);
+
+    postShopifyCustomerWebhook($this, '/webhooks/shopify/customers/create', shopifyCustomerPayload([
+        'id' => 9008,
+        'email' => 'legacy.email@example.com',
+        'first_name' => 'Legacy',
+        'last_name' => 'Email',
+    ]))->assertOk();
+
+    $profile->refresh();
+
+    expect(MarketingProfile::query()->count())->toBe(1)
+        ->and((int) $profile->tenant_id)->toBe((int) $this->tenantId)
+        ->and(MarketingProfileLink::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('tenant_id', $this->tenantId)
+            ->where('source_type', 'shopify_customer')
+            ->where('source_id', 'retail:9008')
+            ->count())->toBe(1)
+        ->and(CustomerExternalProfile::query()
+            ->forTenantId($this->tenantId)
+            ->where('store_key', 'retail')
+            ->where('external_customer_id', '9008')
+            ->value('marketing_profile_id'))->toBe((int) $profile->id);
+});
+
 test('repeated customers create webhook delivery is idempotent', function (): void {
     $payload = shopifyCustomerPayload([
         'id' => 9004,

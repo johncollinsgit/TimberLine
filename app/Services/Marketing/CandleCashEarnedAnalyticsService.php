@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\CandleCashBalance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTransaction;
@@ -30,6 +31,7 @@ class CandleCashEarnedAnalyticsService
     {
         $state = $this->currentLedgerState($tenantId);
         $sourceDefinitions = $this->normalizer->sourceDefinitions();
+        $balanceLiability = $this->balanceLiability($tenantId);
 
         $windowEvents = collect((array) ($state['program_earn_events'] ?? []))
             ->filter(function (array $event) use ($from, $to): bool {
@@ -130,8 +132,8 @@ class CandleCashEarnedAnalyticsService
         $reminderCandidates = $this->reminderCandidates($tenantId);
 
         return [
-            'title' => 'Rewards earn activity',
-            'subtitle' => 'Program-earned reward credit and redemption behavior for the selected timeframe.',
+            'title' => 'Program-earned Candle Cash activity',
+            'subtitle' => 'Selected-period earn, redemption, and outstanding behavior for expiring program-earned Candle Cash.',
             'earned' => [
                 'amount' => $earnedAmount,
                 'formattedAmount' => $this->formatCurrency($earnedAmount),
@@ -152,7 +154,7 @@ class CandleCashEarnedAnalyticsService
                 'formattedAmount' => $this->formatCurrency($outstandingAmount),
                 'customerCount' => $outstandingCustomerCount,
                 'excludedGrandfatheredAmount' => $excludedOpeningAmount,
-                'helperText' => 'Currently outstanding earned reward credit excludes imported, grandfathered, and manual opening balances.',
+                'helperText' => 'Outstanding expiring Candle Cash includes only new program-earned credit. Legacy Growave-migrated and manual non-expiring opening balances stay in the same customer balance, but are excluded from this expiring pool.',
             ],
             'timeToFirstRedemption' => $timeToFirstRedemption,
             'customersWithOutstandingEarned' => [
@@ -161,8 +163,38 @@ class CandleCashEarnedAnalyticsService
             'reminderEligibility' => [
                 'eligibleCustomers' => (int) ($reminderCandidates['eligible_customers'] ?? 0),
                 'missingEmailCustomers' => (int) ($reminderCandidates['missing_email_customers'] ?? 0),
-                'expirationPolicy' => 'No fixed expiration date is currently stored for earned reward credit buckets in this ledger.',
+                'expirationPolicy' => 'Program-earned Candle Cash follows the tenant rewards expiration policy when reminder schedules are evaluated. Legacy Growave-migrated Candle Cash is excluded from that expiring pool.',
             ],
+            'balanceLiability' => $balanceLiability,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function balanceLiability(?int $tenantId = null): array
+    {
+        $state = $this->currentLedgerState($tenantId);
+        $totalRemainingPoints = CandleCashMeasurement::normalizeStoredAmount($state['total_remaining_points'] ?? 0);
+        $legacyRemainingPoints = CandleCashMeasurement::normalizeStoredAmount($state['legacy_remaining_points'] ?? 0);
+        $programRemainingPoints = CandleCashMeasurement::normalizeStoredAmount($state['program_remaining_points'] ?? 0);
+        $manualRemainingPoints = CandleCashMeasurement::normalizeStoredAmount($state['manual_nonexpiring_points'] ?? 0);
+        $balanceTablePoints = CandleCashMeasurement::normalizeStoredAmount($state['balance_table_points'] ?? 0);
+        $differencePoints = CandleCashMeasurement::normalizeStoredAmount($totalRemainingPoints - $balanceTablePoints);
+        $reconciled = abs($differencePoints) < 0.005;
+
+        return [
+            'title' => 'Current Candle Cash liability',
+            'subtitle' => 'The live customer-visible Candle Cash pool, split between non-expiring migrated credit and expiring program-earned credit.',
+            'totalCurrentBalance' => $this->balanceLiabilityValue($totalRemainingPoints),
+            'legacyMigrated' => $this->balanceLiabilityValue($legacyRemainingPoints),
+            'programExpiring' => $this->balanceLiabilityValue($programRemainingPoints),
+            'manualNonExpiring' => $this->balanceLiabilityValue($manualRemainingPoints),
+            'reconciled' => $reconciled,
+            'ledgerBalance' => $this->balanceLiabilityValue($totalRemainingPoints),
+            'balanceTable' => $this->balanceLiabilityValue($balanceTablePoints),
+            'difference' => $this->balanceLiabilityValue($differencePoints),
+            'helperText' => 'Legacy Growave-migrated Candle Cash remains visible in the same customer balance pool, while only new program-earned Candle Cash is treated as expiring.',
         ];
     }
 
@@ -551,6 +583,7 @@ class CandleCashEarnedAnalyticsService
                 'candle_cash_transactions.source',
                 'candle_cash_transactions.source_id',
                 'candle_cash_transactions.description',
+                'candle_cash_transactions.legacy_points_origin',
                 'candle_cash_transactions.created_at',
             ]);
 
@@ -576,19 +609,23 @@ class CandleCashEarnedAnalyticsService
             }
 
             if ($points > 0) {
-                $isOpening = $this->normalizer->isEarnedLimitExempt($transaction);
                 $taskHandle = $taskHandlesByTransactionId[(int) $transaction->id] ?? null;
-                $sourceKey = $isOpening ? 'opening_balance' : $this->normalizer->classifyEarnSource($transaction, $taskHandle);
-                $sourceDefinition = (array) ($this->normalizer->sourceDefinitions()[$sourceKey] ?? [
-                    'label' => 'Other earn',
-                    'definition' => 'Program-earned reward credit events grouped under a fallback source bucket.',
-                ]);
+                $bucketKind = $this->positiveBucketKind($transaction);
+                $sourceKey = $bucketKind === 'program'
+                    ? $this->normalizer->classifyEarnSource($transaction, $taskHandle)
+                    : ($bucketKind === 'legacy' ? 'legacy_growave_migrated' : 'manual_nonexpiring_opening_balance');
+                $sourceDefinition = $bucketKind === 'program'
+                    ? (array) ($this->normalizer->sourceDefinitions()[$sourceKey] ?? [
+                        'label' => 'Other earn',
+                        'definition' => 'Program-earned reward credit events grouped under a fallback source bucket.',
+                    ])
+                    : $this->nonProgramBucketDefinition($bucketKind);
 
                 $earnedAt = $this->timestampForTransaction($transaction);
                 $bucket = [
                     'transaction_id' => (int) $transaction->id,
                     'marketing_profile_id' => $profileId,
-                    'kind' => $isOpening ? 'opening' : 'program',
+                    'kind' => $bucketKind,
                     'source_key' => $sourceKey,
                     'source_label' => (string) ($sourceDefinition['label'] ?? 'Other earn'),
                     'source_definition' => (string) ($sourceDefinition['definition'] ?? ''),
@@ -641,17 +678,27 @@ class CandleCashEarnedAnalyticsService
 
         $outstandingByProfile = [];
         $excludedOpeningPoints = 0.0;
+        $legacyRemainingPoints = 0.0;
+        $manualNonExpiringPoints = 0.0;
+        $totalRemainingPoints = 0.0;
 
         foreach ($bucketsByProfile as $profileId => $buckets) {
             $programBuckets = collect($buckets)
-                ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'program' && (int) ($bucket['remaining_points'] ?? 0) > 0)
+                ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'program' && (float) ($bucket['remaining_points'] ?? 0) > 0)
                 ->values();
 
-            $openingRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)
-                ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'opening')
+            $legacyRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)
+                ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'legacy')
                 ->sum('remaining_points'));
+            $manualRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)
+                ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'manual_nonexpiring')
+                ->sum('remaining_points'));
+            $profileRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)->sum('remaining_points'));
 
-            $excludedOpeningPoints += max(0, $openingRemaining);
+            $legacyRemainingPoints += max(0, $legacyRemaining);
+            $manualNonExpiringPoints += max(0, $manualRemaining);
+            $excludedOpeningPoints += max(0, CandleCashMeasurement::normalizeStoredAmount($legacyRemaining + $manualRemaining));
+            $totalRemainingPoints += max(0, $profileRemaining);
 
             if ($programBuckets->isEmpty()) {
                 continue;
@@ -665,10 +712,18 @@ class CandleCashEarnedAnalyticsService
             ];
         }
 
+        $programRemainingPoints = CandleCashMeasurement::normalizeStoredAmount(collect($outstandingByProfile)->sum('points'));
+        $balanceTablePoints = $this->balanceTablePoints($tenantId);
+
         $this->currentLedgerStateByScope[$scopeKey] = [
             'program_earn_events' => $programEarnEvents,
             'outstanding_by_profile' => $outstandingByProfile,
             'excluded_opening_points' => $excludedOpeningPoints,
+            'legacy_remaining_points' => CandleCashMeasurement::normalizeStoredAmount($legacyRemainingPoints),
+            'manual_nonexpiring_points' => CandleCashMeasurement::normalizeStoredAmount($manualNonExpiringPoints),
+            'program_remaining_points' => $programRemainingPoints,
+            'total_remaining_points' => CandleCashMeasurement::normalizeStoredAmount($totalRemainingPoints),
+            'balance_table_points' => $balanceTablePoints,
             'redeemed_at_by_profile' => $this->redeemedAtByProfile($tenantId),
             'debit_at_by_profile' => $debitAtByProfile,
         ];
@@ -755,5 +810,65 @@ class CandleCashEarnedAnalyticsService
     protected function formatCurrency(float $value): string
     {
         return '$'.number_format(round($value, 2), 2);
+    }
+
+    protected function positiveBucketKind(CandleCashTransaction $transaction): string
+    {
+        if ($this->normalizer->isLegacyNonExpiringCredit($transaction)) {
+            return 'legacy';
+        }
+
+        if ($this->normalizer->isEarnedLimitEligible($transaction)) {
+            return 'program';
+        }
+
+        return 'manual_nonexpiring';
+    }
+
+    /**
+     * @return array{label:string,definition:string}
+     */
+    protected function nonProgramBucketDefinition(string $kind): array
+    {
+        if ($kind === 'legacy') {
+            return [
+                'label' => 'Legacy Growave migrated Candle Cash',
+                'definition' => 'Converted Growave loyalty value that remains customer-visible in Candle Cash, but is excluded from the expiring program-earned pool.',
+            ];
+        }
+
+        return [
+            'label' => 'Manual non-expiring Candle Cash',
+            'definition' => 'Manual opening, grandfathered, or seed credit that stays customer-visible but is excluded from the expiring program-earned pool.',
+        ];
+    }
+
+    protected function balanceTablePoints(?int $tenantId = null): float
+    {
+        $points = CandleCashBalance::query()
+            ->join('marketing_profiles as mp', 'mp.id', '=', 'candle_cash_balances.marketing_profile_id')
+            ->when(
+                $tenantId === null,
+                fn (EloquentBuilder $query): EloquentBuilder => $query->whereNull('mp.tenant_id'),
+                fn (EloquentBuilder $query): EloquentBuilder => $query->where('mp.tenant_id', $tenantId)
+            )
+            ->sum('candle_cash_balances.balance');
+
+        return CandleCashMeasurement::normalizeStoredAmount($points);
+    }
+
+    /**
+     * @return array{points:float,amount:float,formattedAmount:string}
+     */
+    protected function balanceLiabilityValue(float $points): array
+    {
+        $normalizedPoints = CandleCashMeasurement::normalizeStoredAmount($points);
+        $amount = round($this->candleCashService->amountFromPoints($normalizedPoints), 2);
+
+        return [
+            'points' => $normalizedPoints,
+            'amount' => $amount,
+            'formattedAmount' => $this->formatCurrency($amount),
+        ];
     }
 }

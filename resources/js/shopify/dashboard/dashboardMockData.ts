@@ -377,8 +377,49 @@ export const dashboardMockData: DashboardPayload = {
       detail: "Medium confidence · fallback fixture uses stored-cost style data plus conservative fee assumptions.",
     },
   },
+  balanceLiability: {
+    title: "Current Candle Cash liability",
+    subtitle: "Fallback liability fixture for local development.",
+    totalCurrentBalance: {
+      points: 210,
+      amount: 210,
+      formattedAmount: "$210.00",
+    },
+    legacyMigrated: {
+      points: 120,
+      amount: 120,
+      formattedAmount: "$120.00",
+    },
+    programExpiring: {
+      points: 70,
+      amount: 70,
+      formattedAmount: "$70.00",
+    },
+    manualNonExpiring: {
+      points: 20,
+      amount: 20,
+      formattedAmount: "$20.00",
+    },
+    reconciled: true,
+    ledgerBalance: {
+      points: 210,
+      amount: 210,
+      formattedAmount: "$210.00",
+    },
+    balanceTable: {
+      points: 210,
+      amount: 210,
+      formattedAmount: "$210.00",
+    },
+    difference: {
+      points: 0,
+      amount: 0,
+      formattedAmount: "$0.00",
+    },
+    helperText: "Fallback liability guidance for local development.",
+  },
   candleCashEngagement: {
-    title: "Candle Cash earn activity",
+    title: "Program-earned Candle Cash activity",
     subtitle: "Fallback engagement section for local development.",
     earned: {
       amount: 42,
@@ -428,7 +469,7 @@ export const dashboardMockData: DashboardPayload = {
     reminderEligibility: {
       eligibleCustomers: 17,
       missingEmailCustomers: 2,
-      expirationPolicy: "No fixed expiration date is currently stored for earned Candle Cash buckets in this ledger.",
+      expirationPolicy: "Program-earned Candle Cash follows the tenant rewards expiration policy when reminder schedules are evaluated.",
       emailReadiness: {
         status: "ready",
         provider: "sendgrid",

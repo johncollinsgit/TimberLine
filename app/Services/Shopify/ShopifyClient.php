@@ -20,35 +20,59 @@ class ShopifyClient
 
     public function get(string $path, array $params = []): array
     {
-        $url = $this->baseUrl().'/'.ltrim($path, '/');
+        $page = $this->getPage($path, $params);
+        $resourceKey = $page['resource_key'] ?? null;
+        $payload = $page['payload'] ?? [];
 
-        $response = $this->requestWithRetry($url, $params);
-
-        $payload = $response->json() ?? [];
-        $resourceKey = $this->resourceKey($payload);
-
-        if (
-            $resourceKey === null ||
-            !is_array($payload[$resourceKey] ?? null) ||
-            !array_is_list($payload[$resourceKey])
-        ) {
-            return $payload;
+        if ($resourceKey === null || !($page['is_list_resource'] ?? false)) {
+            return is_array($payload) ? $payload : [];
         }
 
-        $items = $payload[$resourceKey];
+        $items = $page['items'];
+        $nextUrl = $page['next_url'] ?? null;
 
-        // Shopify REST pagination via Link header
-        $nextUrl = $this->nextPageUrl($response->header('Link'));
         while ($nextUrl) {
-            $pageResponse = $this->requestWithRetry($nextUrl);
-
-            $pagePayload = $pageResponse->json() ?? [];
-            $items = array_merge($items, $pagePayload[$resourceKey] ?? []);
-
-            $nextUrl = $this->nextPageUrl($pageResponse->header('Link'));
+            $nextPage = $this->getPage($nextUrl);
+            $items = array_merge($items, is_array($nextPage['items'] ?? null) ? $nextPage['items'] : []);
+            $nextUrl = $nextPage['next_url'] ?? null;
         }
 
         return [$resourceKey => $items];
+    }
+
+    /**
+     * @return array{
+     *   payload: array<string,mixed>,
+     *   resource_key: ?string,
+     *   items: array<int,mixed>,
+     *   is_list_resource: bool,
+     *   next_url: ?string
+     * }
+     */
+    public function getPage(string $pathOrUrl, array $params = []): array
+    {
+        $response = $this->requestWithRetry($this->resolveUrl($pathOrUrl), $params);
+        $payload = $response->json() ?? [];
+        $resourceKey = $this->resourceKey($payload);
+
+        $items = [];
+        $isListResource = false;
+        if (
+            $resourceKey !== null &&
+            is_array($payload[$resourceKey] ?? null) &&
+            array_is_list($payload[$resourceKey])
+        ) {
+            $items = $payload[$resourceKey];
+            $isListResource = true;
+        }
+
+        return [
+            'payload' => is_array($payload) ? $payload : [],
+            'resource_key' => $resourceKey,
+            'items' => $items,
+            'is_list_resource' => $isListResource,
+            'next_url' => $this->nextPageUrl($response->header('Link')),
+        ];
     }
 
     protected function request(): PendingRequest
@@ -62,6 +86,15 @@ class ShopifyClient
     protected function baseUrl(): string
     {
         return 'https://'.rtrim($this->shopDomain, '/').'/admin/api/'.$this->apiVersion;
+    }
+
+    protected function resolveUrl(string $pathOrUrl): string
+    {
+        if (preg_match('#^https?://#i', $pathOrUrl) === 1) {
+            return $pathOrUrl;
+        }
+
+        return $this->baseUrl().'/'.ltrim($pathOrUrl, '/');
     }
 
     protected function resourceKey(array $payload): ?string

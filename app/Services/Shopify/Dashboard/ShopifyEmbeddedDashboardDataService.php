@@ -142,6 +142,7 @@ class ShopifyEmbeddedDashboardDataService
             'attribution' => $this->attributionSection($primarySnapshot, $comparisonSnapshot, $config),
             'locationOrigins' => $this->locationSection($primarySnapshot, $resolvedQuery),
             'financialSummary' => $this->financialSummary($primarySnapshot, $comparisonSnapshot),
+            'balanceLiability' => $this->balanceLiabilitySection($primarySnapshot),
             'candleCashEngagement' => $this->candleCashEngagementSection($primarySnapshot, $comparisonSnapshot),
             'flags' => [
                 'hasAnyData' => (bool) $primarySnapshot['flags']['has_any_data'],
@@ -231,6 +232,7 @@ class ShopifyEmbeddedDashboardDataService
         $locationRows = $this->locationRows($revenueRows, $locationGrouping);
         $candleCash = $this->candleCashProvider->snapshot($from, $to, $tenantId);
         $candleCashEngagement = $this->candleCashEarnedAnalyticsService->snapshot($from, $to, $tenantId);
+        $balanceLiability = (array) data_get($candleCashEngagement, 'balanceLiability', []);
         $emailReadiness = $this->marketingEmailReadiness->summary($tenantId);
         $returningCustomerRate = $this->returningCustomerRate($from, $to, $tenantId);
         $realizedRewardCost = max(0.0, (float) data_get($candleCash, 'realizedRewardCost', 0));
@@ -275,10 +277,12 @@ class ShopifyEmbeddedDashboardDataService
                 'realizedRewardCost' => $realizedRewardCost,
                 'birthdayRewardLiability' => $birthdayRewardLiability,
             ],
+            'balanceLiability' => $balanceLiability,
             'flags' => [
                 'has_any_data' => $revenueRows->isNotEmpty()
                     || $candleCash['used']['count'] > 0
-                    || (int) data_get($candleCashEngagement, 'earned.eventCount', 0) > 0,
+                    || (int) data_get($candleCashEngagement, 'earned.eventCount', 0) > 0
+                    || (float) data_get($balanceLiability, 'totalCurrentBalance.amount', 0) > 0,
                 'attribution_partial' => (bool) data_get($classifiedAttribution, 'summary.has_unknown_rows', false),
                 'location_partial' => $locationRows->isNotEmpty()
                     ? $locationRows->contains(fn (array $row): bool => (bool) ($row['partial'] ?? false))
@@ -898,7 +902,7 @@ class ShopifyEmbeddedDashboardDataService
             ],
             [
                 'key' => 'candle_cash_earned',
-                'label' => 'Rewards Earned',
+                'label' => 'Program Earned (Selected Period)',
                 'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCashEngagement.earned.amount', 0)),
                 'comparisonValue' => data_get($metrics, 'candle_cash_earned.comparison'),
@@ -909,7 +913,7 @@ class ShopifyEmbeddedDashboardDataService
             ],
             [
                 'key' => 'earned_candle_cash_outstanding',
-                'label' => 'Outstanding Earned Rewards',
+                'label' => 'Outstanding Expiring Rewards',
                 'value' => (float) data_get($primarySnapshot, 'candleCashEngagement.outstanding.amount', 0),
                 'formattedValue' => $this->currency((float) data_get($primarySnapshot, 'candleCashEngagement.outstanding.amount', 0)),
                 'comparisonValue' => null,
@@ -1057,7 +1061,7 @@ class ShopifyEmbeddedDashboardDataService
                 'color' => '#2563eb',
             ],
             'candle_cash_earned' => [
-                'label' => 'Rewards Earned',
+                'label' => 'Program Earned (Selected Period)',
                 'description' => 'Program-earned rewards credited in the selected period, excluding imported opening balances.',
                 'color' => '#0f766e',
             ],
@@ -1646,6 +1650,14 @@ class ShopifyEmbeddedDashboardDataService
                 'timeToFirstRedemptionAverageDays' => data_get($comparison, 'timeToFirstRedemption.averageDays'),
             ],
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function balanceLiabilitySection(array $primarySnapshot): array
+    {
+        return (array) data_get($primarySnapshot, 'balanceLiability', data_get($primarySnapshot, 'candleCashEngagement.balanceLiability', []));
     }
 
     protected function daysValue(mixed $value): float

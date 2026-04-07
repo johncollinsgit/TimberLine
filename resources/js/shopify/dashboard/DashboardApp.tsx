@@ -154,6 +154,7 @@ export function DashboardApp({ bootstrap }: DashboardAppProps) {
               data ? (
                 <CandleCashEngagementSection
                   section={data.candleCashEngagement}
+                  balanceLiability={data.balanceLiability}
                   sendingReminders={reminderAction.loading}
                   reminderFeedback={reminderAction.message ? reminderAction : null}
                   onSendReminders={sendCandleCashReminders}

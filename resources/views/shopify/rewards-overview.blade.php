@@ -53,7 +53,36 @@
         $chartEmpty = (bool) ($chartPayload['empty'] ?? true);
         $chartTitle = (string) ($chartPayload['title'] ?? 'Performance trend');
         $chartSubtitle = (string) ($chartPayload['subtitle'] ?? 'Rewards activity across earned credit, redemptions, and the sales they drive.');
-        $topMetrics = array_slice((array) ($analyticsPayload['topMetrics'] ?? []), 0, 4);
+        $selectedPeriodMetrics = collect((array) ($analyticsPayload['topMetrics'] ?? []))
+            ->filter(fn ($metric): bool => in_array((string) ($metric['key'] ?? ''), [
+                'candle_cash_earned',
+                'earned_candle_cash_outstanding',
+                'time_to_first_redemption',
+                'customers_with_unredeemed_earned',
+            ], true))
+            ->values()
+            ->all();
+        $balanceLiability = (array) ($analyticsPayload['balanceLiability'] ?? []);
+        $liabilityMetrics = [
+            [
+                'label' => 'Total Active Candle Cash',
+                'formattedValue' => (string) data_get($balanceLiability, 'totalCurrentBalance.formattedAmount', '$0.00'),
+                'caption' => (bool) data_get($balanceLiability, 'reconciled', false)
+                    ? 'Ledger replay matches candle_cash_balances.'
+                    : 'Ledger replay does not currently reconcile to candle_cash_balances.',
+            ],
+            [
+                'label' => 'Legacy Growave Candle Cash',
+                'formattedValue' => (string) data_get($balanceLiability, 'legacyMigrated.formattedAmount', '$0.00'),
+                'caption' => 'Non-expiring migrated Candle Cash that stays in the normal customer balance.',
+            ],
+            [
+                'label' => 'Expiring Program Candle Cash',
+                'formattedValue' => (string) data_get($balanceLiability, 'programExpiring.formattedAmount', '$0.00'),
+                'caption' => 'New program-earned Candle Cash still governed by the active rewards expiration policy.',
+            ],
+        ];
+        $manualNonExpiringLiability = (float) data_get($balanceLiability, 'manualNonExpiring.amount', 0);
         $attributionSources = (array) data_get($analyticsPayload, 'attribution.sources', []);
         $financialItems = (array) data_get($analyticsPayload, 'financialSummary.items', []);
         $netProfit = (array) data_get($analyticsPayload, 'financialSummary.netProfit', []);
@@ -422,13 +451,27 @@
             </article>
 
             <div class="rewards-metric-grid">
-                @if(count($topMetrics) === 0)
+                @foreach($liabilityMetrics as $metric)
+                    <article class="rewards-metric-card">
+                        <span class="rewards-metric-label">{{ (string) ($metric['label'] ?? 'Metric') }}</span>
+                        <span class="rewards-metric-value">{{ (string) ($metric['formattedValue'] ?? '$0') }}</span>
+                        <p class="rewards-metric-caption">{{ (string) ($metric['caption'] ?? '') }}</p>
+                    </article>
+                @endforeach
+            </div>
+
+            @if($manualNonExpiringLiability > 0)
+                <p class="rewards-chart-empty">Manual non-expiring Candle Cash outside the Growave migration: {{ (string) data_get($balanceLiability, 'manualNonExpiring.formattedAmount', '$0.00') }}</p>
+            @endif
+
+            <div class="rewards-metric-grid">
+                @if(count($selectedPeriodMetrics) === 0)
                     <article class="rewards-metric-card">
                         <span class="rewards-metric-label">Data status</span>
-                        <p class="rewards-metric-caption">Awaiting reward-attributed orders.</p>
+                        <p class="rewards-metric-caption">Awaiting selected-period program reward activity.</p>
                     </article>
                 @else
-                    @foreach($topMetrics as $metric)
+                    @foreach($selectedPeriodMetrics as $metric)
                         <article class="rewards-metric-card">
                             <span class="rewards-metric-label">{{ (string) ($metric['label'] ?? 'Metric') }}</span>
                             <span class="rewards-metric-value">{{ (string) ($metric['formattedValue'] ?? '$0') }}</span>

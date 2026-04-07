@@ -3,6 +3,7 @@ import type { DashboardPayload } from "../types";
 
 interface CandleCashEngagementSectionProps {
   section: DashboardPayload["candleCashEngagement"];
+  balanceLiability: DashboardPayload["balanceLiability"];
   sendingReminders: boolean;
   reminderFeedback: { tone: "success" | "critical" | "subdued"; message: string } | null;
   onSendReminders: () => Promise<void>;
@@ -18,6 +19,7 @@ const readinessBadgeTone = {
 
 export function CandleCashEngagementSection({
   section,
+  balanceLiability,
   sendingReminders,
   reminderFeedback,
   onSendReminders,
@@ -101,7 +103,50 @@ export function CandleCashEngagementSection({
         <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
           <div className="sf-dashboard-engagement-pill">
             <Text as="p" variant="bodySm" tone="subdued">
-              Candle Cash earned
+              Total Active Candle Cash
+            </Text>
+            <Text as="p" variant="headingLg">
+              {balanceLiability.totalCurrentBalance.formattedAmount}
+            </Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              {balanceLiability.reconciled ? "Ledger reconciled" : "Ledger reconciliation needed"}
+            </Text>
+          </div>
+          <div className="sf-dashboard-engagement-pill">
+            <Text as="p" variant="bodySm" tone="subdued">
+              Legacy Growave Candle Cash
+            </Text>
+            <Text as="p" variant="headingLg">
+              {balanceLiability.legacyMigrated.formattedAmount}
+            </Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              Non-expiring migrated balance
+            </Text>
+          </div>
+          <div className="sf-dashboard-engagement-pill">
+            <Text as="p" variant="bodySm" tone="subdued">
+              Expiring Program Candle Cash
+            </Text>
+            <Text as="p" variant="headingLg">
+              {balanceLiability.programExpiring.formattedAmount}
+            </Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              Earned under the active rewards policy
+            </Text>
+          </div>
+        </InlineGrid>
+
+        {balanceLiability.manualNonExpiring.amount > 0 ? (
+          <Text as="p" variant="bodySm" tone="subdued">
+            Manual non-expiring Candle Cash outside the legacy Growave migration:{" "}
+            {balanceLiability.manualNonExpiring.formattedAmount}
+          </Text>
+        ) : null}
+
+        <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
+          <div className="sf-dashboard-engagement-pill">
+            <Text as="p" variant="bodySm" tone="subdued">
+              Program Earned (Selected Period)
             </Text>
             <Text as="p" variant="headingLg">
               {section.earned.formattedAmount}
@@ -112,7 +157,7 @@ export function CandleCashEngagementSection({
           </div>
           <div className="sf-dashboard-engagement-pill">
             <Text as="p" variant="bodySm" tone="subdued">
-              Earned Candle Cash outstanding
+              Outstanding Expiring Rewards
             </Text>
             <Text as="p" variant="headingLg">
               {section.outstanding.formattedAmount}
@@ -135,6 +180,9 @@ export function CandleCashEngagementSection({
         </InlineGrid>
 
         <BlockStack gap="200">
+          <Text as="p" variant="bodySm" tone="subdued">
+            {balanceLiability.helperText}
+          </Text>
           <Text as="p" variant="bodySm" tone="subdued">
             {section.earned.sourceSummary}
           </Text>

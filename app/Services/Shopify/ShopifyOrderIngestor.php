@@ -26,17 +26,21 @@ class ShopifyOrderIngestor
     /**
      * @param array{key: string, source: string, tenant_id?:?int} $store
      * @param array<string, mixed> $orderData
-     * @param array{tenant_id?:?int} $options
-     * @return array{lines_count: int, merged_lines_count: int, mapping_exceptions_count: int}
+     * @param array{tenant_id?:?int,dispatch_profile_sync?:bool} $options
+     * @return array{lines_count: int, merged_lines_count: int, mapping_exceptions_count: int, order_id?: ?int}
      */
     public function ingest(array $store, array $orderData, array $options = []): array
     {
         $resolvedTenantId = $this->positiveInt($options['tenant_id'] ?? null)
             ?? $this->positiveInt($store['tenant_id'] ?? null);
+        $dispatchProfileSync = array_key_exists('dispatch_profile_sync', $options)
+            ? (bool) $options['dispatch_profile_sync']
+            : true;
         $summary = [
             'lines_count' => 0,
             'merged_lines_count' => 0,
             'mapping_exceptions_count' => 0,
+            'order_id' => null,
         ];
 
         $noteText = $this->buildOrderNote($orderData);
@@ -145,6 +149,7 @@ class ShopifyOrderIngestor
 
             $order->save();
             $syncedOrderId = (int) $order->id;
+            $summary['order_id'] = $syncedOrderId;
             $identityContext = $this->buildMarketingIdentityContext(
                 $orderData,
                 (string) ($store['key'] ?? ''),
@@ -195,7 +200,7 @@ class ShopifyOrderIngestor
             }
         });
 
-        if ($syncedOrderId) {
+        if ($syncedOrderId && $dispatchProfileSync) {
             SyncMarketingProfileFromOrder::dispatch(
                 $syncedOrderId,
                 $identityContext,

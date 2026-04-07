@@ -50,6 +50,29 @@ test('program-earned transactions remain earned-limit eligible', function () {
         ->and($normalizer->isEarnedLimitEligible($programEarn))->toBeTrue();
 });
 
+test('legacy growave activity rows stay earned-limit exempt even when description text is not import tagged', function () {
+    $profile = MarketingProfile::query()->create([
+        'email' => 'legacy.activity@example.com',
+        'normalized_email' => 'legacy.activity@example.com',
+    ]);
+
+    $legacyActivity = CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'points' => 10,
+        'source' => 'growave_activity',
+        'source_id' => 'retail:legacy-activity:1001',
+        'description' => 'Imported Growave activity #1001 (reward)',
+    ]);
+
+    $normalizer = app(CandleCashLedgerNormalizationService::class);
+
+    expect((bool) $legacyActivity->legacy_points_origin)->toBeTrue()
+        ->and($normalizer->isEarnedLimitExempt($legacyActivity))->toBeTrue()
+        ->and($normalizer->isEarnedLimitEligible($legacyActivity))->toBeFalse()
+        ->and((float) $legacyActivity->candle_cash_delta)->toBe(3.0);
+});
+
 test('mixed ledgers expose only program-earned credit as earned-limit eligible', function () {
     $profile = MarketingProfile::query()->create([
         'email' => 'mixed.ledger@example.com',

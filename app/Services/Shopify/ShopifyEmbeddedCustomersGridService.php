@@ -221,7 +221,7 @@ class ShopifyEmbeddedCustomersGridService
                 $join->on('external_stats.marketing_profile_id', '=', 'mp.id');
             })
             ->leftJoinSub($this->ordersStatsSubquery($tenantId, $scopedProfileIds), 'order_stats', function ($join): void {
-                $join->on('order_stats.normalized_email', '=', 'mp.normalized_email');
+                $join->on('order_stats.marketing_profile_id', '=', 'mp.id');
             })
             ->leftJoinSub($this->wholesaleLinkStatsSubquery($tenantId, $scopedProfileIds), 'wholesale_link_stats', function ($join): void {
                 $join->on('wholesale_link_stats.marketing_profile_id', '=', 'mp.id');
@@ -964,64 +964,53 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function ordersStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('orders')) {
+        if (! Schema::hasTable('orders') || ! Schema::hasTable('marketing_profile_links')) {
             return $this->emptySubquery([
-                "'' as normalized_email",
+                '0 as marketing_profile_id',
                 '0 as orders_count',
             ]);
         }
 
-        $emailColumns = array_values(array_filter([
-            Schema::hasColumn('orders', 'customer_email') ? 'orders.customer_email' : null,
-            Schema::hasColumn('orders', 'email') ? 'orders.email' : null,
-            Schema::hasColumn('orders', 'billing_email') ? 'orders.billing_email' : null,
-            Schema::hasColumn('orders', 'shipping_email') ? 'orders.shipping_email' : null,
-        ]));
+        $directOrderLinks = DB::table('marketing_profile_links as mpl')
+            ->join('orders as orders', 'orders.id', '=', 'mpl.source_id')
+            ->selectRaw('mpl.marketing_profile_id')
+            ->selectRaw('orders.id as order_id')
+            ->where('mpl.source_type', 'order');
+        $directOrderLinks = $this->applyTenantScope($directOrderLinks, 'marketing_profile_links', 'mpl', $tenantId);
+        $directOrderLinks = $this->applyJoinedTenantScope($directOrderLinks, 'orders', 'orders', $tenantId);
+        $directOrderLinks = $this->applyProfileScope($directOrderLinks, 'mpl.marketing_profile_id', $profileIds);
 
-        if ($emailColumns === []) {
-            return $this->emptySubquery([
-                "'' as normalized_email",
-                '0 as orders_count',
-            ]);
+        if (! Schema::hasColumn('orders', 'shopify_customer_id')) {
+            return DB::query()
+                ->fromSub($directOrderLinks, 'order_links')
+                ->selectRaw('marketing_profile_id')
+                ->selectRaw('count(distinct order_id) as orders_count')
+                ->groupBy('marketing_profile_id');
         }
 
-        $emailExpression = 'coalesce(' . implode(', ', array_map(
-            static fn (string $column): string => "nullif(trim($column), '')",
-            $emailColumns
-        )) . ')';
-        $normalizedEmailExpression = 'lower(' . $emailExpression . ')';
+        $customerIdExpression = $this->shopifyCustomerLinkCustomerIdExpression('mpl.source_id');
+        $storeKeyExpression = $this->shopifyCustomerLinkStoreKeyExpression('mpl.source_id');
+        $orderStoreKeyExpression = $this->orderStoreKeyExpression();
 
-        $query = DB::table('orders as orders')
-            ->selectRaw($normalizedEmailExpression . ' as normalized_email')
-            ->selectRaw('count(*) as orders_count')
-            ->whereRaw($emailExpression . ' is not null')
-            ->groupByRaw($normalizedEmailExpression);
-        $query = $this->applyTenantScope($query, 'orders', 'orders', $tenantId);
+        $shopifyCustomerFallbackLinks = DB::table('marketing_profile_links as mpl')
+            ->join('orders as orders', function ($join) use ($customerIdExpression, $storeKeyExpression, $orderStoreKeyExpression): void {
+                $join->where('mpl.source_type', '=', 'shopify_customer');
+                $join->whereRaw("trim(coalesce(orders.shopify_customer_id, '')) != ''");
+                $join->whereRaw("trim({$customerIdExpression}) != ''");
+                $join->whereRaw("trim(orders.shopify_customer_id) = {$customerIdExpression}");
+                $join->whereRaw("({$storeKeyExpression} = '' or {$orderStoreKeyExpression} = {$storeKeyExpression})");
+            })
+            ->selectRaw('mpl.marketing_profile_id')
+            ->selectRaw('orders.id as order_id');
+        $shopifyCustomerFallbackLinks = $this->applyTenantScope($shopifyCustomerFallbackLinks, 'marketing_profile_links', 'mpl', $tenantId);
+        $shopifyCustomerFallbackLinks = $this->applyJoinedTenantScope($shopifyCustomerFallbackLinks, 'orders', 'orders', $tenantId);
+        $shopifyCustomerFallbackLinks = $this->applyProfileScope($shopifyCustomerFallbackLinks, 'mpl.marketing_profile_id', $profileIds);
 
-        if ($profileIds !== null) {
-            $scopedEmails = DB::table('marketing_profiles as mp')
-                ->select('mp.normalized_email')
-                ->whereIn('mp.id', $profileIds ?: [0])
-                ->whereNotNull('mp.normalized_email')
-                ->where('mp.normalized_email', '!=', '')
-                ->pluck('mp.normalized_email')
-                ->map(fn (mixed $email): string => strtolower(trim((string) $email)))
-                ->filter(fn (string $email): bool => $email !== '')
-                ->unique()
-                ->values()
-                ->all();
-
-            if ($scopedEmails === []) {
-                return $this->emptySubquery([
-                    "'' as normalized_email",
-                    '0 as orders_count',
-                ]);
-            }
-
-            $query->whereIn(DB::raw($normalizedEmailExpression), $scopedEmails);
-        }
-
-        return $query;
+        return DB::query()
+            ->fromSub($directOrderLinks->unionAll($shopifyCustomerFallbackLinks), 'order_links')
+            ->selectRaw('marketing_profile_id')
+            ->selectRaw('count(distinct order_id) as orders_count')
+            ->groupBy('marketing_profile_id');
     }
 
     /**
@@ -1060,5 +1049,47 @@ class ShopifyEmbeddedCustomersGridService
         }
 
         return $query->where($column, '=', $tenantId);
+    }
+
+    protected function applyJoinedTenantScope(Builder $query, string $table, string $alias, ?int $tenantId): Builder
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'tenant_id')) {
+            return $query;
+        }
+
+        $column = $alias !== '' ? $alias . '.tenant_id' : 'tenant_id';
+
+        if ($tenantId === null) {
+            return $query->whereNull($column);
+        }
+
+        return $query->where($column, '=', $tenantId);
+    }
+
+    protected function shopifyCustomerLinkStoreKeyExpression(string $column): string
+    {
+        return "lower(trim(case when instr({$column}, ':') > 0 then substr({$column}, 1, instr({$column}, ':') - 1) else '' end))";
+    }
+
+    protected function shopifyCustomerLinkCustomerIdExpression(string $column): string
+    {
+        return "trim(case when instr({$column}, ':') > 0 then substr({$column}, instr({$column}, ':') + 1) else {$column} end)";
+    }
+
+    protected function orderStoreKeyExpression(): string
+    {
+        $columns = array_values(array_filter([
+            Schema::hasColumn('orders', 'shopify_store_key') ? 'orders.shopify_store_key' : null,
+            Schema::hasColumn('orders', 'shopify_store') ? 'orders.shopify_store' : null,
+        ]));
+
+        if ($columns === []) {
+            return "''";
+        }
+
+        return 'lower(trim(coalesce(' . implode(', ', array_map(
+            static fn (string $column): string => "nullif(trim({$column}), '')",
+            $columns
+        )) . ", '')))";
     }
 }

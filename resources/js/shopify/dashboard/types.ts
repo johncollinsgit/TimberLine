@@ -171,6 +171,47 @@ export interface DashboardPayload {
       detail?: string;
     };
   };
+  balanceLiability: {
+    title: string;
+    subtitle: string;
+    totalCurrentBalance: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    legacyMigrated: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    programExpiring: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    manualNonExpiring: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    reconciled: boolean;
+    ledgerBalance: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    balanceTable: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    difference: {
+      points: number;
+      amount: number;
+      formattedAmount: string;
+    };
+    helperText: string;
+  };
   candleCashEngagement: {
     title: string;
     subtitle: string;

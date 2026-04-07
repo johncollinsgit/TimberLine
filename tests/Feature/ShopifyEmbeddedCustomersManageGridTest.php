@@ -236,7 +236,7 @@ function shopifyAppCustomersManageUrl(array $query = []): string
     return route('shopify.app.customers.manage', array_merge($query, retailEmbeddedSignedQuery()));
 }
 
-function seedOrderForEmail(string $email): void
+function seedLinkedOrderForProfile(MarketingProfile $profile, array $attributes = []): int
 {
     $payload = [
         'source' => 'manual',
@@ -245,14 +245,63 @@ function seedOrderForEmail(string $email): void
         'updated_at' => now(),
     ];
 
-    foreach (['customer_email', 'email', 'billing_email', 'shipping_email'] as $column) {
+    foreach ([
+        'shopify_store_key' => 'retail',
+        'shopify_customer_id' => $attributes['shopify_customer_id'] ?? null,
+        'email' => $attributes['email'] ?? $profile->email,
+        'customer_email' => $attributes['customer_email'] ?? $profile->email,
+        'billing_email' => $attributes['billing_email'] ?? $profile->email,
+        'shipping_email' => $attributes['shipping_email'] ?? $profile->email,
+    ] as $column => $value) {
         if (Schema::hasColumn('orders', $column)) {
-            $payload[$column] = $email;
-            break;
+            $payload[$column] = $value;
         }
     }
 
-    DB::table('orders')->insert($payload);
+    $payload = array_merge($payload, array_filter(
+        $attributes,
+        fn (string $column): bool => Schema::hasColumn('orders', $column),
+        ARRAY_FILTER_USE_KEY
+    ));
+
+    $orderId = (int) DB::table('orders')->insertGetId($payload);
+
+    DB::table('marketing_profile_links')->insert([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $orderId,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    return $orderId;
+}
+
+function seedShopifyCustomerFallbackOrder(string $customerId, array $attributes = []): int
+{
+    $payload = [
+        'source' => 'manual',
+        'status' => 'new',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+
+    foreach ([
+        'shopify_store_key' => 'retail',
+        'shopify_customer_id' => $customerId,
+    ] as $column => $value) {
+        if (Schema::hasColumn('orders', $column)) {
+            $payload[$column] = $value;
+        }
+    }
+
+    $payload = array_merge($payload, array_filter(
+        $attributes,
+        fn (string $column): bool => Schema::hasColumn('orders', $column),
+        ARRAY_FILTER_USE_KEY
+    ));
+
+    return (int) DB::table('orders')->insertGetId($payload);
 }
 
 test('/customers/manage stays search-first until a query is entered', function () {
@@ -417,10 +466,10 @@ test('orders sort is stable when order counts tie', function () {
         'normalized_email' => 'beta@example.com',
     ]);
 
-    seedOrderForEmail('alpha@example.com');
-    seedOrderForEmail('ALPHA@example.com');
-    seedOrderForEmail('beta@example.com');
-    seedOrderForEmail('BETA@example.com');
+    seedLinkedOrderForProfile($alpha);
+    seedLinkedOrderForProfile($alpha, ['email' => 'ALPHA@example.com', 'customer_email' => 'ALPHA@example.com']);
+    seedLinkedOrderForProfile($beta);
+    seedLinkedOrderForProfile($beta, ['email' => 'BETA@example.com', 'customer_email' => 'BETA@example.com']);
 
     $service = app(ShopifyEmbeddedCustomersGridService::class);
     $result = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', [
@@ -465,8 +514,8 @@ test('customers grid resolves missing contact data and vip tier fallbacks', func
     }
     DB::table('customer_external_profiles')->insert([$externalProfilePayload]);
 
-    seedOrderForEmail('alice@example.com');
-    seedOrderForEmail('ALICE@example.com');
+    seedLinkedOrderForProfile($fixtures['alice']);
+    seedLinkedOrderForProfile($fixtures['alice'], ['email' => 'ALICE@example.com', 'customer_email' => 'ALICE@example.com']);
 
     $service = app(ShopifyEmbeddedCustomersGridService::class);
 
@@ -488,6 +537,43 @@ test('customers grid resolves missing contact data and vip tier fallbacks', func
         ->and($claraRow['vip_tier'] ?? null)->toBe(Schema::hasColumn('customer_external_profiles', 'vip_tier') ? 'Gold' : 'Standard')
         ->and($needsContactRow['id'] ?? null)->toBe($missingContact->id)
         ->and($needsContactRow['status']['key'] ?? null)->toBe('needs_contact');
+});
+
+test('customers grid counts canonical Shopify customer fallback orders when order emails changed', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Rynda',
+        'last_name' => 'Baker',
+        'email' => 'rynda@example.com',
+        'normalized_email' => 'rynda@example.com',
+    ]);
+
+    DB::table('marketing_profile_links')->insert([
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:7577017156',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    seedShopifyCustomerFallbackOrder('7577017156', [
+        'email' => 'legacy-address@example.com',
+        'customer_email' => 'legacy-address@example.com',
+        'billing_email' => 'legacy-address@example.com',
+        'shipping_email' => 'legacy-address@example.com',
+    ]);
+    seedShopifyCustomerFallbackOrder('7577017156', [
+        'email' => 'another-address@example.com',
+        'customer_email' => 'another-address@example.com',
+        'billing_email' => 'another-address@example.com',
+        'shipping_email' => 'another-address@example.com',
+    ]);
+
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+    $result = $service->resolve(Request::create('/shopify/app/customers/manage', 'GET', ['search' => 'rynda@example.com']));
+    $row = collect($result['paginator']->items())->first();
+
+    expect($row['id'] ?? null)->toBe($profile->id)
+        ->and($row['orders_count'] ?? 0)->toBe(2);
 });
 
 test('status filters work for candle club, referral, review, birthday, and wholesale columns', function (string $filter, string $expectedEmail, string $unexpectedEmail) {

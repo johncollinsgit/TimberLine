@@ -422,6 +422,33 @@ class MarketingProfileSyncService
                         ->where('source_id', $linkData['source_id'])
                         ->first();
 
+                    $legacyExisting = null;
+                    if (! $existing && $tenantId !== null && $profile->exists) {
+                        $legacyExisting = MarketingProfileLink::query()
+                            ->whereNull('tenant_id')
+                            ->where('marketing_profile_id', $profile->id)
+                            ->where('source_type', $linkData['source_type'])
+                            ->where('source_id', $linkData['source_id'])
+                            ->first();
+                    }
+
+                    if ($legacyExisting) {
+                        $legacyExisting->forceFill([
+                            'tenant_id' => $tenantId,
+                            'marketing_profile_id' => $profile->id,
+                            'source_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                                is_array($legacyExisting->source_meta ?? null) ? $legacyExisting->source_meta : [],
+                                is_array($linkData['source_meta'] ?? null) ? $linkData['source_meta'] : []
+                            ),
+                            'match_method' => $matchMethod,
+                            'confidence' => $confidence,
+                        ])->save();
+
+                        $linksReused++;
+
+                        continue;
+                    }
+
                     MarketingProfileLink::query()->updateOrCreate(
                         [
                             'tenant_id' => $tenantId,
@@ -455,6 +482,15 @@ class MarketingProfileSyncService
                     ->where('source_type', $linkData['source_type'])
                     ->where('source_id', $linkData['source_id'])
                     ->exists();
+
+                if (! $existing && $tenantId !== null && $profile->exists) {
+                    $existing = MarketingProfileLink::query()
+                        ->whereNull('tenant_id')
+                        ->where('marketing_profile_id', $profile->id)
+                        ->where('source_type', $linkData['source_type'])
+                        ->where('source_id', $linkData['source_id'])
+                        ->exists();
+                }
 
                 if ($existing) {
                     $linksReused++;
@@ -612,30 +648,25 @@ class MarketingProfileSyncService
             return collect();
         }
 
-        $query = MarketingProfileLink::query()->forTenantId($tenantId);
-        $query->where(function ($sub) use ($sourceLinks): void {
-            foreach ($sourceLinks as $index => $linkData) {
-                if ($index === 0) {
-                    $sub->where(function ($nested) use ($linkData): void {
-                        $nested->where('source_type', $linkData['source_type'])
-                            ->where('source_id', $linkData['source_id']);
-                    });
-                } else {
-                    $sub->orWhere(function ($nested) use ($linkData): void {
-                        $nested->where('source_type', $linkData['source_type'])
-                            ->where('source_id', $linkData['source_id']);
-                    });
-                }
-            }
-        });
+        $profileIds = $this->profileIdsFromSourceLinks($sourceLinks, $tenantId);
 
-        $profileIds = $query->pluck('marketing_profile_id')->unique()->values();
+        if ($profileIds->isNotEmpty()) {
+            return MarketingProfile::query()->forTenantId($tenantId)->whereIn('id', $profileIds)->get();
+        }
 
-        if ($profileIds->isEmpty()) {
+        if ($tenantId === null) {
             return collect();
         }
 
-        return MarketingProfile::query()->forTenantId($tenantId)->whereIn('id', $profileIds)->get();
+        $legacyProfileIds = $this->profileIdsFromSourceLinks($sourceLinks, nullTenantOnly: true);
+        if ($legacyProfileIds->isEmpty()) {
+            return collect();
+        }
+
+        return MarketingProfile::query()
+            ->whereNull('tenant_id')
+            ->whereIn('id', $legacyProfileIds)
+            ->get();
     }
 
     /**
@@ -653,9 +684,59 @@ class MarketingProfileSyncService
             if ($existing && (int) $existing->marketing_profile_id !== (int) $profile->id) {
                 return $existing;
             }
+
+            if ($existing || $tenantId === null) {
+                continue;
+            }
+
+            $legacyExisting = MarketingProfileLink::query()
+                ->whereNull('tenant_id')
+                ->where('source_type', $linkData['source_type'])
+                ->where('source_id', $linkData['source_id'])
+                ->first();
+
+            if ($legacyExisting && (int) $legacyExisting->marketing_profile_id !== (int) $profile->id) {
+                return $legacyExisting;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<int,array{source_type:string,source_id:string,source_meta:array<string,mixed>}>  $sourceLinks
+     * @return \Illuminate\Support\Collection<int,int>
+     */
+    protected function profileIdsFromSourceLinks(
+        array $sourceLinks,
+        ?int $tenantId = null,
+        bool $nullTenantOnly = false
+    ): \Illuminate\Support\Collection {
+        $query = MarketingProfileLink::query();
+
+        if ($nullTenantOnly) {
+            $query->whereNull('tenant_id');
+        } else {
+            $query->forTenantId($tenantId);
+        }
+
+        $query->where(function ($sub) use ($sourceLinks): void {
+            foreach ($sourceLinks as $index => $linkData) {
+                if ($index === 0) {
+                    $sub->where(function ($nested) use ($linkData): void {
+                        $nested->where('source_type', $linkData['source_type'])
+                            ->where('source_id', $linkData['source_id']);
+                    });
+                } else {
+                    $sub->orWhere(function ($nested) use ($linkData): void {
+                        $nested->where('source_type', $linkData['source_type'])
+                            ->where('source_id', $linkData['source_id']);
+                    });
+                }
+            }
+        });
+
+        return $query->pluck('marketing_profile_id')->map(fn ($value): int => (int) $value)->unique()->values();
     }
 
     /**

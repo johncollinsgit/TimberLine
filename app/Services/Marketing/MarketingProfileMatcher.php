@@ -24,23 +24,19 @@ class MarketingProfileMatcher
      */
     public function match(?string $normalizedEmail, ?string $normalizedPhone, ?int $tenantId = null): array
     {
-        /** @var Collection<int,MarketingProfile> $emailMatches */
-        $emailMatches = $normalizedEmail
-            ? MarketingProfile::query()
-                ->forTenantId($tenantId)
-                ->where('normalized_email', $normalizedEmail)
-                ->get()
-            : collect();
+        [$emailMatches, $phoneMatches] = $this->exactMatches(
+            normalizedEmail: $normalizedEmail,
+            normalizedPhone: $normalizedPhone,
+            tenantId: $tenantId
+        );
 
-        $phoneCandidates = $this->normalizer->phoneMatchCandidates($normalizedPhone);
-
-        /** @var Collection<int,MarketingProfile> $phoneMatches */
-        $phoneMatches = $phoneCandidates !== []
-            ? MarketingProfile::query()
-                ->forTenantId($tenantId)
-                ->whereIn('normalized_phone', $phoneCandidates)
-                ->get()
-            : collect();
+        if ($tenantId !== null && $emailMatches->isEmpty() && $phoneMatches->isEmpty()) {
+            [$emailMatches, $phoneMatches] = $this->exactMatches(
+                normalizedEmail: $normalizedEmail,
+                normalizedPhone: $normalizedPhone,
+                nullTenantOnly: true
+            );
+        }
 
         $emailCount = $emailMatches->count();
         $phoneCount = $phoneMatches->count();
@@ -100,5 +96,54 @@ class MarketingProfileMatcher
             'email_matches' => $emailMatches,
             'phone_matches' => $phoneMatches,
         ];
+    }
+
+    /**
+     * @return array{0:Collection<int,MarketingProfile>,1:Collection<int,MarketingProfile>}
+     */
+    protected function exactMatches(
+        ?string $normalizedEmail,
+        ?string $normalizedPhone,
+        ?int $tenantId = null,
+        bool $nullTenantOnly = false
+    ): array {
+        /** @var Collection<int,MarketingProfile> $emailMatches */
+        $emailMatches = $normalizedEmail
+            ? $this->emailMatchQuery($normalizedEmail, $tenantId, $nullTenantOnly)->get()
+            : collect();
+
+        $phoneCandidates = $this->normalizer->phoneMatchCandidates($normalizedPhone);
+
+        /** @var Collection<int,MarketingProfile> $phoneMatches */
+        $phoneMatches = $phoneCandidates !== []
+            ? $this->phoneMatchQuery($phoneCandidates, $tenantId, $nullTenantOnly)->get()
+            : collect();
+
+        return [$emailMatches, $phoneMatches];
+    }
+
+    protected function emailMatchQuery(string $normalizedEmail, ?int $tenantId = null, bool $nullTenantOnly = false)
+    {
+        $query = MarketingProfile::query()->where('normalized_email', $normalizedEmail);
+
+        if ($nullTenantOnly) {
+            return $query->whereNull('tenant_id');
+        }
+
+        return $query->forTenantId($tenantId);
+    }
+
+    /**
+     * @param  array<int,string>  $phoneCandidates
+     */
+    protected function phoneMatchQuery(array $phoneCandidates, ?int $tenantId = null, bool $nullTenantOnly = false)
+    {
+        $query = MarketingProfile::query()->whereIn('normalized_phone', $phoneCandidates);
+
+        if ($nullTenantOnly) {
+            return $query->whereNull('tenant_id');
+        }
+
+        return $query->forTenantId($tenantId);
     }
 }
