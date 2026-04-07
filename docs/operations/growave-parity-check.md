@@ -50,6 +50,42 @@ Notes:
 - Use `--profile-id={id}` for a targeted profile repair.
 - Use `--chunk={n}` to tune large-tenant reconciliation scans.
 
+## Legacy duplicate-profile Candle Cash rehome (2026-04-07)
+
+Use this flow when legacy migrated balances disappear because null-tenant duplicate profiles exist alongside canonical tenant-1 profiles.
+
+1) Preview deterministic retail mappings (fail-closed):
+
+```bash
+php artisan marketing:rehome-legacy-growave-candle-cash --tenant-id=1 --store=retail
+```
+
+2) Require safe preview shape before apply:
+- `eligible_pairs > 0`
+- `ambiguous_old_profiles = 0`
+- `ambiguous_target_profiles = 0`
+- `excluded_wholesale_profiles` reflects quarantine scope
+
+3) Apply retail-only rehome:
+
+```bash
+php artisan marketing:rehome-legacy-growave-candle-cash --tenant-id=1 --store=retail --apply
+```
+
+4) Re-run reconciliation sequence:
+
+```bash
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1 --apply
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+php artisan marketing:validate-candle-cash-legacy-conversion --json --limit=10
+```
+
+Canonical non-wholesale exclusion rule used by rehome/audit checks:
+- exclude if any `marketing_profile_links` row has `source_type='shopify_customer'` and `source_id LIKE 'wholesale:%'`
+- exclude if any `customer_external_profiles` row has `provider='shopify'` and `store_key='wholesale'`
+
 ## Resumable full-import run strategy
 
 1) Start uncapped pass (retail example):
@@ -271,3 +307,91 @@ echo json_encode([
 ]).PHP_EOL;
 "
 ```
+
+## 6) Fast SOP if points import disappears again
+
+1) Diagnose duplicate-profile drift:
+- run rehome preview and inspect `eligible_pairs`, `excluded_wholesale_profiles`, and ambiguity counters.
+
+2) Rehome retail legacy rows:
+- run rehome apply only after ambiguity is zero.
+
+3) Reconcile and validate:
+- run audit + reconcile preview/apply + legacy conversion validation.
+
+4) Verify top 10 non-wholesale order owners (Shopify snapshot order counts):
+
+```bash
+php artisan tinker --execute="
+\$rows = DB::table('customer_external_profiles as cep')
+  ->join('marketing_profiles as mp', 'mp.id', '=', 'cep.marketing_profile_id')
+  ->where('cep.provider', 'shopify')
+  ->where('cep.integration', 'shopify_customer')
+  ->where('cep.store_key', 'retail')
+  ->whereNotNull('cep.marketing_profile_id')
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('marketing_profile_links as mpl')
+      ->whereColumn('mpl.marketing_profile_id', 'cep.marketing_profile_id')
+      ->where('mpl.source_type', 'shopify_customer')
+      ->where('mpl.source_id', 'like', 'wholesale:%');
+  })
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('customer_external_profiles as ws')
+      ->whereColumn('ws.marketing_profile_id', 'cep.marketing_profile_id')
+      ->where('ws.provider', 'shopify')
+      ->where('ws.store_key', 'wholesale');
+  })
+  ->groupBy('cep.marketing_profile_id', 'mp.first_name', 'mp.last_name', 'mp.email')
+  ->orderByDesc(DB::raw('max(coalesce(cep.order_count, 0))'))
+  ->orderBy('cep.marketing_profile_id')
+  ->limit(10)
+  ->get([
+    'cep.marketing_profile_id',
+    'mp.first_name',
+    'mp.last_name',
+    'mp.email',
+    DB::raw('max(coalesce(cep.order_count, 0)) as orders_count'),
+  ]);
+foreach (\$rows as \$row) { echo json_encode(\$row).PHP_EOL; }
+"
+```
+
+5) Verify top 10 non-wholesale Candle Cash owners:
+
+```bash
+php artisan tinker --execute="
+\$rows = DB::table('candle_cash_balances as b')
+  ->join('marketing_profiles as mp', 'mp.id', '=', 'b.marketing_profile_id')
+  ->where('mp.tenant_id', 1)
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('marketing_profile_links as mpl')
+      ->whereColumn('mpl.marketing_profile_id', 'mp.id')
+      ->where('mpl.source_type', 'shopify_customer')
+      ->where('mpl.source_id', 'like', 'wholesale:%');
+  })
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('customer_external_profiles as ws')
+      ->whereColumn('ws.marketing_profile_id', 'mp.id')
+      ->where('ws.provider', 'shopify')
+      ->where('ws.store_key', 'wholesale');
+  })
+  ->orderByDesc('b.balance')
+  ->orderBy('b.marketing_profile_id')
+  ->limit(10)
+  ->get([
+    'b.marketing_profile_id',
+    'mp.first_name',
+    'mp.last_name',
+    'mp.email',
+    'b.balance as candle_cash_balance',
+  ]);
+foreach (\$rows as \$row) { echo json_encode(\$row).PHP_EOL; }
+"
+```
+
+6) Keep wholesale quarantine separate:
+- do not run broad `--include-wholesale` without manual classification of wholesale-touched candidates.

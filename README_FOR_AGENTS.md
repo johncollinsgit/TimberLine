@@ -121,6 +121,19 @@ Operator notes:
 - Preview returns non-zero when drift is detected.
 - Use `--profile-id={id}` for isolated repair and `--chunk={n}` for large-scope tuning.
 
+Legacy Growave duplicate-profile rehome sequence (retail-only, live-safe):
+1. `php artisan marketing:rehome-legacy-growave-candle-cash --tenant-id=1 --store=retail` (preview)
+2. Require: `ambiguous_old_profiles=0` and `ambiguous_target_profiles=0` before apply.
+3. `php artisan marketing:rehome-legacy-growave-candle-cash --tenant-id=1 --store=retail --apply`
+4. Re-run the canonical drift-repair sequence immediately after apply.
+
+If points import appears missing again, use this exact SOP:
+1. Diagnose duplicate-profile drift via rehome preview counters.
+2. Run retail-only rehome apply (do not include wholesale in broad pass).
+3. Reconcile + audit Candle Cash (`marketing:audit-candle-cash-composition`, `marketing:reconcile-candle-cash-balances`, `marketing:validate-candle-cash-legacy-conversion`).
+4. Verify top non-wholesale customers by order count and Candle Cash balance.
+5. Keep wholesale-touched profiles quarantined unless a separate manually reviewed pass is approved.
+
 Do not start yet:
 - broad multi-tenant refactors
 - Shopify App Store packaging

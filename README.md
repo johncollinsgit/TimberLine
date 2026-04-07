@@ -38,6 +38,130 @@ Notes:
 - `marketing:reconcile-candle-cash-balances` is preview-first by default and returns a non-zero exit code when drift exists.
 - Use `--profile-id={id}` for targeted repairs and `--chunk={n}` to tune scan chunking for large tenants.
 
+## Legacy Growave Candle Cash Rehome Runbook (2026-04-07)
+
+Use this when migrated legacy Candle Cash appears missing (for example, known legacy customers show `0` balance) and duplicate null-tenant profiles are suspected.
+
+1) Preview deterministic retail rehome candidates:
+
+```bash
+php artisan marketing:rehome-legacy-growave-candle-cash --tenant-id=1 --store=retail
+```
+
+2) Require safe preview shape before apply:
+- `eligible_pairs > 0`
+- `ambiguous_old_profiles = 0`
+- `ambiguous_target_profiles = 0`
+- `excluded_wholesale_profiles` is non-zero only for quarantine candidates (default behavior)
+
+3) Apply retail-only move:
+
+```bash
+php artisan marketing:rehome-legacy-growave-candle-cash --tenant-id=1 --store=retail --apply
+```
+
+4) Post-run verification sequence:
+
+```bash
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1 --apply
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+php artisan marketing:validate-candle-cash-legacy-conversion --json --limit=10
+```
+
+Operational safety:
+- `marketing:rehome-legacy-growave-candle-cash` is preview-first by default and writes only with `--apply`.
+- Mapping is fail-closed: ambiguous old↔target relationships are excluded and reported.
+- Wholesale-touched profiles are excluded by default; include them only with explicit `--include-wholesale` after manual review.
+
+## If Points Import Disappears Again (SOP)
+
+1) Diagnose duplicate-profile drift:
+- Run rehome preview and confirm candidate/ambiguous/wholesale counters.
+
+2) Execute deterministic rehome:
+- Run rehome apply for retail-only scope.
+
+3) Reconcile and audit balances:
+- Run the reconciliation sequence above until `reconciled=yes`.
+
+4) Verify top non-wholesale customers still look correct (orders and rewards):
+
+```bash
+php artisan tinker --execute="
+\$rows = DB::table('customer_external_profiles as cep')
+  ->join('marketing_profiles as mp', 'mp.id', '=', 'cep.marketing_profile_id')
+  ->where('cep.provider', 'shopify')
+  ->where('cep.integration', 'shopify_customer')
+  ->where('cep.store_key', 'retail')
+  ->whereNotNull('cep.marketing_profile_id')
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('marketing_profile_links as mpl')
+      ->whereColumn('mpl.marketing_profile_id', 'cep.marketing_profile_id')
+      ->where('mpl.source_type', 'shopify_customer')
+      ->where('mpl.source_id', 'like', 'wholesale:%');
+  })
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('customer_external_profiles as ws')
+      ->whereColumn('ws.marketing_profile_id', 'cep.marketing_profile_id')
+      ->where('ws.provider', 'shopify')
+      ->where('ws.store_key', 'wholesale');
+  })
+  ->groupBy('cep.marketing_profile_id', 'mp.email', 'mp.first_name', 'mp.last_name')
+  ->orderByDesc(DB::raw('max(coalesce(cep.order_count, 0))'))
+  ->orderBy('cep.marketing_profile_id')
+  ->limit(10)
+  ->get([
+    'cep.marketing_profile_id',
+    'mp.first_name',
+    'mp.last_name',
+    'mp.email',
+    DB::raw('max(coalesce(cep.order_count, 0)) as orders_count'),
+  ]);
+foreach (\$rows as \$row) { echo json_encode(\$row).PHP_EOL; }
+"
+```
+
+```bash
+php artisan tinker --execute="
+\$rows = DB::table('candle_cash_balances as b')
+  ->join('marketing_profiles as mp', 'mp.id', '=', 'b.marketing_profile_id')
+  ->where('mp.tenant_id', 1)
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('marketing_profile_links as mpl')
+      ->whereColumn('mpl.marketing_profile_id', 'mp.id')
+      ->where('mpl.source_type', 'shopify_customer')
+      ->where('mpl.source_id', 'like', 'wholesale:%');
+  })
+  ->whereNotExists(function (\$q) {
+    \$q->select(DB::raw(1))
+      ->from('customer_external_profiles as ws')
+      ->whereColumn('ws.marketing_profile_id', 'mp.id')
+      ->where('ws.provider', 'shopify')
+      ->where('ws.store_key', 'wholesale');
+  })
+  ->orderByDesc('b.balance')
+  ->orderBy('b.marketing_profile_id')
+  ->limit(10)
+  ->get([
+    'b.marketing_profile_id',
+    'mp.first_name',
+    'mp.last_name',
+    'mp.email',
+    'b.balance as candle_cash_balance',
+  ]);
+foreach (\$rows as \$row) { echo json_encode(\$row).PHP_EOL; }
+"
+```
+
+5) Keep wholesale quarantine separate:
+- Do not run `--include-wholesale` in the broad pass.
+- Export and manually classify wholesale-touched candidates before any dedicated wholesale migration pass.
+
 ## Responses Inbox (2026-04-06)
 
 Backstage now includes a unified `Responses` inbox in the embedded Shopify Messaging area:
