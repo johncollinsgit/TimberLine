@@ -18,10 +18,9 @@
         ->filter()
         ->take(2)
         ->implode(' + ');
-
-    $cards = [
+    $statusCards = [
         [
-            'label' => 'Program name',
+            'label' => 'Program label',
             'value' => data_get($overview, 'program_name', $resolvedRewardsLabel),
             'detail' => 'The live program label customers see across this workspace.',
         ],
@@ -36,9 +35,35 @@
             'detail' => number_format((int) data_get($overview, 'redeem_rule_count', 0)).' live reward rows currently available.',
         ],
         [
+            'label' => 'Value model',
+            'value' => data_get($overview, 'measurement_label', 'Configured'),
+            'detail' => 'How rewards are measured and redeemed across the live program.',
+        ],
+        [
             'label' => 'Program structure',
             'value' => $earningModes !== '' ? $earningModes : 'Task-based',
             'detail' => 'Customers earn through configured tasks, then spend '.$resolvedRewardsBalanceLabel.' on available offers.',
+        ],
+    ];
+
+    $taskPanels = [
+        [
+            'eyebrow' => 'Tasks',
+            'title' => 'Ways to Earn',
+            'copy' => 'Review the live tasks customers can currently complete to earn '.$resolvedRewardsLabelLower.'.',
+            'button' => 'Open Ways to Earn',
+            'href' => $earnUrl,
+            'rows' => $earnPreview,
+            'empty' => 'No live earn rules are active yet.',
+        ],
+        [
+            'eyebrow' => 'Tasks',
+            'title' => 'Ways to Redeem',
+            'copy' => 'Review the rows customers can currently redeem with their '.strtolower($resolvedRewardsBalanceLabel).'.',
+            'button' => 'Open Ways to Redeem',
+            'href' => $redeemUrl,
+            'rows' => $redeemPreview,
+            'empty' => 'No live reward rows are active yet.',
         ],
     ];
 
@@ -99,103 +124,163 @@
         ];
 @endphp
 
-<div class="{{ $classes['stack'] }}">
-    <section class="{{ $classes['intro'] }}">
-        <div class="{{ $classes['intro_body'] }}">
-            <div>
-                <div class="{{ $classes['eyebrow'] }}">Program overview</div>
-                <h2 class="{{ $classes['title'] }}">{{ $resolvedRewardsLabel }}</h2>
+@if($theme === 'embedded')
+    <div class="{{ $classes['stack'] }}">
+        <section class="{{ $classes['intro'] }}">
+            <div class="{{ $classes['intro_body'] }}">
+                <div>
+                    <div class="{{ $classes['eyebrow'] }}">Program overview</div>
+                    <h2 class="{{ $classes['title'] }}">{{ $resolvedRewardsLabel }}</h2>
+                </div>
+                <p class="{{ $classes['copy'] }}">
+                    This page reflects the live {{ $resolvedRewardsLabel === 'Candle Cash' ? 'Candle Cash tasks and reward rows' : 'earn and redeem rows' }} currently managed by Backstage.
+                </p>
+                <p class="{{ $classes['copy'] }}">
+                    Use it to quickly review how the {{ $resolvedRewardsLabelLower }} program is currently structured, including how customers earn and what offers are available.
+                </p>
+                <p class="{{ $classes['copy'] }}">
+                    For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
+                </p>
             </div>
-            <p class="{{ $classes['copy'] }}">
-                This page reflects the live {{ $resolvedRewardsLabel === 'Candle Cash' ? 'Candle Cash tasks and reward rows' : 'earn and redeem rows' }} currently managed by Backstage.
-            </p>
-            <p class="{{ $classes['copy'] }}">
-                Use it to quickly review how the {{ $resolvedRewardsLabelLower }} program is currently structured, including how customers earn and what offers are available.
-            </p>
-            <p class="{{ $classes['copy'] }}">
-                For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
-            </p>
-        </div>
-    </section>
+        </section>
 
-    <section class="{{ $classes['overview'] }}">
-        <div class="{{ $classes['overview_header'] }}">
-            <div class="{{ $classes['eyebrow'] }}">Overview</div>
-            <h2 class="{{ $classes['title'] }}">How {{ $resolvedRewardsLabelLower }} works today</h2>
-            <p class="{{ $classes['copy_spaced'] }}">{{ data_get($overview, 'program_summary') }}</p>
-        </div>
+        <section class="{{ $classes['overview'] }}">
+            <div class="{{ $classes['overview_header'] }}">
+                <div class="{{ $classes['eyebrow'] }}">Overview</div>
+                <h2 class="{{ $classes['title'] }}">How {{ $resolvedRewardsLabelLower }} works today</h2>
+                <p class="{{ $classes['copy_spaced'] }}">{{ data_get($overview, 'program_summary') }}</p>
+            </div>
 
-        <div class="{{ $classes['overview_grid'] }}">
-            @foreach($cards as $card)
-                <article class="{{ $classes['summary_card'] }}">
-                    <div class="{{ $classes['summary_label'] }}">{{ $card['label'] }}</div>
-                    <div class="{{ $classes['summary_value'] }}">{{ $card['value'] }}</div>
-                    <p class="{{ $classes['summary_detail'] }}">{{ $card['detail'] }}</p>
+            <div class="{{ $classes['overview_grid'] }}">
+                @foreach($statusCards as $card)
+                    <article class="{{ $classes['summary_card'] }}">
+                        <div class="{{ $classes['summary_label'] }}">{{ $card['label'] }}</div>
+                        <div class="{{ $classes['summary_value'] }}">{{ $card['value'] }}</div>
+                        <p class="{{ $classes['summary_detail'] }}">{{ $card['detail'] }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="{{ $classes['structure'] }}">
+            @foreach($taskPanels as $panel)
+                <article class="{{ $classes['panel'] }}">
+                    <div class="{{ $classes['panel_head'] }}">
+                        <div class="{{ $classes['panel_text'] }}">
+                            <div class="{{ $classes['eyebrow'] }}">{{ $panel['title'] }}</div>
+                            <h2 class="{{ $classes['title'] }}">{{ $panel['title'] === 'Ways to Earn' ? 'Live earn rules' : 'Live reward rows' }}</h2>
+                            <p class="{{ $classes['copy_spaced'] }}">
+                                {{ $panel['copy'] }}
+                            </p>
+                        </div>
+                        <a href="{{ $panel['href'] }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">
+                            {{ $panel['button'] }}
+                        </a>
+                    </div>
+
+                    @if(collect($panel['rows'])->isNotEmpty())
+                        <div class="{{ $classes['previews'] }}">
+                            @foreach($panel['rows'] as $row)
+                                <div class="{{ $classes['preview'] }}">
+                                    <div class="{{ $classes['preview_title'] }}">{{ $row['title'] }}</div>
+                                    <div class="{{ $classes['preview_detail'] }}">{{ $row['detail'] }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </article>
             @endforeach
-        </div>
-    </section>
+        </section>
 
-    <section class="{{ $classes['structure'] }}">
-        <article class="{{ $classes['panel'] }}">
-            <div class="{{ $classes['panel_head'] }}">
-                <div class="{{ $classes['panel_text'] }}">
-                    <div class="{{ $classes['eyebrow'] }}">Ways to Earn</div>
-                    <h2 class="{{ $classes['title'] }}">Live earn rules</h2>
-                    <p class="{{ $classes['copy_spaced'] }}">
-                        Review the live tasks customers can currently complete to earn {{ $resolvedRewardsLabelLower }}.
-                    </p>
+        <section class="{{ $classes['note'] }}">
+            <div class="{{ $classes['note_body'] }}">
+                <div class="{{ $classes['eyebrow'] }}">Note</div>
+                <p class="{{ $classes['copy_spaced'] }}">
+                    This page is meant to stay simple. Use the linked rule editors when you need to review or update the detailed earn and redeem rows.
+                </p>
+            </div>
+        </section>
+    </div>
+@else
+    <div class="space-y-6">
+        <section class="rounded-[1.8rem] border border-zinc-200 bg-zinc-50 p-6">
+            <div class="max-w-3xl space-y-4">
+                <div>
+                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Rewards</div>
+                    <h2 class="mt-2 text-lg font-semibold text-zinc-950">{{ $resolvedRewardsLabel }} Central</h2>
                 </div>
-                <a href="{{ $earnUrl }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">
-                    Open Ways to Earn
-                </a>
+                <p class="text-sm leading-7 text-zinc-600">
+                    This page is split into Tasks and Status so it is easier to separate what you manage from what is currently live.
+                </p>
+                <p class="text-sm leading-7 text-zinc-600">
+                    Use Tasks for actionable earn and redeem rules, and use Status for the current live program state.
+                </p>
+            </div>
+        </section>
+
+        <section class="rounded-[1.8rem] border border-zinc-200 bg-zinc-50 p-6">
+            <div class="max-w-3xl">
+                <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Tasks</div>
+                <h2 class="mt-2 text-lg font-semibold text-zinc-950">Actionable earn and redeem rules</h2>
+                <p class="mt-3 text-sm leading-7 text-zinc-600">
+                    Review the live tasks and reward rows already powering {{ $resolvedRewardsLabelLower }}, then jump straight into the editors when you need to make a change.
+                </p>
             </div>
 
-            @if($earnPreview->isNotEmpty())
-                <div class="{{ $classes['previews'] }}">
-                    @foreach($earnPreview as $row)
-                        <div class="{{ $classes['preview'] }}">
-                            <div class="{{ $classes['preview_title'] }}">{{ $row['title'] }}</div>
-                            <div class="{{ $classes['preview_detail'] }}">{{ $row['detail'] }}</div>
+            <div class="mt-6 grid gap-4 xl:grid-cols-2">
+                @foreach($taskPanels as $panel)
+                    <article class="rounded-[1.6rem] border border-zinc-200 bg-white p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="max-w-xl">
+                                <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">{{ $panel['eyebrow'] }}</div>
+                                <h3 class="mt-2 text-lg font-semibold text-zinc-950">{{ $panel['title'] }}</h3>
+                                <p class="mt-3 text-sm leading-7 text-zinc-600">{{ $panel['copy'] }}</p>
+                            </div>
+                            <a href="{{ $panel['href'] }}" @if($wireNavigate) wire:navigate @endif class="inline-flex shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-xs font-semibold text-zinc-700">
+                                {{ $panel['button'] }}
+                            </a>
                         </div>
-                    @endforeach
-                </div>
-            @endif
-        </article>
 
-        <article class="{{ $classes['panel'] }}">
-            <div class="{{ $classes['panel_head'] }}">
-                <div class="{{ $classes['panel_text'] }}">
-                    <div class="{{ $classes['eyebrow'] }}">Ways to Redeem</div>
-                    <h2 class="{{ $classes['title'] }}">Live reward rows</h2>
-                    <p class="{{ $classes['copy_spaced'] }}">
-                        Review the rows customers can currently redeem with their {{ strtolower($resolvedRewardsBalanceLabel) }}.
-                    </p>
-                </div>
-                <a href="{{ $redeemUrl }}" @if($wireNavigate) wire:navigate @endif class="{{ $classes['button'] }}">
-                    Open Ways to Redeem
-                </a>
+                        <div class="mt-5 space-y-3">
+                            @forelse($panel['rows'] as $row)
+                                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                                    <div class="font-medium text-zinc-950">{{ $row['title'] }}</div>
+                                    <div class="mt-1 text-sm text-zinc-500">{{ $row['detail'] }}</div>
+                                </div>
+                            @empty
+                                <div class="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                                    {{ $panel['empty'] }}
+                                </div>
+                            @endforelse
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="rounded-[1.8rem] border border-zinc-200 bg-zinc-50 p-6">
+            <div class="max-w-3xl">
+                <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Status</div>
+                <h2 class="mt-2 text-lg font-semibold text-zinc-950">Current live program state</h2>
+                <p class="mt-3 text-sm leading-7 text-zinc-600">
+                    Use this section to confirm the current program label, value model, and whether earn and redeem rules are active.
+                </p>
             </div>
 
-            @if($redeemPreview->isNotEmpty())
-                <div class="{{ $classes['previews'] }}">
-                    @foreach($redeemPreview as $row)
-                        <div class="{{ $classes['preview'] }}">
-                            <div class="{{ $classes['preview_title'] }}">{{ $row['title'] }}</div>
-                            <div class="{{ $classes['preview_detail'] }}">{{ $row['detail'] }}</div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-        </article>
-    </section>
+            <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                @foreach($statusCards as $card)
+                    <article class="rounded-[1.6rem] border border-zinc-200 bg-white p-5">
+                        <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">{{ $card['label'] }}</div>
+                        <div class="mt-3 text-xl font-semibold text-zinc-950">{{ $card['value'] }}</div>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">{{ $card['detail'] }}</p>
+                    </article>
+                @endforeach
+            </div>
 
-    <section class="{{ $classes['note'] }}">
-        <div class="{{ $classes['note_body'] }}">
-            <div class="{{ $classes['eyebrow'] }}">Note</div>
-            <p class="{{ $classes['copy_spaced'] }}">
-                This page is meant to stay simple. Use the linked rule editors when you need to review or update the detailed earn and redeem rows.
-            </p>
-        </div>
-    </section>
-</div>
+            <div class="mt-6 rounded-[1.6rem] border border-zinc-200 bg-white p-5">
+                <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Status note</div>
+                <p class="mt-3 text-sm leading-7 text-zinc-600">{{ data_get($overview, 'program_summary') }}</p>
+            </div>
+        </section>
+    </div>
+@endif

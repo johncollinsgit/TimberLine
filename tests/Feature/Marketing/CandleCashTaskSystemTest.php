@@ -31,7 +31,9 @@ test('marketing manager can load candle cash dashboard via stable base route nam
         ->assertOk()
         ->assertSeeText('Candle Cash')
         ->assertSeeText('Rewards')
-        ->assertSeeText('This page reflects the live Candle Cash tasks and reward rows currently managed by Backstage.')
+        ->assertSeeText('This page is split into Tasks and Status so it is easier to separate what you manage from what is currently live.')
+        ->assertSeeText('Tasks')
+        ->assertSeeText('Status')
         ->assertSeeText('Ways to Earn')
         ->assertSeeText('Ways to Redeem');
 });
