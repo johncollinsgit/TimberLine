@@ -8,11 +8,15 @@ use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
 use App\Models\LandlordOperatorAction;
+use App\Models\MarketingCampaign;
+use App\Models\MarketingCampaignConversion;
 use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
 use App\Models\MarketingSetting;
+use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantCandleCashRewardOverride;
@@ -30,6 +34,7 @@ use App\Services\Marketing\TenantRewardsReminderScheduleService;
 use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\TwilioSmsService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -62,9 +67,60 @@ function parseRewardsCsv(string $csv): array
         ->all();
 }
 
+function seedRewardsOverviewAttributionFixture(int $tenantId, string $key, float $revenue): void
+{
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenantId,
+        'first_name' => ucfirst($key),
+        'last_name' => 'Rewards',
+        'email' => $key.'@example.com',
+        'normalized_email' => $key.'@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $campaign = MarketingCampaign::query()->create([
+        'name' => ucfirst($key).' rewards campaign',
+        'slug' => $key.'-rewards-'.uniqid(),
+        'channel' => 'email',
+        'status' => 'sent',
+    ]);
+
+    $order = Order::query()->create([
+        'tenant_id' => $tenantId,
+        'source' => 'shopify_'.$key,
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => random_int(10000, 99999),
+        'ordered_at' => now()->subDay(),
+        'order_number' => '#'.strtoupper($key).'-2001',
+        'status' => 'complete',
+        'currency_code' => 'USD',
+        'subtotal_price' => $revenue,
+        'shipping_total' => 0.00,
+        'total_price' => $revenue,
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenantId,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+    ]);
+
+    MarketingCampaignConversion::query()->create([
+        'campaign_id' => $campaign->id,
+        'marketing_profile_id' => $profile->id,
+        'attribution_type' => 'last_touch',
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+        'converted_at' => now()->subDay(),
+        'order_total' => $revenue,
+    ]);
+}
+
 beforeEach(function () {
     $this->withoutVite();
     config()->set('entitlements.default_plan', 'growth');
+    Cache::flush();
 
     $this->tenant = Tenant::query()->create([
         'name' => 'Retail Tenant',
@@ -79,8 +135,10 @@ test('shopify embedded rewards route renders verified rewards admin page for map
 
     $response->assertOk()
         ->assertSeeText('Rewards')
-        ->assertSeeText('See rewards impact and trend data.')
-        ->assertSeeText('Detailed analytics')
+        ->assertSeeText('Overview')
+        ->assertSeeText('Rewards Explanation')
+        ->assertSeeText('Configuration')
+        ->assertSeeText('Performance trend')
         ->assertSeeText('Ways to Earn')
         ->assertSeeText('Ways to Redeem')
         ->assertDontSeeText('This embedded program editor is unavailable for tenant-scoped stores until earn rows, redeem rows, and program settings are isolated per tenant.')
@@ -1177,6 +1235,34 @@ test('shopify embedded rewards policy is read only when rewards module access is
         ->assertStatus(403)
         ->assertJsonPath('ok', false)
         ->assertJsonPath('status', 'rewards_plan_locked');
+});
+
+test('shopify embedded rewards overview keeps attribution and financial analytics visible for locked tenants with live sales', function () {
+    $lockedTenant = Tenant::query()->create([
+        'name' => 'Locked Analytics Tenant',
+        'slug' => 'locked-analytics-tenant-'.Str::lower(Str::random(8)),
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $lockedTenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+        'metadata' => [],
+    ]);
+
+    configureEmbeddedRetailStore($lockedTenant->id);
+    seedRewardsOverviewAttributionFixture($lockedTenant->id, 'locked-analytics', 85.00);
+
+    $this->get(route('shopify.app.rewards', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('Attribution', false)
+        ->assertSee('Financial summary', false)
+        ->assertSee('Gross revenue touched', false)
+        ->assertSee('Incremental retained revenue', false)
+        ->assertSee('$85.00', false)
+        ->assertDontSee('Attribution rows are still warming up.', false)
+        ->assertDontSee('Financial overlays appear once reward-attributed sales and redemption costs are available.', false);
 });
 
 test('shopify embedded rewards routes fail closed when store tenant context is missing', function () {

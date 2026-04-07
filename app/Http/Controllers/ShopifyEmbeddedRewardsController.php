@@ -52,10 +52,11 @@ class ShopifyEmbeddedRewardsController extends Controller
             : ['available' => false];
         $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : $resolvedTenantId;
         $probe->forTenant($tenantId);
-        $overview = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
+        $hasTenantContext = $authorized && $tenantId !== null;
+        $overview = $hasTenantContext
             ? $probe->time('page_payload', fn (): array => $rewardsService->overview($tenantId))
             : [];
-        $analytics = ($authorized && ($configState['available'] ?? false) && $tenantId !== null)
+        $analytics = $hasTenantContext
             ? $probe->time('page_payload', fn (): array => $dashboardDataService->payload([
                 ...$request->query(),
                 'tenant_id' => $tenantId,

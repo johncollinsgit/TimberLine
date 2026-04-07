@@ -45,6 +45,7 @@
         $activeModuleUi = \App\Support\Tenancy\TenantModuleUi::present($activeModuleState, $activeModuleFallbackLabel);
         $lockedModule = ($activeModuleUi['ui_state'] ?? '') === 'locked';
         $comingSoonModule = ($activeModuleUi['ui_state'] ?? '') === 'coming_soon';
+        $allowLockedContent = $activeChild === 'overview';
     @endphp
 
     <style>
@@ -90,7 +91,7 @@
             <div class="rewards-note">{{ $setupNote }}</div>
         @endif
 
-        @if(! $lockedModule)
+        @if(! $lockedModule || $allowLockedContent)
             @yield('rewards-content')
         @endif
     </section>
