@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -1269,6 +1270,7 @@ GRAPHQL;
     public function history(?int $tenantId, int $limit = 40): array
     {
         $limit = max(1, min($limit, 100));
+        $this->assistDispatchForActiveCampaigns($tenantId);
 
         $smsRows = MarketingMessageDelivery::query()
             ->whereNull('campaign_id')
@@ -1418,6 +1420,38 @@ GRAPHQL;
             'entries' => $entries,
             'campaigns' => $campaigns,
         ];
+    }
+
+    protected function assistDispatchForActiveCampaigns(?int $tenantId): void
+    {
+        if (! app()->environment('production')) {
+            return;
+        }
+
+        $campaignIds = MarketingCampaign::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->where('tenant_id', $tenantId), fn (Builder $query) => $query->whereNull('tenant_id'))
+            ->whereNotNull('source_label')
+            ->where('source_label', 'like', 'shopify_embedded_messaging%')
+            ->whereIn('status', ['sending', 'preparing'])
+            ->orderByDesc('id')
+            ->limit(3)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        foreach ($campaignIds as $campaignId) {
+            try {
+                $this->campaignDispatchService->dispatchPendingJobs($campaignId, inlineProcessing: true);
+            } catch (\Throwable $exception) {
+                Log::warning('embedded messaging inline dispatch assist failed', [
+                    'campaign_id' => $campaignId,
+                    'tenant_id' => $tenantId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**

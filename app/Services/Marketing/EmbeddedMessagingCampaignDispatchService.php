@@ -530,7 +530,7 @@ class EmbeddedMessagingCampaignDispatchService
     /**
      * @return array<string,mixed>
      */
-    public function dispatchPendingJobs(int $campaignId): array
+    public function dispatchPendingJobs(int $campaignId, bool $inlineProcessing = false): array
     {
         $lockKey = 'embedded_messaging:campaign_dispatch:' . $campaignId;
         if (! Cache::add($lockKey, now()->toIso8601String(), 45)) {
@@ -558,6 +558,9 @@ class EmbeddedMessagingCampaignDispatchService
             }
 
             $batchSize = max(25, (int) config('marketing.messaging.dispatch_batch_size', 250));
+            if ($inlineProcessing) {
+                $batchSize = min($batchSize, 10);
+            }
             $jobs = MarketingMessageJob::query()
                 ->where('campaign_id', (int) $campaign->id)
                 ->whereIn('status', ['queued', 'retryable'])
@@ -609,9 +612,13 @@ class EmbeddedMessagingCampaignDispatchService
                 $maxPerSecond = $this->maxDispatchPerSecond($channel);
                 $delaySeconds = intdiv($slot, $maxPerSecond);
 
-                ProcessMessagingCampaignRecipientJob::dispatch((int) $job->id)
-                    ->onQueue($this->queueName())
-                    ->delay(now()->addSeconds($delaySeconds));
+                if ($inlineProcessing) {
+                    $this->processJob((int) $job->id);
+                } else {
+                    ProcessMessagingCampaignRecipientJob::dispatch((int) $job->id)
+                        ->onQueue($this->queueName())
+                        ->delay(now()->addSeconds($delaySeconds));
+                }
 
                 $dispatched++;
             }
@@ -621,7 +628,7 @@ class EmbeddedMessagingCampaignDispatchService
                 ->whereIn('status', ['queued', 'retryable', 'dispatching', 'sending'])
                 ->exists();
 
-            if ($hasMorePending) {
+            if ($hasMorePending && ! $inlineProcessing) {
                 DispatchMessagingCampaignBatch::dispatch((int) $campaign->id)
                     ->onQueue($this->queueName())
                     ->delay(now()->addSeconds(max(1, (int) config('marketing.messaging.dispatch_interval_seconds', 2))));
