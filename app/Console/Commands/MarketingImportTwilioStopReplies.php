@@ -7,6 +7,7 @@ use App\Models\MessagingConversationMessage;
 use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Marketing\MessagingConversationService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use Illuminate\Support\Collection;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use SplFileObject;
@@ -128,9 +129,11 @@ class MarketingImportTwilioStopReplies extends Command
                 continue;
             }
 
-            $profile = $this->resolveProfile($tenantId, $normalized, $identityNormalizer);
+            $profiles = $this->resolveProfiles($tenantId, $normalized, $identityNormalizer);
+            $profile = $profiles->sortByDesc('id')->first();
             $body = $this->normalizeStopKeyword($record['Body'] ?? null);
             $isStop = $body !== null && $this->isStopKeyword($body);
+            $occurredAt = $this->asDate($record['SentDate'] ?? null);
 
             $metadata = [
                 'twilio_sid' => $this->nullableString($record['Sid'] ?? null),
@@ -153,14 +156,16 @@ class MarketingImportTwilioStopReplies extends Command
 
                 if (! $dryRun) {
                     $channelStateService->markSmsUnsubscribed(
-                        tenantId: $tenantId,
-                        profile: $profile,
-                        phone: $normalized,
-                        reason: $reason,
-                        providerSource: $providerSource,
-                        metadata: $metadata,
-                        occurredAt: $this->nullableString($record['SentDate'] ?? null)
-                    );
+                    tenantId: $tenantId,
+                    profile: $profile,
+                    phone: $normalized,
+                    reason: $reason,
+                    providerSource: $providerSource,
+                    metadata: $metadata,
+                    occurredAt: $occurredAt
+                );
+
+                    $this->applySmsOptOutToProfiles($profiles, $occurredAt);
                 }
 
                 continue;
@@ -202,7 +207,7 @@ class MarketingImportTwilioStopReplies extends Command
                     'normalized_body' => trim((string) ($record['Body'] ?? '')),
                     'from_identity' => $normalized,
                     'to_identity' => $this->nullableString($record['To'] ?? null),
-                    'received_at' => $this->asDate($record['SentDate'] ?? null),
+                    'received_at' => $occurredAt,
                     'message_type' => 'normal',
                     'raw_payload' => $record,
                     'metadata' => [
@@ -292,11 +297,14 @@ class MarketingImportTwilioStopReplies extends Command
         return preg_match('/\b(do you|can you|could you|is this|are you|when|where|what|why|how|help|verified|available|have)\b/i', $normalized) === 1;
     }
 
-    protected function resolveProfile(
+    /**
+     * @return Collection<int, MarketingProfile>
+     */
+    protected function resolveProfiles(
         int $tenantId,
         string $phone,
         MarketingIdentityNormalizer $identityNormalizer
-    ): ?MarketingProfile {
+    ): Collection {
         $candidates = $identityNormalizer->phoneMatchCandidates($phone);
 
         return MarketingProfile::query()
@@ -305,8 +313,8 @@ class MarketingImportTwilioStopReplies extends Command
                 $query->where('tenant_id', $tenantId)
                     ->orWhereNull('tenant_id');
             })
-            ->latest('id')
-            ->first();
+            ->orderBy('id')
+            ->get();
     }
 
     protected function normalizedResponseStatus(string $value): string
@@ -324,6 +332,19 @@ class MarketingImportTwilioStopReplies extends Command
             ->where('provider', 'twilio')
             ->where('provider_message_id', $providerMessageId)
             ->exists();
+    }
+
+    /**
+     * @param Collection<int, MarketingProfile> $profiles
+     */
+    protected function applySmsOptOutToProfiles(Collection $profiles, ?CarbonImmutable $occurredAt): void
+    {
+        foreach ($profiles as $profile) {
+            $profile->forceFill([
+                'accepts_sms_marketing' => false,
+                'sms_opted_out_at' => $profile->sms_opted_out_at ?? $occurredAt ?? now(),
+            ])->save();
+        }
     }
 
     protected function asDate(mixed $value): ?CarbonImmutable
