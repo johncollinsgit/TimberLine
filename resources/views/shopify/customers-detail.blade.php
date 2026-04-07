@@ -1297,9 +1297,10 @@
                     }
                 })();
                 const deferredCacheTtlMs = 60 * 1000;
-                let sessionTokenPromise = null;
                 let deferredController = null;
                 let deferredRequestSequence = 0;
+                const embeddedAuthWaitTimeoutMs = 6000;
+                const embeddedAuthPollMs = 120;
 
                 function debug(message, payload = null) {
                     if (!perfDebug || typeof console === "undefined" || typeof console.debug !== "function") {
@@ -1330,6 +1331,10 @@
                     } catch (error) {
                         // Ignore duplicate performance marks.
                     }
+                }
+
+                function wait(ms) {
+                    return new Promise((resolve) => window.setTimeout(resolve, ms));
                 }
 
                 function setText(selector, value) {
@@ -1615,52 +1620,47 @@
                     return messages[status] || fallbackMessage || null;
                 }
 
-                async function resolveEmbeddedAuthHeaders() {
-                    if (window.ForestryEmbeddedApp?.resolveEmbeddedAuthHeaders) {
-                        try {
-                            return await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders();
-                        } catch (error) {
-                            throw new Error(
-                                authFailureMessage(error?.code, error?.message || "Shopify Admin verification is unavailable."),
-                            );
+                async function waitForEmbeddedAuthResolver() {
+                    const startedAt = Date.now();
+
+                    while ((Date.now() - startedAt) < embeddedAuthWaitTimeoutMs) {
+                        const resolver = window.ForestryEmbeddedApp?.resolveEmbeddedAuthHeaders;
+                        if (typeof resolver === "function") {
+                            return resolver;
                         }
+
+                        await wait(embeddedAuthPollMs);
                     }
 
-                    if (!window.shopify || typeof window.shopify.idToken !== "function") {
+                    return null;
+                }
+
+                async function resolveEmbeddedAuthHeaders() {
+                    const resolver = await waitForEmbeddedAuthResolver();
+                    if (typeof resolver !== "function") {
                         throw new Error(
                             authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
                         );
                     }
 
-                    const headers = {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json",
-                    };
-
-                    if (!sessionTokenPromise) {
-                        sessionTokenPromise = Promise.race([
-                            Promise.resolve(window.shopify.idToken()),
-                            new Promise((resolve) => window.setTimeout(() => resolve(null), 6000)),
-                        ]).catch(() => {
-                            sessionTokenPromise = null;
-                            throw new Error(
-                                authFailureMessage("invalid_session_token", "Shopify Admin verification failed."),
-                            );
-                        });
-                    }
-
-                    const sessionToken = await sessionTokenPromise;
-
-                    if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
-                        sessionTokenPromise = null;
+                    try {
+                        return await resolver();
+                    } catch (error) {
                         throw new Error(
-                            authFailureMessage("missing_api_auth", "Shopify Admin verification is unavailable."),
+                            authFailureMessage(error?.code, error?.message || "Shopify Admin verification is unavailable."),
                         );
                     }
+                }
 
-                    headers.Authorization = `Bearer ${sessionToken.trim()}`;
+                function scheduleDeferredLoad(callback) {
+                    if (typeof window.requestIdleCallback === "function") {
+                        window.requestIdleCallback(() => {
+                            callback();
+                        }, { timeout: 900 });
+                        return;
+                    }
 
-                    return headers;
+                    window.setTimeout(callback, 180);
                 }
 
                 async function loadDeferredSections({ background = false } = {}) {
@@ -1828,7 +1828,7 @@
                     debug("rendered deferred sections from cache");
                 }
 
-                window.requestAnimationFrame(() => {
+                scheduleDeferredLoad(() => {
                     void loadDeferredSections({ background: Boolean(cachedDeferred) });
                 });
             })();
