@@ -1248,7 +1248,8 @@ class MarketingShopifyIntegrationController extends Controller
         CandleCashTaskService $taskService,
         CandleCashReferralService $referralService,
         BirthdayRewardEngineService $birthdayRewardEngine,
-        CandleCashShopifyDiscountService $discountSyncService
+        CandleCashShopifyDiscountService $discountSyncService,
+        GoogleBusinessProfileConnectionService $googleBusinessConnectionService
     ): JsonResponse {
         $storeContext = $this->resolveStoreContext($request);
         if (! $this->hasStoreContext($storeContext)) {
@@ -1273,7 +1274,10 @@ class MarketingShopifyIntegrationController extends Controller
             ]);
         }
 
-        $taskRows = $taskService->storefrontTasks($profile);
+        $googleReview = $googleBusinessConnectionService->reviewReadiness();
+        $taskRows = $taskService->storefrontTasks($profile)
+            ->reject(fn (array $row): bool => (string) data_get($row, 'task.handle') === 'google-review' && ! (bool) ($googleReview['ready'] ?? false))
+            ->values();
         $taskHistory = $profile
             ? $profile->candleCashTaskCompletions()->with('task:id,handle,title')->latest('id')->limit(20)->get()
             : collect();
@@ -1319,7 +1323,9 @@ class MarketingShopifyIntegrationController extends Controller
         $rewardsLabelLc = strtolower($rewardsLabel);
         $rewardCreditLabel = $this->displayLabelForStoreContext($storeContext, 'reward_credit_label', 'reward credit');
         $rewardCreditLabelTitle = Str::title($rewardCreditLabel);
-        $googleReviewUrl = trim((string) data_get($integrationConfig, 'google_review_url', '')) ?: null;
+        $googleReviewUrl = (bool) ($googleReview['ready'] ?? false)
+            ? (trim((string) ($googleReview['review_url'] ?? '')) ?: null)
+            : null;
         $voteLockedJoinUrl = trim((string) data_get($integrationConfig, 'vote_locked_join_url', '')) ?: null;
         $rewardCodeRows = [];
         $restoredFailedSyncRedemption = false;
@@ -1478,6 +1484,14 @@ class MarketingShopifyIntegrationController extends Controller
                             : null,
                     ];
                 })->all(),
+            ],
+            'google_review' => [
+                'enabled' => (bool) ($googleReview['enabled'] ?? false),
+                'ready' => (bool) ($googleReview['ready'] ?? false),
+                'reason' => (string) ($googleReview['reason'] ?? 'needs_connection'),
+                'message' => (string) ($googleReview['message'] ?? ''),
+                'review_url' => $googleReviewUrl,
+                'last_sync_at' => $this->isoDateTimeOrNull($googleReview['last_sync_at'] ?? null),
             ],
             'tasks' => $taskRows->map(function (array $row) use ($googleReviewUrl, $voteLockedJoinUrl): array {
                 $handle = (string) data_get($row, 'task.handle');
@@ -1689,8 +1703,12 @@ class MarketingShopifyIntegrationController extends Controller
                 code: $exception->errorCode,
                 message: $exception->getMessage(),
                 status: 422,
-                details: ['request_key' => trim((string) $data['request_key'])],
-                states: ['google_review_not_ready'],
+                details: [
+                    'request_key' => trim((string) $data['request_key']),
+                    'reason' => (string) data_get($exception->context, 'reason', 'needs_connection'),
+                    'launch_state' => (string) data_get($exception->context, 'launch_state', 'needs_connection'),
+                ],
+                states: [(string) data_get($exception->context, 'reason', $exception->errorCode)],
                 recoveryStates: ['retry_after_fix']
             );
         }
@@ -3398,6 +3416,24 @@ class MarketingShopifyIntegrationController extends Controller
     protected function formatStorefrontRewardAmount(float $amount): string
     {
         return '$' . number_format($amount, fmod(abs($amount), 1.0) === 0.0 ? 0 : 2);
+    }
+
+    protected function isoDateTimeOrNull(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format(\DateTimeInterface::ATOM);
+        }
+
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($raw)->toIso8601String();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

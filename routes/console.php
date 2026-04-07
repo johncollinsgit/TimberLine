@@ -66,6 +66,11 @@ Schedule::command('marketing:sync-message-order-attributions', [
     ->withoutOverlapping(120)
     ->runInBackground();
 
+Schedule::command('marketing:sync-google-business-reviews')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 // Bound integration-health event volume by pruning old resolved records.
 Schedule::command('integration-health:prune')
     ->dailyAt('02:20')

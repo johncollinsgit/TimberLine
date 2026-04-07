@@ -43,10 +43,15 @@ class GoogleBusinessProfileConnectionService
         $connection = $this->current();
         $integrationConfig = $this->integrationConfig();
         $lastRun = $connection?->syncRuns()->latest('id')->first();
+        $reviewReadiness = $this->reviewReadiness($connection, $lastRun);
 
         return [
             'oauth_ready' => $this->oauthReady(),
             'enabled' => (bool) data_get($integrationConfig, 'google_review_enabled', false),
+            'ready' => (bool) ($reviewReadiness['ready'] ?? false),
+            'reason' => (string) ($reviewReadiness['reason'] ?? 'needs_connection'),
+            'message' => (string) ($reviewReadiness['message'] ?? ''),
+            'launch_state' => (string) ($reviewReadiness['launch_state'] ?? 'needs_connection'),
             'connection' => $connection,
             'connection_status' => (string) ($connection?->connection_status ?: ($this->oauthReady() ? 'disconnected' : 'not_configured')),
             'project_approval_status' => (string) ($connection?->project_approval_status ?: 'unknown'),
@@ -57,14 +62,146 @@ class GoogleBusinessProfileConnectionService
             'linked_location_place_id' => $connection?->linked_location_place_id,
             'linked_location_maps_uri' => $connection?->linked_location_maps_uri,
             'granted_scopes' => (array) ($connection?->granted_scopes ?? []),
-            'last_sync_at' => $connection?->last_synced_at,
+            'last_sync_at' => $reviewReadiness['last_sync_at'],
             'last_error_code' => $connection?->last_error_code,
             'last_error_message' => $connection?->last_error_message,
             'last_error_at' => $connection?->last_error_at,
             'locations' => $connection?->locations ?? collect(),
             'last_sync_run' => $lastRun,
-            'review_url' => $this->resolveReviewUrl($connection),
+            'review_url' => $reviewReadiness['review_url'],
         ];
+    }
+
+    /**
+     * @return array{
+     *   enabled:bool,
+     *   ready:bool,
+     *   reason:string,
+     *   launch_state:string,
+     *   error_code:string,
+     *   message:string,
+     *   review_url:?string,
+     *   linked_location_id:?string,
+     *   last_sync_at:mixed
+     * }
+     */
+    public function reviewReadiness(
+        ?GoogleBusinessProfileConnection $connection = null,
+        mixed $lastRun = null
+    ): array {
+        $integrationConfig = $this->integrationConfig();
+        $enabled = (bool) data_get($integrationConfig, 'google_review_enabled', false);
+        $connection = $connection ?: $this->current();
+        $lastRun = $lastRun ?: $connection?->syncRuns()->latest('id')->first();
+        $reviewUrl = $this->resolveReviewUrl($connection);
+        $lastSyncAt = $connection?->last_synced_at;
+
+        if ($lastSyncAt === null && $connection) {
+            $completedRun = $connection->syncRuns()
+                ->where('status', 'completed')
+                ->latest('id')
+                ->first();
+
+            $lastSyncAt = $completedRun?->finished_at ?: $completedRun?->started_at;
+        }
+
+        if (! $enabled) {
+            return $this->reviewReadinessState(
+                enabled: false,
+                ready: false,
+                reason: 'disabled',
+                launchState: 'disabled',
+                errorCode: 'google_review_disabled',
+                message: 'Google review matching is turned off for this tenant.',
+                reviewUrl: $reviewUrl,
+                linkedLocationId: $connection?->linked_location_id,
+                lastSyncAt: $lastSyncAt,
+            );
+        }
+
+        if (! $this->oauthReady()) {
+            return $this->reviewReadinessState(
+                enabled: true,
+                ready: false,
+                reason: 'needs_env',
+                launchState: 'needs_env',
+                errorCode: 'google_review_env_not_configured',
+                message: 'Google Business Profile OAuth is not configured yet. Add the GBP env values first.',
+                reviewUrl: $reviewUrl,
+                linkedLocationId: $connection?->linked_location_id,
+                lastSyncAt: $lastSyncAt,
+            );
+        }
+
+        if (! $connection || trim((string) ($connection->connection_status ?? '')) !== 'connected') {
+            return $this->reviewReadinessState(
+                enabled: true,
+                ready: false,
+                reason: 'needs_connection',
+                launchState: 'needs_connection',
+                errorCode: 'google_review_connection_missing',
+                message: trim((string) ($connection?->last_error_message ?? '')) !== ''
+                    ? (string) $connection->last_error_message
+                    : 'Connect Google Business Profile before review matching can go live.',
+                reviewUrl: $reviewUrl,
+                linkedLocationId: $connection?->linked_location_id,
+                lastSyncAt: $lastSyncAt,
+            );
+        }
+
+        if (! $connection->linked_location_id) {
+            return $this->reviewReadinessState(
+                enabled: true,
+                ready: false,
+                reason: 'needs_location',
+                launchState: 'needs_location',
+                errorCode: 'google_review_location_missing',
+                message: 'Pick a Google Business location before review matching can go live.',
+                reviewUrl: $reviewUrl,
+                linkedLocationId: $connection->linked_location_id,
+                lastSyncAt: $lastSyncAt,
+            );
+        }
+
+        if (! $reviewUrl) {
+            return $this->reviewReadinessState(
+                enabled: true,
+                ready: false,
+                reason: 'needs_location',
+                launchState: 'needs_location',
+                errorCode: 'google_review_url_missing',
+                message: 'Add a Google review URL or select a location with a valid review link before review matching can go live.',
+                reviewUrl: null,
+                linkedLocationId: $connection->linked_location_id,
+                lastSyncAt: $lastSyncAt,
+            );
+        }
+
+        if (! $lastSyncAt) {
+            return $this->reviewReadinessState(
+                enabled: true,
+                ready: false,
+                reason: 'needs_first_sync',
+                launchState: 'needs_first_sync',
+                errorCode: 'google_review_initial_sync_required',
+                message: 'Run the first Google review sync before review matching goes live on the storefront.',
+                reviewUrl: $reviewUrl,
+                linkedLocationId: $connection->linked_location_id,
+                lastSyncAt: null,
+            );
+        }
+
+        return $this->reviewReadinessState(
+            enabled: true,
+            ready: true,
+            reason: 'live',
+            launchState: 'live',
+            errorCode: 'google_review_live',
+            message: 'Google review matching is live.',
+            reviewUrl: $reviewUrl,
+            linkedLocationId: $connection->linked_location_id,
+            lastSyncAt: $lastSyncAt,
+        );
     }
 
     public function buildConnectUrl(User $user): string
@@ -272,10 +409,18 @@ class GoogleBusinessProfileConnectionService
     public function startReview(MarketingProfile $profile, string $requestKey, string $surface = 'candle_cash_central'): array
     {
         $connection = $this->current();
-        $reviewUrl = $this->resolveReviewUrl($connection);
-        if (! $connection || ! $connection->linked_location_id || ! $reviewUrl) {
-            throw new GoogleBusinessProfileException('google_review_not_ready', 'Google review matching is not fully configured yet.');
+        $readiness = $this->reviewReadiness($connection);
+        if (! (bool) ($readiness['ready'] ?? false)) {
+            throw new GoogleBusinessProfileException(
+                (string) ($readiness['error_code'] ?? 'google_review_not_ready'),
+                (string) ($readiness['message'] ?? 'Google review matching is not fully configured yet.'),
+                [
+                    'reason' => (string) ($readiness['reason'] ?? 'needs_connection'),
+                    'launch_state' => (string) ($readiness['launch_state'] ?? 'needs_connection'),
+                ]
+            );
         }
+        $reviewUrl = $readiness['review_url'];
 
         $fullName = trim((string) $profile->display_name ?: trim(($profile->first_name ?? '') . ' ' . ($profile->last_name ?? '')));
 
@@ -415,7 +560,18 @@ class GoogleBusinessProfileConnectionService
      */
     protected function integrationConfig(): array
     {
-        return (array) optional(MarketingSetting::query()->where('key', 'candle_cash_integration_config')->first())->value;
+        $config = (array) optional(MarketingSetting::query()->where('key', 'candle_cash_integration_config')->first())->value;
+        $nested = $config[0] ?? $config['0'] ?? null;
+
+        if (is_string($nested)) {
+            $decoded = json_decode($nested, true);
+            if (is_array($decoded)) {
+                unset($config[0], $config['0']);
+                $config = array_merge($decoded, $config);
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -443,5 +599,42 @@ class GoogleBusinessProfileConnectionService
         }
 
         return null;
+    }
+
+    /**
+     * @return array{
+     *   enabled:bool,
+     *   ready:bool,
+     *   reason:string,
+     *   launch_state:string,
+     *   error_code:string,
+     *   message:string,
+     *   review_url:?string,
+     *   linked_location_id:?string,
+     *   last_sync_at:mixed
+     * }
+     */
+    protected function reviewReadinessState(
+        bool $enabled,
+        bool $ready,
+        string $reason,
+        string $launchState,
+        string $errorCode,
+        string $message,
+        ?string $reviewUrl,
+        ?string $linkedLocationId,
+        mixed $lastSyncAt,
+    ): array {
+        return [
+            'enabled' => $enabled,
+            'ready' => $ready,
+            'reason' => $reason,
+            'launch_state' => $launchState,
+            'error_code' => $errorCode,
+            'message' => $message,
+            'review_url' => $reviewUrl,
+            'linked_location_id' => $linkedLocationId,
+            'last_sync_at' => $lastSyncAt,
+        ];
     }
 }

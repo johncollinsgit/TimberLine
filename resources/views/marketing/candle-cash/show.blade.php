@@ -946,6 +946,20 @@
                 $googleConnection = data_get($googleBusinessStatus, 'connection');
                 $googleLocations = collect(data_get($googleBusinessStatus, 'locations', []));
                 $googleLastRun = data_get($googleBusinessStatus, 'last_sync_run');
+                $googleLaunchState = (string) data_get($googleBusinessStatus, 'launch_state', data_get($googleBusinessStatus, 'reason', 'needs_connection'));
+                $googleLaunchLabel = match ($googleLaunchState) {
+                    'disabled' => 'disabled',
+                    'needs_env' => 'needs env',
+                    'needs_location' => 'needs location',
+                    'needs_first_sync' => 'needs first sync',
+                    'live' => 'live',
+                    default => 'needs connection',
+                };
+                $googleLaunchTone = match ($googleLaunchState) {
+                    'live' => 'emerald',
+                    'disabled' => 'zinc',
+                    default => 'amber',
+                };
             @endphp
             <section class="grid gap-4 xl:grid-cols-3">
                 <article class="rounded-[1.8rem] border border-zinc-200 bg-zinc-50 p-5">
@@ -1013,8 +1027,12 @@
                                 <div class="text-xs uppercase tracking-[0.18em] text-zinc-500">Connection status</div>
                                 <div class="mt-2 text-lg font-semibold text-zinc-950">{{ str_replace('_', ' ', (string) data_get($googleBusinessStatus, 'connection_status', 'not_configured')) }}</div>
                                 <div class="mt-2 text-sm text-zinc-500">
-                                    @if(! data_get($googleBusinessStatus, 'oauth_ready', false))
+                                    @if(data_get($googleBusinessStatus, 'message'))
+                                        {{ data_get($googleBusinessStatus, 'message') }}
+                                    @elseif(! data_get($googleBusinessStatus, 'oauth_ready', false))
                                         Google Business OAuth is not configured yet. Add the GBP env values first.
+                                    @elseif(data_get($googleBusinessStatus, 'linked_location_title') && data_get($googleBusinessStatus, 'ready'))
+                                        Linked to {{ data_get($googleBusinessStatus, 'linked_location_title') }} and ready to match reviews.
                                     @elseif(data_get($googleBusinessStatus, 'linked_location_title'))
                                         Linked to {{ data_get($googleBusinessStatus, 'linked_location_title') }}.
                                     @elseif($googleConnection)
@@ -1044,6 +1062,17 @@
                         </div>
 
                         <div class="mt-4 grid gap-3 md:grid-cols-2">
+                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+                                <div class="text-xs uppercase tracking-[0.18em] text-zinc-500">Launch state</div>
+                                <div class="mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]
+                                    @if($googleLaunchTone === 'emerald') border-emerald-300 bg-emerald-100 text-emerald-900
+                                    @elseif($googleLaunchTone === 'zinc') border-zinc-300 bg-zinc-100 text-zinc-700
+                                    @else border-amber-300 bg-amber-100 text-amber-900
+                                    @endif">
+                                    {{ $googleLaunchLabel }}
+                                </div>
+                                <div class="mt-3 text-xs text-zinc-500">{{ data_get($googleBusinessStatus, 'message', 'Google review matching readiness is waiting on setup.') }}</div>
+                            </div>
                             <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
                                 <div class="text-xs uppercase tracking-[0.18em] text-zinc-500">Project approval</div>
                                 <div class="mt-2 font-medium text-zinc-950">{{ str_replace('_', ' ', (string) data_get($googleBusinessStatus, 'project_approval_status', 'unknown')) }}</div>

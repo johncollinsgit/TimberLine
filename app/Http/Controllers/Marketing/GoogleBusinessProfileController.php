@@ -57,6 +57,9 @@ class GoogleBusinessProfileController extends Controller
             'data' => [
                 'oauth_ready' => (bool) $status['oauth_ready'],
                 'enabled' => (bool) $status['enabled'],
+                'ready' => (bool) ($status['ready'] ?? false),
+                'reason' => (string) ($status['reason'] ?? 'needs_connection'),
+                'message' => (string) ($status['message'] ?? ''),
                 'connection_status' => (string) $status['connection_status'],
                 'project_approval_status' => (string) $status['project_approval_status'],
                 'linked_account_id' => $status['linked_account_id'],
