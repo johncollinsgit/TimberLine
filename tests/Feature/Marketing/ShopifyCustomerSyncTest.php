@@ -77,3 +77,16 @@ test('shopify customer sync backfills canonical links and shopify customer metri
             ->where('status', 'completed')
             ->exists())->toBeTrue();
 });
+
+test('shopify client decodes HTML-escaped REST next page links', function () {
+    $client = new App\Services\Shopify\ShopifyClient('retail-test.myshopify.com', 'retail-token', '2026-01');
+    $method = new ReflectionMethod($client, 'nextPageUrl');
+    $method->setAccessible(true);
+
+    $nextUrl = $method->invoke(
+        $client,
+        '<https://retail-test.myshopify.com/admin/api/2026-01/customers.json?page_info=cursor-2&amp;limit=250&amp;fields=id,orders_count,total_spent>; rel="next"'
+    );
+
+    expect($nextUrl)->toBe('https://retail-test.myshopify.com/admin/api/2026-01/customers.json?page_info=cursor-2&limit=250&fields=id,orders_count,total_spent');
+});

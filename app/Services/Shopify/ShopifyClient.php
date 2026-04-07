@@ -109,18 +109,17 @@ class ShopifyClient
 
     protected function nextPageUrl(?string $linkHeader): ?string
     {
-        if (!$linkHeader) {
+        if (! $linkHeader) {
             return null;
         }
 
-        foreach (explode(',', $linkHeader) as $part) {
-            $section = trim($part);
-            if (!str_contains($section, 'rel="next"')) {
-                continue;
-            }
+        if (preg_match_all('/<([^>]+)>\s*;\s*rel="([^"]+)"/i', $linkHeader, $matches, PREG_SET_ORDER) === 1 || ! empty($matches)) {
+            foreach ($matches as $match) {
+                if (strtolower((string) ($match[2] ?? '')) !== 'next') {
+                    continue;
+                }
 
-            if (preg_match('/<([^>]+)>/', $section, $matches)) {
-                return $matches[1];
+                return html_entity_decode((string) ($match[1] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
             }
         }
 
