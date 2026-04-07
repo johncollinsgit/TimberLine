@@ -623,18 +623,42 @@ test('messaging analytics stays tenant and store scoped with attributed outcomes
         'payload' => ['event' => 'click'],
     ]);
 
-    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery()));
+    $homeResponse = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery()));
 
-    $response->assertOk()
+    $homeResponse->assertOk()
         ->assertSeeText('Message Analytics')
-        ->assertSeeText('Recent Message History Outcomes')
+        ->assertSeeText('Analytics tabs')
+        ->assertSeeText('Sales Success');
+
+    $performanceQuery = retailEmbeddedSignedQuery();
+    $performanceQuery['analytics_tab'] = 'performance';
+    $performanceResponse = $this->get(route('shopify.app.messaging.analytics', $performanceQuery));
+
+    $performanceResponse->assertOk()
         ->assertSeeText('Spring VIP launch')
         ->assertSeeText('SMS follow-up about your recent order.')
-        ->assertSeeText('Open chat')
         ->assertDontSeeText('Other tenant campaign')
         ->assertDontSeeText('Other tenant SMS should never render.')
-        ->assertDontSeeText('Wrong store SMS should not appear.')
+        ->assertDontSeeText('Wrong store SMS should not appear.');
+
+    $historyQuery = retailEmbeddedSignedQuery();
+    $historyQuery['analytics_tab'] = 'history';
+    $historyResponse = $this->get(route('shopify.app.messaging.analytics', $historyQuery));
+
+    $historyResponse->assertOk()
+        ->assertSeeText('Recent Message History Outcomes')
+        ->assertSeeText('Open chat')
         ->assertSee('/shopify/app/customers/manage/'.$profileA->id, false)
+        ->assertDontSeeText('Other tenant campaign');
+
+    $salesQuery = retailEmbeddedSignedQuery();
+    $salesQuery['analytics_tab'] = 'sales_success';
+    $salesResponse = $this->get(route('shopify.app.messaging.analytics', $salesQuery));
+
+    $salesResponse->assertOk()
+        ->assertSeeText('Sales Success')
+        ->assertSeeText('From email')
+        ->assertSeeText('/products/spring-vip')
         ->assertSeeText('$54.99')
         ->assertDontSeeText('$29.00');
 });

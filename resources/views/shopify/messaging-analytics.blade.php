@@ -17,11 +17,26 @@
         $messagingMessage = trim((string) ($messagingAccess['message'] ?? ''));
 
         $analytics = is_array($messageAnalytics ?? null) ? $messageAnalytics : [];
+        $analyticsTab = strtolower(trim((string) ($messageAnalyticsTab ?? request()->query('analytics_tab', 'home'))));
+        if (! in_array($analyticsTab, ['home', 'performance', 'history', 'sales_success'], true)) {
+            $analyticsTab = 'home';
+        }
+        $analyticsTabs = [
+            ['key' => 'home', 'label' => 'Home'],
+            ['key' => 'performance', 'label' => 'Message performance'],
+            ['key' => 'history', 'label' => 'History outcomes'],
+            ['key' => 'sales_success', 'label' => 'Sales Success'],
+        ];
         $summary = is_array($analytics['summary'] ?? null) ? $analytics['summary'] : [];
         $chart = is_array($analytics['chart'] ?? null) ? $analytics['chart'] : [];
         $historyOutcomes = is_array($analytics['history_outcomes'] ?? null) ? $analytics['history_outcomes'] : [];
         $historySummary = is_array($historyOutcomes['summary'] ?? null) ? $historyOutcomes['summary'] : [];
         $historyRows = collect((array) ($historyOutcomes['rows'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $salesSuccess = is_array($analytics['sales_success'] ?? null) ? $analytics['sales_success'] : [];
+        $salesSuccessSummary = is_array($salesSuccess['summary'] ?? null) ? $salesSuccess['summary'] : [];
+        $salesSuccessRows = collect((array) ($salesSuccess['rows'] ?? []))
             ->filter(fn ($row) => is_array($row))
             ->values();
         $messagesPaginator = $analytics['messages'] ?? null;
@@ -58,9 +73,14 @@
             'per_page',
             'page',
             'message_key',
+            'analytics_tab',
         ];
         $embeddedContextQuery = collect(request()->query())
             ->except($filterKeys)
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->all();
+        $tabQueryBase = collect(request()->query())
+            ->except(['analytics_tab', 'page', 'message_key'])
             ->filter(fn ($value) => $value !== null && $value !== '')
             ->all();
 
@@ -220,6 +240,34 @@
         }
 
         .message-analytics-button--primary {
+            border-color: rgba(15, 143, 97, 0.35);
+            background: rgba(15, 143, 97, 0.12);
+            color: #0e7a53;
+        }
+
+        .message-analytics-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .message-analytics-tab {
+            min-height: 36px;
+            border-radius: 999px;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            background: rgba(248, 250, 252, 0.7);
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            padding: 0 12px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .message-analytics-tab.is-active {
             border-color: rgba(15, 143, 97, 0.35);
             background: rgba(15, 143, 97, 0.12);
             color: #0e7a53;
@@ -615,6 +663,29 @@
             </article>
 
             <article class="message-analytics-card">
+                <h3>Analytics tabs</h3>
+                <div class="message-analytics-tabs" role="tablist" aria-label="Message analytics sections">
+                    @foreach($analyticsTabs as $tab)
+                        @php
+                            $isActiveTab = $analyticsTab === (string) ($tab['key'] ?? '');
+                        @endphp
+                        <a
+                            role="tab"
+                            aria-selected="{{ $isActiveTab ? 'true' : 'false' }}"
+                            class="message-analytics-tab{{ $isActiveTab ? ' is-active' : '' }}"
+                            href="{{ route('shopify.app.messaging.analytics', array_merge($tabQueryBase, ['analytics_tab' => (string) ($tab['key'] ?? 'home')]), false) }}"
+                        >
+                            {{ (string) ($tab['label'] ?? 'Tab') }}
+                        </a>
+                    @endforeach
+                </div>
+                <p class="message-analytics-muted">
+                    Home keeps the first load focused on trend, filters, and summary. Use the other tabs for deeper operational tables.
+                </p>
+            </article>
+
+            @if($analyticsTab === 'home')
+            <article class="message-analytics-card">
                 <h3>Engagement Trend</h3>
                 <p class="message-analytics-muted">Toggle metrics on/off to compare email and text outcomes over time.</p>
                 @php
@@ -675,6 +746,7 @@
                     @foreach($embeddedContextQuery as $key => $value)
                         <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
                     @endforeach
+                    <input type="hidden" name="analytics_tab" value="home" />
 
                     <div class="message-analytics-field">
                         <label for="analytics-date-from">Date from</label>
@@ -745,7 +817,7 @@
                     </div>
 
                     <div class="message-analytics-filter-actions">
-                        <a class="message-analytics-button" href="{{ route('shopify.app.messaging.analytics', $embeddedContextQuery, false) }}">Reset filters</a>
+                        <a class="message-analytics-button" href="{{ route('shopify.app.messaging.analytics', array_merge($embeddedContextQuery, ['analytics_tab' => 'home']), false) }}">Reset filters</a>
                         <button class="message-analytics-button message-analytics-button--primary" type="submit">Apply filters</button>
                     </div>
                 </form>
@@ -800,6 +872,9 @@
                 @endif
             </article>
 
+            @endif
+
+            @if($analyticsTab === 'performance')
             <article class="message-analytics-card">
                 <h3>Message performance</h3>
                 <p class="message-analytics-muted">One row per email batch or logical SMS send run. Use View to inspect exact clicked URLs and attributed orders.</p>
@@ -900,6 +975,9 @@
                 @endif
             </article>
 
+            @endif
+
+            @if($analyticsTab === 'history')
             <article class="message-analytics-card">
                 <h3>Recent Message History Outcomes</h3>
                 <p class="message-analytics-muted">
@@ -978,7 +1056,62 @@
                 @endif
             </article>
 
-            @if($selectedMessageKey !== '')
+            @endif
+
+            @if($analyticsTab === 'sales_success')
+                <article class="message-analytics-card">
+                    <h3>Sales Success</h3>
+                    <p class="message-analytics-muted">These are purchases that can be tied to a sent message in your current date range and filters.</p>
+                    <p class="message-analytics-muted">
+                        Orders: {{ number_format((int) ($salesSuccessSummary['total_orders'] ?? 0)) }} ·
+                        From email: {{ number_format((int) ($salesSuccessSummary['email_orders'] ?? 0)) }} ·
+                        From text: {{ number_format((int) ($salesSuccessSummary['text_orders'] ?? 0)) }} ·
+                        Total value: {{ $formatMoney((int) ($salesSuccessSummary['total_value_cents'] ?? 0)) }}
+                    </p>
+
+                    @if($salesSuccessRows->isEmpty())
+                        <div class="message-analytics-empty">
+                            <p class="message-analytics-muted">No message-linked purchases matched this filter set yet.</p>
+                        </div>
+                    @else
+                        <div class="message-analytics-table-wrap">
+                            <table class="message-analytics-table" aria-label="Sales success orders table">
+                                <thead>
+                                    <tr>
+                                        <th>Order</th>
+                                        <th>Customer</th>
+                                        <th>Came from</th>
+                                        <th>Message</th>
+                                        <th>Pages before purchase</th>
+                                        <th>Purchased on</th>
+                                        <th>Order value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($salesSuccessRows as $row)
+                                        <tr>
+                                            <td>{{ (string) ($row['order_number'] ?? '#'.(int) ($row['order_id'] ?? 0)) }}</td>
+                                            <td>
+                                                <strong>{{ (string) ($row['customer'] ?? 'Customer') }}</strong>
+                                                @if(filled($row['customer_email'] ?? null))
+                                                    <div class="message-analytics-muted">{{ (string) $row['customer_email'] }}</div>
+                                                @endif
+                                            </td>
+                                            <td>{{ (string) ($row['channel_label'] ?? 'Message') }}</td>
+                                            <td>{{ (string) ($row['message_name'] ?? 'Message') }}</td>
+                                            <td>{{ (string) ($row['pages_followed'] ?? 'Page path before purchase was not captured for this order yet.') }}</td>
+                                            <td>{{ $formatDateTime((string) ($row['purchase_at'] ?? null)) }}</td>
+                                            <td>{{ $formatMoney((int) ($row['value_cents'] ?? 0)) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </article>
+            @endif
+
+            @if($analyticsTab === 'performance' && $selectedMessageKey !== '')
                 <article class="message-analytics-card" id="message-analytics-detail">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
                         <div>

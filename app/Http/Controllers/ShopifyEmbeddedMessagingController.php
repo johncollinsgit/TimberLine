@@ -252,8 +252,34 @@ class ShopifyEmbeddedMessagingController extends Controller
         $hasMessagingAccess = (bool) ($messagingModule['has_access'] ?? false);
         $storeKey = $this->nullableString(data_get($store, 'key'));
         $filters = $messageAnalyticsService->normalizeFilters($request->query());
+        $analyticsTab = strtolower(trim((string) $request->query('analytics_tab', 'home')));
+        if (! in_array($analyticsTab, ['home', 'performance', 'history', 'sales_success'], true)) {
+            $analyticsTab = 'home';
+        }
+        $analyticsLoadOptions = match ($analyticsTab) {
+            'performance' => [
+                'include_messages' => true,
+                'include_history_outcomes' => false,
+                'include_sales_success' => false,
+            ],
+            'history' => [
+                'include_messages' => false,
+                'include_history_outcomes' => true,
+                'include_sales_success' => false,
+            ],
+            'sales_success' => [
+                'include_messages' => false,
+                'include_history_outcomes' => false,
+                'include_sales_success' => true,
+            ],
+            default => [
+                'include_messages' => false,
+                'include_history_outcomes' => false,
+                'include_sales_success' => false,
+            ],
+        };
         $analyticsPayload = ($authorized && $tenantId !== null && $hasMessagingAccess)
-            ? $probe->time('page_payload', fn (): array => $messageAnalyticsService->index($tenantId, $storeKey, $filters))
+            ? $probe->time('page_payload', fn (): array => $messageAnalyticsService->index($tenantId, $storeKey, $filters, $analyticsLoadOptions))
             : null;
         $emailSettings = ($authorized && $tenantId !== null && $hasMessagingAccess)
             ? $probe->time('page_payload', fn (): array => $tenantEmailSettingsService->forAdmin($tenantId))
@@ -309,7 +335,7 @@ class ShopifyEmbeddedMessagingController extends Controller
         ];
 
         $messageKey = trim((string) $request->query('message_key', ''));
-        $detail = (is_array($analyticsPayload) && $messageKey !== '')
+        $detail = (is_array($analyticsPayload) && $messageKey !== '' && $analyticsTab === 'performance')
             ? $probe->time('page_payload', fn (): ?array => $messageAnalyticsService->detail($tenantId, $storeKey, $messageKey))
             : null;
 
@@ -360,6 +386,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                     'per_page' => (int) ($filters['per_page'] ?? 25),
                 ],
                 'messageAnalytics' => $analyticsPayload,
+                'messageAnalyticsTab' => $analyticsTab,
                 'messageAnalyticsDetail' => $detail,
                 'messageAnalyticsSelectedMessageKey' => $messageKey !== '' ? $messageKey : null,
                 'messageAnalyticsTrackingEndpoints' => [

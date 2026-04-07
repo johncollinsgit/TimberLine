@@ -79,8 +79,11 @@ class MessageAnalyticsService
      * @param  array<string,mixed>  $filters
      * @return array<string,mixed>
      */
-    public function index(?int $tenantId, ?string $storeKey, array $filters): array
+    public function index(?int $tenantId, ?string $storeKey, array $filters, array $options = []): array
     {
+        $includeMessages = (bool) ($options['include_messages'] ?? true);
+        $includeHistoryOutcomes = (bool) ($options['include_history_outcomes'] ?? true);
+        $includeSalesSuccess = (bool) ($options['include_sales_success'] ?? false);
         $normalizedStoreKey = $this->nullableString($storeKey);
         if ($tenantId === null || $normalizedStoreKey === null) {
             $emptyPaginator = new LengthAwarePaginator([], 0, (int) ($filters['per_page'] ?? 25), (int) ($filters['page'] ?? 1), [
@@ -93,8 +96,12 @@ class MessageAnalyticsService
                 'messages' => $emptyPaginator,
                 'chart' => $this->emptyChart((array) $filters),
                 'history_outcomes' => $this->emptyHistoryOutcomes(),
+                'sales_success' => $this->emptySalesSuccess(),
                 'diagnostics' => [
                     'reason' => 'tenant_or_store_missing',
+                    'include_messages' => $includeMessages,
+                    'include_history_outcomes' => $includeHistoryOutcomes,
+                    'include_sales_success' => $includeSalesSuccess,
                 ],
                 'raw' => [
                     'email_deliveries' => collect(),
@@ -109,35 +116,47 @@ class MessageAnalyticsService
 
         $rows = collect((array) ($dataset['rows'] ?? []));
         $filteredRows = $this->applyOperationalFilters($rows, $tenantId, (array) $filters);
+        $page = (int) ($filters['page'] ?? 1);
+        $perPage = (int) ($filters['per_page'] ?? 25);
         $sortedRows = $filteredRows
             ->sortByDesc(fn (array $row): string => (string) ($row['sent_at'] ?? ''))
             ->values();
+        $paginator = new LengthAwarePaginator([], $sortedRows->count(), $perPage, $page, [
+            'path' => request()->url(),
+            'query' => request()->query(),
+        ]);
 
-        $page = (int) ($filters['page'] ?? 1);
-        $perPage = (int) ($filters['per_page'] ?? 25);
-        $total = $sortedRows->count();
-        $offset = max(0, ($page - 1) * $perPage);
-        $pageRows = $sortedRows->slice($offset, $perPage)->values();
-
-        $paginator = new LengthAwarePaginator(
-            $pageRows->all(),
-            $total,
-            $perPage,
-            $page,
-            [
-                'path' => request()->url(),
-                'query' => request()->query(),
-            ]
-        );
+        if ($includeMessages) {
+            $offset = max(0, ($page - 1) * $perPage);
+            $pageRows = $sortedRows->slice($offset, $perPage)->values();
+            $paginator = new LengthAwarePaginator(
+                $pageRows->all(),
+                $sortedRows->count(),
+                $perPage,
+                $page,
+                [
+                    'path' => request()->url(),
+                    'query' => request()->query(),
+                ]
+            );
+        }
 
         return [
-            'summary' => $this->summaryFromRows($sortedRows),
+            'summary' => $this->summaryFromRows($filteredRows),
             'messages' => $paginator,
             'chart' => $this->chartFromDataset($dataset, $filters),
-            'history_outcomes' => $this->historyOutcomes($tenantId, $normalizedStoreKey, $dataset, $filters),
+            'history_outcomes' => $includeHistoryOutcomes
+                ? $this->historyOutcomes($tenantId, $normalizedStoreKey, $dataset, $filters)
+                : $this->emptyHistoryOutcomes(),
+            'sales_success' => $includeSalesSuccess
+                ? $this->salesSuccess($tenantId, $dataset, $filteredRows)
+                : $this->emptySalesSuccess(),
             'diagnostics' => [
                 'total_rows' => $rows->count(),
-                'filtered_rows' => $sortedRows->count(),
+                'filtered_rows' => $filteredRows->count(),
+                'include_messages' => $includeMessages,
+                'include_history_outcomes' => $includeHistoryOutcomes,
+                'include_sales_success' => $includeSalesSuccess,
             ],
             'raw' => [
                 'email_deliveries' => $dataset['email_deliveries'] ?? collect(),
@@ -1790,6 +1809,202 @@ class MessageAnalyticsService
     }
 
     /**
+     * @param  array<string,mixed>  $dataset
+     * @param  Collection<int,array<string,mixed>>  $filteredRows
+     * @return array<string,mixed>
+     */
+    protected function salesSuccess(int $tenantId, array $dataset, Collection $filteredRows): array
+    {
+        /** @var Collection<int,MarketingMessageOrderAttribution> $orderAttributions */
+        $orderAttributions = $dataset['order_attributions'] ?? collect();
+        if ($orderAttributions->isEmpty() || $filteredRows->isEmpty()) {
+            return $this->emptySalesSuccess();
+        }
+
+        $rowByMessageKey = $filteredRows
+            ->filter(fn (array $row): bool => $this->nullableString($row['message_key'] ?? null) !== null)
+            ->keyBy(fn (array $row): string => (string) ($row['message_key'] ?? ''));
+
+        if ($rowByMessageKey->isEmpty()) {
+            return $this->emptySalesSuccess();
+        }
+
+        $allowedMessageKeys = $rowByMessageKey->keys()->flip();
+
+        $deliveryKeyByEmailDeliveryId = [];
+        foreach ((array) ($dataset['delivery_key_by_email_delivery_id'] ?? []) as $deliveryId => $messageKey) {
+            $resolvedDeliveryId = (int) $deliveryId;
+            $resolvedMessageKey = $this->nullableString($messageKey);
+            if ($resolvedDeliveryId > 0 && $resolvedMessageKey !== null) {
+                $deliveryKeyByEmailDeliveryId[$resolvedDeliveryId] = $resolvedMessageKey;
+            }
+        }
+
+        $deliveryKeyBySmsDeliveryId = [];
+        foreach ((array) ($dataset['delivery_key_by_sms_delivery_id'] ?? []) as $deliveryId => $messageKey) {
+            $resolvedDeliveryId = (int) $deliveryId;
+            $resolvedMessageKey = $this->nullableString($messageKey);
+            if ($resolvedDeliveryId > 0 && $resolvedMessageKey !== null) {
+                $deliveryKeyBySmsDeliveryId[$resolvedDeliveryId] = $resolvedMessageKey;
+            }
+        }
+
+        $messageKeyForAttribution = function (MarketingMessageOrderAttribution $attribution) use (
+            $deliveryKeyByEmailDeliveryId,
+            $deliveryKeyBySmsDeliveryId
+        ): ?string {
+            $emailDeliveryId = (int) ($attribution->marketing_email_delivery_id ?? 0);
+            if ($emailDeliveryId > 0) {
+                return $deliveryKeyByEmailDeliveryId[$emailDeliveryId] ?? null;
+            }
+
+            $smsDeliveryId = (int) ($attribution->marketing_message_delivery_id ?? 0);
+            if ($smsDeliveryId > 0) {
+                return $deliveryKeyBySmsDeliveryId[$smsDeliveryId] ?? null;
+            }
+
+            return null;
+        };
+
+        $filteredAttributions = $orderAttributions
+            ->filter(function (MarketingMessageOrderAttribution $attribution) use ($allowedMessageKeys, $messageKeyForAttribution): bool {
+                $messageKey = $messageKeyForAttribution($attribution);
+                if ($messageKey === null) {
+                    return false;
+                }
+
+                return $allowedMessageKeys->has($messageKey);
+            })
+            ->values();
+
+        if ($filteredAttributions->isEmpty()) {
+            return $this->emptySalesSuccess();
+        }
+
+        $orderIds = $filteredAttributions
+            ->pluck('order_id')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+        $profileIds = $filteredAttributions
+            ->pluck('marketing_profile_id')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+
+        $orders = Order::query()
+            ->forTenantId($tenantId)
+            ->whereIn('id', $orderIds->all())
+            ->get(['id', 'order_number', 'order_label', 'customer_name', 'total_price', 'ordered_at', 'created_at', 'attribution_meta'])
+            ->keyBy('id');
+        $profiles = MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->whereIn('id', $profileIds->all())
+            ->get(['id', 'first_name', 'last_name', 'email'])
+            ->keyBy('id');
+
+        $orderSignalMetaByOrderId = $this->messageAnalyticsShopifyOrderSignalService->refreshForOrders(
+            $orders->values()->all()
+        );
+
+        $rows = $filteredAttributions
+            ->groupBy(fn (MarketingMessageOrderAttribution $attribution): int => (int) ($attribution->order_id ?? 0))
+            ->map(function (Collection $group, int $orderId) use (
+                $orders,
+                $profiles,
+                $rowByMessageKey,
+                $messageKeyForAttribution,
+                $orderSignalMetaByOrderId
+            ): ?array {
+                if ($orderId <= 0) {
+                    return null;
+                }
+
+                $order = $orders->get($orderId);
+                if (! $order instanceof Order) {
+                    return null;
+                }
+
+                /** @var MarketingMessageOrderAttribution|null $primary */
+                $primary = $group
+                    ->sortByDesc(fn (MarketingMessageOrderAttribution $row): string => optional($row->order_occurred_at)->toIso8601String() ?? '')
+                    ->first();
+                if (! $primary instanceof MarketingMessageOrderAttribution) {
+                    return null;
+                }
+
+                $messageKey = $messageKeyForAttribution($primary);
+                $messageRow = $messageKey !== null ? (array) ($rowByMessageKey->get($messageKey) ?? []) : [];
+                $rawChannel = strtolower(trim((string) (
+                    $messageRow['channel']
+                    ?? $primary->channel
+                    ?? (((int) ($primary->marketing_message_delivery_id ?? 0)) > 0 ? 'sms' : 'email')
+                )));
+
+                $profileId = (int) ($primary->marketing_profile_id ?? 0);
+                $profile = $profileId > 0 ? $profiles->get($profileId) : null;
+                $profileName = $profile instanceof MarketingProfile
+                    ? trim((string) $profile->first_name.' '.(string) $profile->last_name)
+                    : '';
+
+                $clickedPages = $group
+                    ->map(function (MarketingMessageOrderAttribution $attribution): ?string {
+                        return $this->nullableString($attribution->normalized_url)
+                            ?? $this->nullableString($attribution->attributed_url);
+                    })
+                    ->filter(fn (?string $value): bool => $value !== null)
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                $sourceMeta = $orderSignalMetaByOrderId[$orderId] ?? (is_array($order->attribution_meta ?? null) ? $order->attribution_meta : []);
+                $landingPage = $this->orderLandingPage($sourceMeta);
+                $sourceUrl = $this->nullableString($sourceMeta['source_url'] ?? null);
+                $purchaseAt = optional($primary->order_occurred_at)->toIso8601String()
+                    ?? optional($order->ordered_at ?? $order->created_at)->toIso8601String();
+                $orderTotalCents = (int) round((float) ($order->total_price ?? 0) * 100);
+                $attributedRevenueCents = (int) $group->sum('revenue_cents');
+                $valueCents = $orderTotalCents > 0 ? $orderTotalCents : $attributedRevenueCents;
+
+                return [
+                    'order_id' => $orderId,
+                    'order_number' => $this->nullableString($order->order_number)
+                        ?? $this->nullableString($order->order_label)
+                        ?? ('#'.$orderId),
+                    'customer' => $profileName !== '' ? $profileName : ($this->nullableString($order->customer_name) ?? 'Customer'),
+                    'customer_email' => $this->nullableString($profile?->email),
+                    'channel' => $rawChannel,
+                    'channel_label' => $this->salesChannelLabel($rawChannel),
+                    'message_name' => $this->nullableString($messageRow['message_name'] ?? null) ?? ($rawChannel === 'sms' ? 'Text message' : 'Email message'),
+                    'purchase_at' => $purchaseAt,
+                    'value_cents' => $valueCents,
+                    'attributed_revenue_cents' => $attributedRevenueCents,
+                    'pages_followed' => $this->salesJourneySummary($clickedPages, $landingPage, $sourceUrl),
+                ];
+            })
+            ->filter(fn (?array $row): bool => is_array($row))
+            ->sortByDesc(fn (array $row): string => (string) ($row['purchase_at'] ?? ''))
+            ->take(200)
+            ->values()
+            ->all();
+
+        $rowsCollection = collect($rows);
+
+        return [
+            'rows' => $rows,
+            'summary' => [
+                'total_orders' => $rowsCollection->count(),
+                'email_orders' => $rowsCollection->where('channel', 'email')->count(),
+                'text_orders' => $rowsCollection->where('channel', 'sms')->count(),
+                'total_value_cents' => (int) $rowsCollection->sum('value_cents'),
+            ],
+            'empty' => $rowsCollection->isEmpty(),
+        ];
+    }
+
+    /**
      * @param  array<string,mixed>  $filters
      * @return array<string,mixed>
      */
@@ -1825,6 +2040,23 @@ class MessageAnalyticsService
             'attributed_orders' => 0,
             'attributed_revenue_cents' => 0,
             'click_to_order_conversion_rate' => 0.0,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function emptySalesSuccess(): array
+    {
+        return [
+            'rows' => [],
+            'summary' => [
+                'total_orders' => 0,
+                'email_orders' => 0,
+                'text_orders' => 0,
+                'total_value_cents' => 0,
+            ],
+            'empty' => true,
         ];
     }
 
@@ -2724,6 +2956,69 @@ class MessageAnalyticsService
                 ? Str::of($rule)->replace('_', ' ')->title()->value()
                 : 'Attributed order',
         };
+    }
+
+    protected function salesChannelLabel(?string $channel): string
+    {
+        return match (strtolower(trim((string) $channel))) {
+            'email' => 'Email',
+            'sms' => 'Text',
+            default => 'Message',
+        };
+    }
+
+    /**
+     * @param  array<int,string>  $clickedUrls
+     */
+    protected function salesJourneySummary(array $clickedUrls, ?string $landingPage, ?string $sourceUrl): string
+    {
+        $steps = collect($clickedUrls)
+            ->map(fn (string $value): ?string => $this->pageLabel($value))
+            ->filter(fn (?string $value): bool => $value !== null)
+            ->values()
+            ->all();
+
+        foreach ([$landingPage, $sourceUrl] as $candidate) {
+            $label = $this->pageLabel($candidate);
+            if ($label === null || in_array($label, $steps, true)) {
+                continue;
+            }
+            $steps[] = $label;
+        }
+
+        if ($steps === []) {
+            return 'Page path before purchase was not captured for this order yet.';
+        }
+
+        if (count($steps) === 1) {
+            return 'Visited '.$steps[0].' and then purchased.';
+        }
+
+        return 'Moved through '.implode(' -> ', $steps).' and then purchased.';
+    }
+
+    protected function pageLabel(mixed $url): ?string
+    {
+        $value = $this->nullableString($url);
+        if ($value === null) {
+            return null;
+        }
+
+        $parts = parse_url($value);
+        if (! is_array($parts)) {
+            return Str::limit($value, 80);
+        }
+
+        $path = trim((string) ($parts['path'] ?? ''));
+        $query = trim((string) ($parts['query'] ?? ''));
+        $host = trim((string) ($parts['host'] ?? ''));
+
+        $display = $path !== '' ? $path : ($host !== '' ? $host : $value);
+        if ($query !== '') {
+            $display .= '?'.$query;
+        }
+
+        return Str::limit($display, 80);
     }
 
     protected function nullableString(mixed $value): ?string
