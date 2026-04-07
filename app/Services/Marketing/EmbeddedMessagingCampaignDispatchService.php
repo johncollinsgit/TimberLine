@@ -3,6 +3,7 @@
 namespace App\Services\Marketing;
 
 use App\Jobs\DispatchMessagingCampaignBatch;
+use App\Jobs\PrepareMessagingCampaignRecipientsJob;
 use App\Jobs\ProcessMessagingCampaignRecipientJob;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
@@ -79,16 +80,7 @@ class EmbeddedMessagingCampaignDispatchService
             ? $resolvedScheduleFor
             : $now;
 
-        $forceSendLookup = collect($forceSendProfileIds)
-            ->map(fn ($value): int => (int) $value)
-            ->filter(fn (int $value): bool => $value > 0)
-            ->unique()
-            ->values()
-            ->flip();
-
-        $profilesById = $this->profilesForRecipients($tenantId, $recipients);
         $templateInstance = null;
-
         $campaign = DB::transaction(function () use (
             $tenantId,
             $resolvedStoreKey,
@@ -162,6 +154,97 @@ class EmbeddedMessagingCampaignDispatchService
             return $campaign;
         });
 
+        PrepareMessagingCampaignRecipientsJob::dispatch(
+            campaignId: (int) $campaign->id,
+            tenantId: $tenantId,
+            storeKey: $resolvedStoreKey,
+            channel: $resolvedChannel,
+            target: $target,
+            recipients: $recipients,
+            body: $resolvedBody,
+            subject: $resolvedSubject,
+            senderKey: $resolvedSenderKey,
+            actorId: $actorId,
+            sourceLabel: $resolvedSourceLabel,
+            forceSendProfileIds: $forceSendProfileIds,
+            emailTemplate: $emailTemplate,
+            htmlBody: $resolvedHtmlBody,
+            scheduleFor: $scheduleAt->toIso8601String(),
+            shortenLinks: $shortenLinks
+        )->onQueue($this->queueName());
+
+        $summary = [
+            'processed' => count($recipients),
+            'scheduled' => count($recipients),
+            'skipped' => 0,
+            'campaign_id' => (int) $campaign->id,
+            'estimated_recipients' => count($recipients),
+            'queued_jobs' => count($recipients),
+            'schedule_for' => $scheduleAt->toIso8601String(),
+            'preparation_status' => 'queued',
+        ];
+
+        return [
+            'campaign' => [
+                'id' => (int) $campaign->id,
+                'status' => (string) $campaign->status,
+                'channel' => (string) $campaign->channel,
+                'name' => (string) $campaign->name,
+                'scheduled_for' => optional($campaign->scheduled_for)->toIso8601String(),
+            ],
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param  array<int,array{profile_id:?int,name:?string,email:?string,phone:?string,normalized_phone:?string,source_type:string}>  $recipients
+     * @param  array<string,mixed>  $target
+     * @param  array<int,int>  $forceSendProfileIds
+     * @param  array<string,mixed>|null  $emailTemplate
+     * @return array{campaign:array<string,mixed>,summary:array<string,mixed>}
+     */
+    public function prepareCampaignRecipients(
+        int $campaignId,
+        ?int $tenantId,
+        ?string $storeKey,
+        string $channel,
+        array $target,
+        array $recipients,
+        string $body,
+        ?string $subject = null,
+        ?string $senderKey = null,
+        ?int $actorId = null,
+        ?string $sourceLabel = null,
+        array $forceSendProfileIds = [],
+        ?array $emailTemplate = null,
+        ?string $htmlBody = null,
+        mixed $scheduleFor = null,
+        bool $shortenLinks = false
+    ): array {
+        $campaign = MarketingCampaign::query()->findOrFail($campaignId);
+        $resolvedChannel = strtolower(trim($channel));
+        $resolvedStoreKey = $this->nullableString($storeKey);
+        $resolvedSubject = $this->nullableString($subject);
+        $resolvedSenderKey = $this->nullableString($senderKey);
+        $resolvedSourceLabel = $this->nullableString($sourceLabel) ?: 'shopify_embedded_messaging_group';
+        $resolvedBody = trim($body);
+        $resolvedHtmlBody = $this->nullableString($htmlBody);
+        $now = CarbonImmutable::now();
+        $resolvedScheduleFor = $this->resolvedDate($scheduleFor);
+        $scheduleAt = $resolvedScheduleFor !== null && $resolvedScheduleFor->greaterThan($now)
+            ? $resolvedScheduleFor
+            : $now;
+
+        $forceSendLookup = collect($forceSendProfileIds)
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values()
+            ->flip();
+
+        $profilesById = $this->profilesForRecipients($tenantId, $recipients);
+        $templateInstance = $campaign->templateInstance;
+
         $summary = [
             'processed' => 0,
             'scheduled' => 0,
@@ -171,6 +254,17 @@ class EmbeddedMessagingCampaignDispatchService
             'queued_jobs' => 0,
             'schedule_for' => $scheduleAt->toIso8601String(),
         ];
+
+        $campaign->forceFill([
+            'status' => $scheduleAt->greaterThan($now) ? 'draft' : 'preparing',
+            'queued_at' => $campaign->queued_at ?: $now,
+            'scheduled_for' => $scheduleAt,
+            'source_label' => $resolvedSourceLabel,
+            'message_subject' => $resolvedSubject,
+            'message_body' => $resolvedBody,
+            'message_html' => $resolvedHtmlBody,
+            'target_snapshot' => $target,
+        ])->save();
 
         foreach ($recipients as $recipient) {
             $summary['processed']++;

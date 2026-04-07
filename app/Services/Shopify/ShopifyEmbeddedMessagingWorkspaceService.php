@@ -831,6 +831,7 @@ GRAPHQL;
             'dry_run' => 0,
             'campaign_id' => (int) ($summary['campaign_id'] ?? 0),
             'schedule_for' => $summary['schedule_for'] ?? null,
+            'preparation_status' => $summary['preparation_status'] ?? null,
         ];
 
         return [

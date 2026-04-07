@@ -18,10 +18,12 @@ use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
+use App\Jobs\PrepareMessagingCampaignRecipientsJob;
 use App\Services\Marketing\SendGridEmailService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -1637,6 +1639,54 @@ test('group preview returns resolved recipient estimate before send and does not
         ->and(MarketingEmailDelivery::query()->count())->toBe(0);
 });
 
+test('group email send queues campaign preparation so large blasts do not build jobs inline', function () {
+    Queue::fake();
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Queued Blast Tenant',
+        'slug' => 'queued-blast-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    shopifyMessagingProfile($tenant->id, [
+        'email' => 'alpha@example.com',
+        'normalized_email' => 'alpha@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+    shopifyMessagingProfile($tenant->id, [
+        'email' => 'beta@example.com',
+        'normalized_email' => 'beta@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+
+    $response = $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.send.group'), [
+            'target_type' => 'auto',
+            'group_key' => 'all_subscribed',
+            'channel' => 'email',
+            'subject' => 'Spring release',
+            'email_template_mode' => 'sections',
+            'email_sections' => [
+                ['type' => 'body', 'text' => 'Fresh notes and new candles.'],
+            ],
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'Message sent.')
+        ->assertJsonPath('data.summary.processed', 2)
+        ->assertJsonPath('data.summary.queued', 2)
+        ->assertJsonPath('data.summary.preparation_status', 'queued');
+
+    Queue::assertPushed(PrepareMessagingCampaignRecipientsJob::class, 1);
+
+    $campaignId = (int) $response->json('data.summary.campaign_id');
+
+    expect(MarketingCampaign::query()->find($campaignId))->not->toBeNull()
+        ->and(MarketingMessageJob::query()->where('campaign_id', $campaignId)->count())->toBe(0);
+});
+
 test('group preview recommends mms when long text is cheaper than segmented sms', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Preview MMS Tenant',
@@ -1740,7 +1790,7 @@ test('pending embedded email campaign can be canceled before dispatch', function
 
     $sendResponse->assertOk()
         ->assertJsonPath('ok', true)
-        ->assertJsonPath('data.campaign.status', 'sending');
+        ->assertJsonPath('data.campaign.status', 'draft');
 
     $campaignId = (int) $sendResponse->json('data.campaign.id');
     expect($campaignId)->toBeGreaterThan(0);

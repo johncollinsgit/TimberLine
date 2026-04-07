@@ -21,6 +21,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedMessagingController extends Controller
@@ -1029,6 +1030,14 @@ class ShopifyEmbeddedMessagingController extends Controller
             );
         } catch (ValidationException $exception) {
             return $this->validationFailureResponse('Message could not be sent.', $exception);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Message could not be scheduled.',
+                'status' => 'messaging_send_failed',
+            ], 500);
         }
 
         return response()->json([
