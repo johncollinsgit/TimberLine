@@ -110,6 +110,17 @@ Strict near-term execution order (current operator rule):
 2. Email reliability fixed for launch-critical reward/customer workflows.
 3. Only then broader platform expansion.
 
+Canonical Candle Cash drift-repair sequence (tenant-scoped, live-safe):
+1. `php artisan marketing:audit-candle-cash-composition --tenant-id=1`
+2. `php artisan marketing:reconcile-candle-cash-balances --tenant-id=1` (preview-only)
+3. `php artisan marketing:reconcile-candle-cash-balances --tenant-id=1 --apply`
+4. `php artisan marketing:audit-candle-cash-composition --tenant-id=1`
+5. `php artisan marketing:validate-candle-cash-legacy-conversion --json --limit=10`
+
+Operator notes:
+- Preview returns non-zero when drift is detected.
+- Use `--profile-id={id}` for isolated repair and `--chunk={n}` for large-scope tuning.
+
 Do not start yet:
 - broad multi-tenant refactors
 - Shopify App Store packaging

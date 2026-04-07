@@ -22,11 +22,18 @@ class MarketingAuditCandleCashComposition extends Command
         $this->line('program_earned_remaining=' . (string) data_get($composition, 'programExpiring.formattedAmount', '$0.00'));
         $this->line('manual_nonexpiring_remaining=' . (string) data_get($composition, 'manualNonExpiring.formattedAmount', '$0.00'));
         $this->line('ledger_balance=' . (string) data_get($composition, 'ledgerBalance.formattedAmount', '$0.00'));
+        $this->line('replay_balance=' . (string) data_get($composition, 'replayBalance.formattedAmount', '$0.00'));
+        $this->line('replay_difference=' . (string) data_get($composition, 'replayDifference.formattedAmount', '$0.00'));
         $this->line('balance_table=' . (string) data_get($composition, 'balanceTable.formattedAmount', '$0.00'));
         $this->line('difference=' . (string) data_get($composition, 'difference.formattedAmount', '$0.00'));
         $this->line('reconciled=' . ((bool) ($composition['reconciled'] ?? false) ? 'yes' : 'no'));
 
-        return (bool) ($composition['reconciled'] ?? false) ? self::SUCCESS : self::FAILURE;
+        $reconciled = (bool) ($composition['reconciled'] ?? false);
+        if (! $reconciled) {
+            $this->warn('Run marketing:reconcile-candle-cash-balances to preview or repair balance-table drift from ledger net totals.');
+        }
+
+        return $reconciled ? self::SUCCESS : self::FAILURE;
     }
 
     protected function positiveInt(mixed $value): ?int

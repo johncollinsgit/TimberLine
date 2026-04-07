@@ -9,7 +9,46 @@ Use this to validate whether imported Backstage data is trustworthy enough to ca
 - Canonical reference customer for this migration:
   - `Rynda Baker <bakery25@gmail.com>`
   - `legacy_points_total = 1494`
-  - canonical converted balance at `0.3` = `448.200`.
+- canonical converted balance at `0.3` = `448.200`.
+
+## Candle Cash reconciliation sequence (2026-04-07)
+
+When liability summaries, dashboard totals, or customer-visible balances disagree, run this exact sequence:
+
+1) Audit scoped liability composition:
+
+```bash
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+```
+
+2) Preview drift between `candle_cash_balances` and ledger net totals:
+
+```bash
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1
+```
+
+3) Apply deterministic repair (ledger net -> `candle_cash_balances`):
+
+```bash
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1 --apply
+```
+
+4) Re-run audit and require `reconciled=yes`:
+
+```bash
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+```
+
+5) Confirm legacy conversion remains clean:
+
+```bash
+php artisan marketing:validate-candle-cash-legacy-conversion --json --limit=10
+```
+
+Notes:
+- Reconciliation is preview-first by default (no writes without `--apply`).
+- Use `--profile-id={id}` for a targeted profile repair.
+- Use `--chunk={n}` to tune large-tenant reconciliation scans.
 
 ## Resumable full-import run strategy
 

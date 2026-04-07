@@ -1,5 +1,43 @@
 # Modern Forestry Backstage
 
+## Candle Cash Reconciliation Runbook (2026-04-07)
+
+Use this live-safe sequence whenever Candle Cash totals look inconsistent between dashboards, customer views, and ledger reports:
+
+1) Audit current scoped composition + reconciliation status:
+
+```bash
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+```
+
+2) Preview balance-table drift from ledger net (no writes):
+
+```bash
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1
+```
+
+3) Apply deterministic repair (upsert `candle_cash_balances` from ledger net):
+
+```bash
+php artisan marketing:reconcile-candle-cash-balances --tenant-id=1 --apply
+```
+
+4) Re-audit to confirm reconciliation:
+
+```bash
+php artisan marketing:audit-candle-cash-composition --tenant-id=1
+```
+
+5) Validate legacy Growave conversion signals remain clean:
+
+```bash
+php artisan marketing:validate-candle-cash-legacy-conversion --json --limit=10
+```
+
+Notes:
+- `marketing:reconcile-candle-cash-balances` is preview-first by default and returns a non-zero exit code when drift exists.
+- Use `--profile-id={id}` for targeted repairs and `--chunk={n}` to tune scan chunking for large tenants.
+
 ## Responses Inbox (2026-04-06)
 
 Backstage now includes a unified `Responses` inbox in the embedded Shopify Messaging area:

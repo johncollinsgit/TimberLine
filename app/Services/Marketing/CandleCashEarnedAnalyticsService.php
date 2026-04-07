@@ -180,7 +180,9 @@ class CandleCashEarnedAnalyticsService
         $programRemainingPoints = CandleCashMeasurement::normalizeStoredAmount($state['program_remaining_points'] ?? 0);
         $manualRemainingPoints = CandleCashMeasurement::normalizeStoredAmount($state['manual_nonexpiring_points'] ?? 0);
         $balanceTablePoints = CandleCashMeasurement::normalizeStoredAmount($state['balance_table_points'] ?? 0);
-        $differencePoints = CandleCashMeasurement::normalizeStoredAmount($totalRemainingPoints - $balanceTablePoints);
+        $ledgerNetPoints = CandleCashMeasurement::normalizeStoredAmount($state['ledger_net_points'] ?? 0);
+        $differencePoints = CandleCashMeasurement::normalizeStoredAmount($ledgerNetPoints - $balanceTablePoints);
+        $replayDifferencePoints = CandleCashMeasurement::normalizeStoredAmount($totalRemainingPoints - $ledgerNetPoints);
         $reconciled = abs($differencePoints) < 0.005;
 
         return [
@@ -191,9 +193,11 @@ class CandleCashEarnedAnalyticsService
             'programExpiring' => $this->balanceLiabilityValue($programRemainingPoints),
             'manualNonExpiring' => $this->balanceLiabilityValue($manualRemainingPoints),
             'reconciled' => $reconciled,
-            'ledgerBalance' => $this->balanceLiabilityValue($totalRemainingPoints),
+            'ledgerBalance' => $this->balanceLiabilityValue($ledgerNetPoints),
             'balanceTable' => $this->balanceLiabilityValue($balanceTablePoints),
             'difference' => $this->balanceLiabilityValue($differencePoints),
+            'replayBalance' => $this->balanceLiabilityValue($totalRemainingPoints),
+            'replayDifference' => $this->balanceLiabilityValue($replayDifferencePoints),
             'helperText' => 'Legacy Growave-migrated Candle Cash remains visible in the same customer balance pool, while only new program-earned Candle Cash is treated as expiring.',
         ];
     }
@@ -592,6 +596,7 @@ class CandleCashEarnedAnalyticsService
         $bucketsByProfile = [];
         $programEarnEvents = [];
         $debitAtByProfile = [];
+        $debitCarryByProfile = [];
 
         foreach ($transactions as $transaction) {
             $profileId = (int) ($transaction->marketing_profile_id ?? 0);
@@ -609,6 +614,17 @@ class CandleCashEarnedAnalyticsService
             }
 
             if ($points > 0) {
+                $carry = CandleCashMeasurement::normalizeStoredAmount($debitCarryByProfile[$profileId] ?? 0);
+                if ($carry > 0) {
+                    $consumedCarry = min($points, $carry);
+                    $points = CandleCashMeasurement::normalizeStoredAmount($points - $consumedCarry);
+                    $debitCarryByProfile[$profileId] = CandleCashMeasurement::normalizeStoredAmount($carry - $consumedCarry);
+                }
+
+                if ($points <= 0) {
+                    continue;
+                }
+
                 $taskHandle = $taskHandlesByTransactionId[(int) $transaction->id] ?? null;
                 $bucketKind = $this->positiveBucketKind($transaction);
                 $sourceKey = $bucketKind === 'program'
@@ -674,6 +690,12 @@ class CandleCashEarnedAnalyticsService
                     break;
                 }
             }
+
+            if ($remainingToConsume > 0) {
+                $debitCarryByProfile[$profileId] = CandleCashMeasurement::normalizeStoredAmount(
+                    ($debitCarryByProfile[$profileId] ?? 0) + $remainingToConsume
+                );
+            }
         }
 
         $outstandingByProfile = [];
@@ -693,7 +715,9 @@ class CandleCashEarnedAnalyticsService
             $manualRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)
                 ->filter(fn (array $bucket): bool => ($bucket['kind'] ?? '') === 'manual_nonexpiring')
                 ->sum('remaining_points'));
-            $profileRemaining = CandleCashMeasurement::normalizeStoredAmount(collect($buckets)->sum('remaining_points'));
+            $profileRemaining = CandleCashMeasurement::normalizeStoredAmount(
+                collect($buckets)->sum('remaining_points') - ($debitCarryByProfile[$profileId] ?? 0)
+            );
 
             $legacyRemainingPoints += max(0, $legacyRemaining);
             $manualNonExpiringPoints += max(0, $manualRemaining);
@@ -714,6 +738,7 @@ class CandleCashEarnedAnalyticsService
 
         $programRemainingPoints = CandleCashMeasurement::normalizeStoredAmount(collect($outstandingByProfile)->sum('points'));
         $balanceTablePoints = $this->balanceTablePoints($tenantId);
+        $ledgerNetPoints = CandleCashMeasurement::normalizeStoredAmount($transactions->sum('candle_cash_delta'));
 
         $this->currentLedgerStateByScope[$scopeKey] = [
             'program_earn_events' => $programEarnEvents,
@@ -724,6 +749,7 @@ class CandleCashEarnedAnalyticsService
             'program_remaining_points' => $programRemainingPoints,
             'total_remaining_points' => CandleCashMeasurement::normalizeStoredAmount($totalRemainingPoints),
             'balance_table_points' => $balanceTablePoints,
+            'ledger_net_points' => $ledgerNetPoints,
             'redeemed_at_by_profile' => $this->redeemedAtByProfile($tenantId),
             'debit_at_by_profile' => $debitAtByProfile,
         ];
