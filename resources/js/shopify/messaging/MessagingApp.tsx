@@ -160,6 +160,54 @@ function badgeToneForStatus(status: string):
   return "info";
 }
 
+function formatCampaignTime(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+function campaignHeaderText(campaign: MessagingHistoryPayload["campaigns"][number]): string {
+  const targetName = typeof campaign.target?.name === "string" && campaign.target.name.trim() !== ""
+    ? campaign.target.name.trim()
+    : "Audience";
+  const timestamp = formatCampaignTime(campaign.created_at ?? campaign.queued_at ?? campaign.launched_at ?? null);
+
+  return timestamp
+    ? `${campaign.channel.toUpperCase()} · ${targetName} · ${timestamp}`
+    : `${campaign.channel.toUpperCase()} · ${targetName}`;
+}
+
+function hasActiveCampaignWork(campaign: MessagingHistoryPayload["campaigns"][number]): boolean {
+  const status = (campaign.status ?? "").trim().toLowerCase();
+  if (status === "sending" || status === "preparing") {
+    return true;
+  }
+
+  const pendingRecipients = Number(campaign.status_counts?.pending ?? 0)
+    + Number(campaign.status_counts?.queued_for_approval ?? 0)
+    + Number(campaign.status_counts?.approved ?? 0)
+    + Number(campaign.status_counts?.scheduled ?? 0)
+    + Number(campaign.status_counts?.sending ?? 0);
+  const pendingJobs = Number(campaign.job_status_counts?.queued ?? 0)
+    + Number(campaign.job_status_counts?.retryable ?? 0)
+    + Number(campaign.job_status_counts?.dispatching ?? 0)
+    + Number(campaign.job_status_counts?.sending ?? 0);
+
+  return pendingRecipients > 0 || pendingJobs > 0;
+}
+
 function normalizeGroups(payload: MessagingBootstrap): MessagingGroupsPayload {
   const groups = payload.data?.groups;
 
@@ -374,6 +422,26 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
       void loadHistory();
     }
   }, [activeChannel, activeStepIndex, loadHistory]);
+
+  useEffect(() => {
+    const sendStepIndex = activeChannel === "sms" ? 3 : 4;
+    if (activeStepIndex !== sendStepIndex) {
+      return;
+    }
+
+    const campaigns = Array.isArray(history.campaigns) ? history.campaigns : [];
+    if (!campaigns.some(hasActiveCampaignWork)) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void loadHistory();
+    }, 4000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeChannel, activeStepIndex, history.campaigns, loadHistory]);
 
   const groupCards = useMemo(() => {
     const saved = groups.saved.map((group) => {
@@ -1498,7 +1566,7 @@ function CampaignHistoryCard({
                     <InlineStack align="space-between" blockAlign="start" wrap>
                       <BlockStack gap="050">
                         <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          {campaign.name}
+                          {campaignHeaderText(campaign)}
                         </Text>
                         <Text as="p" tone="subdued" variant="bodySm">
                           {campaign.channel.toUpperCase()} · {campaign.subject ?? "No subject"}

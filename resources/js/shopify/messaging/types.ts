@@ -142,11 +142,14 @@ export interface MessagingHistoryPayload {
     name: string;
     status: string;
     channel: string;
+    target?: Record<string, unknown>;
     subject?: string | null;
     status_counts?: Record<string, number>;
+    job_status_counts?: Record<string, number>;
     failure_codes?: Array<{ code: string; count: number }>;
     scheduled_for?: string | null;
     queued_at?: string | null;
+    launched_at?: string | null;
     completed_at?: string | null;
     created_at?: string | null;
     cancelable?: boolean;
