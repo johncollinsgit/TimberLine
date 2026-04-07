@@ -132,3 +132,57 @@ test('message analytics setup guide prompts for reconnect when shopify token is 
         ->assertSeeText('Reconnect Shopify')
         ->assertDontSeeText('Connect Shopify Pixel');
 });
+
+test('message analytics setup guide treats missing shopify web pixel as disconnected', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Tracking Missing Pixel Tenant',
+        'slug' => 'storefront-tracking-missing-pixel-tenant',
+    ]);
+    grantMessagingModule($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    Http::fake(function (HttpRequest $request) {
+        if ($request->url() !== 'https://modernforestry.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response([], 404);
+        }
+
+        $query = (string) data_get($request->data(), 'query', '');
+
+        if (str_contains($query, 'query BackstageGrantedScopes')) {
+            return Http::response([
+                'data' => [
+                    'currentAppInstallation' => [
+                        'accessScopes' => [
+                            ['handle' => 'read_pixels'],
+                            ['handle' => 'write_pixels'],
+                            ['handle' => 'read_customer_events'],
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+        if (str_contains($query, 'query BackstageWebPixelStatus')) {
+            return Http::response([
+                'errors' => [
+                    ['message' => 'No web pixel was found for this app.', 'path' => ['webPixel']],
+                ],
+                'data' => [
+                    'webPixel' => null,
+                ],
+            ], 200);
+        }
+
+        return Http::response(['errors' => [['message' => 'Unexpected query']]], 200);
+    });
+
+    $host = rtrim(strtr(base64_encode('admin.shopify.com/store/theforestrystudio'), '+/', '-_'), '=');
+    $response = $this->get(route('shopify.app.messaging.analytics', retailEmbeddedSignedQuery([
+        'host' => $host,
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Pixel status: Disconnected')
+        ->assertSeeText('Connect Shopify Pixel')
+        ->assertDontSeeText('No web pixel was found for this app');
+});

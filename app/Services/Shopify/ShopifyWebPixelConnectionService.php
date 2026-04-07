@@ -228,7 +228,8 @@ class ShopifyWebPixelConnectionService
 
     protected function queryWebPixel(ShopifyGraphqlClient $client): ?array
     {
-        $data = $client->query(<<<'GRAPHQL'
+        try {
+            $data = $client->query(<<<'GRAPHQL'
 query BackstageWebPixelStatus {
   webPixel {
     id
@@ -236,6 +237,13 @@ query BackstageWebPixelStatus {
   }
 }
 GRAPHQL);
+        } catch (Throwable $error) {
+            if ($this->isMissingWebPixelError($error)) {
+                return null;
+            }
+
+            throw $error;
+        }
 
         $pixel = $data['webPixel'] ?? null;
 
@@ -531,5 +539,13 @@ GRAPHQL);
             || str_contains($message, 'access token')
             || str_contains($message, 'unrecognized login')
             || str_contains($message, 'wrong password');
+    }
+
+    protected function isMissingWebPixelError(Throwable $error): bool
+    {
+        $message = strtolower($error->getMessage());
+
+        return str_contains($message, 'no web pixel was found for this app')
+            || (str_contains($message, 'path=webpixel') && str_contains($message, 'no web pixel'));
     }
 }
