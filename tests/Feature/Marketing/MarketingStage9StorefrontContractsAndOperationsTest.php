@@ -390,6 +390,39 @@ test('shopify reward redemption is gated to the temporary beta email allowlist',
         ->and((float) \App\Models\CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(400.0);
 });
 
+test('shopify redemption access is live for non-allowlisted accounts when allowlist is empty', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', []);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-open-tenant');
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Open',
+        'email' => 'open.stage9@example.com',
+        'normalized_email' => 'open.stage9@example.com',
+        'phone' => '5557012000',
+        'normalized_phone' => '+15557012000',
+    ]);
+    app(CandleCashService::class)->addPoints($profile, 100, 'earn', 'admin', 'seed', 'seed');
+
+    $query = [
+        'email' => $profile->email,
+        'phone' => $profile->phone,
+        'shop' => 'modernforestry.myshopify.com',
+    ];
+    $headers = stage9SignedHeaders('GET', '/shopify/marketing/rewards/balance', $query, '', 'stage9-secret');
+
+    $this->withHeaders($headers)
+        ->getJson(route('marketing.shopify.rewards.balance', $query))
+        ->assertOk()
+        ->assertJsonPath('data.redemption_access.redeem_enabled', true)
+        ->assertJsonPath('data.redemption_access.mode', 'live')
+        ->assertJsonPath('data.redemption_access.cta_label', 'Redeem Reward Credit');
+});
+
 test('ambiguous storefront identity returns verification required instead of silent linkage', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);

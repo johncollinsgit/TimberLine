@@ -11,13 +11,7 @@ class CandleCashAccessGate
     {
         return array_values(array_filter(array_map(
             static fn ($value) => strtolower(trim((string) $value)),
-            (array) config('marketing.candle_cash.temporary_storefront_live_email_allowlist', [
-                'sarahcollins0816@gmail.com',
-                'info@theforestrystudio.com',
-                'randbhendrich@yahoo.com',
-                'pjordan.mail@gmail.com',
-                'marah.jordan@csuglobal.edu',
-            ])
+            (array) config('marketing.candle_cash.temporary_storefront_live_email_allowlist', [])
         )));
     }
 
