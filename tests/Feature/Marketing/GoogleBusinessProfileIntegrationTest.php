@@ -5,7 +5,9 @@ use App\Models\CandleCashTaskCompletion;
 use App\Models\GoogleBusinessProfileConnection;
 use App\Models\GoogleBusinessProfileLocation;
 use App\Models\GoogleBusinessProfileReview;
+use App\Models\GoogleBusinessProfileSyncRun;
 use App\Models\MarketingProfile;
+use App\Models\MarketingSetting;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +47,56 @@ function seedGoogleBusinessConnection(array $overrides = []): GoogleBusinessProf
         'linked_location_title' => 'Forestry HQ',
         'project_approval_status' => 'approved',
     ], $overrides));
+}
+
+function seedGoogleBusinessIntegrationConfig(array $overrides = []): MarketingSetting
+{
+    return MarketingSetting::query()->updateOrCreate(
+        ['key' => 'candle_cash_integration_config'],
+        [
+            'value' => array_merge([
+                'google_review_enabled' => true,
+                'google_review_url' => 'https://g.page/r/CTucm4R1-wmOEAI/review',
+                'google_review_matching_strategy' => 'recent_click_name_match',
+            ], $overrides),
+            'description' => 'test google business profile integration config',
+        ]
+    );
+}
+
+function seedCompletedGoogleBusinessSyncRun(
+    GoogleBusinessProfileConnection $connection,
+    array $overrides = []
+): GoogleBusinessProfileSyncRun {
+    $startedAt = now()->subMinutes(12);
+    $finishedAt = now()->subMinutes(5);
+
+    $run = GoogleBusinessProfileSyncRun::query()->create(array_merge([
+        'google_business_profile_connection_id' => $connection->id,
+        'trigger_type' => 'manual',
+        'status' => 'completed',
+        'fetched_reviews_count' => 1,
+        'new_reviews_count' => 1,
+        'updated_reviews_count' => 0,
+        'matched_reviews_count' => 0,
+        'awarded_reviews_count' => 0,
+        'duplicate_reviews_count' => 0,
+        'unmatched_reviews_count' => 1,
+        'started_at' => $startedAt,
+        'finished_at' => $finishedAt,
+        'metadata' => [
+            'linked_location_id' => $connection->linked_location_id,
+            'linked_location_title' => $connection->linked_location_title,
+        ],
+    ], $overrides));
+
+    if (($overrides['status'] ?? 'completed') === 'completed') {
+        $connection->forceFill([
+            'last_synced_at' => $run->finished_at ?? $run->started_at,
+        ])->save();
+    }
+
+    return $run;
 }
 
 test('google business connect route redirects to oauth with business manage scope', function () {
@@ -199,6 +251,80 @@ test('google business status route returns linked location details', function ()
         ->assertJsonPath('data.connection_status', 'connected')
         ->assertJsonPath('data.linked_location_id', '456')
         ->assertJsonPath('data.locations.0.title', 'Forestry HQ');
+});
+
+test('google business status route reports disabled readiness when google review matching is turned off', function () {
+    $user = candleCashMarketingUser();
+
+    seedGoogleBusinessIntegrationConfig([
+        'google_review_enabled' => false,
+        'google_review_url' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('marketing.candle-cash.google-business.status'))
+        ->assertOk()
+        ->assertJsonPath('data.enabled', false)
+        ->assertJsonPath('data.ready', false)
+        ->assertJsonPath('data.reason', 'disabled')
+        ->assertJsonPath('data.message', 'Google review matching is turned off for this tenant.');
+});
+
+test('google business status route reports env readiness when oauth is not configured', function () {
+    $user = candleCashMarketingUser();
+
+    seedGoogleBusinessIntegrationConfig();
+    config()->set('services.google_gbp.enabled', false);
+
+    $this->actingAs($user)
+        ->getJson(route('marketing.candle-cash.google-business.status'))
+        ->assertOk()
+        ->assertJsonPath('data.enabled', true)
+        ->assertJsonPath('data.ready', false)
+        ->assertJsonPath('data.reason', 'needs_env')
+        ->assertJsonPath('data.message', 'Google Business Profile OAuth is not configured yet. Add the GBP env values first.');
+});
+
+test('google business status route reports manual storefront fallback while automatic matching is waiting on the first sync', function () {
+    $user = candleCashMarketingUser();
+    $connection = seedGoogleBusinessConnection([
+        'linked_location_place_id' => 'place-123',
+    ]);
+
+    seedGoogleBusinessIntegrationConfig([
+        'google_review_url' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('marketing.candle-cash.google-business.status'))
+        ->assertOk()
+        ->assertJsonPath('data.enabled', true)
+        ->assertJsonPath('data.ready', false)
+        ->assertJsonPath('data.reason', 'needs_first_sync')
+        ->assertJsonPath('data.effective_mode', 'manual_review_fallback')
+        ->assertJsonPath('data.fallback_mode', 'manual_review')
+        ->assertJsonPath('data.review_url', 'https://search.google.com/local/writereview?placeid=place-123');
+});
+
+test('google business status route reports live readiness after the first successful sync', function () {
+    $user = candleCashMarketingUser();
+    $connection = seedGoogleBusinessConnection([
+        'linked_location_place_id' => 'place-123',
+    ]);
+
+    seedGoogleBusinessIntegrationConfig([
+        'google_review_url' => null,
+    ]);
+    seedCompletedGoogleBusinessSyncRun($connection);
+
+    $this->actingAs($user)
+        ->getJson(route('marketing.candle-cash.google-business.status'))
+        ->assertOk()
+        ->assertJsonPath('data.enabled', true)
+        ->assertJsonPath('data.ready', true)
+        ->assertJsonPath('data.reason', 'live')
+        ->assertJsonPath('data.linked_location_id', '456')
+        ->assertJsonPath('data.review_url', 'https://search.google.com/local/writereview?placeid=place-123');
 });
 
 test('location selection persists for the active google business connection', function () {
@@ -403,9 +529,11 @@ test('storefront google review start route records a verified start and returns 
     config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
-    seedGoogleBusinessConnection([
+    seedGoogleBusinessIntegrationConfig();
+    $connection = seedGoogleBusinessConnection([
         'linked_location_place_id' => 'place-123',
     ]);
+    seedCompletedGoogleBusinessSyncRun($connection);
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Riley',
@@ -439,6 +567,261 @@ test('storefront google review start route records a verified start and returns 
         'marketing_profile_id' => $profile->id,
         'request_key' => 'google-review-start-1',
     ]);
+});
+
+test('storefront google review start route returns a specific connection error when google business is not connected', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    seedGoogleBusinessIntegrationConfig();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'No',
+        'last_name' => 'Connection',
+        'email' => 'no-connection@example.com',
+        'normalized_email' => 'no-connection@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'request_key' => 'google-review-start-no-connection',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = gbpSignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/google-business/review/start',
+        $query,
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.google-business.review.start', $query), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'google_review_connection_missing')
+        ->assertJsonPath('error.message', 'Automatic Google review matching is still getting ready, so we are reviewing these manually for now. Leave your review, then submit the name shown on the review plus a short snippet or the date posted.')
+        ->assertJsonPath('error.details.reason', 'needs_connection')
+        ->assertJsonPath('error.details.effective_mode', 'manual_review_fallback')
+        ->assertJsonPath('error.states.0', 'needs_connection');
+});
+
+test('storefront google review start route returns a specific location error when no google business location is selected', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    seedGoogleBusinessIntegrationConfig();
+    seedGoogleBusinessConnection([
+        'linked_location_name' => null,
+        'linked_location_id' => null,
+        'linked_location_title' => null,
+        'linked_location_place_id' => null,
+        'linked_location_maps_uri' => null,
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'No',
+        'last_name' => 'Location',
+        'email' => 'no-location@example.com',
+        'normalized_email' => 'no-location@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'request_key' => 'google-review-start-no-location',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = gbpSignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/google-business/review/start',
+        $query,
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.google-business.review.start', $query), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'google_review_location_missing')
+        ->assertJsonPath('error.message', 'Automatic Google review matching is still getting ready, so we are reviewing these manually for now. Leave your review, then submit the name shown on the review plus a short snippet or the date posted.')
+        ->assertJsonPath('error.details.reason', 'needs_location')
+        ->assertJsonPath('error.details.effective_mode', 'manual_review_fallback')
+        ->assertJsonPath('error.states.0', 'needs_location');
+});
+
+test('storefront google review start route returns a first sync required error until the initial sync succeeds', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    seedGoogleBusinessIntegrationConfig();
+    seedGoogleBusinessConnection([
+        'linked_location_place_id' => 'place-123',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Needs',
+        'last_name' => 'Sync',
+        'email' => 'needs-sync@example.com',
+        'normalized_email' => 'needs-sync@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'request_key' => 'google-review-start-needs-sync',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = gbpSignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/google-business/review/start',
+        $query,
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.google-business.review.start', $query), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'google_review_initial_sync_required')
+        ->assertJsonPath('error.message', 'Automatic Google review matching is still getting ready, so we are reviewing these manually for now. Leave your review, then submit the name shown on the review plus a short snippet or the date posted.')
+        ->assertJsonPath('error.details.reason', 'needs_first_sync')
+        ->assertJsonPath('error.details.effective_mode', 'manual_review_fallback')
+        ->assertJsonPath('error.states.0', 'needs_first_sync');
+});
+
+test('storefront candle cash task submit accepts google review submissions in manual fallback mode', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    seedGoogleBusinessIntegrationConfig();
+    seedGoogleBusinessConnection([
+        'linked_location_place_id' => 'place-123',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Manual',
+        'last_name' => 'Reviewer',
+        'email' => 'manual-reviewer@example.com',
+        'normalized_email' => 'manual-reviewer@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'task_handle' => 'google-review',
+        'proof_text' => 'Posted as Riley Collins, 5 stars, April 7.',
+        'proof_url' => 'https://g.page/r/CTucm4R1-wmOEAI/review',
+        'request_key' => 'google-review-manual-submit-1',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = gbpSignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.state', 'pending')
+        ->assertJsonPath('data.completion.status', 'pending');
+
+    $completion = CandleCashTaskCompletion::query()
+        ->whereHas('task', fn ($query) => $query->where('handle', 'google-review'))
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->firstOrFail();
+
+    expect((string) $completion->proof_text)->toBe('Posted as Riley Collins, 5 stars, April 7.')
+        ->and((string) $completion->proof_url)->toBe('https://g.page/r/CTucm4R1-wmOEAI/review')
+        ->and((string) $completion->status)->toBe('pending');
+});
+
+test('storefront candle cash task submit requires google review proof text in manual fallback mode', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    seedGoogleBusinessIntegrationConfig();
+    seedGoogleBusinessConnection([
+        'linked_location_place_id' => 'place-123',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Missing',
+        'last_name' => 'Proof',
+        'email' => 'missing-proof@example.com',
+        'normalized_email' => 'missing-proof@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'task_handle' => 'google-review',
+        'proof_url' => 'https://g.page/r/CTucm4R1-wmOEAI/review',
+        'request_key' => 'google-review-manual-submit-blank-proof',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = gbpSignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'proof_text_required')
+        ->assertJsonPath('error.details.fallback_mode', 'manual_review');
+});
+
+test('storefront candle cash task submit still blocks direct google review submissions once automatic matching is live', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage10-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+
+    seedGoogleBusinessIntegrationConfig();
+    $connection = seedGoogleBusinessConnection([
+        'linked_location_place_id' => 'place-123',
+    ]);
+    seedCompletedGoogleBusinessSyncRun($connection);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Live',
+        'last_name' => 'Auto',
+        'email' => 'live-auto@example.com',
+        'normalized_email' => 'live-auto@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'task_handle' => 'google-review',
+        'proof_text' => 'Posted as Live Auto.',
+        'request_key' => 'google-review-auto-submit-blocked',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = gbpSignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($payload),
+        'stage10-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'auto_verified_task');
 });
 
 function gbpSignedHeaders(

@@ -2,10 +2,94 @@
 
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashTask;
-use App\Models\MarketingProfile;
 use App\Models\CustomerExternalProfile;
+use App\Models\GoogleBusinessProfileConnection;
+use App\Models\GoogleBusinessProfileSyncRun;
+use App\Models\MarketingProfile;
+use App\Models\MarketingSetting;
 use App\Services\Marketing\CandleCashService;
 use Illuminate\Support\Str;
+
+function configureStage10RewardsStorefront(): void
+{
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+    config()->set('services.google_gbp.enabled', true);
+    config()->set('services.google_gbp.client_id', 'stage10-google-gbp-client-id');
+    config()->set('services.google_gbp.client_secret', 'stage10-google-gbp-client-secret');
+    config()->set('services.google_gbp.redirect_uri', 'http://localhost/marketing/candle-cash/google-business/callback');
+    config()->set('services.google_gbp.scopes', 'https://www.googleapis.com/auth/business.manage');
+}
+
+function seedStage10GoogleReviewConfig(array $overrides = []): MarketingSetting
+{
+    return MarketingSetting::query()->updateOrCreate(
+        ['key' => 'candle_cash_integration_config'],
+        [
+            'value' => array_merge([
+                'google_review_enabled' => true,
+                'google_review_url' => 'https://g.page/r/CTucm4R1-wmOEAI/review',
+                'google_review_matching_strategy' => 'recent_click_name_match',
+            ], $overrides),
+            'description' => 'stage10 test google review config',
+        ]
+    );
+}
+
+function seedStage10GoogleBusinessConnection(array $overrides = []): GoogleBusinessProfileConnection
+{
+    return GoogleBusinessProfileConnection::query()->create(array_merge([
+        'provider_key' => 'google_business_profile',
+        'connection_status' => 'connected',
+        'access_token' => 'gbp-access-token',
+        'refresh_token' => 'gbp-refresh-token',
+        'token_type' => 'Bearer',
+        'expires_at' => now()->addHour(),
+        'granted_scopes' => ['https://www.googleapis.com/auth/business.manage'],
+        'linked_account_name' => 'accounts/123',
+        'linked_account_id' => '123',
+        'linked_account_display_name' => 'Modern Forestry',
+        'linked_location_name' => 'locations/456',
+        'linked_location_id' => '456',
+        'linked_location_title' => 'Forestry HQ',
+        'linked_location_place_id' => 'place-123',
+        'project_approval_status' => 'approved',
+    ], $overrides));
+}
+
+function seedStage10GoogleBusinessLiveConnection(array $overrides = []): GoogleBusinessProfileConnection
+{
+    $connection = seedStage10GoogleBusinessConnection($overrides);
+
+    $run = GoogleBusinessProfileSyncRun::query()->create([
+        'google_business_profile_connection_id' => $connection->id,
+        'trigger_type' => 'manual',
+        'status' => 'completed',
+        'fetched_reviews_count' => 1,
+        'new_reviews_count' => 1,
+        'updated_reviews_count' => 0,
+        'matched_reviews_count' => 0,
+        'awarded_reviews_count' => 0,
+        'duplicate_reviews_count' => 0,
+        'unmatched_reviews_count' => 1,
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(4),
+        'metadata' => [
+            'linked_location_id' => $connection->linked_location_id,
+            'linked_location_title' => $connection->linked_location_title,
+        ],
+    ]);
+
+    $connection->forceFill([
+        'last_synced_at' => $run->finished_at,
+    ])->save();
+
+    return $connection->fresh();
+}
 
 test('shopify v1 consent status returns unknown customer state when identity is missing', function () {
     config()->set('marketing.shopify.signing_secret', 'stage10-secret');
@@ -377,12 +461,9 @@ test('shopify v1 customer status supports anonymous visitor and logged in custom
 });
 
 test('shopify v1 candle cash status returns central contract for linked customer', function () {
-    config()->set('marketing.shopify.app_proxy_enabled', true);
-    config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
-    config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
-    config()->set('marketing.shopify.allow_legacy_token', false);
-    config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
-    config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
+    configureStage10RewardsStorefront();
+    seedStage10GoogleReviewConfig();
+    seedStage10GoogleBusinessLiveConnection();
 
     $profile = MarketingProfile::query()->create([
         'first_name' => 'Cash',
@@ -421,6 +502,10 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->assertJsonPath('data.balance.candle_cash', 50)
         ->assertJsonPath('data.consent.email', true)
         ->assertJsonPath('data.referral.enabled', true)
+        ->assertJsonPath('data.google_review.enabled', true)
+        ->assertJsonPath('data.google_review.ready', true)
+        ->assertJsonPath('data.google_review.reason', 'live')
+        ->assertJsonPath('data.google_review.review_url', 'https://g.page/r/CTucm4R1-wmOEAI/review')
         ->assertJsonCount(10, 'data.tasks');
 
     expect(data_get($response->json(), 'data.balance.points'))->toBeNull();
@@ -440,6 +525,79 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
+});
+
+test('shopify v1 candle cash status returns google review in manual fallback mode until the first successful sync makes it live', function () {
+    configureStage10RewardsStorefront();
+    seedStage10GoogleReviewConfig();
+    seedStage10GoogleBusinessConnection();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Pending',
+        'last_name' => 'Sync',
+        'email' => 'pending.sync@example.com',
+        'normalized_email' => 'pending.sync@example.com',
+    ]);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+    ], 'stage10-proxy-secret');
+
+    $response = $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.google_review.enabled', true)
+        ->assertJsonPath('data.google_review.ready', false)
+        ->assertJsonPath('data.google_review.reason', 'needs_first_sync')
+        ->assertJsonPath('data.google_review.fallback_mode', 'manual_review')
+        ->assertJsonPath('data.google_review.review_url', 'https://g.page/r/CTucm4R1-wmOEAI/review')
+        ->assertJsonPath('data.google_review.last_sync_at', null);
+
+    $googleReview = collect($response->json('data.tasks'))->firstWhere('handle', 'google-review');
+
+    expect($googleReview)->not->toBeNull()
+        ->and(data_get($googleReview, 'verification_mode'))->toBe('manual_review_fallback')
+        ->and(data_get($googleReview, 'auto_award'))->toBeFalse()
+        ->and(data_get($googleReview, 'requires_manual_approval'))->toBeTrue()
+        ->and(data_get($googleReview, 'requires_customer_submission'))->toBeTrue()
+        ->and(data_get($googleReview, 'action_url'))->toBe('https://g.page/r/CTucm4R1-wmOEAI/review');
+});
+
+test('shopify v1 candle cash status hides google review when auto-match is not ready and no review url can be resolved', function () {
+    configureStage10RewardsStorefront();
+    seedStage10GoogleReviewConfig([
+        'google_review_url' => null,
+    ]);
+    seedStage10GoogleBusinessConnection([
+        'linked_location_place_id' => null,
+        'linked_location_maps_uri' => null,
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Missing',
+        'last_name' => 'Url',
+        'email' => 'missing.google.url@example.com',
+        'normalized_email' => 'missing.google.url@example.com',
+    ]);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+    ], 'stage10-proxy-secret');
+
+    $response = $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.google_review.enabled', true)
+        ->assertJsonPath('data.google_review.ready', false)
+        ->assertJsonPath('data.google_review.reason', 'needs_location')
+        ->assertJsonPath('data.google_review.fallback_mode', null)
+        ->assertJsonPath('data.google_review.review_url', null);
+
+    expect(collect($response->json('data.tasks'))->firstWhere('handle', 'google-review'))->toBeNull();
 });
 
 test('shopify v1 customer reward reads preserve fractional candle cash balances after legacy correction', function () {

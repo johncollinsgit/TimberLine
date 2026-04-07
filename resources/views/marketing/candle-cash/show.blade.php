@@ -203,6 +203,9 @@
                 @endforelse
             </section>
         @elseif($sectionKey === 'queue')
+            @php
+                $googleBusinessReviewUrl = $googleBusinessReviewUrl ?? null;
+            @endphp
             <section class="grid gap-4 md:grid-cols-5">
                 @foreach([
                     'all' => 'All events',
@@ -242,6 +245,9 @@
                                     <td class="px-4 py-3 align-top">
                                         <div class="font-medium text-zinc-950">{{ $event->task?->title ?: 'Task' }}</div>
                                         <div class="mt-1 text-xs text-zinc-500">{{ $event->task?->handle }}</div>
+                                        @if($event->task?->handle === 'google-review' && $event->verification_mode === 'manual_review_fallback')
+                                            <div class="mt-2 inline-flex rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-900">Temporary manual verification</div>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-3 align-top text-zinc-500">{{ $event->verification_mode }}</td>
                                     <td class="px-4 py-3 align-top text-zinc-600">{{ strtoupper($event->status) }}@if($event->reward_awarded) · AWARDED @endif</td>
@@ -257,6 +263,16 @@
                                         <div class="mt-1 text-xs text-zinc-500">{{ optional($event->processed_at ?: $event->occurred_at ?: $event->created_at)->format('Y-m-d H:i') }}</div>
                                         @if($event->blocked_reason)
                                             <div class="mt-1 text-xs text-rose-200">{{ str_replace('_', ' ', $event->blocked_reason) }}</div>
+                                        @endif
+                                        @if($event->completion?->proof_text)
+                                            <div class="mt-3 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Customer note</div>
+                                            <div class="mt-1 whitespace-pre-line text-xs text-zinc-600">{{ $event->completion->proof_text }}</div>
+                                        @endif
+                                        @if($event->completion?->proof_url)
+                                            <a href="{{ $event->completion->proof_url }}" target="_blank" rel="noopener" class="mt-3 inline-flex text-xs font-semibold text-amber-800 underline decoration-zinc-300 underline-offset-4">Open submitted proof link</a>
+                                        @endif
+                                        @if($event->task?->handle === 'google-review' && $event->verification_mode === 'manual_review_fallback' && $googleBusinessReviewUrl)
+                                            <a href="{{ $googleBusinessReviewUrl }}" target="_blank" rel="noopener" class="mt-3 inline-flex text-xs font-semibold text-amber-800 underline decoration-zinc-300 underline-offset-4">Open live Google review page</a>
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 align-top">
@@ -1107,6 +1123,13 @@
                                 @if(data_get($googleBusinessStatus, 'last_error_code'))
                                     <div class="mt-1 text-xs text-rose-800">Code: {{ data_get($googleBusinessStatus, 'last_error_code') }}</div>
                                 @endif
+                            </div>
+                        @endif
+
+                        @if(data_get($googleBusinessStatus, 'effective_mode') === 'manual_review_fallback')
+                            <div class="mt-4 rounded-2xl border border-amber-300/35 bg-amber-100 p-4 text-sm text-amber-900">
+                                <div class="font-semibold">Storefront fallback is live</div>
+                                <div class="mt-2">Customers can leave a Google review and submit the name shown on the review plus a short snippet or the date posted. Candle Cash stays pending until the team approves it.</div>
                             </div>
                         @endif
 

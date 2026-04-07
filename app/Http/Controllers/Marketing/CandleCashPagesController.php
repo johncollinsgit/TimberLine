@@ -162,11 +162,15 @@ class CandleCashPagesController extends Controller
         return back()->with('toast', ['style' => 'success', 'message' => 'Task archived.']);
     }
 
-    public function queue(Request $request): View
+    public function queue(Request $request, GoogleBusinessProfileConnectionService $googleBusinessConnectionService): View
     {
         $status = trim((string) $request->query('status', 'all'));
         $query = CandleCashTaskEvent::query()
-            ->with(['task:id,title,handle,verification_mode,auto_award', 'profile:id,first_name,last_name,email,phone', 'completion:id,status,review_notes'])
+            ->with([
+                'task:id,title,handle,verification_mode,auto_award',
+                'profile:id,first_name,last_name,email,phone',
+                'completion:id,status,review_notes,proof_url,proof_text,submitted_at',
+            ])
             ->latest('id');
 
         if ($status === 'duplicates') {
@@ -185,6 +189,7 @@ class CandleCashPagesController extends Controller
             'sections' => $this->navigationItems(),
             'eventLog' => $events,
             'queueStatus' => $status,
+            'googleBusinessReviewUrl' => $googleBusinessConnectionService->resolveReviewUrl(),
             'queueSummary' => [
                 'all' => CandleCashTaskEvent::query()->count(),
                 'awarded' => CandleCashTaskEvent::query()->where('reward_awarded', true)->count(),

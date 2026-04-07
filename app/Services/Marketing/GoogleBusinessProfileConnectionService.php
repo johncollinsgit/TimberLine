@@ -51,7 +51,10 @@ class GoogleBusinessProfileConnectionService
             'ready' => (bool) ($reviewReadiness['ready'] ?? false),
             'reason' => (string) ($reviewReadiness['reason'] ?? 'needs_connection'),
             'message' => (string) ($reviewReadiness['message'] ?? ''),
+            'storefront_message' => (string) ($reviewReadiness['storefront_message'] ?? ''),
             'launch_state' => (string) ($reviewReadiness['launch_state'] ?? 'needs_connection'),
+            'effective_mode' => (string) ($reviewReadiness['effective_mode'] ?? 'unavailable'),
+            'fallback_mode' => $reviewReadiness['fallback_mode'] ?? null,
             'connection' => $connection,
             'connection_status' => (string) ($connection?->connection_status ?: ($this->oauthReady() ? 'disconnected' : 'not_configured')),
             'project_approval_status' => (string) ($connection?->project_approval_status ?: 'unknown'),
@@ -80,6 +83,9 @@ class GoogleBusinessProfileConnectionService
      *   launch_state:string,
      *   error_code:string,
      *   message:string,
+     *   storefront_message:string,
+     *   effective_mode:string,
+     *   fallback_mode:?string,
      *   review_url:?string,
      *   linked_location_id:?string,
      *   last_sync_at:mixed
@@ -410,13 +416,19 @@ class GoogleBusinessProfileConnectionService
     {
         $connection = $this->current();
         $readiness = $this->reviewReadiness($connection);
+        $effectiveMode = (string) ($readiness['effective_mode'] ?? 'unavailable');
         if (! (bool) ($readiness['ready'] ?? false)) {
             throw new GoogleBusinessProfileException(
                 (string) ($readiness['error_code'] ?? 'google_review_not_ready'),
-                (string) ($readiness['message'] ?? 'Google review matching is not fully configured yet.'),
+                $effectiveMode === 'manual_review_fallback'
+                    ? (string) ($readiness['storefront_message'] ?? $this->manualReviewFallbackStorefrontMessage())
+                    : (string) ($readiness['message'] ?? 'Google review matching is not fully configured yet.'),
                 [
                     'reason' => (string) ($readiness['reason'] ?? 'needs_connection'),
                     'launch_state' => (string) ($readiness['launch_state'] ?? 'needs_connection'),
+                    'effective_mode' => $effectiveMode,
+                    'fallback_mode' => $readiness['fallback_mode'] ?? null,
+                    'review_url' => $readiness['review_url'] ?? null,
                 ]
             );
         }
@@ -625,6 +637,8 @@ class GoogleBusinessProfileConnectionService
         ?string $linkedLocationId,
         mixed $lastSyncAt,
     ): array {
+        $effectiveMode = $this->effectiveStorefrontMode($enabled, $ready, $reviewUrl);
+
         return [
             'enabled' => $enabled,
             'ready' => $ready,
@@ -632,9 +646,34 @@ class GoogleBusinessProfileConnectionService
             'launch_state' => $launchState,
             'error_code' => $errorCode,
             'message' => $message,
+            'storefront_message' => match ($effectiveMode) {
+                'automatic' => 'Google review matching is live.',
+                'manual_review_fallback' => $this->manualReviewFallbackStorefrontMessage(),
+                default => 'Google review matching is not live yet.',
+            },
+            'effective_mode' => $effectiveMode,
+            'fallback_mode' => $effectiveMode === 'manual_review_fallback' ? 'manual_review' : null,
             'review_url' => $reviewUrl,
             'linked_location_id' => $linkedLocationId,
             'last_sync_at' => $lastSyncAt,
         ];
+    }
+
+    protected function effectiveStorefrontMode(bool $enabled, bool $ready, ?string $reviewUrl): string
+    {
+        if (! $enabled) {
+            return 'unavailable';
+        }
+
+        if ($ready) {
+            return 'automatic';
+        }
+
+        return filled($reviewUrl) ? 'manual_review_fallback' : 'unavailable';
+    }
+
+    protected function manualReviewFallbackStorefrontMessage(): string
+    {
+        return 'Automatic Google review matching is still getting ready, so we are reviewing these manually for now. Leave your review, then submit the name shown on the review plus a short snippet or the date posted.';
     }
 }

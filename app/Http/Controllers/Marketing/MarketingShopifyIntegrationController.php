@@ -1275,8 +1275,10 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         $googleReview = $googleBusinessConnectionService->reviewReadiness();
+        $googleReviewMode = (string) ($googleReview['effective_mode'] ?? 'unavailable');
+        $googleReviewUrl = trim((string) ($googleReview['review_url'] ?? '')) ?: null;
         $taskRows = $taskService->storefrontTasks($profile)
-            ->reject(fn (array $row): bool => (string) data_get($row, 'task.handle') === 'google-review' && ! (bool) ($googleReview['ready'] ?? false))
+            ->reject(fn (array $row): bool => (string) data_get($row, 'task.handle') === 'google-review' && $googleReviewMode === 'unavailable')
             ->values();
         $taskHistory = $profile
             ? $profile->candleCashTaskCompletions()->with('task:id,handle,title')->latest('id')->limit(20)->get()
@@ -1323,9 +1325,6 @@ class MarketingShopifyIntegrationController extends Controller
         $rewardsLabelLc = strtolower($rewardsLabel);
         $rewardCreditLabel = $this->displayLabelForStoreContext($storeContext, 'reward_credit_label', 'reward credit');
         $rewardCreditLabelTitle = Str::title($rewardCreditLabel);
-        $googleReviewUrl = (bool) ($googleReview['ready'] ?? false)
-            ? (trim((string) ($googleReview['review_url'] ?? '')) ?: null)
-            : null;
         $voteLockedJoinUrl = trim((string) data_get($integrationConfig, 'vote_locked_join_url', '')) ?: null;
         $rewardCodeRows = [];
         $restoredFailedSyncRedemption = false;
@@ -1489,11 +1488,12 @@ class MarketingShopifyIntegrationController extends Controller
                 'enabled' => (bool) ($googleReview['enabled'] ?? false),
                 'ready' => (bool) ($googleReview['ready'] ?? false),
                 'reason' => (string) ($googleReview['reason'] ?? 'needs_connection'),
-                'message' => (string) ($googleReview['message'] ?? ''),
+                'message' => (string) ($googleReview['storefront_message'] ?? $googleReview['message'] ?? ''),
+                'fallback_mode' => $googleReview['fallback_mode'] ?? null,
                 'review_url' => $googleReviewUrl,
                 'last_sync_at' => $this->isoDateTimeOrNull($googleReview['last_sync_at'] ?? null),
             ],
-            'tasks' => $taskRows->map(function (array $row) use ($googleReviewUrl, $voteLockedJoinUrl): array {
+            'tasks' => $taskRows->map(function (array $row) use ($googleReviewUrl, $googleReviewMode, $voteLockedJoinUrl): array {
                 $handle = (string) data_get($row, 'task.handle');
                 $actionUrl = data_get($row, 'task.action_url');
                 if (($actionUrl === null || trim((string) $actionUrl) === '') && $handle === 'google-review' && $googleReviewUrl) {
@@ -1505,7 +1505,7 @@ class MarketingShopifyIntegrationController extends Controller
                     $eligibility['locked_cta_url'] = $voteLockedJoinUrl;
                 }
 
-                return [
+                $taskPayload = [
                     'id' => (int) data_get($row, 'task.id'),
                     'handle' => $handle,
                     'title' => (string) data_get($row, 'task.title'),
@@ -1525,6 +1525,17 @@ class MarketingShopifyIntegrationController extends Controller
                     'requires_customer_submission' => (bool) data_get($row, 'task.requires_customer_submission'),
                     'eligibility' => $eligibility,
                 ];
+
+                if ($handle === 'google-review' && $googleReviewMode === 'manual_review_fallback') {
+                    $taskPayload['verification_mode'] = 'manual_review_fallback';
+                    $taskPayload['auto_award'] = false;
+                    $taskPayload['requires_manual_approval'] = true;
+                    $taskPayload['requires_customer_submission'] = true;
+                    $taskPayload['action_url'] = $googleReviewUrl;
+                    $taskPayload['button_text'] = 'Leave a Google review';
+                }
+
+                return $taskPayload;
             })->all(),
             'history' => [
                 'tasks' => $taskHistory->map(function ($row): array {
@@ -1561,7 +1572,8 @@ class MarketingShopifyIntegrationController extends Controller
 
     public function submitCandleCashTask(
         Request $request,
-        CandleCashTaskService $taskService
+        CandleCashTaskService $taskService,
+        GoogleBusinessProfileConnectionService $googleBusinessConnectionService
     ): JsonResponse {
         $data = $request->validate([
             'task_handle' => ['required', 'string', 'max:120'],
@@ -1587,26 +1599,50 @@ class MarketingShopifyIntegrationController extends Controller
 
         /** @var MarketingProfile $profile */
         $profile = $resolved['profile'];
+        $requestKey = trim((string) ($data['request_key'] ?? ''));
+        $taskHandle = (string) $data['task_handle'];
+        $googleReview = $taskHandle === 'google-review'
+            ? $googleBusinessConnectionService->reviewReadiness()
+            : null;
+        $googleReviewMode = (string) ($googleReview['effective_mode'] ?? 'unavailable');
+        $googleReviewManualFallback = $taskHandle === 'google-review' && $googleReviewMode === 'manual_review_fallback';
+        $sourceId = trim((string) ($data['campaign_key'] ?? '')) !== ''
+            ? ($taskHandle . ':campaign:' . trim((string) $data['campaign_key']))
+            : $taskHandle;
+        $sourceEventKey = trim((string) ($data['campaign_key'] ?? '')) !== ''
+            ? ($taskHandle . ':profile:' . $profile->id . ':campaign:' . trim((string) $data['campaign_key']))
+            : '';
+
+        if ($googleReviewManualFallback) {
+            $windowKey = now()->startOfWeek()->toDateString();
+            $submissionKey = $requestKey !== '' ? $requestKey : (string) Str::uuid();
+            $sourceId = 'google-review:manual-submit:' . $submissionKey;
+            $sourceEventKey = 'google-review:profile:' . $profile->id . ':manual-submit:' . $submissionKey;
+        }
+
         $result = $taskService->submitCustomerTask(
             $profile,
-            (string) $data['task_handle'],
+            $taskHandle,
             [
                 'proof_url' => $data['proof_url'] ?? null,
                 'proof_text' => $data['proof_text'] ?? null,
             ],
             [
                 'source_type' => 'shopify_widget_task',
-                'source_id' => trim((string) ($data['campaign_key'] ?? '')) !== ''
-                    ? ((string) $data['task_handle'] . ':campaign:' . trim((string) $data['campaign_key']))
-                    : (string) $data['task_handle'],
-                'source_event_key' => trim((string) ($data['campaign_key'] ?? '')) !== ''
-                    ? ((string) $data['task_handle'] . ':profile:' . $profile->id . ':campaign:' . trim((string) $data['campaign_key']))
-                    : '',
-                'request_key' => trim((string) ($data['request_key'] ?? '')),
+                'source_id' => $sourceId,
+                'source_event_key' => $sourceEventKey,
+                'request_key' => $requestKey,
                 'metadata' => [
                     'surface' => 'candle_cash_central',
                     'campaign_key' => trim((string) ($data['campaign_key'] ?? '')) ?: null,
+                    'google_review_effective_mode' => $googleReviewManualFallback ? 'manual_review_fallback' : null,
+                    'google_review_reward_window_start' => $googleReviewManualFallback ? now()->startOfWeek()->toDateString() : null,
                 ],
+                'effective_verification_mode' => $googleReviewManualFallback ? 'manual_review_fallback' : null,
+                'effective_auto_award' => $googleReviewManualFallback ? false : null,
+                'effective_requires_manual_approval' => $googleReviewManualFallback ? true : null,
+                'effective_requires_customer_submission' => $googleReviewManualFallback ? true : null,
+                'effective_proof_text_required' => $googleReviewManualFallback ? true : null,
             ]
         );
 
@@ -1619,22 +1655,31 @@ class MarketingShopifyIntegrationController extends Controller
             'issue_type' => $ok ? null : ((string) ($result['error'] ?? 'task_submit_failed')),
             'profile' => $profile,
             'source_type' => 'shopify_widget_candle_cash_task',
-            'source_id' => (string) $data['task_handle'],
-            'request_key' => trim((string) ($data['request_key'] ?? '')),
+            'source_id' => $taskHandle,
+            'request_key' => $requestKey,
             'meta' => [
-                'task_handle' => (string) $data['task_handle'],
+                'task_handle' => $taskHandle,
                 'state' => $state,
                 'completion_id' => $completion?->id,
+                'google_review_effective_mode' => $googleReviewManualFallback ? 'manual_review_fallback' : null,
             ],
             'resolution_status' => $ok ? 'resolved' : 'open',
         ]);
 
         if (! $ok) {
+            $errorCode = (string) ($result['error'] ?? 'task_submit_failed');
+
             return MarketingStorefrontContract::error(
-                code: (string) ($result['error'] ?? 'task_submit_failed'),
-                message: 'That task could not be completed right now.',
+                code: $errorCode,
+                message: match ($errorCode) {
+                    'proof_text_required' => 'Add the name shown on your Google review plus a short snippet or the date posted so the team can verify it.',
+                    default => 'That task could not be completed right now.',
+                },
                 status: 422,
-                details: ['state' => $state],
+                details: [
+                    'state' => $state,
+                    'fallback_mode' => $googleReviewManualFallback ? 'manual_review' : null,
+                ],
                 states: [$state],
                 recoveryStates: ['try_again_later']
             );
@@ -1642,7 +1687,7 @@ class MarketingShopifyIntegrationController extends Controller
 
         return MarketingStorefrontContract::success([
             'profile_id' => (int) $profile->id,
-            'task_handle' => (string) $data['task_handle'],
+            'task_handle' => $taskHandle,
             'state' => $state,
             'completion' => $completion ? [
                 'id' => (int) $completion->id,
@@ -1707,6 +1752,9 @@ class MarketingShopifyIntegrationController extends Controller
                     'request_key' => trim((string) $data['request_key']),
                     'reason' => (string) data_get($exception->context, 'reason', 'needs_connection'),
                     'launch_state' => (string) data_get($exception->context, 'launch_state', 'needs_connection'),
+                    'effective_mode' => (string) data_get($exception->context, 'effective_mode', 'unavailable'),
+                    'fallback_mode' => data_get($exception->context, 'fallback_mode'),
+                    'review_url' => data_get($exception->context, 'review_url'),
                 ],
                 states: [(string) data_get($exception->context, 'reason', $exception->errorCode)],
                 recoveryStates: ['retry_after_fix']

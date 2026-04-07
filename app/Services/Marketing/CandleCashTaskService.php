@@ -117,7 +117,19 @@ class CandleCashTaskService
             return ['ok' => false, 'state' => 'task_not_found', 'completion' => null, 'event' => null, 'error' => 'task_not_found'];
         }
 
-        if ($this->taskIsAutoVerified($taskModel)) {
+        $effectiveVerificationMode = trim((string) ($context['effective_verification_mode'] ?? $taskModel->verification_mode ?: 'manual_review_fallback'));
+        $effectiveAutoAward = array_key_exists('effective_auto_award', $context) && $context['effective_auto_award'] !== null
+            ? (bool) $context['effective_auto_award']
+            : (bool) $taskModel->auto_award;
+        $effectiveRequiresManualApproval = array_key_exists('effective_requires_manual_approval', $context) && $context['effective_requires_manual_approval'] !== null
+            ? (bool) $context['effective_requires_manual_approval']
+            : (bool) $taskModel->requires_manual_approval;
+        $effectiveRequiresCustomerSubmission = array_key_exists('effective_requires_customer_submission', $context) && $context['effective_requires_customer_submission'] !== null
+            ? (bool) $context['effective_requires_customer_submission']
+            : (bool) $taskModel->requires_customer_submission;
+        $effectiveProofTextRequired = (bool) ($context['effective_proof_text_required'] ?? false);
+
+        if ($this->verificationModeIsAutoVerified($effectiveVerificationMode)) {
             $requestPayload = [
                 'source_type' => (string) ($context['source_type'] ?? 'storefront_task'),
                 'source_id' => (string) ($context['source_id'] ?? ''),
@@ -143,9 +155,12 @@ class CandleCashTaskService
             'proof_text' => $payload['proof_text'] ?? null,
             'submission_payload' => $payload !== [] ? $payload : null,
             'metadata' => is_array($context['metadata'] ?? null) ? $context['metadata'] : null,
+            'effective_verification_mode' => $effectiveVerificationMode,
+            'effective_requires_customer_submission' => $effectiveRequiresCustomerSubmission,
+            'effective_proof_text_required' => $effectiveProofTextRequired,
             'reward_amount' => isset($context['reward_amount']) ? (float) $context['reward_amount'] : null,
             'occurred_at' => $context['occurred_at'] ?? now(),
-        ], autoApprove: ! $taskModel->requires_manual_approval && ! $taskModel->requires_customer_submission, logBlocked: true);
+        ], autoApprove: $effectiveAutoAward && ! $effectiveRequiresManualApproval && ! $effectiveRequiresCustomerSubmission, logBlocked: true);
     }
 
     public function approveCompletion(CandleCashTaskCompletion $completion, ?int $approvedBy = null, ?string $note = null): CandleCashTaskCompletion
@@ -242,8 +257,11 @@ class CandleCashTaskService
 
     public function taskIsAutoVerified(CandleCashTask $task): bool
     {
-        $mode = trim((string) ($task->verification_mode ?: ''));
+        return $this->verificationModeIsAutoVerified(trim((string) ($task->verification_mode ?: '')));
+    }
 
+    protected function verificationModeIsAutoVerified(string $mode): bool
+    {
         return in_array($mode, [
             'system_event',
             'subscription_event',
@@ -256,8 +274,10 @@ class CandleCashTaskService
 
     protected function createOrResolveCompletion(MarketingProfile $profile, CandleCashTask $task, array $payload, bool $autoApprove, bool $logBlocked): array
     {
+        $effectiveVerificationMode = trim((string) ($payload['effective_verification_mode'] ?? $task->verification_mode ?: 'manual_review_fallback'));
+
         $eventRecord = $this->taskEventService->record($task, $profile, [
-            'verification_mode' => (string) ($task->verification_mode ?: 'manual_review_fallback'),
+            'verification_mode' => $effectiveVerificationMode,
             'source_type' => (string) ($payload['source_type'] ?? 'task_event'),
             'source_id' => (string) ($payload['source_id'] ?? ''),
             'source_event_key' => (string) ($payload['source_event_key'] ?? $this->sourceEventKey($task, $profile, $payload)),
@@ -355,7 +375,9 @@ class CandleCashTaskService
             }
         }
 
-        $requiresSubmission = (bool) $task->requires_customer_submission;
+        $requiresSubmission = array_key_exists('effective_requires_customer_submission', $payload)
+            ? (bool) $payload['effective_requires_customer_submission']
+            : (bool) $task->requires_customer_submission;
         $proofText = trim((string) ($payload['proof_text'] ?? ''));
         $proofUrl = trim((string) ($payload['proof_url'] ?? ''));
         if ($requiresSubmission && $proofText === '' && $proofUrl === '') {
@@ -367,6 +389,18 @@ class CandleCashTaskService
                 'completion' => null,
                 'event' => $event,
                 'error' => 'submission_required',
+            ];
+        }
+
+        if ((bool) ($payload['effective_proof_text_required'] ?? false) && $proofText === '') {
+            $this->taskEventService->markBlocked($event, 'proof_text_required');
+
+            return [
+                'ok' => false,
+                'state' => 'submission_required',
+                'completion' => null,
+                'event' => $event,
+                'error' => 'proof_text_required',
             ];
         }
 
@@ -531,7 +565,7 @@ class CandleCashTaskService
             return $task->handle . ':profile:' . $profile->id . ':campaign:' . $campaignKey;
         }
 
-        return match ((string) $task->verification_mode) {
+        return match ((string) ($payload['effective_verification_mode'] ?? $task->verification_mode)) {
             'onsite_action' => $task->handle . ':profile:' . $profile->id . ':onsite',
             'google_business_review', 'product_review_platform_event', 'subscription_event', 'referral_conversion', 'system_event' => $task->handle . ':profile:' . $profile->id,
             default => $task->handle . ':profile:' . $profile->id . ':manual',

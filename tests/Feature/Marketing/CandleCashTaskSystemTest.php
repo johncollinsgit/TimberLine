@@ -9,6 +9,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingSetting;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -73,6 +74,54 @@ test('marketing manager can load candle cash management sections', function () {
         ->get(route('marketing.candle-cash.settings'))
         ->assertOk()
         ->assertSeeText('Verification hooks');
+});
+
+test('queue shows manual google review proof details and the live review link for approval', function () {
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    MarketingSetting::query()->updateOrCreate(
+        ['key' => 'candle_cash_integration_config'],
+        [
+            'value' => [
+                'google_review_enabled' => true,
+                'google_review_url' => 'https://g.page/r/CTucm4R1-wmOEAI/review',
+            ],
+            'description' => 'queue review proof test config',
+        ]
+    );
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Queue',
+        'last_name' => 'Reviewer',
+        'email' => 'queue-reviewer@example.com',
+        'normalized_email' => 'queue-reviewer@example.com',
+    ]);
+
+    app(CandleCashTaskService::class)->submitCustomerTask($profile, 'google-review', [
+        'proof_url' => 'https://example.com/review-proof',
+        'proof_text' => 'Posted as Queue Reviewer on April 7.',
+    ], [
+        'source_type' => 'shopify_widget_task',
+        'source_id' => 'google-review:manual-window:2026-04-06',
+        'source_event_key' => 'google-review:profile:' . $profile->id . ':manual-window:2026-04-06',
+        'request_key' => 'queue-google-review-proof',
+        'effective_verification_mode' => 'manual_review_fallback',
+        'effective_auto_award' => false,
+        'effective_requires_manual_approval' => true,
+        'effective_requires_customer_submission' => true,
+        'effective_proof_text_required' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.queue'))
+        ->assertOk()
+        ->assertSeeText('Temporary manual verification')
+        ->assertSeeText('Posted as Queue Reviewer on April 7.')
+        ->assertSeeText('Open submitted proof link')
+        ->assertSeeText('Open live Google review page');
 });
 
 test('marketing manager can update an existing candle cash redeem rule from backstage', function () {
