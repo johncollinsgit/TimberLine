@@ -11,8 +11,9 @@
   - sort/row controls stay disabled until search results exist.
 - Restored the embedded `Messages` workspace to a lightweight initial bootstrap:
   - the initial page payload now ships groups + templates only,
-  - auto-audience counts hydrate asynchronously after first paint,
+  - auto-audience counts now load on demand when the operator opens audience details or selects an auto audience,
   - campaign history is no longer fetched on mount and only loads when the completed-runs view or final send step is opened.
+- Hardened embedded `Messages` async UX so passive audience-summary requests no longer surface a red load-failed banner or hold up nav changes when the operator immediately switches to another tab such as `Rewards`.
 - Added a dedicated embedded performance benchmark test that uses `Server-Timing` to measure Dashboard, Customers, Messages, Rewards, and Settings over repeated runs.
 
 ### Why

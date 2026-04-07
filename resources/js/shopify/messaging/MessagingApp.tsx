@@ -18,7 +18,7 @@ import {
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessagingApiError, requestMessagingFormData, requestMessagingJson } from "./api";
+import { isAbortLikeError, MessagingApiError, requestMessagingFormData, requestMessagingJson } from "./api";
 import { analyzeLocalSms, formatCurrency } from "./smsSafety";
 import type {
   AutoAudienceGroup,
@@ -295,6 +295,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   const [emailScheduleFor, setEmailScheduleFor] = useState("");
   const [emailSendLoading, setEmailSendLoading] = useState(false);
 
+  const [audienceSummaryLoading, setAudienceSummaryLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [history, setHistory] = useState<MessagingHistoryPayload>({ entries: [], campaigns: [] });
@@ -329,6 +330,10 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   };
 
   const handleApiError = (error: unknown, fallback: string) => {
+    if (isAbortLikeError(error)) {
+      return;
+    }
+
     if (error instanceof MessagingApiError) {
       const fieldErrors = error.payload?.errors ?? {};
       const firstField = Object.keys(fieldErrors)[0];
@@ -349,17 +354,29 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
       return;
     }
 
+    setAudienceSummaryLoading(true);
+
     try {
       const response = await requestMessagingJson<{
         group_summaries?: Record<string, Record<string, number>>;
         diagnostics?: Record<string, Record<string, number>>;
-      }>(endpoints.audience_summary);
+      }>(endpoints.audience_summary, {
+        auth: {
+          timeoutMs: 1200,
+          requestTimeoutMs: 1200,
+          minTtlMs: 5000,
+        },
+      });
 
       const payload = response.data;
       setGroupSummaries(payload?.group_summaries ?? {});
       setAudienceDiagnostics(payload?.diagnostics ?? {});
     } catch (error) {
-      handleApiError(error, "Failed to load audience summary.");
+      if (!isAbortLikeError(error)) {
+        console.warn("[messaging] audience summary load skipped", error);
+      }
+    } finally {
+      setAudienceSummaryLoading(false);
     }
   }, [audienceDiagnostics, endpoints.audience_summary, groupSummaries]);
 
@@ -427,10 +444,6 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
   }, [endpoints.cancel_campaign_base, loadHistory]);
 
   useEffect(() => {
-    void loadAudienceSummary();
-  }, [loadAudienceSummary]);
-
-  useEffect(() => {
     if (templates.length === 0) {
       return;
     }
@@ -491,7 +504,9 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
       return {
         id: `auto:${group.key}`,
         name: group.name,
-        subtitle: hasSummary ? `${formatCount(count)} sendable` : "Calculating sendable",
+        subtitle: hasSummary
+          ? `${formatCount(count)} sendable`
+          : (audienceSummaryLoading ? "Loading sendable" : "Open details to load"),
         count,
         kind: "auto" as const,
         group,
@@ -499,7 +514,7 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
     });
 
     return [...saved, ...auto];
-  }, [groups, groupSummaries, activeChannel]);
+  }, [groups, groupSummaries, activeChannel, audienceSummaryLoading]);
 
   const selectGroup = (group: SavedAudienceGroup | AutoAudienceGroup) => {
     if (group.type === "saved") {
@@ -513,6 +528,10 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
         },
       }));
       return;
+    }
+
+    if (!group.counts && !groupSummaries[group.key]) {
+      void loadAudienceSummary();
     }
 
     const summary = group.counts ?? groupSummaries[group.key] ?? {};
@@ -941,6 +960,9 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
                         variant="plain"
                         onClick={(event) => {
                           event.stopPropagation();
+                          if (card.group.type === "auto") {
+                            void loadAudienceSummary();
+                          }
                           setDetailsTarget(card.group);
                         }}
                       >
@@ -1528,7 +1550,9 @@ export function MessagingApp({ bootstrap }: MessagingAppProps) {
                 </InlineStack>
               ) : (
                 <Text as="p" tone="subdued" variant="bodySm">
-                  Audience summary is loading.
+                  {audienceSummaryLoading
+                    ? "Audience summary is loading."
+                    : "Open this audience to load the latest sendable counts."}
                 </Text>
               )}
               <Text as="p" tone="subdued" variant="bodySm">

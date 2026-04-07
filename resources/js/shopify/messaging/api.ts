@@ -9,6 +9,18 @@ interface EmbeddedAppHelpers {
   }) => Promise<Record<string, string>>;
 }
 
+interface EmbeddedAuthHeaderOptions {
+  includeJsonContentType?: boolean;
+  timeoutMs?: number;
+  requestTimeoutMs?: number;
+  minTtlMs?: number;
+  signal?: AbortSignal;
+}
+
+interface MessagingRequestOptions extends RequestInit {
+  auth?: Omit<EmbeddedAuthHeaderOptions, "includeJsonContentType">;
+}
+
 export class MessagingApiError extends Error {
   payload?: MessagingEnvelope<unknown>;
 
@@ -17,6 +29,16 @@ export class MessagingApiError extends Error {
     this.name = "MessagingApiError";
     this.payload = payload;
   }
+}
+
+function createAbortError(): DOMException {
+  return new DOMException("The operation was aborted.", "AbortError");
+}
+
+export function isAbortLikeError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
 }
 
 function authFailureMessage(status?: string | null, fallback?: string | null): string {
@@ -32,7 +54,13 @@ function authFailureMessage(status?: string | null, fallback?: string | null): s
   return byStatus[status ?? ""] ?? fallback ?? "Request failed.";
 }
 
-export async function resolveEmbeddedAuthHeaders(): Promise<Record<string, string>> {
+export async function resolveEmbeddedAuthHeaders(
+  options: EmbeddedAuthHeaderOptions = {},
+): Promise<Record<string, string>> {
+  if (options.signal?.aborted) {
+    throw createAbortError();
+  }
+
   const helper = (
     window as Window & {
       ForestryEmbeddedApp?: EmbeddedAppHelpers;
@@ -40,9 +68,18 @@ export async function resolveEmbeddedAuthHeaders(): Promise<Record<string, strin
   ).ForestryEmbeddedApp;
 
   if (helper && typeof helper.resolveEmbeddedAuthHeaders === "function") {
-    return helper.resolveEmbeddedAuthHeaders({
+    const headers = await helper.resolveEmbeddedAuthHeaders({
       includeJsonContentType: false,
+      timeoutMs: options.timeoutMs,
+      requestTimeoutMs: options.requestTimeoutMs,
+      minTtlMs: options.minTtlMs,
     });
+
+    if (options.signal?.aborted) {
+      throw createAbortError();
+    }
+
+    return headers;
   }
 
   const bridge = (
@@ -64,8 +101,16 @@ export async function resolveEmbeddedAuthHeaders(): Promise<Record<string, strin
       Promise.resolve(bridge.idToken()),
       new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
     ]);
-  } catch {
+  } catch (error) {
+    if (isAbortLikeError(error)) {
+      throw error;
+    }
+
     throw new MessagingApiError(authFailureMessage("invalid_session_token"));
+  }
+
+  if (options.signal?.aborted) {
+    throw createAbortError();
   }
 
   if (typeof token !== "string" || token.trim() === "") {
@@ -80,19 +125,23 @@ export async function resolveEmbeddedAuthHeaders(): Promise<Record<string, strin
 
 export async function requestMessagingJson<TData>(
   url: string,
-  options: RequestInit = {},
+  options: MessagingRequestOptions = {},
 ): Promise<MessagingEnvelope<TData>> {
-  const authHeaders = await resolveEmbeddedAuthHeaders();
+  const { auth, ...requestOptions } = options;
+  const authHeaders = await resolveEmbeddedAuthHeaders({
+    ...auth,
+    signal: requestOptions.signal,
+  });
 
   const headers = {
     ...authHeaders,
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
-    ...(options.headers ?? {}),
+    ...(requestOptions.body ? { "Content-Type": "application/json" } : {}),
+    ...(requestOptions.headers ?? {}),
   };
 
   const response = await fetch(url, {
     credentials: "same-origin",
-    ...options,
+    ...requestOptions,
     headers,
   });
 
@@ -114,17 +163,21 @@ export async function requestMessagingJson<TData>(
 export async function requestMessagingFormData<TData>(
   url: string,
   body: FormData,
-  options: RequestInit = {},
+  options: MessagingRequestOptions = {},
 ): Promise<MessagingEnvelope<TData>> {
-  const authHeaders = await resolveEmbeddedAuthHeaders();
+  const { auth, ...requestOptions } = options;
+  const authHeaders = await resolveEmbeddedAuthHeaders({
+    ...auth,
+    signal: requestOptions.signal,
+  });
 
   const response = await fetch(url, {
     credentials: "same-origin",
-    ...options,
+    ...requestOptions,
     body,
     headers: {
       ...authHeaders,
-      ...(options.headers ?? {}),
+      ...(requestOptions.headers ?? {}),
     },
   });
 

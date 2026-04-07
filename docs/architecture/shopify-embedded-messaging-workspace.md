@@ -64,7 +64,7 @@
 - Group editor is hidden by default and only shown when explicitly opened.
 - Send controls live in a full-width bottom card.
 - Clicking send first opens preview/confirmation; only confirmation dispatches.
-- Auto-audience counts load after first paint through the async summary endpoint; they are not part of the initial HTML response.
+- Auto-audience counts are not part of the initial HTML response and now load on demand when the operator starts interacting with audience cards/details, so opening or leaving the page is not blocked by passive auth fetches.
 - Campaign history loads on demand when the operator opens `Completed runs` or reaches the final send step, and polling only starts after history is visible.
 - Email-only tools:
   - conditional email template editor
