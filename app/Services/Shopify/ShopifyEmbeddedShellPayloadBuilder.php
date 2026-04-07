@@ -448,6 +448,10 @@ class ShopifyEmbeddedShellPayloadBuilder
             return false;
         }
 
+        if ($this->primaryPageVisibleWhenLocked($page, $state)) {
+            return true;
+        }
+
         return (bool) ($state['has_access'] ?? false);
     }
 
@@ -457,6 +461,21 @@ class ShopifyEmbeddedShellPayloadBuilder
     protected function pageRequiresEnabledAccess(array $page): bool
     {
         return (bool) ($page['requires_enabled_access'] ?? false);
+    }
+
+    /**
+     * @param  array<string,mixed>  $page
+     * @param  array<string,mixed>  $state
+     */
+    protected function primaryPageVisibleWhenLocked(array $page, array $state): bool
+    {
+        if (strtolower(trim((string) ($page['group'] ?? ''))) !== 'primary') {
+            return false;
+        }
+
+        $reason = strtolower(trim((string) ($state['reason'] ?? '')));
+
+        return ! in_array($reason, ['channel_not_supported', 'module_unavailable'], true);
     }
 
     protected function searchScore(string $query, array $haystacks, int $base = 260): int
