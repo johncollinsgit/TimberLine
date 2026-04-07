@@ -137,6 +137,29 @@ test('customers create webhook creates canonical profile when no tenant-scoped m
             ->exists())->toBeTrue();
 });
 
+test('customers create webhook stores shopify commerce snapshot fields on the external profile', function (): void {
+    postShopifyCustomerWebhook($this, '/webhooks/shopify/customers/create', shopifyCustomerPayload([
+        'id' => 9012,
+        'email' => 'snapshot.customer@example.com',
+        'first_name' => 'Snapshot',
+        'last_name' => 'Customer',
+        'orders_count' => 145,
+        'total_spent' => '127784.75',
+    ]))->assertOk();
+
+    $external = CustomerExternalProfile::query()
+        ->forTenantId($this->tenantId)
+        ->where('provider', 'shopify')
+        ->where('integration', 'shopify_customer')
+        ->where('store_key', 'retail')
+        ->where('external_customer_id', '9012')
+        ->first();
+
+    expect($external)->not->toBeNull()
+        ->and((int) $external?->order_count)->toBe(145)
+        ->and((string) $external?->total_spent)->toBe('127784.75');
+});
+
 test('customers create webhook promotes matching legacy source-linked profile into tenant scope instead of duplicating it', function (): void {
     $profile = MarketingProfile::query()->create([
         'tenant_id' => null,
@@ -455,6 +478,7 @@ function shopifyCustomerPayload(array $overrides = []): array
         'phone' => $overrides['phone'] ?? '+15550001111',
         'accepts_marketing' => $overrides['accepts_marketing'] ?? true,
         'orders_count' => $overrides['orders_count'] ?? 0,
+        'total_spent' => $overrides['total_spent'] ?? '0.00',
         'created_at' => $overrides['created_at'] ?? '2026-03-18T10:00:00Z',
         'updated_at' => $overrides['updated_at'] ?? '2026-03-18T10:00:00Z',
         'tags' => $overrides['tags'] ?? 'backstage-webhook',

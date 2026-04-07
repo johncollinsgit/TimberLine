@@ -348,6 +348,9 @@ class ShopifyCustomerWebhookIngestor
                 'normalized_phone' => $this->normalizer->normalizePhone($phone),
                 'accepts_marketing' => $this->parseAcceptsMarketing($payload) ?? (is_bool($existing?->accepts_marketing) ? (bool) $existing->accepts_marketing : null),
                 'order_count' => is_numeric($payload['orders_count'] ?? null) ? max(0, (int) $payload['orders_count']) : $existing?->order_count,
+                'total_spent' => is_numeric($payload['total_spent'] ?? null)
+                    ? round((float) $payload['total_spent'], 2)
+                    : $existing?->total_spent,
                 'last_order_at' => $lastOrderAt ?: $existing?->last_order_at,
                 'last_activity_at' => $lastActivity,
                 'source_channels' => $channels !== [] ? $channels : null,

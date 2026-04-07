@@ -70,10 +70,11 @@ class ShopifyEmbeddedCustomersController extends Controller
             }
 
             $tenantId = $this->resolveEmbeddedTenantId($context, app(TenantResolver::class));
+            $storeKey = (string) data_get($context, 'store.key', '');
             $resultsDeferred = $this->customersResultsDeferred($request);
             $grid = $resultsDeferred
                 ? $gridService->emptyResult($request)
-                : $gridService->resolve($request, $tenantId);
+                : $gridService->resolve($request, $tenantId, $storeKey);
             /** @var ShopifyEmbeddedShellPayloadBuilder $payloadBuilder */
             $payloadBuilder = app(ShopifyEmbeddedShellPayloadBuilder::class);
             $displayLabels = $payloadBuilder->displayLabels($tenantId, $request);
@@ -90,12 +91,13 @@ class ShopifyEmbeddedCustomersController extends Controller
         $tenantId = $authorized
             ? $probe->time('tenant_resolve', fn (): ?int => $this->resolveEmbeddedTenantId($context, app(TenantResolver::class)))
             : null;
+        $storeKey = $authorized ? (string) data_get($context, 'store.key', '') : null;
         $probe->forTenant($tenantId);
         $resultsDeferred = $this->customersResultsDeferred($request);
         $grid = $authorized
             ? ($resultsDeferred
                 ? $gridService->emptyResult($request)
-                : $probe->time('page_payload', fn (): array => $gridService->resolve($request, $tenantId)))
+                : $probe->time('page_payload', fn (): array => $gridService->resolve($request, $tenantId, $storeKey)))
             : $gridService->emptyResult($request);
 
         Log::info('shopify.embedded.manage.render', [

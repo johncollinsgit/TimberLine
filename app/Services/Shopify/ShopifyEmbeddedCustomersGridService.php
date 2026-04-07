@@ -20,11 +20,11 @@ class ShopifyEmbeddedCustomersGridService
      *   active_filter_count:int
      * }
      */
-    public function resolve(Request $request, ?int $tenantId = null): array
+    public function resolve(Request $request, ?int $tenantId = null, ?string $storeKey = null): array
     {
         $filters = $this->normalizeFilters($request);
         $searchContext = $this->resolveSearchContext((string) $filters['search'], $tenantId);
-        $query = $this->baseQuery($tenantId, $searchContext['scoped_profile_ids'] ?? null);
+        $query = $this->baseQuery($tenantId, $searchContext['scoped_profile_ids'] ?? null, $storeKey);
 
         $this->applySearch($query, $searchContext);
         $this->applyFilters($query, $filters);
@@ -193,7 +193,7 @@ class ShopifyEmbeddedCustomersGridService
     /**
      * @return Builder
      */
-    protected function baseQuery(?int $tenantId = null, ?array $scopedProfileIds = null): Builder
+    protected function baseQuery(?int $tenantId = null, ?array $scopedProfileIds = null, ?string $storeKey = null): Builder
     {
         $lastActivityExpression = $this->lastActivityExpression();
 
@@ -217,7 +217,7 @@ class ShopifyEmbeddedCustomersGridService
             ->leftJoinSub($this->reviewStatsSubquery($tenantId, $scopedProfileIds), 'review_stats', function ($join): void {
                 $join->on('review_stats.marketing_profile_id', '=', 'mp.id');
             })
-            ->leftJoinSub($this->externalProfileStatsSubquery($tenantId, $scopedProfileIds), 'external_stats', function ($join): void {
+            ->leftJoinSub($this->externalProfileStatsSubquery($tenantId, $scopedProfileIds, $storeKey), 'external_stats', function ($join): void {
                 $join->on('external_stats.marketing_profile_id', '=', 'mp.id');
             })
             ->leftJoinSub($this->ordersStatsSubquery($tenantId, $scopedProfileIds), 'order_stats', function ($join): void {
@@ -258,7 +258,7 @@ class ShopifyEmbeddedCustomersGridService
                 'mp.phone',
                 'mp.normalized_phone',
             ])
-            ->selectRaw('coalesce(order_stats.orders_count, 0) as orders_count')
+            ->selectRaw('coalesce(external_stats.shopify_orders_count, order_stats.orders_count, 0) as orders_count')
             ->selectRaw("coalesce(nullif(trim(external_stats.vip_tier), ''), case when ".$this->candleClubExpression()." = 1 then 'Candle Club' else 'Standard' end) as vip_tier")
             ->selectRaw('coalesce(balance_stats.candle_cash_balance, 0) as candle_cash_balance')
             ->selectRaw('coalesce(task_stats.rewards_actions_count, 0) as rewards_actions_count')
@@ -471,7 +471,7 @@ class ShopifyEmbeddedCustomersGridService
         }
 
         if ($sort === 'orders') {
-            $query->orderByRaw('coalesce(order_stats.orders_count, 0) ' . $direction)
+            $query->orderByRaw('coalesce(external_stats.shopify_orders_count, order_stats.orders_count, 0) ' . $direction)
                 ->orderBy('mp.id', 'asc');
 
             return;
@@ -844,21 +844,33 @@ class ShopifyEmbeddedCustomersGridService
         );
     }
 
-    protected function externalProfileStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
+    protected function externalProfileStatsSubquery(?int $tenantId = null, ?array $profileIds = null, ?string $storeKey = null): Builder
     {
         if (! Schema::hasTable('customer_external_profiles')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as wholesale_eligible',
                 'null as vip_tier',
+                'null as shopify_orders_count',
+                'null as shopify_total_spent',
                 'null as last_external_activity_at',
             ]);
         }
+
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        $storeMatchExpression = $normalizedStoreKey !== null
+            ? "lower(coalesce(store_key, '')) = '" . $this->quoteSqlLiteral($normalizedStoreKey) . "'"
+            : '1 = 1';
+        $hasTotalSpentColumn = Schema::hasColumn('customer_external_profiles', 'total_spent');
 
         $query = DB::table('customer_external_profiles')
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when lower(coalesce(store_key, '')) = 'wholesale' or lower(coalesce(integration, '')) = 'wholesale' or lower(coalesce(provider, '')) = 'wholesale' then 1 else 0 end) as wholesale_eligible")
             ->selectRaw("max(nullif(trim(vip_tier), '')) as vip_tier")
+            ->selectRaw("max(case when lower(coalesce(provider, '')) = 'shopify' and lower(coalesce(integration, '')) = 'shopify_customer' and {$storeMatchExpression} then order_count else null end) as shopify_orders_count")
+            ->selectRaw($hasTotalSpentColumn
+                ? "max(case when lower(coalesce(provider, '')) = 'shopify' and lower(coalesce(integration, '')) = 'shopify_customer' and {$storeMatchExpression} then total_spent else null end) as shopify_total_spent"
+                : 'null as shopify_total_spent')
             ->selectRaw('max(coalesce(last_activity_at, synced_at, updated_at, created_at)) as last_external_activity_at')
             ->whereNotNull('marketing_profile_id')
             ->groupBy('marketing_profile_id');
@@ -1091,5 +1103,17 @@ class ShopifyEmbeddedCustomersGridService
             static fn (string $column): string => "nullif(trim({$column}), '')",
             $columns
         )) . ", '')))";
+    }
+
+    protected function normalizeStoreKey(?string $storeKey): ?string
+    {
+        $normalized = strtolower(trim((string) $storeKey));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function quoteSqlLiteral(string $value): string
+    {
+        return str_replace("'", "''", $value);
     }
 }

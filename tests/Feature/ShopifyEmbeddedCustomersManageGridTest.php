@@ -576,6 +576,49 @@ test('customers grid counts canonical Shopify customer fallback orders when orde
         ->and($row['orders_count'] ?? 0)->toBe(2);
 });
 
+test('customers grid prefers retail Shopify snapshot order counts over the partial local order mirror', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Matt',
+        'last_name' => 'Timmerman',
+        'email' => 'matt@hopebox.com',
+        'normalized_email' => 'matt@hopebox.com',
+    ]);
+
+    seedLinkedOrderForProfile($profile);
+    seedLinkedOrderForProfile($profile, ['email' => 'changed-address@example.com', 'customer_email' => 'changed-address@example.com']);
+
+    $externalProfilePayload = [
+        'marketing_profile_id' => $profile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_customer',
+        'store_key' => 'retail',
+        'external_customer_id' => '7740177732',
+        'email' => $profile->email,
+        'normalized_email' => $profile->normalized_email,
+        'order_count' => 145,
+        'created_at' => now(),
+        'updated_at' => now(),
+        'synced_at' => now(),
+    ];
+
+    if (Schema::hasColumn('customer_external_profiles', 'total_spent')) {
+        $externalProfilePayload['total_spent'] = 127784.75;
+    }
+
+    DB::table('customer_external_profiles')->insert([$externalProfilePayload]);
+
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+    $result = $service->resolve(
+        Request::create('/shopify/app/customers/manage', 'GET', ['search' => 'matt@hopebox.com']),
+        null,
+        'retail'
+    );
+    $row = collect($result['paginator']->items())->first();
+
+    expect($row['id'] ?? null)->toBe($profile->id)
+        ->and($row['orders_count'] ?? 0)->toBe(145);
+});
+
 test('status filters work for candle club, referral, review, birthday, and wholesale columns', function (string $filter, string $expectedEmail, string $unexpectedEmail) {
     configureEmbeddedRetailStore();
     seedEmbeddedCustomersGridFixtures();
