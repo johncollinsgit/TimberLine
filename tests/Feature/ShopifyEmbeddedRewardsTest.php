@@ -139,8 +139,10 @@ test('shopify embedded rewards route renders verified rewards admin page for map
         ->assertSeeText('Rewards Explanation')
         ->assertSeeText('Configuration')
         ->assertSeeText('Performance trend')
-        ->assertSee('Loading rewards trend...', false)
-        ->assertSee('__forestryApexChartsLoader', false)
+        ->assertSeeText('Analytics are loaded on demand')
+        ->assertSeeText('Open full analytics')
+        ->assertDontSee('Loading rewards trend...', false)
+        ->assertDontSee('__forestryApexChartsLoader', false)
         ->assertSeeText('Ways to Earn')
         ->assertSeeText('Ways to Redeem')
         ->assertDontSee('<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>', false)
@@ -1257,7 +1259,12 @@ test('shopify embedded rewards overview keeps attribution and financial analytic
     configureEmbeddedRetailStore($lockedTenant->id);
     seedRewardsOverviewAttributionFixture($lockedTenant->id, 'locked-analytics', 85.00);
 
-    $this->get(route('shopify.app.rewards', retailEmbeddedSignedQuery()))
+    // First request establishes the signed embedded session context.
+    $this->get(route('shopify.app.rewards', retailEmbeddedSignedQuery()))->assertOk();
+
+    // Then request analytics without Shopify-signed params (relies on the
+    // server-stored embedded session context rather than re-verifying HMAC).
+    $this->get(route('shopify.app.rewards', ['analytics' => 1]))
         ->assertOk()
         ->assertSee('Attribution', false)
         ->assertSee('Financial summary', false)

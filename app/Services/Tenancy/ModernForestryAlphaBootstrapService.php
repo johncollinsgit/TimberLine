@@ -10,6 +10,7 @@ use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class ModernForestryAlphaBootstrapService
 {
@@ -70,13 +71,39 @@ class ModernForestryAlphaBootstrapService
             ];
         }
 
-        $this->ensureStoreOwnership((int) $tenant->id, $storeKey);
-        $this->ensureModuleEntitlements((int) $tenant->id);
-        $this->ensureModuleStates((int) $tenant->id);
-        $this->ensureEmailSettings((int) $tenant->id);
-        $this->ensureSmsProviderSettings((int) $tenant->id);
+        // Guard against stampede: multiple concurrent embedded requests can all
+        // miss the cache and then run heavy upserts. Best-effort lock keeps the
+        // work single-flight where supported by the cache store.
+        $lock = null;
+        $lockKey = $cacheKey.':lock';
+        try {
+            $lock = Cache::lock($lockKey, 60);
+            if (! $lock->get()) {
+                return [
+                    'applied' => true,
+                    'tenant_id' => (int) $tenant->id,
+                    'reason' => 'in_flight',
+                ];
+            }
+        } catch (Throwable) {
+            $lock = null;
+        }
 
-        Cache::put($cacheKey, true, now()->addMinutes(10));
+        try {
+            $this->ensureStoreOwnership((int) $tenant->id, $storeKey);
+            $this->ensureModuleEntitlements((int) $tenant->id);
+            $this->ensureModuleStates((int) $tenant->id);
+            $this->ensureEmailSettings((int) $tenant->id);
+            $this->ensureSmsProviderSettings((int) $tenant->id);
+
+            Cache::put($cacheKey, true, now()->addMinutes(10));
+        } finally {
+            try {
+                $lock?->release();
+            } catch (Throwable) {
+                // Best effort lock release.
+            }
+        }
 
         return [
             'applied' => true,

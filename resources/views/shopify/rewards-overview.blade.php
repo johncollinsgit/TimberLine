@@ -2,6 +2,8 @@
 
 @section('rewards-content')
     @php
+        $analyticsEnabled = (bool) ($analyticsEnabled ?? false);
+        $analyticsEndpoint = trim((string) ($analyticsEndpoint ?? ''));
         $analyticsPayload = is_array($analytics ?? null) ? $analytics : [];
         $chartPayload = is_array($analyticsPayload['chart'] ?? null) ? $analyticsPayload['chart'] : [];
         $chartRows = collect($chartPayload['series'] ?? []);
@@ -89,6 +91,7 @@
         $hasAnalyticsData = (bool) data_get($analyticsPayload, 'flags.hasAnyData', false);
         $hasAttributionData = $hasAnalyticsData && collect($attributionSources)->contains(fn ($source) => (float) ($source['revenue'] ?? 0) > 0);
         $hasFinancialData = $hasAnalyticsData && count($financialItems) > 0;
+        $shouldRenderChart = count($chartLabels) > 0 && count($chartSeries) > 0;
         $chartSeriesJson = json_encode([
             'labels' => $chartLabels,
             'series' => $chartSeries,
@@ -432,6 +435,15 @@
         </div>
 
         <div class="rewards-tab-panel is-active" data-tab-panel="overview">
+            @if(! $analyticsEnabled)
+                <p class="rewards-config-note">
+                    Analytics are loaded on demand to keep Rewards fast inside Shopify Admin.
+                    @if($analyticsEndpoint !== '')
+                        <a href="{{ $analyticsEndpoint }}" style="font-weight:700;color:#065f46;text-decoration:none;">Open full analytics</a>.
+                    @endif
+                </p>
+            @endif
+
             <article class="rewards-chart-card">
                 <div class="rewards-chart-heading">
                     <div>
@@ -439,10 +451,14 @@
                         <p>{{ $chartSubtitle }}</p>
                     </div>
                 </div>
-                <div class="message-analytics-series-picker" data-rewards-series-picker aria-label="Select chart metrics"></div>
-                <div id="rewards-engagement-chart" class="message-analytics-chart" aria-label="Rewards engagement trend"></div>
+                @if($shouldRenderChart)
+                    <div class="message-analytics-series-picker" data-rewards-series-picker aria-label="Select chart metrics"></div>
+                    <div id="rewards-engagement-chart" class="message-analytics-chart" aria-label="Rewards engagement trend"></div>
+                @endif
                 <p class="rewards-chart-empty" data-rewards-chart-empty>
-                    @if($hasAnalyticsData)
+                    @if(! $analyticsEnabled)
+                        Open full analytics to view trends, attribution, and financial overlays.
+                    @elseif($hasAnalyticsData)
                         No reward activity has been recorded in this timeframe yet.
                     @else
                         Reward activity will appear here once the system ingests campaign and redemption data.
@@ -517,7 +533,13 @@
                             </tbody>
                         </table>
                     @else
-                        <p class="rewards-chart-empty">Attribution rows are still warming up. This table will populate once reward-driven revenue and orders arrive.</p>
+                        <p class="rewards-chart-empty">
+                            @if(! $analyticsEnabled)
+                                Open full analytics to view attribution rows.
+                            @else
+                                Attribution rows are still warming up. This table will populate once reward-driven revenue and orders arrive.
+                            @endif
+                        </p>
                     @endif
                 </article>
 
@@ -556,7 +578,13 @@
                             </div>
                         @endif
                     @else
-                        <p class="rewards-chart-empty">Financial overlays appear once reward-attributed sales and redemption costs are available.</p>
+                        <p class="rewards-chart-empty">
+                            @if(! $analyticsEnabled)
+                                Open full analytics to view the financial summary.
+                            @else
+                                Financial overlays appear once reward-attributed sales and redemption costs are available.
+                            @endif
+                        </p>
                     @endif
                 </article>
             </div>
@@ -646,9 +674,11 @@
         </div>
     </section>
 
-    <script id="rewards-engagement-chart-data" type="application/json">
-        {!! $chartSeriesJson !!}
-    </script>
+    @if($shouldRenderChart)
+        <script id="rewards-engagement-chart-data" type="application/json">
+            {!! $chartSeriesJson !!}
+        </script>
+    @endif
     <script>
         (() => {
             const tabs = document.querySelectorAll('[data-rewards-tab]');
@@ -678,42 +708,43 @@
             });
         })();
 
-        (() => {
-            const apexChartsSrc = 'https://cdn.jsdelivr.net/npm/apexcharts';
-            const globalLoaderKey = '__forestryApexChartsLoader';
+        @if($shouldRenderChart)
+            (() => {
+                const apexChartsSrc = 'https://cdn.jsdelivr.net/npm/apexcharts';
+                const globalLoaderKey = '__forestryApexChartsLoader';
 
-            if (window.ApexCharts || window[globalLoaderKey]) {
-                return;
-            }
-
-            window[globalLoaderKey] = new Promise((resolve, reject) => {
-                const existing = document.querySelector('script[data-apexcharts-loader="1"]');
-                if (existing instanceof HTMLScriptElement) {
-                    existing.addEventListener('load', () => resolve(window.ApexCharts), { once: true });
-                    existing.addEventListener('error', () => reject(new Error('ApexCharts failed to load.')), { once: true });
+                if (window.ApexCharts || window[globalLoaderKey]) {
                     return;
                 }
 
-                const script = document.createElement('script');
-                script.src = apexChartsSrc;
-                script.async = true;
-                script.dataset.apexchartsLoader = '1';
-                script.addEventListener('load', () => resolve(window.ApexCharts), { once: true });
-                script.addEventListener('error', () => reject(new Error('ApexCharts failed to load.')), { once: true });
-                document.head.appendChild(script);
-            });
-        })();
+                window[globalLoaderKey] = new Promise((resolve, reject) => {
+                    const existing = document.querySelector('script[data-apexcharts-loader="1"]');
+                    if (existing instanceof HTMLScriptElement) {
+                        existing.addEventListener('load', () => resolve(window.ApexCharts), { once: true });
+                        existing.addEventListener('error', () => reject(new Error('ApexCharts failed to load.')), { once: true });
+                        return;
+                    }
 
-        (() => {
-            const chartNode = document.getElementById('rewards-engagement-chart');
-            const dataNode = document.getElementById('rewards-engagement-chart-data');
-            const picker = document.querySelector('[data-rewards-series-picker]');
-            const emptyNode = document.querySelector('[data-rewards-chart-empty]');
-            const apexChartsLoader = window.__forestryApexChartsLoader;
+                    const script = document.createElement('script');
+                    script.src = apexChartsSrc;
+                    script.async = true;
+                    script.dataset.apexchartsLoader = '1';
+                    script.addEventListener('load', () => resolve(window.ApexCharts), { once: true });
+                    script.addEventListener('error', () => reject(new Error('ApexCharts failed to load.')), { once: true });
+                    document.head.appendChild(script);
+                });
+            })();
 
-            if (!chartNode || !dataNode || !picker || !emptyNode) {
-                return;
-            }
+            (() => {
+                const chartNode = document.getElementById('rewards-engagement-chart');
+                const dataNode = document.getElementById('rewards-engagement-chart-data');
+                const picker = document.querySelector('[data-rewards-series-picker]');
+                const emptyNode = document.querySelector('[data-rewards-chart-empty]');
+                const apexChartsLoader = window.__forestryApexChartsLoader;
+
+                if (!chartNode || !dataNode || !picker || !emptyNode) {
+                    return;
+                }
 
             const chartData = JSON.parse(dataNode.textContent || '{}');
             const labels = Array.isArray(chartData.labels) ? chartData.labels : [];
@@ -860,6 +891,7 @@
                     chartNode.style.display = 'none';
                 });
         })();
+        @endif
 
         (() => {
             const configRoot = document.querySelector('[data-rewards-config]');

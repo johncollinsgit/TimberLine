@@ -38,7 +38,15 @@ class ShopifyEmbeddedSettingsController extends Controller
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
         if ($authorized && $tenantId !== null) {
-            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+            // Avoid blocking first paint on large alpha-default upserts.
+            // Keep it best-effort and outside the response critical path.
+            app()->terminating(function () use ($alphaBootstrapService, $tenantId, $store): void {
+                try {
+                    $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? ''));
+                } catch (\Throwable) {
+                    // Defaults are best-effort and should never fail the settings UI.
+                }
+            });
         }
         $probe->forTenant($tenantId);
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('settings', null, $tenantId));

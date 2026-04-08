@@ -56,12 +56,28 @@ class ShopifyEmbeddedRewardsController extends Controller
         $overview = $hasTenantContext
             ? $probe->time('page_payload', fn (): array => $rewardsService->overview($tenantId))
             : [];
-        $analytics = $hasTenantContext
-            ? $probe->time('page_payload', fn (): array => $dashboardDataService->payload([
-                ...$request->query(),
+        // Rewards overview is intentionally "lite" by default. Pulling the full
+        // embedded dashboard analytics payload blocks first paint and has been
+        // responsible for timeouts/failed loads in production.
+        $wantsAnalytics = $request->boolean('analytics');
+        $analytics = [];
+
+        if ($hasTenantContext && $wantsAnalytics) {
+            $allowedKeys = [
+                'timeframe',
+                'comparison',
+                'location_grouping',
+                'custom_start_date',
+                'custom_end_date',
+                'refresh',
+            ];
+            $query = array_intersect_key($request->query(), array_flip($allowedKeys));
+
+            $analytics = $probe->time('page_payload', fn (): array => $dashboardDataService->payload([
+                ...$query,
                 'tenant_id' => $tenantId,
-            ]))
-            : [];
+            ]));
+        }
 
         return $this->renderSection(
             $request,
@@ -72,6 +88,8 @@ class ShopifyEmbeddedRewardsController extends Controller
             [
                 'dashboard' => $overview,
                 'analytics' => $analytics,
+                'analyticsEnabled' => $wantsAnalytics,
+                'analyticsEndpoint' => route('shopify.app', ['full' => 1], false),
                 'setupNote' => null,
             ],
             resolvedContext: $pageContext,

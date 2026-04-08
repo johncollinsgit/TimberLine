@@ -45,9 +45,9 @@ class ShopifyEmbeddedAppController extends Controller
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $fallbackRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label(null, 'rewards_label', 'Rewards'));
-        $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
 
         if (($context['status'] ?? '') === 'open_from_shopify') {
+            $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
             $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
 
             $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
@@ -84,6 +84,7 @@ class ShopifyEmbeddedAppController extends Controller
         }
 
         if (! ($context['ok'] ?? false)) {
+            $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
             $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
 
             $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
@@ -150,6 +151,9 @@ class ShopifyEmbeddedAppController extends Controller
         $subheadline = $wantsFullDashboard
             ? 'Revenue and setup at a glance.'
             : 'Fast loyalty snapshot for recent program activity.';
+        $dashboardConfig = $wantsFullDashboard
+            ? $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload())
+            : [];
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view($view, [

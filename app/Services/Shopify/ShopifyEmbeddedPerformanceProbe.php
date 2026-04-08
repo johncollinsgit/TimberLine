@@ -43,6 +43,19 @@ class ShopifyEmbeddedPerformanceProbe
         protected ?bool $enabled = null
     ) {
         $this->enabled = $enabled ?? (bool) config('shopify_embedded.perf_profiling_enabled', false);
+        // Allow per-request profiling without requiring an env deploy. This is
+        // intentionally opt-in via query/header because query logging adds overhead.
+        if (! $this->enabled) {
+            try {
+                $request = app()->bound('request') ? app('request') : null;
+                if ($request instanceof Request) {
+                    $header = strtolower(trim((string) $request->header('X-Backstage-Perf', '')));
+                    $this->enabled = $request->boolean('perf') || $request->boolean('debug_perf') || in_array($header, ['1', 'true', 'yes'], true);
+                }
+            } catch (\Throwable) {
+                // Keep probe disabled if request inspection fails.
+            }
+        }
         $this->totalStartedAt = microtime(true);
 
         if (! $this->enabled) {

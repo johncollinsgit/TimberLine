@@ -54,6 +54,53 @@ const DASHBOARD_DEBUG_KEY = "sf-dashboard-debug";
 const DASHBOARD_AUTO_REFRESH_KEY = "sf-dashboard-auto-refresh";
 const AUTO_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
+function readInitialDashboardQueryFromUrl(
+  config: DashboardPayload["config"] | DashboardBootstrap["config"] | null,
+) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const timeframe = (params.get("timeframe") ?? "").trim();
+  const comparison = (params.get("comparison") ?? "").trim();
+  const locationGrouping = (params.get("location_grouping") ?? "").trim();
+  const customStartDate = (params.get("custom_start_date") ?? "").trim();
+  const customEndDate = (params.get("custom_end_date") ?? "").trim();
+
+  const timeframeOptions = Array.isArray((config as any)?.timeframeOptions)
+    ? ((config as any).timeframeOptions as Array<{ value: string }>)
+    : [];
+  const comparisonOptions = Array.isArray((config as any)?.comparisonOptions)
+    ? ((config as any).comparisonOptions as Array<{ value: string }>)
+    : [];
+  const locationOptions = Array.isArray((config as any)?.locationGroupingOptions)
+    ? ((config as any).locationGroupingOptions as Array<{ value: string }>)
+    : [];
+
+  const allowedTimeframes = new Set(timeframeOptions.map((opt) => String(opt.value)));
+  const allowedComparisons = new Set(comparisonOptions.map((opt) => String(opt.value)));
+  const allowedLocations = new Set(locationOptions.map((opt) => String(opt.value)));
+
+  const normalizedTimeframe = allowedTimeframes.has(timeframe) ? (timeframe as DashboardTimeframe) : null;
+  const normalizedComparison = allowedComparisons.has(comparison)
+    ? (comparison as DashboardComparison)
+    : null;
+  const normalizedLocation = allowedLocations.has(locationGrouping)
+    ? (locationGrouping as "country" | "state" | "city")
+    : null;
+
+  const isIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+  return {
+    timeframe: normalizedTimeframe,
+    comparison: normalizedComparison,
+    locationGrouping: normalizedLocation,
+    customStartDate: isIsoDate(customStartDate) ? customStartDate : null,
+    customEndDate: isIsoDate(customEndDate) ? customEndDate : null,
+  };
+}
+
 function isDashboardDebugEnabled(): boolean {
   if (typeof window === "undefined") {
     return false;
@@ -194,13 +241,37 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     message: null,
     tone: "subdued",
   });
-  const [query, setQuery] = useState<DashboardQueryState>({
-    timeframe: initialQuery?.timeframe ?? config?.defaultTimeframe ?? "last_30_days",
-    comparison: initialQuery?.comparison ?? config?.defaultComparison ?? "previous_period",
-    locationGrouping:
-      initialQuery?.locationGrouping ?? config?.locationGroupingPreference ?? "state",
-    customStartDate: initialQuery?.customStartDate ?? null,
-    customEndDate: initialQuery?.customEndDate ?? null,
+  const [query, setQuery] = useState<DashboardQueryState>(() => {
+    const urlQuery = bootstrap.authorized ? readInitialDashboardQueryFromUrl(config) : null;
+
+    const timeframe =
+      initialQuery?.timeframe ??
+      urlQuery?.timeframe ??
+      config?.defaultTimeframe ??
+      ("last_30_days" as DashboardTimeframe);
+
+    const comparison =
+      initialQuery?.comparison ??
+      urlQuery?.comparison ??
+      config?.defaultComparison ??
+      ("previous_period" as DashboardComparison);
+
+    const locationGrouping =
+      initialQuery?.locationGrouping ??
+      urlQuery?.locationGrouping ??
+      config?.locationGroupingPreference ??
+      ("state" as const);
+
+    const customStartDate = initialQuery?.customStartDate ?? urlQuery?.customStartDate ?? null;
+    const customEndDate = initialQuery?.customEndDate ?? urlQuery?.customEndDate ?? null;
+
+    return {
+      timeframe,
+      comparison,
+      locationGrouping,
+      customStartDate: timeframe === "custom" ? customStartDate : null,
+      customEndDate: timeframe === "custom" ? customEndDate : null,
+    };
   });
 
   const autoRefreshEnabled = useMemo(() => isAutoRefreshEnabled(), []);
@@ -222,6 +293,27 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
 
     return params.toString();
   }, [query]);
+
+  useEffect(() => {
+    if (!bootstrap.authorized) {
+      return;
+    }
+
+    if (!isDashboardDebugEnabled()) {
+      return;
+    }
+
+    console.info("[Shopify Dashboard] Initial query", {
+      timeframe: query.timeframe,
+      comparison: query.comparison,
+      locationGrouping: query.locationGrouping,
+      customStartDate: query.customStartDate,
+      customEndDate: query.customEndDate,
+      url: window.location.href,
+      hasInitialData: Boolean(bootstrap.initialData),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!bootstrap.authorized) {
@@ -264,7 +356,17 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
     if (firstLoadRef.current) {
       firstLoadRef.current = false;
       if (bootstrap.initialData) {
-        return;
+        const initial = bootstrap.initialData.query;
+        const matchesInitial =
+          initial?.timeframe === query.timeframe &&
+          initial?.comparison === query.comparison &&
+          initial?.locationGrouping === query.locationGrouping &&
+          (initial?.customStartDate ?? null) === (query.customStartDate ?? null) &&
+          (initial?.customEndDate ?? null) === (query.customEndDate ?? null);
+
+        if (matchesInitial) {
+          return;
+        }
       }
     }
 
@@ -278,6 +380,14 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
       }
 
       try {
+        if (isDashboardDebugEnabled()) {
+          console.info("[Shopify Dashboard] Fetch start", {
+            queryString,
+            shouldForceRefresh,
+            reloadSeed,
+          });
+        }
+
         const params = new URLSearchParams(queryString);
         if (shouldForceRefresh) {
           params.set("refresh", "1");
@@ -334,6 +444,14 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
         setLoading(false);
         if (shouldForceRefresh) {
           setRefreshing(false);
+        }
+
+        if (isDashboardDebugEnabled()) {
+          console.info("[Shopify Dashboard] Fetch end", {
+            queryString,
+            shouldForceRefresh,
+            reloadSeed,
+          });
         }
       }
     };

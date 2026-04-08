@@ -5,12 +5,15 @@ namespace App\Services\Shopify;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\UrlGenerationException;
+use Illuminate\Support\Facades\Cache;
 
 class ShopifyEmbeddedShellPayloadBuilder
 {
     protected const REQUEST_CACHE_KEY = '_shopify_embedded_shell_payload_cache';
+    protected const SHARED_CACHE_PREFIX = 'shopify:embedded:shell';
 
     public function __construct(
         protected ShopifyEmbeddedPageRegistry $pageRegistry,
@@ -237,10 +240,14 @@ class ShopifyEmbeddedShellPayloadBuilder
     {
         $request ??= request();
 
-        return $this->remember($request, 'display_labels:tenant:'.$tenantId, function () use ($tenantId): array {
-            $resolved = $this->displayLabelResolver->resolve($tenantId);
+        $userId = $request->user()?->id ?? 0;
 
-            return is_array($resolved['labels'] ?? null) ? (array) $resolved['labels'] : [];
+        return $this->remember($request, 'display_labels:tenant:'.$tenantId, function () use ($tenantId, $userId): array {
+            return $this->rememberShared('display_labels', $tenantId, $userId, function () use ($tenantId): array {
+                $resolved = $this->displayLabelResolver->resolve($tenantId);
+
+                return is_array($resolved['labels'] ?? null) ? (array) $resolved['labels'] : [];
+            });
         });
     }
 
@@ -251,18 +258,22 @@ class ShopifyEmbeddedShellPayloadBuilder
     {
         $request ??= request();
 
-        return $this->remember($request, 'module_states:tenant:'.$tenantId, function () use ($tenantId): array {
-            $moduleKeys = collect($this->pageRegistry->pages())
-                ->pluck('module_key')
-                ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
-                ->map(fn (string $value): string => strtolower(trim($value)))
-                ->unique()
-                ->values()
-                ->all();
+        $userId = $request->user()?->id ?? 0;
 
-            $resolved = $this->moduleAccessResolver->resolveForTenant($tenantId, $moduleKeys);
+        return $this->remember($request, 'module_states:tenant:'.$tenantId, function () use ($tenantId, $userId): array {
+            return $this->rememberShared('module_states', $tenantId, $userId, function () use ($tenantId): array {
+                $moduleKeys = collect($this->pageRegistry->pages())
+                    ->pluck('module_key')
+                    ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                    ->map(fn (string $value): string => strtolower(trim($value)))
+                    ->unique()
+                    ->values()
+                    ->all();
 
-            return is_array($resolved['modules'] ?? null) ? (array) $resolved['modules'] : [];
+                $resolved = $this->moduleAccessResolver->resolveForTenant($tenantId, $moduleKeys);
+
+                return is_array($resolved['modules'] ?? null) ? (array) $resolved['modules'] : [];
+            });
         });
     }
 
@@ -274,8 +285,12 @@ class ShopifyEmbeddedShellPayloadBuilder
         $request ??= request();
         $user = $request->user();
 
-        return $this->remember($request, 'experience_profile:tenant:'.$tenantId.':user:'.($user?->id ?? 0), function () use ($tenantId, $user): array {
-            return $this->experienceProfileService->forTenant($tenantId, $user);
+        $userId = $user?->id ?? 0;
+
+        return $this->remember($request, 'experience_profile:tenant:'.$tenantId.':user:'.$userId, function () use ($tenantId, $user, $userId): array {
+            return $this->rememberShared('experience_profile', $tenantId, $userId, function () use ($tenantId, $user): array {
+                return $this->experienceProfileService->forTenant($tenantId, $user);
+            });
         });
     }
 
@@ -527,5 +542,64 @@ class ShopifyEmbeddedShellPayloadBuilder
         $request->attributes->set(self::REQUEST_CACHE_KEY, $cache);
 
         return $value;
+    }
+
+    /**
+     * Cross-request shell caching keeps embedded navigation responsive without
+     * re-resolving module access / labels on every page load.
+     *
+     * @template T
+     *
+     * @param  callable():T  $resolver
+     * @return T
+     */
+    protected function rememberShared(string $scope, ?int $tenantId, int $userId, callable $resolver)
+    {
+        $ttlSeconds = max(0, (int) config('shopify_embedded.journey_cache_ttl_seconds', 60));
+        if ($ttlSeconds <= 0) {
+            return $resolver();
+        }
+
+        $normalizedScope = strtolower(trim($scope)) ?: 'unknown';
+        $cacheKey = sprintf(
+            '%s:%s:tenant:%s:user:%s:v1',
+            self::SHARED_CACHE_PREFIX,
+            $normalizedScope,
+            $tenantId === null ? 'none' : (string) max(0, $tenantId),
+            (string) max(0, $userId),
+        );
+
+        $hit = false;
+
+        try {
+            $hit = Cache::has($cacheKey);
+
+            /** @var T $value */
+            $value = Cache::remember(
+                $cacheKey,
+                now()->addSeconds($ttlSeconds),
+                $resolver,
+            );
+
+            ShopifyEmbeddedDeepProfile::addCacheProbe(
+                'embedded_shell:'.$normalizedScope,
+                $hit,
+                $cacheKey,
+                $tenantId,
+                $ttlSeconds,
+            );
+
+            return $value;
+        } catch (\Throwable) {
+            ShopifyEmbeddedDeepProfile::addCacheProbe(
+                'embedded_shell:'.$normalizedScope,
+                $hit,
+                $cacheKey,
+                $tenantId,
+                $ttlSeconds,
+            );
+
+            return $resolver();
+        }
     }
 }

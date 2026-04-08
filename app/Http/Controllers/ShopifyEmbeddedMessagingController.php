@@ -10,10 +10,8 @@ use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\MessagingResponseInboxService;
 use App\Services\Marketing\MessageAnalyticsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
-use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
-use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Shopify\ShopifyStorefrontTrackingSetupService;
 use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
@@ -38,8 +36,6 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
         ShopifyEmbeddedMessagingWorkspaceService $workspaceService,
-        ShopifyEmbeddedRewardsService $rewardsService,
-        ShopifyEmbeddedDashboardDataService $dashboardDataService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -51,7 +47,7 @@ class ShopifyEmbeddedMessagingController extends Controller
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
         if ($authorized && $tenantId !== null) {
-            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+            $this->scheduleAlphaDefaults($alphaBootstrapService, $tenantId, (string) ($store['key'] ?? ''));
         }
         $probe->forTenant($tenantId);
 
@@ -72,18 +68,8 @@ class ShopifyEmbeddedMessagingController extends Controller
             ])
             : null;
 
-        if ($authorized && $tenantId !== null && $hasMessagingAccess) {
-            app()->terminating(function () use ($tenantId, $rewardsService, $dashboardDataService): void {
-                try {
-                    $rewardsService->overview($tenantId);
-                    $dashboardDataService->payload([
-                        'tenant_id' => $tenantId,
-                    ]);
-                } catch (Throwable) {
-                    // Cache warming stays best-effort so Messaging never fails because Rewards is cold.
-                }
-            });
-        }
+        // Avoid warming the full embedded dashboard analytics payload from the
+        // Messaging view; it is expensive and not required for first paint.
 
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'workspace', $tenantId));
         $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('workspace', $tenantId));
@@ -169,7 +155,7 @@ class ShopifyEmbeddedMessagingController extends Controller
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
         if ($authorized && $tenantId !== null) {
-            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+            $this->scheduleAlphaDefaults($alphaBootstrapService, $tenantId, (string) ($store['key'] ?? ''));
         }
         $probe->forTenant($tenantId);
 
@@ -253,7 +239,7 @@ class ShopifyEmbeddedMessagingController extends Controller
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
         if ($authorized && $tenantId !== null) {
-            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+            $this->scheduleAlphaDefaults($alphaBootstrapService, $tenantId, (string) ($store['key'] ?? ''));
         }
         $probe->forTenant($tenantId);
 
@@ -376,7 +362,7 @@ class ShopifyEmbeddedMessagingController extends Controller
             ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
             : null;
         if ($authorized && $tenantId !== null) {
-            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+            $this->scheduleAlphaDefaults($alphaBootstrapService, $tenantId, (string) ($store['key'] ?? ''));
         }
         $probe->forTenant($tenantId);
 
@@ -1732,6 +1718,20 @@ class ShopifyEmbeddedMessagingController extends Controller
         $probe = app(ShopifyEmbeddedPerformanceProbe::class);
 
         return $probe->forRequest($request);
+    }
+
+    protected function scheduleAlphaDefaults(
+        ModernForestryAlphaBootstrapService $alphaBootstrapService,
+        int $tenantId,
+        string $storeKey
+    ): void {
+        app()->terminating(function () use ($alphaBootstrapService, $tenantId, $storeKey): void {
+            try {
+                $alphaBootstrapService->ensureForTenant($tenantId, $storeKey);
+            } catch (Throwable) {
+                // Best-effort only; defaults should never block Messaging pages.
+            }
+        });
     }
 
     protected function headlineForStatus(string $status, string $default = 'Messaging'): string
