@@ -39,6 +39,7 @@ class ShopifyEmbeddedAppController extends Controller
         TenantCommercialExperienceService $experienceService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
+        $wantsFullDashboard = filter_var($request->query('full', false), FILTER_VALIDATE_BOOLEAN);
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $fallbackRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label(null, 'rewards_label', 'Rewards'));
@@ -120,7 +121,9 @@ class ShopifyEmbeddedAppController extends Controller
         /** @var array<string,mixed> $store */
         $store = $context['store'];
         $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
-        if ($tenantId !== null) {
+        // Avoid doing large alpha bootstrap upserts on the lightweight dashboard view.
+        // Other embedded pages still run this bootstrap as needed.
+        if ($tenantId !== null && $wantsFullDashboard) {
             $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
         }
         $probe->forTenant($tenantId);
@@ -141,9 +144,10 @@ class ShopifyEmbeddedAppController extends Controller
             ],
         ];
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
+        $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
-            response()->view('shopify.dashboard', [
+            response()->view($view, [
                 'authorized' => true,
                 'status' => 'ok',
                 'shopifyApiKey' => (string) ($store['client_id'] ?? ''),

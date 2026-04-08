@@ -45,12 +45,28 @@ test('shopify embedded app route renders verified admin shell for configured sto
     $response->assertOk()
         ->assertSeeText('Dashboard')
         ->assertSeeText('Revenue and setup at a glance.')
-        ->assertSee('id="shopify-dashboard-root"', false)
-        ->assertSee('id="shopify-dashboard-bootstrap"', false)
+        ->assertSeeText('Dashboard (Lite)')
+        ->assertDontSee('id="shopify-dashboard-root"', false)
+        ->assertDontSee('id="shopify-dashboard-bootstrap"', false)
         ->assertSee('<s-app-nav>', false)
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
+});
+
+test('shopify embedded app route can load the full analytics dashboard from the stored session page context', function () {
+    configureEmbeddedRetailStore();
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Dashboard (Lite)');
+
+    $full = $this->get(route('shopify.app', ['full' => 1]));
+
+    $full->assertOk()
+        ->assertSeeText('Loading dashboard')
+        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertSee('id="shopify-dashboard-bootstrap"', false);
 });
 
 test('shopify embedded app route emits server timing header only when profiling is enabled', function () {
@@ -166,13 +182,12 @@ test('shopify embedded home renders concise setup surface', function () {
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Loading dashboard')
-        ->assertSeeText('Backstage is loading fresh Shopify data in the background.')
+        ->assertSeeText('Dashboard (Lite)')
         ->assertSee('data-command-field', false)
         ->assertSee('id="app-topbar-command-search"', false)
         ->assertDontSeeText('Cmd/Ctrl + K')
-        ->assertSee('shopify-dashboard-loading-shell', false)
-        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertDontSee('shopify-dashboard-loading-shell', false)
+        ->assertDontSee('id="shopify-dashboard-root"', false)
         ->assertDontSeeText('What Happens After Import');
 });
 
@@ -260,7 +275,7 @@ test('home does not flag sync as stale before the configured threshold', functio
         $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
 
         $response->assertOk()
-            ->assertSee('id="shopify-dashboard-root"', false)
+            ->assertSeeText('Dashboard (Lite)')
             ->assertDontSeeText('Refresh customer sync')
             ->assertDontSeeText('Retry sync');
     } finally {
@@ -300,8 +315,9 @@ test('home flags sync as stale at the configured threshold', function () {
         $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
 
         $response->assertOk()
-            ->assertSee('id="shopify-dashboard-root"', false)
-            ->assertSee('id="shopify-dashboard-bootstrap"', false)
+            ->assertSeeText('Dashboard (Lite)')
+            ->assertDontSee('id="shopify-dashboard-root"', false)
+            ->assertDontSee('id="shopify-dashboard-bootstrap"', false)
             ->assertDontSeeText('Refresh customer sync')
             ->assertDontSeeText('Customer data has not synced in the last 3 days.')
             ->assertDontSeeText('Retry sync');
