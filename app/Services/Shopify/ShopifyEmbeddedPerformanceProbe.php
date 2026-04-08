@@ -36,6 +36,8 @@ class ShopifyEmbeddedPerformanceProbe
     protected float $totalStartedAt;
 
     protected bool $queryLogEnabled = false;
+    protected bool $disableQueryLogOnFinish = false;
+    protected int $queryLogStartOffset = 0;
 
     public function __construct(
         protected ?bool $enabled = null
@@ -47,8 +49,14 @@ class ShopifyEmbeddedPerformanceProbe
             return;
         }
 
-        DB::connection()->flushQueryLog();
-        DB::connection()->enableQueryLog();
+        $connection = DB::connection();
+        $this->queryLogStartOffset = count($connection->getQueryLog());
+
+        if (! $connection->logging()) {
+            $connection->enableQueryLog();
+            $this->disableQueryLogOnFinish = true;
+        }
+
         $this->queryLogEnabled = true;
     }
 
@@ -127,11 +135,15 @@ class ShopifyEmbeddedPerformanceProbe
 
         $this->phaseDurationsMs['total'] = round((microtime(true) - $this->totalStartedAt) * 1000, 2);
         $normalized = $this->normalizedDurations();
+        $queryStats = $this->queryStats();
 
         $timingValues = collect($normalized)
             ->map(fn (float $ms, string $phase): string => sprintf('%s;dur=%s', str_replace('_', '-', $phase), number_format($ms, 2, '.', '')))
             ->values()
             ->all();
+        if ((float) ($queryStats['total_ms'] ?? 0.0) > 0) {
+            $timingValues[] = sprintf('db-query;dur=%s', number_format((float) $queryStats['total_ms'], 2, '.', ''));
+        }
 
         if ($timingValues !== []) {
             $existing = trim((string) $response->headers->get('Server-Timing', ''));
@@ -139,15 +151,15 @@ class ShopifyEmbeddedPerformanceProbe
             $response->headers->set('Server-Timing', implode(', ', $combined));
         }
 
-        $queryCount = $this->queryCount();
-
         Log::info('shopify.embedded.perf', array_merge([
             'route' => $this->request?->route()?->getName(),
             'method' => $this->request?->method(),
             'path' => $this->request?->path(),
             'tenant_id' => $this->tenantId,
             'timings_ms' => $normalized,
-            'query_count' => $queryCount,
+            'query_count' => (int) ($queryStats['count'] ?? 0),
+            'query_time_ms' => (float) ($queryStats['total_ms'] ?? 0.0),
+            'slow_queries' => (array) ($queryStats['slow_queries'] ?? []),
         ], $this->context));
 
         return $response;
@@ -179,19 +191,67 @@ class ShopifyEmbeddedPerformanceProbe
         return $normalized;
     }
 
-    protected function queryCount(): int
+    /**
+     * @return array{
+     *   count:int,
+     *   total_ms:float,
+     *   slow_queries:array<int,array{time_ms:float,sql:string,bindings_count:int}>
+     * }
+     */
+    protected function queryStats(): array
     {
         if (! $this->queryLogEnabled) {
-            return 0;
+            return [
+                'count' => 0,
+                'total_ms' => 0.0,
+                'slow_queries' => [],
+            ];
         }
 
         $queries = DB::connection()->getQueryLog();
+        if ($this->queryLogStartOffset > 0) {
+            $queries = array_slice($queries, $this->queryLogStartOffset);
+        }
+
         $count = count($queries);
+        $totalMs = round((float) collect($queries)->sum(fn (array $entry): float => (float) ($entry['time'] ?? 0.0)), 2);
+        $slowQueryThresholdMs = max(0.0, (float) config('shopify_embedded.perf_slow_query_ms', 25));
+        $slowQueries = collect($queries)
+            ->filter(fn (array $entry): bool => (float) ($entry['time'] ?? 0.0) >= $slowQueryThresholdMs)
+            ->sortByDesc(fn (array $entry): float => (float) ($entry['time'] ?? 0.0))
+            ->take(5)
+            ->map(fn (array $entry): array => [
+                'time_ms' => round((float) ($entry['time'] ?? 0.0), 2),
+                'sql' => $this->summarizeSql((string) ($entry['query'] ?? '')),
+                'bindings_count' => count((array) ($entry['bindings'] ?? [])),
+            ])
+            ->values()
+            ->all();
 
         DB::connection()->flushQueryLog();
-        DB::connection()->disableQueryLog();
+        if ($this->disableQueryLogOnFinish) {
+            DB::connection()->disableQueryLog();
+        }
         $this->queryLogEnabled = false;
 
-        return $count;
+        return [
+            'count' => $count,
+            'total_ms' => $totalMs,
+            'slow_queries' => $slowQueries,
+        ];
+    }
+
+    protected function summarizeSql(string $sql): string
+    {
+        $normalized = trim((string) preg_replace('/\s+/', ' ', $sql));
+        if ($normalized === '') {
+            return '';
+        }
+
+        if (strlen($normalized) <= 220) {
+            return $normalized;
+        }
+
+        return substr($normalized, 0, 217).'...';
     }
 }

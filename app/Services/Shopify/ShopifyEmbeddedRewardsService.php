@@ -14,6 +14,7 @@ use App\Services\Marketing\TenantRewardsPolicyAuditService;
 use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Marketing\TenantRewardsReminderDispatchService;
 use App\Services\Marketing\TenantRewardsReminderLogService;
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -44,10 +45,11 @@ class ShopifyEmbeddedRewardsService
      */
     public function payload(?int $tenantId = null): array
     {
-        return Cache::remember(
-            $this->embeddedCacheKey('payload', $tenantId),
-            now()->addSeconds(self::EMBEDDED_CACHE_TTL_SECONDS),
-            function () use ($tenantId): array {
+        return $this->rememberEmbedded(
+            segment: 'payload',
+            tenantId: $tenantId,
+            context: [],
+            resolver: function () use ($tenantId): array {
                 $programConfig = $this->programConfig($tenantId);
                 $policy = $this->policy($tenantId);
                 $redeemIncrement = round((float) data_get($programConfig, 'redeem_increment_dollars', $this->candleCashService->fixedRedemptionAmount()), 2);
@@ -88,10 +90,11 @@ class ShopifyEmbeddedRewardsService
      */
     public function policy(?int $tenantId = null, array $context = []): array
     {
-        return Cache::remember(
-            $this->embeddedCacheKey('policy', $tenantId, $context),
-            now()->addSeconds(self::EMBEDDED_CACHE_TTL_SECONDS),
-            fn (): array => $this->tenantRewardsPolicyService->resolve($tenantId, $context)
+        return $this->rememberEmbedded(
+            segment: 'policy',
+            tenantId: $tenantId,
+            context: $context,
+            resolver: fn (): array => $this->tenantRewardsPolicyService->resolve($tenantId, $context)
         );
     }
 
@@ -313,10 +316,11 @@ class ShopifyEmbeddedRewardsService
      */
     public function overview(?int $tenantId = null): array
     {
-        return Cache::remember(
-            $this->embeddedCacheKey('overview', $tenantId),
-            now()->addSeconds(self::EMBEDDED_CACHE_TTL_SECONDS),
-            function () use ($tenantId): array {
+        return $this->rememberEmbedded(
+            segment: 'overview',
+            tenantId: $tenantId,
+            context: [],
+            resolver: function () use ($tenantId): array {
                 $payload = $this->payload($tenantId);
                 $earnItems = collect((array) data_get($payload, 'earn.items', []));
                 $redeemItems = collect((array) data_get($payload, 'redeem.items', []));
@@ -1071,6 +1075,41 @@ class ShopifyEmbeddedRewardsService
         }
 
         return round((float) $matches[0], 2);
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     * @param  callable():array<string,mixed>  $resolver
+     * @return array<string,mixed>
+     */
+    protected function rememberEmbedded(string $segment, ?int $tenantId, array $context, callable $resolver): array
+    {
+        $cacheKey = $this->embeddedCacheKey($segment, $tenantId, $context);
+        $ttlSeconds = self::EMBEDDED_CACHE_TTL_SECONDS;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            ShopifyEmbeddedDeepProfile::addCacheProbe(
+                scope: 'rewards.'.$segment,
+                hit: true,
+                key: $cacheKey,
+                tenantId: $tenantId,
+                ttlSeconds: $ttlSeconds
+            );
+
+            return $cached;
+        }
+
+        $resolved = $resolver();
+        Cache::put($cacheKey, $resolved, now()->addSeconds($ttlSeconds));
+        ShopifyEmbeddedDeepProfile::addCacheProbe(
+            scope: 'rewards.'.$segment,
+            hit: false,
+            key: $cacheKey,
+            tenantId: $tenantId,
+            ttlSeconds: $ttlSeconds
+        );
+
+        return $resolved;
     }
 
     protected function embeddedCacheKey(string $segment, ?int $tenantId = null, array $context = []): string

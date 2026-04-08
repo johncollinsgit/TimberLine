@@ -16,6 +16,7 @@ use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Reporting\AnalyticsComparisonService;
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use App\Support\Marketing\CandleCashMeasurement;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -69,6 +70,13 @@ class ShopifyEmbeddedDashboardDataService
                 Cache::put($cacheKey, $payload, now()->addSeconds($cacheTtlSeconds));
             }
         }
+        ShopifyEmbeddedDeepProfile::addCacheProbe(
+            scope: 'dashboard.payload',
+            hit: $cacheHit,
+            key: $cacheKey,
+            tenantId: $tenantId,
+            ttlSeconds: $cacheTtlSeconds
+        );
 
         $payload['meta'] = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
         $payload['meta']['freshness'] = [

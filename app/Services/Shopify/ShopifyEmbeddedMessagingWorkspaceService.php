@@ -17,6 +17,7 @@ use App\Services\Marketing\EmbeddedMessagingCampaignDispatchService;
 use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Services\Marketing\MessagingCampaignProgressService;
 use App\Services\Marketing\SmsMessageSafetyService;
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -236,10 +237,13 @@ query EmbeddedMessagingProducts($query: String!, $first: Int!) {
 GRAPHQL;
 
         try {
-            $data = $client->query($graphql, [
-                'query' => $search,
-                'first' => max(1, min($limit, 20)),
-            ]);
+            $data = ShopifyEmbeddedDeepProfile::time(
+                'messaging.search_products.graphql',
+                fn (): array => $client->query($graphql, [
+                    'query' => $search,
+                    'first' => max(1, min($limit, 20)),
+                ])
+            );
         } catch (RuntimeException $exception) {
             throw ValidationException::withMessages([
                 'q' => 'Shopify product lookup failed. Confirm read_products scope is enabled.',
@@ -427,12 +431,34 @@ GRAPHQL;
     public function audienceSummary(?int $tenantId): array
     {
         $cacheKey = 'shopify_embedded_messaging:audience_summary:v1:' . (string) ($tenantId ?? 'none');
+        $ttlSeconds = self::AUDIENCE_SUMMARY_CACHE_MINUTES * 60;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            ShopifyEmbeddedDeepProfile::addCacheProbe(
+                scope: 'messaging.audience_summary',
+                hit: true,
+                key: $cacheKey,
+                tenantId: $tenantId,
+                ttlSeconds: $ttlSeconds
+            );
 
-        return Cache::remember(
-            $cacheKey,
-            now()->addMinutes(self::AUDIENCE_SUMMARY_CACHE_MINUTES),
+            return $cached;
+        }
+
+        $computed = ShopifyEmbeddedDeepProfile::time(
+            'messaging.audience_summary.compute',
             fn (): array => $this->computeAudienceSummary($tenantId)
         );
+        Cache::put($cacheKey, $computed, now()->addMinutes(self::AUDIENCE_SUMMARY_CACHE_MINUTES));
+        ShopifyEmbeddedDeepProfile::addCacheProbe(
+            scope: 'messaging.audience_summary',
+            hit: false,
+            key: $cacheKey,
+            tenantId: $tenantId,
+            ttlSeconds: $ttlSeconds
+        );
+
+        return $computed;
     }
 
     /**

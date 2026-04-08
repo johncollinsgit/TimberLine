@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -75,33 +76,53 @@ class ShopifyGraphqlClient
         $attempts = 0;
         $maxAttempts = 5;
         $baseDelayMs = 500;
+        $startedAt = microtime(true);
+        $status = null;
+        $retried = false;
+        $response = null;
 
-        do {
-            $attempts++;
-            $response = $this->request()->post($url, $payload);
+        try {
+            do {
+                $attempts++;
+                $response = $this->request()->post($url, $payload);
 
-            if (! $response->failed()) {
-                return $response;
+                if (! $response->failed()) {
+                    return $response;
+                }
+
+                $status = $response->status();
+                $retryAfter = (int) ($response->header('Retry-After') ?? 0);
+
+                if (in_array($status, [429, 500, 502, 503, 504], true) && $attempts < $maxAttempts) {
+                    $retried = true;
+                    $delayMs = $retryAfter > 0
+                        ? $retryAfter * 1000
+                        : ($baseDelayMs * (2 ** ($attempts - 1)));
+                    usleep($delayMs * 1000);
+
+                    continue;
+                }
+
+                $response->throw();
+            } while ($attempts < $maxAttempts);
+
+            if ($response instanceof Response) {
+                $response->throw();
             }
 
-            $status = $response->status();
-            $retryAfter = (int) ($response->header('Retry-After') ?? 0);
-
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempts < $maxAttempts) {
-                $delayMs = $retryAfter > 0
-                    ? $retryAfter * 1000
-                    : ($baseDelayMs * (2 ** ($attempts - 1)));
-                usleep($delayMs * 1000);
-
-                continue;
-            }
-
-            $response->throw();
-        } while ($attempts < $maxAttempts);
-
-        $response->throw();
-
-        return $response;
+            throw new RuntimeException('Shopify GraphQL request failed before receiving a response.');
+        } finally {
+            ShopifyEmbeddedDeepProfile::addExternalHttp([
+                'service' => 'shopify_graphql',
+                'shop_domain' => $this->shopDomain,
+                'api_version' => $this->apiVersion,
+                'url' => $url,
+                'status' => $status,
+                'attempts' => $attempts,
+                'retried' => $retried,
+                'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+            ]);
+        }
     }
 
     /**

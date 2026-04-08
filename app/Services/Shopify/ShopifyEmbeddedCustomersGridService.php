@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\Paginator as PaginatorContract;
 use Illuminate\Database\Query\Builder;
@@ -22,20 +23,43 @@ class ShopifyEmbeddedCustomersGridService
      */
     public function resolve(Request $request, ?int $tenantId = null, ?string $storeKey = null): array
     {
-        $filters = $this->normalizeFilters($request);
-        $searchContext = $this->resolveSearchContext((string) $filters['search'], $tenantId);
-        $query = $this->baseQuery($tenantId, $searchContext['scoped_profile_ids'] ?? null, $storeKey);
+        $filters = ShopifyEmbeddedDeepProfile::time(
+            'customers_grid.normalize_filters',
+            fn (): array => $this->normalizeFilters($request)
+        );
+        $searchContext = ShopifyEmbeddedDeepProfile::time(
+            'customers_grid.resolve_search_context',
+            fn (): array => $this->resolveSearchContext((string) $filters['search'], $tenantId)
+        );
+        $query = ShopifyEmbeddedDeepProfile::time(
+            'customers_grid.base_query',
+            fn (): Builder => $this->baseQuery($tenantId, $searchContext['scoped_profile_ids'] ?? null, $storeKey)
+        );
 
-        $this->applySearch($query, $searchContext);
-        $this->applyFilters($query, $filters);
-        $this->applySort($query, (string) $filters['sort'], (string) $filters['direction']);
+        ShopifyEmbeddedDeepProfile::time('customers_grid.apply_search', function () use ($query, $searchContext): null {
+            $this->applySearch($query, $searchContext);
 
-        $paginator = $query
-            ->simplePaginate((int) $filters['per_page'])
-            ->withQueryString();
+            return null;
+        });
+        ShopifyEmbeddedDeepProfile::time('customers_grid.apply_filters', function () use ($query, $filters): null {
+            $this->applyFilters($query, $filters);
 
-        $mapped = $paginator->getCollection()
-            ->map(fn (object $row): array => $this->mapRow($row));
+            return null;
+        });
+        ShopifyEmbeddedDeepProfile::time('customers_grid.apply_sort', function () use ($query, $filters): null {
+            $this->applySort($query, (string) $filters['sort'], (string) $filters['direction']);
+
+            return null;
+        });
+
+        $paginator = ShopifyEmbeddedDeepProfile::time('customers_grid.paginate', function () use ($query, $filters): PaginatorContract {
+            return $query
+                ->simplePaginate((int) $filters['per_page'])
+                ->withQueryString();
+        });
+
+        $mapped = ShopifyEmbeddedDeepProfile::time('customers_grid.map_rows', fn () => $paginator->getCollection()
+            ->map(fn (object $row): array => $this->mapRow($row)));
 
         $paginator->setCollection($mapped);
 
@@ -95,7 +119,10 @@ class ShopifyEmbeddedCustomersGridService
     public function searchProfilesForMessaging(string $query, ?int $tenantId = null, int $limit = 12): array
     {
         $limit = max(1, min($limit, 50));
-        $searchContext = $this->resolveSearchContext($query, $tenantId);
+        $searchContext = ShopifyEmbeddedDeepProfile::time(
+            'customers_grid.messaging_search_context',
+            fn (): array => $this->resolveSearchContext($query, $tenantId)
+        );
 
         $profiles = DB::table('marketing_profiles as mp');
         $profiles = $this->applyTenantScope($profiles, 'marketing_profiles', 'mp', $tenantId);
@@ -109,7 +136,7 @@ class ShopifyEmbeddedCustomersGridService
 
         $this->applySearch($profiles, $searchContext);
 
-        $rows = $profiles
+        $rows = ShopifyEmbeddedDeepProfile::time('customers_grid.messaging_search_query', fn () => $profiles
             ->select([
                 'mp.id',
                 'mp.first_name',
@@ -124,7 +151,7 @@ class ShopifyEmbeddedCustomersGridService
             ->orderByDesc('mp.updated_at')
             ->orderByDesc('mp.id')
             ->limit($limit)
-            ->get();
+            ->get());
 
         return $rows->map(function (object $row): array {
             $displayName = trim((string) (($row->first_name ?? '') . ' ' . ($row->last_name ?? '')));

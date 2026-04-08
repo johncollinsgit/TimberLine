@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Marketing\CandleClubMembershipService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\CandleCashService;
+use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -58,21 +59,53 @@ class ShopifyEmbeddedCustomerDetailService
      */
     public function buildCritical(MarketingProfile $profile, ?int $tenantId = null): array
     {
-        $this->assertTenantScopedProfile($profile->id, $tenantId);
+        ShopifyEmbeddedDeepProfile::time(
+            'customer_detail.assert_tenant_scope',
+            function () use ($profile, $tenantId): null {
+                $this->assertTenantScopedProfile($profile->id, $tenantId);
 
-        $profile->loadMissing([
-            'candleCashBalance',
-            'birthdayProfile',
-        ]);
+                return null;
+            }
+        );
 
-        $balancePoints = $this->balancePoints($profile);
-        $rewardsActions = $this->rewardsActionsCount($profile->id);
+        ShopifyEmbeddedDeepProfile::time('customer_detail.load_critical_relations', function () use ($profile): null {
+            $profile->loadMissing([
+                'candleCashBalance',
+                'birthdayProfile',
+            ]);
+
+            return null;
+        });
+
+        $balancePoints = ShopifyEmbeddedDeepProfile::time(
+            'customer_detail.balance_points',
+            fn (): int => $this->balancePoints($profile)
+        );
+        $rewardsActions = ShopifyEmbeddedDeepProfile::time(
+            'customer_detail.rewards_actions_count',
+            fn (): int => $this->rewardsActionsCount($profile->id)
+        );
         $statuses = [
-            'candle_club' => $this->hasCandleClub($profile->id),
-            'referral' => $this->hasReferralCompletion($profile->id),
-            'review' => $this->hasReviewCompletion($profile->id),
-            'birthday' => $this->hasBirthdayCompletion($profile->id),
-            'wholesale' => $this->hasWholesaleEligibility($profile->id),
+            'candle_club' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.status_candle_club',
+                fn (): bool => $this->hasCandleClub($profile->id)
+            ),
+            'referral' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.status_referral',
+                fn (): bool => $this->hasReferralCompletion($profile->id)
+            ),
+            'review' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.status_review',
+                fn (): bool => $this->hasReviewCompletion($profile->id)
+            ),
+            'birthday' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.status_birthday',
+                fn (): bool => $this->hasBirthdayCompletion($profile->id)
+            ),
+            'wholesale' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.status_wholesale',
+                fn (): bool => $this->hasWholesaleEligibility($profile->id)
+            ),
         ];
 
         $summary = [
@@ -89,8 +122,14 @@ class ShopifyEmbeddedCustomerDetailService
         return [
             'summary' => $summary,
             'statuses' => $statuses,
-            'consent' => $this->consentSnapshot($profile),
-            'messaging' => $this->messagingSnapshot($profile),
+            'consent' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.consent_snapshot',
+                fn (): array => $this->consentSnapshot($profile)
+            ),
+            'messaging' => ShopifyEmbeddedDeepProfile::time(
+                'customer_detail.messaging_snapshot',
+                fn (): array => $this->messagingSnapshot($profile)
+            ),
         ];
     }
 
@@ -105,20 +144,38 @@ class ShopifyEmbeddedCustomerDetailService
      */
     public function buildDeferredSections(MarketingProfile $profile, ?int $tenantId = null): array
     {
-        $this->assertTenantScopedProfile($profile->id, $tenantId);
+        ShopifyEmbeddedDeepProfile::time(
+            'customer_detail.assert_tenant_scope',
+            function () use ($profile, $tenantId): null {
+                $this->assertTenantScopedProfile($profile->id, $tenantId);
 
-        $profile->loadMissing([
-            'externalProfiles' => fn ($query) => $query->orderByDesc('synced_at')->orderByDesc('id')->limit(self::DEFERRED_EXTERNAL_PROFILE_LIMIT),
-        ]);
+                return null;
+            }
+        );
 
-        $activity = $this->activityFeed($profile);
+        ShopifyEmbeddedDeepProfile::time('customer_detail.load_deferred_relations', function () use ($profile): null {
+            $profile->loadMissing([
+                'externalProfiles' => fn ($query) => $query->orderByDesc('synced_at')->orderByDesc('id')->limit(self::DEFERRED_EXTERNAL_PROFILE_LIMIT),
+            ]);
+
+            return null;
+        });
+
+        $activity = ShopifyEmbeddedDeepProfile::time(
+            'customer_detail.activity_feed',
+            fn (): array => $this->activityFeed($profile)
+        );
         $lastActivityAt = $this->latestActivityTimestamp($activity);
+        $externalProfilesCount = ShopifyEmbeddedDeepProfile::time(
+            'customer_detail.external_profiles_count',
+            fn (): int => $this->externalProfilesCount($profile->id)
+        );
 
         return [
             'activity' => $activity,
             'activity_count' => count($activity),
             'external_profiles' => $profile->externalProfiles,
-            'external_profiles_count' => $this->externalProfilesCount($profile->id),
+            'external_profiles_count' => $externalProfilesCount,
             'deferred_meta' => [
                 'last_activity_at' => $lastActivityAt,
                 'last_activity_display' => $lastActivityAt ? $this->formatTimestamp($lastActivityAt) : 'No recent activity',

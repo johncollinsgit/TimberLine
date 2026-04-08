@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->remove(FrameGuard::class);
         $middleware->web(prepend: [
+            \App\Http\Middleware\ProfileShopifyEmbeddedRequest::class,
             \App\Http\Middleware\ResolveHostTenantContext::class,
         ]);
         $middleware->validateCsrfTokens(except: [
