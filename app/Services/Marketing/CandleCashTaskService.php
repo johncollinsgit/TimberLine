@@ -226,7 +226,11 @@ class CandleCashTaskService
     public function customerSummary(MarketingProfile $profile): array
     {
         $balance = $this->candleCashService->currentBalance($profile);
-        $lifetimeEarned = round((float) $profile->candleCashTransactions()->where('candle_cash_delta', '>', 0)->sum('candle_cash_delta'), 3);
+        $lifetimeEarned = round((float) $profile->candleCashTransactions()
+            ->where('candle_cash_delta', '>', 0)
+            ->whereNotIn('source', ['growave_activity', 'growave'])
+            ->where('type', '!=', 'import_opening_balance')
+            ->sum('candle_cash_delta'), 3);
         $lifetimeRedeemed = round(abs((float) $profile->candleCashTransactions()->where('candle_cash_delta', '<', 0)->sum('candle_cash_delta')), 3);
         $pendingRewards = (int) CandleCashTaskCompletion::query()
             ->where('marketing_profile_id', $profile->id)

@@ -2,6 +2,7 @@
 
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashTask;
+use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\GoogleBusinessProfileConnection;
 use App\Models\GoogleBusinessProfileSyncRun;
@@ -528,6 +529,52 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
+});
+
+test('shopify v1 candle cash status lifetime earned excludes legacy growave-converted credits', function () {
+    configureStage10RewardsStorefront();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Legacy',
+        'last_name' => 'Excluded',
+        'email' => 'legacy.excluded@example.com',
+        'normalized_email' => 'legacy.excluded@example.com',
+        'phone' => '5557772323',
+        'normalized_phone' => '+15557772323',
+    ]);
+
+    $service = app(CandleCashService::class);
+
+    $service->addPoints(
+        profile: $profile,
+        points: 10,
+        type: 'earn',
+        source: 'order',
+        sourceId: 'stage10-modern-earn',
+        description: 'Modern earned Candle Cash'
+    );
+
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'points' => 100,
+        'source' => 'growave_activity',
+        'source_id' => 'stage10-legacy-import',
+        'description' => 'Legacy Growave import',
+    ]);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => $profile->email,
+    ], 'stage10-proxy-secret');
+
+    $response = $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true);
+
+    expect((float) data_get($response->json(), 'data.summary.lifetime_earned'))->toBe(10.0)
+        ->and((float) data_get($response->json(), 'data.summary.lifetime_earned_amount'))->toBe(10.0);
 });
 
 test('shopify v1 candle cash status uses lightweight storefront policy snapshot instead of full policy resolve', function () {
