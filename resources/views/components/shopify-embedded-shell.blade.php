@@ -390,8 +390,13 @@
                 });
             }
 
-            window.setTimeout(warmVisibleNavLinks, 100);
-            window.addEventListener("load", warmVisibleNavLinks, { once: true });
+            // Eager warm-up prefetch can stampede the server with multiple heavy page
+            // requests during first render. Keep prefetch intent-driven by default.
+            const eagerPrefetchEnabled = document.body?.dataset?.embeddedPrefetchEager === "1";
+            if (eagerPrefetchEnabled) {
+                window.setTimeout(warmVisibleNavLinks, 100);
+                window.addEventListener("load", warmVisibleNavLinks, { once: true });
+            }
         })();
     </script>
 </body>
