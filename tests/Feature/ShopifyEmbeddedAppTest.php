@@ -44,8 +44,8 @@ test('shopify embedded app route renders verified admin shell for configured sto
 
     $response->assertOk()
         ->assertSeeText('Dashboard')
-        ->assertSeeText('Revenue and setup at a glance.')
-        ->assertSeeText('Dashboard (Lite)')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertSeeText('Recent customer purchase activity')
         ->assertDontSee('id="shopify-dashboard-root"', false)
         ->assertDontSee('id="shopify-dashboard-bootstrap"', false)
         ->assertSee('<s-app-nav>', false)
@@ -59,7 +59,7 @@ test('shopify embedded app route can load the full analytics dashboard from the 
 
     $this->get(route('shopify.app', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Dashboard (Lite)');
+        ->assertSeeText('Recent customer purchase activity');
 
     $full = $this->get(route('shopify.app', ['full' => 1]));
 
@@ -125,7 +125,7 @@ test('shopify embedded session lets root-style home route resolve after signed a
     $this->get('/')
         ->assertOk()
         ->assertSeeText('Dashboard')
-        ->assertSeeText('Revenue and setup at a glance.');
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.');
 });
 
 test('shopify embedded session redirects legacy rewards root to canonical app route and blocks legacy customer entry without Shopify context', function () {
@@ -182,7 +182,7 @@ test('shopify embedded home renders concise setup surface', function () {
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Dashboard (Lite)')
+        ->assertSeeText('Recent customer purchase activity')
         ->assertSee('data-command-field', false)
         ->assertSee('id="app-topbar-command-search"', false)
         ->assertDontSeeText('Cmd/Ctrl + K')
@@ -275,7 +275,7 @@ test('home does not flag sync as stale before the configured threshold', functio
         $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
 
         $response->assertOk()
-            ->assertSeeText('Dashboard (Lite)')
+            ->assertSeeText('Recent customer purchase activity')
             ->assertDontSeeText('Refresh customer sync')
             ->assertDontSeeText('Retry sync');
     } finally {
@@ -315,7 +315,7 @@ test('home flags sync as stale at the configured threshold', function () {
         $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
 
         $response->assertOk()
-            ->assertSeeText('Dashboard (Lite)')
+            ->assertSeeText('Recent customer purchase activity')
             ->assertDontSee('id="shopify-dashboard-root"', false)
             ->assertDontSee('id="shopify-dashboard-bootstrap"', false)
             ->assertDontSeeText('Refresh customer sync')
