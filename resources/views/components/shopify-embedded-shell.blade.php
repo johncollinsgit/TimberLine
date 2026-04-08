@@ -46,6 +46,8 @@
 <html lang="en">
 <head>
     @include('partials.head', ['title' => $title])
+    <link rel="dns-prefetch" href="//cdn.shopify.com">
+    <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
     <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     @if($authorized && filled($shopifyApiKey))
@@ -59,7 +61,7 @@
     @endif
 
     @if($authorized && filled($shopifyApiKey) && filled($host))
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+        <script defer src="https://cdn.shopify.com/shopifycloud/app-bridge.js" crossorigin="anonymous"></script>
     @endif
 </head>
 <body>
