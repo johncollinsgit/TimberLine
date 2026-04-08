@@ -964,6 +964,97 @@ Temporarily disable deploy:
   - mobile/desktop spacing and hierarchy polish
 - Backend remains canonical for identity/rewards state; sidecar only presents and invokes existing contracts.
 
+## Rewards Status Stall + Cart CTA Remediation (2026-04-07)
+This section records what behavior was observed, what was changed, and what should be monitored for side effects.
+
+### What the site was doing before this fix
+- Storefront rewards status calls were intermittently timing out from the custom domain:
+  - `GET /apps/forestry/candle-cash/status`
+  - `GET /apps/forestry/rewards/available`
+- At the same time, lighter app-proxy routes were healthy:
+  - `GET /apps/forestry/health`
+  - `GET /apps/forestry/customer/status`
+- On cart/rewards surfaces, fallback state often rendered:
+  - `cta_label = "Check reward status"`
+  - message about checking redemption access
+  - CTA looked non-actionable (disabled-looking pending state for some served JS/HTML combinations).
+
+### Root cause pattern identified
+- Storefront runtime was still hitting a heavy tenant policy resolve path intended for richer Backstage/admin payloads.
+- That heavier path made storefront reward/status responses more vulnerable to latency spikes/timeouts.
+- A separate custom-domain HTML/asset cache drift could intermittently re-serve stale fallback snapshots and stale script revisions, creating mixed behavior even after code changes were pushed.
+
+### Backend changes shipped
+- `TenantRewardsPolicyService`:
+  - added lightweight `storefrontSnapshot(?int $tenantId)` accessor for storefront-safe payload needs only.
+- `MarketingShopifyIntegrationController`:
+  - `storefrontProgramPayload()` now uses the lightweight snapshot instead of full `resolve()` path.
+  - added slow-request instrumentation for storefront scopes:
+    - `available_rewards`
+    - `candle_cash_status`
+  - warns when request duration exceeds `marketing.shopify.storefront_slow_request_ms` (default `1500ms`, floor `250ms`).
+- Added operational command for canonical page refresh:
+  - `php artisan marketing:touch-shopify-page-cache retail --handle=rewards`
+  - supports `--dry-run`.
+  - note: Shopify GraphQL mutation uses `pageUpdate(id: ..., page: ...)` signature.
+
+### Theme/runtime changes shipped
+- `assets/forestry-rewards.js`:
+  - pending/neutral coming-soon state now renders actionable retry button:
+    - `data-action="refresh-status"`
+  - retry action forces re-hydration:
+    - `loadAndRender(root, { force: true })`
+  - fail-closed behavior remains intact (no accidental redemption enablement when API is unavailable).
+- Additional cache-hardening edits were shipped in theme layout/cart templates to reduce stale script pinning risk from cached page shells.
+
+### What changed in user-facing behavior
+- Before:
+  - pending state could appear dead/non-clickable.
+  - users could remain stuck on stale fallback copy while status API recovered.
+- After:
+  - pending state has explicit retry behavior.
+  - storefront status endpoints are on lighter code path and return promptly under normal load.
+  - fallback remains neutral and safe while API is unavailable.
+
+### Operational notes from this rollout
+- The active live theme during this incident was `#159737250051` (`rewards-cache-reset-20260407`), not the older previously-tracked ID.
+- Custom-domain cache drift still needs operational handling when stale HTML/script revisions reappear.
+- The page-touch command successfully forces canonical `/pages/rewards` regeneration, but does not by itself guarantee custom-domain CDN/edge purges for every cached shell.
+
+### Areas to re-check for possible side effects
+- Storefront contract payload integrity:
+  - `program`, `copy`, `redemption_access`, and reward/task rendering paths across page/cart/drawer surfaces.
+- Any logic that depends on rich policy metadata:
+  - storefront now intentionally receives only lightweight policy subset.
+  - Backstage/admin flows should continue using full policy resolve path.
+- Latency instrumentation volume:
+  - monitor warning rates for `shopify storefront request slow`.
+- Theme shell consistency across hosts:
+  - `/pages/rewards`
+  - `/cart`
+  - ensure custom domain and myshopify domain serve the same current asset versions.
+
+### Cross-feature sanity checklist (because this touched shared rewards plumbing)
+- Google review reward behavior:
+  - auto mode still uses `POST /apps/forestry/google-business/review/start`.
+  - manual fallback (when approval/sync not ready) still routes through task submission with pending manual review.
+- Internal product review rewards:
+  - verified review submit path still creates/awards Candle Cash once per qualifying rule.
+- Consent/signup bonuses:
+  - login/register and rewards CTA opt-in flows still call `POST /apps/forestry/consent/opt-in` and award configured bonuses.
+- Redemption access authority:
+  - access state remains API-authoritative (`/apps/forestry/candle-cash/status`) and fail-closed during API failure.
+- Admin surfaces:
+  - Backstage policy/analytics pages must keep full `resolve()` behavior (no storefront fast-path substitution).
+
+### Verification commands used in this remediation
+- Endpoint health/latency checks:
+  - `curl -sS -m 8 https://theforestrystudio.com/apps/forestry/candle-cash/status`
+  - `curl -sS -m 8 https://theforestrystudio.com/apps/forestry/rewards/available`
+  - `curl -sS -m 8 https://theforestrystudio.com/apps/forestry/health`
+- Canonical rewards page touch:
+  - `php artisan marketing:touch-shopify-page-cache retail --handle=rewards`
+
 ## Future Purchasable Add-Ons (Tenant-Scoped)
 - Build future apps/modules as tenant-scoped add-ons attached to the shared platform shell.
 - Reuse canonical identity and marketing architecture:
