@@ -870,8 +870,8 @@ Route::prefix('shopify/marketing/v1')
             ->name('google-business.review.start');
     });
 
-Route::prefix('shopify')->middleware('web')->group(function () {
-    Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
+    Route::prefix('shopify')->middleware('web')->group(function () {
+        Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
     Route::get('/app/plans', [ShopifyEmbeddedAppController::class, 'plansAndAddons'])->name('shopify.app.plans');
     Route::get('/app/store', [ShopifyEmbeddedAppController::class, 'moduleStore'])->name('shopify.app.store');
@@ -896,13 +896,14 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
-    Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
-    Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
-        Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
-        Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
-        Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
-            ->withoutMiddleware([VerifyCsrfToken::class])
-            ->name('dashboard.candle-cash-reminders');
+        Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
+        Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
+            Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
+            Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
+            Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
+            Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
+                ->withoutMiddleware([VerifyCsrfToken::class])
+                ->name('dashboard.candle-cash-reminders');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
         Route::get('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'policy'])
             ->name('rewards.policy');

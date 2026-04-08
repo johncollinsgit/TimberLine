@@ -6,6 +6,7 @@ use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
+use App\Services\Shopify\DashboardLite\ShopifyEmbeddedDashboardLiteDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
@@ -26,6 +27,7 @@ class ShopifyEmbeddedAppController extends Controller
 
     public function __construct(
         protected ShopifyEmbeddedDashboardDataService $dashboardDataService,
+        protected ShopifyEmbeddedDashboardLiteDataService $dashboardLiteDataService,
         protected CandleCashEarnedReminderService $candleCashEarnedReminderService,
         protected ShopifyEmbeddedShellPayloadBuilder $shellPayloadBuilder,
         protected ShopifyEmbeddedUrlGenerator $urlGenerator
@@ -145,6 +147,9 @@ class ShopifyEmbeddedAppController extends Controller
         ];
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
         $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
+        $subheadline = $wantsFullDashboard
+            ? 'Revenue and setup at a glance.'
+            : 'Fast loyalty snapshot for recent program activity.';
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view($view, [
@@ -155,7 +160,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'host' => (string) ($context['host'] ?? ''),
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                 'headline' => 'Dashboard',
-                'subheadline' => 'Revenue and setup at a glance.',
+                'subheadline' => $subheadline,
                 'appNavigation' => $appNavigation,
                 'pageActions' => [],
                 'pageSubnav' => [],
@@ -199,6 +204,64 @@ class ShopifyEmbeddedAppController extends Controller
                 'tenant_id' => $tenantId,
             ]),
         ]);
+    }
+
+    public function liteData(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): JsonResponse {
+        $startedAt = microtime(true);
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolveAuthenticatedApiContext($request));
+
+        if (! ($context['ok'] ?? false)) {
+            /** @var JsonResponse $invalid */
+            $invalid = $this->invalidContextResponse($context);
+
+            return $probe->finish($invalid);
+        }
+
+        $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? [])));
+        $probe->forTenant($tenantId);
+
+        $range = (string) $request->query('range', '7d');
+        $section = (string) $request->query('section', 'summary');
+        $limit = (int) $request->query('limit', 20);
+
+        $data = $probe->time('page_payload', fn (): array => $this->dashboardLiteDataService->payload([
+            'tenant_id' => $tenantId,
+            'range' => $range,
+            'section' => $section,
+            'limit' => $limit,
+        ]));
+
+        $response = response()->json([
+            'ok' => true,
+            'data' => $data,
+        ]);
+
+        $durationMs = round((microtime(true) - $startedAt) * 1000, 2);
+        $timingValue = sprintf('dashboard-lite;dur=%s', number_format($durationMs, 2, '.', ''));
+        $existingTiming = trim((string) $response->headers->get('Server-Timing', ''));
+        $response->headers->set('Server-Timing', $existingTiming !== '' ? ($existingTiming . ', ' . $timingValue) : $timingValue);
+
+        // Light-weight signal for debugging in the browser network panel.
+        $response->headers->set('X-Backstage-Dashboard-Lite-Range', strtolower(trim($range)));
+        $response->headers->set('X-Backstage-Dashboard-Lite-Section', strtolower(trim($section)));
+
+        $debugRequested = filter_var($request->query('debug', false), FILTER_VALIDATE_BOOLEAN);
+        if ($debugRequested || $durationMs >= 250) {
+            Log::info('shopify.embedded.dashboard_lite', [
+                'tenant_id' => $tenantId,
+                'range' => strtolower(trim($range)),
+                'section' => strtolower(trim($section)),
+                'duration_ms' => $durationMs,
+                'cache' => (array) data_get($data, 'meta.cache', []),
+            ]);
+        }
+
+        return $probe->finish($response);
     }
 
     public function startHere(
