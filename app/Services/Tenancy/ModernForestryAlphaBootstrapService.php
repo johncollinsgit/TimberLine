@@ -162,10 +162,10 @@ class ModernForestryAlphaBootstrapService
             'entitlement_source' => 'modern_forestry_alpha_default',
             'price_source' => 'modern_forestry_alpha_default',
             'notes' => 'Alpha client defaults keep all Backstage modules available for Modern Forestry.',
-            'metadata' => [
+            'metadata' => json_encode([
                 'source' => 'modern_forestry_alpha_default',
                 'alpha_client' => true,
-            ],
+            ], JSON_UNESCAPED_SLASHES),
             'created_at' => $now,
             'updated_at' => $now,
         ], $moduleKeys);
@@ -214,10 +214,10 @@ class ModernForestryAlphaBootstrapService
             'setup_completed_at' => $now,
             'coming_soon_override' => false,
             'upgrade_prompt_override' => false,
-            'metadata' => [
+            'metadata' => json_encode([
                 'source' => 'modern_forestry_alpha_default',
                 'alpha_client' => true,
-            ],
+            ], JSON_UNESCAPED_SLASHES),
             'created_at' => $now,
             'updated_at' => $now,
         ], $moduleKeys);
