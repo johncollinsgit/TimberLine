@@ -140,35 +140,52 @@ class ModernForestryAlphaBootstrapService
         }
 
         $now = now();
-        $moduleKeys = array_keys((array) config('module_catalog.modules', []));
+        $moduleKeys = collect(array_keys((array) config('module_catalog.modules', [])))
+            ->map(static fn ($moduleKey): string => strtolower(trim((string) $moduleKey)))
+            ->filter(static fn (string $moduleKey): bool => $moduleKey !== '')
+            ->unique()
+            ->values()
+            ->all();
 
-        foreach ($moduleKeys as $moduleKey) {
-            if (! is_string($moduleKey) || trim($moduleKey) === '') {
-                continue;
-            }
-
-            TenantModuleEntitlement::query()->updateOrCreate(
-                [
-                    'tenant_id' => $tenantId,
-                    'module_key' => strtolower(trim($moduleKey)),
-                ],
-                [
-                    'availability_status' => 'available',
-                    'enabled_status' => 'enabled',
-                    'billing_status' => 'add_on_comped',
-                    'price_override_cents' => 0,
-                    'currency' => 'USD',
-                    'entitlement_source' => 'modern_forestry_alpha_default',
-                    'price_source' => 'modern_forestry_alpha_default',
-                    'notes' => 'Alpha client defaults keep all Backstage modules available for Modern Forestry.',
-                    'metadata' => [
-                        'source' => 'modern_forestry_alpha_default',
-                        'alpha_client' => true,
-                    ],
-                    'updated_at' => $now,
-                ]
-            );
+        if ($moduleKeys === []) {
+            return;
         }
+
+        $rows = array_map(static fn (string $moduleKey) => [
+            'tenant_id' => $tenantId,
+            'module_key' => $moduleKey,
+            'availability_status' => 'available',
+            'enabled_status' => 'enabled',
+            'billing_status' => 'add_on_comped',
+            'price_override_cents' => 0,
+            'currency' => 'USD',
+            'entitlement_source' => 'modern_forestry_alpha_default',
+            'price_source' => 'modern_forestry_alpha_default',
+            'notes' => 'Alpha client defaults keep all Backstage modules available for Modern Forestry.',
+            'metadata' => [
+                'source' => 'modern_forestry_alpha_default',
+                'alpha_client' => true,
+            ],
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $moduleKeys);
+
+        TenantModuleEntitlement::query()->upsert(
+            $rows,
+            ['tenant_id', 'module_key'],
+            [
+                'availability_status',
+                'enabled_status',
+                'billing_status',
+                'price_override_cents',
+                'currency',
+                'entitlement_source',
+                'price_source',
+                'notes',
+                'metadata',
+                'updated_at',
+            ]
+        );
     }
 
     protected function ensureModuleStates(int $tenantId): void
@@ -178,26 +195,46 @@ class ModernForestryAlphaBootstrapService
         }
 
         $now = now();
-        foreach ($this->configuredModuleKeys as $moduleKey) {
-            TenantModuleState::query()->updateOrCreate(
-                [
-                    'tenant_id' => $tenantId,
-                    'module_key' => $moduleKey,
-                ],
-                [
-                    'enabled_override' => true,
-                    'setup_status' => 'configured',
-                    'setup_completed_at' => $now,
-                    'coming_soon_override' => false,
-                    'upgrade_prompt_override' => false,
-                    'metadata' => [
-                        'source' => 'modern_forestry_alpha_default',
-                        'alpha_client' => true,
-                    ],
-                    'updated_at' => $now,
-                ]
-            );
+        $moduleKeys = collect($this->configuredModuleKeys)
+            ->map(static fn ($moduleKey): string => strtolower(trim((string) $moduleKey)))
+            ->filter(static fn (string $moduleKey): bool => $moduleKey !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($moduleKeys === []) {
+            return;
         }
+
+        $rows = array_map(static fn (string $moduleKey) => [
+            'tenant_id' => $tenantId,
+            'module_key' => $moduleKey,
+            'enabled_override' => true,
+            'setup_status' => 'configured',
+            'setup_completed_at' => $now,
+            'coming_soon_override' => false,
+            'upgrade_prompt_override' => false,
+            'metadata' => [
+                'source' => 'modern_forestry_alpha_default',
+                'alpha_client' => true,
+            ],
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $moduleKeys);
+
+        TenantModuleState::query()->upsert(
+            $rows,
+            ['tenant_id', 'module_key'],
+            [
+                'enabled_override',
+                'setup_status',
+                'setup_completed_at',
+                'coming_soon_override',
+                'upgrade_prompt_override',
+                'metadata',
+                'updated_at',
+            ]
+        );
     }
 
     protected function ensureEmailSettings(int $tenantId): void
