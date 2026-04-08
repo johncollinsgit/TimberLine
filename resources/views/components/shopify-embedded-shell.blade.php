@@ -61,7 +61,7 @@
     @endif
 
     @if($authorized && filled($shopifyApiKey) && filled($host))
-        <script defer src="https://cdn.shopify.com/shopifycloud/app-bridge.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
     @endif
 </head>
 <body>
