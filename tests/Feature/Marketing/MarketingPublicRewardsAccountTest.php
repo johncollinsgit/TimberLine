@@ -334,7 +334,7 @@ test('public rewards account redeem route issues and rejects redemptions with cl
         ->exists())->toBeFalse();
 });
 
-test('public rewards account shows COMING SOON! and blocks non-allowlisted redemptions', function () {
+test('public rewards account ignores legacy beta allowlist gating for non-allowlisted customers', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com']);
     $tenant = publicRewardsRetailTenant('public-coming-soon-tenant', 'modernforestry.myshopify.com');
@@ -369,7 +369,20 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
     expect($reward)->not->toBeNull();
 
     $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
-    $discountSync->shouldReceive('ensureDiscountForRedemption')->never();
+    $discountSync->shouldReceive('ensureDiscountForRedemption')
+        ->once()
+        ->withArgs(function (CandleCashRedemption $redemption, ?string $preferredStoreKey) use ($profile, $reward): bool {
+            return (int) $redemption->marketing_profile_id === (int) $profile->id
+                && (int) $redemption->reward_id === (int) $reward->id
+                && $preferredStoreKey === 'retail';
+        })
+        ->andReturn([
+            'discount_id' => 'gid://shopify/DiscountCodeNode/public-redeem-live',
+            'discount_node_id' => 'gid://shopify/DiscountCodeNode/public-redeem-live',
+            'store_key' => 'retail',
+            'starts_at' => now()->toIso8601String(),
+            'ends_at' => now()->addDays(30)->toIso8601String(),
+        ]);
     app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
 
     $this->get(route('marketing.public.account-rewards', [
@@ -378,7 +391,7 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
         'store_key' => 'retail',
     ]))
         ->assertOk()
-        ->assertSeeText('COMING SOON!');
+        ->assertDontSeeText('COMING SOON!');
 
     $this->post(route('marketing.public.account-rewards.redeem'), [
         'email' => $profile->email,
@@ -392,12 +405,13 @@ test('public rewards account shows COMING SOON! and blocks non-allowlisted redem
             'store_key' => 'retail',
         ]))
         ->assertSessionHas('redeem_result', function (array $result): bool {
-            return ($result['ok'] ?? true) === false
-                && ($result['state'] ?? null) === 'coming_soon';
+            return ($result['ok'] ?? false) === true
+                && ($result['state'] ?? null) === 'code_issued'
+                && filled($result['redemption_code'] ?? null);
         });
 
-    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeFalse()
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(300.0);
+    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeTrue()
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(290.0);
 });
 
 test('public rewards account prefers data-rich Growave projection when duplicate rows exist', function () {

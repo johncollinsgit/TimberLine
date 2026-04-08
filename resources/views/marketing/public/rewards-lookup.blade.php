@@ -166,7 +166,7 @@
                 <h2 class="text-sm font-semibold text-zinc-950">Redeem {{ $rewardsLabel }}</h2>
                 <p class="mt-2 text-xs text-zinc-500">{{ $rewardCreditLabelTitle }} is redeemed in $10 increments, with a limit of $10 per order.</p>
                 @if(! data_get($redemptionAccess ?? [], 'redeem_enabled', true))
-                    <p class="mt-2 text-xs text-zinc-500">{{ data_get($redemptionAccess, 'message', $rewardsLabel . ' are temporarily available for selected accounts only.') }}</p>
+                    <p class="mt-2 text-xs text-zinc-500">{{ data_get($redemptionAccess, 'message', 'Reward redemption availability is being checked.') }}</p>
                 @endif
                 <div class="mt-3 space-y-3">
                     @forelse($availableRewards as $reward)
@@ -175,7 +175,7 @@
                             $redeemEnabled = (bool) data_get($redemptionAccess ?? [], 'redeem_enabled', true);
                             $buttonEnabled = $canRedeem && $redeemEnabled;
                             $buttonLabel = ! $redeemEnabled
-                                ? 'COMING SOON!'
+                                ? (string) data_get($redemptionAccess, 'cta_label', 'Check reward status')
                                 : ($canRedeem ? 'Redeem $10 ' . $rewardCreditLabelTitle : 'Need more balance');
                         @endphp
                         <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">

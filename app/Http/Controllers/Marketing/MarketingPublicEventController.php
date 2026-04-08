@@ -441,7 +441,7 @@ class MarketingPublicEventController extends Controller
         if (! (bool) ($redemptionAccess['redeem_enabled'] ?? false)) {
             $this->eventLogger->log('public_reward_redeem', [
                 'status' => 'error',
-                'issue_type' => 'coming_soon',
+                'issue_type' => 'redemption_access_denied',
                 'source_surface' => 'public_event',
                 'endpoint' => '/rewards/lookup/redeem',
                 'profile' => $profile,
@@ -454,10 +454,10 @@ class MarketingPublicEventController extends Controller
                 ->route('marketing.public.rewards-lookup', $query)
                 ->with('redeem_result', [
                     'ok' => false,
-                    'state' => 'coming_soon',
-                    'message' => 'Reward redemption is coming soon for this account.',
+                    'state' => 'redemption_unavailable',
+                    'message' => (string) ($redemptionAccess['message'] ?? 'Reward redemption is not available right now.'),
                     'balance' => $candleCashService->balancePayloadFromPoints($candleCashService->currentBalance($profile)),
-                    'cta_label' => $redemptionAccess['cta_label'] ?? 'COMING SOON!',
+                    'cta_label' => $redemptionAccess['cta_label'] ?? 'Check reward status',
                 ]);
         }
 

@@ -346,7 +346,7 @@ test('shopify reward redemption persists and uses verified storefront store cont
         ->and((int) data_get($redemption->redemption_context, 'tenant_id'))->toBe((int) $tenant->id);
 });
 
-test('shopify reward redemption is gated to the temporary beta email allowlist', function () {
+test('shopify reward redemption ignores legacy beta allowlist gating and remains live', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['sarahcollins0816@gmail.com']);
@@ -368,7 +368,20 @@ test('shopify reward redemption is gated to the temporary beta email allowlist',
     expect($reward)->not->toBeNull();
 
     $discountSync = \Mockery::mock(CandleCashShopifyDiscountService::class);
-    $discountSync->shouldReceive('ensureDiscountForRedemption')->never();
+    $discountSync->shouldReceive('ensureDiscountForRedemption')
+        ->once()
+        ->withArgs(function (CandleCashRedemption $redemption, ?string $preferredStoreKey) use ($profile, $reward): bool {
+            return (int) $redemption->marketing_profile_id === (int) $profile->id
+                && (int) $redemption->reward_id === (int) $reward->id
+                && $preferredStoreKey === 'retail';
+        })
+        ->andReturn([
+            'discount_id' => 'gid://shopify/DiscountCodeNode/stage9-live',
+            'discount_node_id' => 'gid://shopify/DiscountCodeNode/stage9-live',
+            'store_key' => 'retail',
+            'starts_at' => now()->toIso8601String(),
+            'ends_at' => now()->addDays(30)->toIso8601String(),
+        ]);
     app()->instance(CandleCashShopifyDiscountService::class, $discountSync);
 
     $payload = [
@@ -381,19 +394,19 @@ test('shopify reward redemption is gated to the temporary beta email allowlist',
 
     $this->withHeaders($headers)
         ->postJson(route('marketing.shopify.rewards.redeem'), $payload)
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'coming_soon')
-        ->assertJsonPath('error.details.state', 'coming_soon')
-        ->assertJsonPath('error.details.redemption_access.cta_label', 'COMING SOON!');
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.state', 'code_issued')
+        ->assertJsonPath('data.discount_sync_status', 'synced');
 
-    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeFalse()
-        ->and((float) \App\Models\CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(400.0);
+    expect(CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->exists())->toBeTrue()
+        ->and((float) \App\Models\CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(390.0);
 });
 
-test('shopify redemption access is live for non-allowlisted accounts when allowlist is empty', function () {
+test('shopify redemption access is live for non-allowlisted accounts even when legacy allowlist is configured', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
-    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', []);
+    config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['legacy.beta.only@example.com']);
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
     $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'stage9-open-tenant');

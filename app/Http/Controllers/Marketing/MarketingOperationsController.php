@@ -324,7 +324,7 @@ class MarketingOperationsController extends Controller
         ?MarketingStorefrontEvent $latestIssue
     ): ?string {
         if (! ($accessPayload['redeem_enabled'] ?? false)) {
-            return 'coming_soon';
+            return 'redemption_access_denied';
         }
 
         $maxOpenCodes = (int) config('marketing.candle_cash.max_open_codes', 1);

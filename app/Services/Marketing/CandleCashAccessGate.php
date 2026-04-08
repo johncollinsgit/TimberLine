@@ -7,6 +7,11 @@ use Illuminate\Http\Request;
 
 class CandleCashAccessGate
 {
+    /**
+     * @deprecated Beta rollout allowlist is no longer used for storefront redemption access.
+     *
+     * @return array<int,string>
+     */
     public function storefrontLiveEmailAllowlist(): array
     {
         return array_values(array_filter(array_map(
@@ -17,14 +22,7 @@ class CandleCashAccessGate
 
     public function storefrontRedeemEnabledForProfile(?MarketingProfile $profile): bool
     {
-        $allowlist = $this->storefrontLiveEmailAllowlist();
-        if ($allowlist === []) {
-            return true;
-        }
-
-        $email = strtolower(trim((string) ($profile?->normalized_email ?: $profile?->email ?: '')));
-
-        return $email !== '' && in_array($email, $allowlist, true);
+        return true;
     }
 
     /**
@@ -36,11 +34,11 @@ class CandleCashAccessGate
 
         return [
             'redeem_enabled' => $enabled,
-            'cta_label' => $enabled ? 'Redeem Reward Credit' : 'COMING SOON!',
+            'cta_label' => $enabled ? 'Redeem Reward Credit' : 'Check reward status',
             'message' => $enabled
-                ? 'Reward redemption is live for this account.'
-                : 'Reward redemption is temporarily available for selected accounts only.',
-            'mode' => $enabled ? 'live' : 'coming_soon',
+                ? 'Reward redemption is live for eligible accounts.'
+                : 'Reward redemption availability is being checked.',
+            'mode' => $enabled ? 'live' : 'pending_status',
         ];
     }
 

@@ -1055,6 +1055,28 @@ This section records what behavior was observed, what was changed, and what shou
 - Canonical rewards page touch:
   - `php artisan marketing:touch-shopify-page-cache retail --handle=rewards`
 
+## Candle Cash GA Rollout (2026-04-08)
+This update removes the temporary beta redemption rollout gate and keeps Candle Cash redeemable for normal eligible users.
+
+### What behavior existed before
+- Storefront/public redemption access depended on `marketing.candle_cash.temporary_storefront_live_email_allowlist`.
+- Non-allowlisted users could be hard-blocked with `coming_soon` states and `COMING SOON!` CTA copy.
+- Public rewards lookup UI included selected-account fallback copy.
+
+### What changed
+- `CandleCashAccessGate` now treats storefront redemption access as GA (`redeem_enabled=true` by default runtime path).
+- Shopify and public redemption controllers no longer emit beta-only `coming_soon` copy/codes for rollout gating.
+- Public rewards lookup view no longer defaults to selected-account/`COMING SOON!` copy.
+- Legacy env/config key `MARKETING_CANDLE_CASH_TEMP_LIVE_EMAIL_ALLOWLIST` is retained only for compatibility and is now effectively ignored by access gating.
+
+### What remained intentionally unchanged
+- All redemption integrity/safety controls in `CandleCashService`:
+  - active reward checks
+  - insufficient-balance enforcement
+  - single-open-code controls (`max_open_codes`)
+  - duplicate/idempotent task protections
+  - Shopify discount-sync fail-safe with automatic balance restoration
+
 ## Future Purchasable Add-Ons (Tenant-Scoped)
 - Build future apps/modules as tenant-scoped add-ons attached to the shared platform shell.
 - Reuse canonical identity and marketing architecture:

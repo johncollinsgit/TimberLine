@@ -54,7 +54,7 @@ class MarketingDebugCandleCashRedemption extends Command
 
         $this->line('Profile: ' . $profile->id . ' ' . ($profile->email ?: ''));
         $this->line('Balance: ' . number_format($balance, 3, '.', ''));
-        $this->line('Allowlist: ' . (($access['redeem_enabled'] ?? false) ? 'allowed' : 'blocked'));
+        $this->line('Storefront redemption access: ' . (($access['redeem_enabled'] ?? false) ? 'enabled' : 'blocked'));
         $this->line('CTA: ' . ($access['cta_label'] ?? ''));
         $this->line('Reward: ' . ($reward?->id ? ('#' . $reward->id . ' ' . $reward->name) : 'none'));
         $this->line('Open issued codes: ' . $openIssuedCount . ' / ' . $candleCashService->maxOpenStorefrontCodes());

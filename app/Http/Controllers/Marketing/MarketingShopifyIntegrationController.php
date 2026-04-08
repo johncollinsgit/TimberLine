@@ -324,24 +324,26 @@ class MarketingShopifyIntegrationController extends Controller
         $redemptionAccess = $this->storefrontRedemptionAccessPayload($profile);
         if (! (bool) ($redemptionAccess['redeem_enabled'] ?? false)) {
             $balance = $candleCashService->currentBalance($profile);
+            $accessMode = trim((string) ($redemptionAccess['mode'] ?? 'pending_status')) ?: 'pending_status';
 
             $this->logStorefrontEvent($request, 'widget_redeem_request', [
                 'status' => 'error',
-                'issue_type' => 'coming_soon',
+                'issue_type' => 'redemption_access_denied',
                 'profile' => $profile,
                 'source_type' => 'shopify_widget_redeem_request',
                 'source_id' => (string) $reward->id,
                 'meta' => [
                     'reward_id' => (int) $reward->id,
-                    'state' => 'coming_soon',
+                    'state' => 'redemption_unavailable',
+                    'access_mode' => $accessMode,
                     'balance' => round((float) $balance, 3),
                     'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
                 ],
             ]);
 
             return MarketingStorefrontContract::error(
-                code: 'coming_soon',
-                message: 'Reward redemption is coming soon for this account.',
+                code: 'redemption_access_denied',
+                message: (string) ($redemptionAccess['message'] ?? 'Reward redemption is not available right now.'),
                 status: 403,
                 details: [
                     'balance' => $this->storefrontBalancePayload($candleCashService, $balance),
@@ -349,12 +351,12 @@ class MarketingShopifyIntegrationController extends Controller
                     'candle_cash_balance_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($balance)),
                     'candle_cash_amount' => $candleCashService->amountFromPoints($balance),
                     'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($balance)),
-                    'state' => 'coming_soon',
+                    'state' => 'redemption_unavailable',
                     'redemption_access' => $redemptionAccess,
                     'redemption_rules' => $candleCashService->redemptionRulesPayload($tenantId),
                 ],
-                states: ['coming_soon'],
-                recoveryStates: $this->widgetService->recoveryStatesForError('coming_soon')
+                states: ['redemption_unavailable'],
+                recoveryStates: $this->widgetService->recoveryStatesForError('reward_unavailable')
             );
         }
 
