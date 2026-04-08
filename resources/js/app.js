@@ -98,6 +98,10 @@ if (document.getElementById("shopify-messaging-root")) {
   import("./shopify/messaging");
 }
 
+if (document.getElementById("shopify-dashboard-root")) {
+  import("./shopify/dashboard");
+}
+
 if (document.getElementById("shopify-responses-root")) {
   import("./shopify/responses");
 }

@@ -140,11 +140,6 @@ class ShopifyEmbeddedAppController extends Controller
                 'href' => route('shopify.app.settings', [], false),
             ],
         ];
-        $dashboardData = $probe->time('page_payload', fn (): array => $this->dashboardDataService->payload([
-            ...$request->query(),
-            'tenant_id' => $tenantId,
-        ]));
-        $merchantJourney = $probe->time('page_payload', fn (): array => $experienceService->merchantJourneyPayload($tenantId));
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
@@ -167,10 +162,10 @@ class ShopifyEmbeddedAppController extends Controller
                     'links' => $dashboardLinks,
                     'dataEndpoint' => route('shopify.app.api.dashboard'),
                     'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
-                    'initialData' => $dashboardData,
-                    'config' => $dashboardData['config'],
+                    'initialData' => null,
+                    'config' => $dashboardConfig,
                 ],
-                'merchantJourney' => $merchantJourney,
+                'merchantJourney' => null,
             ])
         ));
 

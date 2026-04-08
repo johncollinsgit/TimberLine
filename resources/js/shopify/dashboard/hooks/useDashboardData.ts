@@ -228,8 +228,32 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
       return;
     }
 
-    const nextUrl = `${window.location.pathname}?${queryString}`;
-    window.history.replaceState({}, "", nextUrl);
+    const nextUrl = new URL(window.location.href);
+    const preservedParams = new URLSearchParams(nextUrl.search);
+
+    preservedParams.set("timeframe", query.timeframe);
+    preservedParams.set("comparison", query.comparison);
+    preservedParams.set("location_grouping", query.locationGrouping);
+
+    if (query.timeframe === "custom") {
+      if (query.customStartDate) {
+        preservedParams.set("custom_start_date", query.customStartDate);
+      } else {
+        preservedParams.delete("custom_start_date");
+      }
+
+      if (query.customEndDate) {
+        preservedParams.set("custom_end_date", query.customEndDate);
+      } else {
+        preservedParams.delete("custom_end_date");
+      }
+    } else {
+      preservedParams.delete("custom_start_date");
+      preservedParams.delete("custom_end_date");
+    }
+
+    nextUrl.search = preservedParams.toString();
+    window.history.replaceState({}, "", nextUrl.toString());
   }, [bootstrap.authorized, queryString]);
 
   useEffect(() => {

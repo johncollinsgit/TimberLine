@@ -45,7 +45,8 @@ test('shopify embedded app route renders verified admin shell for configured sto
     $response->assertOk()
         ->assertSeeText('Dashboard')
         ->assertSeeText('Revenue and setup at a glance.')
-        ->assertSee('id="embedded-home-chart"', false)
+        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertSee('id="shopify-dashboard-bootstrap"', false)
         ->assertSee('<s-app-nav>', false)
         ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
 
@@ -165,17 +166,14 @@ test('shopify embedded home renders concise setup surface', function () {
     $response = $this->get(route('shopify.app', $query));
 
     $response->assertOk()
-        ->assertSeeText('Setup progress')
+        ->assertSeeText('Loading dashboard')
+        ->assertSeeText('Backstage is loading fresh Shopify data in the background.')
         ->assertSee('data-command-field', false)
         ->assertSee('id="app-topbar-command-search"', false)
         ->assertDontSeeText('Cmd/Ctrl + K')
-        ->assertSee('data-setup-panel', false)
-        ->assertSee('aria-expanded="false"', false)
-        ->assertSeeText('Attention needed')
-        ->assertDontSeeText('What Happens After Import')
-        ->assertDontSeeText('Available Now')
-        ->assertDontSeeText('Setup Next')
-        ->assertDontSeeText('Unlock Next');
+        ->assertSee('shopify-dashboard-loading-shell', false)
+        ->assertSee('id="shopify-dashboard-root"', false)
+        ->assertDontSeeText('What Happens After Import');
 });
 
 test('shopify embedded search reuses page context and returns embedded backstage sections', function () {
@@ -262,6 +260,7 @@ test('home does not flag sync as stale before the configured threshold', functio
         $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
 
         $response->assertOk()
+            ->assertSee('id="shopify-dashboard-root"', false)
             ->assertDontSeeText('Refresh customer sync')
             ->assertDontSeeText('Retry sync');
     } finally {
@@ -301,9 +300,11 @@ test('home flags sync as stale at the configured threshold', function () {
         $response = $this->get(route('shopify.app', retailEmbeddedSignedQuery()));
 
         $response->assertOk()
-            ->assertSeeText('Refresh customer sync')
-            ->assertSeeText('Customer data has not synced in the last 3 days.')
-            ->assertSeeText('Retry sync');
+            ->assertSee('id="shopify-dashboard-root"', false)
+            ->assertSee('id="shopify-dashboard-bootstrap"', false)
+            ->assertDontSeeText('Refresh customer sync')
+            ->assertDontSeeText('Customer data has not synced in the last 3 days.')
+            ->assertDontSeeText('Retry sync');
     } finally {
         $this->travelBack();
     }
