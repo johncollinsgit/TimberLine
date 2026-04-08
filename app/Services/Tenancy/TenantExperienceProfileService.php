@@ -10,8 +10,8 @@ use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\Schema\SchemaCapabilityMap;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 class TenantExperienceProfileService
 {
@@ -22,7 +22,8 @@ class TenantExperienceProfileService
 
     public function __construct(
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
-        protected TenantModuleAccessResolver $moduleAccessResolver
+        protected TenantModuleAccessResolver $moduleAccessResolver,
+        protected SchemaCapabilityMap $schemaCapabilities
     ) {
     }
 
@@ -131,7 +132,7 @@ class TenantExperienceProfileService
             return $tenant->shopifyStores->isNotEmpty();
         }
 
-        if ($tenantId === null || ! Schema::hasTable('shopify_stores')) {
+        if ($tenantId === null || ! $this->hasTable('shopify_stores')) {
             return false;
         }
 
@@ -150,11 +151,11 @@ class TenantExperienceProfileService
             return false;
         }
 
-        if (Schema::hasTable('square_customers') && SquareCustomer::query()->forTenantId($tenantId)->exists()) {
+        if ($this->hasTable('square_customers') && SquareCustomer::query()->forTenantId($tenantId)->exists()) {
             return true;
         }
 
-        if (Schema::hasTable('square_orders') && SquareOrder::query()->forTenantId($tenantId)->exists()) {
+        if ($this->hasTable('square_orders') && SquareOrder::query()->forTenantId($tenantId)->exists()) {
             return true;
         }
 
@@ -248,7 +249,7 @@ class TenantExperienceProfileService
         }
 
         $table = app($modelClass)->getTable();
-        if (! Schema::hasTable($table)) {
+        if (! $this->hasTable($table)) {
             return false;
         }
 
@@ -261,5 +262,10 @@ class TenantExperienceProfileService
     protected function moduleEnabled(array $resolvedModules, string $moduleKey): bool
     {
         return (bool) data_get($resolvedModules, $moduleKey.'.enabled', false);
+    }
+
+    protected function hasTable(string $table): bool
+    {
+        return $this->schemaCapabilities->hasTable($table);
     }
 }

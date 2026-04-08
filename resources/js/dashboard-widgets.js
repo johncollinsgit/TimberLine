@@ -124,10 +124,16 @@ window.__mfAnalyticsWidgetsMount = () => {
   mountAnalytics();
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+function mountNow() {
   window.__mfDashboardWidgetsMount();
   window.__mfAnalyticsWidgetsMount();
-});
+  observeWidgetGrid(document.querySelector("[data-dashboard-root]"), window.__mfDashboardWidgetsMount);
+  observeWidgetGrid(document.querySelector("[data-widget-root]"), window.__mfAnalyticsWidgetsMount);
+}
+
+export function mountDashboardWidgetsNow() {
+  mountNow();
+}
 
 window.addEventListener("mf:theme-changed", () => {
   window.__mfDashboardWidgetsMount?.();
@@ -135,14 +141,10 @@ window.addEventListener("mf:theme-changed", () => {
 });
 
 // If Livewire is present, re-mount on updates
-document.addEventListener("livewire:navigated", () => {
-  window.__mfDashboardWidgetsMount();
-  window.__mfAnalyticsWidgetsMount();
-});
+document.addEventListener("livewire:navigated", mountNow);
 
 document.addEventListener("livewire:load", () => {
-  window.__mfDashboardWidgetsMount();
-  window.__mfAnalyticsWidgetsMount();
+  mountNow();
   if (window.Livewire?.hook) {
     window.Livewire.hook("message.processed", () => {
       window.__mfDashboardWidgetsMount();
@@ -162,12 +164,5 @@ function observeWidgetGrid(root, mountFn) {
   root.__mfObserver = observer;
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  observeWidgetGrid(document.querySelector("[data-dashboard-root]"), window.__mfDashboardWidgetsMount);
-  observeWidgetGrid(document.querySelector("[data-widget-root]"), window.__mfAnalyticsWidgetsMount);
-});
-
-document.addEventListener("livewire:navigated", () => {
-  observeWidgetGrid(document.querySelector("[data-dashboard-root]"), window.__mfDashboardWidgetsMount);
-  observeWidgetGrid(document.querySelector("[data-widget-root]"), window.__mfAnalyticsWidgetsMount);
-});
+document.addEventListener("DOMContentLoaded", mountNow);
+mountNow();

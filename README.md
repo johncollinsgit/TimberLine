@@ -1,5 +1,63 @@
 # Modern Forestry Backstage
 
+## Embedded Admin Redis Runtime Cutover (2026-04-08)
+
+Use this sequence when moving embedded-admin session/cache/queue storage from database to Redis in production.
+Do not cut over until preflight checks pass.
+
+1) Preflight checks:
+
+```bash
+redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping
+php artisan optimize:clear
+php artisan tinker --execute="cache()->store('redis')->put('redis-preflight', 'ok', 60); dump(cache()->store('redis')->get('redis-preflight'));"
+php artisan queue:failed
+```
+
+2) Production env values:
+
+```dotenv
+SESSION_DRIVER=redis
+SESSION_CONNECTION=default
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+REDIS_QUEUE_CONNECTION=default
+REDIS_DB=0
+REDIS_CACHE_DB=1
+REDIS_QUEUE_DB=2
+```
+
+3) Cutover and warm caches:
+
+```bash
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan queue:restart
+```
+
+4) Verify after deploy:
+- Embedded Shopify admin login persists across refreshes.
+- Cache reads/writes succeed (`cache()->store('redis')->get('redis-preflight')`).
+- Queue backlog does not grow unexpectedly (`php artisan queue:failed`, worker metrics/process manager).
+
+5) Rollback steps:
+
+```dotenv
+SESSION_DRIVER=database
+SESSION_CONNECTION=null
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+REDIS_QUEUE_CONNECTION=default
+```
+
+```bash
+php artisan optimize:clear
+php artisan config:cache
+php artisan queue:restart
+```
+
 ## Candle Cash Reconciliation Runbook (2026-04-07)
 
 Use this live-safe sequence whenever Candle Cash totals look inconsistent between dashboards, customer views, and ledger reports:

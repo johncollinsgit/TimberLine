@@ -14,12 +14,12 @@ use App\Models\User;
 use App\Services\Marketing\CandleClubMembershipService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\CandleCashService;
+use App\Support\Schema\SchemaCapabilityMap;
 use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ShopifyEmbeddedCustomerDetailService
@@ -29,7 +29,8 @@ class ShopifyEmbeddedCustomerDetailService
     public function __construct(
         protected TwilioSenderConfigService $senderConfigService,
         protected CandleCashService $candleCashService,
-        protected CandleClubMembershipService $membershipService
+        protected CandleClubMembershipService $membershipService,
+        protected SchemaCapabilityMap $schemaCapabilities
     ) {
     }
 
@@ -205,7 +206,7 @@ class ShopifyEmbeddedCustomerDetailService
 
     protected function balancePoints(MarketingProfile $profile): int
     {
-        if (! Schema::hasTable('candle_cash_balances')) {
+        if (! $this->hasTable('candle_cash_balances')) {
             return 0;
         }
 
@@ -214,7 +215,7 @@ class ShopifyEmbeddedCustomerDetailService
 
     protected function rewardsActionsCount(int $profileId): int
     {
-        if (! Schema::hasTable('candle_cash_task_completions')) {
+        if (! $this->hasTable('candle_cash_task_completions')) {
             return 0;
         }
 
@@ -236,7 +237,7 @@ class ShopifyEmbeddedCustomerDetailService
     protected function hasReferralCompletion(int $profileId): bool
     {
         if (! $this->hasTaskCompletion($profileId, ['refer-a-friend', 'referred-friend-bonus'])) {
-            if (! Schema::hasTable('candle_cash_referrals')) {
+            if (! $this->hasTable('candle_cash_referrals')) {
                 return false;
             }
 
@@ -259,7 +260,7 @@ class ShopifyEmbeddedCustomerDetailService
             return true;
         }
 
-        if (! Schema::hasTable('marketing_review_summaries')) {
+        if (! $this->hasTable('marketing_review_summaries')) {
             return false;
         }
 
@@ -275,7 +276,7 @@ class ShopifyEmbeddedCustomerDetailService
             return true;
         }
 
-        if (Schema::hasTable('birthday_reward_issuances')) {
+        if ($this->hasTable('birthday_reward_issuances')) {
             $issued = DB::table('birthday_reward_issuances')
                 ->where('marketing_profile_id', $profileId)
                 ->where(function ($query): void {
@@ -290,7 +291,7 @@ class ShopifyEmbeddedCustomerDetailService
             }
         }
 
-        if (! Schema::hasTable('customer_birthday_profiles')) {
+        if (! $this->hasTable('customer_birthday_profiles')) {
             return false;
         }
 
@@ -303,7 +304,7 @@ class ShopifyEmbeddedCustomerDetailService
     protected function hasWholesaleEligibility(int $profileId): bool
     {
         $external = false;
-        if (Schema::hasTable('customer_external_profiles')) {
+        if ($this->hasTable('customer_external_profiles')) {
             $external = DB::table('customer_external_profiles')
                 ->where('marketing_profile_id', $profileId)
                 ->where(function ($query): void {
@@ -319,7 +320,7 @@ class ShopifyEmbeddedCustomerDetailService
             return true;
         }
 
-        if (! Schema::hasTable('marketing_profile_links')) {
+        if (! $this->hasTable('marketing_profile_links')) {
             return false;
         }
 
@@ -341,7 +342,7 @@ class ShopifyEmbeddedCustomerDetailService
 
     protected function hasTaskCompletion(int $profileId, array $handles): bool
     {
-        if (! Schema::hasTable('candle_cash_task_completions') || ! Schema::hasTable('candle_cash_tasks')) {
+        if (! $this->hasTable('candle_cash_task_completions') || ! $this->hasTable('candle_cash_tasks')) {
             return false;
         }
 
@@ -355,7 +356,7 @@ class ShopifyEmbeddedCustomerDetailService
 
     protected function externalProfilesCount(int $profileId): int
     {
-        if (! Schema::hasTable('customer_external_profiles')) {
+        if (! $this->hasTable('customer_external_profiles')) {
             return 0;
         }
 
@@ -373,7 +374,7 @@ class ShopifyEmbeddedCustomerDetailService
         $transactions = collect();
         $messageDeliveries = collect();
 
-        if (Schema::hasTable('candle_cash_transactions')) {
+        if ($this->hasTable('candle_cash_transactions')) {
             $transactions = CandleCashTransaction::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->orderByDesc('id')
@@ -381,7 +382,7 @@ class ShopifyEmbeddedCustomerDetailService
                 ->get();
         }
 
-        if (Schema::hasTable('marketing_message_deliveries')) {
+        if ($this->hasTable('marketing_message_deliveries')) {
             $messageDeliveries = MarketingMessageDelivery::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->orderByDesc('id')
@@ -471,7 +472,7 @@ class ShopifyEmbeddedCustomerDetailService
             }));
         }
 
-        if (Schema::hasTable('candle_cash_redemptions')) {
+        if ($this->hasTable('candle_cash_redemptions')) {
             $redemptions = CandleCashRedemption::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->with('reward:id,name')
@@ -492,7 +493,7 @@ class ShopifyEmbeddedCustomerDetailService
             }));
         }
 
-        if (Schema::hasTable('candle_cash_referrals')) {
+        if ($this->hasTable('candle_cash_referrals')) {
             $referrals = CandleCashReferral::query()
                 ->where('referrer_marketing_profile_id', $profile->id)
                 ->with('referrerTransaction:id,candle_cash_delta')
@@ -519,7 +520,7 @@ class ShopifyEmbeddedCustomerDetailService
             }));
         }
 
-        if (Schema::hasTable('candle_cash_task_completions')) {
+        if ($this->hasTable('candle_cash_task_completions')) {
             $completions = CandleCashTaskCompletion::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->with('task:id,title,handle')
@@ -598,7 +599,7 @@ class ShopifyEmbeddedCustomerDetailService
             'sms' => null,
         ];
 
-        if (Schema::hasTable('marketing_consent_events')) {
+        if ($this->hasTable('marketing_consent_events')) {
             $events = MarketingConsentEvent::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->orderByDesc('occurred_at')
@@ -676,7 +677,7 @@ class ShopifyEmbeddedCustomerDetailService
      */
     protected function resolveActorLabels(array $sourceIds): array
     {
-        if (! Schema::hasTable('users')) {
+        if (! $this->hasTable('users')) {
             return [];
         }
 
@@ -743,5 +744,10 @@ class ShopifyEmbeddedCustomerDetailService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    protected function hasTable(string $table): bool
+    {
+        return $this->schemaCapabilities->hasTable($table);
     }
 }

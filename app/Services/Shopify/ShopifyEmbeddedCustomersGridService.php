@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Support\Schema\SchemaCapabilityMap;
 use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\Paginator as PaginatorContract;
@@ -9,10 +10,14 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class ShopifyEmbeddedCustomersGridService
 {
+    public function __construct(
+        protected SchemaCapabilityMap $schemaCapabilities
+    ) {
+    }
+
     /**
      * @return array{
      *   paginator:PaginatorContract,
@@ -33,11 +38,14 @@ class ShopifyEmbeddedCustomersGridService
         );
         $query = ShopifyEmbeddedDeepProfile::time(
             'customers_grid.base_query',
-            fn (): Builder => $this->baseQuery($tenantId, $searchContext['scoped_profile_ids'] ?? null, $storeKey)
+            fn (): Builder => $this->baseQuery($tenantId, $searchContext, $storeKey)
         );
+        $searchAlreadyScoped = (bool) ($searchContext['search_already_scoped'] ?? false);
 
-        ShopifyEmbeddedDeepProfile::time('customers_grid.apply_search', function () use ($query, $searchContext): null {
-            $this->applySearch($query, $searchContext);
+        ShopifyEmbeddedDeepProfile::time('customers_grid.apply_search', function () use ($query, $searchContext, $searchAlreadyScoped): null {
+            if (! $searchAlreadyScoped) {
+                $this->applySearch($query, $searchContext);
+            }
 
             return null;
         });
@@ -123,6 +131,7 @@ class ShopifyEmbeddedCustomersGridService
             'customers_grid.messaging_search_context',
             fn (): array => $this->resolveSearchContext($query, $tenantId)
         );
+        $searchAlreadyScoped = (bool) ($searchContext['search_already_scoped'] ?? false);
 
         $profiles = DB::table('marketing_profiles as mp');
         $profiles = $this->applyTenantScope($profiles, 'marketing_profiles', 'mp', $tenantId);
@@ -134,7 +143,9 @@ class ShopifyEmbeddedCustomersGridService
             $profiles->whereIn('mp.id', $profileIds !== [] ? $profileIds : [0]);
         }
 
-        $this->applySearch($profiles, $searchContext);
+        if (! $searchAlreadyScoped) {
+            $this->applySearch($profiles, $searchContext);
+        }
 
         $rows = ShopifyEmbeddedDeepProfile::time('customers_grid.messaging_search_query', fn () => $profiles
             ->select([
@@ -220,16 +231,13 @@ class ShopifyEmbeddedCustomersGridService
     /**
      * @return Builder
      */
-    protected function baseQuery(?int $tenantId = null, ?array $scopedProfileIds = null, ?string $storeKey = null): Builder
+    protected function baseQuery(?int $tenantId = null, array $searchContext = [], ?string $storeKey = null): Builder
     {
+        $scopedProfileIds = isset($searchContext['scoped_profile_ids']) && is_array($searchContext['scoped_profile_ids'])
+            ? array_values(array_map('intval', $searchContext['scoped_profile_ids']))
+            : null;
+        $query = $this->seedQuery($tenantId, $scopedProfileIds);
         $lastActivityExpression = $this->lastActivityExpression();
-
-        $query = DB::table('marketing_profiles as mp');
-        $query = $this->applyTenantScope($query, 'marketing_profiles', 'mp', $tenantId);
-
-        if ($scopedProfileIds !== null) {
-            $query->whereIn('mp.id', $scopedProfileIds ?: [0]);
-        }
 
         return $query
             ->leftJoinSub($this->balanceSubquery($tenantId, $scopedProfileIds), 'balance_stats', function ($join): void {
@@ -265,7 +273,7 @@ class ShopifyEmbeddedCustomersGridService
             ->leftJoin('customer_birthday_profiles as birthday_profiles', function ($join) use ($tenantId): void {
                 $join->on('birthday_profiles.marketing_profile_id', '=', 'mp.id');
 
-                if (! Schema::hasTable('customer_birthday_profiles') || ! Schema::hasColumn('customer_birthday_profiles', 'tenant_id')) {
+                if (! $this->hasTable('customer_birthday_profiles') || ! $this->hasColumn('customer_birthday_profiles', 'tenant_id')) {
                     return;
                 }
 
@@ -295,6 +303,18 @@ class ShopifyEmbeddedCustomersGridService
             ->selectRaw($this->birthdayExpression() . ' as birthday_completed')
             ->selectRaw($this->wholesaleExpression() . ' as wholesale_eligible')
             ->selectRaw($lastActivityExpression . ' as last_activity_at');
+    }
+
+    protected function seedQuery(?int $tenantId = null, ?array $scopedProfileIds = null): Builder
+    {
+        $query = DB::table('marketing_profiles as mp');
+        $query = $this->applyTenantScope($query, 'marketing_profiles', 'mp', $tenantId);
+
+        if ($scopedProfileIds !== null) {
+            $query->whereIn('mp.id', $scopedProfileIds ?: [0]);
+        }
+
+        return $query;
     }
 
     /**
@@ -577,7 +597,8 @@ class ShopifyEmbeddedCustomersGridService
      *   normalized_phone_with_country_code:?string,
      *   numeric_id:?int,
      *   terms:\Illuminate\Support\Collection<int,string>,
-     *   scoped_profile_ids:?array<int,int>
+     *   scoped_profile_ids:?array<int,int>,
+     *   search_already_scoped:bool
      * }
      */
     protected function resolveSearchContext(string $search, ?int $tenantId = null): array
@@ -618,26 +639,47 @@ class ShopifyEmbeddedCustomersGridService
             'numeric_id' => $numericId,
             'terms' => $terms,
         ];
-
-        $context['scoped_profile_ids'] = $this->searchScopedProfileIds($context, $tenantId);
+        $scope = $this->searchScopedProfileIds($context, $tenantId);
+        $context['scoped_profile_ids'] = $scope['ids'];
+        $context['search_already_scoped'] = $scope['search_already_scoped'];
 
         return $context;
     }
 
     /**
-     * @return array<int,int>|null
+     * @param  array{
+     *   mode:string,
+     *   numeric_id:?int
+     * }  $searchContext
+     * @return array{
+     *   ids:?array<int,int>,
+     *   search_already_scoped:bool
+     * }
      */
-    protected function searchScopedProfileIds(array $searchContext, ?int $tenantId = null): ?array
+    protected function searchScopedProfileIds(array $searchContext, ?int $tenantId = null): array
     {
         $mode = (string) ($searchContext['mode'] ?? 'text');
         $numericId = isset($searchContext['numeric_id']) ? (int) $searchContext['numeric_id'] : null;
 
         if ($mode === 'none') {
-            return null;
+            return [
+                'ids' => null,
+                'search_already_scoped' => false,
+            ];
         }
 
         if ($mode === 'exact_id') {
-            return $numericId !== null ? [$numericId] : [0];
+            return [
+                'ids' => $numericId !== null ? [$numericId] : [0],
+                'search_already_scoped' => true,
+            ];
+        }
+
+        if (in_array($mode, ['email', 'phone'], true)) {
+            return [
+                'ids' => null,
+                'search_already_scoped' => false,
+            ];
         }
 
         $candidateQuery = DB::table('marketing_profiles as mp')
@@ -653,14 +695,23 @@ class ShopifyEmbeddedCustomersGridService
             ->all();
 
         if ($ids === []) {
-            return [0];
+            return [
+                'ids' => [0],
+                'search_already_scoped' => true,
+            ];
         }
 
         if (count($ids) > 250) {
-            return null;
+            return [
+                'ids' => null,
+                'search_already_scoped' => false,
+            ];
         }
 
-        return $ids;
+        return [
+            'ids' => $ids,
+            'search_already_scoped' => true,
+        ];
     }
 
     /**
@@ -769,7 +820,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function balanceSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('candle_cash_balances')) {
+        if (! $this->hasTable('candle_cash_balances')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as candle_cash_balance',
@@ -791,7 +842,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function taskStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('candle_cash_task_completions') || ! Schema::hasTable('candle_cash_tasks')) {
+        if (! $this->hasTable('candle_cash_task_completions') || ! $this->hasTable('candle_cash_tasks')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as rewards_actions_count',
@@ -824,7 +875,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function referralStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('candle_cash_referrals')) {
+        if (! $this->hasTable('candle_cash_referrals')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as referral_completed',
@@ -848,7 +899,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function reviewStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('marketing_review_summaries')) {
+        if (! $this->hasTable('marketing_review_summaries')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as review_completed',
@@ -873,7 +924,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function externalProfileStatsSubquery(?int $tenantId = null, ?array $profileIds = null, ?string $storeKey = null): Builder
     {
-        if (! Schema::hasTable('customer_external_profiles')) {
+        if (! $this->hasTable('customer_external_profiles')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as wholesale_eligible',
@@ -888,7 +939,7 @@ class ShopifyEmbeddedCustomersGridService
         $storeMatchExpression = $normalizedStoreKey !== null
             ? "lower(coalesce(store_key, '')) = '" . $this->quoteSqlLiteral($normalizedStoreKey) . "'"
             : '1 = 1';
-        $hasTotalSpentColumn = Schema::hasColumn('customer_external_profiles', 'total_spent');
+        $hasTotalSpentColumn = $this->hasColumn('customer_external_profiles', 'total_spent');
 
         $query = DB::table('customer_external_profiles')
             ->selectRaw('marketing_profile_id')
@@ -912,7 +963,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function wholesaleLinkStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('marketing_profile_links')) {
+        if (! $this->hasTable('marketing_profile_links')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as wholesale_eligible',
@@ -934,7 +985,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function groupStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('marketing_group_members') || ! Schema::hasTable('marketing_groups')) {
+        if (! $this->hasTable('marketing_group_members') || ! $this->hasTable('marketing_groups')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as candle_club_member',
@@ -957,7 +1008,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function birthdayIssuanceStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('birthday_reward_issuances')) {
+        if (! $this->hasTable('birthday_reward_issuances')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as birthday_completed',
@@ -981,7 +1032,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function transactionStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('candle_cash_transactions')) {
+        if (! $this->hasTable('candle_cash_transactions')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 'null as last_transaction_at',
@@ -1003,7 +1054,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function ordersStatsSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
     {
-        if (! Schema::hasTable('orders') || ! Schema::hasTable('marketing_profile_links')) {
+        if (! $this->hasTable('orders') || ! $this->hasTable('marketing_profile_links')) {
             return $this->emptySubquery([
                 '0 as marketing_profile_id',
                 '0 as orders_count',
@@ -1019,7 +1070,7 @@ class ShopifyEmbeddedCustomersGridService
         $directOrderLinks = $this->applyJoinedTenantScope($directOrderLinks, 'orders', 'orders', $tenantId);
         $directOrderLinks = $this->applyProfileScope($directOrderLinks, 'mpl.marketing_profile_id', $profileIds);
 
-        if (! Schema::hasColumn('orders', 'shopify_customer_id')) {
+        if (! $this->hasColumn('orders', 'shopify_customer_id')) {
             return DB::query()
                 ->fromSub($directOrderLinks, 'order_links')
                 ->selectRaw('marketing_profile_id')
@@ -1077,7 +1128,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function applyTenantScope(Builder $query, string $table, string $alias, ?int $tenantId): Builder
     {
-        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'tenant_id')) {
+        if (! $this->hasTable($table) || ! $this->hasColumn($table, 'tenant_id')) {
             return $query;
         }
 
@@ -1092,7 +1143,7 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function applyJoinedTenantScope(Builder $query, string $table, string $alias, ?int $tenantId): Builder
     {
-        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'tenant_id')) {
+        if (! $this->hasTable($table) || ! $this->hasColumn($table, 'tenant_id')) {
             return $query;
         }
 
@@ -1118,8 +1169,8 @@ class ShopifyEmbeddedCustomersGridService
     protected function orderStoreKeyExpression(): string
     {
         $columns = array_values(array_filter([
-            Schema::hasColumn('orders', 'shopify_store_key') ? 'orders.shopify_store_key' : null,
-            Schema::hasColumn('orders', 'shopify_store') ? 'orders.shopify_store' : null,
+            $this->hasColumn('orders', 'shopify_store_key') ? 'orders.shopify_store_key' : null,
+            $this->hasColumn('orders', 'shopify_store') ? 'orders.shopify_store' : null,
         ]));
 
         if ($columns === []) {
@@ -1142,5 +1193,15 @@ class ShopifyEmbeddedCustomersGridService
     protected function quoteSqlLiteral(string $value): string
     {
         return str_replace("'", "''", $value);
+    }
+
+    protected function hasTable(string $table): bool
+    {
+        return $this->schemaCapabilities->hasTable($table);
+    }
+
+    protected function hasColumn(string $table, string $column): bool
+    {
+        return $this->schemaCapabilities->hasColumn($table, $column);
     }
 }

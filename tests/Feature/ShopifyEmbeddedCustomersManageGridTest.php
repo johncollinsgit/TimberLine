@@ -6,6 +6,7 @@ use App\Models\CandleCashTask;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
+use App\Support\Schema\SchemaCapabilityMap;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -304,6 +305,37 @@ function seedShopifyCustomerFallbackOrder(string $customerId, array $attributes 
     return (int) DB::table('orders')->insertGetId($payload);
 }
 
+/**
+ * @return array<int,string>
+ */
+function captureSqlQueries(callable $callback): array
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    try {
+        $callback();
+        $entries = DB::getQueryLog();
+    } finally {
+        DB::disableQueryLog();
+    }
+
+    return array_values(array_filter(array_map(
+        static fn (array $entry): string => (string) ($entry['query'] ?? ''),
+        $entries
+    )));
+}
+
+function containsCandidateSearchPrequery(array $queries): bool
+{
+    return collect($queries)->contains(static function (string $sql): bool {
+        $normalized = strtolower(trim((string) preg_replace('/\s+/', ' ', $sql)));
+
+        return str_contains($normalized, 'marketing_profiles')
+            && preg_match('/\blimit\s+251\b/', $normalized) === 1;
+    });
+}
+
 test('/customers/manage stays search-first until a query is entered', function () {
     configureEmbeddedRetailStore();
     $fixtures = seedEmbeddedCustomersGridFixtures();
@@ -397,6 +429,36 @@ test('search by phone and customer id works for manage customers', function () {
     $idResponse->assertOk()
         ->assertSeeText('clara@example.com')
         ->assertDontSeeText('alice@example.com');
+});
+
+test('customers grid skips candidate prequery for exact-id, email, and phone modes', function () {
+    $fixtures = seedEmbeddedCustomersGridFixtures();
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+    $schemaCapabilities = app(SchemaCapabilityMap::class);
+
+    $schemaCapabilities->hasTable('marketing_profiles');
+    $schemaCapabilities->hasColumn('marketing_profiles', 'tenant_id');
+
+    $exactIdQueries = captureSqlQueries(fn () => $service->searchProfilesForMessaging((string) $fixtures['alice']->id));
+    $emailQueries = captureSqlQueries(fn () => $service->searchProfilesForMessaging('alice@example.com'));
+    $phoneQueries = captureSqlQueries(fn () => $service->searchProfilesForMessaging('5551230002'));
+
+    expect(containsCandidateSearchPrequery($exactIdQueries))->toBeFalse()
+        ->and(containsCandidateSearchPrequery($emailQueries))->toBeFalse()
+        ->and(containsCandidateSearchPrequery($phoneQueries))->toBeFalse();
+});
+
+test('customers grid keeps candidate prequery for broad text search mode', function () {
+    seedEmbeddedCustomersGridFixtures();
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+    $schemaCapabilities = app(SchemaCapabilityMap::class);
+
+    $schemaCapabilities->hasTable('marketing_profiles');
+    $schemaCapabilities->hasColumn('marketing_profiles', 'tenant_id');
+
+    $queries = captureSqlQueries(fn () => $service->searchProfilesForMessaging('Alice Aster'));
+
+    expect(containsCandidateSearchPrequery($queries))->toBeTrue();
 });
 
 test('no-results state stays clean for unmatched customer searches', function () {

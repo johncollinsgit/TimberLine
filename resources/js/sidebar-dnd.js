@@ -48,9 +48,14 @@ function mountSidebarSortable() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", mountSidebarSortable);
-document.addEventListener("livewire:navigated", mountSidebarSortable);
-document.addEventListener("livewire:load", mountSidebarSortable);
-if (window.Livewire?.hook) {
-  window.Livewire.hook("message.processed", mountSidebarSortable);
+export function mountSidebarDndNow() {
+  mountSidebarSortable();
 }
+
+document.addEventListener("DOMContentLoaded", mountSidebarDndNow);
+document.addEventListener("livewire:navigated", mountSidebarDndNow);
+document.addEventListener("livewire:load", mountSidebarDndNow);
+if (window.Livewire?.hook) {
+  window.Livewire.hook("message.processed", mountSidebarDndNow);
+}
+mountSidebarDndNow();

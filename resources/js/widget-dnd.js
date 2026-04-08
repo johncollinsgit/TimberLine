@@ -90,9 +90,14 @@ function mountAll() {
   initLibrarySortable(analytics);
 }
 
-document.addEventListener("DOMContentLoaded", mountAll);
-document.addEventListener("livewire:navigated", mountAll);
-document.addEventListener("livewire:load", mountAll);
-if (window.Livewire?.hook) {
-  window.Livewire.hook("message.processed", mountAll);
+export function mountWidgetDndNow() {
+  mountAll();
 }
+
+document.addEventListener("DOMContentLoaded", mountWidgetDndNow);
+document.addEventListener("livewire:navigated", mountWidgetDndNow);
+document.addEventListener("livewire:load", mountWidgetDndNow);
+if (window.Livewire?.hook) {
+  window.Livewire.hook("message.processed", mountWidgetDndNow);
+}
+mountWidgetDndNow();

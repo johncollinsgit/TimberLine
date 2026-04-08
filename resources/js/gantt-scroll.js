@@ -112,9 +112,14 @@ function initGanttScroll() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", initGanttScroll);
-document.addEventListener("livewire:navigated", initGanttScroll);
-document.addEventListener("livewire:load", initGanttScroll);
-if (window.Livewire?.hook) {
-  window.Livewire.hook("message.processed", initGanttScroll);
+export function mountGanttScrollNow() {
+  initGanttScroll();
 }
+
+document.addEventListener("DOMContentLoaded", mountGanttScrollNow);
+document.addEventListener("livewire:navigated", mountGanttScrollNow);
+document.addEventListener("livewire:load", mountGanttScrollNow);
+if (window.Livewire?.hook) {
+  window.Livewire.hook("message.processed", mountGanttScrollNow);
+}
+mountGanttScrollNow();

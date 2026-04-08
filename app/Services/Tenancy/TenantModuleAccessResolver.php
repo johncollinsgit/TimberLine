@@ -6,7 +6,7 @@ use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
-use Illuminate\Support\Facades\Schema;
+use App\Support\Schema\SchemaCapabilityMap;
 
 class TenantModuleAccessResolver
 {
@@ -46,7 +46,8 @@ class TenantModuleAccessResolver
     protected array $moduleEntitlementCache = [];
 
     public function __construct(
-        protected TenantResolver $tenantResolver
+        protected TenantResolver $tenantResolver,
+        protected SchemaCapabilityMap $schemaCapabilities
     ) {
     }
 
@@ -355,7 +356,7 @@ class TenantModuleAccessResolver
             'source' => 'config_default',
         ];
 
-        if ($tenantId === null || ! Schema::hasTable('tenant_access_profiles')) {
+        if ($tenantId === null || ! $this->hasTable('tenant_access_profiles')) {
             return $this->profileCache[$cacheKey] = $default;
         }
 
@@ -380,7 +381,7 @@ class TenantModuleAccessResolver
      */
     protected function enabledAddonsForTenant(?int $tenantId): array
     {
-        if ($tenantId === null || ! Schema::hasTable('tenant_access_addons')) {
+        if ($tenantId === null || ! $this->hasTable('tenant_access_addons')) {
             return [];
         }
 
@@ -419,7 +420,7 @@ class TenantModuleAccessResolver
      */
     protected function moduleStateRowsForTenant(?int $tenantId): array
     {
-        if ($tenantId === null || ! Schema::hasTable('tenant_module_states')) {
+        if ($tenantId === null || ! $this->hasTable('tenant_module_states')) {
             return [];
         }
 
@@ -463,7 +464,7 @@ class TenantModuleAccessResolver
      */
     protected function moduleEntitlementRowsForTenant(?int $tenantId): array
     {
-        if ($tenantId === null || ! Schema::hasTable('tenant_module_entitlements')) {
+        if ($tenantId === null || ! $this->hasTable('tenant_module_entitlements')) {
             return [];
         }
 
@@ -930,5 +931,10 @@ class TenantModuleAccessResolver
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
+    }
+
+    protected function hasTable(string $table): bool
+    {
+        return $this->schemaCapabilities->hasTable($table);
     }
 }
