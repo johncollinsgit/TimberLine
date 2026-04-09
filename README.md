@@ -1,5 +1,27 @@
 # Modern Forestry Backstage
 
+## Embedded Admin Dashboard Lite + Rewards Stall Notes (2026-04-08)
+
+Observed in production after the initial embedded perf deploy:
+- `/shopify/app` (inside Shopify Admin) could show the shell quickly but default to `7d` and never populate `Today` until a tab switch.
+- `/shopify/app/rewards` could stall/hang on first load.
+
+Root causes:
+- Dashboard Lite shipped with `7d` selected and then stamped that default into `localStorage` on first paint (making `7d` “sticky” even when the merchant never chose it).
+- Dashboard Lite fired its first API request before App Bridge session token (`window.shopify.idToken`) was reliably available; errors were swallowed and there was no retry.
+- Rewards computed a server-side “overview” payload on first paint that the `rewards-overview` Blade view does not consume, and it duplicated label/module access resolution instead of reusing the cached embedded shell payload.
+
+Fixes shipped:
+- Dashboard Lite now defaults to `Today` on a clean load and only persists the range after an explicit click (`fb.dashboard_lite.range.explicit` prevents accidental persistence).
+- Dashboard Lite retries auth + fetch when the embedded session token is not ready yet and shows a visible error/toast instead of silently failing.
+- Rewards no longer computes the unused “overview” payload on initial render and reuses the cached embedded shell display labels + module states.
+
+Debugging:
+- Add `?perf=1` to embedded routes for `Server-Timing` + `shopify.embedded.perf` log entries.
+- Add `?dashboard_debug=1` to `/shopify/app` to enable Dashboard Lite console logs (`[dashboard-lite] …`).
+- Do not add debug query params to the original Shopify-signed entry URL (adding params breaks the HMAC); open the app first, then append debug params on subsequent in-app navigations.
+- See `PERF_NOTES.md` for file-level details.
+
 ## Embedded Admin Redis Runtime Cutover (2026-04-08)
 
 Use this sequence when moving embedded-admin session/cache/queue storage from database to Redis in production.

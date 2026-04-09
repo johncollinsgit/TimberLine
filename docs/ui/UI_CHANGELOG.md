@@ -47,6 +47,17 @@
 - This pass keeps the existing embedded routes, shell, and reporting endpoints intact.
 - It does not introduce a parallel customer grid or a new messaging history API contract.
 
+## 2026-04-08 — Dashboard Lite Default Today + Embedded Auth Retry + Rewards Stall Fix
+
+### What changed
+- Dashboard Lite now defaults to `Today` on a clean load and only persists the range after an explicit operator click (prevents `7d` becoming “sticky” on first paint).
+- Dashboard Lite now retries embedded session token resolution and retries its initial fetch when App Bridge has not exposed `window.shopify.idToken` yet (and it shows a visible error/toast instead of silently failing).
+- Rewards no longer performs unused server-side overview computation on first paint, and it now reuses the cached embedded shell payload for display labels and module access checks.
+
+### Why
+- Fresh embedded loads could show the shell but never populate `Today` without a tab switch because the first fetch could run before session auth was ready and failures were swallowed.
+- Rewards could appear to “hang” in production when cold/unhealthy cache conditions made that unused controller work expensive, even though the overview page is Blade-rendered and should stay responsive.
+
 ## 2026-04-06 — Embedded Messaging Responses Inbox
 
 ### What changed
