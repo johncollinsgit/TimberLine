@@ -29,6 +29,8 @@ class ShopifyEmbeddedDashboardLiteDataService
         $tenantId = isset($input['tenant_id']) && is_numeric($input['tenant_id'])
             ? (int) $input['tenant_id']
             : null;
+        $storeKey = $this->normalizeStoreKey($input['store_key'] ?? null);
+        $timezone = $this->normalizeTimezone($input['timezone'] ?? null);
         $range = $this->normalizeRange((string) ($input['range'] ?? 'today'));
         $section = strtolower(trim((string) ($input['section'] ?? 'summary'))) ?: 'summary';
         $includeActivity = in_array($section, ['activity', 'all'], true);
@@ -36,11 +38,11 @@ class ShopifyEmbeddedDashboardLiteDataService
             ? max(5, min(40, (int) $input['limit']))
             : 20;
 
-        $window = $this->windowForRange($range);
-        $ttlSeconds = $this->ttlSecondsForRange($range, $window);
+        $window = $this->windowForRange($range, $timezone);
+        $ttlSeconds = $this->ttlSecondsForRange($range, $window, $timezone);
 
-        $summaryKey = $this->cacheKey($tenantId, $range, 'summary');
-        $activityKey = $this->cacheKey($tenantId, $range, 'activity:' . $limit);
+        $summaryKey = $this->cacheKey($tenantId, $storeKey, $timezone, $range, 'summary');
+        $activityKey = $this->cacheKey($tenantId, $storeKey, $timezone, $range, 'activity:' . $limit);
 
         $summaryCacheHit = false;
         $activityCacheHit = false;
@@ -49,7 +51,7 @@ class ShopifyEmbeddedDashboardLiteDataService
         if (is_array($summary)) {
             $summaryCacheHit = true;
         } else {
-            $summary = $this->buildSummary($tenantId, $window);
+            $summary = $this->buildSummary($tenantId, $storeKey, $timezone, $window);
             Cache::put($summaryKey, $summary, now()->addSeconds($ttlSeconds));
         }
 
@@ -59,7 +61,7 @@ class ShopifyEmbeddedDashboardLiteDataService
             if (is_array($activity)) {
                 $activityCacheHit = true;
             } else {
-                $activity = $this->buildActivity($tenantId, $window, $limit);
+                $activity = $this->buildActivity($tenantId, $storeKey, $timezone, $window, $limit);
                 Cache::put($activityKey, $activity, now()->addSeconds($ttlSeconds));
             }
         }
@@ -79,7 +81,8 @@ class ShopifyEmbeddedDashboardLiteDataService
                 'range' => $range,
                 'from' => $window['from']->toIso8601String(),
                 'to' => $window['to']->toIso8601String(),
-                'timezone' => (string) config('app.timezone', 'UTC'),
+                'timezone' => $timezone ?: (string) config('app.timezone', 'UTC'),
+                'storeKey' => $storeKey,
             ],
             'summary' => $summary,
         ];
@@ -109,9 +112,9 @@ class ShopifyEmbeddedDashboardLiteDataService
     /**
      * @return array{from:CarbonImmutable,to:CarbonImmutable}
      */
-    protected function windowForRange(string $range): array
+    protected function windowForRange(string $range, ?string $timezone): array
     {
-        $now = now()->toImmutable();
+        $now = $timezone ? CarbonImmutable::now($timezone) : now()->toImmutable();
 
         return match ($range) {
             'today' => [
@@ -129,31 +132,58 @@ class ShopifyEmbeddedDashboardLiteDataService
         };
     }
 
-    protected function ttlSecondsForRange(string $range, array $window): int
+    protected function ttlSecondsForRange(string $range, array $window, ?string $timezone): int
     {
         if ($range === 'today') {
             return 30;
         }
 
+        $todayStart = $timezone ? CarbonImmutable::now($timezone)->startOfDay() : now()->startOfDay()->toImmutable();
         $touchesToday = ($window['to'] ?? null) instanceof CarbonImmutable
-            && $window['to']->greaterThanOrEqualTo(now()->startOfDay()->toImmutable());
+            && $window['to']->greaterThanOrEqualTo($todayStart);
 
         return $touchesToday ? 60 : 180;
     }
 
-    protected function cacheKey(?int $tenantId, string $range, string $section): string
+    protected function cacheKey(?int $tenantId, ?string $storeKey, ?string $timezone, string $range, string $section): string
     {
         return 'shopify:dashboard-lite:' . sha1(json_encode([
             'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'timezone' => $timezone,
             'range' => $range,
             'section' => $section,
         ]));
     }
 
     /**
+     * Convert a window defined in a local timezone to an equivalent UTC window for tables that store timestamps in UTC
+     * (Eloquent `created_at`/`updated_at` columns, redemption timestamps, etc).
+     *
+     * @param  array{from:CarbonImmutable,to:CarbonImmutable}  $window
+     * @return array{from:CarbonImmutable,to:CarbonImmutable}
+     */
+    protected function utcWindow(array $window, ?string $timezone): array
+    {
+        try {
+            $from = $window['from'] instanceof CarbonImmutable ? $window['from'] : CarbonImmutable::parse((string) ($window['from'] ?? ''));
+            $to = $window['to'] instanceof CarbonImmutable ? $window['to'] : CarbonImmutable::parse((string) ($window['to'] ?? ''));
+
+            // When the app stores timestamps in UTC, shift the window boundaries to UTC instants.
+            // If the app already uses UTC everywhere, this is a no-op.
+            return [
+                'from' => $from->setTimezone('UTC'),
+                'to' => $to->setTimezone('UTC'),
+            ];
+        } catch (\Throwable) {
+            return $window;
+        }
+    }
+
+    /**
      * @return array<string,mixed>
      */
-    protected function buildSummary(?int $tenantId, array $window): array
+    protected function buildSummary(?int $tenantId, ?string $storeKey, ?string $timezone, array $window): array
     {
         if (
             $tenantId === null
@@ -163,8 +193,9 @@ class ShopifyEmbeddedDashboardLiteDataService
             return $this->emptySummary();
         }
 
-        $purchaseStats = $this->purchaseStats($tenantId, $window['from'], $window['to']);
-        $candleCashStats = $this->candleCashStats($tenantId, $window['from'], $window['to']);
+        $utcWindow = $this->utcWindow($window, $timezone);
+        $purchaseStats = $this->purchaseStats($tenantId, $storeKey, $utcWindow['from'], $utcWindow['to']);
+        $candleCashStats = $this->candleCashStats($tenantId, $utcWindow['from'], $utcWindow['to']);
 
         return [
             'kpis' => [
@@ -193,7 +224,7 @@ class ShopifyEmbeddedDashboardLiteDataService
     /**
      * @return array{rows:array<int,array<string,mixed>>,count:int}
      */
-    protected function buildActivity(?int $tenantId, array $window, int $limit): array
+    protected function buildActivity(?int $tenantId, ?string $storeKey, ?string $timezone, array $window, int $limit): array
     {
         if (
             $tenantId === null
@@ -209,6 +240,10 @@ class ShopifyEmbeddedDashboardLiteDataService
 
         $from = $window['from'];
         $to = $window['to'];
+        $utcWindow = $this->utcWindow(['from' => $from, 'to' => $to], $timezone);
+        $fromUtc = $utcWindow['from'];
+        $toUtc = $utcWindow['to'];
+        $ordersStoreColumn = $this->ordersStoreColumn();
 
         $earnedByProfile = null;
         if (Schema::hasTable('candle_cash_transactions')) {
@@ -217,7 +252,7 @@ class ShopifyEmbeddedDashboardLiteDataService
                 ->when($tenantId === null, fn ($q) => $q->whereNull('mp.tenant_id'), fn ($q) => $q->where('mp.tenant_id', $tenantId))
                 ->where('tx.type', 'earn')
                 ->where('tx.candle_cash_delta', '>', 0)
-                ->whereBetween('tx.created_at', [$from, $to])
+                ->whereBetween('tx.created_at', [$fromUtc, $toUtc])
                 ->groupBy('tx.marketing_profile_id')
                 ->selectRaw('tx.marketing_profile_id as marketing_profile_id')
                 ->selectRaw('sum(tx.candle_cash_delta) as earned_points')
@@ -231,7 +266,7 @@ class ShopifyEmbeddedDashboardLiteDataService
                 ->join('marketing_profiles as mp', 'mp.id', '=', 'r.marketing_profile_id')
                 ->when($tenantId === null, fn ($q) => $q->whereNull('mp.tenant_id'), fn ($q) => $q->where('mp.tenant_id', $tenantId))
                 ->where('r.status', 'redeemed')
-                ->whereBetween('r.redeemed_at', [$from, $to])
+                ->whereBetween('r.redeemed_at', [$fromUtc, $toUtc])
                 ->groupBy('r.marketing_profile_id')
                 ->selectRaw('r.marketing_profile_id as marketing_profile_id')
                 ->selectRaw('sum(r.candle_cash_spent) as redeemed_points')
@@ -245,7 +280,7 @@ class ShopifyEmbeddedDashboardLiteDataService
                 ->where('r.external_order_source', 'order')
                 ->whereNotNull('r.external_order_id')
                 ->where('r.external_order_id', '!=', '')
-                ->whereBetween('r.redeemed_at', [$from, $to])
+                ->whereBetween('r.redeemed_at', [$fromUtc, $toUtc])
                 ->groupBy(DB::raw($castOrderId))
                 ->selectRaw($castOrderId . ' as order_id')
                 ->selectRaw('sum(r.candle_cash_spent) as redeemed_order_points');
@@ -267,7 +302,8 @@ class ShopifyEmbeddedDashboardLiteDataService
             ->join('marketing_profiles as mp', 'mp.id', '=', 'mpl.marketing_profile_id')
             ->when($tenantId === null, fn ($q) => $q->whereNull('mpl.tenant_id'), fn ($q) => $q->where('mpl.tenant_id', $tenantId))
             ->where('mpl.source_type', 'order')
-            ->whereBetween(DB::raw('coalesce(o.ordered_at, o.created_at)'), [$from, $to])
+            ->when($storeKey !== null && $ordersStoreColumn !== null, fn ($q) => $q->where("o.{$ordersStoreColumn}", $storeKey))
+            ->whereBetween(DB::raw('coalesce(o.ordered_at, o.created_at)'), [$fromUtc, $toUtc])
             ->orderByDesc(DB::raw('coalesce(o.ordered_at, o.created_at)'))
             ->limit($limit)
             ->select([
@@ -356,7 +392,9 @@ class ShopifyEmbeddedDashboardLiteDataService
                 'order' => [
                     'id' => (int) ($row->order_id ?? 0),
                     'label' => trim((string) ($row->shopify_name ?? $row->order_number ?? '')) ?: ('Order #' . (int) ($row->order_id ?? 0)),
-                    'orderedAt' => $row->ordered_at ? (string) CarbonImmutable::parse($row->ordered_at)->toIso8601String() : null,
+                    'orderedAt' => $row->ordered_at
+                        ? (string) CarbonImmutable::parse($row->ordered_at, 'UTC')->setTimezone($timezone ?: 'UTC')->toIso8601String()
+                        : null,
                     'total' => [
                         'amount' => $orderTotal,
                         'currencyCode' => $currencyCode,
@@ -384,9 +422,10 @@ class ShopifyEmbeddedDashboardLiteDataService
     /**
      * @return array{customersPurchased:int,purchaseCount:int,returningCustomers:int,returningRatePct:float}
      */
-    protected function purchaseStats(?int $tenantId, CarbonImmutable $from, CarbonImmutable $to): array
+    protected function purchaseStats(?int $tenantId, ?string $storeKey, CarbonImmutable $from, CarbonImmutable $to): array
     {
         $orderIdJoinExpr = $this->castToIntegerExpression('mpl.source_id');
+        $ordersStoreColumn = $this->ordersStoreColumn();
 
         $base = DB::table('marketing_profile_links as mpl')
             ->join('orders as o', function ($join) use ($orderIdJoinExpr): void {
@@ -394,6 +433,7 @@ class ShopifyEmbeddedDashboardLiteDataService
             })
             ->when($tenantId === null, fn ($q) => $q->whereNull('mpl.tenant_id'), fn ($q) => $q->where('mpl.tenant_id', $tenantId))
             ->where('mpl.source_type', 'order')
+            ->when($storeKey !== null && $ordersStoreColumn !== null, fn ($q) => $q->where("o.{$ordersStoreColumn}", $storeKey))
             ->whereBetween(DB::raw('coalesce(o.ordered_at, o.created_at)'), [$from, $to]);
 
         $customersPurchased = (int) (clone $base)
@@ -571,5 +611,61 @@ class ShopifyEmbeddedDashboardLiteDataService
         }
 
         return 'cast(' . $columnExpression . ' as unsigned)';
+    }
+
+    protected function normalizeStoreKey(mixed $value): ?string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function normalizeTimezone(mixed $value): ?string
+    {
+        $candidate = trim((string) $value);
+        if ($candidate === '') {
+            return null;
+        }
+
+        try {
+            new \DateTimeZone($candidate);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $candidate;
+    }
+
+    protected function ordersStoreColumn(): ?string
+    {
+        static $resolved = null;
+        static $hasResolved = false;
+        if ($hasResolved) {
+            return $resolved;
+        }
+
+        $hasResolved = true;
+
+        if (! Schema::hasTable('orders')) {
+            $resolved = null;
+
+            return null;
+        }
+
+        if (Schema::hasColumn('orders', 'shopify_store_key')) {
+            $resolved = 'shopify_store_key';
+
+            return $resolved;
+        }
+
+        if (Schema::hasColumn('orders', 'shopify_store')) {
+            $resolved = 'shopify_store';
+
+            return $resolved;
+        }
+
+        $resolved = null;
+
+        return null;
     }
 }

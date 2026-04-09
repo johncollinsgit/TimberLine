@@ -106,6 +106,9 @@ return [
 
         'api_version' => env('SHOPIFY_API_VERSION', '2026-01'),
         'allow_env_token_fallback' => (bool) env('SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK', false),
+        // Reporting window timezone used by embedded admin surfaces (Dashboard Lite, etc).
+        // Defaults to the primary business timezone so "Today" matches merchant expectations.
+        'reporting_timezone' => env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York'),
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
@@ -119,6 +122,7 @@ return [
                 'access_token'  => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
                 'client_id'     => env('SHOPIFY_RETAIL_CLIENT_ID'),
                 'client_secret' => env('SHOPIFY_RETAIL_CLIENT_SECRET'),
+                'timezone'      => env('SHOPIFY_RETAIL_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 
             'wholesale' => [
@@ -126,6 +130,7 @@ return [
                 'access_token'  => env('SHOPIFY_WHOLESALE_ACCESS_TOKEN'),
                 'client_id'     => env('SHOPIFY_WHOLESALE_CLIENT_ID'),
                 'client_secret' => env('SHOPIFY_WHOLESALE_CLIENT_SECRET'),
+                'timezone'      => env('SHOPIFY_WHOLESALE_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 
         ],

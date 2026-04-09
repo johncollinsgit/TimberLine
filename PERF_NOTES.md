@@ -13,6 +13,21 @@ Fixes shipped:
 - Dashboard Lite now retries auth + fetch on missing session token, uses longer App Bridge wait options, and shows a visible error/toast instead of silently failing.
 - Rewards no longer computes the unused “overview” payload on initial render, and it reuses the cached embedded shell display labels + module states.
 
+### 0b) Dashboard Lite “Today” Uses Store Reporting Timezone (2026-04-08)
+Observed symptom:
+- After ~8pm ET, “Today” could suddenly look empty and recent customers (for example, a purchase earlier the same evening) would no longer appear under the `Today` tab.
+
+Root cause:
+- Embedded “Today” windows were based on **UTC calendar days** (Laravel app timezone is UTC). For a store operating in ET, the “day boundary” effectively happened at **8pm local** (00:00 UTC), so same-day purchases could fall into “yesterday” unexpectedly.
+
+Fix shipped:
+- Dashboard Lite now resolves a **store reporting timezone** (per Shopify store key) and computes “Today/7d/30d” window boundaries in that timezone.
+- For DB queries against timestamp columns, it converts those local window boundaries to **equivalent UTC instants** before applying `whereBetween(...)` filters.
+
+Config:
+- `SHOPIFY_REPORTING_TIMEZONE` (global fallback)
+- `SHOPIFY_RETAIL_TIMEZONE`, `SHOPIFY_WHOLESALE_TIMEZONE` (store-specific overrides)
+
 ### 1) Dashboard “Today” Initial Fetch Bug
 - Fixed the embedded React dashboard hook so the initial query state is derived from the URL query string when server `initialData` is absent.
 - Guarded the “skip first fetch when `initialData` exists” logic so it only skips when `initialData.query` matches the current query state (prevents stale/incorrect first paint).

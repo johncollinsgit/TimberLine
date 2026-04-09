@@ -45,6 +45,9 @@ class ShopifyStores
             ?? config('services.shopify.stores.retail.access_token')
             ?? config('services.shopify.retail.token')
             ?? config('services.shopify.retail.access_token');
+        $retailTimezone = config('services.shopify.stores.retail.timezone')
+            ?? config('services.shopify.reporting_timezone')
+            ?? 'UTC';
         $retailClientId = config('services.shopify.stores.retail.client_id')
             ?? config('services.shopify.retail.client_id');
         $retailSecret = config('services.shopify.stores.retail.client_secret')
@@ -55,6 +58,9 @@ class ShopifyStores
             ?? config('services.shopify.stores.wholesale.access_token')
             ?? config('services.shopify.wholesale.token')
             ?? config('services.shopify.wholesale.access_token');
+        $wholesaleTimezone = config('services.shopify.stores.wholesale.timezone')
+            ?? config('services.shopify.reporting_timezone')
+            ?? 'UTC';
         $wholesaleClientId = config('services.shopify.stores.wholesale.client_id')
             ?? config('services.shopify.wholesale.client_id');
         $wholesaleSecret = config('services.shopify.stores.wholesale.client_secret')
@@ -66,6 +72,7 @@ class ShopifyStores
                 'shop' => $retailShop,
                 'legacy_token' => $retailLegacyToken,
                 'source' => 'shopify_retail',
+                'timezone' => $retailTimezone,
                 'secret' => $retailSecret,
                 'client_id' => $retailClientId,
                 'api_version' => config('services.shopify.api_version', '2026-01'),
@@ -75,6 +82,7 @@ class ShopifyStores
                 'shop' => $wholesaleShop,
                 'legacy_token' => $wholesaleLegacyToken,
                 'source' => 'shopify_wholesale',
+                'timezone' => $wholesaleTimezone,
                 'secret' => $wholesaleSecret,
                 'client_id' => $wholesaleClientId,
                 'api_version' => config('services.shopify.api_version', '2026-01'),

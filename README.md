@@ -15,6 +15,11 @@ Fixes shipped:
 - Dashboard Lite now defaults to `Today` on a clean load and only persists the range after an explicit click (`fb.dashboard_lite.range.explicit` prevents accidental persistence).
 - Dashboard Lite retries auth + fetch when the embedded session token is not ready yet and shows a visible error/toast instead of silently failing.
 - Rewards no longer computes the unused “overview” payload on initial render and reuses the cached embedded shell display labels + module states.
+- Dashboard Lite “Today/7d/30d” windows now use the store reporting timezone (prevents “Today” rolling over at 8pm ET due to UTC day boundaries).
+
+Timezone config (embedded reporting windows):
+- `SHOPIFY_REPORTING_TIMEZONE` (global fallback, default `America/New_York`)
+- `SHOPIFY_RETAIL_TIMEZONE` / `SHOPIFY_WHOLESALE_TIMEZONE` (store-specific overrides)
 
 Debugging:
 - Add `?perf=1` to embedded routes for `Server-Timing` + `shopify.embedded.perf` log entries.

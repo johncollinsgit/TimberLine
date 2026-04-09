@@ -229,12 +229,18 @@ class ShopifyEmbeddedAppController extends Controller
         $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? [])));
         $probe->forTenant($tenantId);
 
+        $storeKey = strtolower(trim((string) data_get($context, 'store.key', ''))) ?: null;
+        $storeTimezone = trim((string) data_get($context, 'store.timezone', ''));
+        $storeTimezone = $storeTimezone !== '' ? $storeTimezone : null;
+
         $range = (string) $request->query('range', 'today');
         $section = (string) $request->query('section', 'summary');
         $limit = (int) $request->query('limit', 20);
 
         $data = $probe->time('page_payload', fn (): array => $this->dashboardLiteDataService->payload([
             'tenant_id' => $tenantId,
+            'store_key' => $storeKey,
+            'timezone' => $storeTimezone,
             'range' => $range,
             'section' => $section,
             'limit' => $limit,
@@ -253,11 +259,19 @@ class ShopifyEmbeddedAppController extends Controller
         // Light-weight signal for debugging in the browser network panel.
         $response->headers->set('X-Backstage-Dashboard-Lite-Range', strtolower(trim($range)));
         $response->headers->set('X-Backstage-Dashboard-Lite-Section', strtolower(trim($section)));
+        if ($storeKey) {
+            $response->headers->set('X-Backstage-Dashboard-Lite-Store', $storeKey);
+        }
+        if ($storeTimezone) {
+            $response->headers->set('X-Backstage-Dashboard-Lite-Timezone', $storeTimezone);
+        }
 
         $debugRequested = filter_var($request->query('debug', false), FILTER_VALIDATE_BOOLEAN);
         if ($debugRequested || $durationMs >= 250) {
             Log::info('shopify.embedded.dashboard_lite', [
                 'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'timezone' => $storeTimezone,
                 'range' => strtolower(trim($range)),
                 'section' => strtolower(trim($section)),
                 'duration_ms' => $durationMs,
