@@ -282,6 +282,25 @@ Useful commands:
 - `npm run shopify:app:dev -- --store modernforestry.myshopify.com`
 - `npm run shopify:app:deploy`
 
+Storefront tracking hardening pass (2026-04-09):
+- Messaging Setup now exposes a single-source tracking health snapshot with:
+  - theme embed inferred enabled state
+  - web pixel connected/disconnected state
+  - granted-vs-requested Shopify scope verification state
+  - recent storefront event count
+  - last event type/timestamp
+  - recent checkout completion seen/not-seen state
+- Messaging Setup now includes an explicit tracking inventory list so each tracking source is visible with status + known gaps.
+- Message Analytics now includes a `Storefront tracking health` card plus raw diagnostics output for debugging.
+- Message-level storefront funnel summary now visibly includes `checkout_completed` (in addition to directional checkout abandonment candidates).
+- Scope diagnostics now parse requested scopes from `shopify.app.toml` and compare against granted scopes returned by Shopify app installation access scopes (with stored fallback when live lookup is unavailable).
+- Tracker-level event diagnostics now separate recent signal flow by:
+  - `theme_app_embed`
+  - `web_pixel`
+  - `unknown`
+- Shopify-native analytics/reporting status is now surfaced explicitly as scope availability only.
+  - Backstage still does **not** query Shopify native analytics/report APIs for storefront funnel reporting.
+
 ## MT-4C Hardening Status (2026-03-30)
 
 MT-4C is now complete.
